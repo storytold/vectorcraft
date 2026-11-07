@@ -106,6 +106,37 @@ fn export_as_png_picks_the_file_then_shows_png_options() {
     assert_eq!(&written.borrow()[0].1[16..20], 120u32.to_be_bytes(), "60 pt at 144 ppi");
 }
 
+/// File › Export › Export As PNG… exports the artboard in use, not the first (#5502), and each
+/// artboard the Artboard tool has selected, one file each.
+#[test]
+fn export_as_png_exports_the_active_artboard() {
+    let (mut app, written) = app(2);
+    // The ellipse is on the first artboard; the second is empty.
+    let opaque = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_rgba8().pixels().any(|p| p.0[3] > 0);
+    app.view_mut().unwrap().artboard = 1;
+    app.run("file.export.png", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["artboard"], json!(1));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(!opaque(&written.borrow()[0].1), "the second artboard, which is empty");
+    app.view_mut().unwrap().artboard = 0;
+    app.run("file.export.png", json!({})).unwrap();
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert!(opaque(&written.borrow()[1].1), "the first artboard, with the ellipse");
+    // A choice given is kept.
+    app.run("file.export.png", json!({"useArtboards": false})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none_or(serde_json::Value::is_null));
+    app.ui.dialog = None;
+    // Artboards the Artboard tool selected: one file each.
+    app.select_tool("artboard");
+    app.session.set_tool_option("selected", &json!([0, 1]));
+    app.run("file.export.png", json!({})).unwrap();
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(names(&written)[2..], ["/out/Untitled-1-Artboard-1.png", "/out/Untitled-1-Artboard-2.png"]);
+}
+
 #[test]
 fn export_as_with_a_range_then_png_options_writes_one_file_per_artboard() {
     let (mut app, written) = app(3);
@@ -250,7 +281,7 @@ fn pdf_artboards_continue_in_the_save_pdf_dialog() {
 /// format, each file holding that artboard's art (the ellipse is on artboard 1).
 #[test]
 fn export_as_writes_only_the_chosen_artboard_in_every_format() {
-    for (format, ellipse) in [("svg", "<path"), ("dxf", "HATCH"), ("pdf", ""), ("png", "")] {
+    for (format, ellipse) in [("svg", "<ellipse"), ("dxf", "HATCH"), ("pdf", ""), ("png", "")] {
         for (range, on) in [("1", true), ("3", false)] {
             let (mut app, written) = app(3);
             app.run("file.exportAs", json!({"format": format})).unwrap();

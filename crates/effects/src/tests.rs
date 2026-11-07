@@ -4,6 +4,9 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod scale;
+mod transformfx;
+
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
 }
@@ -127,6 +130,15 @@ fn geometry_effects_are_deterministic() {
         let a = run(id, params.clone(), &sq);
         let b = run(id, params, &sq);
         assert_eq!(a, b, "{id} is not deterministic");
+    }
+}
+
+/// The effects that symbol art across 9-slice guides draws once around all its cells are raster
+/// effects that do not reshape it.
+#[test]
+fn nine_slice_painted_effects_are_raster_effects() {
+    for id in vectorcraft_doc::PAINTED_EFFECTS {
+        assert!(is_raster(id) && !is_geometry(id), "{id}");
     }
 }
 
@@ -262,6 +274,7 @@ fn stacked_transform_copies_stay_within_the_image_budget() {
                 xf: Affine::translate((10.0, 0.0)),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         )
     };
@@ -435,6 +448,93 @@ fn three_max_detail_roughens_stay_within_the_effect_budget() {
 }
 
 #[test]
+fn transform_copies_before_offset_path_evaluates_without_ram_spike() {
+    let effects = [
+        fx("distort.transform", json!({"moveH": -0.66, "moveV": 0.66, "copies": 30})),
+        fx("path.offsetPath", json!({"offset": 10.0, "joins": "round"})),
+    ];
+    let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+    let start = std::time::Instant::now();
+    let out = apply_geometry(&effects, &path, path.bounds().unwrap());
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2), "elapsed: {:?}", elapsed);
+    assert_eq!(out.subpaths.len(), 31);
+}
+
+#[test]
+fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId};
+
+    let id = NodeId(10);
+    let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 20.0, 20.0)), Appearance::default()));
+    let mut art = Node::group(id, (0..5).map(|k| leaf(k as f64 * 30.0)).collect());
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 10}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let start = std::time::Instant::now();
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS);
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(2));
+
+    let children = art.children().unwrap();
+    assert_eq!(children.len(), 5);
+    for c in children {
+        let (p, _) = crate::reshape::leaf_geometry(c).unwrap();
+        // Base rectangle offset once, then copied 10 times -> 11 subpaths
+        assert_eq!(p.subpaths.len(), 11);
+    }
+}
+
+#[test]
+fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+
+    let id = NodeId(11);
+    // 1. EvenOdd fill rule: preserving order causes Transform copies to union in Offset Path into 1 subpath.
+    let mut leaf = Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default());
+    if let NodeKind::Path { rule, .. } = &mut leaf.kind {
+        *rule = FillRule::EvenOdd;
+    }
+    let mut art_evenodd = Node::group(id, vec![Arc::new(leaf)]);
+    let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 2}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0}));
+    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS);
+    let p = art_evenodd.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "EvenOdd does not swap; copies union into 1 outer subpath");
+
+    // 2. Non-terminal Offset Path: followed by Round Corners, must preserve order.
+    let leaf_round = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_round = Node::group(id, vec![leaf_round]);
+    let round_corners = fx("stylize.roundCorners", json!({"radius": 2.0}));
+    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS);
+    let p = art_round.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Non-terminal Offset Path does not swap; copies union into 1 outer subpath");
+
+    // 3. Non-round join (e.g. miter): preserving order is required as corners differ (#4145).
+    let leaf_miter = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
+    let mut art_miter = Node::group(id, vec![leaf_miter]);
+    let offset_miter = fx("path.offsetPath", json!({"offset": 4.0, "joins": "miter"}));
+    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS);
+    let p = art_miter.children().unwrap()[0].path_data().unwrap();
+    assert_eq!(p.subpaths.len(), 1, "Miter join does not swap; copies union into 1 outer subpath");
+}
+
+#[test]
+fn consecutive_transforms_before_terminal_offset_path_all_move_after() {
+    let t1 = fx("distort.transform", json!({"moveH": 1.0, "moveV": 0.0, "copies": 2}));
+    let t2 = fx("distort.transform", json!({"moveH": 0.0, "moveV": 1.0, "copies": 3}));
+    let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
+
+    let opt = crate::geometry::optimize_geometry_effects(&[&t1, &t2, &offset], true);
+    assert_eq!(opt.len(), 3);
+    assert_eq!(opt[0].id, "path.offsetPath");
+    assert_eq!(opt[1].id, "distort.transform");
+    assert_eq!(opt[2].id, "distort.transform");
+}
+
+#[test]
 fn transform_copies_stop_before_they_overflow() {
     let out = run("distort.transform", json!({"scaleH": 100000, "scaleV": 100000, "copies": 1000}), &square());
     assert!(all_finite(&out) && out.subpaths.len() < 10, "{}", out.subpaths.len());
@@ -458,6 +558,7 @@ fn transform_on_a_group_moves_and_copies_its_images() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let mut g = Node::group(id, vec![Arc::new(sq), Arc::new(image)]);
@@ -479,6 +580,7 @@ fn transform_on_a_group_moves_and_copies_its_images() {
                 xf: Affine::translate((10.0, 0.0)),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         ))],
     );
@@ -531,6 +633,7 @@ fn images_and_symbol_instances_share_the_copy_budget() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let instance = Node::new(id, NodeKind::SymbolInstance { symbol: "s".into(), xf: Affine::IDENTITY });
@@ -560,6 +663,7 @@ fn transform_copies_of_images_stop_at_the_reach_limit() {
             xf: Affine::translate((10.0, 0.0)),
             link: None,
             placement: Default::default(),
+            pixels: None,
         })),
     );
     let mut g = Node::group(id, vec![Arc::new(image)]);
@@ -839,6 +943,18 @@ fn round_corners_keeps_where_a_closed_path_starts() {
 }
 
 #[test]
+fn twist_turns_clockwise_for_positive_angles() {
+    // A positive angle turns clockwise, a negative one counterclockwise
+    // (https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/distort-and-transform-effects-in-illustrator.html).
+    // The document's y runs down, so clockwise on the page takes a point right of the center down.
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
+    assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
+    assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
@@ -915,6 +1031,17 @@ fn scribble_reads_its_earlier_single_variation() {
         json!({"overlapVariation": 3, "spacingVariation": 1})
     );
     assert!(default_params("stylize.scribble").unwrap().get("variation").is_none());
+}
+
+#[test]
+fn scribble_settings_presets_are_distinct_and_recognized() {
+    let presets = crate::scribble_settings();
+    assert_eq!(presets.len(), 11);
+    assert_eq!(presets[0].id, "default");
+    assert_eq!(crate::scribble_setting_id(&presets[0].params), Some("default"));
+    assert_eq!(crate::scribble_setting_id(&presets[9].params), Some("tight"));
+    let custom = json!({"angle": 30.0, "overlap": 0.0, "overlapVariation": 0.5, "strokeWidth": 3.0, "curviness": 5.0, "curvinessVariation": 0.0, "spacing": 4.0, "spacingVariation": 0.5});
+    assert_eq!(crate::scribble_setting_id(&custom), None);
 }
 
 #[test]
@@ -1085,10 +1212,10 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
     let instance = |name: &str| Arc::new(Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY }));
     let mut d = Document::new(100.0, 100.0);
     // A 500 × 500 grid as a symbol's art, directly and inside a group; a symbol holding itself.
-    d.symbols.push(Symbol { name: "Grid".into(), art: repeat(grid(unit(), 500)) });
-    d.symbols.push(Symbol { name: "Grouped".into(), art: Arc::new(Node::group(NodeId(0), vec![repeat(grid(unit(), 500))])) });
-    d.symbols.push(Symbol { name: "Loop".into(), art: Arc::new(Node::group(NodeId(0), vec![unit(), instance("Loop")])) });
-    d.symbols.push(Symbol { name: "Small".into(), art: repeat(grid(unit(), 3)) });
+    d.symbols.push(Symbol { dynamic: false, name: "Grid".into(), art: repeat(grid(unit(), 500)) });
+    d.symbols.push(Symbol { dynamic: false, name: "Grouped".into(), art: Arc::new(Node::group(NodeId(0), vec![repeat(grid(unit(), 500))])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Loop".into(), art: Arc::new(Node::group(NodeId(0), vec![unit(), instance("Loop")])) });
+    d.symbols.push(Symbol { dynamic: false, name: "Small".into(), art: repeat(grid(unit(), 3)) });
     // A 3 × 3 grid of an instance of each: each copy draws 250,000 instances, so one copy fits.
     for name in ["Grid", "Grouped"] {
         let outer = Node::new(NodeId(0), NodeKind::Repeat(grid(instance(name), 3)));
@@ -1100,4 +1227,33 @@ fn a_repeat_of_a_symbol_whose_art_is_a_repeat_shares_the_instance_budget() {
     assert_eq!(expand_live(Some(&d), &looped).len(), 9);
     let small = Node::new(NodeId(0), NodeKind::Repeat(RepeatSpec::mirror(vec![instance("Small")], 90.0, 5.0)));
     assert_eq!(expand_live(Some(&d), &small).len(), 2);
+}
+
+#[test]
+fn a_distance_parameters_range_comes_from_its_documentation() {
+    assert_eq!(length_range("stylize.glowingEdges", "edgeWidth"), Some(1.0..=14.0));
+    // A distance documented without a range, and unknown effects and parameters, have none.
+    assert_eq!(length_range("path.offsetPath", "offset"), None);
+    assert_eq!(length_range("stylize.glowingEdges", "edgeBrightness"), None);
+    assert_eq!(length_range("no.such", "edgeWidth"), None);
+}
+
+#[test]
+fn color_halftones_radius_is_in_raster_pixels_not_a_distance() {
+    // Pixels of the Document Raster Effects resolution, as public documentation gives it (#3260):
+    // no unit setting changes it, so it isn't a distance in points.
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "maxRadius"), Some(4.0..=127.0));
+    assert!(!is_length("pixelate.colorHalftone", "maxRadius", false));
+    assert_eq!(length_range("pixelate.colorHalftone", "maxRadius"), None);
+    assert_eq!(raster_px_range("pixelate.colorHalftone", "channel1"), None);
+    assert_eq!(raster_px_range("stylize.glowingEdges", "edgeWidth"), None);
+    // The effect applies the range's floor to a radius below it.
+    assert_eq!(
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 1})),
+        crate::pixel::parse("pixelate.colorHalftone", &json!({"maxRadius": 4}))
+    );
+    // Scale Strokes & Effects scales it with the object, as it does distances.
+    let mut e = crate::new_effect("pixelate.colorHalftone", &json!({"maxRadius": 10})).unwrap();
+    crate::scale_effect(&mut e, 2.0);
+    assert_eq!((e.params["maxRadius"].as_f64(), e.params["channel1"].as_f64()), (Some(20.0), Some(108.0)));
 }

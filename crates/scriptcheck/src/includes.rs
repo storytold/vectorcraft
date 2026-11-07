@@ -20,13 +20,11 @@ use crate::analyze::{self, IncludeRef, Known};
 use crate::directives::MAX_PATH;
 use crate::report::{Acc, IncludeStatus};
 
-/// An included file that was read and is checked: its path inside the script's folder, its text
-/// (and whether it held bytes that aren't UTF-8), and the `#includepath` folders in force at its
-/// start.
+/// An included file that was read and is checked: its path inside the script's folder, its bytes,
+/// and the `#includepath` folders in force at its start.
 pub(crate) struct ReadFile {
     pub path: String,
-    pub text: String,
-    pub invalid: bool,
+    pub bytes: Vec<u8>,
     pub paths: Rc<[String]>,
 }
 
@@ -141,12 +139,14 @@ pub(crate) fn follow(
                 files.push(path.clone());
                 let file = files.len() - 1;
                 read.insert(path.clone(), (status, Some(file)));
-                let (text, invalid) = crate::decode(&b);
+                let (text, _) = crate::decode(&b);
                 let mut tallies = Acc::new(limits);
-                let scan = analyze::scan(&text, Some(&path), Rc::clone(&inc.paths), known, &mut tallies);
+                let text = analyze::unescaped(text, &mut tallies);
+                let declared = analyze::declarations(&text, &mut tallies);
+                let scan = analyze::scan(&text, &declared, Some(&path), Rc::clone(&inc.paths), known, &mut tallies);
                 acc.steps = acc.steps.saturating_add(tallies.steps);
                 known.add(scan.known, limits.entries);
-                checked.push(ReadFile { path: path.clone(), text: text.into_owned(), invalid, paths: Rc::clone(&inc.paths) });
+                checked.push(ReadFile { path: path.clone(), bytes: b, paths: Rc::clone(&inc.paths) });
                 work.push_back(Work { file, includes: scan.includes, depth: w.depth + 1 });
                 (found, to) = (Some(path), Some(file));
                 break;
@@ -163,9 +163,11 @@ pub(crate) fn follow(
             }
         }
     }
-    let reach = reachable(files.len(), &edges, acc);
+    let component = components(files.len(), &edges, acc);
     for r in rows {
-        let cycle = r.to.and_then(|to| reach.get(to)).and_then(|reached| reached.get(r.from)).copied().unwrap_or(false);
+        // An include closes a cycle when the file it includes leads back to the including one:
+        // both are then in one strongly connected component.
+        let cycle = r.to.and_then(|to| component.get(to)).is_some_and(|c| component.get(r.from) == Some(c));
         let status = if cycle { IncludeStatus::Cycle } else { r.status };
         let file = files.get(r.from).filter(|_| r.from > 0).map(String::as_str);
         acc.include(&r.value, r.line, file, status, r.path.as_deref());
@@ -173,30 +175,67 @@ pub(crate) fn follow(
     checked
 }
 
-/// For each of `n` files, the files it includes directly or through other files (itself too),
-/// with `edges` giving the files each one includes.
-fn reachable(n: usize, edges: &BTreeSet<(usize, usize)>, acc: &mut Acc) -> Vec<Vec<bool>> {
+/// For each of `n` files, the number of its strongly connected component (files that include each
+/// other, directly or through others, share one), with `edges` giving the files each one includes.
+/// Tarjan's algorithm without recursion: linear in files and edges, where a row of reached files
+/// for every file took their square.
+fn components(n: usize, edges: &BTreeSet<(usize, usize)>, acc: &mut Acc) -> Vec<usize> {
     let mut next: Vec<Vec<usize>> = vec![vec![]; n];
     for &(from, to) in edges {
-        if let Some(v) = next.get_mut(from) {
+        if let (Some(v), true) = (next.get_mut(from), to < n) {
             v.push(to);
         }
     }
-    (0..n)
-        .map(|start| {
-            let mut seen = vec![false; n];
-            let mut stack = vec![start];
-            while let Some(f) = stack.pop() {
-                acc.steps = acc.steps.saturating_add(1);
-                match seen.get_mut(f) {
-                    Some(s) if !*s => *s = true,
-                    _ => continue,
+    const UNSEEN: usize = usize::MAX;
+    let (mut index, mut low, mut component) = (vec![UNSEEN; n], vec![0; n], vec![UNSEEN; n]);
+    let (mut on_stack, mut stack) = (vec![false; n], vec![]);
+    let (mut counter, mut components) = (0, 0);
+    for root in 0..n {
+        if index[root] != UNSEEN {
+            continue;
+        }
+        // Each frame: a file and how many of its includes have been followed.
+        let mut frames = vec![(root, 0)];
+        index[root] = counter;
+        low[root] = counter;
+        counter += 1;
+        stack.push(root);
+        on_stack[root] = true;
+        while let Some(&(f, i)) = frames.last() {
+            acc.steps = acc.steps.saturating_add(1);
+            if let Some(&to) = next[f].get(i) {
+                if let Some(top) = frames.last_mut() {
+                    top.1 += 1;
                 }
-                stack.extend(next.get(f).into_iter().flatten().copied());
+                if index[to] == UNSEEN {
+                    index[to] = counter;
+                    low[to] = counter;
+                    counter += 1;
+                    stack.push(to);
+                    on_stack[to] = true;
+                    frames.push((to, 0));
+                } else if on_stack[to] {
+                    low[f] = low[f].min(index[to]);
+                }
+                continue;
             }
-            seen
-        })
-        .collect()
+            frames.pop();
+            if let Some(&(parent, _)) = frames.last() {
+                low[parent] = low[parent].min(low[f]);
+            }
+            if low[f] == index[f] {
+                while let Some(g) = stack.pop() {
+                    on_stack[g] = false;
+                    component[g] = components;
+                    if g == f {
+                        break;
+                    }
+                }
+                components += 1;
+            }
+        }
+    }
+    component
 }
 
 /// List the script's `includes` as not read.

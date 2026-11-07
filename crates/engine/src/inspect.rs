@@ -2,7 +2,8 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Document, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, WidthProfile};
+use vectorcraft_geom::Rect;
 
 use crate::Session;
 
@@ -44,6 +45,10 @@ pub fn node_summary_opts(n: &Node, opts: SummaryOpts, symbols: &SymbolBoxes) -> 
     });
     if n.opacity < 1.0 {
         v["opacity"] = json!(n.opacity);
+        // The same value in the percent scale `object.setProps`, `transparency.set` and the MCP
+        // drawing tools take, so a reader can pass it back as it is. Rounded to 1/100 of a
+        // percent so a 55 written as an f32 reads back as 55, not 55.000001.
+        v["opacityPct"] = json!((f64::from(n.opacity) * 10_000.0).round() / 100.0);
     }
     if n.blend != BlendMode::Normal {
         v["blend"] = json!(n.blend.label());
@@ -265,6 +270,8 @@ fn document_base(s: &Session) -> Value {
     json!({
         "uid": st.uid,
         "title": st.title(),
+        // The File Info title (`file.info`), where `title` comes from the file name once the document has one.
+        "fileInfoTitle": d.title,
         "path": st.path,
         "dirty": st.is_dirty(),
         "revision": st.revision,
@@ -296,20 +303,87 @@ fn document_base(s: &Session) -> Value {
 
 /// What `document.find` matches: every given filter must hit (AND). All matching is
 /// case-insensitive; `name` and `text` are substrings, `kind` is the exact panel label
-/// (`Layer`, `Group`, `Path`, `Type`, `Image`, ...).
+/// (`Layer`, `Group`, `Path`, `Type`, `Image`, ...). The geometric filters read an object's
+/// geometric bounds as `document.inspect` reports them; layers and sublayers fail them, and so
+/// does a node without bounds (an empty group); `anchors` counts a path's anchor points, summed
+/// over a compound path's members, and a node that is neither fails it.
+#[derive(Default)]
 pub struct FindFilter {
     pub name: Option<String>,
     pub kind: Option<String>,
     pub text: Option<String>,
+    /// The bounds lie inside this rectangle, edges included.
+    pub within: Option<Rect>,
+    /// The bounds touch or overlap this rectangle.
+    pub intersects: Option<Rect>,
+    /// The bounds' width.
+    pub width: FindRange,
+    /// The bounds' height.
+    pub height: FindRange,
+    /// The smaller of the bounds' width and height.
+    pub thickness: FindRange,
+    /// The bounds' width times their height.
+    pub area: FindRange,
+    /// The anchor points of a path, or of a compound path's members together.
+    pub anchors: FindRange,
+}
+
+/// Inclusive limits on one measure of a [`FindFilter`]; neither given matches everything.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FindRange {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
+impl FindRange {
+    pub fn is_empty(&self) -> bool {
+        self.min.is_none() && self.max.is_none()
+    }
+
+    fn hits(&self, v: f64) -> bool {
+        self.min.is_none_or(|m| v >= m) && self.max.is_none_or(|m| v <= m)
+    }
 }
 
 impl FindFilter {
     /// True when no effective filter was given (empty strings count as absent).
     pub fn is_empty(&self) -> bool {
         [self.name.as_ref(), self.kind.as_ref(), self.text.as_ref()].iter().all(|f| f.is_none())
+            && self.within.is_none()
+            && self.intersects.is_none()
+            && self.ranges().iter().all(FindRange::is_empty)
+            && self.anchors.is_empty()
     }
 
-    fn hits(&self, n: &Node) -> bool {
+    /// The limits read from the bounds.
+    fn ranges(&self) -> [FindRange; 4] {
+        [self.width, self.height, self.thickness, self.area]
+    }
+
+    fn hits(&self, n: &Node, symbols: &SymbolBoxes) -> bool {
+        if self.within.is_some() || self.intersects.is_some() || self.ranges().iter().any(|r| !r.is_empty()) {
+            if matches!(n.kind, NodeKind::Layer { .. }) {
+                return false;
+            }
+            let Some(b) = n.geometric_bounds_with(symbols) else { return false };
+            if self.within.is_some_and(|r| b.x0 < r.x0 || b.y0 < r.y0 || b.x1 > r.x1 || b.y1 > r.y1) {
+                return false;
+            }
+            if self.intersects.is_some_and(|r| b.x0 > r.x1 || b.x1 < r.x0 || b.y0 > r.y1 || b.y1 < r.y0) {
+                return false;
+            }
+            let (w, h) = (b.width(), b.height());
+            if !(self.width.hits(w) && self.height.hits(h) && self.thickness.hits(w.min(h)) && self.area.hits(w * h)) {
+                return false;
+            }
+        }
+        if !self.anchors.is_empty() && !anchor_count(n).is_some_and(|c| self.anchors.hits(c as f64)) {
+            return false;
+        }
+        self.hits_text(n)
+    }
+
+    fn hits_text(&self, n: &Node) -> bool {
         if let Some(needle) = &self.name
             && !n.display_name().to_lowercase().contains(needle)
         {
@@ -330,31 +404,47 @@ impl FindFilter {
     }
 }
 
+/// The anchor points of a path, or of a compound path's members together; `None` for any other
+/// node.
+fn anchor_count(n: &Node) -> Option<usize> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => Some(path.anchor_count()),
+        NodeKind::Compound { children, .. } => Some(children.iter().filter_map(|c| anchor_count(c)).sum()),
+        _ => None,
+    }
+}
+
 /// Search the whole layer tree, top of the stack first like the Layers panel.
 /// Returns at most `limit` hits as `{id, name, kind, path}` (`path` is the ancestor
-/// chain, layer first) plus the total hit count, so a capped reply stays explicit.
-pub fn find_nodes(doc: &Document, filter: &FindFilter, limit: u64) -> (Vec<Value>, u64) {
+/// chain, layer first) plus the ids of every hit, so a capped reply stays explicit.
+pub fn find_nodes(doc: &Document, filter: &FindFilter, limit: u64) -> (Vec<Value>, Vec<NodeId>) {
     use std::sync::Arc;
-    let mut out = Vec::new();
-    let mut total = 0u64;
-    let mut ancestors: Vec<u64> = Vec::new();
-    fn walk(nodes: &[Arc<Node>], ancestors: &mut Vec<u64>, filter: &FindFilter, limit: u64, out: &mut Vec<Value>, total: &mut u64) {
+    struct Walk<'a> {
+        filter: &'a FindFilter,
+        symbols: SymbolBoxes<'a>,
+        limit: u64,
+        ancestors: Vec<u64>,
+        out: Vec<Value>,
+        ids: Vec<NodeId>,
+    }
+    fn walk(nodes: &[Arc<Node>], w: &mut Walk) {
         for n in nodes.iter().rev() {
-            if filter.hits(n) {
-                *total += 1;
-                if (out.len() as u64) < limit {
-                    out.push(json!({"id": n.id.0, "name": n.display_name(), "kind": n.kind_label(), "path": ancestors}));
+            if w.filter.hits(n, &w.symbols) {
+                w.ids.push(n.id);
+                if (w.out.len() as u64) < w.limit {
+                    w.out.push(json!({"id": n.id.0, "name": n.display_name(), "kind": n.kind_label(), "path": w.ancestors}));
                 }
             }
             if let Some(ch) = n.children() {
-                ancestors.push(n.id.0);
-                walk(ch, ancestors, filter, limit, out, total);
-                ancestors.pop();
+                w.ancestors.push(n.id.0);
+                walk(ch, w);
+                w.ancestors.pop();
             }
         }
     }
-    walk(&doc.layers, &mut ancestors, filter, limit, &mut out, &mut total);
-    (out, total)
+    let mut w = Walk { filter, symbols: doc.symbol_boxes(), limit, ancestors: Vec::new(), out: Vec::new(), ids: Vec::new() };
+    walk(&doc.layers, &mut w);
+    (w.out, w.ids)
 }
 
 /// Cap names as `stroke.set` takes them.

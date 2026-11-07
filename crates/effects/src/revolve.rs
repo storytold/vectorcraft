@@ -12,6 +12,24 @@ use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
 pub const REVOLVE: &str = "threeD.revolve";
 
+/// Most bytes the copies of the object's paint in the faces may take together. Each face and the
+/// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
+/// thousands of faces took gigabytes; past this the source path is drawn.
+const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// About the bytes one copy of `paint` takes.
+fn paint_bytes(paint: &Paint) -> usize {
+    use std::mem::size_of;
+    use vectorcraft_doc::color::{FreeformPoint, GradientStop};
+    let own = size_of::<Paint>();
+    let Paint::Gradient(g) = paint else { return own };
+    let freeform = g
+        .freeform
+        .as_ref()
+        .map_or(0, |f| f.points.len() * size_of::<FreeformPoint>() + f.lines.iter().map(|l| l.len() * size_of::<usize>()).sum::<usize>());
+    own + size_of::<vectorcraft_doc::color::GradientPaint>() + g.gradient.stops.len() * size_of::<GradientStop>() + freeform
+}
+
 fn visible(fx: &[Effect]) -> bool {
     fx.iter().any(|e| e.visible && e.id == REVOLVE)
 }
@@ -93,6 +111,10 @@ fn surface(
     let options = revolve_options(&merged_params(REVOLVE, &fx.params));
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
+    // A face's fill, its shadow and their seam strokes: up to four copies of the paint.
+    if faces.len().saturating_mul(4).saturating_mul(paint_bytes(&paint)) > MAX_PAINT_COPIES {
+        return None;
+    }
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
     // failure also retains the complete surface rather than losing any of the user's art.

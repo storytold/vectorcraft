@@ -89,8 +89,13 @@ fn about(o: Point, a: Affine) -> Affine {
 
 /// The transform `m` of the selection (of a copy with `copy`): of the anchors selected with Direct
 /// Selection alone, when there are some.
-fn preview(m: Affine, copy: bool) -> Action {
-    Action::Preview("object.transform".into(), json!({ "matrix": matrix_json(m), "copy": copy, "anchors": true }))
+fn preview(m: Affine, copy: bool, backquote: bool) -> Action {
+    let mut params = json!({ "matrix": matrix_json(m), "copy": copy, "anchors": true });
+    if backquote {
+        params["objects"] = json!(false);
+        params["patterns"] = json!(true);
+    }
+    Action::Preview("object.transform".into(), params)
 }
 
 /// Reflection across the line through the origin at angle `theta` (radians, screen space).
@@ -149,18 +154,43 @@ impl TransformTool {
                 (about(o, Affine::scale_non_uniform(sx, sy)), format!("W: {:.1}%\nH: {:.1}%", sx * 100.0, sy * 100.0))
             }
             TransformKind::Shear => {
-                // The shear axis follows the dominant drag direction (Shift keeps it strictly on
-                // that axis, which this always does).
-                let d = p - start;
+                // The shear axis follows the dominant drag direction. Shift keeps the drag on that
+                // axis and locks the object's width (vertical shear) or height (horizontal shear).
+                let mut d = p - start;
+                if shift {
+                    if d.x.abs() >= d.y.abs() {
+                        d.y = 0.0;
+                    } else {
+                        d.x = 0.0;
+                    }
+                }
                 let horizontal = d.x.abs() >= d.y.abs();
                 let lever = |a: f64, fallback: f64| if a.abs() > 1e-3 { a } else { fallback.max(1.0) };
-                if horizontal {
-                    let k = d.x / lever(start.y - o.y, bounds.height() / 2.0);
-                    (about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0])), format!("{:.1}°", (-k.atan()).to_degrees()))
+                let shear_k = |horizontal: bool| {
+                    if horizontal { d.x / lever(start.y - o.y, bounds.height() / 2.0) } else { d.y / lever(start.x - o.x, bounds.width() / 2.0) }
+                };
+                let mut k = shear_k(horizontal);
+                let mut m = if horizontal {
+                    about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0]))
                 } else {
-                    let k = d.y / lever(start.x - o.x, bounds.width() / 2.0);
-                    (about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0])), format!("{:.1}°", (-k.atan()).to_degrees()))
+                    about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0]))
+                };
+                if shift {
+                    let (size0, size1) = if horizontal {
+                        (bounds.height(), m.transform_rect_bbox(bounds).height())
+                    } else {
+                        (bounds.width(), m.transform_rect_bbox(bounds).width())
+                    };
+                    if size1 > 1e-9 && (size1 - size0).abs() > 1e-6 {
+                        k *= size0 / size1;
+                        m = if horizontal {
+                            about(o, Affine::new([1.0, 0.0, k, 1.0, 0.0, 0.0]))
+                        } else {
+                            about(o, Affine::new([1.0, k, 0.0, 1.0, 0.0, 0.0]))
+                        };
+                    }
                 }
+                (m, format!("{:.1}°", (-k.atan()).to_degrees()))
             }
         }
     }
@@ -218,14 +248,14 @@ impl Tool for TransformTool {
                 d.last = m;
                 self.drag = Some(d);
                 self.measure = Some((p, text));
-                out.push(preview(m, ev.mods.alt));
+                out.push(preview(m, ev.mods.alt, ev.backquote));
                 out
             }
             PointerKind::Up => {
                 let Some(d) = self.end_drag() else { return vec![] };
                 if d.began {
                     // The Alt state at release decides whether the result is a copy.
-                    vec![preview(d.last, ev.mods.alt), Action::Commit]
+                    vec![preview(d.last, ev.mods.alt, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too.
                     self.origin = Some((d.pick, cx.selection.objects.clone()));
@@ -317,6 +347,51 @@ mod tests {
 
     fn ev(kind: PointerKind, x: f64, y: f64) -> PointerEvent {
         PointerEvent::new(kind, x, y)
+    }
+    #[test]
+    fn backquote_drag_previews_and_commits_pattern_only_for_each_transform_tool() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        for kind in [TransformKind::Rotate, TransformKind::Reflect, TransformKind::Scale, TransformKind::Shear] {
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            assert!(
+                matches!(drag.as_slice(), [Action::Begin(_), Action::Preview(c, v)] if c == "object.transform" && v["objects"] == false && v["patterns"] == true),
+                "{kind:?}: {drag:?}"
+            );
+            assert_ne!(matrix(&drag[1]), Affine::IDENTITY, "{kind:?}");
+            let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 290.0, 210.0) });
+            assert!(
+                matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v["objects"] == false && v["patterns"] == true),
+                "{kind:?}: {up:?}"
+            );
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            let up = t.pointer(&cx, &ev(PointerKind::Up, 290.0, 210.0));
+            assert!(
+                matches!(up.as_slice(), [Action::Preview(_, v), Action::Commit] if v.get("objects").is_none() && v.get("patterns").is_none()),
+                "{kind:?}: {up:?}"
+            );
+            let mut t = TransformTool::new(kind);
+            t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+            t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0) });
+            assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+            assert!(t.pointer(&cx, &ev(PointerKind::Up, 290.0, 210.0)).is_empty());
+        }
+        let mut t = TransformTool::new(TransformKind::Scale);
+        t.pointer(&cx, &ev(PointerKind::Down, 250.0, 170.0));
+        let mods = Mods { alt: true, shift: true, ..Default::default() };
+        let drag = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Drag, 290.0, 210.0).with_mods(mods) });
+        assert!(matches!(&drag[1], Action::Preview(_, v) if v["copy"] == true && v["objects"] == false && v["patterns"] == true));
+        let c = matrix(&drag[1]).as_coeffs();
+        assert!((c[0] - c[3]).abs() < 1e-9);
+        let up = t.pointer(&cx, &PointerEvent { backquote: true, ..ev(PointerKind::Up, 290.0, 210.0).with_mods(mods) });
+        assert!(matches!(&up[0], Action::Preview(_, v) if v["copy"] == true && v["objects"] == false));
     }
     fn alt() -> Mods {
         Mods { alt: true, ..Default::default() }
@@ -507,6 +582,28 @@ mod tests {
         let (m, _) = t.matrix_for(o, Point::new(150.0, 100.0), Point::new(200.0, 100.0), false, Rect::new(100.0, 100.0, 200.0, 200.0));
         assert!((m * Point::new(100.0, 200.0)).distance(Point::new(100.0, 200.0)) < 1e-9);
         assert!((m * Point::new(150.0, 100.0)).distance(Point::new(200.0, 100.0)) < 1e-9);
+    }
+
+    #[test]
+    fn shear_shift_vertical_preserves_width() {
+        let b = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let o = Point::new(150.0, 200.0);
+        let t = TransformTool::new(TransformKind::Shear);
+        let start = Point::new(100.0, 100.0);
+        let p = Point::new(100.0, 190.0);
+        let (m, _) = t.matrix_for(o, start, p, true, b);
+        assert!((m.transform_rect_bbox(b).width() - b.width()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shear_shift_horizontal_preserves_height() {
+        let b = Rect::new(100.0, 100.0, 200.0, 200.0);
+        let o = Point::new(150.0, 200.0);
+        let t = TransformTool::new(TransformKind::Shear);
+        let start = Point::new(100.0, 100.0);
+        let p = Point::new(190.0, 130.0);
+        let (m, _) = t.matrix_for(o, start, p, true, b);
+        assert!((m.transform_rect_bbox(b).height() - b.height()).abs() < 1e-6);
     }
 
     #[test]

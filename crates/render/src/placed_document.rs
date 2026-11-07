@@ -6,11 +6,17 @@
 //!
 //! On screen ([`RenderOptions::progressive_placed`]): a placed document can't be edited, so what
 //! it shows is cached as a bitmap per file and zoom step (a power of two, in device pixels per
-//! point), shared by every object showing that file. A bitmap not made yet is made on a
+//! point), shared by every object showing that file. Images inside it whose pixels can't be
+//! decoded are drawn as crossed boxes in the bitmap when the frame marks them
+//! ([`RenderOptions::mark_undecoded_images`]), and the bitmaps with and without marks are kept
+//! apart. A bitmap not made yet is made on a
 //! background worker while the frame shows another step's bitmap, or a light placeholder;
-//! [`generation`] changes when one is ready and [`busy`] says whether any is coming, so the screen
-//! can draw again. Past [`MAX_SIDE`] pixels, and in outline, proofing and ink frames, it is drawn
-//! exactly.
+//! [`generation`] changes when one is ready, [`made_between`] says for which files, and [`busy`]
+//! says whether any is coming, so the screen can draw again where those files show
+//! ([`crate::placed_area`]). Bitmaps drawn since a frame began are not dropped to make room for
+//! the ones it asks for, up to [`MAX_BYTES`], and a bitmap that can't be made is not asked for
+//! again. Past [`MAX_SIDE`] pixels, past [`MAX_BYTES`], and in outline, proofing and ink frames,
+//! it is drawn exactly.
 //!
 //! A document opened with only its placed documents' previews ([`ImageBlob::is_proxy`]) shows them
 //! up to their resolution; past it the file is read again in the background
@@ -19,7 +25,7 @@
 //! same way, up to [`MAX_DEPTH`] deep; deeper ones show their previews.
 
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
 
@@ -33,13 +39,18 @@ use crate::{Frame, Renderer};
 
 /// The longest side of a cached bitmap (pixels); larger steps draw exactly.
 pub const MAX_SIDE: f64 = 4096.0;
-/// The most bytes of bitmaps kept.
+/// The bytes of bitmaps kept, past which those not drawn since the frame that asks for another
+/// one began are dropped.
 const BUDGET: usize = 512 << 20;
+/// The most bytes of bitmaps kept, those drawn in the frame included: a bitmap that would take
+/// them past it is not kept, and its file draws exactly at that zoom step.
+const MAX_BYTES: usize = 4 * BUDGET;
 /// The smallest zoom step (device pixels per point).
 const MIN_STEP: f64 = 1.0 / 64.0;
 
-/// A bitmap's identity: the file shown (its key) and the zoom step's bits.
-type BitmapKey = (String, u64);
+/// A bitmap's identity: the file shown (its key), the zoom step's bits, and whether images whose
+/// pixels can't be decoded are marked ([`crate::RenderOptions::mark_undecoded_images`]).
+type BitmapKey = (String, u64, bool);
 
 struct Bitmap {
     pm: Arc<Pixmap>,
@@ -57,7 +68,19 @@ struct Bitmaps {
 static BITMAPS: LazyLock<Mutex<Bitmaps>> = LazyLock::new(Default::default);
 /// Bitmaps being made.
 static PENDING: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
+/// Bitmaps that could not be made (neither the file nor a preview could be read): not asked for
+/// again.
+static FAILED: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
+/// Bitmaps made but not kept, past [`MAX_BYTES`]: their files draw exactly at those zoom steps.
+static UNKEPT: LazyLock<Mutex<HashSet<BitmapKey>>> = LazyLock::new(Default::default);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+/// The files of the last [`MADE_KEPT`] bitmaps made, each with the [`generation`] it gave.
+static MADE: LazyLock<Mutex<VecDeque<(u64, String)>>> = LazyLock::new(Default::default);
+/// How many bitmaps [`MADE`] keeps.
+const MADE_KEPT: usize = 256;
+/// How many bitmaps of each file were asked for (tests).
+#[cfg(test)]
+static SCHEDULED: LazyLock<Mutex<HashMap<String, usize>>> = LazyLock::new(Default::default);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     // The caches stay whole if a holder panicked (entries are only inserted and removed).
@@ -65,9 +88,33 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Changes whenever a bitmap made in the background is ready: a screen showing placed documents
-/// draws again when it does.
+/// draws again when it does, where [`made_between`] says.
 pub fn generation() -> u64 {
     GENERATION.load(Ordering::Relaxed)
+}
+
+/// The files whose bitmaps were made after [`generation`] `from`, up to `to`: a screen drawn at
+/// `from` draws again where they show ([`crate::placed_area`]). None when they are no longer
+/// known (more than [`MADE_KEPT`] bitmaps were made since).
+pub fn made_between(from: u64, to: u64) -> Option<HashSet<String>> {
+    let made = lock(&MADE);
+    let oldest = made.front().map_or(u64::MAX, |(g, _)| *g);
+    if to > from && oldest > from.saturating_add(1) {
+        return None;
+    }
+    Some(made.iter().filter(|(g, _)| *g > from && *g <= to).map(|(_, key)| key.clone()).collect())
+}
+
+/// A bitmap of file `key` is ready: the generation changes, and [`MADE`] records which file
+/// changed it. Both happen under [`MADE`]'s lock, so a generation read is in [`MADE`] by the time
+/// [`made_between`] reads it.
+fn made(key: &str) {
+    let mut made = lock(&MADE);
+    let g = GENERATION.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    made.push_back((g, key.to_owned()));
+    while made.len() > MADE_KEPT {
+        made.pop_front();
+    }
 }
 
 /// Are bitmaps being made in the background?
@@ -79,6 +126,27 @@ pub fn busy() -> bool {
 #[cfg(test)]
 pub(crate) fn pending_for(key: &str) -> bool {
     lock(&PENDING).iter().any(|k| k.0 == key)
+}
+
+/// How many bitmaps of file `key` were asked for.
+#[cfg(test)]
+pub(crate) fn scheduled(key: &str) -> usize {
+    lock(&SCHEDULED).get(key).copied().unwrap_or(0)
+}
+
+/// Mark the bitmaps of file `key` at zoom `step`, with and without marks on undecoded images, as
+/// not kept past [`MAX_BYTES`].
+#[cfg(test)]
+pub(crate) fn mark_unkept(key: &str, step: f64) {
+    for mark in [false, true] {
+        lock(&UNKEPT).insert((key.to_string(), step.to_bits(), mark));
+    }
+}
+
+/// `object`'s file (`blob`) as a bitmap of `step` device pixels per point, made here and now.
+#[cfg(test)]
+pub(crate) fn bitmap(object: &PlacedDocument, blob: &ImageBlob, step: f64, mark_undecoded_images: bool) -> Option<Pixmap> {
+    make(&mut Renderer::new(), object, blob, step, mark_undecoded_images)
 }
 
 /// The zoom step for `scale` device pixels per point: the power of two at or above it.
@@ -95,29 +163,55 @@ impl Bitmaps {
         Some(b.pm.clone())
     }
 
-    /// The bitmap of another step of the same file, the nearest to `step`.
-    fn nearest(&self, key: &str, step: f64) -> Option<(Arc<Pixmap>, f64)> {
+    /// The bitmap of another step of the same file, with the same marks on undecoded images, the
+    /// nearest to `step`.
+    fn nearest(&self, key: &str, step: f64, mark: bool) -> Option<(Arc<Pixmap>, f64)> {
         self.map
             .iter()
-            .filter(|((k, _), _)| k == key)
+            .filter(|((k, _, m), _)| k == key && *m == mark)
             .min_by(|a, b| (a.1.step / step).log2().abs().total_cmp(&(b.1.step / step).log2().abs()))
             .map(|(_, b)| (b.pm.clone(), b.step))
     }
 
-    fn insert(&mut self, k: BitmapKey, pm: Pixmap, step: f64) {
+    /// Keep `pm` as bitmap `k`, and past `budget` bytes drop the bitmaps drawn least recently,
+    /// but not those drawn or made since clock `keep` (when the frame that asked for `k` began),
+    /// which stay even past it. When the bitmaps would still be past `max` bytes, `k` is not kept:
+    /// false.
+    fn insert(&mut self, k: BitmapKey, pm: Pixmap, step: f64, keep: u64, (budget, max): (usize, usize)) -> bool {
         self.clock += 1;
         let size = pm.width() as usize * pm.height() as usize * 4;
         self.bytes += size;
-        if let Some(old) = self.map.insert(k, Bitmap { pm: Arc::new(pm), step, used: self.clock }) {
+        if let Some(old) = self.map.insert(k.clone(), Bitmap { pm: Arc::new(pm), step, used: self.clock }) {
             self.bytes = self.bytes.saturating_sub(old.pm.width() as usize * old.pm.height() as usize * 4);
         }
-        while self.bytes > BUDGET && self.map.len() > 1 {
-            let Some(k) = self.map.iter().min_by_key(|(_, b)| b.used).map(|(k, _)| k.clone()) else { break };
+        while self.bytes > budget {
+            let Some(k) = self.map.iter().filter(|(key, b)| b.used <= keep && **key != k).min_by_key(|(_, b)| b.used).map(|(key, _)| key.clone())
+            else {
+                break;
+            };
             if let Some(b) = self.map.remove(&k) {
                 self.bytes = self.bytes.saturating_sub(b.pm.width() as usize * b.pm.height() as usize * 4);
             }
         }
+        if self.bytes <= max {
+            return true;
+        }
+        if self.map.remove(&k).is_some() {
+            self.bytes = self.bytes.saturating_sub(size);
+        }
+        false
     }
+}
+
+/// Runs a closure in the file-access scope of whoever scheduled a job (see [`set_scope_capture`]).
+pub type Scoped = Box<dyn FnOnce(&mut dyn FnMut()) + Send>;
+
+static SCOPE_CAPTURE: std::sync::OnceLock<fn() -> Scoped> = std::sync::OnceLock::new();
+
+/// Register how the scope the caller reads files in is carried to the background workers, which
+/// read placed files too (the first registration stays). The engine registers its automation roots.
+pub fn set_scope_capture(f: fn() -> Scoped) {
+    let _ = SCOPE_CAPTURE.set(f);
 }
 
 /// What a bitmap is made from.
@@ -126,6 +220,10 @@ struct Job {
     object: PlacedDocument,
     blob: ImageBlob,
     step: f64,
+    /// The bitmap clock when the frame that asked for it began ([`Bitmaps::insert`]).
+    keep: u64,
+    /// The scheduler's file-access scope, which the worker runs the job in.
+    scope: Option<Scoped>,
 }
 
 /// Device pixels per point of `object`'s box its preview `bytes` have.
@@ -161,14 +259,30 @@ fn depth() -> usize {
 /// Render `art` of a placed document's file (`doc`, its resources) into `w`×`h` transparent
 /// pixels through `view`, the placed documents inside it one level deeper.
 pub fn render_inside(r: &mut Renderer, doc: &vectorcraft_doc::Document, art: &Arc<Node>, w: u16, h: u16, view: Affine) -> Option<crate::Rendered> {
+    render_inside_marked(r, doc, art, w, h, view, false)
+}
+
+/// [`render_inside`], drawing images whose pixels can't be decoded as crossed boxes when
+/// `mark_undecoded_images` is set ([`crate::RenderOptions::mark_undecoded_images`]).
+fn render_inside_marked(
+    r: &mut Renderer,
+    doc: &vectorcraft_doc::Document,
+    art: &Arc<Node>,
+    w: u16,
+    h: u16,
+    view: Affine,
+    mark_undecoded_images: bool,
+) -> Option<crate::Rendered> {
     let _inside = Inside::enter();
-    r.render_node(doc, art, w, h, view)
+    let opts = crate::RenderOptions { mark_undecoded_images, ..Default::default() };
+    r.render_node_with(doc, art, w, h, view, &opts)
 }
 
 /// `object`'s file (`blob`) as a bitmap of `step` device pixels per point of its box: from its
 /// preview when that is all there is and is fine enough, else from the file (read again when
-/// needed; the preview when it can't be).
-fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64) -> Option<Pixmap> {
+/// needed; the preview when it can't be). Images whose pixels can't be decoded are drawn as
+/// crossed boxes when `mark_undecoded_images` is set.
+fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64, mark_undecoded_images: bool) -> Option<Pixmap> {
     let (w, h) = (pixels(object.width * step), pixels(object.height * step));
     let preview = if blob.is_proxy() { Some(blob.bytes.clone()) } else { blob.proxy.clone() };
     let full = match blob.is_proxy() {
@@ -181,7 +295,7 @@ fn make(r: &mut Renderer, object: &PlacedDocument, blob: &ImageBlob, step: f64) 
     let f = e.frame;
     let (sx, sy) = (w as f64 / f.width(), h as f64 / f.height());
     let view = Affine::scale_non_uniform(sx, sy) * Affine::translate((-f.x0, -f.y0));
-    let img = render_inside(r, &e.doc, &e.art, w, h, view)?;
+    let img = render_inside_marked(r, &e.doc, &e.art, w, h, view, mark_undecoded_images)?;
     let data = img.pixels.as_chunks::<4>().0.iter().map(|&[r, g, b, a]| vello_cpu::color::PremulRgba8 { r, g, b, a }).collect();
     Some(Pixmap::from_parts(data, w, h))
 }
@@ -191,13 +305,29 @@ fn pixels(v: f64) -> u16 {
     v.round().clamp(1.0, MAX_SIDE) as u16
 }
 
-/// Make `job`'s bitmap and keep it.
-fn run(r: &mut Renderer, job: Job) {
-    if let Some(pm) = make(r, &job.object, &job.blob, job.step) {
-        lock(&BITMAPS).insert(job.key.clone(), pm, job.step);
+/// Make `job`'s bitmap and keep it (or remember that it was not kept), or remember that it can't
+/// be made. The generation changes before the job stops being pending, so a screen that sees
+/// nothing pending sees the change.
+fn run(r: &mut Renderer, mut job: Job) {
+    let scope = job.scope.take();
+    let mut body = || {
+        match make(r, &job.object, &job.blob, job.step, job.key.2) {
+            Some(pm) => {
+                if !lock(&BITMAPS).insert(job.key.clone(), pm, job.step, job.keep, (BUDGET, MAX_BYTES)) {
+                    lock(&UNKEPT).insert(job.key.clone());
+                }
+                made(&job.key.0);
+            }
+            None => {
+                lock(&FAILED).insert(job.key.clone());
+            }
+        }
+        lock(&PENDING).remove(&job.key);
+    };
+    match scope {
+        Some(scoped) => scoped(&mut body),
+        None => body(),
     }
-    lock(&PENDING).remove(&job.key);
-    GENERATION.fetch_add(1, Ordering::Relaxed);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -221,9 +351,10 @@ mod workers {
                 loop {
                     let job = super::lock(&rx).recv();
                     let Ok(job) = job else { break };
-                    // A panic loses this bitmap, not the worker.
+                    // A panic loses this bitmap, not the worker; it is not asked for again.
                     let key = job.key.clone();
                     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| super::run(&mut r, *job))).is_err() {
+                        super::lock(&super::FAILED).insert(key.clone());
                         super::lock(&super::PENDING).remove(&key);
                     }
                 }
@@ -246,6 +377,10 @@ mod workers {
 fn schedule(job: Job) {
     if !lock(&PENDING).insert(job.key.clone()) {
         return;
+    }
+    #[cfg(test)]
+    {
+        *lock(&SCHEDULED).entry(job.key.0.clone()).or_default() += 1;
     }
     #[cfg(not(target_arch = "wasm32"))]
     let job = match workers::submit(Box::new(job)) {
@@ -281,7 +416,7 @@ impl Renderer {
             if blob.is_proxy()
                 && let Some(im) = p.preview_image(&blob.bytes)
             {
-                self.draw_image(ctx, f, &im);
+                self.draw_image(ctx, f, &im, None);
             }
             return;
         };
@@ -298,8 +433,9 @@ impl Renderer {
         self.draw_arc(ctx, &inner, &e.art);
     }
 
-    /// Draw `p` from its bitmap at this zoom step, or (while that is made) another step's, or a
-    /// placeholder. False when bitmaps don't suit (too large).
+    /// Draw `p` from its bitmap at this zoom step, or (while that is made, or when it can't be)
+    /// another step's, or a placeholder. False when bitmaps don't suit (too large, or not kept
+    /// past [`MAX_BYTES`]).
     fn draw_placed_bitmap(&mut self, ctx: &mut RenderContext, f: &Frame, p: &PlacedDocument) -> bool {
         let m = f.view * p.xf;
         let Some(step) = step(mean_scale(m)) else { return false };
@@ -307,20 +443,28 @@ impl Renderer {
             return false;
         }
         let Some(blob) = f.doc.images.get(&p.key).cloned() else { return true };
-        let key = (p.key.clone(), step.to_bits());
-        let (found, nearest) = {
+        let key = (p.key.clone(), step.to_bits(), f.opts.mark_undecoded_images);
+        // Not kept past [`MAX_BYTES`]: drawn exactly.
+        if lock(&UNKEPT).contains(&key) {
+            return false;
+        }
+        let (found, nearest, keep) = {
             let mut b = lock(&BITMAPS);
+            // The clock when this frame first drew a placed document's bitmap.
+            let keep = *self.placed_frame.get_or_insert(b.clock);
             let found = b.get(&key);
-            let nearest = if found.is_none() { b.nearest(&p.key, step) } else { None };
-            (found, nearest)
+            let nearest = if found.is_none() { b.nearest(&p.key, step, f.opts.mark_undecoded_images) } else { None };
+            (found, nearest, keep)
         };
         let shown = match found {
             Some(pm) => Some(pm),
+            // It can't be made: another step's, or the placeholder.
+            None if lock(&FAILED).contains(&key) => nearest.map(|n| n.0),
             None => {
-                schedule(Job { key, object: p.clone(), blob, step });
+                schedule(Job { key, object: p.clone(), blob, step, keep, scope: SCOPE_CAPTURE.get().map(|capture| capture()) });
                 // Made here and now (no threads) or meanwhile another step's.
                 let mut b = lock(&BITMAPS);
-                b.get(&(p.key.clone(), step.to_bits())).or(nearest.map(|n| n.0))
+                b.get(&(p.key.clone(), step.to_bits(), f.opts.mark_undecoded_images)).or(nearest.map(|n| n.0))
             }
         };
         let rect = Rect::new(0.0, 0.0, p.width, p.height);
@@ -334,7 +478,7 @@ impl Renderer {
                 ctx.reset_paint_transform();
             }
             None => {
-                // Coming: a light box where it will be.
+                // Coming, or it can't be made: a light box where it shows.
                 ctx.set_transform(m);
                 ctx.set_paint(peniko::Color::from_rgba8(128, 128, 128, 40));
                 ctx.fill_rect(&kurbo::Rect::new(rect.x0, rect.y0, rect.x1, rect.y1));
@@ -357,5 +501,45 @@ mod tests {
         assert_eq!(step(1e-9), Some(MIN_STEP));
         assert_eq!(step(f64::NAN), None);
         assert_eq!(step(0.0), None);
+    }
+
+    /// Past the budget, the bitmaps drawn least recently are dropped, but not those drawn since
+    /// the frame that asked for the new one began; past the most, the new one is not kept.
+    #[test]
+    fn bitmaps_drawn_in_the_frame_stay_up_to_the_most_kept() {
+        let mut b = Bitmaps::default();
+        // 400 bytes each: a budget of 1,000 bytes and at most 2,000.
+        let limits = (1000, 2000);
+        let key = |name: &str| (name.to_string(), 1f64.to_bits(), false);
+        for name in ["a", "b", "c"] {
+            assert!(b.insert(key(name), Pixmap::new(10, 10), 1.0, 0, limits));
+        }
+        assert_eq!(b.bytes, 1200, "all made in the frame: kept past the budget");
+        // The next frame begins and draws "a", then asks for "d".
+        let frame = b.clock;
+        assert!(b.get(&key("a")).is_some());
+        assert!(b.insert(key("d"), Pixmap::new(10, 10), 1.0, frame, limits));
+        let mut kept: Vec<&str> = b.map.keys().map(|(name, _, _)| name.as_str()).collect();
+        kept.sort_unstable();
+        assert_eq!((kept, b.bytes), (vec!["a", "d"], 800), "b and c, not drawn since, are dropped");
+        for name in ["e", "f", "g"] {
+            assert!(b.insert(key(name), Pixmap::new(10, 10), 1.0, frame, limits), "{name}");
+        }
+        assert_eq!(b.bytes, 2000);
+        assert!(!b.insert(key("h"), Pixmap::new(10, 10), 1.0, frame, limits), "past the most: not kept");
+        assert!(!b.map.contains_key(&key("h")) && b.bytes == 2000);
+    }
+
+    /// While a bitmap is made, another step's bitmap stands in only when it has the same marks on
+    /// undecoded images.
+    #[test]
+    fn a_stand_in_bitmap_has_the_same_marks() {
+        let mut b = Bitmaps::default();
+        let limits = (BUDGET, MAX_BYTES);
+        assert!(b.insert(("a".into(), 1f64.to_bits(), false), Pixmap::new(10, 10), 1.0, 0, limits));
+        assert!(b.insert(("a".into(), 4f64.to_bits(), true), Pixmap::new(40, 40), 4.0, 0, limits));
+        assert_eq!(b.nearest("a", 2.0, false).map(|n| n.1), Some(1.0));
+        assert_eq!(b.nearest("a", 2.0, true).map(|n| n.1), Some(4.0));
+        assert!(b.nearest("b", 2.0, false).is_none());
     }
 }

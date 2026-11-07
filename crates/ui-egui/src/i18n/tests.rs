@@ -4,6 +4,37 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
+fn hindi_resolves_locales_and_uses_zero_one_plurals() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
+        assert_eq!(lang_from_tag(tag), Some(hi), "{tag}");
+    }
+    assert_eq!(hi.name(), "हिन्दी");
+    assert_eq!([0, 1, 2, 21, u64::MAX].map(hi.0.plural), [0, 0, 1, 1, 1]);
+    assert_eq!(tr(hi, "Save"), "सेव");
+    assert_eq!(tr(hi, "Save As…"), "सेव ऐज़…");
+    assert_eq!(tr(hi, "Path"), "पाथ");
+    assert_eq!(tr(hi, "Selection"), "सिलेक्शन");
+    assert_eq!(tr(hi, "Properties"), "प्रॉपर्टीज़");
+    assert_eq!(tr(hi, "Options"), "ऑप्शन्स");
+    assert_eq!(tr(hi, "Open"), "ओपन");
+    let (entries, errors) = parse_entries(hi.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    for (ctx, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@plural" || ctx == "@msgplural") {
+        let (one, other) = src.split_once('|').expect("one|other source");
+        let forms: Vec<_> = translation.split('|').collect();
+        assert_eq!(forms.len(), 2, "{ctx}: {src}");
+        if ctx == "@plural" {
+            for (n, index) in [(0, 0), (1, 0), (2, 1), (21, 1)] {
+                assert_eq!(trn(hi, n, one, other), forms[index].replace("{n}", &n.to_string()));
+            }
+        }
+    }
+}
+
+/// Locale tags name their language by region or script (in either case, with an encoding or
+/// modifier), and a tag that names no language resolves to none.
+#[test]
 fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("en_US.UTF-8"), Some(Lang::EN));
     assert_eq!(lang_from_tag("C"), Some(Lang::EN));
@@ -23,24 +54,7 @@ fn tags_map_to_languages() {
     for tag in ["fr", "fr_FR.UTF-8", "fr-BE", "fr_CA", "fr-CH", "fr-LU"] {
         assert_eq!(lang_from_tag(tag), Lang::from_code("fr"), "{tag}");
     }
-    for tag in ["ka", "ka-GE", "ka_GE.UTF-8", "KA-ge"] {
-        assert_eq!(lang_from_tag(tag), Some(ka()), "{tag}");
-    }
-    for tag in ["uk", "uk-UA", "uk_UA.UTF-8", "UK-ua", "uk_UA.UTF-8@euro"] {
-        assert_eq!(lang_from_tag(tag), Some(uk()), "{tag}");
-    }
-    for tag in ["hu", "hu-HU", "hu_HU.UTF-8", "HU-hu"] {
-        assert_eq!(lang_from_tag(tag), Some(hu()), "{tag}");
-    }
-    for tag in ["ko", "ko-KR", "ko_KR.UTF-8", "KO-kr"] {
-        assert_eq!(lang_from_tag(tag), Some(ko()), "{tag}");
-    }
-    for tag in ["vi", "vi-VN", "vi_VN.UTF-8", "VI-vn"] {
-        assert_eq!(lang_from_tag(tag), Some(vi()), "{tag}");
-    }
-    for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8", "SV-se"] {
-        assert_eq!(lang_from_tag(tag), Lang::from_code("sv"), "{tag}");
-    }
+    other_tags_map_to_languages();
     // Traditional Chinese: by region, by script, and with a region after the script.
     assert_eq!(lang_from_tag("zh_TW.UTF-8"), Some(ZH()));
     assert_eq!(lang_from_tag("zh-TW"), Some(ZH()));
@@ -59,8 +73,40 @@ fn tags_map_to_languages() {
     assert_eq!(lang_from_tag("_"), None);
 }
 
-/// Italian, Brazilian Portuguese, Finnish, Turkish and Polish resolve from their locale tags and
-/// preferences, and each language names itself in its own language.
+/// The Bosnian, Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
+/// [`tags_map_to_languages`].
+fn other_tags_map_to_languages() {
+    let bs = Lang::from_code("bs").expect("bs registered");
+    for tag in ["bs", "bs-BA", "bs_BA.UTF-8", "BS-ba", "bs-Latn-BA"] {
+        assert_eq!(lang_from_tag(tag), Some(bs), "{tag}");
+    }
+    for tag in ["ka", "ka-GE", "ka_GE.UTF-8", "KA-ge"] {
+        assert_eq!(lang_from_tag(tag), Some(ka()), "{tag}");
+    }
+    for tag in ["uk", "uk-UA", "uk_UA.UTF-8", "UK-ua", "uk_UA.UTF-8@euro"] {
+        assert_eq!(lang_from_tag(tag), Some(uk()), "{tag}");
+    }
+    for tag in ["hu", "hu-HU", "hu_HU.UTF-8", "HU-hu"] {
+        assert_eq!(lang_from_tag(tag), Some(hu()), "{tag}");
+    }
+    for tag in ["ko", "ko-KR", "ko_KR.UTF-8", "KO-kr"] {
+        assert_eq!(lang_from_tag(tag), Some(ko()), "{tag}");
+    }
+    for tag in ["vi", "vi-VN", "vi_VN.UTF-8", "VI-vn"] {
+        assert_eq!(lang_from_tag(tag), Some(vi()), "{tag}");
+    }
+    for tag in ["sv", "sv-SE", "sv-FI", "sv_SE.UTF-8", "SV-se"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("sv"), "{tag}");
+    }
+    // Catalan: Catalonia, Andorra, Northern Catalonia, the Valencian Country and the rest share
+    // the one catalog.
+    for tag in ["ca", "ca-ES", "ca_AD.UTF-8", "CA-es", "ca-FR", "ca-IT", "ca-ES-VALENCIA"] {
+        assert_eq!(lang_from_tag(tag), Lang::from_code("ca"), "{tag}");
+    }
+}
+
+/// Italian, Brazilian Portuguese, Finnish, Turkish, Catalan and Polish resolve from their locale
+/// tags and preferences, and each language names itself in its own language.
 #[test]
 fn languages_resolve_from_their_tags_and_name_themselves() {
     let lang = |code: &str| Lang::from_code(code).expect("registered");
@@ -69,6 +115,7 @@ fn languages_resolve_from_their_tags_and_name_themselves() {
         ("pt-br", &["pt-br", "pt_BR.UTF-8", "pt-BR", "pt_BR"]),
         ("fi", &["fi", "fi-FI", "fi_FI.UTF-8", "FI-fi"]),
         ("tr", &["tr", "tr-TR", "tr_TR.UTF-8", "TR-tr", "tr-CY"]),
+        ("ca", &["ca", "ca-ES", "ca_AD.UTF-8", "CA-es", "ca-FR", "ca-IT", "ca-ES-VALENCIA"]),
         ("pl", &["pl", "pl-PL", "pl_PL.UTF-8", "PL-pl"]),
     ] {
         for tag in tags {
@@ -78,11 +125,62 @@ fn languages_resolve_from_their_tags_and_name_themselves() {
     // Filipino (`fil`) and Swedish in Finland (`sv-FI`) don't pick Finnish.
     assert_ne!(lang_from_tag("fil"), Some(lang("fi")));
     assert_ne!(lang_from_tag("sv-FI"), Some(lang("fi")));
-    for (pref, code) in [("vi", "vi"), ("VI", "vi"), ("fi", "fi"), ("FI", "fi"), ("tr", "tr"), ("TR", "tr"), ("pt-br", "pt-br"), ("pt-BR", "pt-br")] {
+    for (pref, code) in [
+        ("vi", "vi"),
+        ("VI", "vi"),
+        ("fi", "fi"),
+        ("FI", "fi"),
+        ("tr", "tr"),
+        ("TR", "tr"),
+        ("ca", "ca"),
+        ("CA", "ca"),
+        ("pt-br", "pt-br"),
+        ("pt-BR", "pt-br"),
+    ] {
         assert_eq!(Lang::from_pref(pref), lang(code), "{pref}");
     }
-    for (code, name) in [("vi", "Tiếng Việt"), ("fi", "Suomi"), ("tr", "Türkçe"), ("pt-br", "Português (Brasil)")] {
+    for (code, name) in [("vi", "Tiếng Việt"), ("fi", "Suomi"), ("tr", "Türkçe"), ("ca", "Català"), ("pt-br", "Português (Brasil)")] {
         assert_eq!(lang(code).name(), name);
+    }
+}
+
+/// The Catalan catalog registers under `ca`, claims complete menus and messages, and passes
+/// locale resolution, vocabulary and count formatting checks.
+#[test]
+fn catalan_reads_as_catalan() {
+    let ca = Lang::from_code("ca").expect("ca registered");
+    assert_eq!(ca.name(), "Català");
+    assert!(ca.complete_menus());
+    assert_eq!(Lang::from_pref("ca"), ca);
+    assert_eq!(Lang::from_pref("CA"), ca);
+    for (en, want) in [
+        ("Artboard Tool", "Eina de tauler"),
+        ("Swatches", "Mostres"),
+        ("Stroke", "Traç"),
+        ("Fill", "Farciment"),
+        ("Direct Selection Tool", "Eina de selecció directa"),
+        ("Save As…", "Desa com a…"),
+        ("Undo", "Desfés"),
+        ("Close", "Tanca"),
+    ] {
+        assert_eq!(tr(ca, en), want);
+    }
+    for n in [0, 1, 3, 21] {
+        let noun = if n == 1 { "capa" } else { "capes" };
+        assert_eq!(trn(ca, n, "{n} Layer", "{n} Layers"), format!("{n} {noun}"));
+    }
+    let nested = "command `object.group` is not available right now: nothing selected";
+    assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
+}
+
+#[test]
+fn font_height_reference_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in
+            ["Show Font Height Options", "Hide Font Height Options", "Set Font Height Reference", "Em Box", "Cap Height", "x-Height", "ICF Box"]
+        {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
     }
 }
 
@@ -92,10 +190,10 @@ fn languages_resolve_from_their_tags_and_name_themselves() {
 fn each_language_counts_with_its_plural_rule() {
     const COUNTS: [u64; 8] = [0, 1, 2, 3, 5, 11, 21, 22];
     for (codes, forms) in [
-        (&["de", "es", "it", "pt-br", "fi"][..], [1, 0, 1, 1, 1, 1, 1, 1]),
+        (&["de", "es", "it", "pt-br", "fi", "ca"][..], [1, 0, 1, 1, 1, 1, 1, 1]),
         (&["fr"], [0, 0, 1, 1, 1, 1, 1, 1]),
         (&["ja", "ka", "hu", "ko", "vi", "tr"], [0; 8]),
-        (&["ru", "uk"], [2, 0, 1, 1, 2, 2, 0, 1]),
+        (&["ru", "uk", "bs"], [2, 0, 1, 1, 2, 2, 0, 1]),
         (&["cs"], [2, 0, 1, 1, 2, 2, 2, 2]),
         (&["pl"], [2, 0, 1, 1, 2, 2, 2, 1]),
     ] {
@@ -213,7 +311,7 @@ fn bundled_catalogs_are_consistent() {
         let mut seen = std::collections::HashSet::new();
         for (ctx, src, tr) in &entries {
             assert!(seen.insert((ctx.clone(), src.clone())), "{}: duplicate {ctx:?} {src:?}", l.code);
-            if ctx == "@plural" {
+            if ctx == "@plural" || ctx == "@msgplural" {
                 let one_other: Vec<&str> = src.split('|').collect();
                 assert_eq!(one_other.len(), 2, "{}: plural source must be `one|other`: {src:?}", l.code);
                 for form in tr.split('|') {
@@ -335,6 +433,11 @@ fn is_georgian(c: char) -> bool {
     matches!(c as u32, 0x10A0..=0x10FF | 0x1C90..=0x1CBF | 0x2D00..=0x2D2F)
 }
 
+#[cfg(feature = "interface-fonts")]
+fn is_devanagari(c: char) -> bool {
+    matches!(c as u32, 0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -347,6 +450,7 @@ fn is_georgian(c: char) -> bool {
 fn bundled_fonts_cover_the_catalogs() {
     let japanese_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese());
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
+    let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -365,7 +469,12 @@ fn bundled_fonts_cover_the_catalogs() {
             let chars: std::collections::BTreeSet<char> = entries
                 .iter()
                 .flat_map(|(_, _, tr)| tr.chars())
-                .filter(|c| !c.is_whitespace() && (cjk_checked || !is_cjk(*c)) && (georgian_ui_font || !is_georgian(*c)))
+                .filter(|c| {
+                    !c.is_whitespace()
+                        && (cjk_checked || !is_cjk(*c))
+                        && (georgian_ui_font || !is_georgian(*c))
+                        && (devanagari_ui_font || !is_devanagari(*c))
+                })
                 .collect();
             for family in &families {
                 let font = egui::FontId::new(13.0, family.clone());
@@ -455,6 +564,58 @@ fn zh_hans_is_simplified_and_mainland() {
     assert!(bad.is_empty(), "in zh-hans.tsv:\n{}", bad.join("\n"));
 }
 
+/// Whether `text` holds `term`. In a script that separates words with spaces the term must stand as
+/// whole words, so "liderlik" does not hold "lider"; in Chinese, Japanese, Thai, Lao, Khmer and
+/// Myanmar text any occurrence counts.
+fn contains_term(text: &str, term: &str) -> bool {
+    let unspaced = |c: char| matches!(c as u32, 0x0E00..=0x0EFF | 0x1000..=0x109F | 0x1780..=0x17FF | 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF);
+    if term.chars().any(unspaced) {
+        return text.contains(term);
+    }
+    text.match_indices(term).any(|(at, m)| {
+        !text[..at].chars().next_back().is_some_and(char::is_alphanumeric) && !text[at + m.len()..].chars().next().is_some_and(char::is_alphanumeric)
+    })
+}
+
+#[test]
+fn contains_term_matches_whole_words_where_words_are_spaced() {
+    assert!(contains_term("tepeden tepeye lider", "lider"));
+    assert!(contains_term("boyut/lider:", "lider"));
+    assert!(contains_term("réinitialiser l’approche", "approche"));
+    assert!(!contains_term("tepeden tepeye liderlik", "lider"));
+    assert!(!contains_term("automatické proklady:", "proklad"));
+    assert!(contains_term("kích thước: giãn chữ:", "giãn chữ"));
+    assert!(!contains_term("kích thước chữ: giãn:", "giãn chữ"));
+    assert!(contains_term("自動行送り:", "行送り"));
+    assert!(contains_term("大小：字距微調：", "字距"));
+}
+
+/// Each catalog names leading with one term: every word of the Character panel's Leading field
+/// (the text before " (", ignoring case) appears as a whole word (see [`contains_term`]) in the
+/// Auto Leading, Size/Leading, Top-to-Top Leading and Bottom-to-Bottom Leading rows outside their
+/// placeholders.
+/// A catalog without the Leading row, or without one of the others, is skipped for that check.
+#[test]
+fn leading_term_agrees_within_each_catalog() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        let row = |src: &str| entries.iter().find(|(ctx, s, _)| ctx.is_empty() && s == src).map(|(_, _, tr)| tr.to_lowercase());
+        let Some(leading) = row("Leading").map(|tr| tr.split(" (").next().unwrap_or_default().trim().to_string()) else {
+            continue;
+        };
+        for src in ["Auto Leading:", "Size/Leading", "Top-to-Top Leading", "Bottom-to-Bottom Leading"] {
+            if let Some(text) = row(src) {
+                let bare = placeholders(&text).iter().fold(text.clone(), |t, p| t.replace(&format!("{{{p}}}"), " "));
+                for word in leading.split_whitespace().filter(|w| !contains_term(&bare, w)) {
+                    bad.push(format!("{}: {src:?} → {text:?} lacks {word:?} from the Leading field {leading:?}", l.code));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "rows that name leading differently from the Leading field:\n{}", bad.join("\n"));
+}
+
 /// No translated word mixes Latin, Cyrillic and Greek letters, such as a Latin "A" typed in place
 /// of a Cyrillic "А". A word written in one script, such as "PDF" or "X" in a Russian row, is
 /// allowed.
@@ -481,6 +642,60 @@ fn no_translated_word_mixes_latin_cyrillic_and_greek_letters() {
     assert!(bad.is_empty(), "words that mix scripts:\n{}", bad.join("\n"));
 }
 
+/// Each catalog gives the Character panel's Kerning, Leading and Tracking fields three different
+/// names, and every word of the Tracking and Kerning names appears in the Reset Tracking and
+/// Kerning row (ignoring case). Each word is matched once, the longer name first, so a name that
+/// contains the other name does not count for both. The Info panel's type line labels
+/// `{tracking}` with the whole Tracking name: the text between the placeholder before it and
+/// `{tracking}` holds the name (see [`contains_term`]) once any Kerning or Leading name that
+/// contains it has been taken out.
+/// A catalog without one of these rows is skipped for the checks that need it.
+#[test]
+fn character_panel_terms_agree_within_each_catalog() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        let row = |src: &str| entries.iter().find(|(ctx, s, _)| ctx.is_empty() && s == src).map(|(_, _, tr)| tr.to_lowercase());
+        let kerning = row("Kerning");
+        let leading = row("Leading");
+        let tracking = row("Tracking");
+        for (a, b) in [(&kerning, &leading), (&kerning, &tracking), (&leading, &tracking)] {
+            if let (Some(a), Some(b)) = (a, b)
+                && a == b
+            {
+                bad.push(format!("{}: two Character panel fields are both {a:?}", l.code));
+            }
+        }
+        let mut uses = |row_src: &str, terms: &[&Option<String>]| {
+            let Some(text) = row(row_src) else { return };
+            let mut bare = placeholders(&text).iter().fold(text.clone(), |t, p| t.replace(&format!("{{{p}}}"), " "));
+            let mut terms: Vec<&String> = terms.iter().filter_map(|t| t.as_ref()).collect();
+            terms.sort_by_key(|t| std::cmp::Reverse(t.chars().count()));
+            for term in terms {
+                for word in term.split_whitespace() {
+                    if bare.contains(word) {
+                        bare = bare.replacen(word, " ", 1);
+                    } else {
+                        bad.push(format!("{}: {row_src:?} → {text:?} lacks {word:?} from the field {term:?}", l.code));
+                    }
+                }
+            }
+        };
+        uses("Reset Tracking and Kerning", &[&tracking, &kerning]);
+        if let (Some(text), Some(tracking)) = (row("Size: {size}  Tracking: {tracking}"), &tracking) {
+            let before = text.split("{tracking}").next().unwrap_or_default();
+            let mut label = before.rsplit('}').next().unwrap_or_default().to_string();
+            for other in [&kerning, &leading].into_iter().flatten().filter(|o| *o != tracking && o.contains(tracking.as_str())) {
+                label = label.replace(other.as_str(), " ");
+            }
+            if !contains_term(&label, tracking) {
+                bad.push(format!("{}: the Info row {text:?} labels {{tracking}} {label:?}, not the field {tracking:?}", l.code));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "Character panel terms that disagree:\n{}", bad.join("\n"));
+}
+
 /// Every `tl!("…")` literal in this crate's sources (test modules aside).
 pub fn tl_literals() -> std::collections::BTreeSet<String> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -491,10 +706,20 @@ pub fn tl_literals() -> std::collections::BTreeSet<String> {
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if path.is_dir() {
-                stack.push(path);
+                if name != "tests" {
+                    stack.push(path);
+                }
             } else if name.ends_with(".rs") && name != "lib.rs" && !name.starts_with("tests") {
                 let text = std::fs::read_to_string(&path).unwrap_or_default();
-                let code = text.split("#[cfg(test)]").next().unwrap_or("");
+                // Code up to the first test item; test-only imports (`#[cfg(test)] use …;`) don't end it.
+                let code = text
+                    .match_indices("#[cfg(test)]")
+                    .find(|&(at, m)| {
+                        let item = text[at + m.len()..].trim_start();
+                        let item = ["pub(crate) ", "pub(super) ", "pub "].iter().find_map(|p| item.strip_prefix(p)).unwrap_or(item);
+                        !item.starts_with("use ")
+                    })
+                    .map_or(text.as_str(), |(at, _)| &text[..at]);
                 let mut rest = code;
                 while let Some(at) = rest.find("tl!(\"") {
                     rest = &rest[at + 5..];
@@ -608,7 +833,7 @@ fn undo_scan() -> UndoScan {
     UndoScan { labels: out, templates, formatted }
 }
 
-/// The sources of a crate's `src` directory, test modules and files and `//` comments aside.
+/// The sources of a crate's `src` directory, test modules and files and comments aside.
 fn undo_sources(dir: &std::path::Path) -> Vec<String> {
     let mut out = vec![];
     let mut stack = vec![dir.to_path_buf()];
@@ -629,7 +854,8 @@ fn undo_sources(dir: &std::path::Path) -> Vec<String> {
     out
 }
 
-/// `text` with each `//` comment removed (a `//` inside a string literal stays).
+/// `text` with each comment removed: a `//` comment, and a `/* … */` comment (nested ones
+/// included), which becomes a space. A `//` or `/*` inside a string or character literal stays.
 fn without_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut i = 0;
@@ -639,12 +865,36 @@ fn without_comments(text: &str) -> String {
             i = end;
         } else if text[i..].starts_with("//") {
             i = text[i..].find('\n').map_or(text.len(), |n| i + n);
+        } else if text[i..].starts_with("/*") {
+            i = block_comment_end(text, i);
+            out.push(' ');
         } else {
             out.push(c);
             i += c.len_utf8();
         }
     }
     out
+}
+
+/// Where the `/* … */` comment starting at `text[at]` ends, past the comments nested in it; the
+/// end of `text` when the comment is not closed.
+fn block_comment_end(text: &str, at: usize) -> usize {
+    let (mut depth, mut i) = (0usize, at);
+    while let Some(c) = text[i..].chars().next() {
+        if text[i..].starts_with("/*") {
+            depth += 1;
+            i += 2;
+        } else if text[i..].starts_with("*/") {
+            depth = depth.saturating_sub(1);
+            i += 2;
+            if depth == 0 {
+                return i;
+            }
+        } else {
+            i += c.len_utf8();
+        }
+    }
+    text.len()
 }
 
 /// Where the string or character literal starting at `text[at]` (a `"` or `'`) ends, raw strings
@@ -872,7 +1122,8 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 18] = ["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr"];
+const KEEPS_MENU_NAMES: [&str; 20] =
+    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -1239,8 +1490,9 @@ fn latin_script_glyphs_are_available_without_system_fonts() {
         let families: Vec<_> = fonts.definitions().families.iter().map(|(f, stack)| (f.clone(), stack.first().cloned())).collect();
         for (family, first) in families {
             let first = first.unwrap();
-            let mut font = fonts.fonts.font(&family);
-            let chars = font.characters();
+            // Public 0.37 view: the family's characters with the fonts that have each (the old
+            // `fonts.font(...).characters()` reached a now-private field).
+            let chars = fonts.characters(&family);
             for ch in "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ„“‚‘…–ñÑüÜ¿¡”àèìòùÀÈÌÒÙ«»’âêîôûçëïÿœæÂÊÎÔÛÇËÏŒÆäöÄÖßőűŐŰąćęłńśźżĄĆĘŁŃŚŹŻåÅ\u{a0}".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
@@ -1261,8 +1513,9 @@ fn cyrillic_glyphs_are_available_without_system_fonts() {
         let families: Vec<_> = fonts.definitions().families.iter().map(|(f, stack)| (f.clone(), stack.first().cloned())).collect();
         for (family, first) in families {
             let first = first.unwrap();
-            let mut font = fonts.fonts.font(&family);
-            let chars = font.characters();
+            // Public 0.37 view: the family's characters with the fonts that have each (the old
+            // `fonts.font(...).characters()` reached a now-private field).
+            let chars = fonts.characters(&family);
             for ch in "абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯґєіїҐЄІЇ«»„“…–’".chars()
             {
                 assert!(chars.get(&ch).is_some_and(|fonts| fonts.contains(&first)), "{first} ({family:?}) has no {ch}");
@@ -1336,14 +1589,186 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// A `@msgplural` row translates both English forms of a message with a count, and the count
+/// picks the language's form.
+#[test]
+fn messages_with_a_count_take_the_plural_form() {
+    let c = Catalog::parse("@msgplural\tSaved {n} file|Saved {n} files\tone {n}|few {n}|many {n}\n");
+    for s in ["Saved 1 file", "Saved 4 files"] {
+        let (forms, caps) = c.message_forms(s).unwrap();
+        assert_eq!(forms, ["one {n}", "few {n}", "many {n}"], "{s}");
+        assert_eq!(caps.len(), 1, "{s}");
+    }
+    assert!(c.message_forms("Saved 1 files!").is_none());
+    let cs = cs();
+    assert_eq!(message(cs, "Packaged 1 file"), "Zabalen 1 soubor");
+    assert_eq!(message(cs, "Packaged 4 files"), "Zabaleny 4 soubory");
+    assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
+}
+
+/// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
+/// and every complete catalog translates it, in the form its plural rule picks.
+#[test]
+fn gamut_check_status_takes_the_plural_form() {
+    use crate::panels::separations::gamut_check_status;
+    assert_eq!(gamut_check_status(0), "All colors are within the CMYK gamut");
+    assert_eq!(gamut_check_status(1), "1 color is out of the CMYK gamut");
+    assert_eq!(gamut_check_status(3), "3 colors are out of the CMYK gamut");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for n in [0, 1, 3] {
+            let s = gamut_check_status(n);
+            assert_ne!(message(lang, &s), s, "{code}: {s}");
+        }
+    }
+    assert_eq!(message(de(), &gamut_check_status(1)), "1 Farbe liegt außerhalb des CMYK-Farbumfangs");
+    assert_eq!(message(de(), &gamut_check_status(3)), "3 Farben liegen außerhalb des CMYK-Farbumfangs");
+    let cs = cs();
+    assert_eq!(message(cs, &gamut_check_status(1)), "1 barva je mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(3)), "3 barvy jsou mimo gamut CMYK");
+    assert_eq!(message(cs, &gamut_check_status(5)), "5 barev je mimo gamut CMYK");
+}
+
+/// The link, font and export status messages with a count, in English for a count of 1 and of 2.
+const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
+    ("1 linked file can't be read here: its preview shows", "2 linked files can't be read here: their previews show"),
+    ("1 image couldn't be decoded and shows as a crossed box", "2 images couldn't be decoded and show as crossed boxes"),
+    ("1 linked image changed on disk: Update Links shows the new version", "2 linked images changed on disk: Update Links shows the new versions"),
+    ("Updated 1 linked file changed on disk", "Updated 2 linked files changed on disk"),
+    ("Exported /out/a.svg with 1 note: a note", "Exported /out/a.svg with 2 notes: a note"),
+    ("Embedded 1 image; 1 missing: relink them first", "Embedded 2 images; 1 missing: relink them first"),
+    ("Embedded 1 image", "Embedded 2 images"),
+    ("Relinked 1 image", "Relinked 2 images"),
+    ("Relinked 1 image; not in that folder: a.png", "Relinked 2 images; not in that folder: a.png"),
+    ("Relinked 1 image; a.png couldn't be relinked: a reason", "Relinked 2 images; a.png couldn't be relinked: a reason"),
+    ("Updated 1 image", "Updated 2 images"),
+    ("Replaced 1 image", "Replaced 2 images"),
+    ("Broke 1 link", "Broke 2 links"),
+    ("Broke 1 link; 1 can't be read: relink or update them first", "Broke 2 links; 1 can't be read: relink or update them first"),
+    ("1 font file is now in /fonts", "2 font files are now in /fonts"),
+    ("1 font file is now in /fonts; 1 couldn't be added: a reason", "2 font files are now in /fonts; 1 couldn't be added: a reason"),
+    ("1 font isn't available here: its text shows in another font", "2 fonts aren't available here: their text shows in another font"),
+    ("Copied the CSS of 1 object", "Copied the CSS of 2 objects"),
+    ("Downloaded 1 file", "Downloaded 2 files"),
+    ("Exported 1 file to /out", "Exported 2 files to /out"),
+];
+
+/// The link, font and export status messages name a count of 1 in the singular and other counts in
+/// the plural, and every complete catalog translates both, in the form its plural rule picks.
+#[test]
+fn counted_status_messages_take_the_plural_form() {
+    use crate::panels::links::{relinked_status, updated_status};
+    assert_eq!((relinked_status(1), relinked_status(2)), ("Relinked 1 image".to_string(), "Relinked 2 images".to_string()));
+    assert_eq!((updated_status(1), updated_status(2)), ("Updated 1 image".to_string(), "Updated 2 images".to_string()));
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(1), COUNTED_STATUS_MESSAGES[2].0);
+    assert_eq!(crate::dialogs::missing_links::changed_on_disk_status(2), COUNTED_STATUS_MESSAGES[2].1);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 1, "a note"), COUNTED_STATUS_MESSAGES[4].0);
+    assert_eq!(crate::io::exported_with_notes("/out/a.svg", 2, "a note"), COUNTED_STATUS_MESSAGES[4].1);
+    // A value that holds placeholder text is not filled in again.
+    assert_eq!(crate::io::exported_with_notes("/out/{first}.svg", 1, "{n}"), "Exported /out/{first}.svg with 1 note: {n}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in COUNTED_STATUS_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    let cs = cs();
+    assert_eq!(message(cs, &relinked_status(1)), "Znovu propojen 1 obrázek");
+    assert_eq!(message(cs, &relinked_status(3)), "Znovu propojeny 3 obrázky");
+    assert_eq!(message(cs, &relinked_status(5)), "Znovu propojeno 5 obrázků");
+    assert_eq!(message(de(), &updated_status(1)), "1 Bild aktualisiert");
+    assert_eq!(message(de(), &updated_status(2)), "2 Bilder aktualisiert");
+    let noted = crate::io::exported_with_notes("/out/{n}.svg", 1, "{what}");
+    assert_eq!(message(de(), &noted), "/out/{n}.svg mit 1 Hinweis exportiert: {what}");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, COUNTED_STATUS_MESSAGES[19].0), "Экспортирован 1 файл в /out");
+    assert_eq!(message(ru, "Exported 3 files to /out"), "Экспортировано 3 файла в /out");
+    assert_eq!(message(ru, "Exported 5 files to /out"), "Экспортировано 5 файлов в /out");
+}
+
+/// The open, save and recovery status messages with a count, in English for a count of 1 and of 2.
+const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
+    ("Opened with 1 note: a note", "Opened with 2 notes: a note"),
+    ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
+    ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
+    ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+];
+
+/// The open, save and recovery status messages and the Global Edit options' Results line name a
+/// count of 1 in the singular and other counts in the plural, and every complete catalog
+/// translates both, in the form its plural rule picks.
+#[test]
+fn open_save_and_recovery_messages_take_the_plural_form() {
+    use crate::io::{opened_with_notes, saved_status};
+    use crate::panels::properties::global_edit_results;
+    use crate::recovery::recovered_status;
+    let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let made = [
+        (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
+        (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
+        (recovered_status(true, 1), recovered_status(true, 2)),
+        (recovered_status(false, 1), recovered_status(false, 2)),
+    ];
+    for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
+        assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
+    }
+    // A path that holds placeholder text is not filled in again.
+    assert_eq!(saved("/out/{first}.pdf", 1), "Saved /out/{first}.pdf with 1 note: a note");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
+            assert_ne!(message(lang, s), *s, "{code}: {s}");
+        }
+    }
+    for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
+        let lang = Lang::from_code(l.code).expect("registered");
+        for n in [1, 2] {
+            assert_ne!(trn(lang, n, "Result: {n}", "Results: {n}"), trn(Lang::EN, n, "Result: {n}", "Results: {n}"), "{}: {n}", l.code);
+        }
+    }
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Result: 1".to_string(), "Results: 2".to_string()));
+    set_current(de());
+    assert_eq!((global_edit_results(1), global_edit_results(2)), ("Ergebnis: 1".to_string(), "Ergebnisse: 2".to_string()));
+    set_current(Lang::EN);
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].0), "Mit 1 Hinweis geöffnet: a note");
+    assert_eq!(message(de(), OPEN_SAVE_COUNTED_MESSAGES[0].1), "Mit 2 Hinweisen geöffnet: a note");
+    assert_eq!(message(de(), &saved("/out/{n}.pdf", 2)), "/out/{n}.pdf mit 2 Hinweisen gespeichert: a note");
+    let cs = cs();
+    assert_eq!(message(cs, &recovered_status(true, 1)), "Zahozen 1 obnovený dokument");
+    assert_eq!(message(cs, &recovered_status(true, 3)), "Zahozeny 3 obnovené dokumenty");
+    assert_eq!(message(cs, &recovered_status(true, 5)), "Zahozeno 5 obnovených dokumentů");
+    let ru = Lang::from_code("ru").expect("registered");
+    assert_eq!(message(ru, &opened_with_notes(1, "x")), "Открыто с 1 примечанием: x");
+    assert_eq!(message(ru, &opened_with_notes(3, "x")), "Открыто с 3 примечаниями: x");
+}
+
+/// The `{n}` of a message with a count matches only a number, so a path that holds the text after
+/// the path keeps its count and its whole path. A `{n}` in a message without a count is any text.
+#[test]
+fn a_count_placeholder_matches_only_a_number() {
+    use crate::io::saved_status;
+    let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let path = "/out/art with notes.pdf";
+    assert_eq!(message(de(), &saved(path, 1)), "/out/art with notes.pdf mit 1 Hinweis gespeichert: a note");
+    assert_eq!(message(de(), &saved(path, 2)), "/out/art with notes.pdf mit 2 Hinweisen gespeichert: a note");
+    let c = Catalog::parse("@msgplural\tSaved {path} with {n} note|Saved {path} with {n} notes\tone|other\n");
+    let (_, caps) = c.message_forms("Saved /a with 1 b with 2 notes").expect("matches");
+    assert_eq!(caps, [("path", "/a with 1 b"), ("n", "2")]);
+    assert!(c.message_forms("Saved /a with b notes").is_none());
+    assert_eq!(message(de(), "no brush `with 2`"), "kein Pinsel `with 2`");
+}
+
 /// The scan reads the message of an error made with one of the engine's [`ERROR_HELPERS`] or with
-/// an error enum's variant: a literal or a `format!` string, on the call's line or wrapped over
-/// several lines, in the same template form as the catalogs' rows. It does not read a call whose
-/// name ends in a helper's name (`is_bad(`), a method call (`.err(`), `std::io::Error::new` or one
-/// of [`NAME_VARIANTS`]; without the helpers, it reads only the two variants in this source.
+/// an error enum's variant, `EngineError::Disabled`'s reason included: a literal or a `format!`
+/// string, on the call's line or wrapped over several lines, in the same template form as the
+/// catalogs' rows. It does not read a call whose name ends in a helper's name (`is_bad(`), a method
+/// call (`.err(`), `std::io::Error::new`, one of [`NAME_VARIANTS`], `EngineError::Disabled`'s
+/// command id or a call in a comment. A `//` or `/*` inside a string or a raw string, or after a
+/// character literal such as `'"'`, does not start a comment. Without the helpers, the scan reads
+/// only the four variants in this source.
 #[test]
 fn message_scan_reads_error_helpers_and_variants() {
-    let code = r#"
+    let code = r##"
 fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     let w = p.get(key).and_then(Value::as_f64).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
     if w < 0.0 {
@@ -1365,9 +1790,16 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
     let _ = std::io::Error::new(kind, "not an error variant");
     let _ = PsError::Ps("not an error message", op);
     let _ = EngineError::UnknownCommand("not.an.error.message".into());
+    let _ = EngineError::Disabled("not.a.reason".into(), "there is nothing to clear".into());
+    let _ = EngineError::Disabled(C.into(), format!("the {kind} panel is locked"));
+    // return Err(bad(cmd, "not an error: a commented-out call"));
+    /* let _ = err("not an error: a call in a block comment");
+       /* nested */ let _ = err("not an error: after a nested block comment"); */
+    let _ = ('"', '\'', b'"', bad(cmd, "the width // the height"));
+    let _ = (r#"a "/* raw string"#, |s: &'a str| -> Result<&'a str> { Err(bad(cmd, "the height is too large")) });
     Err(error("Select only dimensions"))
 }
-"#;
+"##;
     let engine: Vec<_> = ERROR_HELPERS.iter().filter(|(c, _, _)| *c == "engine").map(|&(_, call, before)| (call, before)).collect();
     let found = source_messages(code, &engine);
     for want in [
@@ -1378,13 +1810,19 @@ fn width(p: &Value, cmd: &str, key: &str) -> Result<f64> {
         "can't open `{name}`: damaged",
         "the {what} is nested too deep",
         "the manifest has no name",
+        "there is nothing to clear",
+        "the {kind} panel is locked",
+        "the width // the height",
+        "the height is too large",
         "Select only dimensions",
     ] {
         assert!(found.iter().any(|m| m == want), "{want} not in {found:#?}");
     }
-    assert!(!found.iter().any(|m| m.contains("not an error") || m.contains("not.an.error")), "{found:#?}");
+    let named = |m: &String| m.contains("not an error") || m.contains("not.an.error") || m.contains("not.a.reason");
+    assert!(!found.iter().any(named), "{found:#?}");
     let elsewhere = source_messages(code, &[]);
-    assert!(elsewhere.len() == 2 && elsewhere.iter().all(|m| m.contains("nested") || m.contains("manifest")), "{elsewhere:#?}");
+    let in_variants = ["nested", "manifest", "nothing to clear", "panel is locked"];
+    assert!(elsewhere.len() == 4 && elsewhere.iter().all(|m| in_variants.iter().any(|w| m.contains(w))), "{elsewhere:#?}");
     // A message read this way matches its row: `{key}` keeps its name.
     let c = Catalog::parse("@msg\t`{key}` must be a number\t`{key}` ok\n");
     assert_eq!(c.message("`width` must be a number").map(|m| m.1), Some(vec![("key", "width")]));
@@ -1425,6 +1863,12 @@ fn blend_spine_param_errors_say_what_is_wrong() {
         ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 1e12, "y": 0}), "x and y must be finite"),
         ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 0, "y": 0, "handle": "up"}), "handle must be in or out"),
         ("object.blend.spine.moveAnchor", json!({"anchor": 5, "x": 0, "y": 0}), "no such spine point"),
+        (
+            "object.blend.spine.moveAnchor",
+            json!({"anchor": 0, "x": 0, "y": 0, "with": "1"}),
+            "`with` must be a list of at most 10000 spine point indexes",
+        ),
+        ("object.blend.spine.moveAnchor", json!({"anchor": 0, "x": 0, "y": 0, "with": [1], "handle": "in"}), "`with` moves points, not a handle"),
         ("object.blend.spine.moveAnchor", json!({"id": other, "anchor": 0, "x": 0, "y": 0}), "not a blend"),
         ("object.blend.spine.reshapeSegment", json!({"segment": 0, "dx": 1e12}), "t, dx and dy must be finite"),
         ("object.blend.spine.reshapeSegment", json!({"segment": 5, "dy": 10}), "no such spine segment"),
@@ -1438,6 +1882,89 @@ fn blend_spine_param_errors_say_what_is_wrong() {
     s.execute("select.none", &json!({})).unwrap();
     let e = s.execute("object.blend.spine.moveAnchor", &json!({"anchor": 0, "x": 0, "y": 0})).unwrap_err();
     assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == "select a blend or give `id`"), "{e}");
+}
+
+/// Import Data Sets' refusal of two header cells that name one variable is translated in every
+/// language that translates every message.
+#[test]
+fn dataset_import_repeated_column_error_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let e = s.execute("dataset.import", &json!({"csv": "City,City\nParis,Rome"})).unwrap_err();
+    let want = "columns 1 and 2 both name the variable `City`";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    let e = e.to_string();
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, &e);
+        assert!(!shown.contains(want), "{code}: {shown}");
+    }
+}
+
+/// The errors of saving, renaming and deleting a tracing preset are translated in every language
+/// that translates every message.
+#[test]
+fn saved_tracing_preset_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("imageTrace.presets.save", &json!({"name": "Mine"})).unwrap();
+    s.execute("imageTrace.presets.save", &json!({"name": "Other"})).unwrap();
+    let mut errors = vec![];
+    for (cmd, p, want) in [
+        ("imageTrace.presets.save", json!({"name": ""}), "`name` is empty"),
+        ("imageTrace.presets.save", json!({"name": "Mine", "newName": ""}), "`newName` is empty"),
+        ("imageTrace.presets.save", json!({"name": "Other", "newName": "Mine"}), "a preset named `Mine` exists"),
+        ("imageTrace.presets.save", json!({"name": "Default"}), "`Default` is a built-in preset and can't change: save it under another name"),
+        ("imageTrace.presets.delete", json!({"name": "Default"}), "`Default` is a built-in preset and stays"),
+        ("imageTrace.presets.delete", json!({"name": "Gone"}), "no saved preset named `Gone`"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+        errors.push((e.to_string(), want));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want), "{code}: {shown}");
+        }
+    }
+}
+
+/// Export Data Sets' refusals of more data sets or variables than Import Data Sets reads are
+/// translated in every language that translates every message.
+#[test]
+fn dataset_export_limit_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let rows = "x\n".repeat(1000);
+    s.execute("dataset.import", &json!({"csv": format!("V1\n{rows}")})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Set 1001"})).unwrap();
+    let mut errors = vec![];
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 1000 data sets: Import Data Sets reads at most 1000";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
+    s.execute("dataset.delete", &json!({"names": ["Set 1001"]})).unwrap();
+    for i in 2..=257 {
+        s.execute("variable.define", &json!({"name": format!("V{i}"), "kind": "text"})).unwrap();
+    }
+    let e = s.execute("dataset.export", &json!({})).unwrap_err();
+    let want = "more than 256 variables: Import Data Sets reads at most 256";
+    assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+    errors.push((e.to_string(), want));
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want), "{code}: {shown}");
+        }
+    }
 }
 
 /// The status bar's line for an EPS file whose PostScript stops on an error, opened partly or
@@ -1463,6 +1990,34 @@ fn postscript_errors_keep_their_name_and_meaning() {
                 let ok = shown.contains("typecheck") && shown.contains("`add`") && meaning_shown;
                 assert!(ok, "{}: {shown}", lang.code());
             }
+        }
+    }
+}
+
+/// Import Data Sets' errors for a refused cell are translated in every language that translates
+/// every message, with the line and the variable kept.
+#[test]
+fn dataset_import_cell_errors_are_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::{EngineError, Session};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Sales", "kind": "graph"})).unwrap();
+    let mut errors = vec![];
+    for (csv, want) in [
+        ("Show\nmaybe".to_string(), "line 2: value for `Show` must be true or false"),
+        (format!("Sales\n\"{}\"", "1,".repeat(140_000)), "line 2: value for `Sales` is longer than 262144 bytes"),
+    ] {
+        let e = s.execute("dataset.import", &json!({"csv": csv})).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{e}");
+        errors.push((e.to_string(), want));
+    }
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, want) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(want) && shown.contains('2') && shown.contains('`'), "{code}: {shown}");
         }
     }
 }
@@ -1509,8 +2064,9 @@ fn shared_param_check_errors_show_their_values_as_given() {
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
-const COMPLETE_MESSAGES: &[&str] =
-    &["cs", "de", "el", "es", "fr", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr"];
+const COMPLETE_MESSAGES: &[&str] = &[
+    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
+];
 
 /// Crates whose error and status messages reach the status bar.
 const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace"];
@@ -1528,6 +2084,10 @@ const ERROR_HELPERS: &[(&str, &str, usize)] =
 /// Error variants whose first argument is a name, not a message: a command id
 /// (`EngineError::UnknownCommand`) and a PostScript error name (`PsError::Ps`).
 const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
+
+/// Error variants whose message follows other arguments, with the number of arguments before it:
+/// `EngineError::Disabled(command id, reason)`.
+const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
 
 /// Messages that are signals, not text for people.
 const NOT_MESSAGES: &[&str] = &["quit", "cancelled"];
@@ -1559,18 +2119,21 @@ pub fn message_literals() -> std::collections::BTreeSet<String> {
     out
 }
 
-/// The message literals in `code`, as catalog templates (see [`message_literals`]): the literal
-/// after each of [`MESSAGE_MARKERS`], the first argument of an error enum's variant
-/// (`PsError::Limit(…)`, `Error::Manifest(…)`; not [`NAME_VARIANTS`]),
+/// The message literals in `code` outside its comments, as catalog templates (see
+/// [`message_literals`]): the literal after each of [`MESSAGE_MARKERS`], the message argument of an
+/// error enum's variant (the first, as in `PsError::Limit(…)` and `Error::Manifest(…)`, or the one
+/// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal or a `format!` string.
 fn source_messages(code: &str, helpers: &[(&str, usize)]) -> Vec<String> {
+    let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
     let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
-        if named { args.strip_prefix('(') } else { None }
+        let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
+        if named { skip_args(args.strip_prefix('(')?, before) } else { None }
     });
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
@@ -1707,10 +2270,12 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
     ("file-filter", "Flattener presets"),
     ("file-filter", "PDF presets"),
     ("file-filter", "Print presets"),
+    ("file-filter", "Export presets"),
     ("file-filter", "SVG Compressed"),
     ("file-filter", "PDF-compatible .ai"),
     ("file-filter", "VectorCraft Template"),
     ("file-filter", "Templates"),
+    ("anchor", "Points:"),
     ("diagnostics", "render"),
     ("diagnostics", "ui"),
     ("", "Preset {number}"),
@@ -1748,4 +2313,20 @@ fn polish_plurals_have_three_forms() {
         }
     }
     assert!(count >= 13, "Polish plural rows missing");
+}
+
+/// Every catalog names each numeral system of Character panel menu › Digits, in the `digits`
+/// context (where the language's name would read wrong) or with its plain row (#4942).
+#[test]
+fn every_catalog_names_the_digits_menus_numeral_systems() {
+    let mut missing = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let cat = l.catalog();
+        for (label, _) in crate::panels::character::DIGITS {
+            if cat.contextual("digits", label).is_none() && cat.plain(label).is_none() {
+                missing.push(format!("{}: {label}", l.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "Digits menu labels without a row:\n{}", missing.join("\n"));
 }

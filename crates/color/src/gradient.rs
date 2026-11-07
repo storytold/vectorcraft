@@ -78,6 +78,17 @@ const PERCEPTUAL_TOLERANCE: f32 = 0.4 / 255.0;
 /// Most times each half of a Perceptual gradient's segment (either side of its midpoint) is
 /// halved to keep within [`PERCEPTUAL_TOLERANCE`].
 const PERCEPTUAL_DEPTH: u32 = 10;
+/// How many times [`Gradient::ink_tints`] halves the range of tints it searches: to within
+/// 1/65536 of a tint.
+const TINT_STEPS: u32 = 16;
+/// The least OKLab lightness by which an ink at 100% must differ from paper white for
+/// [`Gradient::ink_tints`] to tell its tints apart by lightness.
+const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
+/// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
+const MAX_INK_TINTS: usize = 4096;
+/// How many even steps [`Gradient::ink_mixes`] checks the lightness of two stops' display RGB mix
+/// at, to tell whether it moves steadily from one stop's lightness to the other's.
+const INK_MIX_STEPS: u32 = 64;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -100,6 +111,30 @@ fn perceptual_steps(a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out:
     }
 }
 
+/// The mix positions (`v`, 0..1) of the stops a Perceptual gradient's curve has between stops `a`
+/// and `b`, in order: [`perceptual_steps`] on either side of the midpoint, and the midpoint (½).
+fn perceptual_mixes(a: &GradientStop, b: &GradientStop) -> Vec<f32> {
+    let mut vs = Vec::new();
+    perceptual_steps(&a.color, &b.color, (0.0, 0.5), 1, &mut vs);
+    vs.push(0.5);
+    perceptual_steps(&a.color, &b.color, (0.5, 1.0), 1, &mut vs);
+    vs
+}
+
+/// The offset of mix position `v` between stops `a` and `b`, placed through `a`'s midpoint
+/// (`v` = ½ at the midpoint) as [`Gradient::sample`] maps it.
+fn curve_offset(a: &GradientStop, b: &GradientStop, v: f32) -> f32 {
+    let m = a.midpoint.clamp(0.01, 0.99);
+    let u = if v == 0.5 {
+        a.midpoint
+    } else if v < 0.5 {
+        2.0 * v * m
+    } else {
+        m + (v - 0.5) * 2.0 * (1.0 - m)
+    };
+    a.offset + (b.offset - a.offset) * u
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientStop {
     /// 0..=1 along the gradient.
@@ -116,20 +151,71 @@ pub struct GradientStop {
     /// Tint of the linked swatch (0..1; 1 without a link), as on a solid paint.
     #[serde(default = "crate::full_tint", skip_serializing_if = "crate::is_full_tint")]
     pub tint: f32,
+    /// Process inks (C, M, Y, K, 0..1) printed together with the linked spot swatch's tint: a
+    /// DeviceN colour of a file that mixes a spot ink with process plates. `color` is how the mix
+    /// looks; separations print the spot ink at `tint` and these plates. `None`: the ink alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plates: Option<[f32; 4]>,
 }
 
 impl GradientStop {
     /// An opaque, unlinked stop of `color` at `offset` with a centred midpoint.
     pub fn new(offset: f32, color: Color) -> Self {
-        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0 }
+        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0, plates: None }
     }
-    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked.
+    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked, without
+    /// process plates.
     pub fn set_color(&mut self, color: Color, link: Option<(String, f32)>) {
         self.color = color;
+        self.plates = None;
         (self.swatch, self.tint) = match link {
             Some((n, t)) => (Some(n), t),
             None => (None, 1.0),
         };
+    }
+}
+
+/// The colour and opacity at `t` between stops `a` and `b`, through `a`'s midpoint (`u` = midpoint
+/// maps to `v` = ½), mixed by `mix`.
+fn between(a: &GradientStop, b: &GradientStop, t: f32, mix: &impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
+    let span = (b.offset - a.offset).max(1e-6);
+    let u = (t - a.offset) / span;
+    let m = a.midpoint.clamp(0.01, 0.99);
+    let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
+    (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v)
+}
+
+/// For each pair of neighbouring stops (`k`, `k + 1`), the largest offset among stops `1..=k + 1`.
+/// [`Gradient::sample_with`] picks the first pair whose end offset `t` doesn't pass; that is the
+/// first pair whose reach `t` doesn't pass, and the reaches never decrease, so the pair is found by
+/// binary search whether or not the stops are in order.
+struct StopReach(Vec<f32>);
+
+impl StopReach {
+    fn new(stops: &[GradientStop]) -> Self {
+        // `f32::max` skips a NaN offset, which `t <= offset` never chooses either.
+        let reach = stops.iter().skip(1).scan(f32::NEG_INFINITY, |m, s| {
+            *m = m.max(s.offset);
+            Some(*m)
+        });
+        Self(reach.collect())
+    }
+
+    /// What [`Gradient::sample_with`] gives at `t` for `stops`, the stops this was built from.
+    fn sample_with(&self, stops: &[GradientStop], t: f32, mix: &impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
+        let Some(first) = stops.first() else { return (Color::BLACK, 1.0) };
+        if t <= first.offset {
+            return (first.color, first.opacity);
+        }
+        let last = || stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity));
+        if t.is_nan() {
+            return last();
+        }
+        let k = self.0.partition_point(|r| *r < t);
+        match (stops.get(k), stops.get(k + 1)) {
+            (Some(a), Some(b)) => between(a, b, t, mix),
+            _ => last(),
+        }
     }
 }
 
@@ -169,6 +255,12 @@ impl Gradient {
     pub fn sample(&self, t: f32) -> (Color, f32) {
         self.sample_with(t, |a, b, v| self.method.mix(a, b, v))
     }
+    /// [`Self::sample`] for many points in no order (a gradient drawn pixel by pixel): the stops
+    /// are prepared once, so each sample costs a binary search rather than a scan of the stops.
+    pub fn sampler(&self) -> impl Fn(f32) -> (Color, f32) + '_ {
+        let reach = StopReach::new(&self.stops);
+        move |t| reach.sample_with(&self.stops, t, &|a, b, v| self.method.mix(a, b, v))
+    }
     /// [`Self::sample`], a Classic gradient's neighbouring stop colours of one model mixed in it
     /// (CMYK stays CMYK; [`Color::lerp_keep_model`]) rather than in display RGB, a Perceptual
     /// gradient's as [`Self::sample`] mixes them.
@@ -191,18 +283,42 @@ impl Gradient {
         for w in stops.windows(2) {
             let (a, b) = (&w[0], &w[1]);
             if t <= b.offset {
-                let span = (b.offset - a.offset).max(1e-6);
-                let u = (t - a.offset) / span;
-                // Map through the midpoint: u=mid → 0.5.
-                let m = a.midpoint.clamp(0.01, 0.99);
-                let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
-                return (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v);
+                return between(a, b, t, &mix);
             }
         }
         match stops.last() {
             Some(l) => (l.color, l.opacity),
             None => (Color::BLACK, 1.0),
         }
+    }
+    /// [`Self::sample_with`] at each of `ts`, which must not decrease. Each search starts where
+    /// the one before it stopped, so the work is the samples plus the stops, not their product.
+    pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {
+        let stops = &self.stops;
+        // The shared cursor assumes ordered stops; others (a file's, unsorted) look each sample up
+        // in a [`StopReach`], so they cost a binary search each rather than a scan of the stops.
+        if stops.windows(2).any(|w| w[1].offset < w[0].offset) {
+            let reach = StopReach::new(stops);
+            return ts.into_iter().map(|t| reach.sample_with(stops, t, &mix)).collect();
+        }
+        let mut j = 0;
+        ts.into_iter()
+            .map(|t| {
+                let Some(first) = stops.first() else { return (Color::BLACK, 1.0) };
+                if t <= first.offset {
+                    return (first.color, first.opacity);
+                }
+                // The first pair whose end `t` doesn't pass, as `sample_with` finds it: one that a
+                // smaller `t` passed, this one passes too.
+                while j + 1 < stops.len() && t > stops[j + 1].offset {
+                    j += 1;
+                }
+                match (stops.get(j), stops.get(j + 1)) {
+                    (Some(a), Some(b)) => between(a, b, t, &mix),
+                    _ => stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity)),
+                }
+            })
+            .collect()
     }
     /// Stops expanded so that midpoints are represented as explicit stops (for renderers without
     /// midpoints), and a Perceptual gradient's segments as stops on its curve (for renderers that
@@ -213,39 +329,132 @@ impl Gradient {
     /// [`Self::expanded_stops`], each stop that stands for a midpoint with that midpoint (`None`
     /// on the gradient's own stops and a Perceptual gradient's other in-between stops).
     pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>)> + '_ {
+        self.expanded_with_stops().map(|(t, c, o, mid, _)| (t, c, o, mid))
+    }
+    /// [`Self::expanded`], each of the gradient's own stops with its index in [`Self::stops`]
+    /// (`None` on the stops in between).
+    fn expanded_with_stops(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>, Option<usize>)> + '_ {
+        // Direct interpolation matches `sample` only for strictly increasing offsets.
+        let increasing = self.stops.windows(2).all(|w| w[0].offset < w[1].offset);
+        // Otherwise (repeated or unsorted offsets) each midpoint is looked up as `sample` would
+        // find it, but by binary search: a scan of all the stops per midpoint cost their square.
+        let reach = if increasing || !self.method.is_classic() { None } else { Some(StopReach::new(&self.stops)) };
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
             let next = self.stops.get(i + 1);
             let off_centre = (s.midpoint - 0.5).abs() > 1e-3;
             // Classic: a stop at the midpoint, when it is off-centre.
             let classic = next.filter(|_| off_centre && self.method.is_classic()).map(|n| {
                 let t = s.offset + (n.offset - s.offset) * s.midpoint;
-                let (c, o) = self.sample(t);
-                (t, c, o, Some(s.midpoint))
+                // Mixed from the two stops it lies between, as `sample` would: searching all the
+                // stops again for each midpoint made many stops cost their square.
+                let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
+                let (c, o) = match &reach {
+                    Some(reach) => reach.sample_with(&self.stops, t, &mix),
+                    None => between(s, n, t, &mix),
+                };
+                (t, c, o, Some(s.midpoint), None)
             });
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
             // midpoint (v = ½) among them, placed through the midpoint as [`Self::sample`] maps them.
             let perceptual = next.filter(|_| !self.method.is_classic()).map(|n| {
-                let mut vs = Vec::new();
-                perceptual_steps(&s.color, &n.color, (0.0, 0.5), 1, &mut vs);
-                vs.push(0.5);
-                perceptual_steps(&s.color, &n.color, (0.5, 1.0), 1, &mut vs);
-                let m = s.midpoint.clamp(0.01, 0.99);
-                vs.into_iter().map(move |v| {
+                perceptual_mixes(s, n).into_iter().map(move |v| {
                     let mid = v == 0.5;
-                    let u = if mid {
-                        s.midpoint
-                    } else if v < 0.5 {
-                        2.0 * v * m
-                    } else {
-                        m + (v - 0.5) * 2.0 * (1.0 - m)
-                    };
-                    let t = s.offset + (n.offset - s.offset) * u;
+                    let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
-                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint))
+                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint), None)
                 })
             });
-            std::iter::once((s.offset, s.color, s.opacity, None)).chain(classic).chain(perceptual.into_iter().flatten())
+            std::iter::once((s.offset, s.color, s.opacity, None, Some(i))).chain(classic).chain(perceptual.into_iter().flatten())
         })
+    }
+    /// A gradient of tints of one ink `ink` (its color at 100%; paper white is 0% of it) as
+    /// (offset, tint, opacity) at each of [`Self::expanded_stops`]: the tint (0..1) whose OKLab
+    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings, except at
+    /// the gradient's own stops, which take their tints from `stop_tints` (one per stop, in
+    /// order) where it has one. Mixed linearly between them, the tints follow a Perceptual
+    /// gradient's curve. `None` when the ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of
+    /// paper white's (a white or nearly white ink), so lightness does not tell its tints apart,
+    /// and when the curve has more than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_tints(&self, ink: &Color, stop_tints: &[f32]) -> Option<Vec<(f32, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        if lightness(&ink.tinted(0.0)) - lightness(ink) < MIN_INK_LIGHTNESS_SPAN {
+            return None;
+        }
+        let curve: Vec<_> = self.expanded_with_stops().take(MAX_INK_TINTS + 1).collect();
+        if curve.len() > MAX_INK_TINTS {
+            return None;
+        }
+        let tint = |c: &Color| {
+            let want = lightness(c);
+            let (mut lo, mut hi) = (0.0f32, 1.0f32);
+            for _ in 0..TINT_STEPS {
+                let mid = (lo + hi) / 2.0;
+                if lightness(&ink.tinted(mid)) > want {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            (lo + hi) / 2.0
+        };
+        Some(curve.into_iter().map(|(t, c, o, _, i)| (t, i.and_then(|i| stop_tints.get(i).copied()).unwrap_or_else(|| tint(&c)), o)).collect())
+    }
+    /// Does the gradient's curve ([`Self::expanded`]) have at most [`MAX_INK_TINTS`] stops, so
+    /// [`Self::ink_tints`] finds tints for it?
+    pub fn fits_ink_tints(&self) -> bool {
+        self.expanded().nth(MAX_INK_TINTS).is_none()
+    }
+    /// A Perceptual gradient's curve ([`Self::expanded_stops`]) as mixes of its stops' inks:
+    /// (offset, `i`, weight, opacity) at each stop on it, where the inks there are those of stop
+    /// `i` and stop `i + 1` mixed linearly at the weight (0..1; 0 on the gradient's own stops).
+    /// The weight is the one at which the two stops' colors mixed in display RGB have the OKLab
+    /// lightness of the color on the curve there, found to [`TINT_STEPS`] halvings, or the mix
+    /// position itself when the two colors' lightness differs by less than
+    /// [`MIN_INK_LIGHTNESS_SPAN`], or when the display RGB mix's lightness turns back somewhere
+    /// on the way from one color's lightness to the other's (checked at [`INK_MIX_STEPS`] even
+    /// steps), as from red to blue. `None` for a Classic gradient, and when the curve has more
+    /// than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        if self.method.is_classic() || !self.fits_ink_tints() {
+            return None;
+        }
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        let mut out = Vec::new();
+        for (i, s) in self.stops.iter().enumerate() {
+            out.push((s.offset, i, 0.0, s.opacity));
+            let Some(n) = self.stops.get(i + 1) else { continue };
+            let (l0, l1) = (lightness(&s.color), lightness(&n.color));
+            let mixed_lightness = |w: f32| lightness(&GradientMethod::Classic.mix(&s.color, &n.color, w));
+            // The mix position itself when the lightness doesn't tell the mixes apart.
+            let by_position = (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN
+                || !(0..=INK_MIX_STEPS)
+                    .map(|k| mixed_lightness(k as f32 / INK_MIX_STEPS as f32))
+                    .collect::<Vec<_>>()
+                    .windows(2)
+                    .all(|w| (w[1] - w[0]) * (l1 - l0) >= 0.0);
+            for v in perceptual_mixes(s, n) {
+                let weight = if by_position {
+                    v
+                } else {
+                    let want = lightness(&self.method.mix(&s.color, &n.color, v));
+                    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+                    for _ in 0..TINT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        // The mix at `mid` has not yet gone from stop `i`'s lightness to the wanted one.
+                        if (mixed_lightness(mid) - want) * (l1 - l0) < 0.0 {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    (lo + hi) / 2.0
+                };
+                out.push((curve_offset(s, n, v), i, weight, s.opacity + (n.opacity - s.opacity) * v));
+            }
+        }
+        Some(out)
     }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
     /// segment's midpoint mirrored with it.
@@ -764,448 +973,4 @@ pub fn dither_noise(x: u32, y: u32, channel: u32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sample_endpoints_and_mid() {
-        let g = Gradient::default();
-        assert_eq!(g.sample(0.0).0.to_hex(), "#ffffff");
-        assert_eq!(g.sample(1.0).0.to_hex(), "#000000");
-        let mid = g.sample(0.5).0.to_rgb()[0];
-        assert!((mid - 0.5).abs() < 1e-5);
-    }
-
-    #[test]
-    fn midpoint_shifts() {
-        let mut g = Gradient::default();
-        g.stops[0].midpoint = 0.25;
-        // At t = 0.25 we should be half way.
-        assert!((g.sample(0.25).0.to_rgb()[0] - 0.5).abs() < 1e-5);
-        assert_eq!(g.expanded_stops().len(), 3);
-    }
-
-    #[test]
-    fn fit_linear_horizontal() {
-        let g = GradientGeom::fit(GradientKind::Linear, Rect::new(0.0, 0.0, 100.0, 50.0), 0.0);
-        assert_eq!(g.start, Point::new(0.0, 25.0));
-        assert_eq!(g.end, Point::new(100.0, 25.0));
-        assert!((g.angle_deg()).abs() < 1e-9);
-        let v = GradientGeom::fit(GradientKind::Linear, Rect::new(0.0, 0.0, 100.0, 50.0), 90.0);
-        assert!((v.angle_deg() - 90.0).abs() < 1e-9);
-        assert!((v.length() - 50.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn reverse_stops() {
-        let mut g = Gradient::default();
-        g.reverse();
-        assert_eq!(g.stops[0].color.to_hex(), "#000000");
-        assert_eq!(g.stops[0].offset, 0.0);
-    }
-
-    /// #1007: reversing mirrors off-centre midpoints with their segments, so the ramp is the same
-    /// the other way round.
-    #[test]
-    fn reverse_mirrors_midpoints() {
-        let stop = |offset, hex, midpoint| GradientStop { midpoint, ..GradientStop::new(offset, Color::from_hex(hex).unwrap()) };
-        let two = Gradient::new(GradientKind::Linear, vec![stop(0.0, "#ff0000", 0.2), stop(1.0, "#0000ff", 0.5)]);
-        let three = Gradient::new(GradientKind::Linear, vec![stop(0.0, "#ff0000", 0.2), stop(0.3, "#00ff00", 0.8), stop(1.0, "#0000ff", 0.5)]);
-        for g in [two, three] {
-            let mut r = g.clone();
-            r.reverse();
-            let mids: Vec<f32> = r.stops.iter().map(|s| s.midpoint).collect();
-            let want: Vec<f32> = g.stops.iter().rev().skip(1).map(|s| 1.0 - s.midpoint).chain([0.5]).collect();
-            assert!(mids.iter().zip(&want).all(|(a, b)| (a - b).abs() < 1e-6), "{mids:?} {want:?}");
-            for i in 0..=20 {
-                let t = i as f32 / 20.0;
-                let ((a, ao), (b, bo)) = (g.sample(t), r.sample(1.0 - t));
-                let same = a.to_rgba8(1.0).iter().zip(b.to_rgba8(1.0)).all(|(x, y)| x.abs_diff(y) <= 1);
-                assert!(same && (ao - bo).abs() < 1e-6, "t {t}: {a:?} vs {b:?}");
-            }
-            r.reverse();
-            let back = r.stops.iter().zip(&g.stops).all(|(a, b)| (a.offset - b.offset).abs() < 1e-6 && (a.midpoint - b.midpoint).abs() < 1e-6);
-            assert!(back, "reversed twice, it is as it was: {:?}", r.stops);
-        }
-    }
-
-    fn close(a: Point, b: Point) -> bool {
-        a.distance(b) < 1e-9
-    }
-
-    fn linear(start: (f64, f64), end: (f64, f64)) -> GradientGeom {
-        GradientGeom { start: start.into(), end: end.into(), aspect: 1.0, focal: None }
-    }
-
-    #[test]
-    fn rotate_90_gives_vertical_vector() {
-        let mut g = linear((0.0, 0.0), (100.0, 0.0));
-        g.transform(Affine::rotate(std::f64::consts::FRAC_PI_2), GradientKind::Linear);
-        assert!(close(g.start, Point::ZERO) && close(g.end, Point::new(0.0, 100.0)), "{g:?}");
-        assert!((g.angle_deg() + 90.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn reflect_swaps_start_and_end() {
-        let mut g = linear((0.0, 25.0), (100.0, 25.0));
-        // Reflect across the vertical axis through x = 50.
-        let flip = Affine::translate((50.0, 0.0)) * Affine::scale_non_uniform(-1.0, 1.0) * Affine::translate((-50.0, 0.0));
-        g.transform(flip, GradientKind::Linear);
-        assert!(close(g.start, Point::new(100.0, 25.0)) && close(g.end, Point::new(0.0, 25.0)), "{g:?}");
-    }
-
-    #[test]
-    fn non_uniform_scale_turns_a_circle_into_an_ellipse() {
-        let mut g = GradientGeom { start: Point::new(10.0, 10.0), end: Point::new(20.0, 10.0), aspect: 1.0, focal: None };
-        g.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
-        assert!(close(g.start, Point::new(20.0, 10.0)) && close(g.end, Point::new(40.0, 10.0)), "{g:?}");
-        assert!((g.aspect - 0.5).abs() < 1e-9);
-        // A vertical vector keeps its axis: the ellipse is twice as wide as the vector is long.
-        let mut v = GradientGeom { start: Point::ZERO, end: Point::new(0.0, -10.0), aspect: 1.0, focal: None };
-        v.transform(Affine::scale_non_uniform(2.0, 1.0), GradientKind::Radial);
-        assert!(close(v.end, Point::new(0.0, -10.0)) && (v.aspect - 2.0).abs() < 1e-9, "{v:?}");
-    }
-
-    #[test]
-    fn samples_follow_shear_and_rotation() {
-        let shear = Affine::new([1.0, 0.3, 0.7, 1.2, 15.0, -4.0]) * Affine::rotate(0.4);
-        for kind in [GradientKind::Linear, GradientKind::Radial] {
-            let g = GradientGeom { start: Point::new(30.0, 40.0), end: Point::new(80.0, 55.0), aspect: 0.6, focal: None };
-            let mut m = g;
-            m.transform(shear, kind);
-            for p in [Point::new(30.0, 40.0), Point::new(55.0, 70.0), Point::new(90.0, 10.0), Point::new(-20.0, 48.0)] {
-                let (a, b) = (g.param_at(kind, p), m.param_at(kind, shear * p));
-                assert!((a - b).abs() < 1e-9, "{kind:?} at {p:?}: {a} vs {b}");
-            }
-        }
-    }
-
-    #[test]
-    fn radial_fit_uses_the_angle_and_param_honours_aspect() {
-        let b = Rect::new(0.0, 0.0, 100.0, 60.0);
-        let g = GradientGeom::fit(GradientKind::Radial, b, 90.0);
-        assert!(close(g.start, Point::new(50.0, 30.0)) && close(g.end, Point::new(50.0, -20.0)), "end above the centre: {g:?}");
-        let e = GradientGeom { start: Point::ZERO, end: Point::new(10.0, 0.0), aspect: 0.5, focal: None };
-        assert!((e.param_at(GradientKind::Radial, Point::new(0.0, 5.0)) - 1.0).abs() < 1e-12);
-        assert!((e.param_at(GradientKind::Radial, Point::new(5.0, 0.0)) - 0.5).abs() < 1e-12);
-        assert!((e.param_at(GradientKind::Linear, Point::new(5.0, 7.0)) - 0.5).abs() < 1e-12);
-    }
-
-    fn g3() -> Gradient {
-        let mut g = Gradient::default();
-        g.stops.insert(1, GradientStop::new(0.5, Color::rgb(1.0, 0.0, 0.0)));
-        g
-    }
-
-    #[test]
-    fn insert_samples_color_and_sorts() {
-        let g = Gradient::default();
-        let (stops, i) = insert_stop(&g, 0.25);
-        assert_eq!(stops.len(), 3);
-        assert_eq!(i, 1);
-        let r = stops[1].color.to_rgb()[0];
-        assert!((r - 0.75).abs() < 1e-4, "sampled {r}");
-        let (stops, i) = insert_stop(&g, 2.0);
-        assert_eq!(i, 2);
-        assert_eq!(stops[2].offset, 1.0);
-    }
-
-    #[test]
-    fn remove_keeps_two() {
-        let g = g3();
-        let v = remove_stop(&g.stops, 1).unwrap();
-        assert_eq!(v.len(), 2);
-        assert!(remove_stop(&v, 0).is_none());
-        assert!(remove_stop(&g.stops, 9).is_none());
-    }
-
-    #[test]
-    fn move_reorders_and_tracks_index() {
-        let g = g3();
-        let (v, i) = move_stop(&g.stops, 0, 0.8);
-        assert_eq!(i, 1);
-        assert_eq!(v[1].color.to_hex(), "#ffffff");
-        assert!(v.windows(2).all(|w| w[0].offset <= w[1].offset));
-        let (v, i) = move_stop(&g.stops, 1, -3.0);
-        // Clamped to 0 and placed after the existing stop at 0.
-        assert_eq!((i, v[i].offset, v[i].color.to_hex()), (1, 0.0, "#ff0000".to_string()));
-    }
-
-    #[test]
-    fn duplicate_copies_the_stop_to_a_new_offset() {
-        let g = g3();
-        let (v, i) = duplicate_stop(&g.stops, 1, 0.9);
-        assert_eq!((v.len(), i, v[i].offset, v[i].color.to_hex()), (4, 2, 0.9, "#ff0000".to_string()));
-        assert_eq!(v[1], g.stops[1], "the original stays");
-        assert_eq!(duplicate_stop(&g.stops, 7, 0.5).0, g.stops);
-    }
-
-    #[test]
-    fn swap_exchanges_only_the_colours() {
-        let mut g = g3();
-        g.stops[0].opacity = 0.25;
-        let v = swap_stop_colors(&g.stops, 0, 1);
-        assert_eq!((v[0].color.to_hex(), v[1].color.to_hex()), ("#ff0000".to_string(), "#ffffff".to_string()));
-        assert_eq!((v[0].offset, v[0].opacity, v[1].offset, v[1].opacity), (0.0, 0.25, 0.5, 1.0));
-        assert_eq!(swap_stop_colors(&g.stops, 0, 9), g.stops);
-    }
-
-    #[test]
-    fn midpoint_math() {
-        let g = g3();
-        assert_eq!(midpoint_pos(&g.stops, 0), Some(0.25));
-        assert_eq!(midpoint_pos(&g.stops, 2), None);
-        let m = midpoint_from_pos(&g.stops, 1, 0.6).unwrap();
-        assert!((m - 0.2).abs() < 1e-5);
-        assert_eq!(midpoint_from_pos(&g.stops, 1, 0.51).unwrap(), 0.13);
-        let v = set_midpoint(&g.stops, 0, 0.99);
-        assert_eq!(v[0].midpoint, 0.87);
-    }
-
-    #[test]
-    fn rebase_keeps_relative_positions() {
-        let mut g = GradientGeom { start: Point::new(110.0, 150.0), end: Point::new(190.0, 120.0), aspect: 0.5, focal: None };
-        g.rebase(Rect::new(100.0, 100.0, 200.0, 200.0), Rect::new(500.0, 0.0, 700.0, 50.0));
-        assert!(close(g.start, Point::new(520.0, 25.0)) && close(g.end, Point::new(680.0, 10.0)) && g.aspect == 0.5, "{g:?}");
-        // A box without height (a horizontal line) keeps the offset from its centre line.
-        let mut h = GradientGeom { start: Point::new(0.0, 12.0), end: Point::new(10.0, 10.0), aspect: 1.0, focal: None };
-        h.rebase(Rect::new(0.0, 10.0, 10.0, 10.0), Rect::new(0.0, 0.0, 20.0, 40.0));
-        assert!(close(h.start, Point::new(0.0, 22.0)) && close(h.end, Point::new(20.0, 20.0)), "{h:?}");
-        // Unplaced paints have nothing to move.
-        let mut p = GradientPaint::new(Gradient::default());
-        p.rebase(Rect::new(0.0, 0.0, 1.0, 1.0), Rect::new(5.0, 5.0, 9.0, 9.0));
-        assert_eq!(p.geom, None);
-    }
-
-    #[test]
-    fn pin_fixes_the_fit_once() {
-        let mut p = GradientPaint::new(Gradient::default());
-        p.angle = 90.0;
-        let b = Rect::new(0.0, 0.0, 100.0, 50.0);
-        p.pin(b);
-        assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
-        p.pin(Rect::new(0.0, 0.0, 1.0, 1.0));
-        assert_eq!(p.geom, Some(GradientGeom::fit(GradientKind::Linear, b, 90.0)));
-    }
-
-    /// A 100 pt circle at (200, 200) with its focal point 40 pt left of the centre.
-    fn off_centre() -> GradientGeom {
-        let mut g = GradientGeom { start: Point::new(200.0, 200.0), end: Point::new(300.0, 200.0), aspect: 1.0, focal: None };
-        g.set_focal(Some(Point::new(160.0, 200.0)));
-        g
-    }
-
-    #[test]
-    fn focal_round_trips_through_serde_and_defaults_to_none() {
-        let g = off_centre();
-        let s = serde_json::to_string(&g).unwrap();
-        assert!(s.contains("\"focal\""), "{s}");
-        assert_eq!(serde_json::from_str::<GradientGeom>(&s).unwrap(), g);
-        // Placements saved before focal points existed load centred, and centred ones write none.
-        let old: GradientGeom = serde_json::from_str(r#"{"start":{"x":0.0,"y":0.0},"end":{"x":1.0,"y":0.0}}"#).unwrap();
-        assert_eq!((old.focal, old.aspect), (None, 1.0));
-        assert!(!serde_json::to_string(&old).unwrap().contains("focal"));
-    }
-
-    #[test]
-    fn focal_follows_transforms_and_rebases() {
-        let mut g = off_centre();
-        let a = Affine::translate((10.0, -5.0)) * Affine::rotate(0.7) * Affine::scale_non_uniform(2.0, 0.5);
-        let f = a * g.focal.unwrap();
-        g.transform(a, GradientKind::Radial);
-        assert!(close(g.focal.unwrap(), f), "{g:?}");
-        // Still at the same parameter: the first stop.
-        assert!(g.param_at(GradientKind::Radial, f).abs() < 1e-9);
-        let mut h = off_centre();
-        h.rebase(Rect::new(100.0, 100.0, 300.0, 300.0), Rect::new(0.0, 0.0, 100.0, 100.0));
-        assert!(close(h.focal.unwrap(), Point::new(30.0, 50.0)) && close(h.start, Point::new(50.0, 50.0)), "{h:?}");
-    }
-
-    #[test]
-    fn param_runs_from_the_focal_point_to_the_ellipse() {
-        let g = off_centre();
-        let t = |x: f64, y: f64| g.param_at(GradientKind::Radial, Point::new(x, y));
-        assert!(t(160.0, 200.0).abs() < 1e-9);
-        // The extent circle is the last stop all round.
-        for a in [0.0f64, 1.0, 2.5, 4.0] {
-            let p = Point::new(200.0 + 100.0 * a.cos(), 200.0 + 100.0 * a.sin());
-            assert!((g.param_at(GradientKind::Radial, p) - 1.0).abs() < 1e-9, "{a}");
-        }
-        // The centre lies on the level-2/7 circle: centred 2/7 of the way back to the focal point
-        // (0.4 of the radius off), with a radius of 2/7.
-        assert!((t(200.0, 200.0) - 2.0 / 7.0).abs() < 1e-9, "{}", t(200.0, 200.0));
-        assert!(t(180.0, 200.0) < t(220.0, 200.0), "nearer the focal side is earlier");
-        assert_eq!(GradientGeom { focal: None, ..g }.param_at(GradientKind::Radial, Point::new(250.0, 200.0)), 0.5);
-    }
-
-    #[test]
-    fn focal_is_kept_inside_the_ellipse_and_follows_its_reshaping() {
-        let mut g = off_centre();
-        g.set_focal(Some(Point::new(500.0, 200.0)));
-        assert!(close(g.focal.unwrap(), Point::new(299.0, 200.0)), "pulled inside: {g:?}");
-        g.set_focal(Some(Point::new(200.0, 200.0)));
-        assert_eq!(g.focal, None, "on the centre: centred");
-        // A new vector and aspect keep it in its place in the ellipse.
-        let before = off_centre();
-        let mut h = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(0.0, 50.0), aspect: 0.5, focal: None };
-        h.keep_focal_from(&before);
-        assert!(close(h.focal.unwrap(), Point::new(0.0, -20.0)), "{h:?}");
-    }
-
-    #[test]
-    fn pixels_sample_the_ramp_at_each_cell_centre() {
-        // White → black left to right over a 10 × 2 box, a midpoint at 30% and a half-opaque end.
-        let mut g = GradientPaint::new(Gradient::default());
-        g.gradient.stops[0].midpoint = 0.3;
-        g.gradient.stops[1].opacity = 0.5;
-        let b = Rect::new(0.0, 0.0, 10.0, 2.0);
-        let px: Vec<[u8; 4]> = g.pixels(b, b, 10, 2, true, &Color::to_rgb).collect();
-        assert_eq!(px.len(), 20);
-        let ramp = Ramp::new(&g.gradient, &Color::to_rgb);
-        for (i, p) in px.iter().take(10).enumerate() {
-            let c = ramp.at((i as f32 + 0.5) / 10.0).map(|v| (v * 255.0).round() as u8);
-            assert_eq!(*p, c, "pixel {i}");
-        }
-        assert_eq!(px[3], px[13], "rows alike");
-        // The midpoint stop: grey at 30%; padded past the ends.
-        assert!((ramp.at(0.3)[0] - 0.5).abs() < 0.02, "{:?}", ramp.at(0.3));
-        assert_eq!(ramp.at(-1.0), [1.0, 1.0, 1.0, 1.0]);
-        assert_eq!(ramp.at(2.0), [0.0, 0.0, 0.0, 0.5]);
-        assert_eq!(ramp.at(f32::NAN), [1.0, 1.0, 1.0, 1.0]);
-    }
-
-    fn blue_yellow(method: GradientMethod) -> Gradient {
-        let mut g = Gradient::new(
-            GradientKind::Linear,
-            vec![GradientStop::new(0.0, Color::rgb(0.0, 0.0, 1.0)), GradientStop::new(1.0, Color::rgb(1.0, 1.0, 0.0))],
-        );
-        g.method = method;
-        g
-    }
-
-    /// Illustrator 30's Perceptual method mixes colours in a perceptually even way
-    /// (https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-gradients/control-perceptual-interpolation-in-gradients.html).
-    /// Here that is OKLab: blue → yellow passes through a light blue-grey, not the flat mid grey
-    /// a display RGB mix gives, and its lightness climbs evenly.
-    #[test]
-    fn perceptual_blue_to_yellow_is_not_the_grey_rgb_mix() {
-        let classic = blue_yellow(GradientMethod::Classic).sample(0.5).0.to_rgb();
-        assert!(classic.iter().all(|v| (v - 0.5).abs() < 1e-5), "classic: the RGB mix {classic:?}");
-        let p = blue_yellow(GradientMethod::Perceptual);
-        let [r, g, b] = p.sample(0.5).0.to_rgb();
-        assert!(b > r + 0.1 && b > g + 0.05, "a blue-grey, not grey: {:?}", [r, g, b]);
-        assert!(r + g + b > 1.5 + 0.2, "lighter than the RGB mix: {:?}", [r, g, b]);
-        let lightness = |t: f32| crate::libraries::to_oklab(&p.sample(t).0)[0];
-        let steps: Vec<f64> = (0..4).map(|k| lightness((k + 1) as f32 / 4.0) - lightness(k as f32 / 4.0)).collect();
-        assert!(steps.iter().all(|d| (d - steps[0]).abs() < 1e-3), "even lightness steps: {steps:?}");
-        // Ends and opacity as before.
-        assert_eq!(p.sample(0.0).0.to_hex(), "#0000ff");
-        assert_eq!(p.sample(1.0).0.to_hex(), "#ffff00");
-    }
-
-    /// Renderers mix linearly between stops: a Perceptual segment becomes stops on the perceptual
-    /// curve (the midpoint diamond among them), more where it bends, close enough that the linear
-    /// ramp between them stays within half a colour level of the curve; a segment that hardly
-    /// bends needs few.
-    #[test]
-    fn perceptual_segments_expand_into_stops_on_the_curve() {
-        let pairs = [
-            (Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 1.0, 0.0)),
-            (Color::BLACK, Color::rgb(1.0, 0.0, 0.0)),
-            (Color::rgb(0.0, 1.0, 0.0), Color::rgb(1.0, 0.0, 1.0)),
-            (Color::cmyk(0.0, 0.0, 0.0, 1.0), Color::WHITE),
-        ];
-        for (a, b) in pairs {
-            let mut p = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)]);
-            p.method = GradientMethod::Perceptual;
-            p.stops[0].midpoint = 0.3;
-            p.stops[1].opacity = 0.5;
-            let ex: Vec<_> = p.expanded().collect();
-            assert!((3..=100).contains(&ex.len()), "{a:?} → {b:?}: {} stops", ex.len());
-            assert!(ex.windows(2).all(|w| w[0].0 < w[1].0), "in order");
-            assert_eq!(ex.iter().filter(|s| s.3.is_some()).count(), 1, "one stop stands for the midpoint");
-            assert!(ex.iter().any(|s| s.3 == Some(0.3) && (s.0 - 0.3).abs() < 1e-6));
-            let ramp = Ramp::new(&p, &Color::to_rgb);
-            for k in 0..=2000 {
-                let t = k as f32 / 2000.0;
-                let (c, o) = p.sample(t);
-                let [r, g, b] = c.to_rgb();
-                let off = [r, g, b, o].iter().zip(ramp.at(t)).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max);
-                assert!(off < 0.5 / 255.0, "{a:?} → {b:?} at {t}: {off}");
-            }
-        }
-        let mut flat = Gradient::new(
-            GradientKind::Linear,
-            vec![GradientStop::new(0.0, Color::rgb(0.2, 0.4, 0.6)), GradientStop::new(1.0, Color::rgb(0.25, 0.45, 0.6))],
-        );
-        flat.method = GradientMethod::Perceptual;
-        assert_eq!(flat.expanded().count(), 3, "the ends and the midpoint");
-    }
-
-    /// Classic gradients expand as they always did: their stops, and a stop at each off-centre
-    /// midpoint, sampled in display RGB (so the renderer draws the same pixels as before).
-    #[test]
-    fn classic_gradients_expand_as_before() {
-        let mut g = Gradient::new(
-            GradientKind::Linear,
-            vec![
-                GradientStop { midpoint: 0.2, ..GradientStop::new(0.0, Color::rgb(0.0, 0.0, 1.0)) },
-                GradientStop { opacity: 0.4, ..GradientStop::new(0.45, Color::cmyk(0.1, 0.8, 0.0, 0.2)) },
-                GradientStop { midpoint: 0.87, ..GradientStop::new(0.6, Color::rgb(1.0, 1.0, 0.0)) },
-                GradientStop::new(1.0, Color::gray(0.3)),
-            ],
-        );
-        // The expansion gradients had before they had a method.
-        let before: Vec<_> = g
-            .stops
-            .iter()
-            .enumerate()
-            .flat_map(|(i, s)| {
-                let mid = g.stops.get(i + 1).filter(|_| (s.midpoint - 0.5).abs() > 1e-3).map(|n| {
-                    let t = s.offset + (n.offset - s.offset) * s.midpoint;
-                    let (c, o) = g.sample_with(t, Color::lerp);
-                    (t, c, o, Some(s.midpoint))
-                });
-                std::iter::once((s.offset, s.color, s.opacity, None)).chain(mid)
-            })
-            .collect();
-        assert_eq!(g.expanded().collect::<Vec<_>>(), before);
-        assert_eq!(before.len(), 6);
-        assert_eq!(g.sample(0.3), g.sample_with(0.3, Color::lerp));
-        assert_eq!(g.sample_keep_model(0.5), g.sample_with(0.5, Color::lerp_keep_model));
-        g.method = GradientMethod::Perceptual;
-        assert_eq!(g.sample_keep_model(0.5), g.sample(0.5), "perceptual: one mix");
-    }
-
-    /// The method is written only when Perceptual, so files from before it (and Classic
-    /// gradients) read as Classic and new Classic files stay as they were.
-    #[test]
-    fn method_is_saved_only_when_perceptual() {
-        let classic = serde_json::to_value(Gradient::default()).unwrap();
-        assert!(classic.get("method").is_none(), "{classic}");
-        let old: Gradient = serde_json::from_value(serde_json::json!({"kind": "Linear", "stops": []})).unwrap();
-        assert_eq!(old.method, GradientMethod::Classic);
-        let p = blue_yellow(GradientMethod::Perceptual);
-        let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["method"], "Perceptual");
-        assert_eq!(serde_json::from_value::<Gradient>(v).unwrap(), p);
-        assert_eq!(GradientMethod::parse("perceptual"), Some(GradientMethod::Perceptual));
-        assert_eq!(GradientMethod::parse("CLASSIC"), Some(GradientMethod::Classic));
-        assert_eq!(GradientMethod::parse("smooth"), None);
-    }
-
-    /// SVG and PDF can't mix colours perceptually: a Perceptual gradient is drawn as pixels there,
-    /// as Illustrator rasterises perceptual gradients saved as PDF or SVG, as a fill or a stroke,
-    /// dithered or not.
-    #[test]
-    fn perceptual_gradients_draw_as_pixels() {
-        for fill in [true, false] {
-            assert!(!GradientPaint::new(blue_yellow(GradientMethod::Classic)).draws_as_pixels(fill));
-            assert!(GradientPaint::new(blue_yellow(GradientMethod::Perceptual)).draws_as_pixels(fill));
-            let mut radial = blue_yellow(GradientMethod::Perceptual);
-            radial.kind = GradientKind::Radial;
-            radial.dither = true;
-            assert!(GradientPaint::new(radial).draws_as_pixels(fill));
-        }
-    }
-}
+mod tests;

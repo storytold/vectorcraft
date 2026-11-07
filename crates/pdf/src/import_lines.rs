@@ -153,6 +153,10 @@ fn block(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>) -> (usize, Opt
 /// the file's widths are rounded, or it moved a glyph a hair (`TJ`).
 const EVEN_TRACKING: f64 = 10.0;
 
+/// How far the tracking of a wrapped line's spaces may stray (thousandths of an em, a fiftieth of
+/// an em) and still be one value: each space the file draws beside a wider gap is tracked apart.
+const SPACE_TRACKING_TOLERANCE: f64 = 20.0;
+
 /// A line's spacing: the tracking after its letters, and how much more its spaces take (word
 /// spacing, `Tw`; `None` when it has none). `None` when its letters are tracked apart (set by
 /// hand), or its spaces more than `slack` apart.
@@ -194,7 +198,7 @@ fn area_type(nodes: &[Arc<Node>], lines: &HashMap<NodeId, LineFacts>, b: &Block)
     // type's own.
     // A wrapped line's spaces may each be tracked apart, within a fiftieth of an em of each other.
     let spacings: Vec<(f64, Option<f64>)> =
-        texts.iter().map(|(t, f)| line_spacing(t, if f.wraps { 20.0 } else { EVEN_TRACKING })).collect::<Option<_>>()?;
+        texts.iter().map(|(t, f)| line_spacing(t, if f.wraps { SPACE_TRACKING_TOLERANCE } else { EVEN_TRACKING })).collect::<Option<_>>()?;
     let trackings: Vec<f64> = spacings.iter().map(|(t, _)| *t).collect();
     let words: Vec<Option<f64>> = spacings.iter().map(|(_, w)| *w).collect();
     let wrapped: Vec<f64> = texts.iter().filter(|(_, f)| f.wraps).map(|(_, f)| f.length).collect();

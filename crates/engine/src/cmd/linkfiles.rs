@@ -2,7 +2,7 @@
 //! subfolders (`links.findFiles`, searched on separate threads: [`super::findfiles`]). A file with
 //! a linked file's name, in any letter case, is ranked by what the link saved
 //! ([`vectorcraft_doc::LinkInfo`]): the same file (its size and hash), the same size (when the link
-//! saved no hash, or the file is larger than 1 GB and isn't hashed), or the name only.
+//! saved no hash, or the file is larger than 1 GiB and isn't hashed), or the name only.
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
 use super::findfiles::{self, Limits, Visitor};
-use super::*;
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, bool_or, checked_ids_param, cmd};
 
 /// The most linked files one search looks for.
 const MAX_LINKS: usize = 1_000;
@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Find Linked Files",
         [],
         None,
-        "{folder?: an absolute path, ids?: [image or placed document ids] (default: the active document's missing links), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders, on separate threads, for files with the names of the linked files (in any letter case), and answer at once with the search's state (searching while it runs); without folder: the last search's state, with the files found so far. Each linked file's files come best first: same (the size and hash saved with the link), size (the saved size, where there is no saved hash or the file is larger than 1 GB), then name. Within each kind, a file whose name has the link's letter case comes first. Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that differs, and a file with more matching names comes first; files that still tie are listed by path. A search looks for at most 1000 linked files and keeps the first 10 files of each one's name, and up to 10 that are the same file; it ends once every linked file has its same file, and searches only the folders text.findFontFiles may search, with the same maxSeconds, depth and count limits; none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, links: [{name, path, ids, files: [{path, size, match: same|size|name, caseDiffers?: true}]}], searched?: {folders, files, read}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
+        "{folder?: an absolute path, ids?: [image or placed document ids] (default: the active document's missing links), maxSeconds?: 60 (1 to 600), stop?: false (true: stop the last search)} with folder: look in it and its subfolders, on separate threads, for files with the names of the linked files (in any letter case), and answer at once with the search's state (searching while it runs); without folder: the last search's state, with the files found so far. Each linked file's files come best first: same (the size and hash saved with the link), size (the saved size, where there is no saved hash or the file is larger than 1 GiB), then name. Within each kind, a file whose name has the link's letter case comes first. Then each file's folder names are compared with the saved path's, from the innermost outward up to the first one that differs, and a file with more matching names comes first; files that still tie are listed by path. Before the comparison, the saved path's parent-folder steps (.., or the empty components of a classic Mac :: run) are resolved, and . components in a slash path are skipped. A search looks for at most 1000 linked files and keeps the first 10 files of each one's name, and up to 10 that are the same file; it ends once every linked file has its same file, and searches only the folders text.findFontFiles may search, with the same maxSeconds, depth and count limits; none on the web → {id (absent while idle), state: idle|searching|done|stopped|failed, folder?, links: [{name, path, ids, files: [{path, size, match: same|size|name, caseDiffers?: true}]}], searched?: {folders, files, read}, skipped?, unreadable?, stopped?: stop|time|limit, error?, seconds?}",
         always,
         find
     )]
@@ -96,7 +96,15 @@ impl Visitor for LinkFiles {
             if let Some((Some(saved_size), Some(saved_hash))) = self.saved.get(i)
                 && *saved_size == size
                 && size <= MAX_HASHED
-                && hash.get_or_insert_with(|| std::fs::File::open(path).and_then(vectorcraft_doc::links::hash_reader).ok()).as_ref()
+                && hash
+                    .get_or_insert_with(|| {
+                        // Only the size looked at is read: a file growing meanwhile no longer
+                        // matches, rather than being hashed to its new end.
+                        let file = std::fs::File::open(path).ok()?;
+                        let (hash, read) = vectorcraft_doc::links::hash_reader_within(file, size).ok()?;
+                        (read == size).then_some(hash)
+                    })
+                    .as_ref()
                     == Some(saved_hash)
             {
                 items.push(n + i);
@@ -168,10 +176,29 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// How many folder names the file at `found` has in common with the saved path `saved` (whichever
-/// system's separators it uses), counted from the innermost out up to the first that differs,
-/// compared in lowercase.
+/// system's separators it uses, [`vectorcraft_doc::links::path_separators`]), counted from the
+/// innermost out up to the first that differs, compared in lowercase. The saved path's parent
+/// components are resolved first: `..` in a `/` or `\` path, and each colon after the first in a
+/// run of colons in a classic Mac OS path (`Disk:Projects:Art::photo.png` is in `Projects`).
 fn shared_folders(saved: &str, found: &Path) -> usize {
-    let saved = saved.rsplit(['/', '\\']).skip(1).filter(|c| !c.is_empty());
+    let separators = vectorcraft_doc::links::path_separators(saved);
+    let classic = separators == [':'];
+    let mut up = 0usize;
+    let saved = saved.rsplit(separators).skip(1).filter(move |c| {
+        let parent = if classic { c.is_empty() } else { *c == ".." };
+        if parent {
+            up += 1;
+            return false;
+        }
+        if c.is_empty() || *c == "." && !classic {
+            return false;
+        }
+        if up > 0 {
+            up -= 1;
+            return false;
+        }
+        true
+    });
     let found = found.parent().into_iter().flat_map(|p| p.components().rev()).map_while(|c| match c {
         Component::Normal(n) => n.to_str(),
         _ => None,

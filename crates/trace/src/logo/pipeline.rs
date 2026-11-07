@@ -20,7 +20,7 @@ const FIELD_CELLS_MAX: usize = 6_000_000;
 const MIN_FLAT: f64 = 0.93;
 /// Most outlines of one colour (above the noise threshold) we will fit; more is refused, not truncated.
 const MAX_LOOPS_PER_CLASS: usize = if cfg!(test) { 500 } else { 20_000 };
-/// Most pixels `unmix` may have to work on (those that are not exactly one colour). A busier image is
+/// Most distinct pixel values `unmix` may have to work on (those that are not exactly one color). A busier image is
 /// averaged down further first, which bounds the time on pathological input.
 const EDGE_BUDGET: usize = 150_000;
 /// Palette colours closer than this (RGB distance) are one colour.
@@ -29,6 +29,8 @@ const SAME_COLOUR: f64 = 12.0;
 const MAX_COLOURS: usize = 10;
 /// Neighbouring colours overlap by this many working pixels so no hairline gap can open.
 const OVERLAP: f64 = 0.06;
+/// A traced outline whose area (in source pixels squared) is below this paints nothing.
+const NO_AREA: f64 = 1e-6;
 
 /// The raster as premultiplied RGBA, averaged down so its longest side is at most [`WORK_MAX_SIDE`].
 fn working_copy(img: &Raster, at_least: usize) -> (Vec<Px>, usize, usize, usize) {
@@ -262,11 +264,58 @@ fn to_subpath(segs: &[Cubic], map: &ToSource) -> Option<SubPath> {
     anchors.iter().all(|a| finite(a.p) && finite(a.h_in) && finite(a.h_out)).then(|| SubPath::new(anchors, true))
 }
 
+/// The area `sp` paints, summed about its first anchor. A subpath of one anchor has no segment and
+/// paints nothing.
+fn painted_area(sp: &SubPath) -> f64 {
+    use kurbo::ParamCurveArea;
+    let Some(origin) = sp.anchors.first().map(|a| a.p.to_vec2()) else { return 0.0 };
+    (0..sp.segment_count()).map(|i| (kurbo::Affine::translate(-origin) * sp.segment(i)).signed_area()).sum()
+}
+
 struct Shape {
     class: usize,
     area: f64,
     outer: Vec<Cubic>,
     holes: Vec<Vec<Cubic>>,
+}
+
+/// The subpaths of `s` in source pixels: its outline, then its holes. The fit of a thin outline
+/// can have no area: two anchors whose segments run along one line, or a single anchor, which has
+/// no segment. Such an outline paints nothing and is left out with its holes, and a hole with no
+/// area is left out too.
+fn shape_subpaths(s: &Shape, map: &ToSource) -> Vec<SubPath> {
+    let outer = to_subpath(&s.outer, map);
+    if outer.as_ref().is_some_and(|sp| painted_area(sp).abs() < NO_AREA) {
+        return Vec::new();
+    }
+    let mut subs: Vec<SubPath> = Vec::new();
+    subs.extend(outer);
+    for hole in &s.holes {
+        subs.extend(to_subpath(hole, map).filter(|sp| painted_area(sp).abs() >= NO_AREA));
+    }
+    subs
+}
+
+/// A shape's subpaths in source pixels, with no outline or hole that paints nothing.
+struct Kept {
+    class: usize,
+    area: f64,
+    subs: Vec<SubPath>,
+}
+
+/// Adds `s` to `kept` unless it paints nothing, and counts the anchors of the subpaths it keeps
+/// in `anchors_made`: the trace is too complex once they come to more than `max_anchors`.
+fn keep_shape(s: &Shape, map: &ToSource, kept: &mut Vec<Kept>, anchors_made: &mut usize, max_anchors: usize) -> Result<(), TraceError> {
+    let subs = shape_subpaths(s, map);
+    if subs.is_empty() {
+        return Ok(());
+    }
+    *anchors_made = anchors_made.saturating_add(subs.iter().map(|sp| sp.anchors.len()).sum::<usize>());
+    if *anchors_made > max_anchors {
+        return Err(TraceError::TooComplex { max: max_anchors });
+    }
+    kept.push(Kept { class: s.class, area: s.area, subs });
+    Ok(())
 }
 
 /// A hard-edged source (a GIF, say) has no anti-aliasing to read an edge position from, and its
@@ -342,7 +391,7 @@ fn choose_palette(params: &TraceParams, pix: &[Px], w: usize, h: usize) -> Resul
 /// Trace a flat-colour logo.
 pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
     let (w0, h0) = (img.width as usize, img.height as usize);
-    if w0 == 0 || h0 == 0 || img.rgba.len() != w0 * h0 * 4 {
+    if w0 == 0 || h0 == 0 || w0.checked_mul(h0).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
         return Ok(TraceResult::default());
     }
     let (mut pix, mut w, mut h, mut factor) = working_copy(img, 1);
@@ -422,7 +471,8 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
     // `noise` is in source pixels (areas under noise/10 are ignored), whatever the working size.
     let min_area = ((f64::from(params.noise) / 10.0) / (factor * factor) as f64).max(0.3);
     let mut stats = Stats::default();
-    let mut shapes: Vec<Shape> = Vec::new();
+    let to_source = ToSource { factor: factor as f64, work: (w, h), source: (w0, h0) };
+    let mut shapes: Vec<Kept> = Vec::new();
     let mut anchors_made = 0usize;
     for class in 0..=white {
         if class == white && params.ignore_white {
@@ -436,6 +486,10 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
         for lp in contours(&f, ow, oh) {
             let a2 = area2(&lp) / (u * u) as f64;
             if a2.abs() / 2.0 < min_area {
+                continue;
+            }
+            // Holes are cut only under Ignore White; otherwise white and the other colors are traced as their own shapes.
+            if a2 >= 0.0 && !params.ignore_white {
                 continue;
             }
             // More real outlines than we will fit is refused, not silently truncated.
@@ -462,32 +516,19 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
             let Some(outer) = fit_outline(&pts, &style, &mut stats) else { continue };
             let hole_fits: Vec<Vec<Cubic>> =
                 holes.iter().zip(&owner).filter(|(_, o)| **o == Some(idx)).filter_map(|(hole, _)| fit_outline(hole, &style, &mut stats)).collect();
-            anchors_made += outer.len() + hole_fits.iter().map(Vec::len).sum::<usize>();
-            if anchors_made > max_anchors {
-                return Err(TraceError::TooComplex { max: max_anchors });
-            }
-            shapes.push(Shape { class, area, outer, holes: hole_fits });
+            keep_shape(&Shape { class, area, outer, holes: hole_fits }, &to_source, &mut shapes, &mut anchors_made, max_anchors)?;
         }
     }
     // Painter's order: biggest shapes first, so smaller ones sit on top of what they belong to.
     shapes.sort_by(|a, b| b.area.total_cmp(&a.area).then(a.class.cmp(&b.class)));
-    let to_source = ToSource { factor: factor as f64, work: (w, h), source: (w0, h0) };
-    let mut out = TraceResult::default();
+    let mut out = TraceResult { worked_at: (factor > 1).then_some((w as u32, h as u32)), ..TraceResult::default() };
     for s in shapes {
         let color = palette.get(s.class).copied().unwrap_or([255, 255, 255]);
-        let mut subs: Vec<SubPath> = Vec::new();
-        subs.extend(to_subpath(&s.outer, &to_source));
-        for hole in &s.holes {
-            subs.extend(to_subpath(hole, &to_source));
-        }
-        if subs.is_empty() {
-            continue;
-        }
         if !out.palette.contains(&color) {
             out.palette.push(color);
         }
         out.paths.push(TracedPath {
-            path: PathData::new(subs),
+            path: PathData::new(s.subs),
             color,
             pixels: (s.area * (factor * factor) as f64) as usize,
             stroke: None,
@@ -497,4 +538,60 @@ pub(crate) fn trace_logo(img: &Raster, params: &TraceParams, max_anchors: usize)
         });
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A closed outline of straight cubics through `pts`.
+    fn polygon(pts: &[(f64, f64)]) -> Vec<Cubic> {
+        (0..pts.len())
+            .map(|i| {
+                let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+                let (a, b) = (Point::new(a.0, a.1), Point::new(b.0, b.1));
+                [a, a, b, b]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_hole_without_area_is_left_out() {
+        let map = ToSource { factor: 1.0, work: (40, 40), source: (40, 40) };
+        let shape = Shape {
+            class: 0,
+            area: 900.0,
+            outer: polygon(&[(5.0, 5.0), (35.0, 5.0), (35.0, 35.0), (5.0, 35.0)]),
+            holes: vec![polygon(&[(10.0, 20.0), (20.0, 20.0)]), polygon(&[(20.0, 10.0), (30.0, 10.0), (30.0, 30.0)])],
+        };
+        let subs = shape_subpaths(&shape, &map);
+        let areas: Vec<f64> = subs.iter().map(painted_area).collect();
+        assert_eq!(subs.len(), 2, "areas {areas:?}");
+        assert!(areas.iter().all(|a| a.abs() >= 100.0), "areas {areas:?}");
+    }
+
+    #[test]
+    fn an_outline_without_area_is_left_out_with_its_holes() {
+        let map = ToSource { factor: 1.0, work: (40, 40), source: (40, 40) };
+        let shape = Shape {
+            class: 0,
+            area: 1.0,
+            outer: polygon(&[(5.0, 5.0), (35.0, 5.0)]),
+            holes: vec![polygon(&[(20.0, 10.0), (30.0, 10.0), (30.0, 30.0)])],
+        };
+        assert!(shape_subpaths(&shape, &map).is_empty());
+    }
+
+    #[test]
+    fn the_anchor_limit_counts_only_the_subpaths_kept() {
+        let map = ToSource { factor: 1.0, work: (40, 40), source: (40, 40) };
+        let square = || polygon(&[(5.0, 5.0), (35.0, 5.0), (35.0, 35.0), (5.0, 35.0)]);
+        let with_flat_hole = Shape { class: 0, area: 900.0, outer: square(), holes: vec![polygon(&[(10.0, 20.0), (20.0, 20.0)])] };
+        let flat_outline = Shape { class: 0, area: 1.0, outer: polygon(&[(5.0, 5.0), (35.0, 5.0)]), holes: vec![square()] };
+        let (mut kept, mut anchors_made) = (Vec::new(), 0usize);
+        assert!(keep_shape(&with_flat_hole, &map, &mut kept, &mut anchors_made, 4).is_ok());
+        assert!(keep_shape(&flat_outline, &map, &mut kept, &mut anchors_made, 4).is_ok());
+        assert_eq!((kept.len(), anchors_made), (1, 4));
+        assert!(matches!(keep_shape(&with_flat_hole, &map, &mut kept, &mut anchors_made, 4), Err(TraceError::TooComplex { max: 4 })));
+    }
 }

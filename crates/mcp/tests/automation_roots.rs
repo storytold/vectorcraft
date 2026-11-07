@@ -114,7 +114,13 @@ fn saves_exports_and_captures_go_only_into_the_write_root() {
         json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("outside"))}}),
         "outside the write root",
     );
-    ok(&mut server, "run_command", json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("out"))}}));
+    // Data Recovery lists and restores what is in its folder too: write access alone isn't enough.
+    refused(
+        &mut server,
+        "run_command",
+        json!({"command": "prefs.set", "params": {"key": "recoveryFolder", "value": s(&base.join("out"))}}),
+        "outside the read root",
+    );
     refused(&mut server, "run_command", json!({"command": "plugin.reload", "params": {"path": s(&base.join("outside"))}}), "outside the read root");
 
     // The document saved inside the write root saves again in place.
@@ -154,4 +160,13 @@ fn links_out_of_a_root_are_refused() {
     }
     refused(&mut server, "export", json!({"path": s(&base.join("out/away/art.png"))}), "outside the write root");
     assert!(!base.join("outside/art.png").exists());
+}
+
+/// The Place tool keeps its queue until a click, which no scope confines: a queued file outside the
+/// read root is refused when the queue is set (whichever tool is active when it is).
+#[test]
+fn a_place_queue_names_only_files_inside_the_read_root() {
+    let (mut server, base) = confined("place-queue", true, true);
+    let queue = |file: &str| json!({"key": "queue", "value": {"entries": [{"params": {"path": s(&base.join(file))}, "name": "x", "width": 10, "height": 10}]}});
+    refused(&mut server, "run_command", json!({"command": "tool.setOption", "params": queue("outside/b.svg")}), "outside the read root");
 }

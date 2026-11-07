@@ -19,10 +19,12 @@ fi
 
 TMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 KEYCHAIN="$TMP/vectorcraft-signing.keychain-db"
-CERT="$TMP/vectorcraft-signing.p12"
+# A fresh private directory, so a pre-made symlink in a shared $TMP cannot redirect the secret.
+CERT_DIR="$(mktemp -d "$TMP/vectorcraft-signing.XXXXXX")"
+CERT="$CERT_DIR/vectorcraft-signing.p12"
 KC_PASS="${KEYCHAIN_PASSWORD:-$(openssl rand -hex 24)}"
 
-trap 'rm -f "$CERT"' EXIT
+trap 'rm -rf "$CERT_DIR"' EXIT
 printf '%s' "$APPLE_CERTIFICATE" | base64 --decode >"$CERT"
 security create-keychain -p "$KC_PASS" "$KEYCHAIN"
 security set-keychain-settings -lut 21600 "$KEYCHAIN"

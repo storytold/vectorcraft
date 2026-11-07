@@ -178,7 +178,8 @@ fn third_vp(ui: &mut egui::Ui, d: &mut Dialog, i: usize, unit: Unit, enabled: bo
     v.resize(2, json!(0));
     let pt = v.get(i).and_then(Value::as_f64).map(|x| unit.to_pt(x));
     ui.label(if i == 0 { "X:" } else { "Y:" });
-    if let Some(x) = ui.add_enabled_ui(enabled, |ui| widgets::num_field(ui, ("persp-vp3", i), pt, unit, 84.0)).inner {
+    let name = if i == 0 { crate::i18n::t("X:") } else { crate::i18n::t("Y:") };
+    if let Some(x) = ui.add_enabled_ui(enabled, |ui| widgets::num_field_named(ui, ("persp-vp3", i), Some(name), pt, unit, 84.0)).inner {
         v[i] = json!(unit.from_pt(x));
         d.fields.insert("thirdVp".into(), Value::Array(v));
     }

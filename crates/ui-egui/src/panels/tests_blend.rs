@@ -122,7 +122,7 @@ fn window_blend_opens_the_panel() {
     assert_eq!(item.command.as_deref(), Some("window.panel"));
     assert_eq!(item.params, json!({"panel": ID, "toggle": true}));
     crate::menus::invoke(&mut app, "window.panel", item.params.clone());
-    assert_eq!(app.ui.open_panel.as_deref(), Some(ID));
+    assert!(crate::panel_docking::showing(&app.ui, ID));
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::show_icon_panel(app, ui, ID));
     for label in ["Make", "Spacing:", "Orientation:", "Direction:", "Reverse Front to Back", "Reverse Spine", "Replace Spine", "Expand", "Release"] {
         assert!(text.contains(label), "{label} in {text}");

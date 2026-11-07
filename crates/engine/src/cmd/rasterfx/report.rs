@@ -92,6 +92,7 @@ mod tests {
                 xf: Affine::scale(72.0 / ppi),
                 link: None,
                 placement: Default::default(),
+                pixels: None,
             })),
         )
     }

@@ -20,7 +20,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, id_param, index, ok, str_param, unique_name};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {

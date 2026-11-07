@@ -1,5 +1,7 @@
-//! What draws differently after an edit, so a view can draw again only there.
+//! What draws differently after an edit, or once placed documents' bitmaps are ready, so a view
+//! can draw again only there.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Document, Node, NodeKind, SymbolBoxes};
@@ -12,6 +14,66 @@ pub enum Changed {
     /// This area of the document, outside of which every pixel draws as before.
     Area(Rect),
     Everything,
+}
+
+impl Changed {
+    /// What may draw differently after this change and `other`: everything when either is,
+    /// else both areas.
+    pub fn and(self, other: Changed) -> Changed {
+        match (self, other) {
+            (Changed::Everything, _) | (_, Changed::Everything) => Changed::Everything,
+            (Changed::Area(a), Changed::Area(b)) => Changed::Area(a.union(b)),
+            (Changed::Area(a), Changed::Nothing) | (Changed::Nothing, Changed::Area(a)) => Changed::Area(a),
+            (Changed::Nothing, Changed::Nothing) => Changed::Nothing,
+        }
+    }
+}
+
+/// What draws differently in `doc` once the bitmaps of the placed documents' `files` are ready
+/// ([`crate::placed_document::made_between`]): the bounds of everything the objects that show
+/// them paint, measured as [`changed`] measures an object that changed. Everything when the art
+/// of a symbol, a graph design, a pattern or a brush shows one of them (it draws wherever it is
+/// used), or while a pattern is edited.
+pub fn placed_area(doc: &Document, files: &HashSet<String>) -> Changed {
+    if files.is_empty() {
+        return Changed::Nothing;
+    }
+    let mut elsewhere =
+        doc.symbols.iter().map(|s| &s.art).chain(doc.graph_designs.iter().map(|g| &g.art)).chain(doc.patterns.iter().flat_map(|p| &p.art));
+    if doc.pattern_edit.is_some()
+        || elsewhere.any(|n| shows(n, files))
+        || vectorcraft_brush::library(doc).iter().any(|b| b.art().into_iter().any(|n| shows(n, files)))
+    {
+        return Changed::Everything;
+    }
+    let symbols = doc.symbol_boxes();
+    let mut area = None;
+    for layer in &doc.layers {
+        add_placed(&symbols, layer, files, &mut area);
+    }
+    area.map_or(Changed::Nothing, Changed::Area)
+}
+
+/// Does `n`, a member of it or the art of an opacity mask in it show one of `files`?
+fn shows(n: &Node, files: &HashSet<String>) -> bool {
+    matches!(&n.kind, NodeKind::PlacedDocument(p) if files.contains(&p.key))
+        || n.extras().mask.as_ref().is_some_and(|m| shows(&m.art, files))
+        || n.children().is_some_and(|c| c.iter().any(|c| shows(c, files)))
+}
+
+/// Add to `area` what `n` paints where it shows one of `files`: each member of a group or layer
+/// whose members draw each on their own (unless its opacity mask shows one), and any other object
+/// whole.
+fn add_placed(symbols: &SymbolBoxes, n: &Node, files: &HashSet<String>, area: &mut Option<Rect>) {
+    match members(n) {
+        Some(children) if !n.extras().mask.as_ref().is_some_and(|m| shows(&m.art, files)) => {
+            for c in children {
+                add_placed(symbols, c, files, area);
+            }
+        }
+        _ if shows(n, files) => *area = vectorcraft_geom::union_opt(*area, crate::brush_fx::cull_bounds(symbols, n)),
+        _ => {}
+    }
 }
 
 /// What may draw differently in `new` than in `old`, the version before an edit: the bounds of

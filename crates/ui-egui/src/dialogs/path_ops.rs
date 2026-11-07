@@ -1,4 +1,4 @@
-//! Path dialogs: Average, and Offset Path, Simplify and Split Into Grid with Preview.
+//! Path dialogs: Average, Average & Join, and Offset Path, Simplify and Split Into Grid with Preview.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind, Unit};
@@ -23,6 +23,7 @@ const ORIGINAL_IDS: &str = "__ids";
 fn title(kind: &str) -> &'static str {
     match kind {
         "average" => tl!("Average"),
+        "averageJoin" => tl!("Average & Join"),
         "offsetPath" => tl!("Offset Path"),
         "simplify" => tl!("Simplify"),
         _ => tl!("Split Into Grid"),
@@ -33,6 +34,7 @@ fn title(kind: &str) -> &'static str {
 fn command(d: &Dialog) -> (&'static str, Value) {
     match d.kind.as_str() {
         "average" => ("path.average", json!({"axis": d.str("axis")})),
+        "averageJoin" => ("path.averageJoin", json!({"to": d.str("to")})),
         "offsetPath" => {
             ("object.path.offsetPath", json!({"offset": d.f64("offset", 10.0), "joins": d.str("joins"), "miterLimit": d.f64("miterLimit", 4.0)}))
         }
@@ -44,7 +46,7 @@ fn command(d: &Dialog) -> (&'static str, Value) {
     }
 }
 
-/// The undo label of the dialogs that preview on the canvas (all but Average).
+/// The undo label of the dialogs that preview on the canvas (all but Average and Average & Join).
 fn previewed(kind: &str) -> Option<&'static str> {
     match kind {
         "offsetPath" => Some("Offset Path"),
@@ -71,34 +73,55 @@ fn split_grid(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     let gutter_label = form::humanized("gutter");
     egui::Grid::new("dlg").num_columns(4).spacing([10.0, 8.0]).show(ui, |ui| {
         for (number, label, ..) in axes {
-            form::row_label(ui, label);
-            if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
-                d.fields.insert(number.into(), json!(v));
-            }
+            let row = form::row_label(ui, label);
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(v) = crate::widgets::range_field(ui, ("dlg-num", number), d.f64(number, 2.0), 1.0..=500.0, "", 0, WIDTH) {
+                    d.fields.insert(number.into(), json!(v));
+                }
+            });
         }
         ui.end_row();
         for (number, _, label, gutter, total) in axes {
-            form::row_label(ui, label);
+            let row = form::row_label(ui, label);
             let n = d.f64(number, 2.0).max(1.0);
             let gaps = d.f64(gutter, 0.0) * (n - 1.0);
-            if let Some(v) = crate::widgets::num_field(ui, ("dlg-size", number), Some((d.f64(total, 0.0) - gaps) / n), unit, WIDTH) {
-                d.fields.insert(total.into(), json!(n * v + gaps));
-            }
+            ui.label_inputs_by(row.id, |ui| {
+                if let Some(v) = crate::widgets::num_field(ui, ("dlg-size", number), Some((d.f64(total, 0.0) - gaps) / n), unit, WIDTH) {
+                    d.fields.insert(total.into(), json!(n * v + gaps));
+                }
+            });
         }
         ui.end_row();
-        for (.., gutter, _) in axes {
-            form::row_label(ui, &gutter_label);
-            form::length(ui, d, gutter, unit, WIDTH);
+        for (_, axis, _, gutter, _) in axes {
+            // The visible rows stay the existing translated "Gutter:" and "Total:" labels; the
+            // accessible names say which axis they belong to (two identical visible labels would
+            // otherwise name two different inputs the same).
+            let _ = form::row_label(ui, &gutter_label);
+            ui.name_inputs(format!("{axis} {gutter_label}"), |ui| form::length(ui, d, gutter, unit, WIDTH));
         }
         ui.end_row();
-        for (.., total) in axes {
-            form::row_label(ui, tl!("Total:"));
-            form::length(ui, d, total, unit, WIDTH);
+        for (_, axis, _, _, total) in axes {
+            let _ = form::row_label(ui, tl!("Total:"));
+            ui.name_inputs(format!("{axis} {}", tl!("Total:")), |ui| form::length(ui, d, total, unit, WIDTH));
         }
         ui.end_row();
     });
     ui.add_space(8.0);
     form::check(ui, d, "addGuides", tl!("Add Guides"));
+}
+
+/// Average & Join's Points: Corner or Smooth, the joined anchor. "Points:" in the "anchor"
+/// context: the plain row is a star's number of points.
+fn join_points(ui: &mut egui::Ui, d: &mut Dialog) {
+    let to = d.str("to");
+    ui.horizontal(|ui| {
+        form::row_label(ui, crate::i18n::tr_ctx(crate::i18n::current(), "anchor", "Points:"));
+        for (value, label) in [("corner", "Corner"), ("smooth", "Smooth")] {
+            if crate::widgets::radio(ui, label, to == value, true) {
+                d.fields.insert("to".into(), json!(value));
+            }
+        }
+    });
 }
 
 /// The fields the Simplify dialog opens with at `tolerance` (points): the slider's tolerance when
@@ -153,6 +176,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         split_grid(ui, d, unit);
     } else if d.kind == "simplify" {
         simplify_fields(ui, d, unit);
+    } else if d.kind == "averageJoin" {
+        join_points(ui, d);
     } else {
         form::grid(ui, d, unit);
     }
@@ -182,7 +207,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (id, params) = command(d);
     if previewed(&d.kind).is_none() {
-        return run_and_close(app, id, params);
+        let r = run_and_close(app, id, params)?;
+        if d.kind == "averageJoin" {
+            app.ui.average_join = json!({"to": d.str("to")});
+        }
+        return Ok(r);
     }
     let r = form::commit_preview(app, id, params)?;
     // Simplify: with retain ticked, the menu item opens this dialog on these fields next time; with it

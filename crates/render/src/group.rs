@@ -49,6 +49,10 @@ pub(crate) struct Region {
     pub h: u16,
 }
 
+/// Groups drawn twice ([`Renderer::group_offscreen`]: blending with their backdrop) that may be
+/// nested in each other before deeper ones are drawn isolated, once.
+const MAX_TWICE_DRAWN: u32 = 4;
+
 impl Renderer {
     /// Draw a group's content with `draw` and composite it as `c` says. Blending content is drawn
     /// offscreen: over a copy of the backdrop when the group isn't isolated (possible only with
@@ -110,6 +114,12 @@ impl Renderer {
 
     fn group_offscreen(&mut self, ctx: &mut RenderContext, f: &Frame, c: Composite, r: Region, draw: &mut Content) {
         let Composite { clip, blend, opacity, mask, isolated, .. } = c;
+        // A group that blends with its backdrop is drawn twice (over the backdrop, and alone for
+        // its coverage), and so is everything in it, so such groups nested in each other cost 2ⁿ.
+        // Past [`MAX_TWICE_DRAWN`] of them, a deeper one is drawn as an isolated group.
+        let twice = !isolated && blend != Blend::Normal;
+        let isolated = isolated || twice && self.twice_drawn >= MAX_TWICE_DRAWN;
+        let twice = twice && !isolated;
         if self.offscreen_live == 0 {
             self.offscreen_budget = OFFSCREEN_FRAMES * u64::from(ctx.width()) * u64::from(ctx.height());
         }
@@ -117,6 +127,7 @@ impl Renderer {
         self.offscreen_live = self.offscreen_live.saturating_add(cost);
         let sub = frame_over(f, r);
         let backdrop = (!isolated).then(|| self.flatten(ctx, r));
+        self.twice_drawn += u32::from(twice);
         let content = self.offscreen(r, &sub, backdrop.clone(), draw);
         let at = (r.x as f64, r.y as f64);
         let push = |ctx: &mut RenderContext, mode: BlendMode| {
@@ -162,6 +173,7 @@ impl Renderer {
             }
         }
         ctx.pop_layer();
+        self.twice_drawn -= u32::from(twice);
         self.offscreen_live = self.offscreen_live.saturating_sub(cost);
     }
 

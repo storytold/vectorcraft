@@ -3,10 +3,11 @@
 
 use std::collections::BTreeMap;
 
+use craft_keymap::import::namematch::Candidate;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::shortcut_import::{Code, KIND, Review, Row, Status, report};
+use super::shortcut_import::{Code, KIND, Review, Row, Status, report, target_picker};
 use super::*;
 use crate::{io, shortcut_editor, theme};
 
@@ -360,7 +361,7 @@ fn keyboard_shortcuts_import_reads_both_kinds_of_set() {
     let files: BTreeMap<&str, Vec<u8>> = BTreeMap::from([
         (
             "/sets/Mine.json",
-            serde_json::to_vec(&shortcut_editor::export_json("Mine", &BTreeMap::from([("tool:pen".into(), "Shift+9".into())]))).unwrap(),
+            serde_json::to_vec(&shortcut_editor::export_json("Mine", &crate::keymap::overrides_from(&[("tool:pen", "Shift+9")]))).unwrap(),
         ),
         ("/sets/Text.json", b"\xEF\xBB\xBF  /Menus { /Acme\\ Undo { /Key 1 } }".to_vec()),
     ]);
@@ -464,4 +465,169 @@ fn a_large_set_keeps_its_buttons_on_a_small_window() {
             assert!(screen.contains_rect(*rect) && clip.contains_rect(*rect), "Keys open: {open}: {label} at {rect:?}, clipped to {clip:?}");
         }
     }
+}
+
+/// Applies `rows` (name, section, target, shortcut) through the review, every code answered, starting
+/// from `start` → Apply's result and the working set Keyboard Shortcuts shows.
+fn apply_rows(app: &mut VectorcraftApp, start: &str, rows: &[(&str, &str, &str, &str)]) -> (Value, Value) {
+    super::shortcut_import::open(app, "Set.kys", SET.as_bytes()).unwrap();
+    let mut r = Review::default();
+    for (i, (name, section, target, chord)) in rows.iter().enumerate() {
+        let code = 1000 + i as i64;
+        let (mods, key) = chord.rsplit_once('+').unwrap_or(("", chord));
+        r.keys.insert(code, Code { text: Some(key.into()), from: "you".into(), ..Default::default() });
+        r.mods.insert(code, Code { text: Some(mods.into()), from: "you".into(), ..Default::default() });
+        let target = Some(target.to_string());
+        r.rows.push(Row {
+            name: name.to_string(),
+            section: section.to_string(),
+            line: i + 2,
+            key: Some(code),
+            modifiers: Some(code),
+            target,
+            from: "you".into(),
+            on: true,
+            ..Default::default()
+        });
+    }
+    assert!(r.statuses().iter().all(|s| s.0 == Status::Ready), "{:?}", r.statuses());
+    set(app, "rows", serde_json::to_value(&r.rows).unwrap());
+    set(app, "keys", serde_json::to_value(&r.keys).unwrap());
+    set(app, "mods", serde_json::to_value(&r.mods).unwrap());
+    set(app, "start", json!(start));
+    set(app, "remember", json!(false));
+    let out = confirm(app).unwrap();
+    (out, dialog(app).fields["overrides"].clone())
+}
+
+/// Cmd and Ctrl are one key off the Mac: the review lets both rows through, and the later one takes
+/// the shortcut.
+#[test]
+fn a_later_row_takes_a_shortcut_that_reads_the_same() {
+    let mut app = app();
+    let rows = [("Acme Copy", "Menus", "edit.copy", "Cmd+Alt+Shift+F10"), ("Acme Undo", "Menus", "edit.undo", "Ctrl+Alt+Shift+F10")];
+    let (out, ov) = apply_rows(&mut app, "defaults", &rows);
+    assert_eq!(ov["edit.undo"], "Ctrl+Alt+Shift+F10");
+    if craft_keymap::Platform::current() == craft_keymap::Platform::Mac {
+        assert_eq!((out["applied"].clone(), ov["edit.copy"].clone()), (json!(2), json!("Cmd+Alt+Shift+F10")));
+    } else {
+        assert_eq!(out["applied"], 1);
+        assert!(ov.get("edit.copy").is_none(), "Copy keeps its default: {ov}");
+    }
+}
+
+/// A shortcut the set gives is taken from a default outside the set and from the working set's own
+/// change, while the working set's other changes stay with Start: Current.
+#[test]
+fn the_set_takes_its_shortcuts_from_outside_it() {
+    let mut app = app();
+    assert_eq!(shortcut_editor::default_of("path.join"), Some("Cmd+J"));
+    let rows = [("Acme Copy", "Menus › Edit", "edit.copy", "Cmd+J"), ("Acme Undo", "Menus › Edit", "edit.undo", "Cmd+Alt+Shift+9")];
+    let (out, ov) = apply_rows(&mut app, "defaults", &rows);
+    assert_eq!(out["applied"], 2);
+    assert_eq!(ov, json!({"edit.copy": "Cmd+J", "edit.undo": "Cmd+Alt+Shift+9", "path.join": ""}));
+    // From the current shortcuts: the parent dialog's working set.
+    app.ui.dialog = None;
+    shortcut_editor::open(&mut app);
+    set(&mut app, "overrides", json!({"edit.preferences": "Cmd+Alt+Shift+9", "edit.redo": "Cmd+Alt+Shift+F11"}));
+    let (_, ov) = apply_rows(&mut app, "current", &rows);
+    assert_eq!(
+        ov,
+        json!({"edit.copy": "Cmd+J", "edit.undo": "Cmd+Alt+Shift+9", "edit.preferences": "", "edit.redo": "Cmd+Alt+Shift+F11", "path.join": ""})
+    );
+    // From the defaults: the working set's changes are dropped.
+    set(&mut app, "overrides", json!({"edit.redo": "Cmd+Alt+Shift+F11"}));
+    let (_, ov) = apply_rows(&mut app, "defaults", &rows);
+    assert_eq!(ov, json!({"edit.copy": "Cmd+J", "edit.undo": "Cmd+Alt+Shift+9", "path.join": ""}));
+}
+
+#[test]
+fn tool_rows_go_to_tools_and_command_rows_to_commands() {
+    let mut app = app();
+    let rows = [("Pen", "Tools", "tool:pen", "Shift+9"), ("Pen Tool", "Menus", "edit.copy", "Cmd+Alt+Shift+F12")];
+    let (out, ov) = apply_rows(&mut app, "defaults", &rows);
+    assert_eq!(out["applied"], 2);
+    assert_eq!(ov, json!({"tool:pen": "Shift+9", "edit.copy": "Cmd+Alt+Shift+F12"}));
+}
+
+/// Two entries with one name in one block can be answered with different items.
+#[test]
+fn rows_with_one_name_keep_their_own_targets() {
+    let mut app = app();
+    let rows = [("Acme Twin", "Menus", "edit.copy", "Cmd+Alt+Shift+F11"), ("acme twin…", "Menus", "edit.undo", "Cmd+Alt+Shift+F12")];
+    let (out, ov) = apply_rows(&mut app, "defaults", &rows);
+    assert_eq!(out["applied"], 2);
+    assert_eq!(ov, json!({"edit.copy": "Cmd+Alt+Shift+F11", "edit.undo": "Cmd+Alt+Shift+F12"}));
+}
+
+#[test]
+fn long_names_match_and_apply() {
+    let label = "Acme Long Label ".repeat(14);
+    assert!(label.chars().count() > 200);
+    let read = json!({"entries": [{"name": format!("{label}and more words after it"), "section": ["Menus"], "line": 2, "key": 901}]});
+    let r = Review::build(
+        &read,
+        &[Candidate { id: "edit.copy".into(), labels: vec![label] }, Candidate { id: "edit.undo".into(), labels: vec!["Undo".into()] }],
+    );
+    assert_eq!(r.rows[0].target.as_deref(), Some("edit.copy"), "the first 200 characters decide");
+    // Past the longest text the plan reads.
+    let mut app = app();
+    let name = "Acme Copy ".repeat(150);
+    let (out, ov) = apply_rows(&mut app, "defaults", &[(&name, "Menus", "edit.copy", "Cmd+Alt+Shift+F11")]);
+    assert_eq!((out["applied"].clone(), ov), (json!(1), json!({"edit.copy": "Cmd+Alt+Shift+F11"})));
+}
+
+/// A search in a row's target picker that matches nothing shrinks its menu to the search field
+/// and "No equivalent"; clearing the search lists every entry again, and the menu grows back to
+/// its height before the search (egui#5225). The search field stays where it was throughout.
+#[test]
+fn the_target_picker_grows_back_when_a_search_that_matched_nothing_is_cleared() {
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let r = Row { name: "Acme Undo".into(), ..Default::default() };
+    let frame = |events: Vec<egui::Event>| {
+        let input =
+            egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 800.0))), ..Default::default() };
+        let mut at = egui::Pos2::ZERO;
+        let mut out = ctx.run_ui(input, |ui| {
+            at = ui.next_widget_position();
+            target_picker(ui, 0, &r);
+        });
+        out.textures_delta.clear();
+        let text = |label: &str| {
+            out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos),
+                _ => None,
+            })
+        };
+        // The row under the search field: it shows whatever the field holds.
+        let none_row = text("No equivalent");
+        let menu = none_row.and_then(|p| ctx.layer_id_at(p)).and_then(|l| ctx.memory(|m| m.area_rect(l.id)));
+        (at, none_row, text("Search"), menu.map(|r| r.height()))
+    };
+    let settle = |events: Vec<egui::Event>| {
+        let mut last = frame(events);
+        for _ in 0..5 {
+            last = frame(vec![]);
+        }
+        last
+    };
+    let (at, ..) = frame(vec![]);
+    let click = at + egui::vec2(40.0, 10.0);
+    let button = |pressed| egui::Event::PointerButton { pos: click, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(vec![egui::Event::PointerMoved(click), button(true)]);
+    let (_, none_row, search, full) = settle(vec![button(false)]);
+    let (none_row, search, full) = (none_row.expect("the menu is open"), search.expect("the search field shows"), full.expect("the menu's area"));
+    let nothing = "qqzzxxqqzz";
+    let (_, n, _, small) = settle(vec![egui::Event::Text(nothing.into())]);
+    assert_eq!(n, Some(none_row), "the search field stays put while nothing matches");
+    let small = small.expect("the menu stays open");
+    assert!(small + 40.0 < full, "the menu shrinks to its search field: {small} of {full}");
+    for _ in nothing.chars() {
+        frame(vec![press(egui::Key::Backspace)]);
+    }
+    let (_, n, s, grown) = settle(vec![]);
+    assert_eq!((n, s), (Some(none_row), Some(search)), "the search field is where it was");
+    assert_eq!(grown, Some(full), "the menu grows back to its height before the search");
 }

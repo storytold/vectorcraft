@@ -1,0 +1,3293 @@
+//! Rich text editing: range edit/style commands, the Type tools through the session, area and
+//! on-path type from paths, Fit Headline, Convert To Area/Point Type.
+
+use serde_json::{Value, json};
+use vectorcraft_doc::{CharStyle, NodeId, NodeKind, TextKind, TextObject};
+use vectorcraft_geom::Point;
+use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+
+use crate::*;
+
+fn session() -> Session {
+    // Type placed by the Type tools starts empty (Fill New Type Objects With Placeholder Text off).
+    let mut s = Session::new();
+    s.prefs.placeholder_text = false;
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    s
+}
+
+fn text(s: &mut Session, t: &str) -> NodeId {
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": t, "size": 20})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn obj(s: &Session, id: NodeId) -> TextObject {
+    match &s.doc().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+fn click(s: &mut Session, x: f64, y: f64) {
+    let v = ViewInfo::default();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+    }
+}
+
+fn key(s: &mut Session, k: ToolKey, m: Mods) {
+    s.tool_key(k, m, ViewInfo::default()).unwrap();
+}
+
+fn undo_labels(s: &Session) -> Vec<String> {
+    s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect()
+}
+
+#[test]
+fn edit_range_replaces_and_undoes() {
+    let mut s = session();
+    let id = text(&mut s, "Hello world");
+    let r = s.execute("text.editRange", &json!({"id": id.0, "start": 6, "end": 11, "insert": "there"})).unwrap();
+    assert_eq!(r["caret"], json!(11));
+    assert_eq!(obj(&s, id).plain_text(), "Hello there");
+    // Out-of-range and reversed offsets are clamped.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 99, "end": 5, "insert": "!"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello!");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello there");
+    // An offset of 2^32 is past the end too. A 32-bit build read it as 0 and inserted at the start.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 1u64 << 32, "end": 1u64 << 32, "insert": "!"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello there!");
+    assert!(s.execute("text.editRange", &json!({"start": 0})).is_err(), "id required");
+    let rect = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    assert!(s.execute("text.editRange", &json!({"id": rect["id"], "insert": "x"})).is_err(), "not text");
+}
+
+#[test]
+fn set_range_style_splits_runs() {
+    let mut s = session();
+    let id = text(&mut s, "Hello brave world");
+    let w0 = obj(&s, id).cached_bounds.unwrap().width();
+    let r = s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 6, "end": 11, "size": 40, "fill": "#ff0000", "tracking": 50})).unwrap();
+    assert_eq!(r["runs"], json!(3));
+    let t = obj(&s, id);
+    assert_eq!(t.runs[1].text, "brave");
+    assert_eq!((t.runs[0].style.size, t.runs[1].style.size, t.runs[2].style.size), (20.0, 40.0, 20.0));
+    assert_eq!(t.runs[1].style.tracking, 50.0);
+    assert!(t.cached_bounds.unwrap().width() > w0 * 1.2, "bounds refreshed");
+    // Kerning / scales / baseline / caps on another range; "auto" leading.
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 5, "kerning": 20, "hScale": 80, "vScale": 120, "baselineShift": 3, "rotation": 370, "allCaps": true, "leading": "auto", "font": "Inter", "strokeWidth": 1})).unwrap();
+    let st = obj(&s, id).runs[0].style.clone();
+    assert_eq!((st.kerning, st.h_scale, st.v_scale, st.baseline_shift, st.all_caps), (Some(20.0), 80.0, 120.0, 3.0, true));
+    assert!((st.rotation - 10.0).abs() < 1e-9);
+    assert_eq!(st.font_family, "Inter");
+    // One undo step per command.
+    assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Character").count(), 2);
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id.0})).is_err(), "nothing to change");
+    assert!(s.execute("text.setRangeStyle", &json!({"id": id.0, "size": -1})).is_err());
+}
+
+/// `featureChanges` turns features on and off on top of each run's own and keeps the rest, in
+/// `text.setStyle` and `text.setRangeStyle`, in one undo step; an unknown tag is an error.
+#[test]
+fn feature_changes_keep_each_runs_other_features() {
+    let mut s = session();
+    let id = text(&mut s, "1/23");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "features": ["numr", "smcp"]})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "features": ["swsh"]})).unwrap();
+    let features = |s: &Session| obj(s, id).runs.iter().map(|r| r.style.features.clone()).collect::<Vec<_>>();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom", "-numr"]})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(features(&s), [vec!["smcp", "dnom"], vec!["swsh", "dnom"], vec!["dnom"]]);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 2, "featureChanges": ["dnom", "-liga", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the last change of a feature counts");
+    for cmd in ["text.setStyle", "text.setRangeStyle"] {
+        for tag in ["zzzz", "--liga", "+-dnom"] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": [tag]})).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{tag}`")), "{cmd}: {e}");
+        }
+        for bad in [json!(["numr", 12]), json!([12]), json!("numr")] {
+            let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": bad})).unwrap_err().to_string();
+            assert!(e.contains("featureChanges must be a list of tags"), "{cmd} {bad}: {e}");
+        }
+        let e = s.execute(cmd, &json!({"id": id.0, "featureChanges": vec!["numr"; 257]})).unwrap_err().to_string();
+        assert!(e.contains("at most 256"), "{cmd}: {e}");
+    }
+    assert_eq!(features(&s), [vec!["smcp", "-liga"], vec!["swsh", "-liga"], vec!["dnom"]], "the refused commands change nothing");
+    // Tags of features the change does not name stay as they were: one the list does not know
+    // (kept from an opened file) and an explicit `liga`, which keeps tracked type ligated.
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = vec!["zzzz".into(), "liga".into(), "dnom".into()];
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["numr", "-dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "-liga", "numr"], vec!["swsh", "-liga", "numr"], vec!["zzzz", "liga", "numr"]]);
+    // Ligatures turned on are written as `liga`, so tracked type keeps them.
+    s.execute("text.setStyle", &json!({"featureChanges": ["+liga"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga"], vec!["swsh", "numr", "liga"], vec!["zzzz", "numr", "liga"]]);
+    // A list longer than shaping reads keeps the tags shaping uses, and the new tag is read too:
+    // `-onum` overrides `onum`, unknown tags do nothing, and `ordn` lies past the entries read.
+    let max = vectorcraft_text::MAX_STYLE_FEATURES;
+    let mut long = vec!["onum".to_string(), "-onum".into()];
+    long.extend(std::iter::repeat_n("zzzz".to_string(), max - 3));
+    long.extend(["swsh".to_string(), "ordn".into()]);
+    if let Some(NodeKind::Text(t)) = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.features = long;
+    }
+    s.execute("text.setStyle", &json!({"featureChanges": ["dnom"]})).unwrap();
+    assert_eq!(features(&s), [vec!["smcp", "numr", "liga", "dnom"], vec!["swsh", "numr", "liga", "dnom"], vec!["-onum", "swsh", "dnom"]]);
+}
+
+/// `text.setStyle {stroke, strokeWidth}` sets the character stroke of all the text or of a range, as
+/// `text.setRangeStyle` does, and a call with `fill` and `stroke` sets both in one undo step.
+#[test]
+fn set_style_sets_the_character_stroke() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let id = text(&mut s, "Hello world");
+    let paints =
+        |s: &Session| obj(s, id).runs.iter().map(|r| (r.style.fill.color(), r.style.stroke.color(), r.style.stroke_width)).collect::<Vec<_>>();
+    let red = Some(Color::rgb8(255, 0, 0));
+    let blue = Some(Color::rgb8(0, 0, 255));
+    let fill = obj(&s, id).runs[0].style.fill.color();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#ff0000", "strokeWidth": 2})).unwrap();
+    assert_eq!(paints(&s), [(fill, red, 2.0)], "all the text");
+    s.execute("text.setStyle", &json!({"ids": [id.0], "start": 6, "end": 11, "stroke": "#0000ff"})).unwrap();
+    assert_eq!(paints(&s), [(fill, red, 2.0), (fill, blue, 2.0)], "a range");
+    let before = paints(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "fill": "#0000ff", "stroke": "none", "strokeWidth": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert!(
+        obj(&s, id).runs.iter().all(|r| r.style.fill.color() == blue && r.style.stroke == Paint::None && r.style.stroke_width == 0.0),
+        "{:?}",
+        paints(&s)
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(paints(&s), before, "undo restores the fill and the stroke");
+    let e = s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "nope"})).unwrap_err().to_string();
+    assert!(e.contains("bad stroke colour"), "{e}");
+    assert!(s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": "x"})).is_err(), "strokeWidth must be a number");
+    // The weight is in document points, as stroke.set gives it: type scaled 200% keeps half of it in text space.
+    s.execute("object.scale", &json!({"ids": [id.0], "sx": 200, "sy": 200})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": 2})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| (r.style.stroke_width - 1.0).abs() < 1e-9), "{:?}", paints(&s));
+}
+
+/// `text.setStyle {stroke}` without `strokeWidth` gives type with no stroke weight 1 pt, as
+/// `paint.setStroke` does, and keeps a weight the type already has.
+#[test]
+fn set_style_stroke_without_a_weight_draws_1_pt() {
+    use vectorcraft_color::Color;
+    let mut s = session();
+    let id = text(&mut s, "Hello");
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 0.0);
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#ff0000"})).unwrap();
+    let st = &obj(&s, id).runs[0].style;
+    assert_eq!((st.stroke.color(), st.stroke_width), (Some(Color::rgb8(255, 0, 0)), 1.0));
+    assert!(st.has_stroke());
+    s.execute("text.setStyle", &json!({"ids": [id.0], "strokeWidth": 3})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id.0], "stroke": "#0000ff"})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.stroke_width, 3.0, "an existing weight is kept");
+}
+
+#[test]
+fn optical_command_manual_pair_undo_redo_and_native_reopen() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": 70})).unwrap();
+    let result = s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    assert_eq!(result["kerning"], "optical");
+    assert!(obj(&s, id).runs[0].style.optical_kerning);
+    assert_eq!(obj(&s, id).runs[0].style.kerning, None, "choosing Optical clears the manual value");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "kerning": 0})).unwrap();
+    let styled = obj(&s, id);
+    assert_eq!(styled.runs.iter().map(|r| r.style.kerning).collect::<Vec<_>>(), vec![None, Some(0.0), None]);
+    assert!(styled.runs.iter().all(|r| r.style.optical_kerning));
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    let opened = vectorcraft_format::load(&bytes).unwrap();
+    let NodeKind::Text(reopened) = &opened.node(id).unwrap().kind else { panic!("text missing") };
+    assert_eq!(
+        reopened.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>(),
+        styled.runs.iter().map(|r| (r.style.optical_kerning, r.style.kerning)).collect::<Vec<_>>()
+    );
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.kerning.is_none()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].style.kerning, Some(70.0), "undoing Optical brings the manual value back");
+    assert!(!obj(&s, id).runs[0].style.optical_kerning);
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).runs[1].style.kerning, Some(0.0));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.optical_kerning));
+}
+
+#[test]
+fn optical_set_format_clears_existing_pair_override() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 40})).unwrap();
+    let result = s.execute("text.setFormat", &json!({"ids": [id.0], "kerning": "optical"})).unwrap();
+    assert_eq!(result["kerning"], "optical");
+    let t = obj(&s, id);
+    assert!(t.runs.iter().all(|r| r.style.optical_kerning));
+    assert!(t.runs.iter().all(|r| r.style.kerning.is_none()), "choosing Optical clears the manual value");
+}
+
+#[test]
+fn optical_kerning_step_starts_from_the_automatic_pair() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AVA", "size": 100, "font": "JetBrains Mono"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    let t = obj(&s, id);
+    let optical = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let mut manual = t.clone();
+    vectorcraft_text::edit::style_range(&mut manual.runs, 0, 1, |st| st.kerning = Some(0.0));
+    let unkerned = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &manual);
+    let auto = (optical.glyphs[0].advance - unkerned.glyphs[0].advance) * 1000.0 / 100.0;
+    assert!(auto.abs() > 1.0, "the font needs a measurable shape correction");
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() - auto - s.prefs.tracking_increment).abs() < 0.01);
+    assert!(after.runs.iter().all(|r| r.style.optical_kerning));
+}
+
+#[test]
+fn metrics_pair_step_preserves_the_drawn_auto_position() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "AV", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let before = obj(&s, id);
+    let auto = vectorcraft_text::layout(db, &before);
+    let drawn_v = |layout: &vectorcraft_text::TextLayout| layout.glyphs.iter().find(|g| g.byte == 1).unwrap().xf.as_coeffs()[4];
+    assert!((crate::cmd::effective_kerning(db, &before, &auto, 0, 1) + 160.0).abs() < 0.01);
+    let mut same = before.clone();
+    vectorcraft_text::edit::style_range(&mut same.runs, 0, 1, |st| st.kerning = Some(-160.0));
+    assert!((drawn_v(&vectorcraft_text::layout(db, &same)) - drawn_v(&auto)).abs() < 0.01);
+
+    s.execute("type.step", &json!({"id": id.0, "start": 1, "end": 1, "attribute": "kerning", "by": 1})).unwrap();
+    let after = obj(&s, id);
+    assert!((after.runs[0].style.kerning.unwrap() + 160.0 - s.prefs.tracking_increment).abs() < 0.01);
+    let moved = drawn_v(&vectorcraft_text::layout(db, &after)) - drawn_v(&auto);
+    assert!((moved - s.prefs.tracking_increment * 0.1).abs() < 0.01, "V moves by one kerning increment: {moved}");
+}
+
+#[test]
+fn effective_auto_kerning_at_area_line_end_survives_unkerned_wrap() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(pair_kerning_font().unwrap());
+    let style = CharStyle { font_family: PAIR_KERNING_FAMILY.into(), size: 100.0, ..CharStyle::default() };
+    let mut text = TextObject::point(Point::ZERO, "AV", style);
+    let mut wrapping_pair = None;
+    for width in 80..160 {
+        text.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(width), 300.0)) };
+        let auto = vectorcraft_text::layout(db, &text);
+        let mut trial = text.clone();
+        vectorcraft_text::edit::style_range(&mut trial.runs, 0, 1, |st| st.kerning = Some(0.0));
+        let unkerned = vectorcraft_text::layout(db, &trial);
+        if auto.glyphs.len() >= 2
+            && unkerned.glyphs.len() >= 2
+            && auto.glyphs[0].line == auto.glyphs[1].line
+            && unkerned.glyphs[0].line != unkerned.glyphs[1].line
+        {
+            wrapping_pair = Some((text.clone(), auto, unkerned));
+            break;
+        }
+    }
+    let (text, auto, unkerned) = wrapping_pair.expect("the kerned pair fits on a line that wraps the unkerned pair");
+    assert_ne!(unkerned.glyphs[0].line, unkerned.glyphs[1].line);
+    assert!((crate::cmd::effective_kerning(db, &text, &auto, 0, 1) + 160.0).abs() < 0.01);
+}
+
+#[test]
+fn effective_optical_kerning_reads_the_right_to_left_pair() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    assert_eq!(db.add_font(right_to_left_optical_font().unwrap()), 1);
+    let style = CharStyle { font_family: RIGHT_TO_LEFT_OPTICAL_FAMILY.into(), size: 100.0, optical_kerning: true, ..CharStyle::default() };
+    let text = TextObject::point(Point::ZERO, "אב", style);
+    let optical = vectorcraft_text::layout(&db, &text);
+    let mut manual = text.clone();
+    manual.runs[0].style.kerning = Some(0.0);
+    let unkerned = vectorcraft_text::layout(&db, &manual);
+    let drawn_gap = |lay: &vectorcraft_text::TextLayout| {
+        let drawn = |byte| lay.glyphs.iter().find(|g| g.byte == byte).unwrap().xf.as_coeffs()[4];
+        drawn(2) - drawn(0)
+    };
+    let expected = (drawn_gap(&optical) - drawn_gap(&unkerned)) * 10.0;
+    assert!(expected.abs() > 1.0, "the outlined pair has a measurable Optical correction");
+    let actual = crate::cmd::effective_kerning(&db, &text, &optical, 0, 2);
+    assert!((actual - expected).abs() < 0.01, "the caret reads the adjacent right-to-left pair");
+}
+
+#[test]
+fn reset_tracking_clears_manual_pairs_without_changing_optical_mode() {
+    let mut s = session();
+    let id = text(&mut s, "III");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 1, "kerning": 80})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let (a, b) = vectorcraft_text::caret_position(&lay, 1);
+    let p = t.xf * a.midpoint(b);
+    click(&mut s, p.x, p.y);
+    assert!(s.tool_wants_text());
+    s.set_tool_option("select", &json!({"start": 1, "end": 1}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    let caret = obj(&s, id);
+    assert_eq!(caret.runs[0].style.kerning, None);
+    assert!(caret.runs.iter().all(|r| r.style.optical_kerning));
+
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": 60, "tracking": 30})).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    s.execute("type.resetTracking", &json!({})).unwrap();
+    let range = obj(&s, id);
+    assert!(range.runs.iter().all(|r| r.style.kerning.is_none() && r.style.tracking == 0.0));
+    assert!(range.runs.iter().all(|r| r.style.optical_kerning));
+}
+
+/// A character style applied from byte 2^32 to 2^32 + 5 styles no character, as a range past the
+/// end does. A 32-bit build read the range as bytes 0 to 5 and styled "Hello".
+#[test]
+fn char_style_range_past_u32_styles_nothing() {
+    let mut s = session();
+    let id = text(&mut s, "Hello world");
+    s.execute("charStyle.new", &json!({"name": "Big", "attrs": {"size": 40.0}})).unwrap();
+    s.execute("charStyle.apply", &json!({"name": "Big", "id": id.0, "start": 1u64 << 32, "end": (1u64 << 32) + 5})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.size == 20.0 && r.style.style_name.is_none()), "{:?}", obj(&s, id).runs);
+}
+
+#[test]
+fn set_range_style_defaults_to_all_text_and_get_range() {
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "size": 30})).unwrap();
+    assert_eq!(obj(&s, id).runs.len(), 1);
+    assert_eq!(obj(&s, id).runs[0].style.size, 30.0);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "size": 10})).unwrap();
+    let r = s.execute("text.getRange", &json!({"id": id.0, "start": 0, "end": 2})).unwrap();
+    assert_eq!(r["text"], json!("ab"));
+    assert_eq!(r["runs"].as_array().unwrap().len(), 2);
+    assert_eq!(r["length"], json!(3));
+}
+
+/// The type commands refuse a number or an on/off option given as text or as another value of the
+/// wrong kind, naming the key, and leave the document and its undo history as they were; true,
+/// false, numbers and null still work.
+#[test]
+fn type_commands_refuse_a_number_or_boolean_given_as_text() {
+    use crate::tests::{not_a_number, not_a_switch, not_refused};
+    let mut s = session();
+    let id = text(&mut s, "abc");
+    let frame = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 100, "height": 50})).unwrap()["id"].clone();
+    let boxed = s.execute("text.create", &json!({"x": 0, "y": 300, "text": "a", "area": {"width": 100, "height": 50}})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let area = json!({"x": 0, "y": 0, "text": "a", "area": {"width": "200", "height": 100}});
+    let mut calls = vec![("text.create".to_string(), area, "`width` must be a number, not \"200\"".to_string())];
+    let area = json!({"x": 0, "y": 0, "text": "a", "area": {"width": 200, "height": 100, "fit": "shrinkText", "fitMinPercent": "40"}});
+    calls.push(("text.create".to_string(), area, "`fitMinPercent` must be a number, not \"40\"".to_string()));
+    calls.extend(
+        [
+            ("text.create", json!({"x": 0, "y": 0, "text": "a", "size": "12"}), "size"),
+            ("text.createInPath", json!({"path": frame, "text": "a", "size": [12]}), "size"),
+            ("text.createInPath", json!({"path": frame, "mode": "area", "fitMinPercent": "40"}), "fitMinPercent"),
+            ("text.setRangeStyle", json!({"id": id.0, "size": "30"}), "size"),
+            ("text.setRangeStyle", json!({"id": id.0, "tracking": "50"}), "tracking"),
+            ("text.setRangeStyle", json!({"id": id.0, "hScale": true}), "hScale"),
+            ("text.setRangeStyle", json!({"id": id.0, "strokeWidth": "1"}), "strokeWidth"),
+            ("text.setRangeStyle", json!({"id": id.0, "start": "1", "size": 30}), "start"),
+            ("text.setRangeStyle", json!({"id": id.0, "end": [1], "size": 30}), "end"),
+            ("text.editRange", json!({"id": id.0, "start": 0, "end": "1", "insert": "x"}), "end"),
+            ("text.getRange", json!({"id": id.0, "start": "1"}), "start"),
+            ("text.touchType", json!({"id": id.0, "start": 0, "rotation": "10"}), "rotation"),
+            ("text.touchType", json!({"id": id.0, "start": "0", "rotation": 10}), "start"),
+            ("type.step", json!({"attribute": "size", "by": "2"}), "by"),
+            ("type.step", json!({"attribute": "size", "id": id.0, "start": "1"}), "start"),
+            ("type.size.increase", json!({"by": "2"}), "by"),
+            ("type.size.decrease", json!({"by": [2]}), "by"),
+            ("type.ruby", json!({"text": "a", "size": "60"}), "size"),
+            ("text.areaOptions", json!({"ids": [boxed], "width": "200"}), "width"),
+            ("text.areaOptions", json!({"ids": [boxed], "height": [80]}), "height"),
+            ("text.areaOptions", json!({"ids": [boxed], "fit": "shrinkText", "fitMinPercent": "40"}), "fitMinPercent"),
+        ]
+        .map(|(cmd, p, key)| not_a_number(cmd, p, key)),
+    );
+    calls.extend(
+        [
+            ("text.create", json!({"x": 0, "y": 0, "text": "a", "vertical": "true"}), "vertical"),
+            ("text.create", json!({"x": 0, "y": 0, "placeholder": 1}), "placeholder"),
+            ("text.createInPath", json!({"path": frame, "vertical": "true"}), "vertical"),
+            ("text.createInPath", json!({"path": frame, "placeholder": "true"}), "placeholder"),
+            ("text.setRangeStyle", json!({"id": id.0, "underline": "true"}), "underline"),
+            ("text.setRangeStyle", json!({"id": id.0, "allCaps": 1}), "allCaps"),
+            ("text.setRangeStyle", json!({"id": id.0, "noBreak": "true"}), "noBreak"),
+            ("text.setRangeStyle", json!({"id": id.0, "size": 30, "tateChuYoko": 1}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "underline": "true"}), "underline"),
+            ("text.setFormat", json!({"ids": [id.0], "strikethrough": 1}), "strikethrough"),
+            ("text.setFormat", json!({"ids": [id.0], "allCaps": "false"}), "allCaps"),
+            ("text.setFormat", json!({"ids": [id.0], "proportionalMetrics": 1}), "proportionalMetrics"),
+            ("text.setFormat", json!({"ids": [id.0], "tateChuYoko": "true"}), "tateChuYoko"),
+            ("text.setFormat", json!({"ids": [id.0], "standardVerticalRoman": "true"}), "standardVerticalRoman"),
+            ("text.setFormat", json!({"ids": [id.0], "rotation": 10, "noBreak": 1}), "noBreak"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenate": "false"}), "hyphenate"),
+            ("text.setFormat", json!({"ids": [id.0], "hyphenateCapitalized": 0}), "hyphenateCapitalized"),
+            ("text.setFormat", json!({"ids": [id.0], "romanHangingPunctuation": "true"}), "romanHangingPunctuation"),
+            ("text.getRange", json!({"id": id.0, "effective": "true"}), "effective"),
+            ("type.opticalMarginAlignment", json!({"on": "true"}), "on"),
+            ("type.systemLayout", json!({"on": "true"}), "on"),
+            ("type.fractionalWidths", json!({"on": "false"}), "on"),
+            ("type.ruby", json!({"remove": "true"}), "remove"),
+            ("type.ruby", json!({"text": "a", "overhang": "false"}), "overhang"),
+        ]
+        .map(|(cmd, p, key)| not_a_switch(cmd, p, key)),
+    );
+    let wrong = not_refused(&mut s, &calls);
+    assert!(wrong.is_empty(), "not refused: {wrong:#?}");
+    let style = json!({"id": id.0, "size": 30, "underline": true, "tracking": null, "start": null, "noBreak": true});
+    s.execute("text.setRangeStyle", &style).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [id.0], "strikethrough": true, "hyphenate": null})).unwrap();
+    s.execute("type.size.increase", &json!({"by": null})).unwrap();
+    s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap();
+    s.execute("type.ruby", &json!({"text": "a", "size": null, "overhang": false})).unwrap();
+    let t = obj(&s, id);
+    let st = &t.runs[0].style;
+    assert!(st.underline && st.strikethrough && st.no_break && t.optical_margin && st.size > 30.0, "{st:?}");
+    assert!(!t.ruby.is_empty() && t.ruby.iter().all(|r| !r.overhang && r.size_percent == 50.0), "{:?}", t.ruby);
+}
+
+/// Where each glyph of type object `id` is drawn from (its origin in font units), document space.
+fn glyph_pens(s: &Session, id: NodeId) -> Vec<(usize, Point)> {
+    let t = obj(s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    lay.glyphs.iter().map(|g| (g.byte, t.xf * (g.xf * Point::ZERO))).collect()
+}
+
+fn moved_by(before: &[(usize, Point)], after: &[(usize, Point)], byte: usize) -> (f64, f64) {
+    let at = |v: &[(usize, Point)]| v.iter().find(|(b, _)| *b == byte).map(|(_, p)| *p).unwrap_or_else(|| panic!("no glyph at byte {byte}"));
+    let d = at(after) - at(before);
+    (d.x, d.y)
+}
+
+fn near(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
+}
+
+#[test]
+fn touch_type_moves_one_character_and_leaves_the_others_where_they_are() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    let before = glyph_pens(&s, id);
+    let r = s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 10, "dy": 4})).unwrap();
+    assert_eq!((r["start"].clone(), r["end"].clone()), (json!(1), json!(2)));
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "the y moves 10 pt right and 4 pt up: {:?}", moved_by(&before, &after, 1));
+    for byte in [0, 2, 3] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "byte {byte} stays: {:?}", moved_by(&before, &after, byte));
+    }
+    // Kerning on the T and the y, and a baseline shift on the y: live attributes, one undo step.
+    let t = obj(&s, id);
+    let style = |byte: usize| vectorcraft_text::edit::slice_runs(&t.runs, byte, byte + 1)[0].style.clone();
+    let (k0, k1) = (style(0).kerning.unwrap(), style(1).kerning.unwrap());
+    assert!(k0 > 0.0 && k1 < 0.0, "{k0} {k1}");
+    assert!((style(1).baseline_shift - 4.0).abs() < 1e-9 && style(2).baseline_shift == 0.0);
+    assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Touch Type").count(), 1);
+    // The type stays editable, and the moved character keeps its attributes.
+    s.execute("text.editRange", &json!({"id": id.0, "start": 4, "end": 4, "insert": "!"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Type!");
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 1), (10.0, -4.0)));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 1), (0.0, 0.0)), "undone");
+    // The first character of a line moves only up and down.
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err());
+    s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": -2})).unwrap();
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 0), (0.0, 2.0)));
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 1})).is_err(), "nothing to change");
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 9, "dy": 1})).is_err(), "no character there");
+    // A 32-bit build read 2^32 + 1 as character 1.
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": (1u64 << 32) + 1, "dy": 1})).is_err(), "no character there");
+}
+
+/// Touch Type on the first character of a list item moves that character and leaves the bullet
+/// where it is. The bullet stands for no character, so the first character still moves only up
+/// and down.
+#[test]
+fn touch_type_moves_the_first_character_of_a_list_item_and_not_its_bullet() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "bullet"})).unwrap();
+    let pens = |s: &Session| {
+        let t = obj(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let bullet = lay.glyphs.iter().find(|g| g.len == 0).map(|g| t.xf * (g.xf * Point::ZERO)).unwrap();
+        (bullet, lay.glyphs.iter().filter(|g| g.len > 0).map(|g| (g.byte, t.xf * (g.xf * Point::ZERO))).collect::<Vec<_>>())
+    };
+    let (bullet, before) = pens(&s);
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err(), "no character before it to kern");
+    s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dy": 3})).unwrap();
+    let (bullet_after, after) = pens(&s);
+    assert!(near(moved_by(&before, &after, 0), (0.0, -3.0)), "the T moves 3 pt up: {:?}", moved_by(&before, &after, 0));
+    assert!(near(moved_by(&before, &after, 1), (0.0, 0.0)));
+    assert!((bullet_after - bullet).hypot() < 1e-6, "the bullet stays: {bullet:?} {bullet_after:?}");
+}
+
+/// Raising, scaling or rotating a character leaves it and the characters after it where they
+/// were along the line, also where the font kerns it with its neighbors (the T and the y).
+#[test]
+fn touch_type_keeps_the_kerning_of_a_raised_or_scaled_character() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 5})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, -5.0)), "{:?}", moved_by(&before, &after, 1));
+    for byte in [0, 2, 3] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "byte {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    // A wider y pushes the p and e on by what it widens, and no further.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let width = |s: &Session| {
+        let t = obj(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+        let face = vectorcraft_text::FontDb::global().face_by_id(y.font_id).unwrap();
+        let [a, b, ..] = y.xf.as_coeffs();
+        face.advance(y.gid) * a.hypot(b)
+    };
+    let w0 = width(&s);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, 0.0)), "{:?}", moved_by(&before, &after, 1));
+    let wider = width(&s) - w0;
+    assert!((wider - w0 / 2.0).abs() < 1e-6, "{wider} {w0}");
+    for byte in [2, 3] {
+        assert!(near(moved_by(&before, &after, byte), (wider, 0.0)), "byte {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    // A move is limited to what kerning can give (-1000/1000 em on the y): the p does not move
+    // by more than the font's kerning pair with the y.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 80})).unwrap();
+    let after = glyph_pens(&s, id);
+    let (y, _) = moved_by(&before, &after, 1);
+    assert!((39.0..=41.0).contains(&y), "the y stops at about 40 pt (1 em): {y}");
+    assert!(moved_by(&before, &after, 2).0.abs() < 1.0, "{:?}", moved_by(&before, &after, 2));
+}
+
+/// A character drawn with two glyphs (ß in All Caps is SS) widens by both when it is scaled.
+#[test]
+fn touch_type_scales_a_character_drawn_with_two_glyphs() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "aße", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "allCaps": true})).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let esses: Vec<_> = lay.glyphs.iter().filter(|g| g.byte == 1).collect();
+    assert_eq!(esses.len(), 2, "ß in All Caps is two glyphs");
+    let width: f64 = esses
+        .iter()
+        .map(|g| {
+            let face = vectorcraft_text::FontDb::global().face_by_id(g.font_id).unwrap();
+            let [a, b, ..] = g.xf.as_coeffs();
+            face.advance(g.gid) * a.hypot(b)
+        })
+        .sum();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    // Half the width of SS (the font's kerning between the two S glyphs scales with them).
+    let (x, _) = moved_by(&before, &glyph_pens(&s, id), 3);
+    assert!((x - width / 2.0).abs() < 1.0, "the E moves on by half the width of SS: {x} {width}");
+}
+
+/// In a centered or right-aligned line, the kerning still moves only the dragged character.
+#[test]
+fn touch_type_moves_one_character_in_centered_and_right_aligned_lines() {
+    for justify in ["center", "right"] {
+        let mut s = session();
+        let r = s.execute("text.create", &json!({"x": 200, "y": 100, "text": "Type", "size": 40, "justify": justify})).unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        let before = glyph_pens(&s, id);
+        s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 10, "dy": 4})).unwrap();
+        let after = glyph_pens(&s, id);
+        assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "{justify}: {:?}", moved_by(&before, &after, 1));
+        for byte in [2, 3] {
+            assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{justify}, byte {byte}: {:?}", moved_by(&before, &after, byte));
+        }
+    }
+}
+
+#[test]
+fn touch_type_centered_ltr_scale_keeps_the_expected_width_change() {
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 200, "y": 100, "text": "Type", "size": 40, "justify": "center"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    let after = glyph_pens(&s, id);
+    let previous = moved_by(&before, &after, 0).0;
+    let following = moved_by(&before, &after, 2).0;
+    assert!(previous < -1.0, "centered line shifts left: {previous}");
+    assert!(following > 1.0, "the wider character shifts following text right: {following}");
+    assert!((following + previous).abs() < 0.1, "width growth is shared around the center: {previous}, {following}");
+}
+
+#[test]
+fn touch_type_refuses_horizontal_move_across_a_direction_boundary() {
+    let mut s = session();
+    let id = text(&mut s, "abc אבג");
+    let before = obj(&s, id);
+    let result = s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5}));
+    assert!(result.is_err(), "a mixed-direction boundary has no safe preceding glyph for kerning");
+    assert_eq!(obj(&s, id), before, "a refused move leaves the text unchanged");
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dy": 3})).unwrap();
+}
+
+/// `dy` moves a rotated character that many document points up from its line, also in type
+/// scaled unevenly.
+#[test]
+fn touch_type_raises_a_rotated_character_in_unevenly_scaled_type() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 1, 0, 0]})).unwrap();
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": 90})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 10})).unwrap();
+    let (x, y) = moved_by(&before, &glyph_pens(&s, id), 1);
+    assert!(near((x, y), (0.0, -10.0)), "({x}, {y})");
+}
+
+/// A character rotated near or at a quarter turn moves across its line and along it: in "ABCD"
+/// with the B at 85, 90 and 95 degrees, `dx` 10 and `dy` 4 move the B 10 pt right and 4 pt up and
+/// leave the C and D where they are, through baseline shift and kerning only, with Auto and
+/// Optical kerning and in type scaled unevenly. Undo, redo and the native format keep the place.
+#[test]
+fn touch_type_moves_a_character_turned_near_a_quarter_turn_across_its_line() {
+    for rotation in [85.0, 90.0, 95.0, -90.0] {
+        for (kerning, scaled) in [("auto", false), ("optical", false), ("auto", true)] {
+            let case = format!("{rotation}°, {kerning}, scaled {scaled}");
+            let mut s = session();
+            let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "ABCD", "size": 40})).unwrap()["id"].as_u64().unwrap());
+            s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+            if scaled {
+                s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 0.5, 0, 0]})).unwrap();
+            }
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": rotation})).unwrap();
+            let before = glyph_pens(&s, id);
+            let runs_before = obj(&s, id).runs;
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dx": 10, "dy": 4})).unwrap();
+            let after = glyph_pens(&s, id);
+            assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "{case}: {:?}", moved_by(&before, &after, 1));
+            for byte in [0, 2, 3] {
+                assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, byte {byte}: {:?}", moved_by(&before, &after, byte));
+            }
+            // Only kerning and baseline shift change.
+            let t = obj(&s, id);
+            let style = |byte: usize| vectorcraft_text::edit::slice_runs(&t.runs, byte, byte + 1)[0].style.clone();
+            let plain = |mut st: CharStyle| {
+                st.kerning = None;
+                st.baseline_shift = 0.0;
+                st
+            };
+            for byte in 0..4 {
+                let was = vectorcraft_text::edit::slice_runs(&runs_before, byte, byte + 1)[0].style.clone();
+                assert_eq!(plain(style(byte)), plain(was), "{case}, byte {byte}");
+            }
+            let shift = style(1).baseline_shift;
+            assert!(shift > 0.0, "{case}: {shift}");
+            // A drag straight across the line is baseline shift alone.
+            let before = glyph_pens(&s, id);
+            s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": -6})).unwrap();
+            assert!(near(moved_by(&before, &glyph_pens(&s, id), 1), (0.0, 6.0)), "{case}: {:?}", moved_by(&before, &glyph_pens(&s, id), 1));
+            s.execute("edit.undo", &json!({})).unwrap();
+            let moved = glyph_pens(&s, id);
+            assert!(near(moved_by(&after, &moved, 1), (0.0, 0.0)), "{case}: undone");
+            s.execute("edit.redo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            // The native format keeps both attributes and the place they give.
+            let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+            let NodeKind::Text(reopened) = &back.node(id).unwrap().kind else { panic!("not text") };
+            assert_eq!(reopened.runs, obj(&s, id).runs, "{case}");
+            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), reopened);
+            let pens: Vec<(usize, Point)> = lay.glyphs.iter().map(|g| (g.byte, reopened.xf * (g.xf * Point::ZERO))).collect();
+            assert!(near(moved_by(&moved, &pens, 1), (0.0, 0.0)), "{case}: reopened");
+        }
+    }
+}
+/// `dy` moves a character that many document points in type scaled up 2000 times, where baseline
+/// shift is limited to 0.648 pt of text space.
+#[test]
+fn touch_type_raises_a_character_in_type_scaled_up_2000_times() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 0, "y": 0, "text": "Type", "size": 1})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2000, 0, 0, 2000, 0, 0]})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 10})).unwrap();
+    let (x, y) = moved_by(&before, &glyph_pens(&s, id), 1);
+    assert!(near((x, y), (0.0, -10.0)), "({x}, {y})");
+}
+
+/// A character whose baseline shift is beyond the range that the object's scale leaves keeps its
+/// shift through a change that does not raise it, and a `dy` moves it back into the range.
+#[test]
+fn touch_type_moves_a_character_shifted_beyond_the_range() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 1, "end": 2, "baselineShift": 1000})).unwrap();
+    s.execute("object.transform", &json!({"ids": [id.0], "matrix": [2, 0, 0, 2, 0, 0]})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "hScale": 150})).unwrap();
+    let (_, up) = moved_by(&before, &glyph_pens(&s, id), 1);
+    assert!(up.abs() < 1e-6, "the shift stays: {up}");
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": -10})).unwrap();
+    let (_, down) = moved_by(&before, &glyph_pens(&s, id), 1);
+    assert!(down >= 10.0 - 1e-6, "{down}");
+}
+
+/// `dy` moves a rotated character on a path with the Skew effect that many document points too,
+/// where the effect stretches its baseline shift.
+#[test]
+fn touch_type_raises_a_rotated_character_on_a_skewed_path() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({"d": "M100 400 L400 100"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Type", "size": 40, "at": [100, 400]})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("type.pathOptions", &json!({"effect": "skew"})).unwrap();
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": 45})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 10})).unwrap();
+    let (x, y) = moved_by(&before, &glyph_pens(&s, id), 1);
+    assert!(((x * x + y * y).sqrt() - 10.0).abs() < 1e-6, "({x}, {y})");
+}
+
+/// A right-to-left character can move along its line and up from it.
+#[test]
+fn touch_type_moves_a_right_to_left_character_along_its_line_and_up() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "אבג", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let (along, up) = moved_by(&before, &glyph_pens(&s, id), 2);
+    assert!((along + 5.0).abs() < 1e-9, "{along}");
+    assert!((up + 3.0).abs() < 1e-9, "{up}");
+}
+
+#[test]
+fn touch_type_scales_and_rotates_one_character() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "hScale": 150, "vScale": 50, "rotation": 30})).unwrap();
+    let t = obj(&s, id);
+    let st = |byte: usize| vectorcraft_text::edit::slice_runs(&t.runs, byte, byte + 1)[0].style.clone();
+    assert_eq!((st(2).h_scale, st(2).v_scale, st(2).rotation), (150.0, 50.0, 30.0));
+    for byte in [1, 3] {
+        assert_eq!((st(byte).h_scale, st(byte).v_scale, st(byte).rotation), (100.0, 100.0, 0.0));
+    }
+}
+
+/// The Touch Type tool through the session: a click on a character selects it, and dragging its
+/// box sends `text.touchType` as one undo step.
+#[test]
+fn the_touch_type_tool_drags_a_character() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let before = glyph_pens(&s, id);
+    let v = ViewInfo::default();
+    s.select_tool("touchType", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let at = t.xf * (y.origin + vectorcraft_geom::Vec2::new(y.advance / 2.0, -10.0));
+    click(&mut s, at.x, at.y);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id], "the click selects the type");
+    assert_eq!(s.tool_options(), json!({"id": id.0, "start": 1}));
+    for (k, x, y) in [(PointerKind::Down, at.x, at.y), (PointerKind::Drag, at.x + 10.0, at.y - 4.0), (PointerKind::Up, at.x + 10.0, at.y - 4.0)] {
+        s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+    }
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (10.0, -4.0)), "{:?}", moved_by(&before, &after, 1));
+    assert!(near(moved_by(&before, &after, 2), (0.0, 0.0)));
+    assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Touch Type").count(), 1);
+    // Turned 30°, the y still follows the pointer: an upward drag of its box moves it straight up.
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "rotation": 30})).unwrap();
+    let before = glyph_pens(&s, id);
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let face = vectorcraft_text::FontDb::global().face_by_id(y.font_id).unwrap();
+    let (ascent, descent) = face.vertical_metrics();
+    let at = t.xf * (y.xf * Point::new(face.advance(y.gid) / 2.0, (descent - ascent) / 2.0));
+    for (k, x, y) in [(PointerKind::Down, at.x, at.y), (PointerKind::Drag, at.x, at.y - 4.0), (PointerKind::Up, at.x, at.y - 4.0)] {
+        s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+    }
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, -4.0)), "{:?}", moved_by(&before, &after, 1));
+    assert!(near(moved_by(&before, &after, 2), (0.0, 0.0)), "{:?}", moved_by(&before, &after, 2));
+}
+
+/// Arrow keys with the Touch Type tool nudge the selected character by the keyboard increment.
+#[test]
+fn touch_type_arrow_keys_nudge_the_selected_character() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 40})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("touchType", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+    let at = t.xf * (y.origin + vectorcraft_geom::Vec2::new(y.advance / 2.0, -10.0));
+    click(&mut s, at.x, at.y);
+    let before = glyph_pens(&s, id);
+    s.tool_key(vectorcraft_tools::ToolKey::Right, Mods::default(), v).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (1.0, 0.0)), "{:?}", moved_by(&before, &after, 1));
+    assert_eq!(undo_labels(&s).iter().filter(|l| *l == "Touch Type").count(), 1);
+}
+
+#[test]
+fn type_tool_typing_is_one_undo_step() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    s.tool_text(" world", v).unwrap();
+    assert!(s.tool_wants_text());
+    assert_eq!(obj(&s, id).plain_text(), "Hello world");
+    key(&mut s, ToolKey::Left, Mods::default());
+    assert!(!s.in_interaction(), "moving the caret commits");
+    assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Typing"));
+    s.tool_text("!", v).unwrap();
+    // #1686: Escape is the tool's while editing, and asks the UI for the Selection tool.
+    assert!(s.tool_claims_key(ToolKey::Escape, v));
+    let r = s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert!(r.iter().any(|r| matches!(r, UiRequest::SwitchTool(t) if t == "selection")), "{r:?}");
+    assert!(!s.tool_claims_key(ToolKey::Escape, v));
+    assert_eq!(obj(&s, id).plain_text(), "Hello worl!d");
+    // #1686: Escape ends editing, the type still selected; the UI goes on to the Selection tool.
+    assert!(!s.tool_wants_text());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello world");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "");
+}
+
+#[test]
+fn dropped_type_press_restores_the_original_text_and_selection() {
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 500})).unwrap();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    s.select(|_, selection| selection.guides.push(0)).unwrap();
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
+}
+
+#[test]
+fn dropped_type_press_restores_the_active_layer_without_a_prior_selection() {
+    let mut s = session();
+    let original_layer = s.doc().unwrap().doc.layers[0].id;
+    let other_layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let text_id = text(&mut s, "Other layer text");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.active_mut().unwrap().active_layer = Some(original_layer);
+    let target = obj(&s, text_id);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+    assert_eq!(s.doc().unwrap().active_layer, Some(other_layer));
+    s.drop_tool_press(v).unwrap();
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    assert_eq!(s.doc().unwrap().active_layer, Some(original_layer));
+}
+
+#[test]
+fn dropped_type_press_after_document_switch_keeps_the_new_document_selection() {
+    let mut s = session();
+    let first = text(&mut s, "First document");
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let second = text(&mut s, "Second document");
+    let selected = s.doc().unwrap().selection.clone();
+    let active_layer = s.doc().unwrap().active_layer;
+    assert_eq!(selected.objects, vec![second]);
+
+    assert!(s.set_active(0));
+    let target = obj(&s, first);
+    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y), v).unwrap();
+
+    assert!(s.set_active(1));
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, selected);
+    assert_eq!(s.doc().unwrap().active_layer, active_layer);
+}
+
+#[test]
+fn dropped_type_press_keeps_new_text_selected_on_a_locked_artboard() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "locked": true})).unwrap();
+    let second = text(&mut s, "Second text");
+    let first = NodeId(s.execute("text.create", &json!({"x": 1050, "y": 100, "text": "First text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.doc().unwrap().selection.new_art.contains(&first));
+    let at = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = at(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    let before = s.doc().unwrap().selection.clone();
+    let b = at(&s, second);
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y), v).unwrap();
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection, before);
+    assert!(s.tool_wants_text());
+}
+
+#[test]
+fn dropped_lent_selection_press_keeps_type_editing() {
+    let mut s = session();
+    let first = text(&mut s, "First text");
+    let second = NodeId(s.execute("text.create", &json!({"x": 300, "y": 100, "text": "Second text", "size": 20})).unwrap()["id"].as_u64().unwrap());
+    let point = |s: &Session, id: NodeId| {
+        let target = obj(s, id);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &target);
+        let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+        target.xf * a.midpoint(b)
+    };
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    let a = point(&s, first);
+    click(&mut s, a.x + 0.1, a.y);
+    assert!(s.tool_wants_text());
+    let b = point(&s, second);
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, b.x + 0.1, b.y).with_mods(cmd), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![second]);
+    s.drop_tool_press(v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![first]);
+    assert!(s.tool_wants_text());
+    s.tool_text("!", v).unwrap();
+    assert!(obj(&s, first).plain_text().contains('!'));
+    assert_eq!(obj(&s, second).plain_text(), "Second text");
+}
+
+#[test]
+fn undo_while_typing_takes_back_only_the_typing_and_redo_returns_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    key(&mut s, ToolKey::Left, Mods::default());
+    key(&mut s, ToolKey::Right, Mods::default());
+    s.tool_text("def", v).unwrap();
+    assert!(s.in_interaction(), "still typing");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc", "only the typing in progress is undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abcdef", "and Redo brings it back");
+    // Typing on after an undo starts a new session from the restored text.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc!");
+}
+
+fn list_markers(s: &Session, id: NodeId) -> Vec<String> {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &obj(s, id)).markers.iter().map(|m| m.text.clone()).collect()
+}
+
+/// Typed list detection: at the start of a paragraph, "1.", "1)", "A." or "A)" and a space start
+/// a numbered list, and "*", "#", ">" or "+" and a space start a bulleted list with the filled dot.
+/// The typed characters go, the paragraph takes the hanging indent, and the text typed next is the
+/// list item's. One Undo puts the typed characters back with no list, and typing goes on after
+/// them, also after a Backspace that deleted nothing.
+#[test]
+fn typing_a_list_start_and_a_space_starts_a_list() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let v = ViewInfo::default();
+    let (arabic, letters, dot) =
+        (ParaList::numbered(NumberStyle::Arabic), ParaList::numbered(NumberStyle::UpperLetters), ParaList::bulleted(Bullet::Dot));
+    let cases = [("1.", arabic, "1."), ("1)", arabic, "1."), ("A.", letters, "A."), ("A)", letters, "A.")];
+    let bullets = ["*", "#", ">", "+"].map(|b| (b, dot, "\u{2022}"));
+    for (typed, list, marker) in cases.into_iter().chain(bullets) {
+        let mut s = session();
+        s.select_tool("type", v).unwrap();
+        click(&mut s, 200.0, 200.0);
+        let id = s.doc().unwrap().selection.objects[0];
+        for c in typed.chars() {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+        s.tool_text(" ", v).unwrap();
+        let t = obj(&s, id);
+        assert_eq!((t.plain_text().as_str(), t.para_at(0).list), ("", Some(list)), "{typed}");
+        assert_eq!((t.para_at(0).left_indent, t.para_at(0).first_line_indent), (18.0, -18.0), "{typed}");
+        assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Bullets and Numbering"), "{typed}");
+        s.tool_text("Apples", v).unwrap();
+        assert_eq!((obj(&s, id).plain_text().as_str(), obj(&s, id).para_at(0).list), ("Apples", Some(list)), "{typed}");
+        assert_eq!(list_markers(&s, id), [marker], "{typed}");
+        key(&mut s, ToolKey::Enter, Mods::default());
+        s.tool_text("Pears", v).unwrap();
+        assert_eq!(obj(&s, id).para_at(1).list, Some(list), "Return continues the list: {typed}");
+        // One Undo after the space puts the characters back with no list; typing goes on after them.
+        let mut s = session();
+        s.select_tool("type", v).unwrap();
+        click(&mut s, 200.0, 200.0);
+        let id = s.doc().unwrap().selection.objects[0];
+        for c in typed.chars() {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+        s.tool_text(" ", v).unwrap();
+        // A Backspace at the start of the empty item deletes nothing and leaves that as it is.
+        key(&mut s, ToolKey::Backspace, Mods::default());
+        s.execute("edit.undo", &json!({})).unwrap();
+        let t = obj(&s, id);
+        assert_eq!((t.plain_text(), t.para_at(0).list), (format!("{typed} "), None), "{typed}");
+        assert_eq!((t.para_at(0).left_indent, t.para_at(0).first_line_indent), (0.0, 0.0), "{typed}");
+        s.tool_text("x", v).unwrap();
+        assert_eq!((obj(&s, id).plain_text(), obj(&s, id).para_at(0).list), (format!("{typed} x"), None), "{typed}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), "", "the typing before the list is a step of its own: {typed}");
+    }
+}
+
+/// A list typed before a paragraph's text: the caret stays before the text, goes after the typed
+/// characters when Undo puts them back, also after undoing what was typed after the list, and
+/// before the text again after Redo, also when the text starts with the same characters.
+#[test]
+fn the_caret_follows_undo_and_redo_of_a_typed_list() {
+    let v = ViewInfo::default();
+    for start in ["Apples", "* Apples"] {
+        let mut s = session();
+        let id = text(&mut s, start);
+        s.select_tool("type", v).unwrap();
+        click(&mut s, 101.0, 95.0);
+        s.set_tool_option("select", &json!({"start": 0, "end": 0}));
+        for c in "* ".chars() {
+            s.tool_text(&c.to_string(), v).unwrap();
+        }
+        let state = |s: &Session| (obj(s, id).plain_text(), s.tool_options()["caret"].clone());
+        assert_eq!(state(&s), (start.to_string(), json!(0)));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(state(&s), (format!("* {start}"), json!(2)));
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(state(&s), (start.to_string(), json!(0)));
+        s.tool_text("x", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), format!("x{start}"));
+        // Undo of the typing and then of the list: typing goes on after the characters again.
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.tool_text("y", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), format!("* y{start}"));
+    }
+}
+
+/// The same characters later in a paragraph, without the space, typed in one piece with the space
+/// (a paste), or at the start of a paragraph that is already in a list start nothing.
+#[test]
+fn list_starts_typed_elsewhere_or_pasted_start_no_list() {
+    use vectorcraft_doc::text::{NumberStyle, ParaList};
+    let v = ViewInfo::default();
+    let mut s = session();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    for c in "Fruit 1. * A) x".chars() {
+        s.tool_text(&c.to_string(), v).unwrap();
+    }
+    key(&mut s, ToolKey::Enter, Mods::default());
+    s.tool_text("1. Apples", v).unwrap();
+    key(&mut s, ToolKey::Enter, Mods::default());
+    for c in "1.Pears".chars() {
+        s.tool_text(&c.to_string(), v).unwrap();
+    }
+    key(&mut s, ToolKey::Enter, Mods::default());
+    s.tool_text("* ", v).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "Fruit 1. * A) x\n1. Apples\n1.Pears\n* ");
+    assert_eq!((0..4).map(|i| t.para_at(i).list).collect::<Vec<_>>(), [None, None, None, None]);
+    assert!(!undo_labels(&s).iter().any(|l| l == "Bullets and Numbering"));
+    // A paragraph in a list keeps its list, and the typed characters stay as text.
+    let id = text(&mut s, "Item");
+    s.execute("text.setFormat", &json!({"ids": [id.0], "list": "number"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    click(&mut s, 101.0, 95.0);
+    s.set_tool_option("select", &json!({"start": 0, "end": 0}));
+    for c in "* ".chars() {
+        s.tool_text(&c.to_string(), v).unwrap();
+    }
+    let t = obj(&s, id);
+    assert_eq!((t.plain_text().as_str(), t.para_at(0).list), ("* Item", Some(ParaList::numbered(NumberStyle::Arabic))));
+}
+
+/// `text.startList`, which the Type tool runs, works from scripts too: by default it reads the
+/// text up to the end, and it changes nothing (and records no step) when the text there starts no
+/// list.
+#[test]
+fn start_list_command_removes_the_typed_characters_and_starts_the_list() {
+    use vectorcraft_doc::text::{Bullet, NumberStyle, ParaList};
+    let mut s = session();
+    let id = text(&mut s, "Fruit\n1) Apples");
+    let r = s.execute("text.startList", &json!({"id": id.0, "at": 9})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "started": true, "caret": 6}));
+    let t = obj(&s, id);
+    assert_eq!(
+        (t.plain_text().as_str(), t.para_at(0).list, t.para_at(1).list),
+        ("Fruit\nApples", None, Some(ParaList::numbered(NumberStyle::Arabic)))
+    );
+    assert_eq!(list_markers(&s, id), ["1."]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((obj(&s, id).plain_text().as_str(), obj(&s, id).para_at(1).list), ("Fruit\n1) Apples", None));
+    let id = text(&mut s, "x\n# ");
+    let r = s.execute("text.startList", &json!({"id": id.0})).unwrap();
+    assert_eq!((r["started"].clone(), obj(&s, id).plain_text()), (json!(true), "x\n".to_string()));
+    assert_eq!(obj(&s, id).para_at(1).list, Some(ParaList::bulleted(Bullet::Dot)));
+    let steps = undo_labels(&s).len();
+    let id = text(&mut s, "1.x");
+    assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": 3})).unwrap()["started"], json!(false));
+    assert_eq!(undo_labels(&s).len(), steps + 1, "only text.create's step");
+    assert!(s.execute("text.startList", &json!({"id": id.0, "at": "3"})).is_err(), "`at` is a number");
+    assert!(s.execute("text.startList", &json!({"at": 3})).is_err(), "id required");
+}
+
+/// A byte offset given as a negative or fractional number is an error, not the end of the text
+/// (`at`) or its start or end (`start`, `end`), and the text is left as it was. Null keeps the default.
+#[test]
+fn byte_offsets_that_are_not_whole_numbers_are_refused() {
+    let mut s = session();
+    let id = text(&mut s, "x\n# ");
+    for at in [json!(-1), json!(1.5)] {
+        let e = s.execute("text.startList", &json!({"id": id.0, "at": at})).unwrap_err().to_string();
+        assert!(e.contains("`at`"), "{e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "x\n# ", "no list was started");
+    assert_eq!(s.execute("text.startList", &json!({"id": id.0, "at": null})).unwrap()["started"], json!(true));
+    let id = text(&mut s, "Hello");
+    for (cmd, p, key) in [
+        ("text.getRange", json!({"id": id.0, "start": -1, "end": 2}), "start"),
+        ("text.getRange", json!({"id": id.0, "start": 1, "end": 2.5}), "end"),
+        ("text.editRange", json!({"id": id.0, "start": 1.5, "end": 2, "insert": "!"}), "start"),
+        ("text.editRange", json!({"id": id.0, "start": 1, "end": -2, "insert": "!"}), "end"),
+        ("text.setRangeStyle", json!({"id": id.0, "start": 0.5, "size": 30}), "start"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}`")), "{cmd} {p}: {e}");
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello");
+    assert_eq!(s.execute("text.getRange", &json!({"id": id.0, "start": 1.0, "end": null})).unwrap()["text"], json!("ello"));
+}
+
+/// #1881: a Cmd/Ctrl drag while typing (the Selection tool lent to the Type tool) moves the type
+/// and keeps what was typed, and typing goes on after it.
+#[test]
+fn a_cmd_drag_while_typing_moves_the_type_and_keeps_the_typing() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    let before = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    let (at, cmd) = (before.center(), Mods { cmd: true, ..Default::default() });
+    for (kind, dx) in [(PointerKind::Down, 0.0), (PointerKind::Drag, 100.0), (PointerKind::Up, 100.0)] {
+        s.pointer(&PointerEvent::new(kind, at.x + dx, at.y).with_mods(cmd), v).unwrap();
+    }
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing is kept");
+    let moved = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!(moved.x0 - before.x0 > 50.0, "the type moved: {before:?} → {moved:?}");
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello!");
+    let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!((after.x0 - moved.x0).abs() < 1e-6, "and stays where it was moved: {after:?}");
+}
+
+fn cmd_click(s: &mut Session, x: f64, y: f64) {
+    let (v, cmd) = (ViewInfo::default(), Mods { cmd: true, ..Default::default() });
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, x, y).with_mods(cmd), v).unwrap();
+    }
+}
+
+/// #3779: a Cmd/Ctrl click on another object while typing selects it and ends the text edit, so
+/// the keys that follow are shortcuts again and not typing.
+#[test]
+fn a_cmd_click_on_another_object_while_typing_ends_the_text_edit() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("shape.rectangle", &json!({"x": 500, "y": 400, "width": 50, "height": 50})).unwrap();
+    let rect = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    cmd_click(&mut s, 525.0, 425.0);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![rect], "the rectangle is selected");
+    assert!(!s.tool_wants_text(), "the text edit ended");
+    s.tool_text("v", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "a later key is not typed into the text");
+    assert_eq!(s.tool_id(), "type", "the Type tool is back");
+}
+
+/// #3779: a Cmd/Ctrl click on empty canvas while typing deselects the text and ends its edit.
+#[test]
+fn a_cmd_click_on_empty_canvas_while_typing_ends_the_text_edit() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Hello", v).unwrap();
+    cmd_click(&mut s, 600.0, 450.0);
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing is selected");
+    assert!(!s.tool_wants_text(), "the text edit ended");
+    s.tool_text("v", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello", "a later key is not typed into the text");
+}
+
+/// #3779: point type a click placed and nothing was typed into goes away on a Cmd/Ctrl click
+/// elsewhere, as it does on Escape.
+#[test]
+fn a_cmd_click_away_from_empty_point_type_discards_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    cmd_click(&mut s, 600.0, 450.0);
+    assert!(s.doc().unwrap().doc.node(id).is_none(), "the empty type is discarded");
+}
+
+#[test]
+fn undo_during_a_drag_takes_back_only_the_drag() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("selection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 125.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 225.0, 125.0), v).unwrap();
+    assert!(s.in_interaction(), "dragging");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let b = doc.bounds_of(&[id], false).expect("the rectangle is still there");
+    assert_eq!(b.x0, 100.0, "back where it was: {b:?}");
+}
+
+#[test]
+fn ime_composition_shows_in_place_and_commits_as_one_step() {
+    // Romaji → kana → conversion → commit, as the macOS Japanese IME sends it.
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    let created = undo_labels(&s).len();
+    s.tool_text("曲:", v).unwrap();
+    for (t, r) in [("g", 1..1), ("が", 1..1), ("がg", 2..2), ("ががく", 3..3)] {
+        s.tool_preedit(t, Some(r), v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), format!("曲:{t}"), "marked text lays out in place");
+        assert!(s.tool_composing());
+    }
+    // Conversion: the active clause is the whole word.
+    s.tool_preedit("雅楽", Some(0..2), v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽");
+    assert_eq!(s.tool_options()["composing"], json!(true));
+    // macOS clears the marked text, then commits.
+    s.tool_preedit("", None, v).unwrap();
+    s.tool_text("雅楽", v).unwrap();
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽");
+    assert_eq!(s.tool_options()["caret"], json!("曲:雅楽".len()));
+    // Typing goes on after the commit, in the same session.
+    s.tool_text("。", v).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "曲:雅楽。");
+    assert_eq!(undo_labels(&s).len(), created + 1, "one undo step for the session");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "");
+}
+
+#[test]
+fn ime_cancel_leaves_no_undo_step_and_keeps_the_text() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = text(&mut s, "雅楽");
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let (a, b) = vectorcraft_text::caret_position(&lay, "雅楽".len());
+    let p = t.xf * a.midpoint(b);
+    click(&mut s, p.x - 0.1, p.y);
+    assert!(s.tool_wants_text());
+    s.set_tool_option("select", &json!({"start": 6, "end": 6}));
+    let before = undo_labels(&s).len();
+    s.tool_preedit("えんそう", Some(4..4), v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "雅楽えんそう");
+    // Escape in the IME: the marked text goes, nothing else changes.
+    s.tool_preedit("", None, v).unwrap();
+    assert!(!s.tool_composing());
+    assert!(!s.in_interaction(), "a cancelled composition leaves no typing session");
+    assert_eq!(obj(&s, id).plain_text(), "雅楽");
+    assert_eq!(undo_labels(&s).len(), before);
+    // A stray clear (no composition) never deletes the selection.
+    s.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    s.tool_preedit("", None, v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "雅楽");
+    // A composition over a selection replaces it.
+    s.tool_preedit("が", Some(1..1), v).unwrap();
+    s.tool_preedit("", None, v).unwrap();
+    s.tool_text("我", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "我楽");
+}
+
+#[test]
+fn clicking_away_keeps_marked_text_as_typed_and_undo_mid_composition_is_safe() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_preedit("しょうこ", Some(4..4), v).unwrap();
+    // Keys belong to the IME while it composes.
+    key(&mut s, ToolKey::Backspace, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "しょうこ");
+    click(&mut s, 600.0, 500.0);
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id).plain_text(), "しょうこ", "the marked text stays, committed");
+    // The UI holds Undo back while composing; if it comes anyway, the session is committed first.
+    click(&mut s, 50.0, 50.0);
+    let id2 = s.doc().unwrap().selection.objects[0];
+    s.tool_preedit("ひちりき", Some(4..4), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.tool_composing());
+    assert_eq!(obj(&s, id2).plain_text(), "");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id2).plain_text(), "ひちりき");
+}
+
+#[test]
+fn type_tool_selection_replace_and_delete() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello brave world");
+    s.select_tool("type", v).unwrap();
+    // Click at the start of the text to edit it.
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let (a, b) = vectorcraft_text::caret_position(&lay, 6);
+    let p = t.xf * a.midpoint(b);
+    click(&mut s, p.x + 0.1, p.y);
+    assert!(s.tool_wants_text());
+    assert_eq!(s.tool_options()["caret"], json!(6));
+    let shift_word = Mods { shift: true, alt: true, ..Default::default() };
+    key(&mut s, ToolKey::Right, shift_word);
+    assert_eq!((s.tool_options()["start"].as_u64(), s.tool_options()["end"].as_u64()), (Some(6), Some(11)));
+    s.tool_text("bold", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello bold world");
+    key(&mut s, ToolKey::Home, Mods { shift: true, ..Default::default() });
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), " world");
+    key(&mut s, ToolKey::End, Mods::default());
+    key(&mut s, ToolKey::Backspace, Mods { alt: true, ..Default::default() });
+    assert_eq!(obj(&s, id).plain_text(), " ");
+}
+
+/// A Type tool click inside a ligature (Source Serif 4's fi) puts the caret between its
+/// characters, and Shift+Right from there selects the i alone.
+#[test]
+fn type_tool_click_reaches_the_inside_of_a_ligature() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "fin", "size": 40, "font": "Source Serif 4"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let g = lay.glyphs.iter().find(|g| g.len == 2).expect("f + i is one glyph");
+    let (_, f) = g.carets[0];
+    let p = t.xf * (g.origin + vectorcraft_geom::Vec2::new(g.advance * f + 0.2, -10.0));
+    click(&mut s, p.x, p.y);
+    assert_eq!(s.tool_options()["caret"], json!(1), "between the f and the i");
+    key(&mut s, ToolKey::Right, Mods { shift: true, ..Default::default() });
+    assert_eq!((s.tool_options()["start"].as_u64(), s.tool_options()["end"].as_u64()), (Some(1), Some(2)));
+    s.tool_text("I", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "fIn");
+}
+
+#[test]
+fn character_panel_flow_styles_the_selected_range_while_editing() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Make this big", v).unwrap();
+    // Select "this" (still inside the typing session).
+    s.set_tool_option("select", &json!({"start": 5, "end": 9}));
+    // What the panel does: end the typing session, then style the range.
+    s.set_tool_option("commitTyping", &json!(true));
+    s.commit_interaction().unwrap();
+    let o = s.tool_options();
+    s.execute("text.setRangeStyle", &json!({"id": o["editing"], "start": o["start"], "end": o["end"], "size": 48})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.runs.len(), 3);
+    assert_eq!(t.runs[1].text, "this");
+    assert_eq!(t.runs[1].style.size, 48.0);
+    // Typing continues in a new session, over the styled selection (keeps its style).
+    s.tool_text("THAT", v).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "Make THAT big");
+    assert_eq!(t.runs[1].text, "THAT");
+    assert_eq!(t.runs[1].style.size, 48.0);
+    let labels = undo_labels(&s);
+    assert_eq!(&labels[labels.len() - 3..], ["Typing", "Character", "Typing"]);
+}
+
+#[test]
+fn select_all_and_cut_like_ui() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 10, "height": 10})).unwrap();
+    let id = text(&mut s, "abc def");
+    s.select_tool("type", v).unwrap();
+    let t = obj(&s, id);
+    let p = t.xf * Point::new(2.0, -5.0);
+    click(&mut s, p.x, p.y);
+    // Select All while editing takes the text, not the art (the rectangle stays unselected).
+    assert!(s.tool_wants_text());
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": id.0, "start": 0, "end": 7}));
+    assert_eq!(s.doc().unwrap().selection.objects, [id]);
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "start": o["start"], "end": o["end"]})).unwrap();
+    assert_eq!(r["text"], json!("abc def"));
+    s.set_tool_option("copy", &r["runs"]);
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "");
+    s.tool_text("abc def", v).unwrap();
+    s.tool_text("abc def", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc defabc def");
+    // Not editing: Select All selects the art again.
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert!(!s.tool_wants_text());
+    assert_eq!(s.execute("select.all", &json!({})).unwrap(), json!({"count": 2}));
+}
+
+/// A story threaded from area type `a` into frame `b`, with the Type tool editing `b` at its start.
+fn threaded_story_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert!(!obj(&s, a).plain_text().is_empty() && !obj(&s, b).plain_text().is_empty(), "the story runs through both frames");
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    assert!(s.tool_wants_text());
+    (s, a, b, story)
+}
+
+#[test]
+fn select_all_in_a_threaded_frame_selects_the_whole_story() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let a_len = obj(&s, a).plain_text().len();
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": a.0, "start": 0, "end": a_len, "story": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().selection.objects, [a], "the first frame, which the tool edits, is selected");
+    // Copy takes the whole story.
+    let r = s.execute("text.getRange", &json!({"id": o["editing"], "story": true})).unwrap();
+    assert_eq!(r["text"], json!(story));
+    assert_eq!(r["length"], json!(story.len()));
+    // The selection is highlighted in both frames.
+    let v = ViewInfo::default();
+    let in_b = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 190.0));
+    assert!(s.overlays(v).iter().any(in_b), "the text of the second frame is highlighted");
+    // A fill reaches the text of both frames, as one undo step.
+    let steps = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1);
+    let red = obj(&s, a).runs[0].style.fill.clone();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == red), "every character of frame {} is filled", id.0);
+    }
+    // So do a baseline shift step (Alt+Shift+Up) and a size step.
+    key(&mut s, ToolKey::Up, Mods { alt: true, shift: true, ..Mods::default() });
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.baseline_shift > 0.0), "every character of frame {} is raised", id.0);
+    }
+    let size = obj(&s, b).runs[0].style.size;
+    s.execute("type.step", &json!({"attribute": "size", "by": 1})).unwrap();
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| r.style.size > size), "every character of frame {} is larger", id.0);
+    }
+}
+
+#[test]
+fn select_all_edits_the_first_frame_that_holds_text() {
+    let mut s = session();
+    // The first frame is too short for a line: the story starts in the second.
+    let a =
+        s.execute("text.create", &json!({"x": 10, "y": 10, "text": "One two three", "size": 12, "area": {"width": 150, "height": 4}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), "One two three".to_string()));
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    let o = s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(o, json!({"editing": b.0, "start": 0, "end": 13, "story": [a.0, b.0]}));
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+}
+
+#[test]
+fn the_eyedropper_styles_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    let source = s.execute("text.create", &json!({"x": 400, "y": 250, "text": "Big", "size": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    s.execute("select.all", &json!({})).unwrap();
+    let r = s.execute("appearance.copyFrom", &json!({"source": source})).unwrap();
+    assert_eq!(r, json!({"ids": [a.0, b.0]}));
+    for id in [a, b] {
+        assert!(obj(&s, id).runs.iter().all(|r| (r.style.size - 30.0).abs() < 1e-9), "every character of frame {} takes the size", id.0);
+    }
+}
+
+/// A red rectangle outside the story of [`threaded_story_edited_in_its_second_frame`], to pick up
+/// from at (525, 325), with the Type tool editing frame `b` at its start again.
+fn red_source(s: &mut Session, b: NodeId) {
+    let source = s.execute("shape.rectangle", &json!({"x": 500, "y": 300, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [source], "color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+}
+
+fn all_red(s: &Session, id: NodeId) -> bool {
+    obj(s, id).runs.iter().all(|r| r.style.fill.color().is_some_and(|c| c.to_hex() == "#ff0000"))
+}
+
+fn any_red(s: &Session, id: NodeId) -> bool {
+    obj(s, id).runs.iter().any(|r| r.style.fill.color().is_some_and(|c| c.to_hex() == "#ff0000"))
+}
+
+/// A click and a Shift-click of the Eyedropper on the rectangle of [`red_source`].
+fn eyedropper_picks() -> [Mods; 2] {
+    [Mods::default(), Mods { shift: true, ..Default::default() }]
+}
+
+fn pick_red_source(s: &mut Session, mods: Mods) {
+    s.pointer(&PointerEvent::new(PointerKind::Down, 525.0, 325.0).with_mods(mods), ViewInfo::default()).unwrap();
+}
+
+fn highlights(s: &mut Session) -> usize {
+    s.overlays(ViewInfo::default()).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Highlight { .. })).count()
+}
+
+#[test]
+fn switching_to_the_eyedropper_keeps_the_whole_story_selected() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.execute("select.all", &json!({})).unwrap();
+        let highlighted = highlights(&mut s);
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options()["story"], json!([a.0, b.0]));
+        assert!(highlights(&mut s) >= highlighted, "the Eyedropper highlights the text of both frames");
+        let undo = s.doc().unwrap().history.undo.len();
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b), "every frame takes the pick");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!any_red(&s, a) && !any_red(&s, b), "one undo takes the pick back from every frame");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        let o = s.tool_options();
+        assert_eq!((&o["editing"], &o["story"]), (&json!(a.0), &json!([a.0, b.0])), "back in the Type tool the story stays selected");
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "x", "typing replaces the whole story");
+    }
+}
+
+#[test]
+fn a_selection_inside_one_threaded_frame_stays_in_that_frame_under_the_eyedropper() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.set_tool_option("select", &json!({"start": 0, "end": 4}));
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        assert!(s.tool_options().get("story").is_none());
+        let undo = s.doc().unwrap().history.undo.len();
+        pick_red_source(&mut s, mods);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+        assert_eq!(obj(&s, b).runs[0].text.len(), 4, "only the selected characters take the pick");
+        assert!(any_red(&s, b) && !all_red(&s, b) && !any_red(&s, a));
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        let o = s.tool_options();
+        assert_eq!((o["editing"].as_u64(), o["start"].as_u64(), o["end"].as_u64()), (Some(b.0), Some(0), Some(4)));
+    }
+}
+
+#[test]
+fn an_eyedropper_pick_on_the_whole_story_styles_locked_and_hidden_frames() {
+    for command in ["object.lock", "object.hide"] {
+        for held_first in [false, true] {
+            for mods in eyedropper_picks() {
+                let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+                let (held, other) = if held_first { (a, b) } else { (b, a) };
+                s.execute(command, &json!({"ids": [held.0]})).unwrap();
+                red_source(&mut s, other);
+                assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+                s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+                let undo = s.doc().unwrap().history.undo.len();
+                pick_red_source(&mut s, mods);
+                assert!(all_red(&s, other), "{command}: the other frame takes the pick");
+                assert!(all_red(&s, held), "{command}: the held frame takes the pick");
+                assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: one undo step");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_eyedropper_pick_from_a_frame_of_the_selected_story_styles_the_other_frames() {
+    for source_first in [false, true] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        let (source, other) = if source_first { (a, b) } else { (b, a) };
+        s.execute("text.setStyle", &json!({"ids": [source.0], "fill": "#ff0000"})).unwrap();
+        assert!(all_red(&s, source) && !any_red(&s, other));
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        let undo = s.doc().unwrap().history.undo.len();
+        let r = s.execute("appearance.copyFrom", &json!({"source": source.0})).unwrap();
+        assert_eq!(r, json!({"ids": [other.0]}));
+        assert!(all_red(&s, other) && all_red(&s, source));
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    }
+}
+
+/// Whether a character in the frame that `text.thread.add` places at [`THREADED_AT`] is highlighted.
+fn third_frame_highlighted(s: &mut Session) -> bool {
+    let in_frame = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 690.0));
+    s.overlays(ViewInfo::default()).iter().any(in_frame)
+}
+
+/// Where a third frame of the story of [`threaded_story_edited_in_its_second_frame`] goes, clear
+/// of its other frames.
+const THREADED_AT: [f64; 2] = [700.0, 10.0];
+
+#[test]
+fn a_frame_threaded_into_the_selected_story_is_highlighted_and_takes_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        let c = s.execute("text.thread.add", &json!({"from": a.0, "before": true, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        assert!(!obj(&s, c).plain_text().is_empty(), "the story starts in the new frame");
+        assert!(third_frame_highlighted(&mut s), "the new frame's text is highlighted");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b) && all_red(&s, c), "every frame takes the pick");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        assert!(third_frame_highlighted(&mut s), "back in the Type tool too");
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        let text = [a, b, c].map(|f| obj(&s, f).plain_text()).concat();
+        assert_eq!(text, "x", "typing replaces the text of every frame");
+    }
+}
+
+/// After Select All in the story of [`threaded_story_edited_in_its_second_frame`], a frame threaded
+/// in before the edited one takes the whole story, and the edited frame holds no text.
+fn selected_story_moved_into_a_new_frame(s: &mut Session, a: NodeId, b: NodeId) -> NodeId {
+    let rect = [THREADED_AT[0], THREADED_AT[1], 400.0, 600.0];
+    let c = NodeId(s.execute("text.thread.add", &json!({"from": a.0, "before": true, "rect": rect})).unwrap()["id"].as_u64().unwrap());
+    assert!(obj(s, a).plain_text().is_empty() && obj(s, b).plain_text().is_empty(), "the new frame holds the whole story");
+    assert!(!obj(s, c).plain_text().is_empty());
+    c
+}
+
+#[test]
+fn a_story_that_left_the_edited_frame_is_highlighted_and_typing_replaces_it() {
+    for through_eyedropper in [false, true] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        if through_eyedropper {
+            s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        }
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        assert!(third_frame_highlighted(&mut s), "through the Eyedropper: {through_eyedropper}");
+        if through_eyedropper {
+            s.select_tool("type", ViewInfo::default()).unwrap();
+            assert!(third_frame_highlighted(&mut s), "back in the Type tool");
+        }
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "x", "through the Eyedropper: {through_eyedropper}");
+    }
+}
+
+#[test]
+fn delete_replaces_a_story_that_left_the_edited_frame() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "", "{k:?} empties every frame");
+        assert_eq!(undo_labels(&s).len(), steps + 1, "{k:?}: one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), story);
+    }
+}
+
+#[test]
+fn delete_in_a_story_that_holds_no_text_records_no_undo_step() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        key(&mut s, ToolKey::Delete, Mods::default());
+        s.execute("select.all", &json!({})).unwrap();
+        assert_eq!(s.tool_options()["story"], json!([a.0, b.0]));
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!(undo_labels(&s).len(), steps, "{k:?}");
+    }
+}
+
+#[test]
+fn a_type_step_keeps_a_story_that_left_the_edited_frame_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+    // Alt+Right steps the tracking of the selected text, not the kerning at a caret.
+    key(&mut s, ToolKey::Right, Mods { alt: true, ..Mods::default() });
+    assert!(obj(&s, c).runs.iter().all(|r| r.style.tracking > 0.0), "every character of the story takes the step");
+    // A key that does nothing leaves it selected as well.
+    key(&mut s, ToolKey::BracketLeft, Mods::default());
+    assert!(third_frame_highlighted(&mut s));
+    // The story stays the target of a fill and of a switch to the Eyedropper.
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert!(all_red(&s, c), "the fill reaches the story");
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    assert!(third_frame_highlighted(&mut s), "the Eyedropper keeps the story");
+}
+
+#[test]
+fn a_frame_that_left_the_selected_story_is_not_highlighted_and_leaves_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        let c = s.execute("text.thread.add", &json!({"from": b.0, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        red_source(&mut s, b);
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0, c.0]));
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        s.execute("text.thread.break", &json!({"id": b.0, "port": "out"})).unwrap();
+        s.execute("text.setText", &json!({"id": c.0, "text": "Kept"})).unwrap();
+        assert!(!third_frame_highlighted(&mut s), "the frame that left has no highlight");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b), "the frames still threaded take the pick");
+        assert!(!any_red(&s, c), "the frame that left stays as it is");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(obj(&s, c).plain_text(), "Kept", "typing leaves the frame that left");
+    }
+}
+
+#[test]
+fn typing_after_a_thread_is_removed_leaves_the_frame_that_left_the_story() {
+    for through_eyedropper in [false, true] {
+        let (mut s, _, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        if through_eyedropper {
+            s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        }
+        s.execute("text.thread.remove", &json!({})).unwrap();
+        assert_eq!(s.execute("text.thread.info", &json!({})).unwrap(), json!([]));
+        if through_eyedropper {
+            s.select_tool("type", ViewInfo::default()).unwrap();
+        }
+        let left = obj(&s, b).plain_text();
+        assert!(!left.is_empty());
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(obj(&s, b).plain_text(), left, "through the Eyedropper: {through_eyedropper}");
+    }
+}
+
+#[test]
+fn typing_over_the_whole_story_replaces_every_frames_text_in_one_step() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), (String::new(), String::new()));
+    s.tool_text("New", ViewInfo::default()).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("New".to_string(), String::new()));
+    assert_eq!(undo_labels(&s).len(), steps + 1, "the delete and the typing are one step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(!obj(&s, b).plain_text().is_empty());
+}
+
+#[test]
+fn select_all_in_one_frame_selects_only_its_text_once_the_caret_moves() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let a_len = obj(&s, a).plain_text().len();
+    // Shift+Left ends the story selection: the selection is the first frame's text but its last
+    // character, and Delete removes only that.
+    key(&mut s, ToolKey::Left, Mods { shift: true, ..Mods::default() });
+    assert!(s.tool_options().get("story").is_none());
+    key(&mut s, ToolKey::Delete, Mods::default());
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story[a_len - 1..]);
+    assert!(s.execute("text.getRange", &json!({"id": a.0, "story": true, "start": 0})).is_err(), "`story` takes no range");
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": [a.0]})).is_err());
+    assert!(s.execute("text.editRange", &json!({"id": a.0, "start": 0, "end": 0, "clear": "x"})).is_err());
+}
+
+/// A story of bulleted paragraphs threaded from area type `a` into frame `b`, each frame holding
+/// paragraph returns, with the Type tool editing `b` at its start.
+fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, String) {
+    let mut s = session();
+    let story = "Alpha beta.\n".repeat(12);
+    let a = s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let b = s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 300})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "bullet"})).unwrap();
+    let (a, b) = (NodeId(a), NodeId(b));
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!(t.plain_text().contains('\n'), "frame {} holds paragraph returns", id.0);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list", id.0);
+    }
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.select_tool("type", ViewInfo::default()).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+    (s, a, b, story)
+}
+
+#[test]
+fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "every frame's returns go, each between words as a space");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+    assert!(obj(&s, a).plain_text().contains('\n') && obj(&s, b).plain_text().contains('\n'));
+}
+
+#[test]
+fn remove_breaks_on_a_selected_threaded_story_puts_a_space_between_its_frames() {
+    let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
+    assert!(obj(&s, a).plain_text().ends_with('\n'), "the first frame ends with a paragraph return");
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    let joined = format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text());
+    assert_eq!(joined, story.trim_end_matches('\n').replace('\n', " "), "the return at the end of the first frame becomes a space");
+}
+
+#[test]
+fn remove_breaks_in_one_frames_selection_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let (in_a, b_len) = (obj(&s, a).plain_text(), obj(&s, b).plain_text().len());
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": b_len}));
+    s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(obj(&s, a).plain_text(), in_a, "the first frame keeps its returns");
+    assert!(!obj(&s, b).plain_text().contains('\n'), "the edited frame's returns go");
+}
+
+#[test]
+fn convert_to_text_takes_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_none()), "frame {} leaves its list", id.0);
+        assert!(t.plain_text().contains("\u{2022}\t"), "frame {} holds its bullets as characters", id.0);
+    }
+    assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    s.execute("edit.undo", &json!({})).unwrap();
+    for id in [a, b] {
+        let t = obj(&s, id);
+        assert!((0..t.paragraph_count()).all(|k| t.para_at(k).list.is_some()), "frame {} is a list again", id.0);
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_locked_frame() {
+    // Over MCP without ids, and as the Paragraph panel sends it, with every frame of the story.
+    for named in [false, true] {
+        let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+        s.execute("object.lock", &json!({"ids": [b.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        // The first frame ends with a paragraph return, so the paragraph that starts the locked
+        // frame takes in the first frame's empty last part and starts its text there.
+        let in_a = obj(&s, a).plain_text();
+        assert!(in_a.ends_with('\n'));
+        let own = in_a.split('\n').filter(|piece| !piece.is_empty()).count();
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([a.0]), "only the editable frame is changed (ids named: {named})");
+        assert_eq!(r["converted"], json!(own), "only the paragraphs whose text starts in the editable frame convert");
+        assert!(r["inserted"].as_array().unwrap().iter().all(|i| i["id"] == json!(a.0)));
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert!(ta.plain_text().contains("\u{2022}\t"), "the editable frame is converted");
+        let markers = ta.plain_text().matches("\u{2022}\t").count() + tb.plain_text().matches("\u{2022}\t").count();
+        assert_eq!(markers, own, "the locked frame's first paragraph keeps its list");
+        // The converted text is longer, so the story flows on into the locked frame; its own
+        // paragraphs stay a list.
+        let last = tb.paragraph_count() - 2;
+        assert!(tb.para_at(last).list.is_some(), "the locked frame's paragraphs stay a list (ids named: {named})");
+        assert!(!tb.plain_text().ends_with("\u{2022}\tAlpha beta.\n"));
+        assert!(s.tool_options().get("story").is_some(), "the whole story stays selected");
+    }
+}
+
+#[test]
+fn convert_to_text_of_the_whole_story_leaves_a_paragraph_that_starts_in_a_locked_frame() {
+    for named in [false, true] {
+        let mut s = session();
+        let story = format!("Alpha beta.\nAlpha beta.\n{}end.\nAlpha beta.\nAlpha beta.\n", "Gamma delta ".repeat(40));
+        let a = NodeId(
+            s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 900})).unwrap()["id"].as_u64().unwrap());
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a.0, b.0], "list": "bullet"})).unwrap();
+        let in_a = obj(&s, a).plain_text();
+        assert!(!in_a.ends_with('\n') && !obj(&s, b).plain_text().starts_with('\n'), "a paragraph runs on from the first frame into the second");
+        s.execute("object.lock", &json!({"ids": [a.0]})).unwrap();
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+        let p = if named { json!({"ids": [a.0, b.0]}) } else { json!({}) };
+        let r = s.execute("text.convertListToText", &p).unwrap();
+        assert_eq!(r["ids"], json!([b.0]), "only the editable frame is changed (ids named: {named})");
+        // The two paragraphs that start in the editable frame, and the empty one that ends the story.
+        assert_eq!(r["converted"], json!(3), "only the paragraphs that start in the editable frame convert");
+        let (ta, tb) = (obj(&s, a), obj(&s, b));
+        assert_eq!(ta.plain_text(), in_a, "the locked frame's text is as it was");
+        assert!((0..ta.paragraph_count()).all(|k| ta.para_at(k).list.is_some()), "the locked frame stays a list");
+        assert!(tb.para_at(0).list.is_some(), "the paragraph the locked frame starts stays a list");
+        assert!(!tb.plain_text().starts_with('\u{2022}'));
+        assert_eq!(tb.plain_text().matches("\u{2022}\t").count(), 2);
+    }
+}
+
+#[test]
+fn convert_to_text_of_named_frames_ends_the_story_selection() {
+    let (mut s, _, b, _) = threaded_list_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("text.convertListToText", &json!({"ids": [b.0]})).unwrap();
+    assert!(obj(&s, b).plain_text().contains("\u{2022}\t"));
+    assert!(s.tool_options().get("story").is_none(), "the Type tool's selection moves past the characters inserted");
+}
+
+#[test]
+fn convert_to_text_in_one_frame_leaves_the_other_frames() {
+    let (mut s, a, b, _) = threaded_list_edited_in_its_second_frame();
+    let in_a = obj(&s, a).plain_text();
+    s.execute("text.convertListToText", &json!({})).unwrap();
+    let (ta, tb) = (obj(&s, a), obj(&s, b));
+    assert_eq!(ta.plain_text(), in_a, "the first frame's text is as it was");
+    assert!(ta.para_at(0).list.is_some(), "the first frame stays a list");
+    assert!((0..tb.paragraph_count()).all(|k| tb.para_at(k).list.is_none()), "the edited frame leaves its list");
+    assert!(tb.plain_text().contains("\u{2022}\t"), "the edited frame holds its bullets as characters");
+}
+
+#[test]
+fn a_frame_dragged_with_the_type_tools_is_the_dragged_rectangle() {
+    for tool in ["type", "verticalType"] {
+        let mut s = session();
+        let v = ViewInfo::default();
+        s.select_tool(tool, v).unwrap();
+        for (k, x, y) in [(PointerKind::Down, 100.0, 100.0), (PointerKind::Drag, 300.0, 180.0), (PointerKind::Up, 300.0, 180.0)] {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        let t = obj(&s, s.doc().unwrap().selection.objects[0]);
+        let TextKind::Area { frame } = &t.kind else { panic!("{tool}: not area type") };
+        let b = frame.bounds().unwrap();
+        let (a, z) = (t.xf * Point::new(b.x0, b.y0), t.xf * Point::new(b.x1, b.y1));
+        assert!((a - Point::new(100.0, 100.0)).hypot() < 1e-9 && (z - Point::new(300.0, 180.0)).hypot() < 1e-9, "{tool}: {a:?} {z:?}");
+    }
+}
+
+/// Through the session, a click with Shift held and the Type tool chosen makes vertical type and
+/// edits it with the Type tool still chosen, and the pointer with Shift held is the vertical
+/// I-beam. A click with Alt held and the Type on a Path tool chosen turns a rectangle into area
+/// type.
+#[test]
+fn shift_and_alt_switch_the_type_tools_through_the_session() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let (shift, alt) = (Mods { shift: true, ..Mods::default() }, Mods { alt: true, ..Mods::default() });
+    s.select_tool("type", v).unwrap();
+    assert_eq!(s.cursor(Point::new(400.0, 300.0), shift, v), vectorcraft_tools::Cursor::TypeVertical);
+    assert_eq!(s.cursor(Point::new(400.0, 300.0), Mods::default(), v), vectorcraft_tools::Cursor::Text);
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 400.0, 300.0).with_mods(shift), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "type");
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(obj(&s, id).vertical);
+    assert!(s.tool_wants_text());
+    s.tool_text("縦", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "縦");
+    key(&mut s, ToolKey::Escape, Mods::default());
+
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    s.select_tool("typeOnPath", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 100.0, 150.0).with_mods(alt), v).unwrap();
+    }
+    assert_eq!(s.tool_id(), "typeOnPath");
+    assert!(s.doc().unwrap().doc.node(rect).is_none(), "the rectangle became the frame");
+    let id = s.doc().unwrap().selection.objects[0];
+    assert!(matches!(obj(&s, id).kind, TextKind::Area { .. }));
+    assert!(!obj(&s, id).vertical);
+}
+
+#[test]
+fn area_type_from_a_circle_keeps_glyphs_inside() {
+    let mut s = session();
+    let e = s.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 240, "height": 240})).unwrap();
+    let pid = e["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "area", "text": vectorcraft_engine_placeholder()})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    assert!(s.doc().unwrap().doc.node(NodeId(pid)).is_none(), "the path became the frame");
+    let t = obj(&s, id);
+    assert!(matches!(t.kind, TextKind::Area { .. }));
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.lines.len() > 5);
+    let c = Point::new(220.0, 220.0);
+    for g in lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()) {
+        let l = &lay.lines[g.line];
+        for q in [Point::new(g.origin.x, l.baseline - l.ascent), Point::new(g.origin.x + g.advance, l.baseline + l.descent)] {
+            assert!((t.xf * q - c).hypot() <= 120.5, "{q:?}");
+        }
+    }
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    assert!(s.execute("text.createInPath", &json!({"path": 9999})).is_err());
+}
+
+fn vectorcraft_engine_placeholder() -> String {
+    "Type flows inside any closed shape, line by line, trimmed to the shape's edges at each band. ".repeat(4)
+}
+
+#[test]
+fn type_on_path_starts_where_clicked() {
+    let mut s = session();
+    let r = s
+        .execute("shape.line", &json!({"x1": 100, "y1": 300, "x2": 500, "y2": 300}))
+        .or_else(|_| s.execute("path.create", &json!({"points": [[100, 300], [500, 300]], "closed": false})));
+    let pid = r.unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "On the line", "at": [200, 310]})).unwrap();
+    let t = obj(&s, NodeId(r["id"].as_u64().unwrap()));
+    let TextKind::OnPath { start, .. } = t.kind else { panic!() };
+    assert!((start - 0.25).abs() < 0.01, "{start}");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let g0 = &lay.glyphs[0];
+    assert!((g0.origin.y - 300.0).abs() < 1e-6 && (g0.origin.x - 200.0).abs() < 1.0, "{:?}", g0.origin);
+}
+
+#[test]
+fn type_on_path_tool_through_session() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let e = s.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+    s.select_tool("typeOnPath", v).unwrap();
+    assert_eq!(s.tool_id(), "typeOnPath");
+    click(&mut s, 300.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_ne!(id.0, e["id"].as_u64().unwrap());
+    s.tool_text("Around", v).unwrap();
+    key(&mut s, ToolKey::Escape, Mods::default());
+    let t = obj(&s, id);
+    assert!(matches!(t.kind, TextKind::OnPath { .. }));
+    assert_eq!(t.plain_text(), "Around");
+}
+
+#[test]
+fn fit_headline_fills_the_frame_width() {
+    let mut s = session();
+    let r = s
+        .execute(
+            "text.create",
+            &json!({"x": 50, "y": 50, "text": "Headline\nBody copy follows here", "size": 24, "area": {"width": 400, "height": 200}}),
+        )
+        .unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let r = s.execute("type.fitHeadline", &json!({"ids": [id.0]})).unwrap();
+    assert!(r["tracking"][0].as_f64().unwrap() > 100.0, "{r}");
+    let t = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let l0 = &lay.lines[0];
+    assert_eq!(&t.plain_text()[l0.start..l0.end], "Headline", "still one line");
+    assert!((l0.x1 - l0.x0 - 400.0).abs() < 1.0, "{}", l0.x1 - l0.x0);
+    // The body keeps its tracking.
+    assert_eq!(t.runs.last().unwrap().style.tracking, 0.0);
+    let p = s.execute("text.create", &json!({"x": 1, "y": 1, "text": "point"})).unwrap();
+    assert!(s.execute("type.fitHeadline", &json!({"ids": [p["id"]]})).is_err(), "area type only");
+}
+
+fn first_glyph_doc_pos(t: &TextObject) -> Point {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    t.xf * lay.glyphs[0].origin
+}
+
+#[test]
+fn convert_area_point_keeps_text_in_place_for_every_alignment() {
+    for j in ["left", "center", "right"] {
+        let mut s = session();
+        let r = s
+            .execute(
+                "text.create",
+                &json!({"x": 100, "y": 100, "text": "Centered words wrap in a frame", "size": 18, "area": {"width": 150, "height": 200}}),
+            )
+            .unwrap();
+        let id = NodeId(r["id"].as_u64().unwrap());
+        s.execute("text.setStyle", &json!({"ids": [id.0], "justify": j})).unwrap();
+        let before = first_glyph_doc_pos(&obj(&s, id));
+        s.execute("type.convertToPointType", &json!({"ids": [id.0]})).unwrap();
+        let t = obj(&s, id);
+        assert!(matches!(t.kind, TextKind::Point));
+        let after = first_glyph_doc_pos(&t);
+        assert!((after - before).hypot() < 0.01, "{j}: {before:?} → {after:?}");
+        s.execute("type.convertToAreaType", &json!({"ids": [id.0]})).unwrap();
+        let t = obj(&s, id);
+        let back = first_glyph_doc_pos(&t);
+        assert!((back - before).hypot() < 0.01, "{j} (area again): {before:?} → {back:?}");
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        assert!(!lay.overflow);
+    }
+}
+
+#[test]
+fn commands_are_listed_with_params() {
+    let s = session();
+    let cmds: Vec<Value> = s.commands().iter().map(|c| serde_json::to_value(c).unwrap()).collect();
+    for id in ["text.editRange", "text.setRangeStyle", "text.getRange", "text.createInPath", "type.fitHeadline"] {
+        assert!(cmds.iter().any(|c| c["id"] == id), "{id}");
+    }
+}
+
+#[test]
+fn type_tool_state_does_not_leak_across_documents() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("First", v).unwrap();
+    // A second document whose first object reuses the same id.
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let id2 = text(&mut s, "Other");
+    assert!(!s.tool_wants_text(), "switching documents ends the edit");
+    s.tool_text("XYZ", v).unwrap();
+    assert_eq!(obj(&s, id2).plain_text(), "Other");
+    s.set_active(0);
+    assert_eq!(obj(&s, id).plain_text(), "First");
+    assert!(!s.in_interaction());
+}
+
+#[test]
+fn vertical_text_creation_orientation_and_persistence() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x":100,"y":100,"text":"日本語", "vertical":true})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let t = obj(&s, id);
+    assert!(t.vertical);
+    let round: TextObject = serde_json::from_value(serde_json::to_value(&t).unwrap()).unwrap();
+    assert!(round.vertical);
+    s.execute("type.orientation.horizontal", &json!({"id":id.0})).unwrap();
+    assert!(!obj(&s, id).vertical);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(obj(&s, id).vertical);
+    let old = serde_json::to_value(TextObject::point(Point::ZERO, "old", Default::default())).unwrap();
+    assert!(old.get("vertical").is_none());
+    let old: TextObject = serde_json::from_value(old).unwrap();
+    assert!(!old.vertical);
+}
+
+#[test]
+fn rtl_edit_commands_and_undo_preserve_logical_source_and_style_ranges() {
+    let mut s = session();
+    let id = text(&mut s, "שלום Rust 123");
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 8, "insert": "مرحبا"})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "مرحبا Rust 123");
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert!(lay.glyphs.iter().any(|g| g.rtl));
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 10, "size": 30})).unwrap();
+    assert_eq!(obj(&s, id).runs[0].text, "مرحبا");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "שלום Rust 123");
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_neighbors_and_undo_restores_the_original() {
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    // Repeated registration of this synthetic face is harmless in the shared database.
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let original = obj(&s, id);
+    let before = glyph_pens(&s, id);
+    assert_eq!(before.len(), 3);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 2, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 2), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 2));
+    for byte in [0, 4] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    assert_eq!(obj(&s, id).plain_text(), original.plain_text());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(near(moved_by(&before, &glyph_pens(&s, id), 2), (-5.0, -3.0)));
+    assert!(s.execute("text.touchType", &json!({"id": id.0, "start": 0, "dx": 5})).is_err());
+}
+
+#[test]
+fn touch_type_rtl_move_keeps_rotated_font_placement() {
+    use vectorcraft_text::test_fonts::{PAIR_KERNING_FAMILY, pair_kerning_font};
+    vectorcraft_text::FontDb::global().add_font(pair_kerning_font().unwrap());
+    let mut s = session();
+    // An explicit RTL override gives the existing synthetic S/S positioning pair RTL order.
+    let id =
+        NodeId(
+            s.execute("text.create", &json!({"x": 300, "y": 250, "text": "\u{202e}SSS\u{202c}", "size": 100, "font": PAIR_KERNING_FAMILY})).unwrap()
+                ["id"]
+                .as_u64()
+                .unwrap(),
+        );
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "rotation": 90})).unwrap();
+    let original = obj(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &original);
+    let glyph = lay.glyphs.iter().find(|g| g.byte == 4).unwrap();
+    assert!(glyph.rtl && glyph.width_start.abs() > 0.1, "fixture needs RTL font x-placement");
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 4, "dx": 5, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 4), (-5.0, -3.0)), "{:?}", moved_by(&before, &after, 4));
+    for byte in [3, 5] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, id), original);
+}
+
+#[test]
+fn touch_type_rtl_moves_rotated_characters_in_aligned_and_transformed_text() {
+    use vectorcraft_geom::{Affine, Vec2};
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    vectorcraft_text::FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let matrices =
+        [Affine::IDENTITY, Affine::scale_non_uniform(2.0, 0.5), Affine::new([1.0, 0.25, 0.4, 1.2, 0.0, 0.0]), Affine::scale_non_uniform(-1.0, 1.0)];
+    for justify in ["auto", "left", "center", "right"] {
+        for rotation in [0.0, 90.0, -90.0] {
+            for matrix in matrices {
+                for (kerning, start) in [("auto", 2), ("optical", 2), ("auto", 4), ("optical", 4)] {
+                    let case = format!("{justify}, {rotation} degrees, {matrix:?}, {kerning}, byte {start}");
+                    let mut s = session();
+                    let r = s
+                        .execute(
+                            "text.create",
+                            &json!({"x": 300, "y": 250, "text": "אבא", "size": 100, "font": RIGHT_TO_LEFT_OPTICAL_FAMILY, "justify": justify}),
+                        )
+                        .unwrap();
+                    let id = NodeId(r["id"].as_u64().unwrap());
+                    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": kerning})).unwrap();
+                    s.execute("object.transform", &json!({"ids": [id.0], "matrix": matrix.as_coeffs()})).unwrap();
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "rotation": rotation})).unwrap();
+                    let original = obj(&s, id);
+                    let before = glyph_pens(&s, id);
+                    let linear = |v: Vec2| original.xf * (Point::ZERO + v) - original.xf * Point::ZERO;
+                    let expected = linear(Vec2::new(-1.0, 0.0)).normalize() * 5.0 + linear(Vec2::new(0.0, -1.0)).normalize() * 3.0;
+                    s.execute("text.touchType", &json!({"id": id.0, "start": start, "dx": 5, "dy": 3})).unwrap();
+                    let after = glyph_pens(&s, id);
+                    assert!(
+                        near(moved_by(&before, &after, start), (expected.x, expected.y)),
+                        "{case}: {:?}, expected {expected:?}",
+                        moved_by(&before, &after, start)
+                    );
+                    for byte in [0, 2, 4].into_iter().filter(|byte| *byte != start) {
+                        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "{case}, neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+                    }
+                    let changed = obj(&s, id);
+                    let reopened: TextObject = serde_json::from_value(serde_json::to_value(&changed).unwrap()).unwrap();
+                    assert_eq!(
+                        serde_json::to_value(&changed).unwrap(),
+                        serde_json::to_value(&reopened).unwrap(),
+                        "{case}: stored attributes round trip"
+                    );
+                    let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &reopened);
+                    for g in &layout.glyphs {
+                        let expected = after.iter().find(|(byte, _)| *byte == g.byte).unwrap().1;
+                        assert!(
+                            (reopened.xf * (g.xf * Point::ZERO) - expected).hypot() < 1e-6,
+                            "{case}: reopened character {} keeps its place",
+                            g.byte
+                        );
+                    }
+                    s.execute("edit.undo", &json!({})).unwrap();
+                    assert_eq!(obj(&s, id), original, "{case}: Undo restores every attribute");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn touch_type_optical_spacing_does_not_shorten_a_baseline_nudge() {
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 300, "y": 250, "text": "AVA", "size": 100, "font": "Source Sans 3"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "kerning": "optical"})).unwrap();
+    let before = glyph_pens(&s, id);
+    s.execute("text.touchType", &json!({"id": id.0, "start": 1, "dy": 3})).unwrap();
+    let after = glyph_pens(&s, id);
+    assert!(near(moved_by(&before, &after, 1), (0.0, -3.0)), "{:?}", moved_by(&before, &after, 1));
+    for byte in [0, 2] {
+        assert!(near(moved_by(&before, &after, byte), (0.0, 0.0)), "neighbor {byte}: {:?}", moved_by(&before, &after, byte));
+    }
+}
+
+#[test]
+fn automatic_alignment_updates_during_edits_and_can_be_overridden() {
+    let mut s = session();
+    let id = text(&mut s, "English");
+    let db = vectorcraft_text::FontDb::global();
+    assert_eq!(obj(&s, id).para.justify, vectorcraft_doc::Justify::Auto);
+    for content in ["שלום", "مرحبا", "English"] {
+        let len = obj(&s, id).plain_text().len();
+        s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": len, "insert": content})).unwrap();
+        let t = obj(&s, id);
+        let l = vectorcraft_text::layout(db, &t);
+        if content == "English" {
+            assert_eq!(l.lines[0].x0, 0.0);
+        } else {
+            assert!(l.lines[0].x1.abs() < 1e-6);
+        }
+    }
+    s.execute("text.setStyle", &json!({"id": id.0, "justify": "center"})).unwrap();
+    s.execute("text.editRange", &json!({"id": id.0, "start": 0, "end": 7, "insert": "שלום"})).unwrap();
+    assert_eq!(obj(&s, id).para.justify, vectorcraft_doc::Justify::Center);
+    s.execute("text.setStyle", &json!({"id": id.0, "justify": "auto"})).unwrap();
+    let t = obj(&s, id);
+    assert!(vectorcraft_text::layout(db, &t).lines[0].x1.abs() < 1e-6);
+    let restored: TextObject = serde_json::from_value(serde_json::to_value(&t).unwrap()).unwrap();
+    assert_eq!(restored.para.justify, vectorcraft_doc::Justify::Auto);
+    // Legacy documents with explicit alignment retain that choice.
+    let mut legacy = serde_json::to_value(t).unwrap();
+    legacy["para"].as_object_mut().unwrap().remove("justify_auto");
+    legacy["para"]["justify"] = json!("Left");
+    assert_eq!(serde_json::from_value::<TextObject>(legacy).unwrap().para.justify, vectorcraft_doc::Justify::Left);
+}
+
+/// #1063: a fill (or stroke) chosen while the Type tool has characters selected colours just
+/// those characters, as one undo step; the rest of the type keeps its colour.
+#[test]
+fn a_fill_chosen_with_characters_selected_colours_only_them() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Sample Text", v).unwrap();
+    let before = obj(&s, id).runs[0].style.fill.clone();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.runs.len(), 2);
+    assert_eq!(t.runs[0].text, "Sample");
+    assert_eq!(t.runs[0].style.fill, Paint::solid(vectorcraft_color::Color::rgb8(0, 160, 0)));
+    assert_eq!(t.runs[1].text, " Text");
+    assert_eq!(t.runs[1].style.fill, before);
+    // A stroke goes on the selected characters only, with a weight to show.
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    let t = obj(&s, id);
+    assert!(t.runs[0].style.stroke_width > 0.0 && !t.runs[0].style.stroke.is_none());
+    assert!(t.runs[1].style.stroke.is_none());
+    // One undo step each.
+    let labels = undo_labels(&s);
+    assert_eq!(&labels[labels.len() - 2..], ["Fill Color", "Stroke Color"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.fill == before));
+}
+
+/// A fill or stroke that the characters selected with the Type tool have already records no undo
+/// step: the step to redo stays and the document stays unmodified.
+#[test]
+fn a_fill_the_selected_characters_have_records_no_undo_step() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    s.tool_text("Sample Text", v).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    // A blue fill, undone, leaves a step to redo.
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let history = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.history.undo.len(), st.history.redo.len(), st.is_dirty())
+    };
+    let before = history(&s);
+    assert_eq!((before.1, before.2), (1, false), "a step to redo, and nothing unsaved");
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+    assert_eq!(history(&s), before);
+}
+
+fn left(s: &Session, id: NodeId) -> f64 {
+    s.doc().unwrap().doc.bounds_of(&[id], false).unwrap().x0
+}
+
+/// #1881: the Transform panel moving or scaling the type while it is being typed keeps both the
+/// typing and the transformation, however the editing goes on.
+#[test]
+fn a_transform_panel_edit_while_typing_keeps_the_typing_and_the_transform() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello");
+    s.select_tool("type", v).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    click(&mut s, b.x1 - 1.0, b.center().y);
+    s.tool_text(" world", v).unwrap();
+    s.execute("object.setBounds", &json!({"x": 400, "reference": 0})).unwrap();
+    assert!((left(&s, id) - 400.0).abs() < 1e-6);
+    // Typing on.
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello world!");
+    assert!((left(&s, id) - 400.0).abs() < 1e-6, "the move stays: {}", left(&s, id));
+    s.execute("object.setBounds", &json!({"width": 300, "reference": 0, "proportional": true})).unwrap();
+    let w = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap().width();
+    assert!((w(&s) - 300.0).abs() < 1e-6);
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert_eq!(obj(&s, id).plain_text(), "Hello world!");
+    assert!((w(&s) - 300.0).abs() < 1e-6, "the scale stays: {}", w(&s));
+    assert!((left(&s, id) - 400.0).abs() < 1e-6);
+    // Each its own step, the typing first.
+    let labels = undo_labels(&s);
+    let n = labels.len();
+    assert_eq!(labels[n - 4], "Typing", "{labels:?}");
+    assert_eq!(labels[n - 2], "Typing", "{labels:?}");
+}
+
+/// #1881: a dialog previewing a transformation while the type is being typed (Object › Transform
+/// with Preview) starts from the typed text, and keeps it when it commits.
+#[test]
+fn a_previewed_transform_while_typing_keeps_the_typing() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello");
+    s.select_tool("type", v).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    click(&mut s, b.x1 - 1.0, b.center().y);
+    s.tool_text(" world", v).unwrap();
+    s.begin_interaction("Move").unwrap();
+    s.preview("object.setBounds", &json!({"x": 400, "reference": 0})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello world", "the preview starts from the typed text");
+    s.commit_interaction().unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello world");
+    assert!((left(&s, id) - 400.0).abs() < 1e-6);
+    // Typing on starts a new session from the moved text.
+    s.tool_text("!", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "Hello world!");
+    assert!((left(&s, id) - 400.0).abs() < 1e-6);
+}
+
+/// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
+/// typed text: its interaction used to join the typing session and preview from the document
+/// before the typing, so the new type came back as its placeholder text.
+#[test]
+fn a_colour_previewed_while_typing_keeps_the_typing() {
+    let mut s = session();
+    s.prefs.placeholder_text = true;
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abc", v).unwrap();
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abc", "the preview starts from the typed text");
+    s.commit_interaction().unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "abc");
+    assert!(t.runs.iter().all(|r| r.style.fill == Paint::solid(vectorcraft_color::Color::rgb8(0, 160, 0))), "{:?}", t.runs);
+    // The typing and the colour are a step each, and typing goes on after them.
+    let labels = undo_labels(&s);
+    assert_eq!(&labels[labels.len() - 2..], ["Typing", "Fill Color"]);
+    s.tool_text("d", v).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), "abcd");
+}
+
+/// The red out port of selected overflowing area type is drawn with the Selection tool too, and
+/// not twice with the Type tool, which draws it itself (#2323).
+#[test]
+fn overflow_marker_shows_with_the_selection_tool() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let long = "Words that fill more than the frame holds. ".repeat(20);
+    let r = s.execute("text.create", &json!({"x": 50, "y": 50, "text": long, "size": 20, "area": {"width": 100, "height": 40}})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    let red = |s: &mut Session| s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Path { color: [230, 30, 30], .. })).count();
+    assert_eq!(red(&mut s), 1, "the out port");
+    s.select_tool("type", v).unwrap();
+    assert_eq!(red(&mut s), 1, "the Type tool's own, not a second one");
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(red(&mut s), 0, "nothing selected");
+}
+
+/// #2572: with the Selection tool, a click on the out port and a click on empty canvas thread the
+/// overflow into a new frame there, in one undo step; Escape, or another tool, drops the loaded text.
+#[test]
+fn clicking_the_out_port_then_the_canvas_threads_the_text_into_a_new_frame() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let long = "Words that fill more than the frame holds. ".repeat(20);
+    let r = s.execute("text.create", &json!({"x": 50, "y": 50, "text": long, "size": 20, "area": {"width": 100, "height": 40}})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    let port = Point::new(150.0, 90.0 - vectorcraft_tools::text::PORT_RISE_PX);
+    let loaded = |s: &mut Session| s.cursor(Point::new(400.0, 400.0), Mods::default(), v) == vectorcraft_tools::Cursor::LoadedText;
+    click(&mut s, port.x, port.y);
+    assert!(loaded(&mut s));
+    key(&mut s, ToolKey::Escape, Mods::default());
+    assert!(!loaded(&mut s), "Escape drops the text");
+    click(&mut s, port.x, port.y);
+    s.select_tool("directSelection", v).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert!(!loaded(&mut s), "another tool drops the text");
+    let steps = undo_labels(&s).len();
+    click(&mut s, port.x, port.y);
+    click(&mut s, 400.0, 400.0);
+    let doc = &s.doc().unwrap().doc;
+    let [thread] = &doc.text_threads[..] else { panic!("one thread: {:?}", doc.text_threads) };
+    assert_eq!(thread[0], id);
+    assert_eq!(format!("{}{}", obj(&s, id).plain_text(), obj(&s, thread[1]).plain_text()), long);
+    assert_eq!(&undo_labels(&s)[steps..], ["Thread Text"]);
+}
+
+/// #2572: with the Selection tool, area type whose text fits shows both ports, and a click on its
+/// in port then on empty canvas makes a new frame the story starts in, flowing on into the frame
+/// clicked, in one undo step; the ports then show the thread's arrows.
+#[test]
+fn clicking_the_in_port_then_the_canvas_threads_a_new_frame_before_it() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let words = "Words that fit. ";
+    let r = s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "size": 12, "area": {"width": 100, "height": 40}})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    let boxes = |s: &mut Session| {
+        s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Highlight { color: [255, 255, 255, 255], .. })).count()
+    };
+    assert_eq!(boxes(&mut s), 2, "an in port and an out port");
+    let steps = undo_labels(&s).len();
+    click(&mut s, 50.0, 50.0 + vectorcraft_tools::text::PORT_RISE_PX);
+    assert_eq!(s.cursor(Point::new(400.0, 400.0), Mods::default(), v), vectorcraft_tools::Cursor::LoadedText);
+    click(&mut s, 400.0, 400.0);
+    let doc = &s.doc().unwrap().doc;
+    let [thread] = &doc.text_threads[..] else { panic!("one thread: {:?}", doc.text_threads) };
+    assert_eq!(thread[1], id, "the frame clicked comes second");
+    assert_eq!(format!("{}{}", obj(&s, thread[0]).plain_text(), obj(&s, id).plain_text()), words);
+    assert!(!obj(&s, thread[0]).plain_text().is_empty(), "the story starts in the new frame");
+    assert_eq!(&undo_labels(&s)[steps..], ["Thread Text"]);
+    let strokes = s.overlays(v).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Line { .. })).count();
+    assert_eq!(strokes, 6, "both frames selected: the first one's out port and the second one's in port show arrows");
+}
+
+/// Given a family without a style, text.create, text.createInPath and text.setStyle keep the style
+/// when the family has it, else take the family's closest one, as text.setRangeStyle does: a family
+/// whose styles are numbered has no Regular to store (#4128). A style given is kept as given.
+#[test]
+fn a_family_without_its_style_takes_its_closest_style() {
+    use vectorcraft_text::test_fonts::{NUMBERED_FAMILY as FAMILY, numbered_font};
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(numbered_font("W3").unwrap());
+    db.add_font(numbered_font("W6").unwrap());
+    let numbered = ["W3", "W6"];
+    let style = |s: &Session, id: NodeId| obj(s, id).runs[0].style.font_style.clone();
+    let create = |s: &mut Session, p: Value| NodeId(s.execute("text.create", &p).unwrap()["id"].as_u64().unwrap());
+    let mut s = session();
+    let created = create(&mut s, json!({"x": 10, "y": 50, "text": "a", "font": FAMILY}));
+    assert!(numbered.contains(&style(&s, created).as_str()), "text.create: {}", style(&s, created));
+    let pid = s.execute("path.create", &json!({"d": "M100 400 L400 100"})).unwrap()["id"].as_u64().unwrap();
+    let on_path = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "a", "font": FAMILY})).unwrap();
+    let on_path = NodeId(on_path["id"].as_u64().unwrap());
+    assert!(numbered.contains(&style(&s, on_path).as_str()), "text.createInPath: {}", style(&s, on_path));
+    let given = create(&mut s, json!({"x": 10, "y": 90, "text": "a", "font": FAMILY, "style": "Medium"}));
+    assert_eq!(style(&s, given), "Medium", "a style given is kept");
+    let set = text(&mut s, "a");
+    s.execute("text.setStyle", &json!({"ids": [set.0], "font": FAMILY})).unwrap();
+    assert!(numbered.contains(&style(&s, set).as_str()), "text.setStyle: {}", style(&s, set));
+    s.execute("text.setStyle", &json!({"ids": [set.0], "style": "W6"})).unwrap();
+    s.execute("text.setStyle", &json!({"ids": [set.0], "font": FAMILY})).unwrap();
+    assert_eq!(style(&s, set), "W6", "a style the family has is kept");
+}
+
+/// The Glyphs panel's Show › Alternates for Current Selection: `text.glyphAlternates` lists a
+/// character's alternates and `text.setGlyphAlternate` draws one of them, a glyph no character maps
+/// to, in place of that character alone, as one undo step that native files keep.
+#[test]
+fn a_glyph_alternate_replaces_one_character_through_undo_and_reopen() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "underline": true})).unwrap();
+    let gids = |t: &TextObject| vectorcraft_text::layout(db, t).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')]);
+
+    let listed = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap();
+    assert_eq!((listed["char"].clone(), listed["default"].clone(), listed["chosen"].clone()), (json!("a"), json!(g('a')), json!(g('a'))));
+    assert_eq!(listed["alternates"][1], json!({"gid": u1, "feature": "aalt"}));
+    assert_eq!(listed["font"], json!(alternates_family(true)));
+
+    // Create Outlines, undone at once: the bounds of the outlines.
+    let outlines = |s: &mut Session| {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let group = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let d = &s.doc().unwrap().doc;
+        let bounds: Vec<kurbo::Rect> = d.node(NodeId(group)).unwrap().children().unwrap().iter().filter_map(|c| c.geometric_bounds()).collect();
+        s.execute("edit.undo", &json!({})).unwrap();
+        bounds
+    };
+    let default = outlines(&mut s);
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 2, "end": 3, "gid": u1}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Glyphs"));
+    let t = obj(&s, id);
+    assert_eq!(t.plain_text(), "xaay", "the text keeps the character");
+    assert!(t.runs.iter().all(|r| r.style.underline), "its other attributes are kept");
+    assert_eq!(gids(&t), [g('x'), g('a'), u1, g('y')], "the second a alone");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap()["chosen"], json!(u1));
+
+    assert_ne!(outlines(&mut s), default, "Create Outlines draws the chosen glyph");
+
+    // Native files keep the choice.
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    let opened = vectorcraft_format::load(&bytes).unwrap();
+    let NodeKind::Text(reopened) = &opened.node(id).unwrap().kind else { panic!("text missing") };
+    assert_eq!(gids(reopened), [g('x'), g('a'), u1, g('y')], "reopened");
+    // A font that is not installed draws the fallback font's default glyph.
+    let mut missing = (**reopened).clone();
+    for r in &mut missing.runs {
+        r.style.font_family = "No Such Font Family".into();
+    }
+    let fallback = db.face("No Such Font Family", "Regular").expect("the fallback face");
+    assert_eq!(gids(&missing)[2], fallback.glyph_for('a'), "a missing font: the default glyph");
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')], "undone");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), u1, g('y')], "redone");
+
+    // The default glyph puts the character back, as null does.
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": u1})).unwrap();
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(gids(&obj(&s, id)), [g('x'), g('a'), g('a'), g('y')]);
+
+    let err = |s: &mut Session, p: Value| s.execute("text.setGlyphAlternate", &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": g('z')})).contains("is not an alternate"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 3, "gid": u1})).contains("is not an alternate"), "y has none");
+    assert!(err(&mut s, json!({"id": id.0, "start": 4, "gid": u1})).contains("no character at byte 4"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 2})).contains("missing `gid`"));
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": -1})).contains("must be a glyph id"));
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 2, "end": 3, "font": "No Such Font Family"})).unwrap();
+    assert!(err(&mut s, json!({"id": id.0, "start": 2, "gid": u1})).contains("is not available"));
+    assert!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 2})).unwrap_err().to_string().contains("is not available"));
+}
+
+/// The glyph already drawn, chosen again, and null for a character drawn with its default glyph
+/// leave the document and its undo history as they are. An empty run before the character does
+/// not stand in for the character's own choice.
+#[test]
+fn a_glyph_alternate_already_drawn_is_not_an_edit() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let mut s = session();
+    let create = |s: &mut Session, y: f64| {
+        let r = s.execute("text.create", &json!({"x": 100, "y": y, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let id = create(&mut s, 100.0);
+    s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let before = state(&s);
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 2, "gid": u1})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 2, "end": 3, "gid": u1}));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r, json!({"id": id.0, "start": 1, "end": 2, "gid": face.glyph_for('a')}));
+    assert_eq!(state(&s), before, "no edit");
+
+    // An empty run that holds the choice, as a file may have, right before the first a.
+    let other = create(&mut s, 150.0);
+    let mut runs = obj(&s, other).runs;
+    let mut empty = vectorcraft_doc::TextRun { text: String::new(), ..runs[0].clone() };
+    empty.style.glyph_alternate = Some(face.choice('a', u1));
+    runs = vec![
+        vectorcraft_doc::TextRun { text: "x".into(), ..runs[0].clone() },
+        empty,
+        vectorcraft_doc::TextRun { text: "aay".into(), ..runs[0].clone() },
+    ];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(other).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs;
+    s.execute("text.setGlyphAlternate", &json!({"id": other.0, "start": 1, "gid": u1})).unwrap();
+    let gids: Vec<u32> = vectorcraft_text::layout(db, &obj(&s, other)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids[1], u1, "the a takes the choice: {gids:?}");
+
+    // A run that holds the choice and goes on past its first character, as a file may have: the
+    // request splits it, so the character is shaped alone.
+    let shared = create(&mut s, 200.0);
+    let mut runs = obj(&s, shared).runs;
+    let mut chosen = vectorcraft_doc::TextRun { text: "aay".into(), ..runs[0].clone() };
+    chosen.style.glyph_alternate = Some(face.choice('a', u1));
+    runs = vec![vectorcraft_doc::TextRun { text: "x".into(), ..runs[0].clone() }, chosen];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let Some(NodeKind::Text(text)) = doc.node_mut(shared).map(|n| &mut n.kind) else { panic!("text") };
+    text.runs = runs;
+    let before = state(&s);
+    s.execute("text.setGlyphAlternate", &json!({"id": shared.0, "start": 1, "gid": u1})).unwrap();
+    assert_eq!(state(&s).0, before.0 + 1, "an edit");
+    let texts: Vec<String> = obj(&s, shared).runs.iter().map(|r| r.text.clone()).collect();
+    assert_eq!(texts, ["x", "a", "ay"]);
+}
+
+/// A glyph the character's style keeps from being drawn (here All Caps draws the a as A) is an
+/// error, and the document and its undo history are left as they were.
+#[test]
+fn a_glyph_alternate_that_the_style_does_not_draw_is_an_error() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let _fonts = crate::adding_fonts();
+    vectorcraft_text::FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "allCaps": true})).unwrap();
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let before = state(&s);
+    let err = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": u1})).unwrap_err();
+    assert!(err.to_string().contains("is not drawn"), "{err}");
+    assert_eq!(state(&s), before, "no edit");
+    assert!(obj(&s, id).runs.iter().all(|r| r.style.glyph_alternate.is_none()));
+}
+
+/// With a style feature that draws another glyph (`salt` draws the a as b), choosing the default
+/// glyph draws it, and `gid: null` takes the choice away and reports the glyph the feature draws.
+#[test]
+fn the_default_glyph_chosen_under_a_substituting_feature_is_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": "xaay", "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|g| g.gid).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')], "salt draws each a as b");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(gids(&s), [g('x'), g('a'), g('b'), g('y')], "the first a draws its default glyph");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 1})).unwrap()["chosen"], json!(g('a')));
+
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    assert_eq!(gids(&s), [g('x'), g('b'), g('b'), g('y')]);
+
+    // A character that overflows its area is not laid out: the choice is kept for when it is.
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('a')], "the default glyph is kept as the choice");
+}
+
+/// A character followed by a combining mark is drawn in one cluster with the mark: with `salt`,
+/// `gid: null` reports the glyph the feature draws, also when the text overflows, and choosing the
+/// default glyph draws it.
+#[test]
+fn the_glyph_drawn_for_a_character_with_a_combining_mark_is_reported() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = "xa\u{331}y";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": alternates_family(true)})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    let at = lay.glyphs.iter().find(|gl| gl.byte == 1).expect("the a is laid out");
+    assert_eq!((at.gid, at.len), (g('b'), 3), "salt draws the a as b, in one cluster with its mark");
+
+    let state = |s: &Session| (s.doc().unwrap().history.undo.len(), s.doc().unwrap().revision);
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the glyph salt draws");
+    let undo = state(&s).0;
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert_eq!(state(&s).0, undo + 1, "one undo step");
+    let lay = vectorcraft_text::layout(db, &obj(&s, id));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 1).map(|gl| gl.gid), Some(g('a')), "the a draws its default glyph");
+
+    let area = json!({"x": 0, "y": 300, "text": "xa\u{331}", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 4, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing a is shaped with its mark");
+}
+
+/// Vertical type draws `vert` glyphs (the test font's `vert` draws ！ as I). A character of
+/// vertical type that overflows its area is shaped as vertical type, so choosing its default glyph
+/// keeps the choice.
+#[test]
+fn the_default_glyph_chosen_in_overflowing_vertical_type_is_kept() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let text = |area: Value| json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": area});
+    let open = NodeId(s.execute("text.create", &text(json!({"width": 200, "height": 200}))).unwrap()["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, open)).glyphs.iter().map(|g| g.gid).collect();
+    assert_eq!(gids, [g('I'), g('I')], "vert draws each ！ as I");
+
+    let boxed = NodeId(s.execute("text.create", &text(json!({"width": 4, "height": 4}))).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": g('！')})).unwrap();
+    assert_eq!(r["gid"], json!(g('！')));
+    let held: Vec<_> = obj(&s, boxed).runs.iter().filter_map(|r| r.style.glyph_alternate.as_ref().map(|c| c.gid)).collect();
+    assert_eq!(held, [g('！')], "the default glyph is kept as the choice");
+}
+
+/// A character that overflows its area reports as `chosen` the glyph it is drawn with when it is
+/// shaped alone: the glyph `salt` draws, a chosen default glyph, and the `vert` glyph of vertical
+/// type.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character() {
+    use vectorcraft_text::test_fonts::{VERTICAL_PUNCTUATION_FAMILY, alternates_family, alternates_font, vertical_punctuation_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(vertical_punctuation_font(true).expect("the test font builds"));
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let g = |c| face.glyph_for(c);
+    let mut s = session();
+    let chosen = |s: &mut Session, id: NodeId, start: usize| {
+        s.execute("text.glyphAlternates", &json!({"id": id.0, "start": start})).unwrap()["chosen"].clone()
+    };
+
+    let area = json!({"x": 0, "y": 300, "text": "xa", "size": 20, "font": alternates_family(true), "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": 2, "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('b')), "the glyph salt draws");
+    s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 1, "gid": g('a')})).unwrap();
+    assert_eq!(chosen(&mut s, boxed, 1), json!(g('a')), "the chosen default glyph");
+
+    let vface = db.face(VERTICAL_PUNCTUATION_FAMILY, "Regular").expect("the test face");
+    let text =
+        json!({"x": 0, "y": 0, "text": "！！", "size": 20, "font": VERTICAL_PUNCTUATION_FAMILY, "vertical": true, "area": {"width": 4, "height": 4}});
+    let vertical = NodeId(s.execute("text.create", &text).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, vertical)).glyphs.is_empty(), "the text overflows");
+    assert_eq!(chosen(&mut s, vertical, 0), json!(vface.glyph_for('I')), "vert draws ！ as I");
+}
+
+/// A parenthesis set right to left is drawn mirrored: in a paragraph whose direction is right to
+/// left, and after Hebrew in a paragraph of automatic direction, but not when its character
+/// direction is left to right. When it overflows its area, the glyph query shapes it in the same
+/// direction and reports the glyph the text draws when it fits.
+#[test]
+fn the_glyph_query_shapes_an_overflowing_character_in_its_paragraph_direction() {
+    let db = vectorcraft_text::FontDb::global();
+    let face = db.face("Source Sans 3", "Regular").expect("the bundled face");
+    let mut s = session();
+    let create = |s: &mut Session, text: &str, rtl: bool, char_ltr: bool, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "size": 20, "font": "Source Sans 3", "area": {"width": 200, "height": height}});
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        if rtl {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "direction": "rightToLeft", "start": 2, "end": 3})).unwrap();
+        }
+        if char_ltr {
+            s.execute("text.setFormat", &json!({"ids": [id.0], "charDirection": "leftToRight", "start": 2, "end": 3})).unwrap();
+        }
+        id
+    };
+    for (text, rtl, char_ltr, at, drawn) in [("a\n(", true, false, 2, ')'), ("a\n\u{5D0}(", false, false, 4, ')'), ("a\n(", true, true, 2, '(')] {
+        let open = create(&mut s, text, rtl, char_ltr, 200.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, open));
+        assert_eq!(lay.glyphs.iter().find(|g| g.byte == at).map(|g| g.gid), Some(face.glyph_for(drawn)), "{text:?}: the parenthesis drawn");
+
+        let boxed = create(&mut s, text, rtl, char_ltr, 30.0);
+        let lay = vectorcraft_text::layout(db, &obj(&s, boxed));
+        assert!(lay.glyphs.iter().all(|g| g.byte < 2), "{text:?}: the second paragraph overflows");
+        let r = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": at})).unwrap();
+        assert_eq!(r["chosen"], json!(face.glyph_for(drawn)), "{text:?}: the glyph drawn when it fits");
+    }
+}
+
+/// A vowel sign drawn before its consonant (Devanagari Ka with the vowel sign I) is in the
+/// consonant's cluster, drawn first: with `salt`, the glyph reported for the consonant is the one
+/// the feature draws, not the vowel sign's, and the default glyph chosen for it is drawn.
+#[test]
+fn the_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids = |s: &Session| vectorcraft_text::layout(db, &obj(s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect::<Vec<_>>();
+    assert_eq!(gids(&s), [(g('i'), 0, 6), (g('b'), 0, 6)], "the vowel sign is drawn first, in the cluster of Ka as salt draws it");
+
+    let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(g('b')), "the glyph salt draws for Ka");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": g('a')})).unwrap();
+    assert_eq!(r["gid"], json!(g('a')));
+    assert!(gids(&s).iter().any(|&(gl, byte, _)| (gl, byte) == (g('a'), 0)), "Ka draws its default glyph: {:?}", gids(&s));
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('a')));
+}
+
+/// Ka with a nukta and the vowel sign I is one cluster: the vowel sign drawn first, then the
+/// ligature of Ka and the nukta, which is neither Ka's default glyph nor one of its alternates. The
+/// glyph reported for Ka is the ligature, not the vowel sign.
+#[test]
+fn the_ligature_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 9), (g('N'), 0, 9)], "the vowel sign is drawn first, then the ligature");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('N')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the ligature is drawn for Ka");
+}
+
+/// Ka, the halant, Ka again and the vowel sign I are one cluster: the vowel sign drawn first, the
+/// first Ka's half form, which the font lists as an alternate of Ka, then the second Ka's default
+/// glyph. The glyph reported for the first Ka is its half form, the first of its glyphs in the
+/// cluster, not the second Ka's default glyph. The font also lists the vowel sign's glyph as an
+/// alternate of Ka; drawn for the vowel sign, it is not reported for Ka.
+#[test]
+fn the_first_of_a_characters_glyphs_in_its_cluster_is_reported() {
+    use vectorcraft_text::test_fonts::{CONJUNCT_FAMILY, conjunct_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(conjunct_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{94D}क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 100, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 12), (g('k'), 0, 12), (g('K'), 0, 12)], "the vowel sign, the half form, then the second Ka");
+
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('k')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('k')), "the half form is drawn for the first Ka");
+
+    let text = "क\u{93F}";
+    let r = s.execute("text.create", &json!({"x": 100, "y": 200, "text": text, "size": 20, "font": CONJUNCT_FAMILY})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('i'), 0, 6), (g('K'), 0, 6)], "the vowel sign, then Ka");
+    assert_eq!(s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap()["chosen"], json!(g('K')));
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('K')), "Ka's default glyph, not the vowel sign's");
+}
+
+/// A character that overflows its area is shaped with its grapheme: the nukta after Ka makes the
+/// font's `nukt` ligature, which `salt` does not change, so `gid: null` reports the ligature as it
+/// does for the laid-out text.
+#[test]
+fn the_glyph_of_an_overflowing_character_is_shaped_with_its_grapheme() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let point = json!({"x": 100, "y": 100, "text": text, "size": 20, "font": MATRA_FAMILY});
+    let id = NodeId(s.execute("text.create", &point).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    let gids: Vec<_> = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.iter().map(|gl| (gl.gid, gl.byte, gl.len)).collect();
+    assert_eq!(gids, [(g('N'), 0, 6)], "Ka and the nukta make the ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": id.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')));
+
+    let area = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY, "area": {"width": 200, "height": 4}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    s.execute("text.setRangeStyle", &json!({"id": boxed.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('N')), "the overflowing Ka is shaped with its nukta");
+}
+
+/// A grapheme whose characters have different styles is shaped in those styles when it overflows:
+/// a nukta of another size does not make the `nukt` ligature with Ka, so `gid: null` reports the
+/// glyph `salt` draws for Ka, as it does for the laid-out text.
+#[test]
+fn an_overflowing_grapheme_keeps_the_styles_of_its_characters() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, matra_font, source_sans_gid};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(matra_font().expect("the test font builds"));
+    let g = |c| u32::from(source_sans_gid(c).expect("a Source Sans glyph"));
+    let mut s = session();
+    let text = "क\u{93C}";
+    let styled = |s: &mut Session, area: Option<Value>| {
+        let mut spec = json!({"x": 0, "y": 300, "text": text, "size": 20, "font": MATRA_FAMILY});
+        if let Some(area) = area {
+            spec["area"] = area;
+        }
+        let id = NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap());
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 0, "end": text.len(), "features": ["salt"]})).unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": 3, "end": text.len(), "size": 30})).unwrap();
+        id
+    };
+    let open = styled(&mut s, None);
+    let lay = vectorcraft_text::layout(db, &obj(&s, open));
+    assert_eq!(lay.glyphs.iter().find(|gl| gl.byte == 0).map(|gl| gl.gid), Some(g('b')), "the nukta of another size makes no ligature");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": open.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')));
+
+    let boxed = styled(&mut s, Some(json!({"width": 200, "height": 4})));
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let r = s.execute("text.setGlyphAlternate", &json!({"id": boxed.0, "start": 0, "gid": null})).unwrap();
+    assert_eq!(r["gid"], json!(g('b')), "the overflowing Ka is shaped apart from the nukta of another size");
+}
+
+#[test]
+fn glyph_alternates_query_reports_the_fallback_glyph_that_is_drawn() {
+    use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let requested = db.face(alternates_family(true), "Regular").expect("the test face");
+    let fallback = db.face("Inter", "Regular").expect("the bundled fallback face");
+    let ch = 'Ƃ';
+    assert_eq!(requested.glyph_for(ch), 0);
+    assert_ne!(fallback.glyph_for(ch), 0);
+    let mut s = session();
+    let id = NodeId(
+        s.execute("text.create", &json!({"x": 0, "y": 0, "text": ch.to_string(), "font": alternates_family(true)})).unwrap()["id"].as_u64().unwrap(),
+    );
+    let glyph = vectorcraft_text::layout(db, &obj(&s, id)).glyphs.remove(0);
+    assert_ne!(glyph.font_id, requested.id());
+    assert_ne!(glyph.gid, 0);
+    let query = s.execute("text.glyphAlternates", &json!({"id": id.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "the query reports the visible fallback glyph");
+    assert!(query["alternates"].as_array().unwrap().is_empty());
+
+    let area = json!({"x": 0, "y": 300, "text": ch.to_string(), "font": alternates_family(true), "area": {"width": 200, "height": 2}});
+    let boxed = NodeId(s.execute("text.create", &area).unwrap()["id"].as_u64().unwrap());
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(glyph.gid), "an overflowing character reports the fallback glyph it is drawn with");
+}
+
+/// A fallback face draws Ka with the vowel sign I in one cluster, the vowel sign first. The glyph
+/// reported for Ka is the fallback face's glyph for Ka, laid out or overflowing, not the vowel
+/// sign's.
+#[test]
+fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
+    use vectorcraft_text::test_fonts::{MATRA_FAMILY, alternates_family, alternates_font, matra_font};
+    let _fonts = crate::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    db.add_font(matra_font().expect("the test font builds"));
+    let requested = db.face(alternates_family(true), "Regular").expect("the test face");
+    let text = "क\u{93F}";
+    assert_eq!(requested.glyph_for('क'), 0);
+    let mut s = session();
+    let create = |s: &mut Session, height: f64| {
+        let spec = json!({"x": 0, "y": 0, "text": text, "font": alternates_family(true), "area": {"width": 200, "height": height}});
+        NodeId(s.execute("text.create", &spec).unwrap()["id"].as_u64().unwrap())
+    };
+    let open = create(&mut s, 200.0);
+    let glyphs = vectorcraft_text::layout(db, &obj(&s, open)).glyphs;
+    let fallback = db.face_by_id(glyphs[0].font_id).expect("the fallback face");
+    assert_ne!(fallback.id(), requested.id());
+    let ka = fallback.glyph_for('क');
+    let drawn: Vec<_> = glyphs.iter().map(|g| (g.gid, g.byte)).collect();
+    // A face may draw the vowel sign with a glyph other than its own, so only its place is checked.
+    let sign_first = matches!(drawn[..], [(sign, 0), (k, 0)] if sign != 0 && sign != ka && k == ka);
+    assert!(sign_first, "the vowel sign is drawn first, in Ka's cluster ({} or {MATRA_FAMILY}): {drawn:?}", fallback.family);
+    let query = s.execute("text.glyphAlternates", &json!({"id": open.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "the fallback face's glyph for Ka");
+
+    let boxed = create(&mut s, 2.0);
+    assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
+    let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
+    assert_eq!(query["chosen"], json!(ka), "an overflowing Ka reports the fallback face's glyph for Ka");
+}
+
+/// Apply Fill to Stroke with characters selected with the Type tool: only those characters take
+/// a stroke of their own fill, as one undo step (#5530).
+#[test]
+fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Sample Text", v).unwrap();
+    // All of it red, then the first word green: a stroke on the rest would show.
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.color.fillToStroke", &json!({})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.runs[0].text, "Sample");
+    assert_eq!(t.runs[0].style.stroke, t.runs[0].style.fill, "the selected characters take their fill as a stroke");
+    assert!(t.runs[0].style.stroke_width > 0.0);
+    assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
+    let labels = undo_labels(&s);
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
+}

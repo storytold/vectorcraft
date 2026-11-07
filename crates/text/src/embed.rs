@@ -223,6 +223,9 @@ fn checksum(data: &[u8]) -> u32 {
     words.iter().chain([&last]).fold(0u32, |s, w| s.wrapping_add(u32::from_be_bytes(*w)))
 }
 
+/// The most bytes of a font file written.
+const MAX_FONT_BYTES: usize = 256 << 20;
+
 /// An OpenType file of `tables` (unique tags) with checksums and the `head` checksum adjustment.
 fn sfnt(version: u32, mut tables: Vec<(Tag, Cow<'_, [u8]>)>) -> Option<Vec<u8>> {
     tables.sort_by_key(|t| t.0);
@@ -230,7 +233,12 @@ fn sfnt(version: u32, mut tables: Vec<(Tag, Cow<'_, [u8]>)>) -> Option<Vec<u8>> 
     let n = u16::try_from(tables.len()).ok().filter(|n| *n > 0)?;
     let sel = n.ilog2() as u16;
     let range = 2u16.checked_pow(u32::from(sel))?.checked_mul(16)?;
-    let mut out = Vec::with_capacity(12 + 16 * tables.len() + tables.iter().map(|t| t.1.len() + 3).sum::<usize>());
+    // Tables may alias one range of the input: the file is no larger than a font file may be.
+    let size = tables.iter().try_fold(12 + 16 * tables.len(), |sum, t| sum.checked_add(t.1.len().checked_add(3)?))?;
+    if size > MAX_FONT_BYTES {
+        return None;
+    }
+    let mut out = Vec::with_capacity(size);
     out.extend(version.to_be_bytes());
     for v in [n, range, sel, n.checked_mul(16)? - range] {
         out.extend(v.to_be_bytes());

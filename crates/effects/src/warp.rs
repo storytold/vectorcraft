@@ -6,7 +6,7 @@
 use serde_json::Value;
 use vectorcraft_geom::{PathData, Point, Rect};
 
-use crate::util::*;
+use crate::util::{map_nonlinear_within, num, text};
 
 pub use vectorcraft_doc::live::{WarpStyle, warp_point};
 

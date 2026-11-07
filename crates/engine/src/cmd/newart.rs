@@ -16,7 +16,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node,
 use vectorcraft_tools::PaintDefaults;
 
 use super::gradient::unplaced;
-use super::*;
+use super::{CommandSpec, Result, Session, always, cmd, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -216,7 +216,7 @@ impl Session {
 }
 
 fn set_basic(s: &mut Session, p: &Value) -> Result<Value> {
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!s.prefs.new_art_basic);
+    let on = switch_or(p, "on", !s.prefs.new_art_basic, "appearance.setNewArtBasic")?;
     s.prefs.new_art_basic = on;
     Ok(json!({ "on": on }))
 }

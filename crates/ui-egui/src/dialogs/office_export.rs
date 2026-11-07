@@ -11,8 +11,15 @@ use crate::{VectorcraftApp, io, widgets};
 
 pub(crate) const KIND: &str = "saveForOffice";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Save for Office Documents").into(), body, confirm, ok: Some("Save…"), min_width: 340.0, ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Save for Office Documents").into(),
+    body,
+    confirm,
+    ok: Some("Save…"),
+    min_width: 340.0,
+    inputs: |_| &["path"],
+    ..DialogSpec::FORM
+};
 
 /// Open the dialog (150 ppi on white, the first artboard).
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {

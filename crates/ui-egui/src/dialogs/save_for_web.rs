@@ -40,6 +40,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
     min_width: PREVIEW_W + GAP + SIDE_W,
+    inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
 };
 
@@ -149,7 +150,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
         }
         match names.first().and_then(Value::as_str).filter(|_| has_warnings(&r)) {
             Some(first) => io::report_saved(app, first, &r),
-            None => app.status(format!("Downloaded {} file(s)", names.len())),
+            None => app.status(crate::i18n::msg_n(names.len() as u64, "Downloaded {n} file", "Downloaded {n} files", &[])),
         }
         return Ok(json!({ "files": names, "bytes": r["bytes"], "warnings": r["warnings"] }));
     }
@@ -174,6 +175,13 @@ fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
 }
 
+/// The preview page's name from the document's title `stem`: one file name in the preview folder.
+/// `file_stem` gives back a title it can't take a stem of ("../.."), so one with a separator or of
+/// dots only is "Untitled".
+pub(super) fn preview_name(stem: &str) -> &str {
+    if stem.trim().is_empty() || stem.contains(['/', '\\']) || stem.chars().all(|c| c == '.') { "Untitled" } else { stem }
+}
+
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
 /// default browser (desktop). When the export has warnings, the status bar shows the first in
 /// place of "Opened …".
@@ -181,9 +189,10 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
     }
+    app.refuse_automation("file.saveForWeb.browser")?;
     let stem = app.session.active().map(|st| vectorcraft_engine::cmd::fileio::file_stem(&st.doc.title)).ok_or("no document")?;
     let dir = temp_folder()?;
-    let path = format!("{dir}/{}.html", if stem.trim().is_empty() { "Untitled" } else { stem.as_str() });
+    let path = format!("{dir}/{}.html", preview_name(&stem));
     let mut q = if p.is_object() { p.clone() } else { json!({}) };
     if let Some(o) = q.as_object_mut() {
         o.insert("path".into(), json!(path));
@@ -372,8 +381,9 @@ struct Cache {
     shots: Vec<(String, Result<Shot, String>)>,
 }
 
+/// Temp-memory key for the Save for Web preview render, original image and optimised shot textures.
 fn cache_id() -> egui::Id {
-    egui::Id::new("save-for-web-previews")
+    egui::Id::unique("save-for-web-previews")
 }
 
 /// The texture of straight RGBA pixels.
@@ -508,7 +518,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(4.0);
     let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
-    let pan_id = egui::Id::new("save-for-web-pan");
+    let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
         pan += resp.drag_delta();
@@ -554,14 +564,16 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     let mut browser = false;
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
-        if let Some(i) = widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0) {
+        let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
+        if let Some(i) = zoom {
             d.fields.insert("__zoom".into(), json!(ZOOMS[i]));
             ui.ctx().data_mut(|m| m.insert_temp(pan_id, egui::Vec2::ZERO));
         }
         let kbps = d.f64("__kbps", 56.6);
         let labels: Vec<String> = SPEEDS.iter().map(|s| speed_label(*s)).collect();
         let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-        if let Some(i) = widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0)
+        let speed = ui.name_inputs(tl!("Download:"), |ui| widgets::dropdown(ui, "sfw-speed", &speed_label(kbps), &names, 110.0));
+        if let Some(i) = speed
             && let Some(s) = SPEEDS.get(i)
         {
             d.fields.insert("__kbps".into(), json!(s));

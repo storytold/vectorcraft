@@ -42,16 +42,21 @@ pub struct OtFeatures {
     /// Swashes (`swsh`).
     pub swash: bool,
     /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
-    /// sets, alternates, titling, proportional and lining figures, superscript and subscript.
+    /// sets, alternates, titling, proportional and lining figures, superscript, subscript,
+    /// numerators and denominators.
     pub extra: u32,
 }
 
+/// The most entries of a style's feature list read: every segment of its text reads the list again.
+pub const MAX_STYLE_FEATURES: usize = 256;
+
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
-/// and lining `lnum` figures, superscript `sups` and subscript `subs`.
-pub const EXTRA_FEATURES: [&str; 26] = [
+/// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr` and
+/// denominators `dnom`.
+pub const EXTRA_FEATURES: [&str; 28] = [
     "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
-    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom",
 ];
 
 impl Default for OtFeatures {
@@ -82,6 +87,40 @@ impl OtFeatures {
         Self::default().with_tags(tags)
     }
 
+    /// The tags that make `change` on any set, for a `change` that turns each feature on, turns it
+    /// off or keeps it, whatever the other features are: `tag` for each feature it turns on, `-tag`
+    /// for each it turns off, and none for one it keeps. [`Self::with_tags`] applies them.
+    pub fn changes(change: impl Fn(&mut Self)) -> Vec<String> {
+        let mut off = Self { ligatures: false, contextual: false, ..Self::default() };
+        let mut on = Self {
+            vertical: false,
+            ligatures: true,
+            contextual: true,
+            discretionary_ligatures: true,
+            small_caps: true,
+            fractions: true,
+            oldstyle_figures: true,
+            tabular_figures: true,
+            ordinals: true,
+            swash: true,
+            extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
+        };
+        change(&mut off);
+        change(&mut on);
+        let named = ["liga", "calt", "dlig", "smcp", "frac", "onum", "tnum", "ordn", "swsh"];
+        let mut v = vec![];
+        for tag in named.into_iter().chain(EXTRA_FEATURES) {
+            let turn_off = format!("-{tag}");
+            let has = |f: &Self| f.with_tags([turn_off.as_str()]) != *f;
+            match (has(&off), has(&on)) {
+                (true, true) => v.push(tag.to_string()),
+                (false, false) => v.push(turn_off.clone()),
+                _ => {}
+            }
+        }
+        v
+    }
+
     /// The tags this set differs from the defaults by (what `CharStyle::features` stores).
     pub fn to_tags(&self) -> Vec<String> {
         let d = Self::default();
@@ -107,7 +146,7 @@ impl OtFeatures {
 
     /// Is `tag` (optionally prefixed with `-` or `+`) one this set understands?
     pub fn known_tag(tag: &str) -> bool {
-        let t = tag.trim_start_matches(['-', '+']);
+        let t = tag.strip_prefix(['-', '+']).unwrap_or(tag);
         matches!(t, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh") || EXTRA_FEATURES.contains(&t)
     }
 
@@ -146,13 +185,15 @@ impl OtFeatures {
     /// The harfrust features for text in style `st`.
     pub(crate) fn resolve(&self, st: &CharStyle) -> Vec<Feature> {
         // The character's own OpenType settings override the layout-wide ones.
-        let own = self.with_tags(st.features.iter().map(String::as_str));
+        // (A style lists a few features; one with thousands, in a document, is read for the first.)
+        let listed = st.features.get(..MAX_STYLE_FEATURES).unwrap_or(&st.features);
+        let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
         if st.kerning.is_some() {
             v.push(f(b"kern", false));
         }
-        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(&st.features));
+        let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
         if !liga {
             v.push(f(b"liga", false));
             v.push(f(b"clig", false));
@@ -265,12 +306,53 @@ mod tests {
             assert!(OtFeatures::known_tag(t), "{t}");
         }
         assert!(!OtFeatures::known_tag("ss21"));
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            assert!(!OtFeatures::known_tag(tag), "{tag}");
+        }
         let o = OtFeatures::from_tags(["ss03", "pnum", "sups", "-liga"]);
         assert_eq!(o.to_tags(), vec!["-liga", "ss03", "pnum", "sups"]);
         assert_eq!(OtFeatures::from_tags(["ss03", "-ss03"]).to_tags(), Vec::<String>::new(), "turned off again");
         let st = CharStyle { features: vec!["ss05".into(), "titl".into()], ..CharStyle::default() };
         let tags: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
         assert!(tags.contains(&"ss05".to_string()) && tags.contains(&"titl".to_string()), "{tags:?}");
+    }
+
+    /// Numerators and denominators (the OpenType panel's Position menu) are known, round-trip
+    /// through the stored tags and reach the shaper.
+    #[test]
+    fn numerators_and_denominators_are_kept_and_shaped() {
+        for t in ["numr", "dnom", "-numr", "+dnom"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        let o = OtFeatures::from_tags(["dnom", "sups", "numr"]);
+        assert_eq!(o.to_tags(), vec!["sups", "numr", "dnom"]);
+        assert_eq!(OtFeatures::from_tags(["numr", "dnom", "-numr"]).to_tags(), ["dnom"]);
+        for tag in ["numr", "dnom"] {
+            let st = CharStyle { features: vec![tag.into()], ..CharStyle::default() };
+            let on: Vec<String> = OtFeatures::default().resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect();
+            assert_eq!(on, [tag], "{tag}");
+        }
+    }
+
+    /// `changes` lists the features a change turns on and off and leaves out the ones it keeps,
+    /// and applying them to any set makes the same change.
+    #[test]
+    fn changes_list_what_turns_on_and_off() {
+        let figure = |f: &mut OtFeatures| {
+            f.tabular_figures = true;
+            f.oldstyle_figures = false;
+            f.extra &= !(1 << 22);
+        };
+        assert_eq!(OtFeatures::changes(figure), ["-onum", "tnum", "-pnum"]);
+        assert_eq!(OtFeatures::changes(|f| f.ligatures = false), ["-liga"]);
+        assert_eq!(OtFeatures::changes(|f| f.extra |= 1 << 27), ["dnom"]);
+        assert!(OtFeatures::changes(|_| {}).is_empty());
+        for start in [&["lnum", "smcp"][..], &["pnum", "onum", "-liga"][..], &[][..]] {
+            let mut want = OtFeatures::from_tags(start.iter().copied());
+            figure(&mut want);
+            let tags = OtFeatures::changes(figure);
+            assert_eq!(OtFeatures::from_tags(start.iter().copied()).with_tags(tags.iter().map(String::as_str)), want, "{start:?}");
+        }
     }
     use crate::{FontDb, layout};
     use vectorcraft_doc::TextObject;
@@ -289,5 +371,65 @@ mod tests {
         assert_eq!(OtFeatures::from_tags(["-liga", "dlig"]).to_tags(), ["-liga", "dlig"]);
         assert!(OtFeatures::default().to_tags().is_empty());
         assert!(OtFeatures::known_tag("-onum") && !OtFeatures::known_tag("zzzz"));
+    }
+
+    /// The characters' language reaches the shaper (#4940): Source Serif 4's Turkish forms
+    /// (`locl`) keep f and i apart, and the dot on the i, where English ligates them. Runs in
+    /// different languages are shaped apart, each in its own.
+    #[test]
+    fn language_picks_the_fonts_forms() {
+        let st =
+            |language: Option<&str>| CharStyle { font_family: "Source Serif 4".into(), language: language.map(str::to_string), ..Default::default() };
+        let count = |language| layout(FontDb::global(), &TextObject::point(Point::ZERO, "fi", st(language))).glyphs.len();
+        assert_eq!((count(None), count(Some("en-US")), count(Some("tr"))), (1, 1, 2));
+        // A tag that isn't one (from a file) shapes without a language.
+        assert_eq!((count(Some("tr; DROP")), count(Some(""))), (1, 1));
+        let mut t = TextObject::point(Point::ZERO, "", st(None));
+        t.runs = vec![vectorcraft_doc::TextRun::new("fi", st(Some("tr"))), vectorcraft_doc::TextRun::new("fi", st(None))];
+        let glyphs = layout(FontDb::global(), &t).glyphs;
+        let per_run: Vec<usize> = (0..2).map(|r| glyphs.iter().filter(|g| g.run == r).count()).collect();
+        assert_eq!(per_run, [2, 1]);
+    }
+
+    /// Bulgarian text gets the font's Bulgarian forms (`locl` for `BGR`, #5945): in the bundled
+    /// Source Sans 3 Italic, в, д, ж, з, к, л and ю differ from the Russian ones, and letters
+    /// the font draws alike stay alike.
+    #[test]
+    fn bulgarian_gets_the_fonts_bulgarian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        // Each letter laid out on its own, so one letter's advance doesn't move the next.
+        let outline = |c: char, language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, &c.to_string(), st(language)))
+                .glyphs
+                .into_iter()
+                .map(|g| g.outline)
+                .collect::<Vec<_>>()
+        };
+        let differs: String = "вгджзийклптцшщюьъ".chars().filter(|c| outline(*c, "bg") != outline(*c, "ru")).collect();
+        assert_eq!(differs, "вджзклю");
+    }
+
+    /// Serbian text gets the font's Serbian forms (`locl` for `SRB`): in the bundled Source Sans
+    /// 3 Italic, б, г, д, п, т differ from the Russian ones, in either Serbian list entry.
+    #[test]
+    fn serbian_gets_the_fonts_serbian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        let outlines = |language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, "бгдпт", st(language))).glyphs.into_iter().map(|g| g.outline).collect::<Vec<_>>()
+        };
+        let (serbian, russian) = (outlines("sr-Cyrl"), outlines("ru"));
+        assert_eq!((serbian.len(), russian.len()), (5, 5));
+        assert!(serbian.iter().zip(&russian).all(|(s, r)| s != r), "every letter in its Serbian form");
+        assert_eq!(outlines("sr-Latn"), serbian);
     }
 }

@@ -166,6 +166,33 @@ mod tests {
         assert_eq!((&def["type"], &def["size"]), (&json!("calligraphic"), &json!(9.0)));
     }
 
+    /// The new brush takes the art its Brush Options opened with: changing or clearing the
+    /// selection while the dialog is open does not change the art, and OK still makes the brush.
+    #[test]
+    fn ok_makes_the_brush_from_the_art_the_dialog_opened_with() {
+        for (ty, key) in [("scatter", "art"), ("art", "art"), ("pattern", "side")] {
+            for change in ["select.set", "select.none"] {
+                let mut app = app();
+                app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+                app.run("ui.newBrush", json!({})).unwrap();
+                set(&mut app, json!({"type": ty}));
+                super::super::confirm(&mut app).unwrap();
+                let captured = app.ui.dialog.as_ref().unwrap().fields["__def"][key].clone();
+                assert!(captured.is_object(), "{ty}");
+                if change == "select.set" {
+                    app.run("shape.ellipse", json!({"x": 100, "y": 50, "width": 120, "height": 90})).unwrap();
+                } else {
+                    app.run("select.none", json!({})).unwrap();
+                }
+                super::super::confirm(&mut app).unwrap_or_else(|e| panic!("{ty} after {change}: {e}"));
+                assert!(app.ui.dialog.is_none(), "{ty} after {change}");
+                let name = format!("New {}{} Brush", ty[..1].to_uppercase(), &ty[1..]);
+                let def = app.run("brush.get", json!({ "name": name })).unwrap();
+                assert_eq!(def[key], captured, "{ty} after {change}");
+            }
+        }
+    }
+
     /// Cancel in New Brush, or in the Brush Options it opens, adds no brush and no undo step.
     #[test]
     fn cancel_adds_no_brush() {

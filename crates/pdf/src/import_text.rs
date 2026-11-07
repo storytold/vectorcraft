@@ -166,6 +166,9 @@ pub(crate) struct TextLine {
     /// Runs of glyphs drawn alike: their look, how far the file raised them off the line's
     /// baseline (points, up; text rise, `Ts`), their text.
     runs: Vec<(Look, f64, String)>,
+    /// The bytes of text the horizontal glyphs added to `runs` so far (counted as they come: a
+    /// sum over the runs for each glyph is quadratic when every glyph is a run).
+    text_bytes: usize,
     /// Where the file put each character of the runs' text, in order: the first character of each
     /// glyph has its glyph's [`Slot`]; a space read from a gap and the other characters of a
     /// glyph of several have none.
@@ -227,6 +230,7 @@ impl TextLine {
             last_size: at.size,
             baseline: vec![],
             runs: vec![],
+            text_bytes: 0,
             slots: vec![],
             upright: None,
             column: false,
@@ -272,7 +276,7 @@ impl TextLine {
         self.column = true;
         // Letter-spaced Japanese is common: a gap reads as a space only when a whole em is left
         // out (the tracking set in `finish` keeps narrower gaps).
-        if step > size * 0.9 && !run.ends_with(' ') && !text.starts_with(' ') {
+        if step > size * 0.9 && !run.ends_with(is_space) && !text.starts_with(is_space) {
             run.push(' ');
         }
         if last.takes(look) {
@@ -292,7 +296,7 @@ impl TextLine {
         if self.column || self.upright.is_some() {
             return false;
         }
-        let bytes: usize = self.runs.iter().map(|(_, _, t)| t.len()).sum();
+        let bytes = self.text_bytes;
         let glyph = self.baseline.len();
         let curved = self.curved();
         let mut shift = 0.0;
@@ -330,15 +334,16 @@ impl TextLine {
             if !on_line && !on_curve {
                 return false;
             }
-            if !run.ends_with(' ') && !text.starts_with(' ') {
+            if !run.ends_with(is_space) && !text.starts_with(is_space) {
                 self.gaps.push(Gap { at: bytes, width: gap, em: self.last_size.min(at.size), on_line });
             }
             // A space the file draws between two glyphs spans the gaps on both sides of it.
             let drawn = self.drawn_space.take();
             if on_line {
-                if text == " " && !run.ends_with(' ') {
+                let mut chars = text.chars();
+                if chars.next().is_some_and(is_space) && chars.next().is_none() && !run.ends_with(is_space) {
                     self.drawn_space = Some((bytes, gap + advance));
-                } else if let Some((b, before)) = drawn.filter(|_| !text.starts_with(' ')) {
+                } else if let Some((b, before)) = drawn.filter(|_| !text.starts_with(is_space)) {
                     self.drawn_spaces.push((b, before + gap));
                 }
             }
@@ -350,6 +355,7 @@ impl TextLine {
         } else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
         }
+        self.text_bytes = self.text_bytes.saturating_add(text.len());
         let one = text.chars().count() == 1;
         self.slots.push(Some(Slot { glyph, advance: one.then_some(advance) }));
         self.slots.extend(text.chars().skip(1).map(|_| None));
@@ -899,12 +905,13 @@ fn tracked(runs: Vec<TextRun>, tracking: f64, spaces: &[(usize, f64)]) -> Vec<Te
         let mut from = 0;
         for &(b, own) in spaces.iter().filter(|(b, _)| (off..end).contains(b)) {
             let at = b - off;
-            let (Some(before), Some(space)) = (r.text.get(from..at), r.text.get(at..at + 1)) else { continue };
+            let len = r.text.get(at..).and_then(|t| t.chars().next()).map_or(1, char::len_utf8);
+            let (Some(before), Some(space)) = (r.text.get(from..at), r.text.get(at..at + len)) else { continue };
             if !before.is_empty() {
                 out.push(TextRun { text: before.to_string(), style: style.clone(), inline: None });
             }
             out.push(TextRun { text: space.to_string(), style: CharStyle { tracking: own, ..style.clone() }, inline: None });
-            from = at + 1;
+            from = at + len;
         }
         if let Some(rest) = r.text.get(from..).filter(|t| !t.is_empty()) {
             out.push(TextRun { text: rest.to_string(), style, inline: None });
@@ -912,6 +919,12 @@ fn tracked(runs: Vec<TextRun>, tracking: f64, spaces: &[(usize, f64)]) -> Vec<Te
         off = end;
     }
     out
+}
+
+/// A space a file draws as a glyph: U+0020, the no-break spaces (U+00A0, U+202F) or one of the
+/// fixed-width spaces U+2000 to U+200A (en, em, thin, hair and the others).
+fn is_space(c: char) -> bool {
+    matches!(c, ' ' | '\u{a0}' | '\u{2000}'..='\u{200a}' | '\u{202f}')
 }
 
 fn round(v: f64) -> f64 {
@@ -952,6 +965,12 @@ impl Families {
         Self(vectorcraft_text::FontDb::global().families().into_iter().map(|f| (norm(&f), f)).collect())
     }
 
+    /// Just the families `names`, for tests that mustn't depend on the fonts installed.
+    #[cfg(test)]
+    pub fn of(names: &[&str]) -> Self {
+        Self(names.iter().map(|f| (norm(f), f.to_string())).collect())
+    }
+
     /// The family and style of a font with base (PostScript) name `name`, or of weight `weight`
     /// and slant `italic` when the name has no style; whether the family is available.
     pub fn resolve(&self, name: &str, weight: Option<u32>, italic: bool) -> (String, String, bool) {
@@ -964,22 +983,74 @@ impl Families {
         if let Some((family, style)) = vectorcraft_text::FontDb::global().by_postscript_name(name) {
             return (family, style, true);
         }
-        let (fam, style) = name.split_once(['-', ',']).unwrap_or((name, ""));
-        let found = [fam, strip_ps(fam)].iter().find_map(|f| self.0.get(&norm(f)).cloned());
-        let style = match spaced(strip_ps(style)).as_str() {
-            "" | "Roman" | "Book" | "Normal" | "Plain" => match (weight.is_some_and(|w| w >= 600) || style.contains("Bold"), italic) {
-                (true, true) => "Bold Italic".to_string(),
-                (true, false) => "Bold".to_string(),
-                (false, true) => "Italic".to_string(),
-                (false, false) => "Regular".to_string(),
+        // The longest part of the name before a hyphen (or the comma of `Arial,Bold`, ISO 32000-1
+        // §9.6.3) that names an available family, the rest its style: a family can hold hyphens
+        // (`Noto-Sans-Bold` is Noto Sans, Bold). The name is the file's: a few cuts from its end are
+        // enough for any family, and each costs a pass over the name.
+        let cuts = std::iter::once(name.len()).chain(name.rmatch_indices(['-', ',']).map(|(i, _)| i).take(16));
+        for cut in cuts {
+            let (fam, style) = (name.get(..cut).unwrap_or(name), name.get(cut + 1..).unwrap_or(""));
+            if let Some(f) = [fam, strip_ps(fam)].iter().find_map(|f| self.0.get(&norm(f)).cloned()) {
+                return (f, style_of(style, weight, italic), true);
+            }
+        }
+        // Not available: split at a comma, or before the first part that is a style
+        // (`Helvetica-BoldOblique`, `Noto-Sans-Bold`, `AGaramondPro-Bold-SC700`); otherwise the
+        // whole name is the family (`Noto-Sans`, `MS-PGothic`).
+        let style_at = |i: usize| name.get(i + 1..).and_then(|rest| rest.split('-').next()).is_some_and(|part| is_style(strip_ps(part)));
+        let (fam, style) = match name.split_once(',') {
+            Some(split) => split,
+            None => match name.match_indices('-').map(|(i, _)| i).find(|&i| style_at(i)) {
+                Some(i) => (name.get(..i).unwrap_or(name), name.get(i + 1..).unwrap_or("")),
+                None => (name, ""),
             },
-            s => s.to_string(),
         };
-        match found {
-            Some(f) => (f, style, true),
-            None => (spaced(strip_ps(fam)).trim().to_string(), style, false),
+        let family = spaced(strip_ps(fam)).split(['-', ' ']).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+        (family, style_of(style, weight, italic), false)
+    }
+}
+
+/// The style a PostScript name's `style` part names, or the one of weight `weight` and slant
+/// `italic` when the part names none (`Roman`, `Book`…).
+fn style_of(style: &str, weight: Option<u32>, italic: bool) -> String {
+    match spaced(strip_ps(style)).as_str() {
+        "" | "Roman" | "Book" | "Normal" | "Plain" => match (weight.is_some_and(|w| w >= 600) || style.contains("Bold"), italic) {
+            (true, true) => "Bold Italic".to_string(),
+            (true, false) => "Bold".to_string(),
+            (false, true) => "Italic".to_string(),
+            (false, false) => "Regular".to_string(),
+        },
+        s => s.to_string(),
+    }
+}
+
+/// Whether `s` is made of style words and their usual abbreviations (`BoldOblique`, `SemiboldIt`,
+/// `XBold`, `W6`), any case: the last part of a font name that names its style.
+fn is_style(s: &str) -> bool {
+    const WORDS: &str = "bd bk black blk bold book cn cnd compressed con condensed demi ex expanded ext extended extra hairline heavy hv it ita italic light lt md \
+                         med medium narrow normal obl oblique plain reg regular rg roman sb semi slanted smb super th thin ul ultra w wide x xb xl";
+    let s = s.to_ascii_lowercase();
+    let s = s.as_bytes();
+    // Which starts of `s` the words and digit runs before them reach (a word break, so
+    // `XBold` is X, Bold even though `xb` also starts it).
+    let mut reached = vec![false; s.len() + 1];
+    if let Some(r) = reached.first_mut() {
+        *r = !s.is_empty();
+    }
+    for i in 0..s.len() {
+        if !reached.get(i).copied().unwrap_or(false) {
+            continue;
+        }
+        let rest = s.get(i..).unwrap_or_default();
+        let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+        let ends = WORDS.split_ascii_whitespace().filter(|w| rest.starts_with(w.as_bytes())).map(|w| i + w.len());
+        for end in ends.chain((digits > 0).then_some(i + digits)) {
+            if let Some(r) = reached.get_mut(end) {
+                *r = true;
+            }
         }
     }
+    reached.last().copied().unwrap_or(false)
 }
 
 /// Hebrew or Arabic comes from a PDF in visual order (each glyph where it is drawn): put `t`'s text

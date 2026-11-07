@@ -164,6 +164,9 @@ fn wall_clock_budget_stops_runaway_plugins() {
     assert!(t < Duration::from_secs(3), "{t:?}");
 }
 
+/// Cancelling stops a run where one slice of its budget ends: an endless loop given all but
+/// unlimited instructions comes back `Cancelled` within seconds, where outside a cancelled scope the
+/// same module runs until its budget is spent.
 #[test]
 fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
@@ -177,6 +180,29 @@ fn cancelling_stops_a_run_between_two_slices_of_its_budget() {
     // Outside a cancelled scope the same module still runs to its budget.
     let (e, _) = run_err(&spin, Limits { fuel_base: 1_000_000, ..Limits::default() });
     assert_eq!(e, Error::Limit("instruction budget".into()));
+}
+
+/// Compiling a plug-in's code takes none of a run's instructions, so a first run takes as many as the
+/// next, though wasmi compiles each function only when it is first called. When the compiling was the
+/// run's to pay for, and the slice of the budget the run was in ran out while a function compiled,
+/// wasmi ended the run with an error the host can't resume: it failed with most of its budget left.
+/// Here `vc_run` calls a function about 100 KB long, a `br_table` of 100,000 labels.
+#[test]
+fn a_first_run_takes_no_more_instructions_than_the_next() {
+    let big = format!("(func $big (param $i i32) (block (br_table {}0 (local.get $i))))", "0 ".repeat(100_000));
+    let calling = module(MANIFEST, &format!("(call $big (i32.const 0)) {}", tpl::ECHO), &big);
+    let with = |fuel_base| Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+    let warm = Plugin::load(&calling, Limits::default()).unwrap();
+    assert_eq!(warm.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()));
+    // The fewest instructions a run takes once the functions are compiled.
+    let (mut lo, mut hi) = (0, 1 << 20);
+    assert!(warm.run_limited(INPUT.as_bytes(), b"{}", &with(hi)).is_ok());
+    while hi - lo > 1 {
+        let mid = (lo + hi) / 2;
+        if warm.run_limited(INPUT.as_bytes(), b"{}", &with(mid)).is_ok() { hi = mid } else { lo = mid }
+    }
+    let first = Plugin::load(&calling, Limits::default()).unwrap();
+    assert_eq!(first.run_limited(INPUT.as_bytes(), b"{}", &with(hi)), Ok(INPUT.as_bytes().to_vec()), "a first run within {hi} instructions");
 }
 
 /// A filter that asks for a heavy budget gets 20 times the instructions and five times the time of

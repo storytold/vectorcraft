@@ -20,8 +20,9 @@ use std::sync::{Arc, RwLock};
 
 use crate::{Node, NodeId};
 
-/// Hasher for node ids: one multiply. Ids are small counters, not attacker-chosen keys, and the
-/// default SipHash dominated the cost of building the cache.
+/// Hasher for node ids: one multiply, by a number chosen at random once per run (a document's ids
+/// are its author's, and a fixed multiplier lets them be picked to collide). The default SipHash
+/// dominated the cost of building the cache.
 #[derive(Default)]
 pub struct IdHasher(u64);
 
@@ -32,11 +33,17 @@ impl Hasher for IdHasher {
         }
     }
     fn write_u64(&mut self, v: u64) {
-        self.0 = (self.0 ^ v).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        self.0 = (self.0 ^ v).wrapping_mul(multiplier());
     }
     fn finish(&self) -> u64 {
         self.0 ^ (self.0 >> 29)
     }
+}
+
+/// The odd multiplier of [`IdHasher`], random per run.
+fn multiplier() -> u64 {
+    static KEY: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *KEY.get_or_init(|| std::hash::BuildHasher::hash_one(&std::hash::RandomState::new(), 0x9e37_79b9_7f4a_7c15_u64) | 1)
 }
 
 /// A map keyed by node id with [`IdHasher`].

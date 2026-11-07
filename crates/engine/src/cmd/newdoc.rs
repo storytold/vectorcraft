@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Artboard, Background, ColorMode, Document, Unit};
 use vectorcraft_geom::{Point, Rect};
 
-use super::*;
+use super::{CommandSpec, Result, Session, always, bad, clock_date, cmd, date_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -517,6 +517,7 @@ pub const CATEGORIES: &[Category] = &[
             ("Logo 1000×1000", 1000.0, 1000.0, PX),
             ("Business Card 3.5 × 2 in", 3.5, 2.0, IN),
             ("Business Card 85 × 55 mm", 85.0, 55.0, MM),
+            ("Business Card 91 × 55 mm", 91.0, 55.0, MM),
             ("Letterhead Letter", 8.5, 11.0, IN),
             ("Letterhead A4", 210.0, 297.0, MM),
             ("Envelope DL", 220.0, 110.0, MM),

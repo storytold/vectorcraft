@@ -73,11 +73,67 @@ pub struct Object {
     pub chain: Vec<Tag>,
     /// Fields in stream order; positional fields have tag 0.
     pub fields: Vec<(Tag, Value)>,
+    /// For objects with many fields: each tag with the positions of its first and last field,
+    /// sorted by tag, so a lookup isn't a scan of every field (a shared object is looked up
+    /// again on every visit). Built by [`Object::index`]; empty for small objects.
+    index: Vec<(Tag, u32, u32)>,
 }
 
+/// Objects with more fields than this get an [`Object::index`]; fewer are scanned.
+const INDEXED_FIELDS: usize = 16;
+
 impl Object {
+    pub fn new(class: Tag, kind: Kind, chain: Vec<Tag>, fields: Vec<(Tag, Value)>) -> Self {
+        let mut o = Self { class, kind, chain, fields, index: Vec::new() };
+        o.index();
+        o
+    }
+
+    /// (Re)build the tag index after `fields` changed.
+    fn index(&mut self) {
+        self.index.clear();
+        if self.fields.len() <= INDEXED_FIELDS {
+            return;
+        }
+        let mut index: Vec<(Tag, u32, u32)> = Vec::new();
+        if index.try_reserve_exact(self.fields.len()).is_err() {
+            return;
+        }
+        // Fields beyond u32 positions are impossible: a stream holds at most MAX_VALUES values.
+        index.extend(self.fields.iter().enumerate().filter_map(|(i, (t, _))| u32::try_from(i).ok().map(|i| (*t, i, i))));
+        // Stable: equal tags stay in stream order, so the run of a tag starts at its first field.
+        index.sort_by_key(|(t, _, _)| *t);
+        index.dedup_by(|later, first| {
+            if later.0 == first.0 {
+                first.2 = later.2;
+                true
+            } else {
+                false
+            }
+        });
+        index.shrink_to_fit();
+        self.index = index;
+    }
+
+    fn position(&self, tag: Tag, last: bool) -> Option<usize> {
+        if self.index.is_empty() {
+            let mut fields = self.fields.iter().enumerate();
+            let hit = if last { fields.rev().find(|(_, (t, _))| *t == tag) } else { fields.find(|(_, (t, _))| *t == tag) };
+            return hit.map(|(i, _)| i);
+        }
+        let at = self.index.binary_search_by_key(&tag, |(t, _, _)| *t).ok()?;
+        let (_, first, end) = self.index.get(at)?;
+        usize::try_from(if last { *end } else { *first }).ok()
+    }
+
+    /// The first field tagged `tag`.
     pub fn get(&self, tag: Tag) -> Option<&Value> {
-        self.fields.iter().find(|(t, _)| *t == tag).map(|(_, v)| v)
+        self.fields.get(self.position(tag, false)?).map(|(_, v)| v)
+    }
+
+    /// The last field tagged `tag` (a shape changed from one kind to another keeps a stale first one).
+    pub fn get_last(&self, tag: Tag) -> Option<&Value> {
+        self.fields.get(self.position(tag, true)?).map(|(_, v)| v)
     }
 }
 
@@ -124,10 +180,11 @@ pub fn parse(bytes: &[u8]) -> Result<Stream, Error> {
         c.u32()?;
     }
     let mut p = Parser { c, objects: Vec::new(), shared: std::collections::HashMap::new(), depth: 0, values: 0 };
-    let root = p.push(Object { class, kind: Kind::Root, chain: vec![class], fields: Vec::new() })?;
+    let root = p.push(Object::new(class, Kind::Root, vec![class], Vec::new()))?;
     let fields = p.fields(true, class)?;
     if let Some(o) = p.objects.get_mut(root) {
         o.fields = fields;
+        o.index();
     }
     Ok(Stream { root, objects: p.objects })
 }
@@ -252,7 +309,7 @@ impl Parser<'_> {
             }
             0x30 => {
                 let fields = self.fields(false, class)?;
-                let id = self.push(Object { class, kind: Kind::Positional, chain: Vec::new(), fields })?;
+                let id = self.push(Object::new(class, Kind::Positional, Vec::new(), fields))?;
                 Value::Obj(Some(id))
             }
             0x31 | 0x32 if !tagged => return Err(Error::Malformed("object without a field tag")),
@@ -303,6 +360,10 @@ impl Parser<'_> {
             0x2c => {
                 let n = usize::try_from(self.c.u32()?).map_err(|_| Error::Malformed("array length"))?;
                 let size = usize::from(self.c.u16()?);
+                // Records of no bytes take nothing from the data, whatever their number.
+                if n > 0 && size == 0 {
+                    return Err(Error::Malformed("array of records without bytes"));
+                }
                 if n.checked_mul(size).is_none_or(|b| b > self.c.remaining()) {
                     return Err(Error::Malformed("array longer than its data"));
                 }
@@ -350,7 +411,7 @@ impl Parser<'_> {
             }
         };
         let fields = self.fields(true, class)?;
-        let id = self.push(Object { class, kind: Kind::Inline, chain: vec![class], fields })?;
+        let id = self.push(Object::new(class, Kind::Inline, vec![class], fields))?;
         Ok(Value::Obj(Some(id)))
     }
 
@@ -369,7 +430,7 @@ impl Parser<'_> {
             return Err(Error::Malformed("object defined twice"));
         }
         // Register before the fields: an object's own fields may refer back to it.
-        let id = self.push(Object { class: Tag(0), kind: Kind::Shared, chain: Vec::new(), fields: Vec::new() })?;
+        let id = self.push(Object::new(Tag(0), Kind::Shared, Vec::new(), Vec::new()))?;
         self.shared.insert(key, id);
         let mut chain = Vec::new();
         let mut fields = Vec::new();
@@ -395,8 +456,36 @@ impl Parser<'_> {
         let class = chain.first().copied().unwrap_or(Tag(0));
         fields.extend(self.fields(true, class)?);
         if let Some(o) = self.objects.get_mut(id) {
-            *o = Object { class, kind: Kind::Shared, chain, fields };
+            *o = Object::new(class, Kind::Shared, chain, fields);
         }
         Ok(Value::Obj(Some(id)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lookups_in_a_large_object_find_the_first_and_last_fields_of_a_tag() {
+        let tag = |i: u32| Tag(0x4100_0000 + i);
+        let mut fields: Vec<(Tag, Value)> = (0..1000).map(|i| (tag(i % 300), Value::UInt(u64::from(i)))).collect();
+        fields.push((tag(7), Value::Str("last".into())));
+        let o = Object::new(Tag::of(b"Grup"), Kind::Shared, Vec::new(), fields.clone());
+        assert!(!o.index.is_empty());
+        // The index has one entry per distinct tag, not per field.
+        assert_eq!(o.index.len(), 300);
+        for t in 0..300 {
+            let first = fields.iter().find(|(k, _)| *k == tag(t)).map(|(_, v)| v);
+            let last = fields.iter().rev().find(|(k, _)| *k == tag(t)).map(|(_, v)| v);
+            assert_eq!(o.get(tag(t)), first);
+            assert_eq!(o.get_last(tag(t)), last);
+        }
+        assert_eq!(o.get(tag(300)), None);
+        assert_eq!(o.get_last(tag(7)), Some(&Value::Str("last".into())));
+        let small = Object::new(Tag::of(b"Grup"), Kind::Shared, Vec::new(), vec![(tag(1), Value::Bool(true)), (tag(1), Value::Bool(false))]);
+        assert!(small.index.is_empty());
+        assert_eq!(small.get(tag(1)), Some(&Value::Bool(true)));
+        assert_eq!(small.get_last(tag(1)), Some(&Value::Bool(false)));
     }
 }

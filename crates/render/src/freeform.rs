@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use vectorcraft_color::freeform::{grid_size, painted_box, spread_scale};
-use vectorcraft_color::{Color, Freeform, GradientPaint};
+use vectorcraft_color::{Freeform, GradientPaint};
 use vectorcraft_geom::{Affine, Rect};
 use vello_cpu::peniko::{Extend, ImageQuality, ImageSampler};
 use vello_cpu::{Pixmap, RenderContext};
@@ -24,22 +24,13 @@ thread_local! {
     static GRIDS: RefCell<FrameCache<u64, Arc<Pixmap>>> = RefCell::new(FrameCache::new(lru::FREEFORM_BUDGET, usize::MAX));
 }
 
-pub(crate) fn hash_color(c: &Color, h: &mut impl Hasher) {
-    match *c {
-        Color::Rgb { r, g, b } => (0u8, r.to_bits(), g.to_bits(), b.to_bits()).hash(h),
-        Color::Cmyk { c, m, y, k } => (1u8, c.to_bits(), m.to_bits(), y.to_bits(), k.to_bits()).hash(h),
-        Color::Gray { k } => (2u8, k.to_bits()).hash(h),
-        Color::Lab { l, a, b } => (3u8, l.to_bits(), a.to_bits(), b.to_bits()).hash(h),
-    }
-}
-
 /// Cache key of the grid of `f` on box `b` at `cols` × `rows` painted with `ink` (and the active
 /// colour settings, which turn colours into display RGB or inks).
 fn key(f: &Freeform, b: Rect, cols: u16, rows: u16, ink: Ink) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for p in &f.points {
         (p.at.x.to_bits(), p.at.y.to_bits(), p.opacity.to_bits(), p.spread.to_bits()).hash(&mut h);
-        hash_color(&p.color, &mut h);
+        p.color.key().hash(&mut h);
     }
     f.lines.hash(&mut h);
     (b.x0.to_bits(), b.y0.to_bits(), b.x1.to_bits(), b.y1.to_bits(), cols, rows).hash(&mut h);

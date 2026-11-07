@@ -20,7 +20,7 @@ fn decode() -> egui::ColorImage {
 
 /// The icon texture, uploaded on first use and kept in the context.
 fn texture(ctx: &Context) -> TextureHandle {
-    let id = Id::new("vectorcraft-brand-mark");
+    let id = Id::unique("vectorcraft-brand-mark");
     if let Some(tex) = ctx.data(|d| d.get_temp::<TextureHandle>(id)) {
         return tex;
     }

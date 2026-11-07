@@ -184,7 +184,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(first) = app.plugin_runs.running.iter().find(|r| r.shown()) else { return };
     let now = ctx.input(|i| i.time);
     let since = ctx.data_mut(|m| {
-        let seen = m.get_temp_mut_or_insert_with(egui::Id::new("plugin-run-seen"), || (first.id, now));
+        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("plugin-run-seen"), || (first.id, now));
         if seen.0 != first.id {
             *seen = (first.id, now);
         }

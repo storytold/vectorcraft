@@ -12,7 +12,10 @@ use vectorcraft_doc::slices::valid_rect;
 use vectorcraft_doc::{Appearance, CellAlign, CellVAlign, Document, Node, NodeKind, Slice, SliceKind, SliceOptions};
 use vectorcraft_geom::{Rect, shapes};
 
-use super::*;
+use super::{
+    CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
+    switch_or, targets,
+};
 
 /// The most slices one Divide Slices makes.
 const MAX_PIECES: usize = 1000;
@@ -96,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Slice Options…",
             ["Object", "Slice"],
             None,
-            "{kind?: \"image\"|\"noImage\"|\"htmlText\" (object slices of type only), name?, url?, target?, message?, alt?: (image), text?: cell text; HTML allowed (noImage), background?: \"\"|\"matte\"|\"#rrggbb\", hAlign?: \"default\"|\"left\"|\"center\"|\"right\", vAlign?: \"default\"|\"top\"|\"middle\"|\"baseline\"|\"bottom\"} set the selected slices' options as one undo step; no options: read them → the first slice's {kind, name, url, target, message, alt, text, background, hAlign, vAlign, htmlText: whether HTML Text applies}",
+            "{kind?: \"image\"|\"noImage\"|\"htmlText\" (object slices of type only), name?, url?, target?, message?, alt?: (image), text?: cell text; HTML allowed (noImage), background?: \"\"|\"matte\"|\"#rrggbb\" (#rrggbbaa and #rgba are refused), hAlign?: \"default\"|\"left\"|\"center\"|\"right\", vAlign?: \"default\"|\"top\"|\"middle\"|\"baseline\"|\"bottom\"} set the selected slices' options as one undo step; no options: read them → the first slice's {kind, name, url, target, message, alt, text, background, hAlign, vAlign, htmlText: whether HTML Text applies}",
             slices_targeted,
             options
         ),
@@ -109,13 +112,21 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             clip_to_artboard
         ),
-        cmd!(query "view.slices.hide", "Hide Slices", ["View"], None, "{hidden?: bool} toggle (or set) whether the canvas hides the slices (session view state) → {hidden}", has_doc, hide),
+        cmd!(
+            query "view.slices.hide",
+            "Hide Slices",
+            ["View"],
+            None,
+            "{hidden?: bool} toggle (or set) whether the canvas hides the slices (session view state); hiding deselects the slices in every open document, and showing them again leaves them deselected and does not restore the selection that was cleared; while they are hidden no command selects one (an object that is an object slice can still be selected as art) → {hidden}",
+            has_doc,
+            hide
+        ),
         cmd!(
             query "view.slices.lock",
             "Lock Slices",
             ["View"],
             None,
-            "{locked?: bool} toggle (or set) the slice lock: locked slices can't be selected or edited with the Slice Selection tool → {locked}",
+            "{locked?: bool} toggle (or set) the slice lock: locked slices can't be selected or edited with the Slice Selection tool; locking deselects the slices in every open document, and unlocking leaves them deselected and does not restore the selection that was cleared; while it is on no command selects one (an object that is an object slice can still be selected as art) → {locked}",
             has_doc,
             lock
         ),
@@ -124,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Slices",
             [],
             None,
-            "{} the slices as laid out, numbered left to right and top to bottom → {slices: [{number, id (null for auto slices), source: \"user\"|\"object\"|\"auto\", name, x, y, width, height, options, selected}], clipToArtboard, hidden, locked}",
+            "{} the slices as laid out, numbered left to right and top to bottom → {slices: [{number, id (null for auto slices), source: \"user\"|\"object\"|\"auto\", name, x, y, width, height, options, selected (selected with the Slice Selection tool or a slice command, or an object slice whose object is selected)}], clipToArtboard, hidden, locked}",
             has_doc,
             list
         ),
@@ -337,8 +348,13 @@ fn from_guides(s: &mut Session, _: &Value) -> Result<Value> {
         v
     };
     let (xs, ys) = (cuts(true, region.x0, region.x1), cuts(false, region.y0, region.y1));
-    let rects: Vec<Rect> =
-        ys.windows(2).flat_map(|y| xs.windows(2).map(move |x| Rect::new(x[0], y[0], x[1], y[1]))).filter(|r| valid_rect(*r)).collect();
+    // One past the limit tells too many, without making every piece of a huge grid first.
+    let rects: Vec<Rect> = ys
+        .windows(2)
+        .flat_map(|y| xs.windows(2).map(move |x| Rect::new(x[0], y[0], x[1], y[1])))
+        .filter(|r| valid_rect(*r))
+        .take(MAX_PIECES + 1)
+        .collect();
     if rects.len() > MAX_PIECES {
         return Err(EngineError::Other(format!("Create from Guides: the guides make more than {MAX_PIECES} slices")));
     }
@@ -497,6 +513,7 @@ impl Edits {
                 "" | "none" => Ok(String::new()),
                 "matte" => Ok("matte".to_string()),
                 _ => vectorcraft_color::Color::from_hex(&b)
+                    .filter(|_| !super::hex_with_alpha(&b))
                     .map(|c| c.to_hex())
                     .ok_or_else(|| bad(C, "`background` must be \"\", \"matte\" or #rrggbb")),
             })
@@ -576,7 +593,7 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn clip_to_artboard(s: &mut Session, p: &Value) -> Result<Value> {
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!s.doc()?.doc.slices_clip_to_artboard);
+    let on = switch_or(p, "on", !s.doc()?.doc.slices_clip_to_artboard, "object.slice.clipToArtboard")?;
     if on != s.doc()?.doc.slices_clip_to_artboard {
         s.edit("Clip to Artboard", |d, _| {
             d.slices_clip_to_artboard = on;
@@ -587,20 +604,37 @@ fn clip_to_artboard(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn hide(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("hidden").and_then(Value::as_bool).unwrap_or(!s.menu.slices_hidden);
+    let v = switch_or(p, "hidden", !s.menu.slices_hidden, "view.slices.hide")?;
     s.menu.slices_hidden = v;
+    if v {
+        deselect_in_every_document(s);
+    }
     Ok(json!({ "hidden": v }))
 }
 
 fn lock(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.slices_locked);
+    let v = switch_or(p, "locked", !s.menu.slices_locked, "view.slices.lock")?;
     s.menu.slices_locked = v;
+    if v {
+        deselect_in_every_document(s);
+    }
     Ok(json!({ "locked": v }))
+}
+
+/// Locked or hidden slices can't stay selected, in any open document ([`crate::deselect_hidden`]).
+fn deselect_in_every_document(s: &mut Session) {
+    for st in &mut s.docs {
+        if crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection) {
+            st.revision += 1;
+        }
+    }
 }
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
     let d = &st.doc;
+    // What the Object → Slice commands act on: the selected objects that are object slices too.
+    let selected = selected_slices(d, &st.selection);
     let slices: Vec<Value> = d
         .slice_layout()
         .iter()
@@ -609,7 +643,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             json!({
                 "number": a.number, "id": a.id.map(|i| i.0), "source": a.source.key(), "name": d.slice_name(a),
                 "x": a.rect.x0, "y": a.rect.y0, "width": a.rect.width(), "height": a.rect.height(),
-                "options": options_json(&o), "selected": a.id.is_some_and(|id| st.selection.slices.contains(&id)),
+                "options": options_json(&o), "selected": a.id.is_some_and(|id| selected.contains(&id)),
             })
         })
         .collect();
@@ -618,9 +652,9 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn select_all(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = s.doc()?.doc.slice_ids();
-    let n = ids.len();
     s.select(|_, sel| sel.set_slices(ids))?;
-    Ok(json!({ "count": n }))
+    // None while the slices are locked or hidden.
+    Ok(json!({ "count": s.doc()?.selection.slices.len() }))
 }
 
 // ---------- the Slice and Slice Selection tools ----------

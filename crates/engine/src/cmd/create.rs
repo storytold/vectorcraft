@@ -5,7 +5,10 @@ use vectorcraft_doc::{Appearance, CharStyle, LiveShape, Node, NodeKind, TextObje
 use vectorcraft_geom::{Affine, Anchor, AnchorKind, FillRule, PathData, Point, Rect, SubPath, shapes};
 
 use super::newart::NewArt;
-use super::*;
+use super::{
+    CommandSpec, NodeId, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, f64_or, f64_req, finite_numbers, has_doc,
+    number_or, str_param, switch_or,
+};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -26,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg), seed?} → {id}",
             has_doc,
             flare
         ),
@@ -82,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style?, color?, keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, rotation?: deg (about x, y), vertical?: bool = false, size?: pt, font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText, fitMinPercent?}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -206,6 +209,8 @@ pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeI
     let gid = d.alloc_id();
     d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
     d.move_node(target, Some(gid), usize::MAX)?;
+    // Copied type whose layout caches `reid` dropped has them again.
+    super::typecmd::refresh_bounds_of(d, &[gid]);
     Ok(gid)
 }
 
@@ -337,11 +342,22 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), f64_or(p, "rotation", 0.0))
 }
 
+/// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
+/// null. A fraction, a negative, a non-finite or a non-number is an error rather than the default.
+fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
+    let n = number_or(p, key, default as f64, cmd)?;
+    if n.is_finite() && n >= 0.0 && n.fract() == 0.0 {
+        Ok(n as u64)
+    } else {
+        Err(bad(cmd, format!("`{key}` must be a whole number of at least 0, not {n}")))
+    }
+}
+
 fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.polygon")?, f64_req(p, "cy", "shape.polygon")?);
     let r = f64_req(p, "radius", "shape.polygon")?.abs();
-    check_numbers(p, &["sides", "rotation"], "shape.polygon")?;
-    let sides = p.get("sides").and_then(Value::as_u64).unwrap_or(6).clamp(3, 1000) as u32;
+    check_numbers(p, &["rotation"], "shape.polygon")?;
+    let sides = count_or(p, "sides", 6, "shape.polygon")?.clamp(3, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
     let xf = Affine::translate(c.to_vec2()) * vectorcraft_geom::rotate_deg(rot);
     let live = LiveShape::Polygon { radius: r, sides, xf, radii: vec![], kinds: vec![], radii_relative: false };
@@ -351,9 +367,9 @@ fn polygon(s: &mut Session, p: &Value) -> Result<Value> {
 fn star(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.star")?, f64_req(p, "cy", "shape.star")?);
     let r1 = f64_req(p, "radius1", "shape.star")?.abs();
-    check_numbers(p, &["radius2", "points", "rotation"], "shape.star")?;
+    check_numbers(p, &["radius2", "rotation"], "shape.star")?;
     let r2 = f64_or(p, "radius2", r1 / 2.0).abs();
-    let n = p.get("points").and_then(Value::as_u64).unwrap_or(5).clamp(2, 1000) as u32;
+    let n = count_or(p, "points", 5, "shape.star")?.clamp(2, 1000) as u32;
     let rot = f64_or(p, "rotation", 0.0);
     let turn = vectorcraft_geom::rotate_deg(rot);
     // A quarter or whole turn (a Constrain Angle of 90°, say) turns the upright star exactly.
@@ -379,6 +395,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         "rays",
         "longest",
         "rayFuzziness",
+        "rotation",
         "rings",
         "largest",
         "x2",
@@ -397,6 +414,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let rays = p.get("rays").and_then(Value::as_u64).unwrap_or(15).min(50) as usize;
     let longest = pct("longest", 300.0);
     let ray_fuzz = pct("rayFuzziness", 100.0).min(1.0);
+    let ray_turn = f64_or(p, "rotation", 0.0).to_radians();
     let rings = p.get("rings").and_then(Value::as_u64).unwrap_or(10).min(50) as usize;
     let largest = pct("largest", 50.0);
     let end = match (p.get("x2").and_then(Value::as_f64), p.get("y2").and_then(Value::as_f64)) {
@@ -427,11 +445,12 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
     let inner = (1.0 - fuzz as f32 * 0.6).clamp(0.05, 0.95);
     parts.push(("Halo", circle(c, halo_r), radial(c, halo_r, vec![stop(0.0, 0.0), stop(inner * 0.75, 0.0), stop(inner, 0.5), stop(1.0, 0.0)]), 1.0));
     // Rays: thin spikes of random length (Longest = % of the centre radius), fading outwards.
+    // `rotation` turns them clockwise about the center.
     if rays > 0 {
         let mut bp = vectorcraft_geom::BezPath::new();
         let mut reach: f64 = 0.0;
         for i in 0..rays {
-            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64;
+            let a = std::f64::consts::TAU * (i as f64 + rnd() * 0.6) / rays as f64 + ray_turn;
             let len = r * longest * (1.0 - ray_fuzz * 0.75 * rnd()).max(0.1);
             reach = reach.max(len);
             let w = r * 0.035;
@@ -498,12 +517,12 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
     let c = Point::new(f64_req(p, "cx", "shape.spiral")?, f64_req(p, "cy", "shape.spiral")?);
-    check_numbers(p, &["segments"], "shape.spiral")?;
+    let segments = count_or(p, "segments", 10, "shape.spiral")?.clamp(2, 1000) as u32;
     let path = shapes::spiral(
         c,
         f64_req(p, "radius", "shape.spiral")?,
         number_or(p, "decay", 80.0, "shape.spiral")?,
-        p.get("segments").and_then(Value::as_u64).unwrap_or(10).clamp(2, 1000) as u32,
+        segments,
         switch_or(p, "clockwise", true, "shape.spiral")?,
     );
     add_art(s, "Spiral", path_kind(path, None), None)
@@ -575,11 +594,12 @@ fn grid_group(s: &mut Session, label: &str, (paths, bbox_angle): (Vec<PathData>,
 }
 
 /// A grid's divider count `count` (an error unless it is a number or null; 5 unless it is a JSON
-/// integer of 0 or more, so 4.0 and 2.5 give 5; at most 999) with its skew `key` in percent (0 when
+/// whole number of 0 or more, so 4.0 gives 4 and 2.5 gives 5; at most 999) with its skew `key` in percent (0 when
 /// absent, clamped to ±[`shapes::GRID_SKEW_MAX`]).
 fn dividers(p: &Value, count: &str, key: &str, cmd: &str) -> Result<(u32, f64)> {
     check_numbers(p, &[count], cmd)?;
-    let n = p.get(count).and_then(Value::as_u64).unwrap_or(5).min(999) as u32;
+    let whole = |v: &Value| v.as_u64().or_else(|| v.as_f64().filter(|f| f.is_finite() && *f >= 0.0 && f.fract() == 0.0).map(|f| f as u64));
+    let n = p.get(count).and_then(whole).unwrap_or(5).min(999) as u32;
     let skew = match p.get(key) {
         None | Some(Value::Null) => 0.0,
         Some(v) => v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?,
@@ -686,6 +706,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     super::paint::check_keep_model(p, "text.create")?;
     check_numbers(p, &["size"], "text.create")?;
     check_switches(p, &["vertical", "placeholder"], "text.create")?;
+    super::color_param(p, "color", "text.create")?;
     if let Some(a) = p.get("area") {
         check_numbers(a, &["width", "height"], "text.create")?;
     }
@@ -700,7 +721,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     if rotation != 0.0 {
         t.xf *= vectorcraft_geom::rotate_deg(rotation);
     }
-    t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
+    t.vertical = switch_or(p, "vertical", false, "text.create")?;
     t.para = new_type_para();
     new_type_alignment(s, p, "text.create", &mut t)?;
     if let Some(a) = p.get("area") {
@@ -719,7 +740,17 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     let made = insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation))?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
-    Ok(super::typecmd::with_overflow(s, id.as_slice(), made))
+    let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
+    if p.get("font").is_some() || p.get("style").is_some() {
+        let runs = match id.and_then(|i| s.doc().ok()?.doc.node(i)).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.runs.iter().map(|r| super::fonts::font_of(&r.style)).collect(),
+            _ => Default::default(),
+        };
+        if let Some(w) = super::fonts::set_font_warning(runs) {
+            made["warning"] = json!(w);
+        }
+    }
+    Ok(made)
 }
 
 /// The paragraph attributes new type gets (the Type tools, `text.create`): aligned to the start of
@@ -781,7 +812,8 @@ pub(crate) fn new_area_fit(s: &Session, p: &Value, c: &str) -> Result<vectorcraf
 
 /// The character style new type gets: `size`, `font`, `style` and `color` from `p` (an RGB
 /// `color` in a CMYK document as [`super::paint::new_color`] stores it), else the defaults,
-/// filled with the current fill unless that is None or white (black then).
+/// filled with the current fill unless that is None or white (black then), in the document's
+/// language.
 pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     let mut style = CharStyle::default();
     if let Some(sz) = p.get("size").and_then(Value::as_f64) {
@@ -792,11 +824,19 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
     }
     if let Some(f) = str_param(p, "style") {
         style.font_style = f.to_string();
+    } else if str_param(p, "font").is_some() {
+        // A family without a Regular (#4128): its closest style, as text.setRangeStyle takes.
+        super::textedit::fit_font_style(&mut style);
     }
     style.fill = match p.get("color").and_then(color_value) {
         Some(c) => vectorcraft_color::Paint::solid(super::paint::new_color(s, p, c)),
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
+    // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
+    // for the default. Type already in a document keeps its own.
+    let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
+    let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
+    style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
     style
 }

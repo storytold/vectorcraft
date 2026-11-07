@@ -592,6 +592,21 @@ showpage"##;
     assert!(near(bounds(&meshes[1]), Rect::new(150.0, 90.0, 190.0, 140.0)), "{:?}", bounds(&meshes[1]));
 }
 
+/// Ghostscript 9's `eps2write` copies the initial graphics state (`currenthalftone`,
+/// `currentcolortransfer`) into global VM before it draws, with a copier for each composite type.
+/// It copies only what `gcheck` says is in local VM: `gcheck` is true for every simple object
+/// (PLRM 3rd ed., `gcheck`), so the halftone's numbers stay as they are. Written from the PLRM.
+#[test]
+fn gcheck_is_true_for_simple_objects() {
+    super::tests::check("1 gcheck 2.5 gcheck and /n gcheck and true gcheck and null gcheck and /add load gcheck and mark gcheck and");
+    super::tests::check("(s) gcheck not 1 dict gcheck not and {} gcheck not and 1 scheck and (s) scheck not and");
+    super::tests::check(
+        "/copiers << /dicttype { << exch { cp2g } forall >> } /arraytype { [ exch { cp2g } forall ] } >> def \
+         /cp2g { dup gcheck not { copiers 1 index type get exec } if } bind def \
+         currenthalftone cp2g /Frequency get 60 eq [ currentcolortransfer ] cp2g length 4 eq and",
+    );
+}
+
 /// A procset written as the PostScript Language Reference (3rd ed.) describes the Level 2 and 3
 /// facilities programs probe before drawing: a resource category made from `Generic` and
 /// resources defined and found in it (§3.9), local and global VM (`currentglobal`, `setglobal`,
@@ -768,17 +783,24 @@ fn errors_say_what_the_postscript_error_means() {
 fn every_postscript_error_the_reader_raises_has_a_meaning() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("import");
     let mut raised = std::collections::BTreeSet::new();
-    for entry in std::fs::read_dir(&dir).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        if !name.ends_with(".rs") || name.starts_with("tests") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        for marker in ["Ps(\"", "ps_err(\""] {
-            for (at, _) in text.match_indices(marker) {
-                let rest = &text[at + marker.len()..];
-                raised.insert(rest[..rest.find('"').unwrap()].to_string());
+    let mut stack = vec![dir];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !name.ends_with(".rs") || name.starts_with("tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for marker in ["Ps(\"", "ps_err(\""] {
+                for (at, _) in text.match_indices(marker) {
+                    let rest = &text[at + marker.len()..];
+                    raised.insert(rest[..rest.find('"').unwrap()].to_string());
+                }
             }
         }
     }

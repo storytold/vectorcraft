@@ -1,0 +1,319 @@
+//! Control-channel input (`ui.key`, `ui.click`, `ui.drag`) holds its modifiers in egui's input
+//! state for the frames it spans, so handlers reading `i.modifiers` see them as they see the
+//! keyboard's.
+
+use egui::Modifiers;
+use serde_json::{Value, json};
+use vectorcraft_doc::NodeId;
+use vectorcraft_engine::Session;
+
+use crate::VectorcraftApp;
+use crate::control::{ControlRequest, Outcome};
+
+/// Send one control request (it must succeed).
+pub(crate) fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) {
+    let (req, _rx) = ControlRequest::new(method, params);
+    let Outcome::Done(r) = crate::control::handle(app, ctx, &req) else { panic!("not done") };
+    assert_eq!(r["ok"], true, "{r}");
+}
+
+/// Frames through the host's input hook until the synthetic queue is drained, and one more (the
+/// keyboard's modifiers come back); `draw` lays out what the input reaches. → the modifiers
+/// held in each frame.
+pub(crate) fn run_synthetic(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<Modifiers> {
+    let mut held = vec![];
+    loop {
+        let last = app.synthetic.is_empty();
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(ctx, &mut raw);
+        let mut out = ctx.run_ui(raw, |ui| {
+            held.push(ui.input(|i| i.modifiers));
+            draw(app, ui);
+        });
+        out.textures_delta.clear();
+        if last {
+            return held;
+        }
+    }
+}
+
+fn keys(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    crate::shortcuts::handle(app, ui.ctx());
+}
+
+/// A document with one selected 10 × 10 square at (10, 10) → (app, its id).
+fn one_square() -> (VectorcraftApp, NodeId) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    (app, NodeId(id))
+}
+
+fn top_left(app: &VectorcraftApp, id: NodeId) -> (f64, f64) {
+    let b = app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+    (b.x0, b.y0)
+}
+
+fn object_count(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().doc.layers[0].children().unwrap().len()
+}
+
+#[test]
+fn shift_arrow_nudges_ten_points_and_alt_arrow_copies() {
+    let (mut app, id) = one_square();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.key", json!({"key": "ArrowDown", "shift": true}));
+    let held = run_synthetic(&mut app, &ctx, keys);
+    assert_eq!(top_left(&app, id), (10.0, 20.0), "Shift+↓ nudges by 10 pt");
+    assert!(held.first().is_some_and(|m| m.shift));
+    assert_eq!(held.last(), Some(&Modifiers::NONE), "the keyboard's modifiers come back");
+    control(&mut app, &ctx, "ui.key", json!({"key": "ArrowRight", "alt": true}));
+    run_synthetic(&mut app, &ctx, keys);
+    assert_eq!(object_count(&app), 2, "Alt+→ nudges a copy");
+}
+
+#[test]
+fn a_typed_key_holds_its_modifiers_for_its_text() {
+    let (mut app, _) = one_square();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.key", json!({"key": "B", "shift": true, "text": "B"}));
+    run_synthetic(&mut app, &ctx, keys);
+    assert_eq!(app.session.tool_id(), "blobBrush", "Shift+B, not B");
+}
+
+/// A `ui.pointer` release sent right after a `ui.key` waits until the key reached the busy tool:
+/// C pressed while an arc is dragged out closes the arc drawn on release.
+#[test]
+fn a_pointer_release_after_a_key_waits_for_the_key() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "arc"})).unwrap();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}));
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(key).unwrap();
+    tx.send(up).unwrap();
+    // Each frame as the host runs it: the input hook, the control requests, then the UI pass.
+    let mut released = None;
+    for _ in 0..8 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        if let Ok(r) = up_reply.try_recv() {
+            released = Some(r);
+            break;
+        }
+        let mut out = ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    let r = released.expect("the release ran");
+    assert_eq!(r["ok"], true, "{r}");
+    let document = app.session.active().unwrap();
+    let arc = *document.selection.objects.last().expect("the arc drawn on release");
+    let closed = document.doc.node(arc).unwrap().path_data().unwrap().subpaths[0].closed;
+    assert!(closed, "C reached the Arc tool before the release");
+}
+
+/// An MCP pointer gesture can select a tool just before sending its pointer events. A key queued
+/// by the previous call must reach the old tool before that selection changes it.
+#[test]
+fn tool_selection_after_a_key_waits_for_the_key() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "pen"})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "B", "shift": true, "text": "B"}));
+    let (select, select_reply) = ControlRequest::new("ui.tool.select", json!({"tool": "arc"}));
+    tx.send(key).unwrap();
+    tx.send(select).unwrap();
+
+    app.drain_control(&ctx);
+    assert!(select_reply.try_recv().is_err(), "selection waits while Shift+B is queued");
+    assert_eq!(app.session.tool_id(), "pen");
+    let mut key_reached_tool = false;
+    let mut selected = None;
+    for _ in 0..8 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        if let Ok(reply) = select_reply.try_recv() {
+            selected = Some(reply);
+            break;
+        }
+        let mut out = ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        key_reached_tool |= app.session.tool_id() == "blobBrush";
+    }
+    assert!(key_reached_tool, "Shift+B reaches the old tool before the explicit selection");
+    let selected = selected.expect("the later tool selection runs");
+    assert_eq!(selected["ok"], true, "{selected}");
+    assert_eq!(app.session.tool_id(), "arc");
+}
+
+#[test]
+fn tool_selection_after_a_discarded_key_does_not_run() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "pen"})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "B", "shift": true, "text": "B"}));
+    let (select, select_reply) = ControlRequest::new("ui.tool.select", json!({"tool": "arc"}));
+    tx.send(key).unwrap();
+    tx.send(select).unwrap();
+    for _ in 0..2 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        assert!(select_reply.try_recv().is_err(), "selection waits for the key");
+    }
+    assert!(app.synthetic_injected);
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let mut raw = egui::RawInput::default();
+    app.raw_input_hook(&ctx, &mut raw);
+    app.drain_control(&ctx);
+    let selected = select_reply.try_recv().expect("the waiting selection is answered");
+    assert_eq!(selected["ok"], false, "{selected}");
+    assert_eq!(app.session.tool_id(), "pen", "the discarded key cannot precede a tool switch");
+}
+
+/// A waiting `ui.pointer` request whose caller gave it up is dropped at once: the requests sent
+/// after it run without waiting for the input sent before it to be applied.
+#[test]
+fn a_given_up_pointer_does_not_hold_back_later_requests() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    let ticket = up.ticket();
+    let (list, list_reply) = ControlRequest::new("ui.tool.list", json!({}));
+    tx.send(key).unwrap();
+    tx.send(up).unwrap();
+    tx.send(list).unwrap();
+    app.drain_control(&ctx);
+    assert!(list_reply.try_recv().is_err(), "the pointer request waits for the key, ahead of the list");
+    assert!(ticket.give_up(), "the waiting pointer request had not started");
+    // The key is still queued: no UI pass ran.
+    app.drain_control(&ctx);
+    let r = list_reply.try_recv().expect("the list ran past the given-up pointer request");
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(up_reply.try_recv().is_err(), "the given-up pointer request did not run");
+}
+
+/// Given-up `ui.pointer` requests made before synthetic input was dropped do not count toward a
+/// frame's request limit: a request queued behind a frame's worth of them runs in that frame.
+#[test]
+fn given_up_stale_pointer_requests_do_not_use_up_the_frame() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    for _ in 0..crate::control::MAX_CONTROL_REQUESTS_PER_FRAME {
+        let (up, _up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert!(up.ticket().give_up(), "the pointer request had not started");
+        tx.send(up).unwrap();
+    }
+    app.synthetic_dropped_before = ControlRequest::next_seq();
+    let (list, list_reply) = ControlRequest::new("ui.tool.list", json!({}));
+    tx.send(list).unwrap();
+    app.drain_control(&ctx);
+    let r = list_reply.try_recv().expect("the list ran in the same frame");
+    assert_eq!(r["ok"], true, "{r}");
+}
+
+/// A `ui.pointer` release sent after a `ui.key` fails when the key's batch is discarded because a
+/// dialog opened before a UI pass took it, whether the release was waiting for the key
+/// (`waiting`) or still on the channel. A release made after the discard runs.
+fn a_release_after_a_discarded_key(waiting: bool) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("tool.select", json!({"tool": "arc"})).unwrap();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}));
+    let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));
+    let (up, up_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(key).unwrap();
+    let mut up = Some(up);
+    if waiting {
+        tx.send(up.take().unwrap()).unwrap();
+    }
+    // The first frame queues the key; the second injects it.
+    for _ in 0..2 {
+        let mut raw = egui::RawInput::default();
+        app.raw_input_hook(&ctx, &mut raw);
+        app.drain_control(&ctx);
+        assert!(up_reply.try_recv().is_err(), "the release waits for the key");
+    }
+    assert!(app.synthetic_injected, "the key is in the frame's input");
+    if let Some(up) = up {
+        tx.send(up).unwrap();
+    }
+    // A dialog opens before a UI pass takes the key, so the next frame discards it.
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    let mut raw = egui::RawInput::default();
+    app.raw_input_hook(&ctx, &mut raw);
+    // A release made after the key was discarded, queued behind the first one, runs.
+    let (later, later_reply) = ControlRequest::new("ui.pointer", json!({"events": [{"kind": "up", "x": 200, "y": 180}]}));
+    tx.send(later).unwrap();
+    app.drain_control(&ctx);
+    let r = up_reply.try_recv().expect("the release was answered");
+    assert_eq!(r["ok"], false, "{r}");
+    let r = later_reply.try_recv().expect("the later release was answered");
+    assert_eq!(r["ok"], true, "{r}");
+    let document = app.session.active().unwrap();
+    let arc = *document.selection.objects.last().expect("the arc drawn on the later release");
+    let closed = document.doc.node(arc).unwrap().path_data().unwrap().subpaths[0].closed;
+    assert!(!closed, "the discarded C did not reach the Arc tool");
+}
+
+#[test]
+fn a_waiting_pointer_release_fails_when_the_key_before_it_is_discarded() {
+    a_release_after_a_discarded_key(true);
+}
+
+#[test]
+fn a_queued_pointer_release_fails_when_the_key_before_it_is_discarded() {
+    a_release_after_a_discarded_key(false);
+}
+
+#[test]
+fn a_drag_holds_its_modifiers_from_the_press_to_the_release() {
+    let (mut app, _) = one_square();
+    let ctx = egui::Context::default();
+    control(&mut app, &ctx, "ui.drag", json!({"x": 10, "y": 10, "toX": 50, "toY": 50, "steps": 3, "shift": true}));
+    let held = run_synthetic(&mut app, &ctx, |_, _| {});
+    let shift: Vec<bool> = held.iter().map(|m| m.shift).collect();
+    // Move to the start, press, three moves, release, then the keyboard's modifiers again.
+    assert_eq!(shift, [false, true, true, true, true, true, false]);
+}
+
+#[test]
+fn a_shift_click_on_a_layers_selection_square_adds_to_the_selection() {
+    let (mut app, a) = one_square();
+    let b = NodeId(app.run("shape.rectangle", json!({"x": 40, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [a.0]})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: the layer, then `b`; a row's selection square is 17 pt right of its target circle.
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::layers::show(&mut app, ui));
+    out.textures_delta.clear();
+    let mut circles: Vec<egui::Pos2> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Circle(cs) if cs.radius == 5.0 => Some(cs.center),
+            _ => None,
+        })
+        .collect();
+    circles.sort_by(|p, q| p.y.total_cmp(&q.y));
+    let square = circles[1] + egui::vec2(17.0, 0.0);
+    control(&mut app, &ctx, "ui.click", json!({"x": square.x, "y": square.y, "shift": true}));
+    run_synthetic(&mut app, &ctx, crate::panels::layers::show);
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![a, b], "added, not replaced");
+}

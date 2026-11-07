@@ -95,6 +95,7 @@
 #![forbid(unsafe_code)]
 
 mod css;
+mod entities;
 mod export;
 mod glyph;
 mod import;
@@ -332,7 +333,7 @@ pub struct LinkedImage {
     pub bytes: std::sync::Arc<Vec<u8>>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum SvgError {
     #[error("SVG parse error: {0}")]
     Parse(String),
@@ -342,6 +343,14 @@ pub enum SvgError {
     /// SVGZ data unpacks to more than the reader takes (a guard against decompression bombs).
     #[error("SVG parse error: {0}")]
     TooBig(String),
+    /// The SVG expands to more objects than the reader takes (a guard against `<use>` and
+    /// nested-image expansion bombs, #3564).
+    #[error("the SVG expands to more than {0} objects")]
+    TooLarge(usize),
+    /// The SVG expands to more nested SVG images than the reader takes (a guard against
+    /// nested-image expansion bombs, #3564).
+    #[error("the SVG expands to more than {0} nested SVG images")]
+    TooManyImages(usize),
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -378,7 +387,7 @@ pub struct Editing {
 /// The native document an SVG carries, if any, and whether the SVG was edited since.
 pub fn editing(svg: &str) -> Option<Editing> {
     // (An SVG nested too deep for the XML reader carries none: it isn't one of ours.)
-    if !svg.contains(EDITING_NS) || import::xml_too_deep(svg) {
+    if !svg.contains(EDITING_NS) || import::xml_too_deep(svg) || entities::expansion_too_large(svg) {
         return None;
     }
     let opts = usvg::roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
@@ -540,13 +549,18 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
 }
 
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE};
+pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
+    import_within(svg, opts, MAX_NODES)
+}
+
+/// [`import_with`], capping the objects the document may expand to at `max_nodes`.
+pub fn import_within(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
     // usvg converts the tree by recursion, in large stack frames: the nesting it is given is
     // capped (`import::depth`), and it gets room for that cap whatever thread asks.
-    vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts))
+    vectorcraft_doc::depth::with_deep_stack(|| import::import(svg, opts, max_nodes))
 }
 
 /// Reads a linked file: its bytes and the link to it (absolute path, size, time and hash), or
@@ -610,6 +624,49 @@ pub fn xml_escape(s: &str) -> String {
     o
 }
 
+/// [`push_num`] through integer arithmetic, for the values it writes the same as the decimal
+/// formatter: `decimals` of at most 9, and `v` scaled by 10^`decimals` below 2^53 and further from
+/// halfway between two integers than the scaling's rounding error. Returns false, writing nothing,
+/// for any other value.
+fn push_num_scaled(out: &mut String, v: f64, decimals: u8) -> bool {
+    const SCALE: [f64; 10] = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
+    let Some(&scale) = SCALE.get(usize::from(decimals)) else { return false };
+    // Each power of ten here is exact, so `x` is within half an ulp (`x * EPSILON / 2`) of |v| × 10^decimals.
+    let x = v.abs() * scale;
+    if x.is_nan() || x >= 9.0e15 {
+        return false;
+    }
+    let whole = x.floor();
+    let frac = x - whole;
+    if (frac - 0.5).abs() <= x * f64::EPSILON {
+        return false;
+    }
+    let mut n = whole as u64 + u64::from(frac > 0.5);
+    let places = usize::from(decimals);
+    // The digits of `n` from the last one, at least one more than `places` of them.
+    let mut digits = [0u8; 24];
+    let mut len = 0;
+    for d in digits.iter_mut() {
+        if n == 0 && len > places {
+            break;
+        }
+        *d = b'0' + (n % 10) as u8;
+        n /= 10;
+        len += 1;
+    }
+    let Some((fraction, int)) = digits.get(..len).and_then(|d| d.split_at_checked(places)) else { return false };
+    let zeros = fraction.iter().take_while(|&&d| d == b'0').count();
+    if v < 0.0 && (zeros < places || int.iter().any(|&d| d != b'0')) {
+        out.push('-');
+    }
+    out.extend(int.iter().rev().map(|&d| char::from(d)));
+    if zeros < places {
+        out.push('.');
+        out.extend(fraction.iter().skip(zeros).rev().map(|&d| char::from(d)));
+    }
+    true
+}
+
 /// Format a number with at most `decimals` places, trimming trailing zeros.
 pub fn fmt_num(v: f64, decimals: u8) -> String {
     let mut s = String::new();
@@ -621,6 +678,9 @@ pub fn fmt_num(v: f64, decimals: u8) -> String {
 pub fn push_num(out: &mut String, v: f64, decimals: u8) {
     use std::fmt::Write as _;
     let v = if v.is_finite() { v } else { 0.0 };
+    if push_num_scaled(out, v, decimals) {
+        return;
+    }
     let start = out.len();
     let _ = write!(out, "{:.*}", decimals as usize, v); // writing to a String can't fail
     let s = out.get(start..).unwrap_or_default();
@@ -659,5 +719,49 @@ mod tests {
     #[test]
     fn escaping() {
         assert_eq!(xml_escape("a<b>&\"'"), "a&lt;b&gt;&amp;&quot;&apos;");
+    }
+
+    /// `v` at `decimals` places by the decimal formatter, trailing zeros trimmed.
+    fn formatted(v: f64, decimals: u8) -> String {
+        let s = format!("{:.*}", usize::from(decimals), if v.is_finite() { v } else { 0.0 });
+        let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.') } else { &s };
+        if matches!(s, "-0" | "") { "0".into() } else { s.into() }
+    }
+
+    #[test]
+    fn numbers_match_the_decimal_formatter() {
+        let mut values =
+            vec![0.0, -0.0, 0.5, -0.5, 2.5, 0.0005, -0.0005, 1.0005, 0.125, 1e-12, 9.0e15, 4503599627370495.5, 1e20, f64::NAN, f64::INFINITY];
+        // Coordinates of every size, and values on and just off the halfway points between written numbers.
+        let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+        for _ in 0..20_000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let unit = (seed >> 11) as f64 / (1u64 << 53) as f64;
+            let v = (unit - 0.5) * 10f64.powi((seed % 13) as i32 - 3);
+            let tie = ((v * 1000.0).trunc() + 0.5) / 1000.0;
+            values.extend([v, tie, f64::from_bits(tie.to_bits() + 1), f64::from_bits(tie.to_bits() - 1)]);
+        }
+        for v in values {
+            for d in 0..=12 {
+                assert_eq!(fmt_num(v, d), formatted(v, d), "{v:e} at {d} decimals");
+            }
+        }
+    }
+
+    #[test]
+    fn coordinates_are_written_through_integers() {
+        for (v, d, want) in [(123.4567, 3, "123.457"), (-0.25, 3, "-0.25"), (-0.0004, 3, "0"), (1600.0, 3, "1600"), (7.0, 0, "7")] {
+            let mut s = String::new();
+            assert!(push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert_eq!(s, want);
+        }
+        // Halfway as stored, too large, or too many places: the decimal formatter writes them.
+        for (v, d) in [(0.5, 0), (0.125, 2), (1e16, 0), (1.0, 10)] {
+            let mut s = String::new();
+            assert!(!push_num_scaled(&mut s, v, d), "{v} at {d} decimals");
+            assert!(s.is_empty());
+        }
     }
 }

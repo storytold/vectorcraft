@@ -176,7 +176,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cw = row.width() / THEME_SIZE as f32;
     for (i, c) in d.colors.iter().enumerate() {
         let r = Rect::from_min_size(row.min + vec2(i as f32 * cw, 0.0), vec2(cw - 3.0, row.height()));
-        let resp = ui.interact(r, ui.id().with(("ct-chip", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("ct-chip", i)), Sense::click());
         ui.painter().rect_filled(r, 2.0, c32(c));
         ui.painter().rect_stroke(r, 2.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
         if i == d.sel {
@@ -189,7 +189,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         let hex = d.colors.get(d.sel).map(|c| c.to_hex().trim_start_matches('#').to_string()).unwrap_or_default();
-        if let Some(c) = widgets::hex_field(ui, "ct-hex", &hex).and_then(|h| Color::from_hex(&h)) {
+        if let Some(c) = widgets::hex_field_named(ui, "ct-hex", Some(tl!("Color")), &hex).and_then(|h| Color::from_hex(&h)) {
             d.set_selected(c);
         }
         let current = active_paint(app).color();
@@ -202,7 +202,7 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Name:")).color(t.text_dim));
-        if let Some(n) = widgets::text_field(ui, "ct-name", Some(&d.name), ui.available_width() - 4.0, 1) {
+        if let Some(n) = widgets::text_field_named(ui, "ct-name", Some(tl!("Name:")), Some(&d.name), ui.available_width() - 4.0, 1) {
             d.name = n;
         }
     });
@@ -250,7 +250,7 @@ fn my_themes(app: &mut VectorcraftApp, ui: &mut Ui) {
             egui::ScrollArea::vertical().id_salt("ct-list").max_height(300.0).auto_shrink([false, true]).show(ui, |ui| {
                 for th in &app.session.prefs.color_themes {
                     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::hover());
-                    let resp = ui.interact(r, ui.id().with(("ct-theme", &th.name)), Sense::click());
+                    let resp = ui.interact(r, ui.scope_id().with(("ct-theme", &th.name)), Sense::click());
                     let selected = pick.as_deref() == Some(th.name.as_str());
                     if selected {
                         ui.painter().rect_filled(r, 0.0, t.row_selected);

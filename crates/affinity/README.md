@@ -17,12 +17,13 @@ Affinity files.
 | Curves (`PCrv`): cubic subpaths, closed flags, live corners (`CnrD`) | paths (multi-subpath curves fill even-odd) |
 | Rectangles with corner radii (relative or absolute, locked or per corner) and round or straight corners, ellipses, polygons (smooth too), stars, square stars, pies, triangles, trapezoids | paths |
 | Compound shapes (`Comp`, add and subtract) | one even-odd path |
-| A shape or curve with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
+| A shape, curve or text with children clips them | clip group whose clipping path keeps its fill (behind) and stroke (over) |
 | Vector masks (`AdCh` curves and shapes) | clip group |
 | Pixel masks (`MRst`, attached or as a layer in a group) | opacity mask |
 | Solid fills: RGBA, HSLA, CMYK, grey, Lab (D50) | fill appearance (alpha as fill opacity) |
 | Linear, elliptical and radial gradients with Affinity's midpoint bias | gradients (the bias as the midpoint where the blend is half way) |
 | Strokes: weight, scale with object, dash pattern and phase, alignment, miter limit, behind the fill; a stroke whose style is None (every shape stores one, black and 1 px) is left out | stroke appearance |
+| A stroke's pressure curve (`LDeP`: position along the path against width) | the stroke's width profile, the curve sampled at 2 to 8 points per segment (256 segments at most), widths up to the full weight |
 | Fill layers (`FRst`) | filled rectangles |
 | Artistic and frame text: Unicode scalar-indexed runs, stored fallback font, family/weight/style, boolean OpenType features, all caps, underline, strikethrough, size, tracking, horizontal scale, fixed leading, colour, outlined characters, first baseline; each paragraph's alignment, indents, space before and after, fixed and automatic leading; frame text sized by its text scale (`FTxS`), not its frame's transform | point type and area type, one paragraph style per paragraph; artistic text whose paragraphs align differently keeps them aligned within its longest line (by indents), as Affinity draws it; a frame's first line hangs from its capitals' tops, and a frame whose last lines' descenders hang out of it is made just tall enough to show them; line breaks inside a paragraph become paragraphs without spacing between them; table cells place their text as Affinity does (centred from the capitals' tops to the last baseline, reaching out of a cell too short for it) |
 | Tables (`TxtT`): grid, cell text, merged cells, cell insets and vertical alignment, the line on every cell edge | a group of area type per cell and a stroked line per edge (VectorCraft has no tables) |
@@ -33,7 +34,7 @@ Affinity files.
 | Opacity, visibility, lock, names, the blend modes VectorCraft has | the same |
 
 Everything else is reported in the import warnings, one line per kind with a count, never
-dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush and pressure strokes,
+dropped silently: bevel, blur and other layer effects, adjustment layers and live filters, brush strokes, pressure curves that can't be read or that go past the million points one document may hold,
 transparency gradients, fill opacity, bitmap fills, master pages based on other master pages, conical gradients (as radial),
 special shapes (cloud, heart, cog, callouts, arrows…, imported as their bounding ellipse), corner
 types other than round or straight, stars with rounded points, several fills or strokes on one object (the
@@ -92,10 +93,10 @@ text-frame fixture.
 
 ## Validation
 
-* `engine/tests/affinity_features.rs` covers pages, several artboards per canvas and per spread,
+* `engine/tests/it/affinity_features.rs` covers pages, several artboards per canvas and per spread,
   master pages, tables, paragraph formats, text scale, layer effects, overlays and embedded
   documents (whose artboards don't become artboards) on synthetic documents, and mutates them.
-  `engine/tests/affinity_local.rs` compares every artboard of local documents with their thumbnail
+  `engine/tests/it/affinity_local.rs` compares every artboard of local documents with their thumbnail
   when `AFFINITY_SAMPLES` points at a folder (never in CI; nothing is committed).
 * Unit tests on synthetic containers built by the `synth` feature (stored, zlib and zstd entries,
   checksums, budgets, cycles, hostile streams, every truncation) and property tests of random
@@ -106,7 +107,7 @@ text-frame fixture.
   feature probes plus one separately identified derived regression input from
   [SethRobinson/Patchy](https://github.com/SethRobinson/Patchy). Only document data and provenance
   notices were inspected, never that project's importer or authoring scripts.
-* `tests/real_files.rs` parses every file and freezes the modeled features of all 33 current
+* `tests/it/real_files.rs` parses every file and freezes the modeled features of all 33 current
   `.af` files. Native raster tests compare decoded pixels with independent embedded images;
   text tests assert Unicode run boundaries, fallback fonts and feature retention.
 * `engine/tests/affinity_corpus.rs` requires editable native import, exact `.vectorcraft`
@@ -123,7 +124,7 @@ text-frame fixture.
   documents with layer effects, colour overlays (also over tables), line styles, paragraph and
   character formats, tables, master pages, CMYK pixel layers and embedded documents (the embedding
   and the embedded stream), and checks that whatever opens also renders and exports.
-  `tests/import_limits.rs` builds hostile documents against the limits below: grids of 16 million
+  `tests/it/import_limits.rs` builds hostile documents against the limits below: grids of 16 million
   cells, grids and stories shared by many layers, 200 000 paragraphs, a document embedded hundreds
   of times. `fuzz/` has `cargo-fuzz` targets for the whole reader (`container`) and the object
   stream (`stream`):

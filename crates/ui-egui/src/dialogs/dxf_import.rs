@@ -163,7 +163,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 fn preview(app: &mut VectorcraftApp, ctx: &egui::Context, d: &Dialog) -> Option<egui::TextureHandle> {
     let file = app.ui.dialog_file.clone()?;
     let layout = d.str("layout");
-    let key = egui::Id::new(("dxf-preview", file.token, layout.as_str()));
+    let key = egui::Id::unique(("dxf-preview", file.token, layout.as_str()));
     let o = vectorcraft_cad::ImportOptions { layout: Some(layout.clone()), fit: true, ..Default::default() };
     // A layout that can't be read shows an empty preview (and isn't read again).
     preview_texture(app, ctx, key, "dxf-preview", PREVIEW, || vectorcraft_cad::import(&file.bytes, &o).ok().map(|r| r.document))

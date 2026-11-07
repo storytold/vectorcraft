@@ -10,7 +10,7 @@
 
 use std::f64::consts::PI;
 
-use kurbo::{BezPath, ParamCurve, PathEl, PathSeg, Point, Vec2};
+use kurbo::{BezPath, ParamCurve, PathEl, PathSeg, Point, Rect, Vec2};
 use vectorcraft_doc::{LineCap, LineJoin, StrokeLayer, WidthProfile};
 
 use super::{kink, segments, subpaths, unit};
@@ -19,6 +19,70 @@ use super::{kink, segments, subpaths, unit};
 /// limit of `st`, flattened to `tol`.
 pub fn width_outline(bp: &BezPath, width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64) -> BezPath {
     outline_spans(bp, &[], width, profile, st, tol)
+}
+
+/// Outline only flattened segments near `near`, retaining each run's original fractions of its
+/// whole subpath for the width profile. `None` means no segments could be omitted.
+pub(super) fn width_outline_near(bp: &BezPath, width: f64, profile: &WidthProfile, st: &StrokeLayer, tol: f64, near: Rect) -> Option<BezPath> {
+    let ctx = Ctx { half: width / 2.0, profile, cap: st.cap, join: st.join, miter_limit: st.miter_limit, tol: tol.max(1e-4) };
+    let mut out = BezPath::new();
+    let mut cut = false;
+    for (r, closed) in subpaths(bp) {
+        if closed {
+            return None;
+        }
+        let (pts, corner) = flatten(&segments(&bp.elements()[r]), closed, ctx.tol);
+        let n = pts.len();
+        if n < 2 {
+            continue;
+        }
+        let count = n - 1;
+        let mut lengths = Vec::with_capacity(count);
+        let mut kept = Vec::with_capacity(count);
+        let mut total = 0.0;
+        for i in 0..count {
+            let (a, b) = (pts[i], pts[i + 1]);
+            let len = a.distance(b);
+            if !len.is_finite() {
+                return None;
+            }
+            total += len;
+            lengths.push(len);
+            kept.push(!(a.x.max(b.x) < near.x0 || a.x.min(b.x) > near.x1 || a.y.max(b.y) < near.y0 || a.y.min(b.y) > near.y1));
+        }
+        if kept.iter().all(|v| *v) {
+            ctx.subpath(&mut out, &pts, &corner, closed, (0.0, 1.0));
+            continue;
+        }
+        cut = true;
+        if total <= 1e-12 {
+            continue;
+        }
+        let mut walked = 0.0;
+        let mut run = Vec::new();
+        let mut run_corner = Vec::new();
+        let mut from = 0.0;
+        for i in 0..count {
+            if kept[i] {
+                if run.is_empty() {
+                    from = walked / total;
+                    run.push(pts[i]);
+                    run_corner.push(corner[i]);
+                }
+                run.push(pts[i + 1]);
+                run_corner.push(corner[i + 1]);
+            } else if run.len() > 1 {
+                ctx.subpath(&mut out, &run, &run_corner, false, (from, walked / total));
+                run.clear();
+                run_corner.clear();
+            }
+            walked += lengths[i];
+        }
+        if run.len() > 1 {
+            ctx.subpath(&mut out, &run, &run_corner, false, (from, walked / total));
+        }
+    }
+    cut.then_some(out)
 }
 
 /// [`width_outline`] of pieces of longer subpaths: subpath `i` of `bp` covers the fractions
@@ -58,7 +122,9 @@ pub(super) fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, 
         };
         match seg {
             PathSeg::Line(l) => push(l.p1),
-            _ => kurbo::flatten([PathEl::MoveTo(seg.start()), seg.as_path_el()], tol, |el| {
+            // Bounded per curve: a projection can blow a small curve up enough that kurbo sizes
+            // an enormous buffer from it.
+            _ => vectorcraft_geom::flatten([PathEl::MoveTo(seg.start()), seg.as_path_el()], tol, |el| {
                 if let PathEl::LineTo(p) = el {
                     push(p);
                 }
@@ -84,17 +150,56 @@ pub(super) fn flatten(segs: &[PathSeg], closed: bool, tol: f64) -> (Vec<Point>, 
     (pts, corner)
 }
 
-/// Insert samples where the profile has width points (so the piecewise-linear profile is exact
-/// along straight runs; the two points of a discontinuous point share one sample). `span` maps the
-/// subpath onto the profile (see [`outline_spans`]).
-fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile, span: (f64, f64)) -> (Vec<Point>, Vec<bool>) {
+/// The most samples added between two width points.
+const MAX_SPAN_SAMPLES: usize = 64;
+/// The most samples [`densify`] adds between width points along one piece of a subpath.
+const MAX_CURVE_SAMPLES: usize = 4096;
+
+/// Insert samples where the profile has width points (the two points of a discontinuous point
+/// share one sample), and between them where the profile's curve ([`WidthProfile::at`]) bends, so
+/// that a straight run follows it to within `tol` with a stroke of half width `half`. `span` maps
+/// the subpath onto the profile (see [`outline_spans`]).
+fn densify(pts: &[Point], corner: &[bool], closed: bool, profile: &WidthProfile, span: (f64, f64), half: f64, tol: f64) -> (Vec<Point>, Vec<bool>) {
     let total = length(pts, closed);
     let range = span.1 - span.0;
     if total <= 1e-12 || range <= 1e-12 {
         return (pts.to_vec(), corner.to_vec());
     }
+    let along = |t: f64| (t - span.0) / range * total;
     // Where the profile's points fall along this piece (a span past 1 wraps round a closed path).
-    let marks: Vec<f64> = profile.points.iter().flat_map(|p| [p.0, p.0 + 1.0]).map(|t| (t - span.0) / range * total).collect();
+    let mut marks: Vec<f64> = profile.points.iter().flat_map(|p| [p.0, p.0 + 1.0]).map(along).collect();
+    let mut added = 0;
+    for shift in [0.0, 1.0] {
+        for w in profile.points.windows(2) {
+            let (a, b) = (&w[0], &w[1]);
+            let (t0, t1) = (a.0 + shift, b.0 + shift);
+            if t1 - t0 <= 1e-7 || t1 <= span.0 || t0 >= span.1 {
+                continue;
+            }
+            // A span whose curve is the straight line between its points (a two-point taper,
+            // points on one line) needs nothing between them. A cubic off the line is off it at a
+            // quarter or three quarters of the way.
+            let off_line = |u: f64| {
+                let (l, r) = profile.at(a.0 + (b.0 - a.0) * u);
+                half * (l - (a.1 + (b.1 - a.1) * u)).abs().max((r - (a.2 + (b.2 - a.2) * u)).abs())
+            };
+            if off_line(0.25) <= tol * 1e-3 && off_line(0.75) <= tol * 1e-3 {
+                continue;
+            }
+            // A monotone cubic span bends by at most 12 times its change in width over the span
+            // squared, so the chords of `n` equal parts stray at most 1.5 · change / n² from it.
+            let change = half * (b.1 - a.1).abs().max((b.2 - a.2).abs());
+            let n = (1.5 * change / tol).sqrt().ceil();
+            let n = if n.is_finite() { n.clamp(1.0, MAX_SPAN_SAMPLES as f64) as usize } else { MAX_SPAN_SAMPLES };
+            for k in 1..n {
+                if added >= MAX_CURVE_SAMPLES {
+                    break;
+                }
+                marks.push(along(t0 + (t1 - t0) * k as f64 / n as f64));
+                added += 1;
+            }
+        }
+    }
     split_at(pts, corner, closed, &marks)
 }
 
@@ -112,13 +217,16 @@ pub(super) fn split_at(pts: &[Point], corner: &[bool], closed: bool, marks: &[f6
     let seg_count = if closed { n } else { n.saturating_sub(1) };
     let mut out = (Vec::with_capacity(n + marks.len()), Vec::with_capacity(n + marks.len()));
     let mut acc = 0.0;
+    // Sorted once, so each segment finds its marks by search, not by a pass over all of them.
+    let mut marks = marks.to_vec();
+    marks.sort_by(f64::total_cmp);
     for i in 0..seg_count {
         let (a, b) = (pts[i], pts[(i + 1) % n]);
         let len = a.distance(b);
         out.0.push(a);
         out.1.push(corner[i]);
-        let mut inner: Vec<f64> = marks.iter().copied().filter(|d| *d > acc + 1e-9 && *d < acc + len - 1e-9).collect();
-        inner.sort_by(f64::total_cmp);
+        let from = marks.partition_point(|d| *d <= acc + 1e-9);
+        let mut inner: Vec<f64> = marks.iter().skip(from).copied().take_while(|d| *d < acc + len - 1e-9).collect();
         inner.dedup_by(|a, b| (*a - *b).abs() <= 1e-9);
         for d in inner {
             out.0.push(a.lerp(b, (d - acc) / len));
@@ -156,7 +264,7 @@ struct Vertex {
 
 impl Ctx<'_> {
     fn subpath(&self, out: &mut BezPath, pts: &[Point], corner: &[bool], closed: bool, span: (f64, f64)) {
-        let (pts, corner) = densify(pts, corner, closed, self.profile, span);
+        let (pts, corner) = densify(pts, corner, closed, self.profile, span, self.half, self.tol);
         let n = pts.len();
         let seg_count = if closed { n } else { n - 1 };
         let seg_dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();
@@ -315,10 +423,13 @@ mod tests {
         assert!((area(&width_outline(&line(), 10.0, &p, &capped(LineCap::Square), 0.01)) - 1100.0).abs() < 1e-6);
     }
 
+    /// The Lens outline swells on its curve, and a profile with one side at zero paints only the other side.
     #[test]
-    fn lens_profile_is_a_diamond_and_one_sided_profiles_stay_on_their_side() {
+    fn lens_profile_swells_smoothly_and_one_sided_profiles_stay_on_their_side() {
+        // Each half of the lens rises on a cubic from 0 to full width, flat at the middle: it
+        // covers 7/12 of the full-width band (a diamond would cover half).
         let a = area(&width_outline(&line(), 10.0, &WidthProfile::lens(), &capped(LineCap::Butt), 0.01));
-        assert!((a - 500.0).abs() < 1e-6, "{a}");
+        assert!((a - 1000.0 * 7.0 / 12.0).abs() < 0.5, "{a}");
         let one = WidthProfile { points: vec![(0.0, 1.0, 0.0), (1.0, 1.0, 0.0)] };
         let o = width_outline(&line(), 10.0, &one, &capped(LineCap::Butt), 0.01);
         assert!((area(&o) - 500.0).abs() < 1e-6);
@@ -340,6 +451,43 @@ mod tests {
         l.line_to((100.0, 100.0));
         let a = area(&width_outline(&l, 10.0, &p, &capped(LineCap::Butt), 0.01));
         assert!(a.is_finite() && (a - 3000.0).abs() < 150.0, "{a}");
+    }
+
+    /// #5714: between width points a straight run follows the profile's smooth curve, not a
+    /// straight line from one width to the next.
+    #[test]
+    fn a_straight_run_follows_the_curve_between_width_points() {
+        // 5 pt either side at the ends, 15 pt at the middle: a quarter of the way along the curve
+        // is at 2.25 × 5 = 11.25 pt (a straight ramp would be at 10 pt).
+        let p = WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 3.0, 3.0), (1.0, 1.0, 1.0)] };
+        let o = width_outline(&line(), 10.0, &p, &capped(LineCap::Butt), 0.01);
+        for y in [-11.0, 11.0] {
+            assert!(o.contains(kurbo::Point::new(25.0, y)), "inside at y {y}");
+        }
+        for y in [-11.5, 11.5] {
+            assert!(!o.contains(kurbo::Point::new(25.0, y)), "outside at y {y}");
+        }
+        // Round the widest point the side is flat: no corner sticks out above 15 pt.
+        let bb = o.bounding_box();
+        assert!((bb.y0 + 15.0).abs() < 1e-6 && (bb.y1 - 15.0).abs() < 1e-6, "{bb:?}");
+    }
+
+    /// A taper is a straight ramp: its outline gets no samples between the width points.
+    #[test]
+    fn a_straight_taper_gets_no_samples_between_its_points() {
+        let o = width_outline(&line(), 10.0, &WidthProfile::taper_end(), &capped(LineCap::Butt), 0.01);
+        assert_eq!(o.elements().len(), 5, "{:?}", o.elements());
+    }
+
+    /// A profile read from a file may have thousands of points and absurd widths: the samples added
+    /// between them stay bounded and the outline finite.
+    #[test]
+    fn samples_between_width_points_are_capped() {
+        let points = (0..=10_000).map(|i| (i as f64 / 10_000.0, if i % 2 == 0 { 0.0 } else { 1e12 }, 1.0)).collect();
+        let o = width_outline(&line(), 10.0, &WidthProfile { points }, &capped(LineCap::Butt), 0.01);
+        let n = o.elements().len();
+        assert!(n < 2 * (2 * 10_001 + MAX_CURVE_SAMPLES) + 64, "{n}");
+        assert!(o.bounding_box().area().is_finite());
     }
 
     #[test]

@@ -499,6 +499,7 @@ fn glyph_char(name: &str) -> char {
         return c;
     }
     if let Some(hex) = name.strip_prefix("uni").or_else(|| name.strip_prefix('u'))
+        && hex.chars().all(|c| c.is_ascii_hexdigit())
         && let Some(c) = u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
     {
         return c;
@@ -506,5 +507,18 @@ fn glyph_char(name: &str) -> char {
     match name {
         "space" => ' ',
         _ => '\u{2022}',
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glyph_char;
+
+    #[test]
+    fn glyph_char_rejects_plus_in_hex() {
+        assert_eq!(glyph_char("uni20AC"), '€');
+        assert_eq!(glyph_char("u1F600"), '\u{1F600}');
+        assert_eq!(glyph_char("uni+041"), '\u{2022}');
+        assert_eq!(glyph_char("u+41"), '\u{2022}');
     }
 }

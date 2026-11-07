@@ -32,10 +32,11 @@ log = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 winsafe = { version = "0.0.29", default-features = false, features = ["kernel", "psapi"] }
 
-# DirectWrite's system font collection (the desktop app's src/system_fonts.rs, shared): fonts that
-# font services such as Adobe Fonts load in place (#579). MIT OR Apache-2.0.
-[target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
-windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite"] }
+# DirectWrite's system font collection and GDI's font list (the desktop app's src/system_fonts.rs,
+# shared): fonts that font services such as Adobe Fonts load in place (#579, #1258). MIT OR
+# Apache-2.0. Win32_System_Threading has `GetProcessAffinityMask`, which the desktop app's
+# src/windows_cores.rs, shared, uses to count the cores the process may run on.
+windows = { version = "0.62", features = ["Win32_Graphics_DirectWrite", "Win32_Graphics_Gdi", "Win32_System_Threading"] }
 
 # CoreText's font manager (the desktop app's src/mac_fonts.rs, shared): fonts that apps and font
 # managers register from their own folders (#579). Zlib OR Apache-2.0 OR MIT.
@@ -44,5 +45,6 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 objc2-core-text = { version = "0.3", default-features = false, features = ["std", "CTFontManager"] }
 
 [dev-dependencies]
+tempfile = "3"
 vectorcraft-testkit = { workspace = true }
 serde_json = { workspace = true }

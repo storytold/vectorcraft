@@ -2,7 +2,7 @@
 //! names. Art dragged in off the canvas becomes assets, one per object (with Alt held, one asset
 //! of them all), and so does the selection with the + button. Clicking selects assets (Shift or
 //! Cmd adds), double-clicking one renames it and the bin removes the selected ones. Below are the
-//! export settings, the format rows Export for Screens shows too (one set per document), and
+//! export settings: the format rows shared with Export for Screens (one set per document), and
 //! Export, which writes the selected assets (else all of them) into a picked folder (on the
 //! desktop with Background Export on, on the background thread); the web downloads them. The
 //! screen button opens Export for Screens on its Assets tab.
@@ -17,9 +17,13 @@ use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{ExportAsset, Node, NodeId};
 use vectorcraft_engine::DocState;
+use vectorcraft_engine::cmd::fileio::{SCREEN_SETTINGS_KEYS, screen_export_preset_list};
 
 use super::{pstate, set_pstate};
-use crate::dialogs::{EXPORT_FOR_SCREENS, open_export_for_screens_assets, screen_formats, screen_saved_options, screen_saved_rows};
+use crate::dialogs::{
+    EXPORT_FOR_SCREENS, ScreenPresetPick, open_export_for_screens_assets, screen_export_preset, screen_formats, screen_import_presets,
+    screen_preset_list, screen_saved_options, screen_saved_rows,
+};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -30,6 +34,10 @@ pub const ID: &str = "assetExport";
 const TILE: egui::Vec2 = vec2(70.0, 84.0);
 const THUMB: f32 = 58.0;
 const SELECTED: &str = "asset-export-selected";
+/// The export preset applied last: (the document's uid, its name; "" for none).
+const PRESET: &str = "asset-export-preset";
+/// The name being typed to save a preset (none when not saving).
+const SAVING: &str = "asset-export-save-preset";
 
 /// The assets selected in the panel (the panel's own state) that are still in the document.
 fn selected(ctx: &egui::Context, st: &DocState) -> Vec<u64> {
@@ -108,7 +116,7 @@ struct Events {
 /// The asset tiles: thumbnail, name (a text field while renaming), selection.
 fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
     let t = Tokens::get(ui.ctx());
-    let rename_id = egui::Id::new("asset-export-rename");
+    let rename_id = egui::Id::unique("asset-export-rename");
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id));
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
@@ -130,8 +138,13 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
                     let field = rename_id.with("field");
                     let kept = widgets::own_field_shift_enter(ui, field, &mut buf, &a.name);
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
-                    let te = child
-                        .add(egui::TextEdit::singleline(&mut buf).id(field).desired_width(name_rect.width()).font(egui::FontId::proportional(11.5)));
+                    let te = child.add(
+                        egui::TextEdit::singleline(&mut buf)
+                            .id(field)
+                            .align(egui::Align2::LEFT_CENTER)
+                            .desired_width(name_rect.width())
+                            .font(egui::FontId::proportional(11.5)),
+                    );
                     // Enter or a click elsewhere commits, Escape cancels; Shift+Enter commits and
                     // keeps the field open.
                     if te.lost_focus() {
@@ -251,14 +264,13 @@ enum Settings {
     Format(String),
 }
 
-/// The export settings: Export for Screens' format rows on the document's shared settings.
-/// Returns the change asked for and how many files one asset makes.
+/// The document's shared export format rows. Returns the change asked for and how many files one asset makes.
 fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
     let (rows, preset) = screen_saved_rows(&st.doc.export_settings);
     let preset = preset.unwrap_or_default().to_string();
     let n = rows.len();
     let mut d = Dialog::new(EXPORT_FOR_SCREENS, json!({ "formats": &rows, "preset": preset, "__settings": "" }));
-    screen_formats(ui, &mut d);
+    screen_formats(ui, &mut d, None);
     let (shown, picked) = (d.str("__settings"), d.str("preset"));
     let formats = d.fields.remove("formats").unwrap_or(Value::Null);
     let change = if !shown.is_empty() {
@@ -276,6 +288,7 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
+    screen_preset_list(&mut app.asset_export_presets, &app.session.prefs.screen_export_presets);
     let Some(st) = app.session.active() else {
         widgets::dim_label(ui, tl!("No document"));
         return;
@@ -297,12 +310,32 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 tiles(ui, st, &sel, &mut ev);
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.id().with("asset-export-drop"), Sense::hover());
+        let zone = ui.interact(out.inner_rect, ui.scope_id().with("asset-export-drop"), Sense::hover());
         drop_zone(ui, &zone, &mut ev);
     });
     ui.add_space(6.0);
     widgets::section_header(ui, tl!("Export Settings"));
     let (change, files_each) = settings(ui, st);
+    let doc = st.uid;
+    let mut save_name = pstate::<Option<String>>(&ctx, SAVING);
+    let mut save_pick = None;
+    let mut cancel_save = false;
+    if let Some(name) = &mut save_name {
+        ui.horizontal(|ui| {
+            widgets::dim_label(ui, tl!("Name:"));
+            ui.add(egui::TextEdit::singleline(name).desired_width((ui.available_width() - 110.0).max(60.0)));
+            if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(tl!("Save"))).clicked() {
+                save_pick = Some(ScreenPresetPick::Save(name.trim().to_string()));
+            }
+            if ui.small_button(tl!("Cancel")).clicked() {
+                cancel_save = true;
+            }
+        });
+    }
+    if cancel_save {
+        save_name = None;
+    }
+    set_pstate(&ctx, SAVING, save_name);
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
     let has_art = !st.selection.is_empty();
     let alt = ui.input(|i| i.modifiers.alt);
@@ -345,7 +378,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         collect(app, &ctx, Some(ids), single);
     }
     match change {
-        Some(Settings::Set(p)) => _ = run(app, "assets.settings.set", p),
+        Some(Settings::Set(p)) => {
+            run(app, "assets.settings.set", p);
+        }
         Some(Settings::Format(f)) => {
             open_export_for_screens_assets(app, Some(&sel_or_all(&sel, &all)));
             if let Some(d) = app.ui.dialog.as_mut() {
@@ -353,6 +388,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
         None => {}
+    }
+    if let Some(pick) = save_pick {
+        preset(app, &ctx, doc, pick);
     }
     if add {
         collect(app, &ctx, None, alt);
@@ -369,6 +407,105 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Act on a preset menu pick for document `doc` (uid): a preset applied to the shared settings,
+/// the shared settings saved as one, a saved one deleted, presets imported from a file or the
+/// current one written to a file.
+pub(crate) fn preset(app: &mut VectorcraftApp, ctx: &egui::Context, doc: u64, pick: ScreenPresetPick) {
+    let done = match pick {
+        ScreenPresetPick::Apply(p) => {
+            let name = p["name"].as_str().unwrap_or_default().to_string();
+            app.run("assets.settings.set", json!({ "exportPreset": name })).map(|_| set_pstate(ctx, PRESET, (doc, name)))
+        }
+        ScreenPresetPick::Save(name) => {
+            let settings = preset_settings(app, ctx, doc);
+            // The name as saved (trimmed and capped).
+            app.run("document.exportPresets.save", json!({ "name": name, "settings": settings })).map(|r| {
+                set_pstate(ctx, SAVING, None::<String>);
+                set_pstate(ctx, PRESET, (doc, r["name"].as_str().unwrap_or_default().to_string()));
+            })
+        }
+        ScreenPresetPick::Delete(name) => {
+            app.run("document.exportPresets.delete", json!({ "name": name })).map(|_| set_pstate(ctx, PRESET, (doc, String::new())))
+        }
+        // A file dialog shown off the UI thread runs these again when it answers.
+        ScreenPresetPick::Import => {
+            crate::picks::button(app, |app| {
+                if let Err(e) = screen_import_presets(app)
+                    && e != "cancelled"
+                {
+                    app.status(e);
+                }
+            });
+            Ok(())
+        }
+        ScreenPresetPick::Export(name) => {
+            crate::picks::button(app, move |app| {
+                if let Err(e) = screen_export_preset(app, &name)
+                    && e != "cancelled"
+                {
+                    app.status(e);
+                }
+            });
+            Ok(())
+        }
+    };
+    if let Err(e) = done
+        && e != "cancelled"
+    {
+        app.status(e);
+    }
+}
+
+/// What Save Preset saves for document `doc` (uid): the preset the panel applied to this document,
+/// with the document's current shared settings over it, replacing its format choice; else the
+/// shared settings alone.
+fn preset_settings(app: &VectorcraftApp, ctx: &egui::Context, doc: u64) -> Value {
+    let shared = shared_settings(app).as_object().cloned().unwrap_or_default();
+    let (shown_doc, current): (u64, String) = pstate(ctx, PRESET);
+    if shown_doc != doc || current.is_empty() {
+        return Value::Object(shared);
+    }
+    let list = screen_export_preset_list(&app.session.prefs.screen_export_presets);
+    let Some(applied) = list.as_array().and_then(|rows| rows.iter().find(|p| p["name"] == current)).and_then(|p| p["settings"].as_object()) else {
+        return Value::Object(shared);
+    };
+    let Some(st) = app.session.active() else { return Value::Object(shared) };
+    if st.uid != doc {
+        return Value::Object(shared);
+    }
+    let mut settings = applied.clone();
+    if shared.contains_key("preset") {
+        settings.remove("formats");
+    }
+    if shared.contains_key("formats") {
+        settings.remove("preset");
+    }
+    settings.extend(shared);
+    Value::Object(settings)
+}
+
+/// The settings the panel shows, as a preset keeps them: the shared settings and effective folder
+/// choice, with the row shown when the document has no rows or mobile/density preset of its own.
+fn shared_settings(app: &VectorcraftApp) -> Value {
+    let Some(st) = app.session.active() else { return json!({}) };
+    let saved = &st.doc.export_settings;
+    let mut settings: serde_json::Map<String, Value> =
+        SCREEN_SETTINGS_KEYS.iter().filter_map(|k| Some((k.to_string(), saved.get(*k).filter(|v| !v.is_null())?.clone()))).collect();
+    let (rows, preset) = screen_saved_rows(saved);
+    if let Some(folders) = saved.get("folders").filter(|v| !v.is_null()) {
+        settings.insert("folders".into(), folders.clone());
+    } else if preset.is_some() && settings.get("subfolders").and_then(Value::as_bool) == Some(false) {
+        settings.insert("folders".into(), json!("none"));
+    }
+    if preset.is_none() {
+        settings.remove("preset");
+        if !settings.get("formats").and_then(Value::as_array).is_some_and(|a| a.iter().any(Value::is_object)) {
+            settings.insert("formats".into(), json!(rows));
+        }
+    }
+    Value::Object(settings)
+}
+
 /// The selected assets, else all of them.
 fn sel_or_all(sel: &[u64], all: &[u64]) -> Vec<u64> {
     if sel.is_empty() { all.to_vec() } else { sel.to_vec() }
@@ -377,7 +514,9 @@ fn sel_or_all(sel: &[u64], all: &[u64]) -> Vec<u64> {
 /// The panel (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
+    screen_preset_list(&mut app.asset_export_presets, &app.session.prefs.screen_export_presets);
     let Some(st) = app.session.active() else { return };
+    let doc = st.uid;
     let (has_art, sel) = (!st.selection.is_empty(), selected(&ctx, st));
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
     if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
@@ -397,5 +536,38 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     if menu_item(ui, tl!("Export for Screens…"), true, false) {
         open_export_for_screens_assets(app, Some(&sel_or_all(&sel, &all)));
+    }
+    ui.separator();
+    let (preset_doc, current): (u64, String) = pstate(&ctx, PRESET);
+    let current = if preset_doc == doc { current } else { String::new() };
+    let list = app.asset_export_presets.as_array().cloned().unwrap_or_default();
+    let saved = list.iter().any(|p| p["name"] == current && p["builtIn"] == false);
+    let known = list.iter().any(|p| p["name"] == current);
+    let mut pick = None;
+    for p in &list {
+        if let Some(name) = p["name"].as_str()
+            && widgets::menu_item_name(ui, name, true, current == name)
+        {
+            pick = Some(ScreenPresetPick::Apply(p.clone()));
+        }
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Save As Preset…"), true, false) {
+        set_pstate(&ctx, SAVING, Some(String::new()));
+    }
+    if menu_item(ui, tl!("Save Changes"), saved, false) {
+        pick = Some(ScreenPresetPick::Save(current.clone()));
+    }
+    if menu_item(ui, tl!("Delete Preset"), saved, false) {
+        pick = Some(ScreenPresetPick::Delete(current.clone()));
+    }
+    if menu_item(ui, tl!("Import Preset…"), true, false) {
+        pick = Some(ScreenPresetPick::Import);
+    }
+    if menu_item(ui, tl!("Export Preset…"), known, false) {
+        pick = Some(ScreenPresetPick::Export(current));
+    }
+    if let Some(pick) = pick {
+        preset(app, &ctx, doc, pick);
     }
 }

@@ -20,7 +20,7 @@ pub const DELAY: f64 = 0.4;
 
 /// Where the job a frame first saw is remembered (its id, the time it was first seen).
 fn seen_id() -> egui::Id {
-    egui::Id::new("export-progress-seen")
+    egui::Id::unique("export-progress-seen")
 }
 
 /// What the dialog shows: (label, steps done, steps in all, share done, exports after this one,
@@ -103,7 +103,7 @@ pub enum Pressed {
 /// ([`crate::plugin_runs`]).
 pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
     let mut pressed = None;
-    modal::show(ctx, heading, egui::Id::new(id), -40.0, 20, |ui| {
+    modal::show(ctx, heading, egui::Id::unique(id), -40.0, 20, |ui| {
         ui.set_width(360.0);
         modal::heading(ui, heading);
         ui.add_space(12.0);
@@ -133,6 +133,39 @@ pub fn busy(ui: &mut egui::Ui, what: &str) {
         ui.add(egui::Spinner::new().size(14.0).color(t.accent));
         ui.label(egui::RichText::new(what).color(t.text_dim));
     });
+}
+
+/// Seconds the moving segment of an [`indeterminate`] bar takes to cross the track once.
+const SWEEP: f64 = 1.6;
+
+/// The share of the track an [`indeterminate`] bar's segment covers.
+const SEGMENT: f32 = 0.3;
+
+/// Where the segment of an [`indeterminate`] bar is at `time` seconds: its left and right ends as
+/// shares of the track, clipped to it (it enters at the left and leaves at the right).
+pub fn sweep_at(time: f64) -> (f32, f32) {
+    let phase = if time.is_finite() { (time / SWEEP).rem_euclid(1.0) as f32 } else { 0.0 };
+    let left = phase * (1.0 + SEGMENT) - SEGMENT;
+    (left.max(0.0), (left + SEGMENT).min(1.0))
+}
+
+/// Work whose progress isn't known, in a [`window`]: `what` it does, in the UI language, over a
+/// bar whose segment keeps sweeping across it while the window shows.
+pub fn indeterminate(ui: &mut egui::Ui, what: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(what).color(t.text_dim));
+    ui.add_space(4.0);
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(360.0, 6.0), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ProgressIndicator, true, what));
+    let radius = egui::CornerRadius::same(3);
+    ui.painter().rect_filled(rect, radius, ui.visuals().extreme_bg_color);
+    let (from, to) = sweep_at(ui.input(|i| i.time));
+    if to > from {
+        let x = |share: f32| rect.left() + rect.width() * share;
+        let segment = egui::Rect::from_min_max(egui::pos2(x(from), rect.top()), egui::pos2(x(to), rect.bottom()));
+        ui.painter().rect_filled(segment, radius, t.accent);
+    }
+    ui.ctx().request_repaint();
 }
 
 #[cfg(test)]

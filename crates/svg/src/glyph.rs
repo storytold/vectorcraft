@@ -1,8 +1,6 @@
 //! OpenType SVG glyphs: the art of a font's glyph from the SVG document its `SVG ` table holds for
 //! it, made as the importer makes art of any SVG file. The text crate asks for it through the
 //! reader the app registers ([`vectorcraft_text::set_svg_glyph_reader`]).
-//!
-//! Where it differs from the `SVG ` table's rules: images are left out (see [`LEFT_OUT`]).
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -10,7 +8,7 @@ use std::sync::atomic::AtomicU64;
 
 use usvg::roxmltree;
 use vectorcraft_doc::color::Color;
-use vectorcraft_doc::{Node, NodeId};
+use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Affine;
 
 use crate::ImportOptions;
@@ -18,17 +16,16 @@ use crate::ImportOptions;
 /// The most bytes a glyph's document may have, unpacked.
 const MAX_SVG_GLYPH_BYTES: u64 = 1 << 20;
 
-/// Elements left out of a glyph: text (type inside type), images (a glyph's art has no document
-/// to keep them in), embedded content and scripts. The `SVG ` table rules text, embedded content
-/// and scripts out, and allows images.
-const LEFT_OUT: [&str; 4] = ["text", "image", "foreignObject", "script"];
+/// Elements left out of a glyph, as the `SVG ` table rules them out: text (type inside type),
+/// embedded content and scripts (and images of SVG documents, in [`glyph`]).
+const LEFT_OUT: [&str; 3] = ["text", "foreignObject", "script"];
 
 /// Glyph `gid`'s art from its SVG `document` (possibly gzipped), in a font of `upem` units per em:
 /// its element `glyph<gid>` (or the whole document when that is its root), in font units (y down),
 /// the root's `viewBox` (or else its size) fitted into the em square by its larger side, centred.
 /// The text's colour is `fill`: `currentColor`, and the legacy `context-fill` and `context-stroke`
-/// (none without a `stroke`). Its nodes have no ids (they aren't a document's). With the art,
-/// whether it uses the text's colours. `None` when the document doesn't read, is too large or has
+/// (none without a `stroke`). Its nodes have no ids and its images their own pixels
+/// ([`own_art`]). With the art, whether it uses the text's colours. `None` when the document doesn't read, is too large or has
 /// no such element.
 pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Option<Color>) -> Option<(Node, bool)> {
     // The SVGZ budget left is the glyph's cap.
@@ -46,7 +43,7 @@ pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Opti
     let coloured = ["currentColor", "currentcolor", "context-fill", "context-stroke"].iter().any(|k| svg.contains(k));
     // usvg resolves `context-fill` and `context-stroke` only for markers.
     let svg = svg.replace("context-fill", &hex(fill)).replace("context-stroke", &stroke.map_or_else(|| "none".into(), hex));
-    let (doc, _) = crate::import::import(&svg, &ImportOptions::default()).ok()?;
+    let (doc, _) = crate::import::import(&svg, &ImportOptions::default(), crate::MAX_NODES).ok()?;
     let mut art = if whole {
         Node::group(NodeId(0), doc.layers.iter().map(|l| Arc::new(Node::group(NodeId(0), l.children().cloned().unwrap_or_default()))).collect())
     } else {
@@ -72,7 +69,7 @@ pub fn glyph_art(document: &[u8], gid: u32, upem: f64, fill: Color, stroke: Opti
         let s = upem / w.max(h);
         art.transform(Affine::translate(((upem - w * s) / 2.0, (upem - h * s) / 2.0)) * Affine::scale(s), true);
     }
-    Some((anonymous(&art), coloured))
+    Some((own_art(&art, &doc)?, coloured))
 }
 
 /// A glyph's document made ready for the importer.
@@ -90,6 +87,10 @@ struct Glyph {
 /// size (the em square is its frame) and in the text's colour `color`. `None` when it doesn't read
 /// or has no element `id`.
 fn glyph(svg: &str, id: &str, color: &str) -> Option<Glyph> {
+    // Before the XML reader: it nests by recursion and expands entities without a total limit.
+    if crate::import::xml_too_deep(svg) || crate::entities::expansion_too_large(svg) {
+        return None;
+    }
     let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).ok()?;
     let root = xml.root_element();
     let whole = root.attribute("id") == Some(id);
@@ -97,7 +98,21 @@ fn glyph(svg: &str, id: &str, color: &str) -> Option<Glyph> {
     let at = target.range();
     // Edits: byte ranges to cut and what to put in their place, in order.
     let mut edits: Vec<(Range<usize>, String)> = vec![];
-    for n in root.descendants().filter(|n| n.is_element() && LEFT_OUT.contains(&n.tag_name().name())) {
+    // Cut with the left-out elements: images of SVG documents, as the table asks (a glyph draws no
+    // documents inside it). Their link is `href`, else `xlink:href`, as the importer reads it. Any
+    // data URL not typed as a raster goes too: the importer reads an untyped one (`text/plain`) as
+    // SVG, SVGZ as well, when its bytes aren't a raster.
+    let svg_image = |n: &roxmltree::Node| {
+        let href = n.attribute("href").or_else(|| n.attribute(("http://www.w3.org/1999/xlink", "href")));
+        let data = href.map(|h| h.trim_start()).filter(|h| h.get(..5).is_some_and(|v| v.eq_ignore_ascii_case("data:")));
+        let raster = |h: &str| {
+            ["data:image/png", "data:image/jpeg", "data:image/jpg", "data:image/gif", "data:image/webp"]
+                .iter()
+                .any(|t| h.get(..t.len()).is_some_and(|v| v.eq_ignore_ascii_case(t)) && h[t.len()..].starts_with([';', ',']))
+        };
+        n.tag_name().name() == "image" && data.is_some_and(|h| !raster(h))
+    };
+    for n in root.descendants().filter(|n| n.is_element() && (LEFT_OUT.contains(&n.tag_name().name()) || svg_image(n))) {
         edits.push((n.range(), String::new()));
     }
     for a in root.attributes().filter(|a| matches!(a.name(), "width" | "height" | "color")) {
@@ -165,14 +180,26 @@ fn edited(svg: &str, range: Range<usize>, edits: &[(Range<usize>, String)]) -> O
     Some(out)
 }
 
-/// `n` with no ids, its members' neither.
-fn anonymous(n: &Node) -> Node {
+/// `n` as art of its own, made from `doc` (the glyph's document): no ids (they aren't a document's)
+/// or links, its members' neither, and its images holding the pixels `doc` keeps for them, named
+/// by their content. A linked image, or one whose pixels `doc` doesn't hold, is left out (`None`
+/// when `n` is one).
+fn own_art(n: &Node, doc: &Document) -> Option<Node> {
     let mut n = n.clone();
     n.id = NodeId(u64::MAX);
-    if let Some(children) = n.children_mut() {
-        for c in children.iter_mut() {
-            *c = Arc::new(anonymous(c));
-        }
+    // A glyph is drawn, not followed: an `<a>`'s link (a `javascript:` one too) would be written
+    // as a link again when its text is exported as outlines.
+    if n.url().is_some() {
+        n.edit_attrs(|a| a.url.clear());
     }
-    n
+    if let NodeKind::Image(im) = &mut n.kind {
+        // A glyph's images are embedded: a link (to no file of the font's) shows nothing.
+        let blob = doc.images.get(&im.key).filter(|b| im.link.is_none() && !b.bytes.is_empty())?;
+        im.key = blob.content_key();
+        im.pixels = Some(Arc::new(blob.clone()));
+    }
+    if let Some(children) = n.children_mut() {
+        *children = children.iter().filter_map(|c| own_art(c, doc).map(Arc::new)).collect();
+    }
+    Some(n)
 }

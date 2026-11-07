@@ -6,7 +6,11 @@
 //! the symbols, patterns and placed files it shows, the fonts for type, the plug-ins for plug-in
 //! effects, and the color settings (so the steps keep
 //! stable `Arc`s and hit the geometry cache frame after frame, and editing a symbol redraws an
-//! envelope around an instance of it). Gradient meshes are tessellated into many small solid-colour quads (vello
+//! envelope around an instance of it). What the walk behind that key found is kept with the node
+//! and with the document's symbols and patterns as the walk read them ([`Walk`]). A later frame
+//! makes the key from what was kept while the node and the document's symbols and patterns stay
+//! the same. A walk that found a placed file is not kept.
+//! Gradient meshes are tessellated into many small solid-colour quads (vello
 //! has no mesh shading), with the density chosen from the on-screen patch size; each quad is
 //! grown by half a device pixel along its edges so neighbours overlap and no antialiasing seams
 //! show. The quads are made again when the color settings change.
@@ -33,16 +37,25 @@ type Quads = Arc<Vec<MeshQuad>>;
 pub(crate) type Found = (u64, Arc<DocInputs>, Vec<Weak<ReadDocument>>);
 /// A mesh node, its quads, and the [`DocInputs`] whose color settings colored them.
 type MeshEntry = (Arc<Node>, Quads, Arc<DocInputs>);
+/// A node, held weakly (the reference keeps its allocation, so no other node gets its address),
+/// what the walk of [`resources_key`] found in it, and the frame's [`DocInputs`] the walk read
+/// the symbols and patterns of.
+type Walk = (Weak<Node>, Walked, Arc<DocInputs>);
 
-/// Per-renderer cache of evaluated live objects: (live node, its evaluation, [`Found`]), and a
-/// [`MeshEntry`] per mesh node and subdivision level.
+/// Per-renderer cache of evaluated live objects: (live node, its evaluation, [`Found`]), a
+/// [`MeshEntry`] per mesh node and subdivision level, and a [`Walk`] per node whose key
+/// [`Renderer::live_found`] found without finding a placed file.
 pub(crate) struct LiveCache {
     expanded: FrameCache<usize, (Arc<Node>, Expanded, Found)>,
     meshes: FrameCache<(usize, usize), MeshEntry>,
+    walks: FrameCache<usize, Walk>,
     /// How many live objects [`Renderer::live_expanded`] evaluated and how many meshes
     /// [`Renderer::mesh_quads`] tessellated.
     #[cfg(test)]
     pub(crate) evaluated: usize,
+    /// How many walks [`Renderer::live_found`] made.
+    #[cfg(test)]
+    pub(crate) walked: usize,
 }
 
 impl Default for LiveCache {
@@ -50,8 +63,11 @@ impl Default for LiveCache {
         Self {
             expanded: FrameCache::new(lru::LIVE_BUDGET, 256),
             meshes: FrameCache::new(lru::MESH_BUDGET, 256),
+            walks: FrameCache::new(lru::WALK_BUDGET, 256),
             #[cfg(test)]
             evaluated: 0,
+            #[cfg(test)]
+            walked: 0,
         }
     }
 }
@@ -61,6 +77,7 @@ impl LiveCache {
     pub(crate) fn sweep(&mut self, stamp: u64) {
         self.expanded.sweep(stamp);
         self.meshes.sweep(stamp);
+        self.walks.sweep(stamp);
     }
 
     /// A cache whose evaluations take at most `budget` bytes.
@@ -85,19 +102,41 @@ pub fn expand_live(n: &Node) -> Vec<Node> {
 /// plug-in revision ([`crate::effects::plugin_revision`]) when it shows an object with a plug-in
 /// effect, and the color settings (`cms`, their address). Art is hashed by the addresses of its
 /// `Arc`s, which copies of the document share: a copy of the document has the same key. It also
-/// returns weak references to the reads found.
-fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>) {
+/// returns weak references to the reads found, and what the walk found ([`Walked`]) when it found
+/// no placed file.
+fn resources_key(doc: &Document, cms: usize, n: &Node) -> (u64, Vec<Weak<ReadDocument>>, Option<Walked>) {
     let mut h = DefaultHasher::new();
     let mut shown = Shown::default();
     hash_resources(doc, n, &mut shown, &mut h);
-    if shown.text {
-        vectorcraft_text::FontDb::global().generation().hash(&mut h);
+    let walked = Walked { hash: h.finish(), text: shown.text, plugins: shown.plugins };
+    (walked.key(cms), shown.reads, (!shown.placed).then_some(walked))
+}
+
+/// What [`hash_resources`] found in a node: the hash of what it walked, whether it found type or
+/// a placed file, and whether it found an object with a visible plug-in effect.
+#[derive(Clone, Copy)]
+struct Walked {
+    hash: u64,
+    text: bool,
+    plugins: bool,
+}
+
+impl Walked {
+    /// The [`resources_key`] of the node walked: the walk's hash, the font generation when it found
+    /// type or a placed file, the plug-in revision when it found a plug-in effect, and the color
+    /// settings `cms`.
+    fn key(self, cms: usize) -> u64 {
+        let mut h = DefaultHasher::new();
+        self.hash.hash(&mut h);
+        if self.text {
+            vectorcraft_text::FontDb::global().generation().hash(&mut h);
+        }
+        if self.plugins {
+            crate::effects::plugin_revision().hash(&mut h);
+        }
+        cms.hash(&mut h);
+        h.finish()
     }
-    if shown.plugins {
-        crate::effects::plugin_revision().hash(&mut h);
-    }
-    cms.hash(&mut h);
-    (h.finish(), shown.reads)
 }
 
 /// What [`hash_resources`] has found so far.
@@ -107,6 +146,8 @@ struct Shown {
     seen: Vec<usize>,
     /// Whether type or a placed file was found.
     text: bool,
+    /// Whether a placed file was found.
+    placed: bool,
     /// Whether an object with a visible plug-in effect was found.
     plugins: bool,
     /// Weak references to the reads of the placed files found.
@@ -154,6 +195,7 @@ fn hash_resources<'a>(doc: &'a Document, n: &'a Node, shown: &mut Shown, h: &mut
                     read.as_ref().map(|r| Arc::as_ptr(r) as usize).hash(h);
                     shown.reads.extend(read.as_ref().map(Arc::downgrade));
                     shown.text = true;
+                    shown.placed = true;
                 }
                 NodeKind::Text(_) => shown.text = true,
                 _ => {}
@@ -392,17 +434,39 @@ fn spread_to_edges(px: &mut [vello_cpu::color::PremulRgba8], filled: Vec<bool>, 
 impl Renderer {
     /// The [`resources_key`] of `n` in `doc`, with the frame's [`DocInputs`] ([`Found`]): `n` is a
     /// live node, or an object with effects whose art ([`Renderer::fx_art`]) can be made from
-    /// evaluated live objects, type, symbol art or colors shaded through the color settings.
-    pub(crate) fn live_found(&mut self, doc: &Document, n: &Node) -> Found {
+    /// evaluated live objects, type, symbol art or colors shaded through the color settings. The
+    /// key is made from the [`Walk`] kept for `n` while `doc`'s symbols and patterns are those it
+    /// read; `n` is walked again when they changed, and in every frame when the walk found a
+    /// placed file.
+    pub(crate) fn live_found(&mut self, doc: &Document, n: &Arc<Node>) -> Found {
         let inputs = self.doc_inputs(doc);
-        let (key, reads) = resources_key(doc, inputs.cms, n);
+        let at = Arc::as_ptr(n) as usize;
+        if let Some((node, walked, read)) = self.live.walks.get(&at, self.stamp)
+            && std::ptr::eq(node.as_ptr(), Arc::as_ptr(n))
+            && read.same_art(&inputs)
+        {
+            return (walked.key(inputs.cms), inputs, vec![]);
+        }
+        #[cfg(test)]
+        {
+            self.live.walked += 1;
+        }
+        let (key, reads, walked) = resources_key(doc, inputs.cms, n);
+        if let Some(walked) = walked {
+            // The bytes count the key and the entry, and the node's allocation that the weak
+            // reference keeps.
+            let bytes = size_of::<(usize, Walk, Node)>();
+            self.live.walks.insert(at, (Arc::downgrade(n), walked, inputs.clone()), bytes, self.stamp);
+        }
         (key, inputs, reads)
     }
 
     fn live_expanded(&mut self, doc: &Document, a: &Arc<Node>, cache: bool) -> Expanded {
         let key = Arc::as_ptr(a) as usize;
-        let resources = self.live_found(doc, a);
-        if cache
+        // An evaluation the cache does not keep is made without the key, so the copy that
+        // `draw_live_node` makes is not walked.
+        let resources = cache.then(|| self.live_found(doc, a));
+        if let Some(resources) = &resources
             && let Some(e) = self.live.expanded.get(&key, self.stamp)
             && Arc::ptr_eq(&e.0, a)
             && e.2.0 == resources.0
@@ -413,11 +477,12 @@ impl Renderer {
         {
             self.live.evaluated += 1;
         }
-        let v: Expanded = match crate::effects::pathfinder_children(a, crate::effects::text_outliner()) {
+        let hook = |c: &Node| crate::effects::outline_object(Some(doc), c);
+        let v: Expanded = match crate::effects::pathfinder_children(a, Some(&hook)) {
             Some(children) => Arc::new(children),
             None => Arc::new(crate::effects::expand_live(Some(doc), a).into_iter().map(Arc::new).collect()),
         };
-        if cache {
+        if let Some(resources) = resources {
             let bytes = size_of::<Expanded>() + v.iter().map(|n| lru::node_bytes(n)).sum::<usize>();
             self.live.expanded.insert(key, (a.clone(), v.clone(), resources), bytes, self.stamp);
         }
@@ -565,7 +630,10 @@ impl Renderer {
         }
     }
 
-    /// Draw a live node reached without its `Arc` (thumbnails, clip fallbacks): uncached.
+    /// Draw a live node that [`Self::draw_content`] reached without its kept `Arc`
+    /// ([`Self::live_root`]): the node of a thumbnail ([`Self::render_node_thumbnail_with`]), symbol
+    /// art placed again in every frame, color glyph art, and brush art that the brush cache did not
+    /// keep. It evaluates a copy of the node and does not use the live cache.
     pub(crate) fn draw_live_node(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node) {
         let a = Arc::new(n.clone());
         self.draw_live_body(ctx, f, &a, false);
@@ -704,7 +772,7 @@ mod tests {
                 true => Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("S{}", k + 1), xf: Affine::IDENTITY }),
                 false => square(&mut d),
             };
-            d.symbols.push(Symbol { name: format!("S{k}"), art: Arc::new(art) });
+            d.symbols.push(Symbol { dynamic: false, name: format!("S{k}"), art: Arc::new(art) });
         }
         let first = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S0".into(), xf: Affine::IDENTITY });
         let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
@@ -738,7 +806,7 @@ mod tests {
         };
         let (x, y) = (square(&mut d, 0.0), square(&mut d, 20.0));
         for (name, art) in [("A", &x), ("B", &y), ("C", &x)] {
-            d.symbols.push(Symbol { name: name.into(), art: art.clone() });
+            d.symbols.push(Symbol { dynamic: false, name: name.into(), art: art.clone() });
         }
         let content = ["A", "B", "C"].map(|s| Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: s.into(), xf: Affine::IDENTITY })));
         let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };

@@ -185,7 +185,7 @@ fn planar_tiffs_with_more_strips_than_can_be_counted_are_too_large() {
     file[102..106].copy_from_slice(&1u32.to_le_bytes());
     let e = raster_image(&file).err().expect("refused");
     assert!(e.to_string().contains("an image of 3 × 2147483649 pixels is too large to draw"), "{e}");
-    assert!(too_large_note(&file).is_some());
+    assert!(load::too_large_note(&file).is_some());
     assert_eq!(vectorcraft_doc::cmyk::oversized_tiff(&file), Some((3, 1 << 31 | 1)));
 }
 
@@ -366,28 +366,29 @@ fn templates_open_untitled() {
 #[test]
 fn open_exts_cover_every_readable_format() {
     for f in FORMATS.iter().filter(|f| f.read) {
-        for e in f.extensions {
+        for e in read_extensions(f) {
             assert!(OPEN_EXTS.contains(e), "OPEN_EXTS lacks .{e} ({})", f.label);
         }
     }
     for e in OPEN_EXTS {
-        assert!(format(e).is_some_and(|f| f.read), ".{e} in OPEN_EXTS is no readable format");
+        assert!(readable_format(e).is_some(), ".{e} in OPEN_EXTS is no readable format");
     }
     let filters: Vec<_> = open_filters().collect();
     assert_eq!(filters[0], ("All readable files", OPEN_EXTS));
     assert_eq!(
         filters.len(),
-        9 + FORMATS.iter().filter(|f| f.read).count(),
-        "and swatch libraries, libraries, flattener, PDF and print presets, shortcut sets, scripts, plug-ins"
+        10 + FORMATS.iter().filter(|f| f.read).count(),
+        "and swatch libraries, libraries, flattener, PDF, print and export presets, shortcut sets, scripts, plug-ins"
     );
+    assert!(filters.contains(&("Export presets", SCREEN_EXPORT_PRESET_EXTS)), "File › Open imports export presets");
     assert!(filters.contains(&("Scripts", crate::cmd::scripts::EXTS)), "File › Open checks scripts");
     assert_eq!(filters.last(), Some(&("Plug-ins", crate::cmd::plugin::EXTS)), "File › Open installs plug-ins");
 }
 
 #[test]
 fn library_open_filters_list_library_formats_first() {
-    let filters: Vec<_> = library_open_filters("Swatch libraries", super::swatchlib::LIBRARY_EXTS).collect();
-    assert_eq!(filters[0], ("Swatch libraries", super::swatchlib::LIBRARY_EXTS));
+    let filters: Vec<_> = library_open_filters("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS).collect();
+    assert_eq!(filters[0], ("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS));
     assert!(filters[0].1.contains(&"ase"));
     assert_eq!(filters[1], ("All readable files", OPEN_EXTS));
 }
@@ -458,7 +459,7 @@ fn formats_query_lists_readers_writers_and_options() {
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 
@@ -702,6 +703,68 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
+/// values is refused before anything is written; `compress`, `version`, `preview` or `precision` beside the path of a format
+/// that doesn't read it is named in the warnings.
+#[test]
+fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
+    let d = tmp_dir("save-options");
+    let mut s = session(200.0, 100.0, 1);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let path = d.join("both.vectorcraft").to_string_lossy().to_string();
+    for cmd in ["document.save", "file.saveAs", "file.saveCopy", "file.saveAsTemplate"] {
+        let e = s.execute(cmd, &json!({"path": path, "compress": true, "options": {"compress": false}})).unwrap_err().to_string();
+        assert!(e.contains("`compress: true` and `options.compress: false` disagree") && e.contains(&format!("`{cmd}`")), "{cmd}: {e}");
+    }
+    assert!(!std::path::Path::new(&path).exists(), "nothing is written");
+    assert!(!d.join("both.vctemplate").exists(), "nor a template");
+    // An SVG option given in `svg: {…}` or in `options.svg` counts as given there.
+    let svg = d.join("a.svg").to_string_lossy().to_string();
+    for p in [
+        json!({"svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+        json!({"hiddenLayers": false, "options": {"svg": {"hiddenLayers": true}}}),
+        json!({"hiddenLayers": true, "svg": {"hiddenLayers": false}, "options": {"hiddenLayers": true}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(svg);
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("`hiddenLayers: false` and `options.hiddenLayers: true` disagree") && e.contains("`file.saveCopy`"), "{p}: {e}");
+    }
+    assert!(!std::path::Path::new(&svg).exists(), "nothing is written");
+    // Agreeing values, or one of them null, save as asked; `3` and `3.0` agree.
+    for p in [
+        json!({"compress": true, "options": {"compress": true}}),
+        json!({"compress": null, "options": {"compress": true}}),
+        json!({"compress": true, "version": 3, "options": {"compress": true, "version": 3.0}}),
+    ] {
+        let mut p = p;
+        p["path"] = json!(path);
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{p}: {r}");
+        assert_eq!(std::fs::read(&path).unwrap()[..2], [0x1f, 0x8b], "{p}");
+    }
+    // An SVG file reads none of the native options; a .ai file reads `compress` only.
+    let r = s.execute("file.saveCopy", &json!({"path": svg, "compress": true, "version": 3, "preview": null})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.contains(&"`compress` was not used: SVG files don't read it"), "{w:?}");
+    assert!(w.contains(&"`version` was not used: SVG files don't read it") && !w.iter().any(|w| w.starts_with("`preview`")), "{w:?}");
+    assert!(std::fs::read(&svg).unwrap().starts_with(b"<"), "plain SVG");
+    let r = s.execute("file.saveCopy", &json!({"path": d.join("a.ai").to_string_lossy(), "compress": false, "version": 3})).unwrap();
+    let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(w.iter().any(|w| w.starts_with("`version` was not used")) && !w.iter().any(|w| w.starts_with("`compress`")), "{w:?}");
+    // `precision` is read by native files and templates only.
+    for name in ["p.svg", "p.pdf", "p.ai", "p.eps"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        let w: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        assert!(w.iter().any(|w| w.starts_with("`precision` was not used:")), "{name}: {w:?}");
+    }
+    for name in ["p.vectorcraft", "p.vctemplate"] {
+        let r = s.execute("file.saveCopy", &json!({"path": d.join(name).to_string_lossy(), "precision": 2})).unwrap();
+        assert_eq!(r["warnings"], json!([]), "{name}: {r}");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A native save whose file write fails partway (a full disk) leaves the file as it was, and no
 /// temporary file behind.
 #[test]
@@ -784,4 +847,34 @@ fn a_failed_save_does_not_stamp_the_documents_dates() {
     // Undoing the edit is back at what the file holds.
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(!s.doc().unwrap().is_dirty());
+}
+
+/// #4284: a photo whose EXIF orientation says the camera was turned places upright: its pixels
+/// turned as the orientation says, its width and height swapped. One without keeps its own bytes.
+#[test]
+fn a_photo_places_the_way_its_exif_orientation_says() {
+    // 16 × 8, red on the left half.
+    let mut rgb = image::RgbImage::from_pixel(16, 8, image::Rgb([255, 255, 255]));
+    for y in 0..8 {
+        for x in 0..8 {
+            rgb.put_pixel(x, y, image::Rgb([220, 0, 0]));
+        }
+    }
+    let mut jpg = Vec::new();
+    image::DynamicImage::ImageRgb8(rgb).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+    // An EXIF segment with Orientation 6: turn a quarter clockwise to show.
+    let exif: Vec<u8> =
+        [b"Exif\0\0".as_slice(), b"II", &[0x2a, 0, 8, 0, 0, 0], &[1, 0], &[0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0], &[0, 0, 0, 0]].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let plain = raster_image(&jpg).unwrap();
+    assert_eq!((plain.width, plain.height, plain.blob.bytes.as_slice()), (16, 8, jpg.as_slice()), "a photo as taken keeps its bytes");
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height), (8, 16), "turned a quarter");
+    let px = image::load_from_memory(&img.blob.bytes).unwrap().to_rgb8();
+    let red = |p: &image::Rgb<u8>| p[0] > 150 && p[1] < 80;
+    assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)), "the left half is on top");
 }
