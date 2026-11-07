@@ -1236,6 +1236,7 @@ font-technology	Variable	Változó
 	Embed Fonts (Glyphs Used)	Betűtípusok beágyazása (használt glifák)
 	Embed ICC Profile	ICC-profil beágyazása
 	Embed ICC Profiles	ICC-profilok beágyazása
+	Embed Preview	Előnézet beágyazása
 	Embed Image	Kép beágyazása
 	Embed Image(s)	Kép(ek) beágyazása
 	Embed page thumbnails	Oldalbélyegképek beágyazása

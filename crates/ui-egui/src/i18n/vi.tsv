@@ -1118,6 +1118,7 @@ font-technology	Variable	Biến thiên
 	Embed Fonts (Glyphs Used)	Nhúng phông (các glyph đã dùng)
 	Embed ICC Profile	Nhúng hồ sơ ICC
 	Embed ICC Profiles	Nhúng các hồ sơ ICC
+	Embed Preview	Nhúng bản xem trước
 	Embed Image	Nhúng ảnh
 	Embed Image(s)	Nhúng ảnh
 	Embed page thumbnails	Nhúng hình thu nhỏ trang

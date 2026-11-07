@@ -934,6 +934,7 @@ font-technology	Variable	可變
 	Embed Fonts (Glyphs Used)	內嵌字體 (使用的字符)
 	Embed ICC Profile	內嵌 ICC 描述檔
 	Embed ICC Profiles	內嵌 ICC 描述檔
+	Embed Preview	內嵌預覽
 	Embed Image	內嵌影像
 	Embed Image(s)	內嵌影像
 	Embed page thumbnails	嵌入頁面縮圖

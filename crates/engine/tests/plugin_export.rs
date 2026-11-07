@@ -91,7 +91,8 @@ fn the_exporter_is_given_the_native_file_s_json() {
     let r = s.execute("document.export", &json!({"format": "plugin.test.input"})).unwrap();
     assert_eq!(r["format"], "plugin.test.input");
     let given = exported(&r);
-    let saved = exported(&s.execute("document.save", &json!({})).unwrap());
+    // Without the preview Embed Preview adds to saves, which exports leave out.
+    let saved = exported(&s.execute("document.save", &json!({"preview": false})).unwrap());
     assert!(saved.len() > given.len() + png.len(), "the image data follows the JSON in the saved file");
     let doc: Value = serde_json::from_slice(&given).unwrap();
     let saved_json: Value = serde_json::from_slice(vectorcraft_format::json_part(&saved)).unwrap();
