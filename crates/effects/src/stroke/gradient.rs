@@ -34,6 +34,8 @@ const MESH_ROWS: usize = 16;
 const MESH_STEP: f64 = 1.0 / 32.0;
 /// The most of a subpath one slice spans while a width profile shapes the across gradient.
 const PROFILE_STEP: f64 = 1.0 / 64.0;
+/// The most points either way a rib looks along the path for how wide the stroke gets near it.
+const WINDOW_POINTS: usize = 256;
 /// Flattening tolerance, cover margin and growth (see [`gradient_slices`]) of meshes and written
 /// slices (document points).
 const SLICE_TOL: f64 = 0.05;
@@ -78,14 +80,26 @@ struct Lay<'a> {
     st: &'a StrokeLayer,
     /// Half the stroked width ([`aligned_width`]).
     hw: f64,
-    /// How far ribs reach either side of the path where nothing wider is near.
-    cover: f64,
+    /// How far ribs reach past the stroke's edge.
     margin: f64,
     /// How far a strip runs on past the start and end of an open subpath (caps and heads).
     ext: (f64, f64),
 }
 
 impl Lay<'_> {
+    /// How far the stroke reaches either side of the path at fraction `t` of a subpath: its wider
+    /// side, just before or just after a step there.
+    fn half(&self, t: f64) -> f64 {
+        let Some(p) = &self.st.profile else { return self.hw };
+        let ((bl, br), (al, ar)) = p.around(t);
+        self.hw * bl.max(br).max(al).max(ar).max(0.0)
+    }
+
+    /// How far a rib at fraction `t` reaches either side of the path to cover the stroke there.
+    fn cover(&self, t: f64) -> f64 {
+        self.half(t) + self.margin
+    }
+
     /// The across band at fraction `t` of a subpath whose visible side is `side` (`Some(true)`:
     /// left; `None`: both, a centred stroke).
     fn band(&self, t: f64, side: Option<bool>) -> (f64, f64) {
@@ -147,10 +161,11 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
     if !(hw > 0.0 && hw.is_finite()) {
         return vec![];
     }
-    let full = hw * st.profile_max();
     let heads = (st.head_reach(false), st.head_reach(true));
-    let cap = cap_extent(st.cap, 2.0 * full);
-    let lay = Lay { st, hw, cover: full + margin, margin, ext: (cap.max(heads.0) + margin, cap.max(heads.1) + margin) };
+    let mut lay = Lay { st, hw, margin, ext: (0.0, 0.0) };
+    // Caps reach as far past the ends as the stroke is wide there.
+    let cap = |t: f64| cap_extent(st.cap, 2.0 * lay.half(t));
+    lay.ext = (cap(0.0).max(heads.0) + margin, cap(1.0).max(heads.1) + margin);
     let subs = subpaths(bp);
     let count = subs.len();
     let mut out = vec![];
@@ -165,7 +180,8 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
             // A subpath of no length: a dot (round and projecting caps paint it).
             1 => {
                 let (d, b, e) = (Vec2::new(1.0, 0.0), lay.band(0.0, side), lay.ext.0.max(lay.ext.1));
-                vec![Rib::square(pts[0] - d * e, d, lay.cover, 0.0, b), Rib::square(pts[0] + d * e, d, lay.cover, 0.0, b)]
+                let r = lay.cover(0.0);
+                vec![Rib::square(pts[0] - d * e, d, r, 0.0, b), Rib::square(pts[0] + d * e, d, r, 0.0, b)]
             }
             _ => {
                 let total = length(&pts, closed);
@@ -215,9 +231,59 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     let n = pts.len();
     let seg_count = if closed { n } else { n - 1 };
     let dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();
-    // Ribs near an arrowhead reach across it.
-    let reach = |s: f64| {
-        let mut r = lay.cover;
+    // How far along the subpath each point is.
+    let mut along = Vec::with_capacity(n);
+    let mut s = 0.0;
+    for i in 0..n {
+        along.push(s);
+        s += pts[i].distance(pts[(i + 1) % n]);
+    }
+    // How far the ribs at point `i` reach: past the stroke there and on its way to the points
+    // either side, where it is no wider than at one of the two (each side of a width profile
+    // stays between its widths at the points of a span, and its points have points here). The
+    // caps and dots of a dashed stroke reach along the path as far as it is wide where they sit,
+    // so there the ribs cover the widest the stroke gets that far either way. Not as far as the
+    // stroke is wide anywhere: where a stroke crosses or runs close by itself, a narrow part
+    // reaching that far would paint over a wide part beside it (#5960). The start of a closed
+    // subpath is also its end. Ribs near an arrowhead reach across it.
+    let cover = |i: usize| {
+        let t = along[i] / total;
+        if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(t) }
+    };
+    let widest = lay.hw * lay.st.profile_max() + lay.margin;
+    let window = match lay.st.dash {
+        Some(_) if lay.st.profile.is_some() => cap_extent(lay.st.cap, 2.0 * lay.hw * lay.st.profile_max()),
+        _ => 0.0,
+    };
+    let reach = |i: usize| {
+        let mut r = cover(i);
+        for forward in [false, true] {
+            // Out to the first point past the window (bounded: past that many, as wide as anywhere).
+            let (mut j, mut d, mut past) = (i, 0.0, false);
+            for _ in 0..WINDOW_POINTS {
+                let k = match (closed, forward) {
+                    (true, true) => (j + 1) % n,
+                    (true, false) => (j + n - 1) % n,
+                    (false, true) if j + 1 < n => j + 1,
+                    (false, false) if j > 0 => j - 1,
+                    _ => {
+                        past = true;
+                        break;
+                    }
+                };
+                r = r.max(cover(k));
+                d += pts[j].distance(pts[k]);
+                j = k;
+                if d > window {
+                    past = true;
+                    break;
+                }
+            }
+            if !past {
+                r = r.max(widest);
+            }
+        }
+        let s = along[i];
         if heads.0 > 0.0 && s <= heads.0 {
             r = r.max(heads.0 + lay.margin);
         }
@@ -227,29 +293,26 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
         r
     };
     let mut out = Vec::with_capacity(n + 4);
-    let mut s = 0.0;
     if !closed {
         let (d, b) = (dir[0], lay.band(0.0, side));
-        out.push(Rib::square(pts[0] - d * lay.ext.0, d, reach(0.0), 0.0, b));
-        out.push(Rib::square(pts[0], d, reach(0.0), 0.0, b));
-        s = pts[0].distance(pts[1]);
+        out.push(Rib::square(pts[0] - d * lay.ext.0, d, reach(0), 0.0, b));
+        out.push(Rib::square(pts[0], d, reach(0), 0.0, b));
     }
     let (first, last) = if closed { (0, n) } else { (1, n - 1) };
     for i in first..last {
         let v = i % n;
-        let t = s / total;
-        let ribs = lay.turn(pts[v], dir[(v + seg_count - 1) % seg_count], dir[v % seg_count], reach(s), t, lay.band(t, side));
+        let t = along[v] / total;
+        let ribs = lay.turn(pts[v], dir[(v + seg_count - 1) % seg_count], dir[v % seg_count], reach(v), t, lay.band(t, side));
         // A closed subpath starts after the fan of its first corner and ends with it.
         let skip = if closed && i == 0 { ribs.len() - 1 } else { 0 };
         out.extend(ribs.into_iter().skip(skip));
-        s += pts[v].distance(pts[(v + 1) % n]);
     }
     if closed {
-        out.extend(lay.turn(pts[0], dir[seg_count - 1], dir[0], reach(total), 1.0, lay.band(1.0, side)));
+        out.extend(lay.turn(pts[0], dir[seg_count - 1], dir[0], reach(0), 1.0, lay.band(1.0, side)));
     } else {
         let (d, b) = (dir[seg_count - 1], lay.band(1.0, side));
-        out.push(Rib::square(pts[n - 1], d, reach(total), 1.0, b));
-        out.push(Rib::square(pts[n - 1] + d * lay.ext.1, d, reach(total), 1.0, b));
+        out.push(Rib::square(pts[n - 1], d, reach(n - 1), 1.0, b));
+        out.push(Rib::square(pts[n - 1] + d * lay.ext.1, d, reach(n - 1), 1.0, b));
     }
     out
 }
