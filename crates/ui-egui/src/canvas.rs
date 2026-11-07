@@ -851,7 +851,7 @@ const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
 fn fade_outside_artboards(painter: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document) {
     let boards: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
     let mut mesh = egui::Mesh::default();
-    for (n, r) in (0u32..).zip(outside_rects(view_bounds(xf), &boards)) {
+    for (n, r) in (0u32..).zip(fade_rects(view_bounds(xf), &boards)) {
         for p in xf.quad(r) {
             mesh.colored_vertex(p, FADE_OUTSIDE);
         }
@@ -862,11 +862,25 @@ fn fade_outside_artboards(painter: &egui::Painter, xf: &Xf, doc: &vectorcraft_do
     painter.add(Shape::mesh(mesh));
 }
 
+/// The most rectangles the fade draws exactly around the artboards.
+const FADE_MAX_RECTS: usize = 4096;
+
+/// The rectangles the fade covers: the parts of `bounds` outside the artboards ([`outside_rects`]),
+/// or, when those would be more than [`FADE_MAX_RECTS`], the parts outside the box around all the
+/// artboards, at most four.
+fn fade_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
+    outside_rects(bounds, boards, FADE_MAX_RECTS).unwrap_or_else(|| {
+        let all: Vec<Rect> = boards.iter().copied().reduce(|a, b| a.union(b)).into_iter().collect();
+        outside_rects(bounds, &all, FADE_MAX_RECTS).unwrap_or_default()
+    })
+}
+
 /// The parts of `bounds` that no rectangle of `boards` covers, as rectangles that do not overlap:
 /// for each band between consecutive top and bottom edges, the gaps between the boards that cross
 /// it. A gap with the same left and right edges as a gap of the band above extends that gap's
-/// rectangle down, so each board edge adds at most a few rectangles.
-fn outside_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
+/// rectangle down, so each board edge adds at most a few rectangles. Boards that cross each other
+/// can leave many more gaps; past `limit` rectangles it stops and returns `None`.
+fn outside_rects(bounds: Rect, boards: &[Rect], limit: usize) -> Option<Vec<Rect>> {
     let mut ys: Vec<f64> = boards.iter().flat_map(|b| [b.y0, b.y1]).filter(|y| *y > bounds.y0 && *y < bounds.y1).collect();
     ys.extend([bounds.y0, bounds.y1]);
     ys.sort_by(f64::total_cmp);
@@ -919,8 +933,11 @@ fn outside_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
             }
         }
         above = row;
+        if out.len() > limit {
+            return None;
+        }
     }
-    out
+    Some(out)
 }
 
 /// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which

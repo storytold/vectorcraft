@@ -9182,11 +9182,33 @@ fn outside_rects_of_a_row_of_boards_stay_few() {
     let boards: Vec<Rect> =
         (0..n).map(|i| Rect::new(20.0 * f64::from(i) + 10.0, 10.0, 20.0 * f64::from(i) + 20.0, 20.0 + 10.0 * f64::from(i))).collect();
     let bounds = Rect::new(0.0, 0.0, 20.0 * f64::from(n) + 10.0, 10.0 * f64::from(n) + 40.0);
-    let parts = outside_rects(bounds, &boards);
+    let parts = outside_rects(bounds, &boards, usize::MAX).unwrap();
     assert!(parts.len() <= 3 * n as usize, "{} parts for {n} boards", parts.len());
     let area = |r: &Rect| r.width() * r.height();
     let covered: f64 = boards.iter().map(area).sum();
     assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - covered);
+}
+
+/// 500 narrow tall boards crossed by 500 narrow wide ones leave about 250,000 gaps between them.
+/// The fade then covers only the parts outside the box around all the boards, so it stays a few
+/// rectangles.
+#[test]
+fn the_fade_of_crossing_boards_stays_bounded() {
+    let n = 500;
+    let side = 4.0 * f64::from(n);
+    let boards: Vec<Rect> = (0..n)
+        .flat_map(|i| {
+            let at = 4.0 * f64::from(i);
+            [Rect::new(at, 0.0, at + 1.0, side), Rect::new(0.0, at, side, at + 1.0)]
+        })
+        .collect();
+    let bounds = Rect::new(-100.0, -100.0, side + 100.0, side + 100.0);
+    assert!(outside_rects(bounds, &boards, FADE_MAX_RECTS).is_none(), "more than {FADE_MAX_RECTS} gaps");
+    let parts = fade_rects(bounds, &boards);
+    assert!(parts.len() <= 4, "{} parts", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let all = Rect::new(0.0, 0.0, side, side);
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - area(&all));
 }
 
 /// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
@@ -9222,10 +9244,10 @@ fn the_fade_darkens_art_on_the_pasteboard_and_not_on_the_artboard() {
 #[test]
 fn outside_rects_cover_the_bounds_minus_the_boards() {
     let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
-    assert!(outside_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
-    assert_eq!(outside_rects(bounds, &[]), vec![bounds]);
+    assert!(fade_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
+    assert_eq!(fade_rects(bounds, &[]), vec![bounds]);
     let boards = [Rect::new(10.0, 10.0, 40.0, 40.0), Rect::new(30.0, 30.0, 60.0, 80.0), Rect::new(90.0, -20.0, 130.0, 50.0)];
-    let parts = outside_rects(bounds, &boards);
+    let parts = fade_rects(bounds, &boards);
     let area = |r: &Rect| r.width() * r.height();
     let overlap = |a: &Rect, b: &Rect| (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0) * (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
     for (i, p) in parts.iter().enumerate() {
