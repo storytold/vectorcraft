@@ -1679,6 +1679,21 @@ fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
 }
 
 #[test]
+fn a_transparency_set_in_a_clipping_group_stays_after_it() {
+    // GUARDS: `Q` ends a clipping group but doesn't take the transparency back to what it was at
+    // its `q`: the writer sets `Xy` only when the next object's state differs from the last one it
+    // wrote. A Screen glow, then a clipping group whose path is set back to Normal, then type with
+    // no `Xy`: restored at `Q`, the type drew in Screen and nearly vanished on a light background.
+    let clip = format!("q\n0 1 0 0 0 Xy\n{}h\nW\nn\n{RED}{}f\nQ\n", rect_path(0.0, 0.0, 200.0, 100.0), rect_path(40.0, 0.0, 50.0, 10.0));
+    let body = format!("2 0.8 0 0 0 Xy\n{RED}{}f\n{clip}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    assert_eq!((a[0].opacity, a[0].blend), (0.8, BlendMode::Screen), "the glow's own state");
+    assert!(matches!(a[1].kind, NodeKind::Group { clip: true, .. }), "{:?}", a[1].kind);
+    assert_eq!((a[2].opacity, a[2].blend), (1.0, BlendMode::Normal), "the state set inside the clipping group");
+}
+
+#[test]
 fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
@@ -2379,6 +2394,44 @@ fn a_drawn_look_stands_for_its_object() {
     assert_eq!(a[0].opacity, 0.4);
     assert_eq!(a[0].children().unwrap().len(), 2, "the newer readers' part is left out");
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+}
+
+/// An object kept as its drawn look: the look (a group), then the object on `%_` lines and its style.
+fn drawn_look_art() -> String {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\n{}S\nU\n%_{hidden_rect}n\n%_/ArtDictionary :\n%_/XMLUID : (Look) ; (AI10_ArtUID) ,\n%_;\n1 (Look style) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    )
+}
+
+/// A pattern's art holding an object kept as its drawn look counts in the note, as a symbol's does;
+/// a definition the same name replaces later counts no longer.
+#[test]
+fn a_drawn_look_in_a_patterns_art_is_noted() {
+    let pattern = |art: &str| format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{art}E\n%AI3_EndPattern\n");
+    let looked = pattern(&drawn_look_art());
+    let r = read_ok(&format!("{looked}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let plain = pattern(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&format!("{looked}{plain}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// A brush's art holding an object kept as its drawn look counts in the note once a brush that is
+/// kept uses the art; art no brush uses brings no note.
+#[test]
+fn a_drawn_look_in_a_brushs_art_is_noted_when_a_brush_uses_it() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", drawn_look_art());
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert!(matches!(brush_named(&lib, "Spray"), vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{section}{}{}", plugin_object(CALLIGRAPHIC, "Nib", NIB), layer("")));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// Editing data with one layer holding an image: `matrix` (`[a b c d tx ty]`), its size, colour
@@ -3328,6 +3381,106 @@ fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
     assert_eq!(texts[1].para_at(0), two);
 }
 
+/// `TV` (§15.3.4) sets the writing direction of point type, area type, type on a path and linked
+/// areas, and lasts into the next text object until it changes.
+#[test]
+fn legacy_type_keeps_its_writing_direction() {
+    let frame = "10 10 m\n110 10 L\n110 110 L\n10 110 L\nN";
+    let area = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Area) Tx\nTO\n");
+    let on_path = "2 To\n1 0 0 1 0 0 0 Tp\n10 10 m\n110 10 L\nN\nTP\n(Path) Tx\nTO\n";
+    let linked = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n1 0 0 1 200 110 0 Tp\n{frame}\nTP\n(Linked) Tx\nTO\n");
+    let art = format!("{}{area}{on_path}{linked}{}", point_type("1 TV", "Point"), point_type("0 TV", "Flat"));
+    let texts = legacy_texts(&art);
+    let vertical: Vec<bool> = texts.iter().map(|t| t.vertical).collect();
+    assert_eq!(vertical, [true, true, true, true, true, false]);
+    assert!(matches!(texts[1].kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert!(matches!(texts[2].kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    // Vertical point type runs down the canvas from `Tp`'s origin (10, 50), which opens at document
+    // (10, 50) on the 100 pt tall artboard, on the column's center line.
+    let long = &legacy_texts(&point_type("1 TV", "Point type"))[0];
+    let bounds = long.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), long).bounds);
+    assert!(bounds.height() > bounds.width(), "{bounds:?}");
+    assert!(bounds.x0 < 10.0 && bounds.x1 > 10.0, "{bounds:?}");
+    assert!((bounds.y0 - 50.0).abs() < 1.0 && bounds.y1 > 60.0, "{bounds:?}");
+    // A text object keeps the direction in force at its first character, with a warning when a later
+    // character has another; the mode lasts into the next text object.
+    let changed = point_type("1 TV", "First").replace("TO\n", "0 TV\n(Second) Tx\nTO\n");
+    let r = legacy_read(&format!("{changed}{}", point_type("", "Next")));
+    let changed = art_texts(&r.doc);
+    assert!(changed[0].vertical);
+    assert_eq!(changed[0].plain_text(), "FirstSecond");
+    assert!(!changed[1].vertical);
+    assert_eq!(r.warnings, [DIRECTION_CHANGE_LEFT_OUT]);
+    // A direction that changes and changes back also warns.
+    let back = point_type("", "a").replace("TO\n", "1 TV\n(b) Tx\n0 TV\n(c) Tx\nTO\n");
+    assert_eq!(legacy_read(&back).warnings, [DIRECTION_CHANGE_LEFT_OUT]);
+    // A `TV` that no character follows does not warn, and an object with no characters opens no
+    // type, while its `TV` lasts into the next object.
+    let trailing = point_type("", "a").replace("TO\n", "1 TV\nTO\n");
+    assert!(legacy_read(&trailing).warnings.is_empty());
+    let empty = legacy_texts(&format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n1 TV\nTO\n{}", point_type("", "Next")));
+    assert_eq!((empty.len(), empty[0].vertical), (1, true));
+    // `TV` before `To` counts, and `TV` after the last character only reaches the next object.
+    let before = legacy_texts(&format!("1 TV\n{}", point_type("", "Hi")));
+    assert!(before[0].vertical);
+    let after = point_type("", "Hi").replace("TO\n", "1 TV\nTO\n");
+    let after = legacy_texts(&format!("{after}{}", point_type("", "Next")));
+    assert_eq!((after[0].vertical, after[1].vertical), (false, true));
+}
+
+/// The glyph origins of a legacy-format text object.
+fn legacy_origins(t: &vectorcraft_doc::TextObject) -> Vec<(f64, f64)> {
+    vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (g.origin.x, g.origin.y)).collect()
+}
+
+/// `Ty` (§15.3.4) marks the characters of a Kumi block in vertical and in horizontal type, `TY`
+/// marks them in horizontal type, and `Tv` keeps Roman characters upright in vertical type; `Tv`
+/// may come inside the text path. All three last into the next text object.
+#[test]
+fn legacy_type_keeps_kumi_blocks_and_upright_roman_characters() {
+    let runs = |art: &str| -> Vec<(String, bool, bool)> {
+        let texts = legacy_texts(art);
+        texts[0].runs.iter().map(|r| (r.text.clone(), r.style.tate_chu_yoko, r.style.standard_vertical_roman)).collect()
+    };
+    let kumi = |begin: &str, end: &str| point_type(&format!("(A) Tx\n{begin}\n(12) Tx\n{end}"), "B");
+    let marked = vec![("A".to_string(), false, false), ("12".to_string(), true, false), ("B".to_string(), false, false)];
+    assert_eq!(runs(&format!("1 TV\n{}", kumi("1 Ty", "0 Ty"))), marked);
+    assert_eq!(runs(&kumi("1 Ty", "0 Ty")), marked);
+    assert_eq!(runs(&kumi("1 TY", "0 TY")), marked);
+    assert!(!legacy_texts(&kumi("1 TY", "0 TY"))[0].vertical);
+    // `TY` records a block that the set text doesn't show: vertical type opens without it, and the
+    // block starts again in the next horizontal object.
+    let unmarked = vec![("A12B".to_string(), false, false)];
+    assert_eq!(runs(&format!("1 TV\n{}", kumi("1 TY", "0 TY"))), unmarked);
+    let recorded = legacy_texts(&format!("1 TV\n1 TY\n{}0 TV\n{}", point_type("", "A"), point_type("", "B")));
+    assert_eq!((recorded[0].runs[0].style.tate_chu_yoko, recorded[1].runs[0].style.tate_chu_yoko), (false, true));
+    let upright = point_type("(a) Tx\n1 Tv", "b");
+    assert_eq!(runs(&format!("1 TV\n{upright}")), [("a".to_string(), false, false), ("b".to_string(), false, true)]);
+    let in_path = point_type("", "c").replace("0 Tp\nTP", "0 Tp\n1 Tv\nTP");
+    assert_eq!(runs(&in_path), [("c".to_string(), false, true)]);
+    assert_eq!(runs(&point_type("1 Tv\n(a) Tx\n0 Tv", "b")), [("a".to_string(), false, true), ("b".to_string(), false, false)]);
+    // Each one lasts into the next text object.
+    for (op, kept) in [("Ty", (true, false)), ("TY", (true, false)), ("Tv", (false, true))] {
+        let texts = legacy_texts(&format!("{}{}", point_type(&format!("1 {op}"), "a"), point_type("", "b")));
+        let st = &texts[1].runs[0].style;
+        assert_eq!((st.tate_chu_yoko, st.standard_vertical_roman), kept, "{op}");
+    }
+    // Horizontal type keeps the mark and doesn't move the characters.
+    let plain = &legacy_texts(&point_type("", "A12B"))[0];
+    let in_horizontal = &legacy_texts(&kumi("1 Ty", "0 Ty"))[0];
+    assert_eq!(legacy_origins(in_horizontal), legacy_origins(plain));
+    // Two blocks with nothing between them open as one block.
+    let vertical = |attrs: &str, text: &str| legacy_texts(&format!("1 TV\n{}", point_type(attrs, text))).remove(0);
+    let two = vertical("1 Ty\n(AB) Tx\n0 Ty\n1 Ty", "CD");
+    let one = vertical("1 Ty", "ABCD");
+    assert_eq!(legacy_origins(&two), legacy_origins(&one));
+    // Two or three digits that no block marks are set across the column by the layout's own rule.
+    let digits = vertical("", "12");
+    assert!(!digits.runs[0].style.tate_chu_yoko);
+    assert_eq!(legacy_origins(&digits), legacy_origins(&vertical("1 Ty", "12")));
+    assert_ne!(legacy_origins(&vertical("", "AB")), legacy_origins(&vertical("1 Ty", "AB")));
+}
+
 /// A legacy attribute whose operands are missing, are not numbers, or are flags other than 0 and
 /// 1 leaves the attribute as it was, and operands are read by their place.
 #[test]
@@ -3343,6 +3496,15 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
     assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
     assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
+    let texts = legacy_texts(&point_type("1 TV\n1 Tv\n1 Ty\n2 TV\n/x TV\nTV\n-1 Tv\n(x) Tv\n0.5 Ty\n2 TY", "Hi"));
+    let st = &texts[0].runs[0].style;
+    assert!(texts[0].vertical && st.standard_vertical_roman && st.tate_chu_yoko);
+    let texts = legacy_texts(&point_type("2 TV\n-1 TV\n2 Tv\n-1 Tv\n0.5 Ty\n-1 Ty\n2 TY\n-1 TY\n1 TY\n2 TY\n0.5 TY", "Hi"));
+    let st = &texts[0].runs[0].style;
+    assert!(!texts[0].vertical && !st.standard_vertical_roman);
+    assert!(st.tate_chu_yoko, "`TY` stays on");
+    let texts = legacy_texts(&point_type("2 TV\n-1 TV\n2 Tv\n-1 Tv\n0.5 Ty\n-1 Ty\n2 TY\n-1 TY", "Hi"));
+    assert!(!texts[0].runs[0].style.tate_chu_yoko);
     // A scale or leading pair with a bad operand leaves both as they were; one operand is the
     // horizontal scale (or the leading) of the format before version 7.
     let texts = legacy_texts(&point_type("50 80 Tz\n14 3 Tl\n/x 120 Tz\n/x 20 Tl", "Hi"));
@@ -3790,6 +3952,7 @@ fn legacy_linked_area_frames_cap_their_copied_tab_stops() {
 
 /// The warning when linked areas are left out.
 const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits were left out";
+const DIRECTION_CHANGE_LEFT_OUT: &str = "type that changes writing direction inside a text object opens in the direction of its first character";
 
 /// The frames of linked areas times the characters of their story are kept to the reader's
 /// allowance of characters: a story of more than half of it gets one frame, and of a third, two.
@@ -5111,6 +5274,25 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(matches!(fill(&a[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("G")));
     let effects: Vec<_> = a[0].appearance.effects.iter().map(|e| (e.id.as_str(), e.params["opacity"].as_f64())).collect();
     assert_eq!(effects, [("stylize.outerGlow", Some(50.0))]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
+    // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
+    // its editing data) found no style and came in as their drawn look.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let styled = format!("u\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{ART_STYLES}{}", symbols(&symbol("Tag", &styled, 1)), layer("")));
+    let art = &r.doc.symbols.first().expect("the symbol").art;
+    let object = match &art.kind {
+        NodeKind::Group { children, .. } if children.len() == 1 => &children[0],
+        _ => art,
+    };
+    assert!(matches!(object.kind, NodeKind::Path { .. }), "the object, not its look: {art:#?}");
+    assert_eq!(object.appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = object.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
@@ -6857,6 +7039,26 @@ fn a_blend_comes_in_as_a_live_blend() {
     let [r, _, b] = color.to_rgb();
     assert!((r - 0.5).abs() < 0.02 && (b - 0.5).abs() < 0.02, "{r} {b}");
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
+/// A blend whose spine was never edited has no spine written, only its keys: its spine is the
+/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
+/// first), and the blend comes in live.
+#[test]
+fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
+    let spine_part = format!("%_N\n{}", blend_part("S", None));
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['B', 'A']));
+    assert!(body.contains(&spine_part));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
+    assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!(points.len(), 2, "{points:?}");
+    assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![0, 1]);
+    assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.
