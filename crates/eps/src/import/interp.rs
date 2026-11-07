@@ -74,6 +74,8 @@ pub(crate) struct Interp<'a> {
     /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
     /// recent last.
     pub cmaps: super::cid::CMaps,
+    /// The decrypted subroutines of Type 0 CIDFonts (see `cid`).
+    pub cid_subrs: super::cid::CidSubrs,
     /// The font number `usefont` gave the CMap mappings that follow.
     pub cmap_font: i64,
     pub g: GState,
@@ -208,6 +210,7 @@ impl<'a> Interp<'a> {
             glyph_width: None,
             type42: vec![],
             cmaps: vec![],
+            cid_subrs: vec![],
             cmap_font: 0,
             g,
             saved: vec![],
@@ -382,7 +385,7 @@ impl<'a> Interp<'a> {
 
     /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
     /// charges per 64 bytes, so a loop of big copies runs out of the budget.
-    fn spend_bytes(&mut self, n: usize) -> Res {
+    pub fn spend_bytes(&mut self, n: usize) -> Res {
         self.spend((n / 256) as u64)
     }
 

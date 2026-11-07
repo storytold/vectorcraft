@@ -787,9 +787,10 @@ impl Interp<'_> {
         let Some(Obj::Dict(cmap)) = cmap else { return Ok(vec![]) };
         let vertical = wmode.or_else(|| cmap.borrow().get(&Key::name("WMode")).and_then(Obj::as_num)) == Some(1.0);
         let map = self.cmap(&cmap)?;
-        self.spend(s.len() as u64)?;
-        Ok(map
-            .decode(s)
+        let (chars, work) = map.decode(s);
+        // Each code is compared with the CMap's ranges and mappings until one matches.
+        self.spend((s.len() as u64).saturating_add(work / 64))?;
+        Ok(chars
             .into_iter()
             .filter_map(|c| match fonts.get(c.font) {
                 Some(Obj::Dict(d)) => Some(Mapped { font: d.clone(), code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical }),
@@ -807,7 +808,8 @@ impl Interp<'_> {
             let w = self.composite_glyph(g, at, Draw::Fill)?;
             let d = spacing.advance(i, i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
-            let c = code_char(&g.font.borrow(), g.code);
+            // A CID stands for no character (its code is only the CID's low byte).
+            let c = if g.cid.is_some() { '\u{2022}' } else { code_char(&g.font.borrow(), g.code) };
             if c != '\u{2022}' {
                 text.push(c);
             }
@@ -867,9 +869,13 @@ impl Interp<'_> {
     fn cid_glyph_at(&mut self, g: &Mapped, cid: u32, notdef: Option<u32>, at: Point, paint: Draw) -> Res<Vec2> {
         let (em, fm) = {
             let f = g.font.borrow();
-            // Type 2 CIDFonts, like Type 42 fonts, are in ems; Type 0 in 1000-unit space.
-            let em = if f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0) { 1.0 } else { 1000.0 };
-            (em, g.outer * font_matrix(&f, 1.0 / em))
+            // Without a matrix, Type 2 CIDFonts, like Type 42 fonts, are in ems; Type 0 in
+            // 1000-unit space. With one, an em is the glyph units it makes one unit of text space.
+            let default = if f.get(&Key::name("CIDFontType")).and_then(Obj::as_num) == Some(2.0) { 1.0 } else { 0.001 };
+            let m = font_matrix(&f, default);
+            let scale = m.determinant().abs().sqrt();
+            let em = if scale.is_finite() && scale > 1e-9 { 1.0 / scale } else { 1.0 / default };
+            (em, g.outer * m)
         };
         let mut glyph = self.cid_glyph(&g.font, cid)?;
         for other in [notdef, Some(0)].into_iter().flatten() {

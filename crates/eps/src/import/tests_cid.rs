@@ -215,3 +215,116 @@ fn cidfonts_the_file_lacks_draw_nothing_with_a_warning() {
 fn cidinit_operators_are_not_in_systemdict() {
     check("systemdict /begincmap known not /CIDInit /ProcSet findresource /begincmap known and systemdict /composefont known and");
 }
+
+/// A CMap's mappings take font 0 until its own `usefont`, whatever font number an earlier CMap
+/// ended with (Adobe Technical Note #5014).
+#[test]
+fn each_cmap_starts_at_font_0() {
+    let r = import(&program(
+        true,
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Two-H def\n\
+         1 begincodespacerange <00> <ff> endcodespacerange 1 usefont 1 begincidchar <41> 1 endcidchar\n\
+         endcmap CMapName currentdict /CMap defineresource pop end end\n\
+         /CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /One-H def\n\
+         1 begincodespacerange <00> <ff> endcodespacerange 1 begincidrange <41> <42> 1 endcidrange\n\
+         endcmap CMapName currentdict /CMap defineresource pop end end\n\
+         /One /One-H [/TestCID] composefont 50 scalefont setfont 10 20 moveto (AB) show",
+    ))
+    .unwrap();
+    assert_eq!(paths(&r).len(), 2, "{:?}", r.warnings);
+}
+
+/// A Type 0 CIDFont with a matrix of its own (its FDArray matrices map 1000 units to an em):
+/// vertical type moves an em a character, not a thousand.
+#[test]
+fn cidfonts_with_their_own_matrix_move_an_em_a_character() {
+    let font = String::from_utf8(cid_font(true)).unwrap().replace("/CIDFontType 0 def", "/CIDFontType 0 def /FontMatrix [1 0 0 1 0 0] def");
+    check(&format!(
+        "{font}{CMAP} /V /Identity-V [/TestCID] composefont 40 scalefont setfont (\\000\\001\\000\\002) stringwidth -80 sub abs 0.01 lt exch abs 0.01 lt and"
+    ));
+}
+
+/// `restore` undoes the matrices `StartData` gives a CIDFont and its FDArray dictionaries, as
+/// it undoes the program's own changes.
+#[test]
+fn restore_undoes_the_matrices_start_data_sets() {
+    let font = String::from_utf8(cid_font(true))
+        .unwrap()
+        .replacen("4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 2 dict dup begin /lenIV -1 def end def currentdict end", "fd0", 1);
+    check(&format!(
+        "/fd0 4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 2 dict dup begin /lenIV -1 def end def currentdict end def\n\
+         /sv save def\n{font}\nsv restore fd0 /FontMatrix get 0 get 0.001 sub abs 1e-9 lt"
+    ));
+}
+
+/// Notdef mappings added to a CMap that was already shown with take effect (its mappings are
+/// read again).
+#[test]
+fn notdef_mappings_added_later_are_read() {
+    let fonts = String::from_utf8(cid_font(true)).unwrap() + CMAP;
+    check(&format!(
+        "{fonts} /TestFont 50 selectfont <21> stringwidth pop pop\n\
+         /CIDInit /ProcSet findresource begin /Test-H /CMap findresource begin 1 beginnotdefrange <20> <2f> 1 endnotdefrange end end\n\
+         <21> stringwidth pop 30 sub abs 0.01 lt"
+    ));
+}
+
+/// A CMap built of many small blocks pays for copying its mappings at each block.
+#[test]
+fn many_small_cmap_blocks_run_out_of_the_budget() {
+    super::tests::runs_out_of_budget(
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap { 1 begincidchar <41> 1 endcidchar } loop",
+    );
+}
+
+/// A CIDFont's subroutines are decrypted once, not again for every glyph: measuring a glyph of
+/// a font with 10 MB of them in a loop ends within the budget.
+#[test]
+fn cidfont_subroutines_are_read_once() {
+    let font = String::from_utf8(cid_font(true)).unwrap();
+    let at = font.find("/Subrs [<").unwrap() + "/Subrs [".len();
+    let font = format!("{}{} 0 1 9998 {{ pop 1000 string }} for{}", &font[..at], &font[at..font[at..].find(']').unwrap() + at], &font[font[at..].find(']').unwrap() + at..]);
+    super::tests::runs_out_of_budget(&format!("{font}{CMAP} /TestFont 50 selectfont {{ (B) stringwidth pop pop }} loop"));
+}
+
+/// Binary data larger than most operators' counts (4 MB) is read: CJK CIDFonts carry more.
+#[test]
+fn start_data_reads_more_than_4_mb() {
+    let mut font = cid_font(false);
+    let marker = b"(Binary) ";
+    let at = font.windows(marker.len()).position(|w| w == marker).unwrap();
+    let rest = font.split_off(at);
+    let len_end = rest.iter().skip(marker.len()).position(|b| *b == b' ').unwrap() + marker.len();
+    let n: usize = std::str::from_utf8(&rest[marker.len()..len_end]).unwrap().parse().unwrap();
+    let data_at = len_end + " StartData ".len();
+    let mut data = rest[data_at..data_at + n].to_vec();
+    data.resize(5_000_000, 0);
+    font.extend(format!("(Binary) {} StartData ", data.len()).into_bytes());
+    font.extend(data);
+    font.push(b'\n');
+    let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+    let r = import(&[head, font, CMAP.as_bytes().to_vec(), b"/TestFont 50 selectfont 10 20 moveto (AB) show\nshowpage\n%%EOF\n".to_vec()].concat()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(paths(&r).len(), 2);
+}
+
+/// Decoding a string through a CMap with many mappings counts against the operation budget.
+#[test]
+fn decoding_through_a_large_cmap_runs_out_of_the_budget() {
+    let font = String::from_utf8(cid_font(true)).unwrap();
+    super::tests::runs_out_of_budget(&format!(
+        "{font}/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Big-H def\n\
+         2 begincodespacerange <00> <7f> <8000> <ffff> endcodespacerange\n\
+         60000 begincidrange 0 1 59999 {{ /i exch def 2 string dup 0 i 256 idiv 128 add put dup 0 get pop dup 1 i 256 mod put dup 1 }} for endcidrange\n\
+         endcmap CMapName currentdict /CMap defineresource pop end end\n\
+         /Big /Big-H [/TestCID] composefont 50 scalefont setfont /s 1000 string def {{ s stringwidth pop pop }} loop"
+    ));
+}
+
+/// A CID-keyed font's glyphs are grouped under the font's name: a CID stands for no character.
+#[test]
+fn cid_glyph_groups_take_the_fonts_name() {
+    let r = import(&program(true, "/TestFont 50 selectfont 10 20 moveto (AB) show")).unwrap();
+    let names: Vec<_> = all(&r.document).iter().filter(|n| matches!(n.kind, NodeKind::Group { .. })).map(|n| n.name.clone()).collect();
+    assert_eq!(names, [Some("TestFont".to_string())]);
+}

@@ -32,9 +32,9 @@ const CODESPACE: &str = "CodeSpaceRange";
 const CIDS: &str = "CIDRange";
 const NOTDEFS: &str = "NotDefRange";
 
-/// The mappings of the CMaps shown with so far, by their character mapping and codespace
-/// arrays, the most recent last.
-pub(super) type CMaps = Vec<(Option<Shared<Obj>>, Option<Shared<Obj>>, Rc<CMap>)>;
+/// The mappings of the CMaps shown with so far, by their character mapping, codespace and
+/// notdef mapping arrays, the most recent last.
+pub(super) type CMaps = Vec<([Option<Shared<Obj>>; 3], Rc<CMap>)>;
 
 /// A CMap's mappings, read from its dictionary.
 pub(super) struct CMap {
@@ -89,12 +89,16 @@ impl CMap {
     }
 
     /// The characters of show string `s` (PLRM 3rd ed., §5.11.5 "CMap Mapping" and "Handling
-    /// Undefined Characters").
-    pub fn decode(&self, s: &[u8]) -> Vec<CidChar> {
+    /// Undefined Characters"), and how many ranges and mappings were compared to find them.
+    pub fn decode(&self, s: &[u8]) -> (Vec<CidChar>, u64) {
         let mut out = Vec::with_capacity(s.len() / 2);
+        let mut work = 0u64;
         let mut i = 0;
         while let Some(rest) = s.get(i..).filter(|r| !r.is_empty()) {
-            let matched = (1..=MAX_CODE.min(rest.len())).find(|&n| self.space.iter().any(|r| r.len() == n && fits(r, rest)));
+            let matched = (1..=MAX_CODE.min(rest.len())).find(|&n| {
+                work += self.space.len() as u64;
+                self.space.iter().any(|r| r.len() == n && fits(r, rest))
+            });
             let n = match matched {
                 Some(n) => n,
                 // An invalid code: as many bytes as the best partly matching range's codes.
@@ -102,21 +106,23 @@ impl CMap {
             };
             let n = n.clamp(1, rest.len());
             let c = code(rest.get(..n).unwrap_or_default());
-            let find = |maps: &[(usize, u32, u32, u32, usize)]| {
-                maps.iter().find(|m| m.0 == n && (m.1..=m.2).contains(&c)).map(|m| (m.4, m.3.saturating_add(c - m.1), m.3))
+            let find = |maps: &[(usize, u32, u32, u32, usize)], work: &mut u64| {
+                let at = maps.iter().position(|m| m.0 == n && (m.1..=m.2).contains(&c));
+                *work += at.map_or(maps.len(), |k| k + 1) as u64;
+                at.and_then(|k| maps.get(k)).map(|m| (m.4, m.3.saturating_add(c - m.1), m.3))
             };
-            let notdef = find(&self.notdefs).map(|(_, _, base)| base);
-            out.push(match (matched.is_some(), find(&self.cids)) {
+            let notdef = find(&self.notdefs, &mut work).map(|(_, _, base)| base);
+            out.push(match (matched.is_some(), find(&self.cids, &mut work)) {
                 (true, Some((font, cid, _))) => CidChar { font, cid, notdef },
                 // No character mapping: the notdef mapping's CID, else font 0's CID 0.
-                _ => match find(&self.notdefs) {
+                _ => match find(&self.notdefs, &mut work) {
                     Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None },
                     _ => CidChar { font: 0, cid: 0, notdef: None },
                 },
             });
             i += n;
         }
-        out
+        (out, work)
     }
 
     /// How many bytes an invalid code at the start of `rest` takes: the length of the codes of
@@ -165,7 +171,9 @@ impl Interp<'_> {
     pub fn cid_op(&mut self, op: Op) -> Res {
         use Op::*;
         match op {
-            BeginCMap | EndCMap | EndRearrangedFont => {}
+            // A CMap's mappings take font 0 until its own `usefont` (Adobe Technical Note #5014).
+            BeginCMap => self.cmap_font = 0,
+            EndCMap | EndRearrangedFont => {}
             BeginCodeSpaceRange | BeginBfChar | BeginBfRange | BeginCidChar | BeginCidRange | BeginNotDefChar | BeginNotDefRange => {
                 self.pop_int()?;
                 self.push(Obj::Mark)?;
@@ -220,8 +228,11 @@ impl Interp<'_> {
                     }
                     self.insert(&d, Key::name(k), Some(Obj::array(all)))?;
                 }
-                if let Some(w) = parent.borrow().get(&Key::name("WMode")).cloned() {
-                    d.borrow_mut().entry(Key::name("WMode")).or_insert(w);
+                let w = parent.borrow().get(&Key::name("WMode")).cloned();
+                if let Some(w) = w
+                    && !d.borrow().contains_key(&Key::name("WMode"))
+                {
+                    self.insert(&d, Key::name("WMode"), Some(w))?;
                 }
             }
             BeginRearrangedFont => {
@@ -258,6 +269,8 @@ impl Interp<'_> {
             return Err(PsError::Limit("a CMap has too many mappings"));
         }
         self.alloc(items.len() * std::mem::size_of::<Obj>())?;
+        // The mappings so far are copied too: a CMap of many small blocks pays for each copy.
+        self.spend_bytes(all.len().saturating_mul(std::mem::size_of::<Obj>()))?;
         all.extend(items);
         self.insert(&d, Key::name(key), Some(Obj::array(all)))
     }
@@ -331,9 +344,14 @@ impl Interp<'_> {
     /// FontSet's `/name n StartData` (Compact Font Format data: PLRM 3rd ed., §5.8.1) is skipped:
     /// its fonts are set as type by name.
     fn start_data(&mut self) -> Res {
-        let n = self.pop_count()?;
+        // Glyph data is often larger than the most other operators take (`pop_count`).
+        let n = self.pop_int()?;
         let kind = self.pop()?;
         let f = self.running.last().cloned().unwrap_or_else(|| Rc::new(std::cell::RefCell::new(super::data::Stream::Current)));
+        if n < 0 {
+            return ps_err("rangecheck", "StartData");
+        }
+        let n = usize::try_from(n).unwrap_or(usize::MAX);
         if n > MAX_GLYPH_DATA {
             return Err(PsError::Limit("a font's data is too large"));
         }
@@ -358,14 +376,15 @@ impl Interp<'_> {
         self.insert(&d, Key::name("GlyphData"), Some(Obj::string(data)))?;
         // A Type 0 CIDFont without a matrix of its own: the 1000-unit glyph space of Type 1
         // fonts, and each FDArray matrix scaled to it (PLRM 3rd ed., §5.11.3).
+        // The changes go through the journal, so `restore` undoes them as it does the program's.
         if !d.borrow().contains_key(&Key::name("FontMatrix")) {
-            d.borrow_mut().insert(Key::name("FontMatrix"), matrix_obj(vectorcraft_geom::Affine::scale(0.001)));
+            self.insert(&d, Key::name("FontMatrix"), Some(matrix_obj(vectorcraft_geom::Affine::scale(0.001))))?;
             let fds = d.borrow().get(&Key::name("FDArray")).and_then(|a| a.items().map(|i| i.to_vec())).unwrap_or_default();
             for fd in fds {
                 if let Obj::Dict(fd) = fd {
                     let m = fd.borrow().get(&Key::name("FontMatrix")).and_then(|o| o.items().and_then(|i| super::interp::matrix_of(&i.borrow())));
                     if let Some(m) = m {
-                        fd.borrow_mut().insert(Key::name("FontMatrix"), matrix_obj(vectorcraft_geom::Affine::scale(1000.0) * m));
+                        self.insert(&fd, Key::name("FontMatrix"), Some(matrix_obj(vectorcraft_geom::Affine::scale(1000.0) * m)))?;
                     }
                 }
             }
@@ -389,14 +408,14 @@ impl Interp<'_> {
 
     /// The mappings of CMap dictionary `d` (read once while it stays the same).
     pub(super) fn cmap(&mut self, d: &DictRef) -> Res<Rc<CMap>> {
-        let key = d.borrow().get(&Key::name(CIDS)).and_then(|a| a.items().cloned());
-        let space = d.borrow().get(&Key::name(CODESPACE)).and_then(|a| a.items().cloned());
+        let array = |k: &str| d.borrow().get(&Key::name(k)).and_then(|a| a.items().cloned());
+        let key = [array(CIDS), array(CODESPACE), array(NOTDEFS)];
         let same = |a: &Option<Shared<Obj>>, b: &Option<Shared<Obj>>| match (a, b) {
             (Some(a), Some(b)) => a.same(b),
             (None, None) => true,
             _ => false,
         };
-        if let Some((.., m)) = self.cmaps.iter().find(|(k, s, _)| same(k, &key) && same(s, &space)) {
+        if let Some((_, m)) = self.cmaps.iter().find(|(k, _)| k.iter().zip(&key).all(|(a, b)| same(a, b))) {
             return Ok(m.clone());
         }
         let m = Rc::new(CMap::read(&d.borrow()));
@@ -404,7 +423,7 @@ impl Interp<'_> {
         if self.cmaps.len() >= MAX_CMAPS {
             self.cmaps.remove(0);
         }
-        self.cmaps.push((key, space, m.clone()));
+        self.cmaps.push((key, m.clone()));
         Ok(m)
     }
 
@@ -460,10 +479,10 @@ impl Interp<'_> {
                 None => Some(u64::from(cid)),
                 Some(Obj::Int(off)) => u64::try_from(i64::from(cid).saturating_add(*off)).ok(),
                 Some(Obj::Dict(d)) => d.borrow().get(&Key::Int(i64::from(cid))).and_then(Obj::as_num).filter(|g| *g >= 0.0).map(|g| g as u64),
-                Some(Obj::Str(s)) => number(&s.borrow(), cid as usize * gd, gd),
+                Some(Obj::Str(s)) => (cid as usize).checked_mul(gd).and_then(|at| number(&s.borrow(), at, gd)),
                 Some(Obj::Array { items, .. }) => {
                     // The strings one after another, each a whole number of entries.
-                    let mut at = cid as usize * gd;
+                    let Some(mut at) = (cid as usize).checked_mul(gd) else { return Ok(None) };
                     let mut found = None;
                     for s in items.borrow().iter() {
                         let Obj::Str(s) = s else { continue };
@@ -542,32 +561,9 @@ impl Interp<'_> {
             .and_then(|o| o.items().and_then(|i| super::interp::matrix_of(&i.borrow())))
             .unwrap_or(vectorcraft_geom::Affine::IDENTITY);
         let Some(Obj::Dict(private)) = fd.get(&Key::name("Private")).cloned() else { return Ok(None) };
-        let private = private.borrow();
-        let len_iv = private.get(&Key::name("lenIV")).and_then(Obj::as_num).unwrap_or(4.0);
-        // Subroutines: the `Subrs` array, else the binary data section's subroutine table.
-        let mut subrs = Vec::new();
-        match private.get(&Key::name("Subrs")) {
-            Some(Obj::Array { items, .. }) => {
-                for s in items.borrow().iter() {
-                    subrs.push(match s {
-                        Obj::Str(s) => decrypt(&s.borrow(), len_iv),
-                        _ => vec![],
-                    });
-                }
-            }
-            _ => {
-                let p = |k: &str| private.get(&Key::name(k)).and_then(Obj::as_num).filter(|n| *n >= 0.0);
-                if let (Some(map), Some(sd), Some(count), Some(data)) = (p("SubrMapOffset"), p("SDBytes"), p("SubrCount"), data.as_ref()) {
-                    let data = data.borrow();
-                    let (map, sd, count) = (map as usize, (sd as usize).min(4), (count as usize).min(MAX_RANGES));
-                    for i in 0..count {
-                        let at = map.saturating_add(i.saturating_mul(sd));
-                        let range = number(&data, at, sd).zip(number(&data, at.saturating_add(sd), sd));
-                        subrs.push(range.and_then(|(a, b)| data.get(a as usize..b as usize)).map(|s| decrypt(s, len_iv)).unwrap_or_default());
-                    }
-                }
-            }
-        }
+        drop(fd);
+        let len_iv = private.borrow().get(&Key::name("lenIV")).and_then(Obj::as_num).unwrap_or(4.0);
+        let subrs = self.cid_subrs(&private, data.as_ref(), len_iv)?;
         self.spend((charstring.len() as u64).saturating_add(64))?;
         let charstring = decrypt(&charstring, len_iv);
         let Some((outline, width)) = type1_glyph(&charstring, &subrs) else { return Ok(None) };
@@ -576,7 +572,85 @@ impl Interp<'_> {
         let w = fdm * vectorcraft_geom::Point::new(width, 0.0) - fdm * vectorcraft_geom::Point::ZERO;
         Ok(Some((outline, w.x)))
     }
+
+    /// The subroutines of a Type 0 CIDFont's FDArray `Private` dictionary `private`, decrypted
+    /// with `len_iv`: its `Subrs` array, else the subroutine table of the CIDFont's binary data
+    /// `data` (Adobe Technical Note #5014). Read once while they stay the same, and counted
+    /// against the budgets before they are copied.
+    fn cid_subrs(&mut self, private: &DictRef, data: Option<&Shared<u8>>, len_iv: f64) -> Res<Rc<Vec<Vec<u8>>>> {
+        let same_data = |d: &Option<Shared<u8>>| match (d, data) {
+            (Some(a), Some(b)) => a.same(b),
+            (None, None) => true,
+            _ => false,
+        };
+        if let Some(i) = self.cid_subrs.iter().position(|(p, d, _)| p.same(private) && same_data(d)) {
+            let hit = self.cid_subrs.remove(i);
+            let subrs = hit.2.clone();
+            self.cid_subrs.push(hit);
+            return Ok(subrs);
+        }
+        let p = private.borrow();
+        // Each subroutine's bytes: a string of `Subrs`, or a range of the binary data.
+        let strings: Option<Vec<Option<Shared<u8>>>> = match p.get(&Key::name("Subrs")) {
+            Some(Obj::Array { items, .. }) => Some(
+                items
+                    .borrow()
+                    .iter()
+                    .map(|s| match s {
+                        Obj::Str(s) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        };
+        let mut ranges: Vec<Option<(usize, usize)>> = Vec::new();
+        if strings.is_none() {
+            let num = |k: &str| p.get(&Key::name(k)).and_then(Obj::as_num).filter(|n| *n >= 0.0);
+            if let (Some(map), Some(sd), Some(count), Some(data)) = (num("SubrMapOffset"), num("SDBytes"), num("SubrCount"), data) {
+                let data = data.borrow();
+                let (map, sd, count) = (map as usize, (sd as usize).min(4), (count as usize).min(MAX_RANGES));
+                for i in 0..count {
+                    let at = map.saturating_add(i.saturating_mul(sd));
+                    let range = number(&data, at, sd).zip(number(&data, at.saturating_add(sd), sd));
+                    ranges.push(range.map(|(a, b)| (a as usize, b as usize)).filter(|(a, b)| a <= b && *b <= data.len()));
+                }
+            }
+        }
+        drop(p);
+        let total = match &strings {
+            Some(strings) => strings.iter().flatten().fold(0usize, |t, s| t.saturating_add(s.len())),
+            None => ranges.iter().flatten().fold(0usize, |t, (a, b)| t.saturating_add(b - a)),
+        };
+        if total > MAX_GLYPH_DATA {
+            return Err(PsError::Limit("a font's subroutines are too large"));
+        }
+        self.alloc(total)?;
+        self.spend_bytes(total)?;
+        self.spend((strings.as_ref().map_or(ranges.len(), Vec::len) / 16) as u64)?;
+        let subrs: Vec<Vec<u8>> = match (&strings, data) {
+            (Some(strings), _) => strings.iter().map(|s| s.as_ref().map(|s| decrypt(&s.borrow(), len_iv)).unwrap_or_default()).collect(),
+            (None, Some(data)) => {
+                let data = data.borrow();
+                ranges.iter().map(|r| r.and_then(|(a, b)| data.get(a..b)).map(|s| decrypt(s, len_iv)).unwrap_or_default()).collect()
+            }
+            (None, None) => vec![],
+        };
+        let subrs = Rc::new(subrs);
+        if self.cid_subrs.len() >= MAX_SUBR_SETS {
+            self.cid_subrs.remove(0);
+        }
+        self.cid_subrs.push((private.clone(), data.cloned(), subrs.clone()));
+        Ok(subrs)
+    }
 }
+
+/// Most FDArray dictionaries whose subroutines are kept decrypted between glyphs.
+const MAX_SUBR_SETS: usize = 32;
+
+/// The decrypted subroutines of FDArray `Private` dictionaries, by the dictionary and the
+/// CIDFont's binary data (see [`Interp::cid_subrs`]), the most recently used last.
+pub(super) type CidSubrs = Vec<(DictRef, Option<Shared<u8>>, Rc<Vec<Vec<u8>>>)>;
 
 /// Type 1 charstring `data` decrypted (the charstring key 4330, the first `len_iv` bytes
 /// dropped: Adobe Type 1 Font Format, §7.2); as it is when `len_iv` is negative.
