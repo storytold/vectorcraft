@@ -438,6 +438,21 @@ fn for_in_over_a_long_string_checks_the_heap_before_listing_its_indices() {
 }
 
 #[test]
+fn long_property_names_count_toward_the_heap_after_their_strings_are_collected() {
+    // Each name is a 16,385-unit buffer that only the object's key or the function's binding
+    // holds once the string that made it is garbage, so about 32 of them fill the heap well before
+    // the fuel runs out. In the second script the property lookup flattens a long string each
+    // time, so collections run.
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
+    let src = "var s = 'x'; while (s.length < 10000) s += s; var o = {}; for (var i = 0; ; i++) o[s + i] = 1;";
+    assert_eq!(limit(&mut realm, src), LimitKind::Heap);
+    let src = "var s = 'x'; while (s.length < 10000) s += s; \
+        (function () { for (var i = 0; ; i++) { eval('var ' + s + i + ' = 1'); ({})[s + i]; } })();";
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 20_000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, src), LimitKind::Heap);
+}
+
+#[test]
 fn for_in_over_a_long_string_takes_fuel_for_each_index() {
     let mut realm = small(Limits { fuel: 10_000, ..Limits::default() });
     assert_eq!(limit(&mut realm, "var s = 'x'; while (s.length < 100000) s += s; for (var k in s) break;"), LimitKind::Fuel);

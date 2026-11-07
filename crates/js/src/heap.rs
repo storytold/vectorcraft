@@ -280,7 +280,8 @@ enum Cell {
     Env(Box<Env>),
 }
 
-/// The estimated bytes of a property or a binding, its name included.
+/// The estimated bytes of a property or a binding entry. A collection adds its name's code units
+/// separately, counting a buffer that several names or strings share once.
 pub(crate) const PROP_BYTES: usize = 64;
 const OBJECT_BYTES: usize = 96;
 const ENV_BYTES: usize = 64;
@@ -406,7 +407,8 @@ pub(crate) struct Roots<'a> {
     pub(crate) codes: Vec<&'a Code>,
 }
 
-/// Sums the sizes of the strings reached, counting each node once.
+/// Sums the sizes of the strings and property names reached, counting each node and each
+/// code-unit buffer once.
 #[derive(Default)]
 struct StringSizes {
     seen: HashSet<usize>,
@@ -426,8 +428,19 @@ impl StringSizes {
                     stack.push(l);
                     stack.push(r);
                 }
-                None => self.bytes += string_bytes(s.len()),
+                None => {
+                    if s.buffer_addr().is_none_or(|a| self.seen.insert(a)) {
+                        self.bytes += string_bytes(s.len());
+                    }
+                }
             }
+        }
+    }
+
+    /// Adds a property or binding name, unless a string or another name shares its buffer.
+    fn add_key(&mut self, k: &Key) {
+        if self.seen.insert(Rc::as_ptr(k) as *const () as usize) {
+            self.bytes += string_bytes(k.len());
         }
     }
 }
@@ -450,7 +463,8 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
     if let Some(p) = o.proto {
         work.push(p.0);
     }
-    for (_, prop) in o.props.iter() {
+    for (k, prop) in o.props.iter() {
+        strings.add_key(k);
         match prop {
             Prop::Data { value, .. } => mark_value(value, work, strings),
             Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
@@ -476,7 +490,8 @@ fn trace_env(e: &Env, work: &mut Vec<u32>, strings: &mut StringSizes) -> usize {
     match e {
         Env::Decl { bindings, outer } => {
             work.extend(outer.iter().map(|o| o.0));
-            for (_, b) in bindings.iter() {
+            for (k, b) in bindings.iter() {
+                strings.add_key(k);
                 mark_value(&b.value, work, strings);
             }
             ENV_BYTES + PROP_BYTES * bindings.len()
@@ -491,7 +506,20 @@ fn trace_env(e: &Env, work: &mut Vec<u32>, strings: &mut StringSizes) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{PropMap, key};
+    use super::{Class, Heap, OBJECT_BYTES, Object, PROP_BYTES, Prop, PropMap, Roots, key, string_bytes};
+    use crate::value::{Str, Value};
+
+    #[test]
+    fn a_collection_counts_a_name_and_a_value_that_share_a_buffer_once() {
+        let mut heap = Heap::default();
+        let name = key(&"n".repeat(1000));
+        let mut object = Object::new(Class::Ordinary, None);
+        object.props.insert(name.clone(), Prop::Data { value: Value::String(Str::from_rc(name.clone())), flags: 0 });
+        object.props.insert(key("other"), Prop::Data { value: Value::Undefined, flags: 0 });
+        let id = heap.alloc_object(object);
+        heap.collect(&Roots { objects: vec![id], ..Roots::default() });
+        assert_eq!(heap.bytes, OBJECT_BYTES + 2 * PROP_BYTES + string_bytes(1000) + string_bytes(5));
+    }
 
     #[test]
     fn prop_maps_keep_insertion_order_through_removals_and_growth() {

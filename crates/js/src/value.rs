@@ -106,6 +106,14 @@ impl Str {
         Rc::as_ptr(&self.0) as *const () as usize
     }
 
+    /// The address of the code-unit buffer of a flat node, which a property name can share.
+    pub(crate) fn buffer_addr(&self) -> Option<usize> {
+        match &*self.0.borrow() {
+            Node::Flat(f) => Some(Rc::as_ptr(f) as *const () as usize),
+            _ => None,
+        }
+    }
+
     /// The two halves of a concatenation node.
     pub(crate) fn halves(&self) -> Option<(Str, Str)> {
         match &*self.0.borrow() {
