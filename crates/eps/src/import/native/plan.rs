@@ -79,14 +79,16 @@ pub(super) fn make_slots(
             {
                 taller += 1;
             }
-            // Where point type draws, to weigh it against the page's type: its layout's box. Its
-            // own bounds before a layout are a guess that starts at the anchor, which centred or
-            // right-aligned type doesn't (and that misses tracking and the font's widths).
+            // Where point type draws, to weigh it against the page's type: its layout's box, with
+            // what its strokes paint around it (as its visual bounds have). Its own bounds before
+            // a layout are a guess that starts at the anchor, which centred or right-aligned type
+            // doesn't (and that misses tracking and the font's widths).
             if let NodeKind::Text(text) = &node.kind
                 && matches!(text.kind, TextKind::Point)
             {
                 let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text).bounds;
-                region = Some(text.xf.transform_rect_bbox(laid)).filter(|r| r.is_finite() && !r.is_zero_area()).or(region);
+                let o = node.appearance.outset().max(text.char_stroke_outset());
+                region = Some(text.xf.transform_rect_bbox(laid).inflate(o, o)).filter(|r| r.is_finite() && !r.is_zero_area()).or(region);
             }
             Some((Box::new(node), region))
         })
