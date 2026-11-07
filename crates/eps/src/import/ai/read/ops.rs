@@ -43,6 +43,8 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
+    /// ([`Self::end_mask`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.

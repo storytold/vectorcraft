@@ -7627,20 +7627,48 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
 /// Mask art that sets no paint of its own paints with the paint before its dictionary: the writer
 /// leaves out paint that doesn't change. In a user's file, white letters were masked by a rectangle
 /// with no colour, which came in black and hid them.
+/// The unread pattern flags it also takes aren't covered here: an owner painted with a pattern the
+/// file doesn't have is unread itself, which hides whether its mask art is.
 #[test]
 fn opacity_mask_art_without_its_own_paint_takes_the_paint_before_its_dictionary() {
-    let owner = format!("0 0 0 0 k\n0 1 0 0 K\n2 w\n{}B\n", rect_path(10.0, 20.0, 50.0, 60.0));
-    let mask = format!(
-        "%_/ArtDictionary :\n%_/Mask :\n%_X=\n{}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n",
-        rect_path(10.0, 20.0, 30.0, 60.0).lines().map(|l| format!("%_{l}\n")).collect::<String>() + "%_B\n"
-    );
-    let r = read_ok(&layer(&format!("{owner}{mask}")));
+    let paint = "0 0 0 0 k\n1 O\n0 1 0 0 K\n1 R\n2 w\n1 J\n1 j\n4 M\n[3 1] 0 d\n1 XR\n";
+    let owner = format!("{paint}{}B\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let hidden_rect = rect_path(10.0, 20.0, 30.0, 60.0).lines().map(|l| format!("%_{l}\n")).collect::<String>();
+    let mask = |own_paint: &str| {
+        format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{own_paint}{hidden_rect}%_B\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    };
+    let fill_layer = |n: &Node| n.appearance.fill().cloned();
+    let stroke_layer = |n: &Node| n.appearance.stroke().cloned();
+    let rule = |n: &Node| match &n.kind {
+        NodeKind::Path { rule, .. } => Some(*rule),
+        _ => None,
+    };
+
+    let r = read_ok(&layer(&format!("{owner}{}", mask(""))));
     let a = art(&r.doc);
     let m = a[0].extras().mask.as_ref().unwrap();
-    assert_eq!(fill(&m.art), fill(&a[0]));
-    let stroke = |n: &Node| n.appearance.stroke().map(|s| (s.paint.clone(), s.width));
-    assert_eq!(stroke(&m.art), stroke(&a[0]));
-    assert!(stroke(&m.art).is_some_and(|(_, w)| w == 2.0));
+    // The owner has the paint set, none of it the default, so equal layers mean it was taken.
+    let (f, s) = (fill_layer(&a[0]).unwrap(), stroke_layer(&a[0]).unwrap());
+    assert!(f.overprint && s.overprint);
+    assert_eq!((s.width, s.cap, s.join, s.miter_limit), (2.0, LineCap::Round, LineJoin::Round, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| (d.pattern.clone(), d.offset)), Some((vec![3.0, 1.0], 0.0)));
+    assert_eq!(rule(&a[0]), Some(vectorcraft_geom::FillRule::EvenOdd));
+    assert_eq!(fill_layer(&m.art), Some(f));
+    assert_eq!(stroke_layer(&m.art), Some(s));
+    assert_eq!(rule(&m.art), rule(&a[0]));
+
+    // Paint the mask's art sets for itself stays in the mask: an object after the dictionary that
+    // sets none paints with the owner's.
+    let own = "%_1 g\n%_0 O\n%_0 G\n%_0 R\n%_5 w\n%_0 J\n%_0 j\n%_10 M\n%_[] 0 d\n%_0 XR\n";
+    let following = format!("{}B\n", rect_path(70.0, 20.0, 80.0, 30.0));
+    let r = read_ok(&layer(&format!("{owner}{}{following}", mask(own))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    assert_ne!(stroke_layer(&m.art), stroke_layer(&a[0]), "the mask's art has its own paint");
+    assert_eq!(fill_layer(&a[1]), fill_layer(&a[0]));
+    assert_eq!(stroke_layer(&a[1]), stroke_layer(&a[0]));
+    assert_eq!(rule(&a[1]), rule(&a[0]));
 }
 
 /// An opacity mask's art of one shown object is that object; other art is read into a group.
