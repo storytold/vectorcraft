@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (EPS and `.ai` editing data: blends in opacity masks read their records; EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (EPS and `.ai` editing data: blends in opacity masks read their records; EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
