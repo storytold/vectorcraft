@@ -2396,6 +2396,44 @@ fn a_drawn_look_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// An object kept as its drawn look: the look (a group), then the object on `%_` lines and its style.
+fn drawn_look_art() -> String {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\n{}S\nU\n%_{hidden_rect}n\n%_/ArtDictionary :\n%_/XMLUID : (Look) ; (AI10_ArtUID) ,\n%_;\n1 (Look style) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    )
+}
+
+/// A pattern's art holding an object kept as its drawn look counts in the note, as a symbol's does;
+/// a definition the same name replaces later counts no longer.
+#[test]
+fn a_drawn_look_in_a_patterns_art_is_noted() {
+    let pattern = |art: &str| format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{art}E\n%AI3_EndPattern\n");
+    let looked = pattern(&drawn_look_art());
+    let r = read_ok(&format!("{looked}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let plain = pattern(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&format!("{looked}{plain}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// A brush's art holding an object kept as its drawn look counts in the note once a brush that is
+/// kept uses the art; art no brush uses brings no note.
+#[test]
+fn a_drawn_look_in_a_brushs_art_is_noted_when_a_brush_uses_it() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", drawn_look_art());
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert!(matches!(brush_named(&lib, "Spray"), vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{section}{}{}", plugin_object(CALLIGRAPHIC, "Nib", NIB), layer("")));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// Editing data with one layer holding an image: `matrix` (`[a b c d tx ty]`), its size, colour
 /// space, kind and alpha channels, its samples, and the size the data comment declares.
 fn image(matrix: &str, (w, h): (u32, u32), (space, kind, alpha): (&str, u32, u32), data: &[u8], declared: usize) -> Vec<u8> {
