@@ -245,14 +245,15 @@ impl Used {
         used
     }
 
-    /// Every character and paragraph style of `defs`, and the resources they use.
-    fn of_text_styles(defs: &Defs<'_>) -> Self {
+    /// Every character style of `defs` (with `chars`) and every paragraph style (with `paras`), and
+    /// the resources they use, styles of the other kind included.
+    fn of_text_styles(defs: &Defs<'_>, chars: bool, paras: bool) -> Self {
         let mut used = Used::default();
         let mut todo = vec![];
-        for s in defs.char_styles {
+        for s in defs.char_styles.iter().filter(|_| chars) {
             used.note(defs, Ref::Name(Res::CharStyle, &s.name), &mut todo);
         }
-        for s in defs.para_styles {
+        for s in defs.para_styles.iter().filter(|_| paras) {
             used.note(defs, Ref::Name(Res::ParaStyle, &s.name), &mut todo);
         }
         used.follow(defs, todo);
@@ -715,13 +716,6 @@ impl<'c> Def<'c> {
         }
     }
 
-    /// Does it use one of `defs`, including itself?
-    fn uses_any(&self, defs: &[Def<'_>]) -> bool {
-        let mut found = false;
-        self.each_use(&mut |res, n| found |= defs.iter().any(|o| o.key() == (res, n)));
-        found
-    }
-
     /// Is it the definition `d` has under `name`, once relinked by `r`?
     fn same_in(&self, d: &Document, name: &str, r: &Relink) -> bool {
         match self {
@@ -758,32 +752,31 @@ impl<'c> Def<'c> {
 
 /// `defs` in rounds: each round takes those that use none of the others left, in their order.
 /// → (those, the rest, which use each other in a loop or use one that does, in their order)
-fn use_order(mut left: Vec<Def<'_>>) -> (Vec<Def<'_>>, Vec<Def<'_>>) {
-    let mut order = Vec::with_capacity(left.len());
-    while !left.is_empty() {
-        let ready: Vec<bool> = left.iter().map(|d| !d.uses_any(&left)).collect();
-        if !ready.contains(&true) {
-            break;
+fn use_order(defs: Vec<Def<'_>>) -> (Vec<Def<'_>>, Vec<Def<'_>>) {
+    let uses = uses_of(&defs);
+    // The round of each definition; `None` for one in a loop or one that uses such a definition.
+    let mut round: Vec<Option<usize>> = vec![None; defs.len()];
+    // A group outside a loop holds one definition, and comes after the groups it uses.
+    for (group, looped) in components(&uses) {
+        for v in group.into_iter().filter(|_| !looped) {
+            let r = uses[v].iter().try_fold(0, |r, &w| round.get(w).copied().flatten().map(|k| r.max(k + 1)));
+            round[v] = r;
         }
-        let mut flags = ready.into_iter();
-        let (now, later): (Vec<_>, Vec<_>) = left.into_iter().partition(|_| flags.next().unwrap_or(false));
-        order.extend(now);
-        left = later;
     }
-    (order, left)
+    let mut ready: Vec<(usize, usize)> = round.iter().enumerate().filter_map(|(i, r)| r.map(|r| (r, i))).collect();
+    ready.sort_unstable();
+    let order = ready.into_iter().filter_map(|(_, i)| defs.get(i).copied()).collect();
+    let rest = defs.iter().zip(&round).filter(|(_, r)| r.is_none()).map(|(def, _)| *def).collect();
+    (order, rest)
 }
 
-/// `rest` ([`use_order`]'s definitions that use each other in a loop or use one that does) split
-/// into its loops and the definitions outside a loop, each group after the groups it uses:
-/// (positions in `rest`, in their order; true for a loop, definitions that use each other or one
-/// that uses itself).
-fn loop_groups(rest: &[Def<'_>]) -> Vec<(Vec<usize>, bool)> {
+/// The positions in `defs` of the definitions each one uses, itself included.
+fn uses_of(defs: &[Def<'_>]) -> Vec<Vec<usize>> {
     let mut at: BTreeMap<(Res, &str), Vec<usize>> = BTreeMap::new();
-    for (i, def) in rest.iter().enumerate() {
+    for (i, def) in defs.iter().enumerate() {
         at.entry(def.key()).or_default().push(i);
     }
-    let uses: Vec<Vec<usize>> = rest
-        .iter()
+    defs.iter()
         .map(|def| {
             let mut to = vec![];
             def.each_use(&mut |res, n| to.extend(at.get(&(res, n)).into_iter().flatten()));
@@ -791,12 +784,26 @@ fn loop_groups(rest: &[Def<'_>]) -> Vec<(Vec<usize>, bool)> {
             to.dedup();
             to
         })
-        .collect();
-    // Tarjan's strongly connected components: each one comes out after those it reaches.
+        .collect()
+}
+
+/// `rest` ([`use_order`]'s definitions that use each other in a loop or use one that does) split
+/// into its loops and the definitions outside a loop, each group after the groups it uses:
+/// (positions in `rest`, in their order; true for a loop, definitions that use each other or one
+/// that uses itself).
+fn loop_groups(rest: &[Def<'_>]) -> Vec<(Vec<usize>, bool)> {
+    components(&uses_of(rest))
+}
+
+/// The strongly connected components of the graph `uses` (each node's successors), each after
+/// those it reaches: (nodes, in their order; true for a loop, two or more nodes or one that uses
+/// itself).
+fn components(uses: &[Vec<usize>]) -> Vec<(Vec<usize>, bool)> {
+    // Tarjan's algorithm, with an explicit stack of calls.
     const NONE: usize = usize::MAX;
-    let (mut index, mut low, mut on) = (vec![NONE; rest.len()], vec![0; rest.len()], vec![false; rest.len()]);
+    let (mut index, mut low, mut on) = (vec![NONE; uses.len()], vec![0; uses.len()], vec![false; uses.len()]);
     let (mut stack, mut next, mut groups) = (vec![], 0, vec![]);
-    for root in 0..rest.len() {
+    for root in 0..uses.len() {
         if index[root] != NONE {
             continue;
         }
@@ -1195,17 +1202,18 @@ pub(crate) struct LoadedStyle {
     pub added: bool,
 }
 
-/// Add every character and paragraph style of `src` to `d`, with the swatches, patterns and
-/// what their art uses that the styles' fill and stroke lead to, as Paste adds those of pasted
-/// type ([`Clipboard::import_into`]; a global or spot color whose name `d` gives another color
-/// is `d`'s). Each style, symbol and pattern is placed after those it uses, so that a style
-/// follows a pattern added under a free name and a pattern follows a style renamed on the way
-/// in. A style `d` has under its name, or a numbered copy of it ("Body 2"), that is the
-/// same once relinked is used; any other is added under a free name. → each style of `src`, in
-/// order, character styles first.
-pub(crate) fn import_text_styles(src: &Document, d: &mut Document) -> Vec<LoadedStyle> {
+/// Add every character style of `src` (with `chars`) and every paragraph style (with `paras`) to
+/// `d`, with the swatches, patterns and what their art uses (styles of the other kind included)
+/// that the styles' fill and stroke lead to, as Paste adds those of pasted type
+/// ([`Clipboard::import_into`]; a global or spot color whose name `d` gives another color is
+/// `d`'s). Each style, symbol and pattern is placed after those it uses, so that a style follows
+/// a pattern added under a free name and a pattern follows a style renamed on the way in. A style
+/// `d` has under its name, or a numbered copy of it ("Body 2"), that is the same once relinked is
+/// used; any other is added under a free name. → each style of `src` placed, in order, character
+/// styles first.
+pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, paras: bool) -> Vec<LoadedStyle> {
     let library = OnceCell::new();
-    let used = Used::of_text_styles(&Defs::of(src, &library));
+    let used = Used::of_text_styles(&Defs::of(src, &library), chars, paras);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
     let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true);

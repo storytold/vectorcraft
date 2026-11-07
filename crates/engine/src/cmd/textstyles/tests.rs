@@ -951,6 +951,34 @@ fn loaded_style_keeps_the_name_used_by_pattern_type() {
     assert_eq!(text.runs[0].style.style_name.as_deref(), Some(" Accent "));
 }
 
+/// Load Character Styles brings the paragraph style that type in a loaded style's pattern is set
+/// in, renamed when the document has another style of that name, without listing it in the reply.
+#[test]
+fn loaded_pattern_type_keeps_its_paragraph_style() {
+    let (mut src, id) = session_with_text("Tile");
+    src.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Center"}})).unwrap();
+    src.execute("paraStyle.apply", &json!({"name": "Centered", "id": id})).unwrap();
+    src.execute("object.pattern.make", &json!({"name": "Tiles", "edit": false, "ids": [id]})).unwrap();
+    let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Tiles", "ids": [other]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Tiled", "id": other})).unwrap();
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&src.doc().unwrap().doc, false));
+    let (mut s, _) = session_with_text("X");
+    s.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Right"}})).unwrap();
+    let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r, json!({"added": ["Tiled"], "existing": [], "skipped": []}));
+    let d = s.doc().unwrap().doc.clone();
+    assert_eq!(listed(&mut s, "paraStyle"), [NORMAL_PARA, "Centered", "Centered 2"]);
+    assert_eq!(super::style_attrs(&d, true, "Centered 2").map(Value::Object), Some(json!({"justify": "Center"})));
+    let NodeKind::Text(text) = &d.pattern("Tiles").unwrap().art[0].kind else { panic!("pattern art should be type") };
+    assert_eq!(text.para_styles().filter_map(|p| p.style_name.as_deref()).collect::<Vec<_>>(), ["Centered 2"]);
+    // Loaded again, nothing is added.
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r["added"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc, d);
+}
+
 /// A pattern whose tile paints with itself is found under its renamed copy on a second load.
 #[test]
 fn self_referencing_pattern_is_not_added_again() {
@@ -971,7 +999,7 @@ fn self_referencing_pattern_is_not_added_again() {
     let different = dst.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
     dst.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [different]})).unwrap();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
     assert!(dst.doc().unwrap().doc.pattern("Dots 2").is_some());
     assert!(
         dst.doc().unwrap().doc.pattern("Dots 2").unwrap().art[0]
@@ -982,7 +1010,7 @@ fn self_referencing_pattern_is_not_added_again() {
     );
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc, before);
 }
@@ -1014,13 +1042,13 @@ fn separate_self_referencing_patterns_are_not_added_again() {
         dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
     }
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    super::super::clipboard::resources::import_text_styles(&source, target);
+    super::super::clipboard::resources::import_text_styles(&source, target, true, true);
     for k in 0..9 {
         assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
     }
     let before = dst.doc().unwrap().doc.clone();
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
-    let again = super::super::clipboard::resources::import_text_styles(&source, target);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
     assert!(again.iter().all(|s| !s.added));
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
     assert_eq!(dst.doc().unwrap().doc, before);
@@ -1028,7 +1056,7 @@ fn separate_self_referencing_patterns_are_not_added_again() {
     let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
     target.patterns.retain(|p| !p.name.starts_with("Dots8"));
     let left = target.patterns.len();
-    let third = super::super::clipboard::resources::import_text_styles(&source, target);
+    let third = super::super::clipboard::resources::import_text_styles(&source, target, true, true);
     assert_eq!(dst.doc().unwrap().doc.patterns.len(), left + 1);
     assert!(third.iter().filter(|s| s.name != "Patterned8" && !s.name.starts_with("Patterned8 ")).all(|s| !s.added));
 }

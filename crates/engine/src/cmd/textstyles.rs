@@ -125,7 +125,7 @@ macro_rules! style_cmds {
 }
 
 /// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
-const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}})";
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with and the styles of either kind that type in those patterns is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}})";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -955,20 +955,24 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
     if src.preview_only {
         return Err(bad(c, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
     }
-    // The source with only the styles that load.
+    // The source with only the styles that load. Those of a kind not loaded still come along when
+    // a pattern or symbol that a loaded style paints with sets type in them.
     let mut src = src.doc;
     let mut skipped = [vec![], vec![]];
     for kind in [Kind::Char, Kind::Para] {
-        let (defs, names) = if kinds.contains(&kind) { loadable(&src, kind) } else { (vec![], vec![]) };
+        let (defs, names) = loadable(&src, kind);
         *kind.defs_mut(&mut src) = defs;
-        skipped[usize::from(kind == Kind::Para)] = names;
+        if kinds.contains(&kind) {
+            skipped[usize::from(kind == Kind::Para)] = names;
+        }
     }
+    let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
     let current = s.doc()?.doc.clone();
     let mut trial = (*current).clone();
-    let mut placed = import_text_styles(&src, &mut trial);
+    let mut placed = import_text_styles(&src, &mut trial, chars, paras);
     // An undo step only when the document changes.
     if trial != *current {
-        placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d)))?;
+        placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
     }
     let reply = |para: bool| {
         let names = |added: bool| placed.iter().filter(|p| p.para == para && p.added == added).map(|p| p.name.as_str()).collect::<Vec<_>>();
