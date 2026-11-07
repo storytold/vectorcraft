@@ -1810,7 +1810,10 @@ impl Interp {
     /// Indirect eval and scripts: runs `code` in the global environment and returns its
     /// completion value.
     pub(crate) fn run_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<Value> {
-        if self.reentry >= self.limits.reentry {
+        // Indirect eval runs inside an operation and counts against the re-entry limit; the
+        // script a realm runs does not.
+        let nested = usize::from(is_eval);
+        if is_eval && self.reentry >= self.limits.reentry {
             return Err(Abrupt::Limit(LimitKind::Reentry));
         }
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
@@ -1823,9 +1826,9 @@ impl Interp {
         };
         self.instantiate_global(&code, var_env, is_eval)?;
         self.push_code_frame(code, env, var_env, Value::Object(global), true)?;
-        self.reentry += 1;
+        self.reentry += nested;
         let r = self.execute();
-        self.reentry -= 1;
+        self.reentry -= nested;
         r
     }
 

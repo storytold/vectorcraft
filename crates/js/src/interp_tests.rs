@@ -516,6 +516,17 @@ fn reentry_through_getters_ends_with_the_reentry_limit() {
 }
 
 #[test]
+fn the_script_itself_does_not_count_against_the_reentry_limit() {
+    let mut realm = small(Limits { reentry: 0, ..Limits::default() });
+    assert_eq!(realm.run("1 + 1"), Ok(JsValue::Number(2.0)));
+    assert_eq!(limit(&mut realm, "var o = { get x() { return 1; } }; o.x"), LimitKind::Reentry);
+    realm.set_limits(Limits { reentry: 1, ..Limits::default() });
+    assert_eq!(realm.run("o.x"), Ok(JsValue::Number(1.0)));
+    assert_eq!(realm.run("(0, eval)('2 + 2')"), Ok(JsValue::Number(4.0)));
+    assert_eq!(limit(&mut realm, "var p = { get x() { return o.x; } }; p.x"), LimitKind::Reentry);
+}
+
+#[test]
 fn memory_bombs_end_with_the_heap_limit() {
     let limits = Limits { heap_bytes: 4 << 20, ..Limits::default() };
     for src in [
