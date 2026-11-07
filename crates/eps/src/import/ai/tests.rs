@@ -8611,13 +8611,31 @@ fn a_multi_layer_mask_in_a_group_or_sublayer() {
 
 #[test]
 fn a_multi_layer_masks_path_can_be_painted_or_compound() {
-    // `W f`: the path also paints, under what the mask covers; it keeps its fill.
+    // `W f`: the path also paints, once, under what the mask covers after it: its fill is a path of its own in the first
+    // layer, and the copies of the mask in each layer have no fill.
+    let black = Some(Color::cmyk(0.0, 0.0, 0.0, 1.0));
     let painted = format!("{}Mb\n0 0 0 1 k\n{}h\nW\nf\nMd\n{}MB\n{END7}", begin7("A", 1), rect_path(40.0, 40.0, 120.0, 120.0), masked(15.0));
     let doc = read7(&painted).doc;
-    assert_eq!(layer_trees(&doc)[0].1, "k[c p]");
+    assert_eq!(layer_trees(&doc)[0].1, "k[c p p]");
     let group = doc.layers[0].children().unwrap()[0].clone();
     let kids = group.children().unwrap();
-    assert_eq!(fill(&kids[0]).color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), "the clipping path's fill");
+    assert_eq!(fill(&kids[0]), Paint::None, "the clipping path has no fill");
+    assert_eq!(fill(&kids[1]).color(), black, "the painted path first");
+    let two = format!(
+        "{}Mb\n0 0 0 1 k\n{}h\nW\nf\nMd\n{}{END7}{}{}MB\n{END7}",
+        begin7("A", 1),
+        rect_path(40.0, 40.0, 120.0, 120.0),
+        masked(15.0),
+        begin7("B", 1),
+        masked(30.0)
+    );
+    let doc = read7(&two).doc;
+    assert_eq!(layer_trees(&doc), [("A".to_string(), "k[c p p]".to_string(), false), ("B".to_string(), "k[c p]".to_string(), false)]);
+    let kids = |l: usize| doc.layers[l].children().unwrap()[0].children().unwrap().to_vec();
+    let (a, b) = (kids(0), kids(1));
+    assert_eq!((fill(&a[0]), fill(&b[0])), (Paint::None, Paint::None), "no copy of the mask paints");
+    assert_eq!(fill(&a[1]).color(), black);
+    assert_eq!(fill(&b[1]).color(), Some(Color::cmyk(0.5, 0.0, 0.0, 0.0)), "layer B's square, unpainted over");
     // A compound path of clipping paths.
     let compound = format!(
         "{}Mb\n*u\n{}h\nW\nn\n{}h\nW\nn\n*U\nMd\n{}MB\n{END7}",
@@ -8627,6 +8645,28 @@ fn a_multi_layer_masks_path_can_be_painted_or_compound() {
         masked(15.0)
     );
     assert_eq!(layer_trees(&read7(&compound).doc)[0].1, "k[o p]");
+    // A filled one over two layers: its fill is a compound path of its own in the first, whose paths don't clip.
+    let filled = format!(
+        "{}Mb\n0 0 0 1 k\n*u\n{}h\nW\nf\n{}h\nW\nf\n*U\nMd\n{}{END7}{}{}MB\n{END7}",
+        begin7("A", 1),
+        rect_path(40.0, 40.0, 80.0, 80.0),
+        rect_path(90.0, 90.0, 120.0, 120.0),
+        masked(15.0),
+        begin7("B", 1),
+        masked(30.0)
+    );
+    let doc = read7(&filled).doc;
+    assert_eq!(layer_trees(&doc), [("A".to_string(), "k[o o p]".to_string(), false), ("B".to_string(), "k[o p]".to_string(), false)]);
+    let kids = |l: usize| doc.layers[l].children().unwrap()[0].children().unwrap().to_vec();
+    let (a, b) = (kids(0), kids(1));
+    assert_eq!((fill(&a[0]), fill(&b[0])), (Paint::None, Paint::None), "no copy of the mask paints");
+    assert_eq!(fill(&a[1]).color(), black);
+    let NodeKind::Compound { children: subpaths, .. } = &a[1].kind else { panic!("{:?}", a[1].kind) };
+    assert!(subpaths.iter().all(|p| matches!(p.kind, NodeKind::Path { clipping: false, .. })), "{subpaths:#?}");
+    let mut ids = std::collections::HashSet::new();
+    for l in &doc.layers {
+        l.walk(&mut |n| assert!(ids.insert(n.id), "{:?} appears twice", n.id));
+    }
 }
 
 /// `Mv` starts a mask as `Mb` does, `ME` defines one as `Md` does, and `Mi` changes nothing.
@@ -8708,5 +8748,9 @@ fn copies_of_a_multi_layer_mask_count_toward_the_limit() {
     assert_eq!(layer_trees(&read7(&one).doc)[0].1, "k[c p]");
     let two = format!("{}{mask}{}{END7}{}{}MB\n{END7}", begin7("A", 1), masked(15.0), begin7("B", 1), masked(30.0));
     let e = read(mask_stream7(&two).as_bytes()).unwrap_err();
+    assert!(e.contains("objects"), "{e}");
+    // A filled mask's fill, a path of its own, counts too.
+    let filled = format!("{}{}{}MB\n{END7}", begin7("A", 1), mask.replace("W\nn\n", "W\nf\n"), masked(15.0));
+    let e = read(mask_stream7(&filled).as_bytes()).unwrap_err();
     assert!(e.contains("objects"), "{e}");
 }

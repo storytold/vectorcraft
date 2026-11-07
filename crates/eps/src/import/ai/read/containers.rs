@@ -322,7 +322,7 @@ impl<'a> Reader<'a> {
 
     /// Clipping path `n`'s fills as a path of their own, taken off `n`; `None` when it has no fill. The path keeps `n`'s
     /// transparency, visibility, lock and opacity mask, and none of its other attributes.
-    fn fill_apart(&mut self, n: &mut Node) -> Option<Node> {
+    pub(super) fn fill_apart(&mut self, n: &mut Node) -> Option<Node> {
         let is_fill = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(_));
         if !n.appearance.items.iter().any(is_fill) {
             return None;
@@ -332,6 +332,14 @@ impl<'a> Reader<'a> {
             *clipping = false;
         }
         let mut fill = Node::new(self.doc.alloc_id(), kind);
+        // A compound clipping path's subpaths: copies of their own that don't clip.
+        for c in fill.children_mut().into_iter().flatten() {
+            let c = Arc::make_mut(c);
+            self.reid(c);
+            if let NodeKind::Path { clipping, .. } = &mut c.kind {
+                *clipping = false;
+            }
+        }
         (fill.opacity, fill.blend, fill.isolate, fill.knockout, fill.knockout_shape, fill.visible, fill.locked) =
             (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape, n.visible, n.locked);
         if let Some(mask) = n.extras().mask.clone() {
@@ -342,6 +350,14 @@ impl<'a> Reader<'a> {
         rest.items.retain(|i| !is_fill(i));
         fill.appearance = fills.into();
         n.appearance = rest.into();
+        // The new path, its subpaths and their points count toward the objects read, as a multi-layer mask's copies do.
+        let mut weight = fill.count_with_masks();
+        fill.walk(&mut |p| {
+            if let NodeKind::Path { path, .. } = &p.kind {
+                weight = weight.saturating_add(path.anchor_count());
+            }
+        });
+        self.nodes = self.nodes.saturating_add(weight);
         Some(fill)
     }
 
