@@ -756,6 +756,9 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::save_style_library::open(app, names.unwrap_or_default())
         }
+        "ui.loadCharStyles" => crate::panels::text_styles::load(app, "charStyle.load", s("path")),
+        "ui.loadParaStyles" => crate::panels::text_styles::load(app, "paraStyle.load", s("path")),
+        "ui.loadAllStyles" => crate::panels::text_styles::load(app, "textStyle.loadAll", s("path")),
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => match crate::panels::graphic_styles::user_library(app, id) {
             Some(l) => crate::panels::graphic_styles::open_library(app, &json!({ "library": l.id })),
             None => Err("no such user library".into()),

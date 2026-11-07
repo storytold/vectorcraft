@@ -733,6 +733,260 @@ fn several_styles_are_deleted_in_one_step() {
     assert_eq!(s.execute("edit.undo", &json!({})).unwrap()["undone"], "Delete Style");
 }
 
+/// A saved document whose character and paragraph styles are `char` and `para` (name, attrs),
+/// stored as they are, as `charStyle.load`'s `dataBase64`.
+fn styles_file(char: &[(&str, Value)], para: &[(&str, Value)]) -> String {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let defs = |v: &[(&str, Value)]| {
+        v.iter().map(|(n, a)| TextStyleDef { name: n.to_string(), attrs: a.as_object().cloned().unwrap_or_default() }).collect::<Vec<_>>()
+    };
+    d.char_styles = defs(char).into();
+    d.para_styles = defs(para).into();
+    vectorcraft_format::base64_encode(&vectorcraft_format::save(&d, false))
+}
+
+/// Load Character Styles and Load Paragraph Styles copy the other document's styles of their kind
+/// after the document's own, in one undo step. A style with the same attributes as the style here
+/// of its name, or of its name with a number, is not added again; any other gets the first free of
+/// those names, and the style here and the type using it keep their attributes. The file's Normal
+/// style is not loaded, and a style whose attributes do not read, or whose name is empty, is
+/// skipped.
+#[test]
+fn styles_load_from_another_document_in_one_step() {
+    for p in ["charStyle", "paraStyle"] {
+        let (mut s, id) = session_with_text("Title");
+        let normal = if p == "charStyle" { NORMAL_CHAR } else { NORMAL_PARA };
+        let key = if p == "charStyle" { "size" } else { "space_after" };
+        let size = |v: f64| Value::Object(Map::from_iter([(key.to_string(), json!(v))]));
+        for (n, v) in [("Body", 12.0), ("Accent", 9.0), ("Accent 2", 1.0)] {
+            s.execute(&format!("{p}.new"), &json!({"name": n, "attrs": size(v)})).unwrap();
+        }
+        s.execute(&format!("{p}.apply"), &json!({"name": "Accent", "id": id})).unwrap();
+        let file =
+            [("Body", size(12.0)), ("Accent", size(20.0)), ("Fresh", size(5.0)), (normal, size(30.0)), ("Bad", json!({"nope": 1})), (" ", size(2.0))];
+        let data = styles_file(&file, &file);
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let r = s.execute(&format!("{p}.load"), &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+        assert_eq!(r, json!({"added": ["Accent 3", "Fresh"], "existing": ["Body"], "skipped": ["Bad", " "]}), "{p}");
+        assert_eq!(listed(&mut s, p), [normal, "Body", "Accent", "Accent 2", "Accent 3", "Fresh"], "{p}");
+        let d = s.doc().unwrap().doc.clone();
+        let attrs = |name: &str| super::style_attrs(&d, p == "paraStyle", name).map(Value::Object);
+        assert_eq!((attrs("Accent"), attrs("Accent 3"), attrs(normal)), (Some(size(9.0)), Some(size(20.0)), Some(json!({}))), "{p}");
+        // The other kind and the type are as they were.
+        let (other, mine) = if p == "charStyle" { (&d.para_styles, &d.char_styles) } else { (&d.char_styles, &d.para_styles) };
+        let (other_before, mine_before) =
+            if p == "charStyle" { (&before.para_styles, &before.char_styles) } else { (&before.char_styles, &before.para_styles) };
+        assert_eq!((other, &mine[..mine_before.len()]), (other_before, &mine_before[..]), "{p}");
+        assert_eq!(d.node(NodeId(id)), before.node(NodeId(id)), "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        // Loading the same file again adds nothing and makes no undo step.
+        let again = s.execute(&format!("{p}.load"), &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+        assert_eq!(again["added"], json!([]), "{p}");
+        assert_eq!(again["existing"], json!(["Body", "Accent 3", "Fresh"]), "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        let undone = s.execute("edit.undo", &json!({})).unwrap()["undone"].clone();
+        assert_eq!(undone, if p == "charStyle" { "Load Character Styles" } else { "Load Paragraph Styles" });
+        assert_eq!(s.doc().unwrap().doc, before, "{p}");
+    }
+}
+
+/// Load All Styles loads both kinds in one undo step, from a path too; a file that does not open,
+/// or no file, loads nothing.
+#[test]
+fn load_all_styles_loads_both_kinds_in_one_step() {
+    let (mut s, _) = session_with_text("Title");
+    let data = styles_file(&[("Lead", json!({"size": 30.0}))], &[("Centered", json!({"justify": "Center"}))]);
+    let dir = std::env::temp_dir().join(format!("vc-load-styles-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Other.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::base64_decode(&data).unwrap()).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in [json!({}), json!({"data": "not a document", "name": "x.vectorcraft"}), json!({"dataBase64": "!"})] {
+        assert!(s.execute("textStyle.loadAll", &bad).is_err(), "{bad}");
+    }
+    let r = s.execute("textStyle.loadAll", &json!({"path": path.to_string_lossy()})).unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+    let one = |name: &str| json!({"added": [name], "existing": [], "skipped": []});
+    assert_eq!(r, json!({"charStyles": one("Lead"), "paraStyles": one("Centered")}));
+    assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Lead"]);
+    assert_eq!(listed(&mut s, "paraStyle"), [NORMAL_PARA, "Centered"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(s.execute("edit.undo", &json!({})).unwrap()["undone"], "Load All Styles");
+    assert_eq!(s.doc().unwrap().doc, before);
+}
+
+/// A loaded style brings the pattern it paints with, renamed when the document has another pattern
+/// of that name, as Paste brings it; a global color whose name the document gives another color
+/// is the document's.
+#[test]
+fn loaded_styles_bring_the_patterns_and_swatches_they_paint_with() {
+    // A pattern "Dots" made from a `size` square, a global "Ink", and type painted with each.
+    let painted = |size: f64, ink: &str| {
+        let (mut s, id) = session_with_text("Dots");
+        let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": size, "height": size})).unwrap()["id"].clone();
+        s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square]})).unwrap();
+        s.execute("swatch.new", &json!({"name": "Ink", "color": ink, "global": true})).unwrap();
+        (s, id)
+    };
+    let (mut src, id) = painted(10.0, "#3366cc");
+    src.execute("select.set", &json!({"ids": [id]})).unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [id]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Patterned", "id": id})).unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Ink", "ids": [id]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Inked", "id": id})).unwrap();
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&src.doc().unwrap().doc, false));
+    let (mut s, id) = painted(30.0, "#ff0000");
+    let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+    assert_eq!(r["added"], json!(["Patterned", "Inked"]));
+    let d = s.doc().unwrap().doc.clone();
+    let fill = |name: &str| super::style_attrs(&d, false, name).unwrap()["fill"].to_string();
+    assert!(d.pattern("Dots 2").is_some() && fill("Patterned").contains("\"Dots 2\""), "{}", fill("Patterned"));
+    assert!(fill("Inked").contains("\"Ink\"") && d.swatch("Ink 2").is_none(), "{}", fill("Inked"));
+    s.execute("charStyle.apply", &json!({"name": "Patterned", "id": id})).unwrap();
+    assert!(matches!(&runs(&s, id)[0].style.fill, vectorcraft_color::Paint::Pattern { pattern, .. } if pattern == "Dots 2"));
+}
+
+/// A pattern whose type is set in a loaded style that was renamed on the way in ("Accent 2") is
+/// the same pattern when the file is loaded again, and so is the style that paints with it, also
+/// when "Accent" itself paints with another pattern.
+#[test]
+fn reloaded_patterns_follow_the_renamed_styles_their_type_uses() {
+    for patterned in [false, true] {
+        let (mut src, id) = session_with_text("Tile");
+        if patterned {
+            let square = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].clone();
+            src.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square]})).unwrap();
+            src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [id]})).unwrap();
+        }
+        src.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 4, "kerning": 40})).unwrap();
+        src.execute("charStyle.new", &json!({"name": "Accent", "id": id})).unwrap();
+        src.execute("charStyle.apply", &json!({"name": "Accent", "id": id})).unwrap();
+        if patterned {
+            // A solid fill over the style's, so the tile's type itself paints with no pattern.
+            src.execute("paint.setFill", &json!({"color": "#000000", "ids": [id]})).unwrap();
+        }
+        src.execute("object.pattern.make", &json!({"name": "Tiles", "edit": false, "ids": [id]})).unwrap();
+        let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+        src.execute("paint.setFill", &json!({"swatch": "Tiles", "ids": [other]})).unwrap();
+        src.execute("charStyle.new", &json!({"name": "Tiled", "id": other})).unwrap();
+        let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&src.doc().unwrap().doc, false));
+        let (mut s, _) = session_with_text("X");
+        s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 10}})).unwrap();
+        let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+        s.execute("charStyle.load", &load).unwrap();
+        let counts = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            (d.patterns.len(), d.char_styles.iter().map(|c| c.name.clone()).collect::<Vec<_>>())
+        };
+        let first = counts(&s);
+        assert!(first.1.contains(&"Accent 2".to_string()) && first.1.contains(&"Tiled".to_string()), "{patterned}: {first:?}");
+        let r = s.execute("charStyle.load", &load).unwrap();
+        assert_eq!(r["added"], json!([]), "{patterned}: {r}");
+        assert_eq!(counts(&s), first, "{patterned}");
+    }
+}
+
+/// A loaded style that paints with a pattern whose type is set in that same style still paints
+/// with the pattern when the pattern comes in under a free name ("Dots 2"). The commands refuse to
+/// make that loop, so the source is a document edited directly, as a file may hold it.
+#[test]
+fn a_style_and_the_pattern_that_uses_it_load_together() {
+    let (mut src, id) = session_with_text("Tile");
+    src.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": id})).unwrap();
+    src.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [id]})).unwrap();
+    let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": other})).unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [other]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Painted", "id": other})).unwrap();
+    let mut source = (*src.doc().unwrap().doc).clone();
+    let painted = source.char_styles.iter().find(|s| s.name == "Painted").unwrap().attrs.clone();
+    source.char_styles.retain(|s| s.name != "Painted");
+    source.char_styles.iter_mut().find(|s| s.name == "Accent").unwrap().attrs = painted;
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&source, false));
+    let fill = |s: &Session, name: &str| super::style_attrs(&s.doc().unwrap().doc, false, name).unwrap()["fill"].to_string();
+    let source_fill = super::style_attrs(&source, false, "Accent").unwrap()["fill"].to_string();
+    assert!(source_fill.contains("\"Dots\""), "{source_fill}");
+    let (mut s, _) = session_with_text("X");
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square]})).unwrap();
+    let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+    s.execute("charStyle.load", &load).unwrap();
+    assert!(s.doc().unwrap().doc.pattern("Dots 2").is_some());
+    assert!(fill(&s, "Accent").contains("\"Dots 2\""), "{}", fill(&s, "Accent"));
+    // Loaded again, the two are found under those names, and nothing is added.
+    let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r["added"], json!([]), "{r}");
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), (doc, undo));
+}
+
+/// A style name from a saved document stays the name used by type in imported pattern art.
+#[test]
+fn loaded_style_keeps_the_name_used_by_pattern_type() {
+    let (mut src, id) = session_with_text("Tile");
+    src.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": id})).unwrap();
+    src.execute("object.pattern.make", &json!({"name": "Tiles", "edit": false, "ids": [id]})).unwrap();
+    let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Tiles", "ids": [other]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Tiled", "id": other})).unwrap();
+    let mut source = (*src.doc().unwrap().doc).clone();
+    source.char_styles.iter_mut().find(|s| s.name == "Accent").unwrap().name = " Accent ".into();
+    let tile = source.patterns.iter_mut().find(|p| p.name == "Tiles").unwrap();
+    let art = std::sync::Arc::make_mut(&mut tile.art[0]);
+    let NodeKind::Text(text) = &mut art.kind else { panic!("pattern art should be type") };
+    text.runs[0].style.style_name = Some(" Accent ".into());
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&source, false));
+    let (mut dst, _) = session_with_text("X");
+    let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+    dst.execute("charStyle.load", &load).unwrap();
+    let doc = &dst.doc().unwrap().doc;
+    assert!(doc.char_styles.iter().any(|s| s.name == " Accent "));
+    let NodeKind::Text(text) = &doc.pattern("Tiles").unwrap().art[0].kind else { panic!("pattern art should be type") };
+    assert_eq!(text.runs[0].style.style_name.as_deref(), Some(" Accent "));
+}
+
+/// A pattern whose tile paints with itself is found under its renamed copy on a second load.
+#[test]
+fn self_referencing_pattern_is_not_added_again() {
+    let (mut src, id) = session_with_text("Patterned");
+    let square = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].clone();
+    src.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square]})).unwrap();
+    let tile = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].clone();
+    src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [tile]})).unwrap();
+    let art = src.doc().unwrap().doc.node(NodeId(tile.as_u64().unwrap())).unwrap().clone();
+    assert!(art.appearance.items.iter().any(|item| matches!(item.paint(), vectorcraft_color::Paint::Pattern { pattern, .. } if pattern == "Dots")));
+    let mut source = (*src.doc().unwrap().doc).clone();
+    source.patterns.iter_mut().find(|p| p.name == "Dots").unwrap().art = vec![std::sync::Arc::new(art)];
+    src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [id]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Patterned", "id": id})).unwrap();
+    source.char_styles = src.doc().unwrap().doc.char_styles.clone();
+    assert!(super::style_attrs(&source, false, "Patterned").unwrap()["fill"].to_string().contains("\"Dots\""));
+    let (mut dst, _) = session_with_text("X");
+    let different = dst.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
+    dst.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [different]})).unwrap();
+    let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
+    super::super::clipboard::resources::import_text_styles(&source, target);
+    assert!(dst.doc().unwrap().doc.pattern("Dots 2").is_some());
+    assert!(
+        dst.doc().unwrap().doc.pattern("Dots 2").unwrap().art[0]
+            .appearance
+            .items
+            .iter()
+            .any(|item| matches!(item.paint(), vectorcraft_color::Paint::Pattern { pattern, .. } if pattern == "Dots 2"))
+    );
+    let before = dst.doc().unwrap().doc.clone();
+    let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target);
+    assert!(again.iter().all(|s| !s.added));
+    assert_eq!(dst.doc().unwrap().doc, before);
+}
+
 /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no
 /// mojikumi) are still attributes a style can set, and a style captured with one applies to
 /// text at the default, is duplicated and comes back out of a library.

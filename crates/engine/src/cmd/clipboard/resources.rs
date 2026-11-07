@@ -241,9 +241,28 @@ pub(super) struct Used {
 impl Used {
     fn of<'a>(defs: &Defs<'a>, nodes: impl IntoIterator<Item = &'a Node>) -> Self {
         let mut used = Used::default();
-        let mut todo: Vec<Source<'a>> = nodes.into_iter().map(Source::Node).collect();
+        used.follow(defs, nodes.into_iter().map(Source::Node).collect());
+        used
+    }
+
+    /// Every character and paragraph style of `defs`, and the resources they use.
+    fn of_text_styles(defs: &Defs<'_>) -> Self {
+        let mut used = Used::default();
+        let mut todo = vec![];
+        for s in defs.char_styles {
+            used.note(defs, Ref::Name(Res::CharStyle, &s.name), &mut todo);
+        }
+        for s in defs.para_styles {
+            used.note(defs, Ref::Name(Res::ParaStyle, &s.name), &mut todo);
+        }
+        used.follow(defs, todo);
+        used
+    }
+
+    /// Note the references of `todo`'s sources and of the definitions they lead to.
+    fn follow<'a>(&mut self, defs: &Defs<'a>, mut todo: Vec<Source<'a>>) {
         while let Some(src) = todo.pop() {
-            let mut found = |r: Ref<'_>| used.note(defs, r, &mut todo);
+            let mut found = |r: Ref<'_>| self.note(defs, r, &mut todo);
             match src {
                 Source::Node(n) => node_refs(n, &mut found),
                 Source::Appearance(a) => appearance_refs(a, &mut found),
@@ -251,7 +270,6 @@ impl Used {
                 Source::Paint(p) => paint_refs(p, &mut found),
             }
         }
-        used
     }
 
     /// Note `r`; a definition seen for the first time joins `todo`.
@@ -505,7 +523,7 @@ impl SwatchChoices {
 }
 
 /// How pasted art is relinked to the document's resources.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct Relink {
     renames: BTreeMap<Res, BTreeMap<String, String>>,
     /// Graphic style id on the clipboard → its id in the document. Links to other ids are dropped.
@@ -665,6 +683,115 @@ impl SymbolOptions {
     }
 }
 
+/// A character or paragraph style, symbol (with the Symbol Options copied with it) or pattern to
+/// place ([`Clipboard::import_used`]).
+#[derive(Clone, Copy)]
+enum Def<'c> {
+    Style(Res, &'c TextStyleDef),
+    Symbol(&'c Symbol, Option<&'c SymbolOptions>),
+    Pattern(&'c PatternDef),
+}
+
+impl<'c> Def<'c> {
+    fn key(&self) -> (Res, &'c str) {
+        match self {
+            Def::Style(r, s) => (*r, &s.name),
+            Def::Symbol(s, _) => (Res::Symbol, &s.name),
+            Def::Pattern(p) => (Res::Pattern, &p.name),
+        }
+    }
+
+    /// Does it use one of `defs`, including itself?
+    fn uses_any(&self, defs: &[Def<'_>]) -> bool {
+        let mut found = false;
+        let mut f = |r: Ref<'_>| {
+            if let Ref::Name(res, n) = r {
+                found |= defs.iter().any(|o| o.key() == (res, n));
+            }
+        };
+        match self {
+            Def::Style(_, s) => attrs_refs(&s.attrs, &mut f),
+            Def::Symbol(s, _) => node_refs(&s.art, &mut f),
+            Def::Pattern(p) => p.art.iter().for_each(|a| node_refs(a, &mut f)),
+        }
+        found
+    }
+
+    /// Is it the definition `d` has under `name`, once relinked by `r`?
+    fn same_in(&self, d: &Document, name: &str, r: &Relink) -> bool {
+        match self {
+            Def::Style(res, s) => {
+                let theirs = if *res == Res::CharStyle { &d.char_styles } else { &d.para_styles };
+                let mut attrs = s.attrs.clone();
+                r.attrs(&mut attrs);
+                theirs.iter().any(|x| x.name == name && x.attrs == attrs)
+            }
+            Def::Symbol(s, options) => d.symbols.iter().any(|x| {
+                x.name == name
+                    && options.is_none_or(|o| SymbolOptions::of(d, name) == *o)
+                    && same_art(r, std::slice::from_ref(&x.art), std::slice::from_ref(&s.art))
+            }),
+            Def::Pattern(p) => {
+                let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
+                d.pattern(name).is_some_and(|x| bare(x) == bare(p) && same_art(r, &x.art, &p.art))
+            }
+        }
+    }
+
+    /// The names of its kind in `d` that are its name or a numbered copy of it.
+    fn names_in<'d>(&self, d: &'d Document) -> Vec<&'d str> {
+        let (res, name) = self.key();
+        let names: Vec<&str> = match res {
+            Res::CharStyle => d.char_styles.iter().map(|s| s.name.as_str()).collect(),
+            Res::ParaStyle => d.para_styles.iter().map(|s| s.name.as_str()).collect(),
+            Res::Symbol => d.symbols.iter().map(|s| s.name.as_str()).collect(),
+            _ => d.patterns.iter().map(|p| p.name.as_str()).collect(),
+        };
+        names.into_iter().filter(|n| copy_of(name, n)).collect()
+    }
+}
+
+/// `defs` in rounds: each round takes those that use none of the others left, in their order.
+/// → (those, the rest, which use each other in a loop or use one that does, in their order)
+fn use_order(mut left: Vec<Def<'_>>) -> (Vec<Def<'_>>, Vec<Def<'_>>) {
+    let mut order = Vec::with_capacity(left.len());
+    while !left.is_empty() {
+        let ready: Vec<bool> = left.iter().map(|d| !d.uses_any(&left)).collect();
+        if !ready.contains(&true) {
+            break;
+        }
+        let mut flags = ready.into_iter();
+        let (now, later): (Vec<_>, Vec<_>) = left.into_iter().partition(|_| flags.next().unwrap_or(false));
+        order.extend(now);
+        left = later;
+    }
+    (order, left)
+}
+
+/// The names in `d` that `looped` (definitions that use each other, [`use_order`]) all have at
+/// once, each the same once relinked by `r` with those names: each one's name or a numbered copy
+/// of it, at most 256 combinations tried. `None` when no combination fits.
+fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<&'d str>> {
+    let names: Vec<Vec<&str>> = looped.iter().map(|def| def.names_in(d)).collect();
+    let count = names.iter().try_fold(1usize, |n, l| n.checked_mul(l.len()).filter(|n| *n <= 256))?;
+    (0..count).find_map(|mut i| {
+        let pick: Vec<&str> = names
+            .iter()
+            .map(|l| {
+                let n = l.get(i % l.len()).copied().unwrap_or_default();
+                i /= l.len();
+                n
+            })
+            .collect();
+        let mut guess = r.clone();
+        for (def, name) in looped.iter().zip(&pick) {
+            let (res, own) = def.key();
+            guess.renames.entry(res).or_default().insert(own.to_string(), name.to_string());
+        }
+        looped.iter().zip(&pick).all(|(def, name)| def.same_in(d, name, &guess)).then_some(pick)
+    })
+}
+
 /// What pasting did to the document's resources (part of the paste result).
 #[derive(Debug, Default)]
 pub(crate) struct Imported {
@@ -704,6 +831,12 @@ impl Clipboard {
     pub(crate) fn gather(src: &Document, nodes: Vec<Node>) -> Self {
         let library = OnceCell::new();
         let used = Used::of(&Defs::of(src, &library), &nodes);
+        Self::with_used(src, &used, &library, nodes)
+    }
+
+    /// `nodes` and the resources of `src` that `used` names (`library`: the brush library of `src`,
+    /// read when a brush was used).
+    fn with_used(src: &Document, used: &Used, library: &OnceCell<Vec<Brush>>, nodes: Vec<Node>) -> Self {
         let pick = |r: Res, list: &[TextStyleDef]| list.iter().filter(|s| used.has(r, &s.name)).cloned().collect::<Vec<_>>();
         // Read when a brush was used.
         let brushes = match (used.names.get(&Res::Brush), library.get()) {
@@ -757,61 +890,108 @@ impl Clipboard {
     /// Add the resources the objects use to `d` (inside the paste's undo step) and work out how
     /// pasted copies relink to them.
     pub(crate) fn import_into(&self, d: &mut Document, choices: &SwatchChoices, same_doc: bool) -> Imported {
-        let used = self.used();
+        self.import_used(d, &self.used(), choices, same_doc, false)
+    }
+
+    /// [`Self::import_into`] for the resources `used` names. The character and paragraph styles
+    /// come before the symbols and patterns, whose art may set type in them; with `in_use_order`,
+    /// each style, symbol and pattern comes after the styles, symbols and patterns it uses
+    /// ([`use_order`]), so that it is compared and relinked with their names here.
+    fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
         let mut out = Imported::default();
-        self.import_images(d, &used, same_doc, &mut out);
-        self.import_swatches(d, &used, choices, same_doc, &mut out);
+        self.import_images(d, used, same_doc, &mut out);
+        self.import_swatches(d, used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
         // they may brush; the others once those are in.
-        let mut added_brushes: HashSet<String> = self.import_brushes(d, &used, same_doc, false, &mut out).into_iter().collect();
-        // Character and paragraph styles (their colours relinked first).
-        for (r, mine, theirs) in [(Res::CharStyle, &self.char_styles, &mut d.char_styles), (Res::ParaStyle, &self.para_styles, &mut d.para_styles)] {
-            for def in mine.iter().filter(|s| used.has(r, &s.name)) {
-                let mut s = def.clone();
+        let mut added_brushes: HashSet<String> = self.import_brushes(d, used, same_doc, false, &mut out).into_iter().collect();
+        let mut defs: Vec<Def<'_>> = vec![];
+        for (r, list) in [(Res::CharStyle, &self.char_styles), (Res::ParaStyle, &self.para_styles)] {
+            defs.extend(list.iter().filter(|s| used.has(r, &s.name)).map(|s| Def::Style(r, s)));
+        }
+        defs.extend(self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).map(|s| Def::Symbol(s, self.symbol_options.get(&s.name))));
+        defs.extend(self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).map(Def::Pattern));
+        let mut looped = vec![];
+        if in_use_order {
+            (defs, looped) = use_order(defs);
+        }
+        let first_looped = defs.len();
+        // Styles (their colors relinked first), symbols and patterns (compared once relinked,
+        // symbols with their options too). The symbols and patterns added are relinked at the end,
+        // when every new name and graphic style id is known; with `in_use_order`, so are the
+        // styles added, which a loop of uses may place before a pattern they paint with.
+        let (mut added_symbols, mut added_patterns, mut added_styles) = (HashSet::new(), HashSet::new(), vec![]);
+        for (i, def) in defs.into_iter().chain(looped.iter().copied()).enumerate() {
+            // Definitions in a loop of uses that the document has all at once are known under
+            // those names before they are compared.
+            if i == first_looped
+                && let Some(names) = names_of_loop(d, &looped, &out.relink)
+            {
+                let names: Vec<String> = names.into_iter().map(str::to_string).collect();
+                for (def, name) in looped.iter().zip(names) {
+                    let (res, own) = def.key();
+                    if own != name {
+                        out.relink.renames.entry(res).or_default().insert(own.to_string(), name);
+                    }
+                }
+            }
+            match def {
+                Def::Style(r, def) => {
+                    let mut s = def.clone();
+                    out.relink.attrs(&mut s.attrs);
+                    let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };
+                    let p = place(theirs, &s, same_doc, PartialEq::eq);
+                    if in_use_order && let Some(name) = p.new_name(&def.name) {
+                        added_styles.push((r, name, def));
+                    }
+                    out.placed(r, &def.name, &p);
+                }
+                Def::Symbol(def, options) => {
+                    let theirs: HashMap<String, SymbolOptions> = match options {
+                        Some(_) => d
+                            .symbols
+                            .iter()
+                            .filter(|s| copy_of(&def.name, &s.name))
+                            .map(|s| (s.name.clone(), SymbolOptions::of(d, &s.name)))
+                            .collect(),
+                        None => HashMap::new(),
+                    };
+                    let r = &out.relink;
+                    let p = place(&mut d.symbols, def, same_doc, |a, b| {
+                        options.is_none_or(|o| theirs.get(&a.name) == Some(o))
+                            && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+                    });
+                    if let Some(name) = p.new_name(&def.name) {
+                        if let Some(o) = options {
+                            o.give(d, &name);
+                        }
+                        added_symbols.insert(name);
+                    }
+                    out.placed(Res::Symbol, &def.name, &p);
+                }
+                Def::Pattern(def) => {
+                    // Tile options alike, and the art once relinked.
+                    let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
+                    let same = |n: &str| d.pattern(n).is_some_and(|x| bare(x) == bare(def) && same_art(&out.relink, &x.art, &def.art));
+                    let p = existing(&def.name, d.patterns.iter().map(|p| p.name.as_str()), same_doc, same).unwrap_or_else(|| {
+                        // Its swatch comes along under the same name.
+                        let name = unique_name(&def.name, |n| d.pattern(n).is_some() || d.swatch_name_taken(n));
+                        add_pattern(d, PatternDef { name: name.clone(), ..def.clone() });
+                        Placed::added(&def.name, name)
+                    });
+                    added_patterns.extend(p.new_name(&def.name));
+                    out.placed(Res::Pattern, &def.name, &p);
+                }
+            }
+        }
+        added_brushes.extend(self.import_brushes(d, used, same_doc, true, &mut out));
+        self.import_graphic_styles(d, used, same_doc, &mut out);
+        for (r, name, def) in added_styles {
+            let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };
+            if let Some(s) = theirs.iter_mut().find(|s| s.name == name) {
+                s.attrs = def.attrs.clone();
                 out.relink.attrs(&mut s.attrs);
-                let p = place(theirs, &s, same_doc, PartialEq::eq);
-                out.placed(r, &def.name, &p);
             }
         }
-        // Symbols and patterns, compared once relinked (symbols with their options too). Those
-        // added are relinked at the end, when every new name and graphic style id is known.
-        let mut added_symbols = HashSet::new();
-        for def in self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)) {
-            let options = self.symbol_options.get(&def.name);
-            let theirs: HashMap<String, SymbolOptions> = match options {
-                Some(_) => {
-                    d.symbols.iter().filter(|s| copy_of(&def.name, &s.name)).map(|s| (s.name.clone(), SymbolOptions::of(d, &s.name))).collect()
-                }
-                None => HashMap::new(),
-            };
-            let r = &out.relink;
-            let p = place(&mut d.symbols, def, same_doc, |a, b| {
-                options.is_none_or(|o| theirs.get(&a.name) == Some(o)) && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
-            });
-            if let Some(name) = p.new_name(&def.name) {
-                if let Some(o) = options {
-                    o.give(d, &name);
-                }
-                added_symbols.insert(name);
-            }
-            out.placed(Res::Symbol, &def.name, &p);
-        }
-        let mut added_patterns = HashSet::new();
-        for def in self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)) {
-            // Tile options alike, and the art once relinked.
-            let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
-            let same = |n: &str| d.pattern(n).is_some_and(|x| bare(x) == bare(def) && same_art(&out.relink, &x.art, &def.art));
-            let p = existing(&def.name, d.patterns.iter().map(|p| p.name.as_str()), same_doc, same).unwrap_or_else(|| {
-                // Its swatch comes along under the same name.
-                let name = unique_name(&def.name, |n| d.pattern(n).is_some() || d.swatch_name_taken(n));
-                add_pattern(d, PatternDef { name: name.clone(), ..def.clone() });
-                Placed::added(&def.name, name)
-            });
-            added_patterns.extend(p.new_name(&def.name));
-            out.placed(Res::Pattern, &def.name, &p);
-        }
-        added_brushes.extend(self.import_brushes(d, &used, same_doc, true, &mut out));
-        self.import_graphic_styles(d, &used, same_doc, &mut out);
         for s in d.symbols.iter_mut().filter(|s| added_symbols.contains(&s.name)) {
             out.relink.node(Arc::make_mut(&mut s.art));
         }
@@ -923,6 +1103,42 @@ impl Clipboard {
             out.relink.styles.insert(g.id, d.graphic_style_id(i));
         }
     }
+}
+
+/// Where a loaded text style is in the document ([`import_text_styles`]).
+pub(crate) struct LoadedStyle {
+    /// A paragraph style (else a character style).
+    pub para: bool,
+    /// Its name in the document.
+    pub name: String,
+    /// It was added (else the document's own was the same).
+    pub added: bool,
+}
+
+/// Add every character and paragraph style of `src` to `d`, with the swatches, patterns and
+/// what their art uses that the styles' fill and stroke lead to, as Paste adds those of pasted
+/// type ([`Clipboard::import_into`]; a global or spot color whose name `d` gives another color
+/// is `d`'s). Each style, symbol and pattern is placed after those it uses, so that a style
+/// follows a pattern added under a free name and a pattern follows a style renamed on the way
+/// in. A style `d` has under its name, or a numbered copy of it ("Body 2"), that is the
+/// same once relinked is used; any other is added under a free name. → each style of `src`, in
+/// order, character styles first.
+pub(crate) fn import_text_styles(src: &Document, d: &mut Document) -> Vec<LoadedStyle> {
+    let library = OnceCell::new();
+    let used = Used::of_text_styles(&Defs::of(src, &library));
+    let clip = Clipboard::with_used(src, &used, &library, vec![]);
+    let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
+    let out = clip.import_used(d, &used, &SwatchChoices::default(), false, true);
+    let mut placed: Vec<LoadedStyle> = vec![];
+    for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
+        for s in list {
+            let name = out.relink.renamed(r, &s.name);
+            let again = placed.iter().any(|p| p.para == para && p.name == name);
+            let added = !again && !before[usize::from(para)].contains(&name);
+            placed.push(LoadedStyle { para, name, added });
+        }
+    }
+    placed
 }
 
 /// Swatch `w` in `d` ([`existing`]), else added under a free name (swatches and colour groups

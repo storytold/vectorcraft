@@ -5930,7 +5930,16 @@ paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle
 the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes. `charStyle.unused` and
 `paraStyle.unused` (Select All Unused in the Character Styles and Paragraph Styles panel menus) list the styles with no
 uses, in panel order and never the Normal style, and the panel highlights them; `charStyle.delete` and
-`paraStyle.delete` take `{names}` to delete several styles in one undo step. A Return the Type tool types (or `text.editRange`
+`paraStyle.delete` take `{names}` to delete several styles in one undo step. `charStyle.load` and `paraStyle.load`
+(Load Character Styles… and Load Paragraph Styles… in the panel menus, where `ui.loadCharStyles` and
+`ui.loadParaStyles` pick the file) copy the styles of that kind from another document VectorCraft opens (`path`, `data`
+or `dataBase64`), and `textStyle.loadAll` (Load All Styles…, `ui.loadAllStyles`) copies both kinds, each in one undo
+step. The swatches and patterns the styles paint with come along as Paste brings those of pasted type; a global or spot
+color whose name the document gives another color is the document's. A loaded style that is the same as the style of
+its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
+document's styles and the type that uses them keep their attributes, and the file's Normal styles are not loaded. The
+reply lists the names `added`, `existing` and `skipped` (a style whose attributes do not read, or whose name is
+empty); `textStyle.loadAll` replies `{charStyles, paraStyles}`. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
 the story re-flows (a paragraph split between frames has them in both).
