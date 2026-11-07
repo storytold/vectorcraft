@@ -44,7 +44,7 @@ use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
-pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
+pub use layout::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};

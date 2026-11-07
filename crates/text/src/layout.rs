@@ -36,7 +36,7 @@ pub(crate) use bidi::{is_rtl, para_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
-pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
+pub use driver::{decorations, fit_first_line, fit_source_lines, layout, layout_with, scaled};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
 const EPS: f64 = 1e-6;

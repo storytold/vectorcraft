@@ -304,6 +304,38 @@ fn area_alignment_and_justify() {
     assert!((l.lines[0].x1 - frame.x1).abs() < 1e-6);
 }
 
+/// A source that sets a last line whose descent passes its frame's bottom: the frame grows from its
+/// bottom by at most a line's descent, so that line shows, and only as many lines as the source has.
+#[test]
+fn fit_source_lines_keeps_the_last_lines_the_source_sets() {
+    let text = "one\ntwo\nthree";
+    let tall = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left));
+    let third = &tall.lines[2];
+    // The third baseline is in the frame, its descent isn't.
+    let frame = Rect::new(0.0, 0.0, 200.0, third.baseline + third.descent / 2.0);
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    let short = layout(db(), &t);
+    assert!(short.overflow && short.lines.len() == 2);
+    // A source with no more lines than fit leaves the frame as it is.
+    assert!(!fit_source_lines(db(), &mut t, 2));
+    assert_eq!(layout(db(), &t).lines.len(), 2);
+    assert!(fit_source_lines(db(), &mut t, 3));
+    let fitted = layout(db(), &t);
+    assert!(!fitted.overflow && fitted.lines.len() == 3);
+    let TextKind::Area { frame: grown } = &t.kind else { panic!("area type") };
+    let grown = grown.bounds().unwrap();
+    assert!(grown.y0 == frame.y0 && grown.y1 > frame.y1 && grown.y1 <= frame.y1 + third.descent + 0.1, "{grown:?}");
+    // Fitted, nothing more to do.
+    assert!(!fit_source_lines(db(), &mut t, 3));
+    // More than a descent short: a line the source can't have set in its frame stays out.
+    let frame = Rect::new(0.0, 0.0, 200.0, tall.lines[1].baseline + tall.lines[1].descent + 1.0);
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    assert!(!fit_source_lines(db(), &mut t, 3));
+    // Point type and vertical type aren't fitted.
+    let mut p = point(text, style(12.0));
+    assert!(!fit_source_lines(db(), &mut p, 9));
+}
+
 #[test]
 fn indents_and_paragraph_spacing() {
     let frame = Rect::new(0.0, 0.0, 200.0, 400.0);

@@ -24,7 +24,9 @@ use std::collections::BTreeMap;
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{CharStyle, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{
+    CharStyle, HyphenationOptions, JustificationOptions, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TextKind, TextObject, TextRun,
+};
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
 /// Longest story read (bytes).
@@ -343,6 +345,13 @@ struct Para {
     space_before: f64,
     space_after: f64,
     hyphenate: bool,
+    /// Key 7: the share of its type size a line takes as its auto leading (1.2: 120%). `None`:
+    /// the default.
+    auto_leading: Option<f64>,
+    /// Keys 10 to 15, in the order of Paragraph panel menu › Hyphenation…: Words Longer Than,
+    /// After First, Before Last, Hyphen Limit, Hyphenation Zone (pt) and Hyphenate Capitalized
+    /// Words. A value that can't be read, or is out of its range, keeps the default.
+    hyphenation: HyphenationOptions,
 }
 
 /// The text of one story, in the units of the text document.
@@ -588,6 +597,24 @@ impl Texts {
             space_before: num("4"),
             space_after: num("5"),
             hyphenate: !matches!(pick("9"), Some(Val::Bool(false))),
+            auto_leading: pick("7").and_then(Val::num).filter(|v| v.is_finite() && *v > 0.0 && *v <= 5.0),
+            hyphenation: {
+                let d = HyphenationOptions::default();
+                let count = |k: &str, lo: f64, hi: f64, or: u32| {
+                    pick(k).and_then(Val::num).filter(|v| v.is_finite() && v.fract() == 0.0 && (lo..=hi).contains(v)).map_or(or, |v| v as u32)
+                };
+                HyphenationOptions {
+                    words_longer_than: count("10", 1.0, 25.0, d.words_longer_than),
+                    after_first: count("11", 1.0, 15.0, d.after_first),
+                    before_last: count("12", 1.0, 15.0, d.before_last),
+                    hyphen_limit: count("13", 0.0, 25.0, d.hyphen_limit),
+                    zone: pick("14").and_then(Val::num).filter(|v| v.is_finite() && (0.0..=1296.0).contains(v)).unwrap_or(d.zone),
+                    capitalized: match pick("15") {
+                        Some(Val::Bool(b)) => *b,
+                        _ => d.capitalized,
+                    },
+                }
+            },
         }
     }
 
@@ -882,7 +909,6 @@ impl Story {
         // The text document measures in the art's units too: the document's scale carries its
         // sizes and spacings onto the page (a Large Canvas copy is written at 1:10; #2031).
         let scale = scale * art_scale(to_doc);
-        let leading = self.line_leading(scale);
         let chars: Vec<char> = text.chars().collect();
         let mut runs = vec![];
         let mut from = 0usize;
@@ -893,13 +919,13 @@ impl Story {
             if piece.is_empty() {
                 continue;
             }
-            runs.push(TextRun::new(piece, char_style(st, scale, leading)));
+            runs.push(TextRun::new(piece, char_style(st, scale)));
         }
         if from < chars.len() {
             let last = self.runs.last().map(|r| &r.1)?;
-            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale, leading)));
+            runs.push(TextRun::new(chars.get(from..).unwrap_or_default().iter().collect::<String>(), char_style(last, scale)));
         }
-        let first = self.runs.first().map(|r| char_style(&r.1, scale, leading))?;
+        let first = self.runs.first().map(|r| char_style(&r.1, scale))?;
         let mut t = TextObject::point(Point::ZERO, "", first);
         if !runs.is_empty() {
             t.runs = runs;
@@ -928,6 +954,15 @@ impl Story {
     /// top, by what the first line needs (`vectorcraft_text::fit_first_line`). Whether it was.
     pub(super) fn fit_first_line(&self, t: &mut TextObject) -> bool {
         !self.lines.is_empty() && vectorcraft_text::fit_first_line(vectorcraft_text::FontDb::global(), t)
+    }
+
+    /// Area type of one frame that the file lays more lines out in than fit here: in the fallback
+    /// font, or a last line whose descent the file lets pass the frame's bottom. The frame is made
+    /// taller from its bottom (`vectorcraft_text::fit_source_lines`) so the file's lines show.
+    /// Whether it was.
+    pub(super) fn fit_last_lines(&self, t: &mut TextObject) -> bool {
+        matches!(self.frames.as_slice(), [FrameKind::Area(..)])
+            && vectorcraft_text::fit_source_lines(vectorcraft_text::FontDb::global(), t, self.lines.len())
     }
 
     /// Area type (`node`, the story's first frame as [`Self::node`] makes it with `template` and
@@ -966,38 +1001,6 @@ impl Story {
         t.area.first_baseline = vectorcraft_doc::FirstBaseline::Fixed;
         t.area.first_baseline_min = min;
         true
-    }
-
-    /// The leading the file's own line positions imply: the distance from one line to the next, less
-    /// the space between paragraphs that is part of it (a paragraph's space after and the next one's
-    /// space before; a layout's lines are where that space has put them, and the text object adds it
-    /// again).
-    fn line_leading(&self, scale: f64) -> Option<f64> {
-        let para_at = |c: usize| {
-            let mut end = 0usize;
-            for (n, p) in &self.paras {
-                end = end.saturating_add(*n);
-                if c < end {
-                    return Some(p);
-                }
-            }
-            self.paras.last().map(|(_, p)| p)
-        };
-        let chars: Vec<char> = self.text.chars().collect();
-        let breaks: Vec<usize> = chars.iter().enumerate().filter(|(_, c)| matches!(c, '\r' | '\x03')).map(|(i, _)| i).collect();
-        // More lines than breaks: area type wraps, and which break ends which line is unknown.
-        let wraps = self.lines.len() > breaks.len() + 1;
-        self.lines.windows(2).enumerate().find_map(|(i, w)| {
-            let pitch = w[1].1 - w[0].1;
-            let between = match breaks.get(i) {
-                Some(&at) if !wraps && chars.get(at) == Some(&'\r') => {
-                    para_at(at).map_or(0.0, |p| p.space_after) + para_at(at + 1).map_or(0.0, |p| p.space_before)
-                }
-                _ => 0.0,
-            };
-            let l = (pitch - between) * scale;
-            (l.is_finite() && l > 0.0).then_some(l)
-        })
     }
 
     /// The style of each paragraph of `text` (paragraphs split at `\n`).
@@ -1049,21 +1052,29 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
         space_before: p.space_before * scale,
         space_after: p.space_after * scale,
         hyphenate: p.hyphenate,
+        hyphenation: HyphenationOptions { zone: p.hyphenation.zone * scale, ..p.hyphenation.clone() },
         // A right-to-left paragraph lays its text out from the right whatever letters it has
         // (" 120.5 mm " reads "mm 120.5"); without the key, from its first strong letter.
         direction: p.rtl.then_some(ParaDirection::RightToLeft),
+        justification: JustificationOptions {
+            // Rounded, so the file's 1.2 is the default 120% exactly.
+            auto_leading: p.auto_leading.map_or(JustificationOptions::default().auto_leading, |a| (a * 1e6).round() / 1e4),
+            ..JustificationOptions::default()
+        },
         ..ParaStyle::default()
     }
 }
 
-fn char_style(s: &Style, scale: f64, leading: Option<f64>) -> CharStyle {
+fn char_style(s: &Style, scale: f64) -> CharStyle {
     let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
     CharStyle {
         font_family: family,
         font_style: style,
         size: s.size * scale,
-        leading: s.leading.map(|l| l * scale).or(leading),
+        // Auto leading stays auto: the layout gives each line the paragraph's share of the largest
+        // type on it, as the file's own layout does.
+        leading: s.leading.map(|l| l * scale),
         tracking: s.tracking,
         baseline_shift: s.baseline_shift * scale,
         h_scale: s.h_scale * 100.0,
@@ -1109,6 +1120,63 @@ mod tests {
         // Left to right keeps them.
         assert_eq!(justify(b"/0 0 /33 0"), Justify::Left);
         assert_eq!(justify(b"/0 1 /33 0"), Justify::Right);
+    }
+
+    /// Key 7 is the paragraph's auto leading, a share of the type size; one that can't be read
+    /// leaves the default, 120%.
+    #[test]
+    fn a_paragraph_keeps_its_auto_leading() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/7 1.2").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let auto = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justification.auto_leading;
+        assert_eq!(auto(b""), JustificationOptions::default().auto_leading);
+        assert_eq!(auto(b"/7 1.5"), 150.0);
+        assert_eq!(auto(b"/7 1.15"), 115.0);
+        for unreadable in [b"/7 0".as_slice(), b"/7 -1", b"/7 1e9", b"/7 /nil"] {
+            assert!((auto(unreadable) - 120.0).abs() < 1e-9, "{}", String::from_utf8_lossy(unreadable));
+        }
+    }
+
+    /// Keys 10 to 15 are the paragraph's hyphenation options; one that can't be read, or is out of
+    /// its range, keeps the default. The zone is in points of the text document, scaled as sizes are.
+    #[test]
+    fn a_paragraph_keeps_its_hyphenation_options() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: read(b"/10 6 /11 2 /12 2 /13 0 /14 36.0 /15 true").unwrap(),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let options = |own: &[u8], scale: f64| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale).hyphenation;
+        let want = HyphenationOptions { words_longer_than: 6, after_first: 2, before_last: 2, hyphen_limit: 0, zone: 36.0, capitalized: true };
+        assert_eq!(options(b"", 1.0), want);
+        assert_eq!(
+            options(b"/10 8 /13 3 /15 false", 0.5),
+            HyphenationOptions { words_longer_than: 8, hyphen_limit: 3, zone: 18.0, capitalized: false, ..want.clone() }
+        );
+        let d = HyphenationOptions::default();
+        let bare = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
+        assert_eq!(own(b""), d);
+        assert_eq!(own(b"/10 0 /11 99 /12 2.5 /13 -1 /14 -3 /15 1"), d);
     }
 
     /// Where point type lies runs along its baseline: a label turned a quarter (as a vertical
@@ -1411,25 +1479,54 @@ mod tests {
         }
     }
 
+    /// The baselines of the text object `story` comes in as, laid out.
+    fn baselines_of(story: &Story) -> Vec<f64> {
+        let Some(node) = story.node(NodeId(1), 0, (0.0, 0.0), Affine::IDENTITY) else { return vec![] };
+        let NodeKind::Text(t) = &node.kind else { return vec![] };
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).baselines().iter().map(|b| b.0.y).collect()
+    }
+
+    /// Auto leading stays auto: each line takes the paragraph's share of the largest type on it, as
+    /// the file's own layout does, not the distance between the first two lines for every line. A
+    /// 15 pt heading over 10 pt type at 120%: 18 pt between the heading's lines, then 12 pt.
+    #[test]
+    fn auto_leading_follows_the_size_of_each_line() {
+        let mut s = story("Big\x03Bigger\rsmall\r", &[0.0, 18.0, 30.0], &Para::default());
+        let base = s.runs[0].1.clone();
+        s.runs = vec![(11, Style { size: 15.0, ..base.clone() }), (6, Style { size: 10.0, ..base })];
+        assert_eq!(leading_of(&s), None);
+        let ys = baselines_of(&s);
+        assert_eq!(ys.len(), 3, "{ys:?}");
+        assert!(((ys[1] - ys[0]).abs() - 18.0).abs() < 1e-6, "{ys:?}");
+        assert!(((ys[2] - ys[1]).abs() - 12.0).abs() < 1e-6, "{ys:?}");
+        // At a share the paragraph sets (key 7) of 150%: 22.5 pt, then 15 pt.
+        let share = Para { auto_leading: Some(1.5), ..Para::default() };
+        s.paras = s.paras.iter().map(|(n, _)| (*n, share.clone())).collect();
+        let ys = baselines_of(&s);
+        assert!(((ys[1] - ys[0]).abs() - 22.5).abs() < 1e-6, "{ys:?}");
+        assert!(((ys[2] - ys[1]).abs() - 15.0).abs() < 1e-6, "{ys:?}");
+    }
+
     #[test]
     fn leading_leaves_out_the_space_between_paragraphs_that_the_lines_already_have() {
         // Lines 10.6 apart that are three paragraphs with 5 less after each: auto leading (15.6) less 5.
         let para = Para { space_after: -5.0, ..Para::default() };
+        // The text object keeps auto leading and the spacing, so its lines are where the file's are.
         let s = story("one\rtwo\rthree\r", &[0.0, 10.6, 21.2], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        assert!((leading_of(&s).unwrap() - 15.6).abs() < 1e-9);
-        // Space after and space before both count; the scale of the frame carries onto the leading.
+        assert_eq!(leading_of(&s), None);
+        let ys = baselines_of(&s);
+        assert!(ys.len() == 3 && ys.windows(2).all(|w| ((w[1] - w[0]).abs() - 10.6).abs() < 1e-6), "{ys:?}");
+        // Space after and space before both count.
         let para = Para { space_after: 4.0, space_before: 2.0, ..Para::default() };
-        let s = story("one\rtwo\r", &[0.0, 20.0], &para);
-        assert!((s.line_leading(1.0).unwrap() - 14.0).abs() < 1e-9);
-        assert!((s.line_leading(0.5).unwrap() - 7.0).abs() < 1e-9);
+        let ys = baselines_of(&story("one\rtwo\r", &[0.0, 21.6], &para));
+        assert!(((ys[1] - ys[0]).abs() - 21.6).abs() < 1e-6, "{ys:?}");
     }
 
     /// #2031: a Large Canvas editing copy measures its text document in its art's units, a tenth
     /// of the page's: the story's size and leading reach the page through `to_doc`'s scale.
     #[test]
     fn a_story_in_a_scaled_art_space_keeps_its_size_and_leading() {
-        let s = story("one\rtwo\r", &[0.0, 20.0], &Para::default());
+        let s = story("one\rtwo\r", &[0.0, 15.6], &Para::default());
         // A copy written at 1:10 (see `ai::read::ensure_space`): its art's units reach the
         // document, 100 points to the page, through `to_doc`'s scale.
         let to_doc = Affine::scale(10.0) * Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
@@ -1438,24 +1535,18 @@ mod tests {
             _ => panic!("not text"),
         };
         assert_eq!(t.runs[0].style.size, 130.0, "13 pt at the page's scale");
-        assert_eq!(t.runs[0].style.leading, Some(200.0), "a 20-unit line pitch at the page's scale");
+        assert_eq!(t.runs[0].style.leading, None, "auto leading: 120% of its size at the page's scale");
+        assert_eq!(t.para.justification.auto_leading, 120.0);
     }
 
     #[test]
     fn leading_between_lines_of_a_paragraph_is_their_distance() {
         // A line break inside a paragraph has no paragraph spacing between its lines.
         let para = Para { space_after: -5.0, space_before: 3.0, ..Para::default() };
-        let s = story("one\x03two\x03three\r", &[0.0, 15.6, 31.2], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // Paragraphs without spacing: the distance as it was.
-        let s = story("one\rtwo\r", &[0.0, 15.6], &Para::default());
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // Area type whose paragraph wraps: lines and breaks don't pair up, so nothing is taken off.
-        let para = Para { space_after: -5.0, ..Para::default() };
-        let s = story("one two three\rfour\r", &[0.0, 15.6, 31.2, 41.8], &para);
-        assert!((s.line_leading(1.0).unwrap() - 15.6).abs() < 1e-9);
-        // One line has no distance to read.
-        assert_eq!(story("one\r", &[0.0], &Para::default()).line_leading(1.0), None);
+        let ys = baselines_of(&story("one\x03two\x03three\r", &[0.0, 15.6, 31.2], &para));
+        assert!(ys.len() == 3 && ys.windows(2).all(|w| ((w[1] - w[0]).abs() - 15.6).abs() < 1e-6), "{ys:?}");
+        // One line.
+        assert_eq!(baselines_of(&story("one\r", &[0.0], &Para::default())).len(), 1);
     }
 
     /// A `\x03` ends a line inside its paragraph: it comes in as a forced line break, and the
@@ -1497,6 +1588,32 @@ mod tests {
         assert!(!s.fit_first_line(&mut t) && height(&t).unwrap().3 == 40.0);
         let mut t = area(13.0);
         assert!(!story("Heading\r", &[], &Para::default()).fit_first_line(&mut t) && height(&t).unwrap().3 == 13.0);
+    }
+
+    /// The file sets three lines in a frame whose third line's descent passes its bottom: the frame
+    /// grows from its bottom so the third shows. Only when the story's one frame is area type.
+    #[test]
+    fn the_last_lines_the_file_sets_in_its_frame_show() {
+        let db = vectorcraft_text::FontDb::global();
+        let area = |height: f64| {
+            let mut t = TextObject::point(Point::ZERO, "one\ntwo\nthree", CharStyle { size: 13.0, ..CharStyle::default() });
+            t.kind = TextKind::Area { frame: vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 210.0, 20.0 + height)) };
+            t
+        };
+        let tall = vectorcraft_text::layout(db, &area(400.0));
+        let third = &tall.lines[2];
+        let mut t = area(third.baseline - 20.0 + third.descent / 2.0);
+        assert_eq!(vectorcraft_text::layout(db, &t).lines.len(), 2);
+        let mut s = story("one\rtwo\rthree\r", &[0.0, 15.6, 31.2], &Para::default());
+        // A point-type frame (the helper's) isn't fitted.
+        assert!(!s.fit_last_lines(&mut t));
+        s.frames = vec![FrameKind::Area(vec![], AreaFrame::default())];
+        assert!(s.fit_last_lines(&mut t));
+        assert_eq!(vectorcraft_text::layout(db, &t).lines.len(), 3);
+        // A story threaded through two frames: its lines are the first frame's alone.
+        let mut t = area(third.baseline - 20.0 + third.descent / 2.0);
+        s.frames.push(FrameKind::Area(vec![], AreaFrame::default()));
+        assert!(!s.fit_last_lines(&mut t));
     }
 
     #[test]
