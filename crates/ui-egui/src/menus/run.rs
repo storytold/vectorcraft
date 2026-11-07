@@ -712,6 +712,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
+        "artboard.selectAll" => crate::panels::artboards::select_all_command(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),

@@ -118,6 +118,18 @@ fn path_is_finite(path: &PathData) -> bool {
 /// Fallible [`offset_path`] that returns an error when the input is non-finite or exceeds
 /// the complexity bound ([`MAX_OFFSET_SEGMENT_PAIRS`]), or when planar arrangement fails.
 pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError> {
+    let src = std::cell::LazyCell::new(|| SegmentTree::new(boxed_segments(&path.to_bezpath())));
+    offset_with_check(path, delta, join, miter_limit, |p, r| any_within(&src, p, r))
+}
+
+/// [`try_offset_path`] with the test of whether some segment of `path` lies closer than a radius to a point.
+fn offset_with_check(
+    path: &PathData,
+    delta: f64,
+    join: Join,
+    miter_limit: f64,
+    within: impl Fn(kurbo::Point, f64) -> bool,
+) -> Result<PathData, PathOpsError> {
     if !delta.is_finite() || !path_is_finite(path) {
         return Err(PathOpsError::NonFinite);
     }
@@ -144,10 +156,9 @@ pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside
     // it lies closer than `d`: holes when growing, islands when insetting.
-    let src = std::cell::LazyCell::new(|| boxed_segments(&path.to_bezpath()));
     let drop_outer = delta < 0.0;
     let spurious: Vec<bool> =
-        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| any_within(&src, p, d * (1.0 - 1e-4) - 1e-6))).collect();
+        c.contours().map(|k| k.outer == drop_outer && deep_point(&k.path).is_some_and(|p| within(p, d * (1.0 - 1e-4) - 1e-6))).collect();
     if !spurious.contains(&true) {
         return Ok(all_contours_to_path(&c, &Tidy::free(DEFAULT_PRECISION)));
     }
@@ -261,12 +272,82 @@ fn box_may_reach(b: &kurbo::Rect, p: kurbo::Point, r: f64) -> bool {
     p.x >= b.x0 - reach && p.x <= b.x1 + reach && p.y >= b.y0 - reach && p.y <= b.y1 + reach
 }
 
+/// Most segments in a leaf of a [`SegmentTree`].
+const TREE_LEAF: usize = 8;
+
+/// A path's segments in a tree of bounding boxes, built once and searched for the segments near a point.
+struct SegmentTree {
+    /// The segments, ordered so that each leaf holds a run of them.
+    segs: Vec<(kurbo::Rect, kurbo::PathSeg)>,
+    /// The nodes, each one followed by the nodes below it.
+    nodes: Vec<TreeNode>,
+}
+
+struct TreeNode {
+    /// The union of the boxes below this node. A box holding NaN never passes [`box_may_reach`],
+    /// and the union leaves its NaN out.
+    bounds: kurbo::Rect,
+    /// The segments of a leaf; empty for a node with nodes below it.
+    leaf: std::ops::Range<usize>,
+    /// The first node after this one that is not below it.
+    next: usize,
+}
+
+impl SegmentTree {
+    fn new(mut segs: Vec<(kurbo::Rect, kurbo::PathSeg)>) -> Self {
+        let mut nodes = Vec::new();
+        Self::split(&mut segs, 0, &mut nodes);
+        Self { segs, nodes }
+    }
+
+    /// Adds the nodes for `segs`, which start at index `start` of the whole list: past
+    /// [`TREE_LEAF`] segments, halves them along the wider side of their bounds.
+    fn split(segs: &mut [(kurbo::Rect, kurbo::PathSeg)], start: usize, nodes: &mut Vec<TreeNode>) {
+        let empty = kurbo::Rect::new(f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let bounds = segs.iter().fold(empty, |u, (b, _)| u.union(*b));
+        let at = nodes.len();
+        let leaf = if segs.len() <= TREE_LEAF { start..start + segs.len() } else { start..start };
+        nodes.push(TreeNode { bounds, leaf, next: at + 1 });
+        if segs.len() > TREE_LEAF {
+            let wide = bounds.width() >= bounds.height();
+            let center = |b: &kurbo::Rect| if wide { b.x0 + b.x1 } else { b.y0 + b.y1 };
+            let mid = segs.len() / 2;
+            segs.select_nth_unstable_by(mid, |a, b| center(&a.0).total_cmp(&center(&b.0)));
+            let (low, high) = segs.split_at_mut(mid);
+            Self::split(low, start, nodes);
+            Self::split(high, start + mid, nodes);
+            let end = nodes.len();
+            if let Some(n) = nodes.get_mut(at) {
+                n.next = end;
+            }
+        }
+    }
+
+    /// Whether `test` holds for a segment in a leaf whose bounds [`box_may_reach`] allows. Stops at
+    /// the first segment it holds for.
+    fn any_near(&self, p: kurbo::Point, r: f64, mut test: impl FnMut(&(kurbo::Rect, kurbo::PathSeg)) -> bool) -> bool {
+        let mut i = 0;
+        while let Some(n) = self.nodes.get(i) {
+            if !box_may_reach(&n.bounds, p, r) {
+                i = n.next;
+            } else if n.leaf.is_empty() {
+                i += 1;
+            } else if self.segs.get(n.leaf.clone()).is_some_and(|run| run.iter().any(&mut test)) {
+                return true;
+            } else {
+                i = n.next;
+            }
+        }
+        false
+    }
+}
+
 /// Whether some segment lies closer than `r` to `p`. A segment whose box is too far away can't, so
 /// it is skipped without the costly nearest-point search, and the search stops at the first
 /// segment that does.
-fn any_within(segs: &[(kurbo::Rect, kurbo::PathSeg)], p: kurbo::Point, r: f64) -> bool {
+fn any_within(tree: &SegmentTree, p: kurbo::Point, r: f64) -> bool {
     use kurbo::ParamCurveNearest;
-    r > 0.0 && segs.iter().any(|(b, s)| box_may_reach(b, p, r) && s.nearest(p, 1e-6).distance_sq.sqrt() < r)
+    r > 0.0 && tree.any_near(p, r, |(b, s)| box_may_reach(b, p, r) && s.nearest(p, 1e-6).distance_sq.sqrt() < r)
 }
 
 #[cfg(test)]
@@ -323,6 +404,7 @@ mod tests {
             let shift = [0.0, 1e6, 1e9][case % 3];
             let bp = kurbo::Affine::translate((shift, -shift)) * bp;
             let segs = boxed_segments(&bp);
+            let tree = SegmentTree::new(segs.clone());
             for _ in 0..40 {
                 // On the grid (on segments and their ends) and off it.
                 let p = if rng.next() < 0.5 {
@@ -349,7 +431,7 @@ mod tests {
                     rng.next() * 3.0,
                     1e6,
                 ] {
-                    assert_eq!(any_within(&segs, p, r), nearest < r, "case {case} p {p:?} r {r} nearest {nearest}");
+                    assert_eq!(any_within(&tree, p, r), nearest < r, "case {case} p {p:?} r {r} nearest {nearest}");
                     hits += usize::from(nearest < r);
                     // Every segment the box test skips is really out of reach.
                     for (b, s) in &segs {
@@ -363,7 +445,200 @@ mod tests {
             }
         }
         assert!(hits > 1000 && skipped > 10_000, "{hits} {skipped}");
-        assert!(!any_within(&[], kurbo::Point::ZERO, 1.0));
+        assert!(!any_within(&SegmentTree::new(vec![]), kurbo::Point::ZERO, 1.0));
+    }
+
+    /// The test over every segment in path order, with no tree.
+    fn any_within_by_scan(segs: &[(kurbo::Rect, kurbo::PathSeg)], p: kurbo::Point, r: f64) -> bool {
+        use kurbo::ParamCurveNearest;
+        r > 0.0 && segs.iter().any(|(b, s)| box_may_reach(b, p, r) && s.nearest(p, 1e-6).distance_sq.sqrt() < r)
+    }
+
+    /// A grid of `n` by `n` unit lines, 10 apart.
+    fn line_grid(n: usize) -> Vec<(kurbo::Rect, kurbo::PathSeg)> {
+        let mut bp = BezPath::new();
+        for i in 0..n {
+            for j in 0..n {
+                let (x, y) = (i as f64 * 10.0, j as f64 * 10.0);
+                bp.move_to((x, y));
+                bp.line_to((x + 1.0, y));
+            }
+        }
+        boxed_segments(&bp)
+    }
+
+    #[test]
+    fn the_tree_tests_only_the_segments_near_the_point() {
+        let tree = SegmentTree::new(line_grid(100));
+        for (p, r) in [((500.5, 500.0), 0.25), ((503.0, 505.0), 2.0), ((-50.0, -50.0), 1.0)] {
+            let p = kurbo::Point::new(p.0, p.1);
+            let mut tested = 0;
+            tree.any_near(p, r, |_| {
+                tested += 1;
+                false
+            });
+            assert!(tested <= 4 * TREE_LEAF, "{tested} of 10000 segments tested at {p:?} within {r}");
+        }
+        // A radius that takes in the whole grid tests every segment.
+        let mut tested = 0;
+        tree.any_near(kurbo::Point::new(500.0, 500.0), 1e6, |_| {
+            tested += 1;
+            false
+        });
+        assert_eq!(tested, 10_000);
+    }
+
+    #[test]
+    fn the_tree_holds_every_segment_once_at_any_size() {
+        for n in [0, 1, TREE_LEAF - 1, TREE_LEAF, TREE_LEAF + 1, 2 * TREE_LEAF + 1, 100, 1000] {
+            let mut bp = BezPath::new();
+            for i in 0..n {
+                bp.move_to((i as f64, 0.0));
+                bp.line_to((i as f64, 1.0));
+            }
+            let tree = SegmentTree::new(boxed_segments(&bp));
+            let mut xs = vec![];
+            tree.any_near(kurbo::Point::new(0.0, 0.0), 1e9, |(b, _)| {
+                xs.push(b.x0);
+                false
+            });
+            xs.sort_by(f64::total_cmp);
+            assert_eq!(xs, (0..n).map(|i| i as f64).collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn the_tree_answers_like_the_scan_when_boxes_are_not_finite() {
+        // Boxes with NaN or infinite sides, as extreme coordinates can give, among ordinary ones.
+        let line = |x: f64| kurbo::PathSeg::Line(kurbo::Line::new((x, 0.0), (x + 1.0, 0.0)));
+        let mut segs: Vec<(kurbo::Rect, kurbo::PathSeg)> =
+            (0..40).map(|i| (line(f64::from(i) * 5.0).bounding_box(), line(f64::from(i) * 5.0))).collect();
+        for (k, b) in [
+            kurbo::Rect::new(f64::NAN, 0.0, 1.0, 1.0),
+            kurbo::Rect::new(0.0, f64::NAN, 1.0, 1.0),
+            kurbo::Rect::new(0.0, 0.0, f64::NAN, 1.0),
+            kurbo::Rect::new(0.0, 0.0, 1.0, f64::NAN),
+            kurbo::Rect::new(f64::NEG_INFINITY, -1.0, f64::INFINITY, 1.0),
+            kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            segs.insert(k * 6, (b, line(1000.0 + k as f64 * 5.0)));
+        }
+        for every_box_is_nan in [false, true] {
+            if every_box_is_nan {
+                segs.iter_mut().for_each(|(b, _)| *b = kurbo::Rect::new(f64::NAN, f64::NAN, f64::NAN, f64::NAN));
+            }
+            let tree = SegmentTree::new(segs.clone());
+            for x in [-3.0, 0.5, 7.0, 100.0, 1000.5, 1012.0, 1e6] {
+                for r in [0.5, 2.0, 50.0, 1e7] {
+                    let p = kurbo::Point::new(x, 0.25);
+                    assert_eq!(any_within(&tree, p, r), any_within_by_scan(&segs, p, r), "{every_box_is_nan} {p:?} {r}");
+                }
+            }
+        }
+    }
+
+    /// Paths across the kinds of input the offset treats differently.
+    fn offset_inputs() -> Vec<PathData> {
+        let mut rng = Lcg(31);
+        let mut paths = vec![];
+        let from = |bp: &BezPath| PathData::from_bezpath(bp);
+        // Separate shapes with no overlaps.
+        let mut islands = BezPath::new();
+        for i in 0..5 {
+            for j in 0..5 {
+                let (x, y) = (f64::from(i) * 20.0, f64::from(j) * 20.0);
+                islands.extend(kurbo::Rect::new(x, y, x + 12.0, y + 12.0).to_path(0.1));
+            }
+        }
+        paths.push(from(&islands));
+        // A compound path with holes, some of a radius equal to the offsets below.
+        for small in [0.8, 1.0, 2.0] {
+            let mut plate = kurbo::Rect::new(0.0, 0.0, 100.0, 100.0).to_path(0.1);
+            for i in 0..4 {
+                for j in 0..4 {
+                    let r = if (i + j) % 2 == 0 { small } else { 4.0 };
+                    plate.extend(kurbo::Circle::new((12.5 + 25.0 * f64::from(i), 12.5 + 25.0 * f64::from(j)), r).to_path(0.01).reverse_subpaths());
+                }
+            }
+            paths.push(from(&plate));
+        }
+        // A self-crossing star, closed and open.
+        let star = |close: bool| {
+            let mut bp = BezPath::new();
+            for i in 0..=7 {
+                let t = f64::from(i) * 3.0 / 7.0 * std::f64::consts::TAU;
+                let p = (50.0 + 40.0 * t.cos(), 50.0 + 40.0 * t.sin());
+                if i == 0 { bp.move_to(p) } else { bp.line_to(p) }
+            }
+            if close {
+                bp.close_path();
+            }
+            bp
+        };
+        paths.push(from(&star(true)));
+        paths.push(from(&star(false)));
+        // Short paths: one line, one curve, a single anchor, and a path whose ends meet.
+        for svg in ["M0,0 L10,0", "M0,0 C5,10 10,-10 15,0", "M3,3", "M0,0 L10,0 L10,10 L0,0"] {
+            paths.push(from(&BezPath::from_svg(svg).unwrap()));
+        }
+        // An open zigzag whose stroke leaves many small holes.
+        let mut zigzag = BezPath::new();
+        for row in 0..4 {
+            for col in 0..40 {
+                let c = if row % 2 == 0 { col } else { 39 - col };
+                let p = (f64::from(c) * 1.6, f64::from(row) * 6.0 + if col % 2 == 0 { 0.0 } else { 2.0 });
+                if row == 0 && col == 0 { zigzag.move_to(p) } else { zigzag.line_to(p) }
+            }
+        }
+        paths.push(from(&zigzag));
+        // Random curves that cross themselves and each other, near the origin and far from it.
+        for case in 0..18 {
+            let n = [6.0, 40.0][case % 2];
+            let mut bp = BezPath::new();
+            for _ in 0..1 + case % 4 {
+                let pt = |rng: &mut Lcg| kurbo::Point::new(rng.grid(n), rng.grid(n));
+                bp.move_to(pt(&mut rng));
+                for _ in 0..2 + (rng.next() * 5.0) as usize {
+                    match (rng.next() * 3.0) as u32 {
+                        0 => bp.line_to(pt(&mut rng)),
+                        1 => bp.quad_to(pt(&mut rng), pt(&mut rng)),
+                        _ => bp.curve_to(pt(&mut rng), pt(&mut rng), pt(&mut rng)),
+                    }
+                }
+                if rng.next() < 0.6 {
+                    bp.close_path();
+                }
+            }
+            let shift = [0.0, 0.0, 1e6][case % 3];
+            paths.push(from(&(kurbo::Affine::translate((shift, -shift)) * bp)));
+        }
+        paths
+    }
+
+    #[test]
+    fn offsets_with_the_tree_are_identical_to_offsets_with_the_scan() {
+        let (mut checks, mut hits, mut misses) = (0, 0, 0);
+        for path in offset_inputs() {
+            let segs = boxed_segments(&path.to_bezpath());
+            for delta in [0.0, 0.05, 1.0, 5.0, 60.0, -0.05, -1.0, -5.0, -60.0] {
+                for join in [Join::Round, Join::Miter, Join::Bevel] {
+                    let found = std::cell::Cell::new((0, 0));
+                    let by_scan = offset_with_check(&path, delta, join, 4.0, |p, r| {
+                        let v = any_within_by_scan(&segs, p, r);
+                        found.set((found.get().0 + usize::from(v), found.get().1 + usize::from(!v)));
+                        v
+                    });
+                    checks += 1;
+                    hits += found.get().0;
+                    misses += found.get().1;
+                    assert_eq!(try_offset_path(&path, delta, join, 4.0), by_scan, "{path:?} by {delta} with {join:?}");
+                }
+            }
+        }
+        assert!(checks > 500 && hits > 200 && misses > 200, "{checks} {hits} {misses}");
     }
 
     #[test]

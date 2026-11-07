@@ -710,6 +710,57 @@ fn tool_key(app: &mut VectorcraftApp, key: vectorcraft_tools::ToolKey) {
 /// #734: Crop Image shows a crop box on the image instead of cropping to the artboard at once (an
 /// image inside the artboard had nothing to cut); Apply crops to the box in one undo step, Cancel
 /// leaves the image whole, and both go back to the Selection tool.
+/// Holding Escape with the place cursor loaded discards one file for the press. The repeats discard
+/// no more and run no command bound to Escape.
+#[test]
+fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let paths: Vec<String> = ["held-a.png", "held-b.png", "held-c.png"].iter().map(|name| temp_file(name, &png(10, 10, 72.0))).collect();
+    app.run("file.place", json!({"paths": paths})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options()["count"], 3);
+    let selected = app.session.active().unwrap().selection.objects.clone();
+    assert!(!selected.is_empty());
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![], &[], false);
+    for repeat in 0..4 {
+        frame(&mut app, &ctx, vec![key(true)], &[], false);
+        assert_eq!(app.session.tool_options()["count"], 2, "repeat {repeat}: one file is discarded");
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "repeat {repeat}: no command ran");
+    }
+    frame(&mut app, &ctx, vec![key(false)], &[], false);
+    frame(&mut app, &ctx, vec![key(true)], &[], false);
+    assert_eq!(app.session.tool_options()["count"], 1, "a new press discards the next file");
+}
+
+/// A command bound to Shift+Escape keeps repeating with the place cursor loaded, and no file is
+/// discarded.
+#[test]
+fn holding_a_chord_bound_to_a_command_repeats_it_with_the_place_cursor_loaded() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("shortcuts.set", json!({"id": "view.zoomIn", "shortcut": "Shift+Escape", "force": true})).unwrap();
+    let paths: Vec<String> = ["chord-a.png", "chord-b.png"].iter().map(|name| temp_file(name, &png(10, 10, 72.0))).collect();
+    app.run("file.place", json!({"paths": paths})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    let modifiers = egui::Modifiers::SHIFT;
+    let press = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&mut app, &ctx, vec![], &[], false);
+    let mut zoom = app.view().unwrap().zoom;
+    for repeat in 0..3 {
+        frame(&mut app, &ctx, vec![press.clone()], &[], true);
+        assert!(app.view().unwrap().zoom > zoom, "repeat {repeat}: the command runs");
+        assert_eq!(app.session.tool_options()["count"], 2, "repeat {repeat}: no file is discarded");
+        zoom = app.view().unwrap().zoom;
+    }
+}
+
 #[test]
 fn crop_image_shows_a_box_that_apply_crops_to() {
     use vectorcraft_tools::ToolKey;

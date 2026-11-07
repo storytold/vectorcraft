@@ -1244,50 +1244,86 @@ fn same_lines(got: &[String], want: &[String]) {
     assert!(differ.is_empty(), "{}", differ.join("\n"));
 }
 
-/// `nodes` as the reader reads them back: an opacity mask's art that isn't a group comes back as
-/// a group holding it.
-fn mask_art_grouped(nodes: &mut [Arc<Node>]) {
-    for n in nodes {
-        let n = Arc::make_mut(n);
-        if let Some(m) = n.extras_mut().mask.as_mut()
-            && !matches!(m.art.kind, NodeKind::Group { .. })
-        {
-            let art = m.art.clone();
-            m.art = Arc::new(Node::new(art.id, NodeKind::Group { children: vec![art], clip: false }));
-        }
-        if let Some(c) = n.children_mut() {
-            mask_art_grouped(c);
-        }
-    }
-}
-
 #[test]
 fn transparency_clipping_and_masks_are_read_back() {
-    let mut doc = transparent();
+    let doc = transparent();
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let back = read_back(&doc);
     same_lines(&lines(&back), &lines(&doc));
-    // The disabled mask's art is one path: it reads back as a group holding the path.
-    let mask_arts = |d: &Document| {
-        let mut out = vec![];
-        d.walk(|n| {
-            if let Some(m) = &n.extras().mask {
-                out.push(match &m.art.kind {
-                    NodeKind::Group { children, .. } => format!("group of {}", children.len()),
-                    NodeKind::Path { .. } => "path".into(),
-                    _ => "other".into(),
-                });
-            }
-        });
-        out
-    };
-    assert_eq!(
-        (mask_arts(&doc), mask_arts(&back)),
-        (vec!["group of 2".to_string(), "path".into()], vec!["group of 2".to_string(), "group of 1".into()])
-    );
-    mask_art_grouped(&mut doc.layers);
     same_lines(&all_looks(&back), &all_looks(&doc));
+}
+
+/// An opacity mask's art reads back in its own shape: one object, a group of one object, a group
+/// of two, a group of one group, a see-through group of two, and a group around a hidden object or
+/// a guide.
+#[test]
+fn opacity_mask_art_keeps_its_shape_when_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches = vec![Swatch { name: "Blue".into(), paint: solid(Color::rgb(0.0, 0.0, 1.0)), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let art = |doc: &mut Document| square(doc, Rect::new(5.0, 5.0, 10.0, 10.0), Color::gray(0.5));
+    let path = art(&mut doc);
+    let one = art(&mut doc);
+    let of_one = group(&mut doc, vec![one], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let of_two = group(&mut doc, vec![a, b], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let inner = group(&mut doc, vec![a, b], false);
+    let of_group = group(&mut doc, vec![inner], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let faded = see_through(group(&mut doc, vec![a, b], false), 0.5, BlendMode::Normal);
+    let mut off = art(&mut doc);
+    off.visible = false;
+    let of_hidden = group(&mut doc, vec![off], false);
+    let line = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(5.0, 5.0, 10.0, 10.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: false,
+            guide: true,
+        },
+    );
+    let of_guide = group(&mut doc, vec![line], false);
+    for mask_art in [path, of_one, of_two, of_group, faded, of_hidden, of_guide] {
+        let mut owner = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, true)));
+        doc.insert(Some(layer), usize::MAX, owner).unwrap();
+    }
+    let back = read_back(&doc);
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    let first = String::from_utf8(export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let again = String::from_utf8(export_ai_editing(&back, &opts()).unwrap().program).unwrap();
+    same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
+}
+
+/// Hidden art of a mask is written shown: the canvas draws the art's root either way, and the reader
+/// puts a hidden object in a group that doesn't draw it.
+#[test]
+fn a_hidden_opacity_mask_art_root_reads_back_shown() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches = vec![Swatch { name: "Blue".into(), paint: solid(Color::rgb(0.0, 0.0, 1.0)), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let art = |doc: &mut Document| square(doc, Rect::new(5.0, 5.0, 10.0, 10.0), Color::gray(0.5));
+    let mut path = art(&mut doc);
+    path.visible = false;
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let mut of_two = group(&mut doc, vec![a, b], false);
+    of_two.visible = false;
+    for mask_art in [path, of_two] {
+        let mut owner = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, true)));
+        doc.insert(Some(layer), usize::MAX, owner).unwrap();
+    }
+    let back = read_back(&doc);
+    let roots: Vec<_> = back.layers[0].children().unwrap().iter().map(|o| o.extras().mask.as_ref().unwrap().art.clone()).collect();
+    assert!(matches!(roots.as_slice(), [p, g] if p.visible && g.visible
+        && matches!(p.kind, NodeKind::Path { .. })
+        && matches!(&g.kind, NodeKind::Group { children, clip: false } if children.len() == 2 && children.iter().all(|c| c.visible))));
 }
 
 #[test]
@@ -2610,8 +2646,6 @@ fn images_doc() -> Document {
         shapes::rectangle(Rect::new(10.0, 60.0, 40.0, 90.0)),
         Appearance::basic(solid(Color::rgb(0.0, 0.5, 1.0)), Paint::None, 0.0),
     );
-    // A mask's art is read into a group.
-    let mask_art = Node::group(doc.alloc_id(), vec![Arc::new(mask_art)]);
     square.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
     doc.insert(Some(layer), usize::MAX, square).unwrap();
     let links = Node::layer(doc.alloc_id(), "Links", LayerColor::Preset(1));

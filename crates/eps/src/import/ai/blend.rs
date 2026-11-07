@@ -11,7 +11,7 @@
 //! and the spine, each object's `/ArtDictionary` naming its part (`ShapeBlendPathType`: `K` a key,
 //! `S` the spine) and a key's id (`ShapeBlendPathID`); then the steps drawn, a group on plain
 //! lines; then `(Adobe Path Blends) 1 0 n XP` and `n` bytes as hex on `%` lines. Those bytes
-//! start `DCBA`.
+//! start `DCBA`. A blend whose spine was never edited has no spine part: only its keys.
 //!
 //! The reader reads the words after `DCBA` (little endian) this way. Word 1 is the spacing: 0 is
 //! Smooth Color, 1 is Specified Steps and 2 is Specified Distance. For Specified Distance, word 2
@@ -28,7 +28,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::blend::{blend_expand, blend_steps};
 use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use vectorcraft_doc::{AppearanceItem, Node, NodeId, NodeKind};
-use vectorcraft_geom::{PathData, Point};
+use vectorcraft_geom::{PathData, Point, SubPath};
 
 /// The plugin that writes blends.
 pub(super) const PLUGIN: &str = "Adobe Path Blends"; // brand-ok: the plugin name the files use
@@ -149,7 +149,12 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
             Arc::new(k)
         })
         .collect();
-    let spine = spine?;
+    // A blend whose spine was never edited has none written: its spine is the straight lines
+    // between the keys' centres, in the record's order.
+    let spine = match spine {
+        Some(spine) => spine,
+        None => straight_spine(&keys, ids, roles)?,
+    };
     let key_anchors = on_spine(&keys, &spine)?;
     let spacing = match record.spacing {
         // Specified Steps: the steps between two keys are the drawn objects that aren't keys,
@@ -202,6 +207,20 @@ fn on_spine(keys: &[Arc<Node>], spine: &PathData) -> Option<Vec<u32>> {
         out.push(i);
     }
     Some(out)
+}
+
+/// The straight lines between the centres of `keys`, taken in the order of the record's `ids`: a
+/// blend's spine until it is edited or replaced, as [`vectorcraft_doc::blend::blend_spine`] lays
+/// out a blend with no spine of its own.
+fn straight_spine(keys: &[Arc<Node>], ids: &[String], roles: &Roles) -> Option<PathData> {
+    let centres = ids
+        .iter()
+        .map(|id| {
+            let key = keys.iter().find(|k| roles.get(&k.id).and_then(|(_, named)| named.as_ref()) == Some(id))?;
+            centre(key)
+        })
+        .collect::<Option<Vec<Point>>>()?;
+    Some(PathData::single(SubPath::polyline(&centres, false)))
 }
 
 fn centre(n: &Node) -> Option<Point> {
