@@ -50,7 +50,7 @@ use fill::fill_uncovered;
 use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
-use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, textured_quad, view_bounds};
+use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, textured_quad};
 pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
@@ -739,6 +739,9 @@ fn paint_paper(
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
+    let da = doc.drawing_area();
+    let da_quad = xf.quad(da);
+    painter.add(Shape::convex_polygon(da_quad, t.drawing_area_tint, Stroke::new(1.0, t.drawing_area_border)));
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
@@ -871,16 +874,15 @@ fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, 
     let picked = LineLook { color: t.selection, ..look };
     let selected: &[usize] = &st.selection.guides;
     let key = st.selection.key_guide;
-    let view = view_bounds(xf);
     // Guides on a hidden layer hide with it.
     for (i, g) in doc.guides.iter().enumerate().filter(|(_, g)| doc.guide_shown(g)) {
         let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
-        // An artboard guide runs across its artboard, a canvas guide across the window (the part
-        // of its document line that the canvas shows, turned with the view).
+        // An artboard guide runs across its artboard, a canvas guide across the drawing area.
         let (a, b) = match doc.guide_span(g) {
             Some((from, to)) => (at(from), at(to)),
             None => {
-                let (from, to) = if g.vertical { (view.y0, view.y1) } else { (view.x0, view.x1) };
+                let gb = doc.guide_bounds(g);
+                let (from, to) = if g.vertical { (gb.y0, gb.y1) } else { (gb.x0, gb.x1) };
                 let Some(ends) = clip_segment(at(from), at(to), rect) else { continue };
                 ends
             }

@@ -3,6 +3,15 @@ use super::NodeId;
 /// Coordinates beyond this many points exceed the supported document range.
 pub const MAX_COORD: f64 = 4.0e6;
 
+/// Adobe Illustrator's standard drawing area (canvas) side length in points ($2^{14} - 1$ = 16,383 pt = 5,779.558 mm).
+pub const DRAWING_AREA_SIDE: f64 = 16383.0;
+/// Half of the standard drawing area side (8,191.5 pt).
+pub const DRAWING_AREA_HALF: f64 = DRAWING_AREA_SIDE / 2.0;
+/// Large Canvas side length (10x standard canvas = 163,830 pt).
+pub const LARGE_CANVAS_SIDE: f64 = DRAWING_AREA_SIDE * 10.0;
+/// Half of the large canvas side (81,915 pt).
+pub const LARGE_CANVAS_HALF: f64 = LARGE_CANVAS_SIDE / 2.0;
+
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DocError {
     #[error("no such object {0}")]

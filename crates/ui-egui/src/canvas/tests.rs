@@ -9307,3 +9307,28 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
 }
+
+#[test]
+fn fit_all_bounds_to_drawing_area_and_does_not_strand_in_void() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 800.0))), ..Default::default() };
+    let mut out = ctx.run_ui(screen, |ui| show(&mut app, ui));
+    out.textures_delta.clear();
+
+    // 1. Normal fitAll fits the 800x600 artboard:
+    app.run("view.fitAll", json!({})).unwrap();
+    let v = app.view().unwrap();
+    assert_eq!(v.center, Point::new(400.0, 300.0));
+    assert!(v.zoom > 0.5, "zoom was {}", v.zoom);
+
+    // 2. An object placed far away (e.g. 1.4 million pt):
+    // Previously this would expand fitAll to 1.4M pt and clamp zoom to 0.0313 at center 700k pt (blank canvas).
+    app.session.execute("shape.rectangle", &json!({"x": 1_400_000.0, "y": 0.0, "width": 100.0, "height": 100.0})).unwrap();
+    app.run("view.fitAll", json!({})).unwrap();
+    let v2 = app.view().unwrap();
+    let da = app.session.active().unwrap().doc.drawing_area();
+    assert!(da.contains(v2.center), "center {:?} must be within drawing area {:?}", v2.center, da);
+    assert!(v2.zoom > 0.05, "zoom was {}, not collapsed to min zoom", v2.zoom);
+}
