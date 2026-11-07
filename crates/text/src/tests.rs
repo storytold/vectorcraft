@@ -305,7 +305,8 @@ fn area_alignment_and_justify() {
 }
 
 /// A source that sets a last line whose descent passes its frame's bottom: the frame grows from its
-/// bottom by at most a line's descent, so that line shows, and only as many lines as the source has.
+/// bottom by its lines' deepest descent plus 0.05 pt, so that line shows, and only as many lines as
+/// the source has.
 #[test]
 fn fit_source_lines_keeps_the_last_lines_the_source_sets() {
     let text = "one\ntwo\nthree";
