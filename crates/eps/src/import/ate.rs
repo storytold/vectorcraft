@@ -1034,6 +1034,8 @@ impl Story {
     }
 }
 
+/// The paragraph style of paragraph attributes `p`, its lengths (indents, spacing, the
+/// hyphenation zone) scaled by `scale`, as sizes are.
 fn para_style(p: &Para, scale: f64) -> ParaStyle {
     ParaStyle {
         justify: match p.justify {
@@ -1066,6 +1068,8 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
     }
 }
 
+/// The character style of character attributes `s`: its font from the fonts the app has, its
+/// lengths (size, leading, baseline shift, stroke width) scaled by `scale`.
 fn char_style(s: &Style, scale: f64) -> CharStyle {
     let (family, style) = s.font.as_deref().map_or_else(|| (CharStyle::default().font_family, "Regular".to_string()), crate::family_style);
     let family = vectorcraft_text::FontDb::global().find_family(&family).unwrap_or(family);
