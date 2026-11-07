@@ -955,7 +955,8 @@ fn any_object_takes_the_distort_effects_that_draw_as_its_drawn_look() {
     assert!(simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.0], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.1], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Punk and Bloat", "-35 /Real (d_factor) ,\n"));
-    assert!(!simple("Adobe Zigzag", ""));
+    // Zig Zag: objects other than type check it against their drawn look (`read::ops`).
+    assert!(simple("Adobe Zigzag", ""));
     assert!(!simple("Adobe Transform", &format!("1 /Int (numCopies) ,\n{SWITCHES}")));
     // With another effect, only type takes it.
     let chain = [basic("Adobe Twirl", "45 /Real (angle) ,\n"), basic("Adobe Offset Path", "4 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n")];
