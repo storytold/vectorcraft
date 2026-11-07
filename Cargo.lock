@@ -968,6 +968,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-desktop"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "raw-window-handle",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols-plasma",
+ "winit",
+ "x11rb",
+ "zbus",
+]
+
+[[package]]
 name = "craft-docpath"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
@@ -6079,6 +6093,7 @@ dependencies = [
  "block2 0.6.2",
  "chrono",
  "clipboard-win",
+ "craft-desktop",
  "craft-print",
  "craft-update",
  "craft-window",
@@ -6557,6 +6572,7 @@ name = "vectorcraft-ui-egui"
 version = "0.21.0"
 dependencies = [
  "bytemuck",
+ "craft-desktop",
  "craft-keymap",
  "craft-ui",
  "craft-update",
@@ -7449,7 +7465,6 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "git+https://github.com/storytold/winit.git?rev=a517b3846ee8457d84ee4975110bfda6797c44dc#a517b3846ee8457d84ee4975110bfda6797c44dc"
 dependencies = [
  "ahash",
  "android-activity",

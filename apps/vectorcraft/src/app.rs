@@ -75,6 +75,13 @@ impl eframe::App for App {
             self.app.set_caps_lock(on);
         }
         file_access::unconfined(|| self.app.ui(ui));
+        #[cfg(target_os = "linux")]
+        if let Some(menu) = self.menu.as_ref()
+            && let Some((state, snapshot)) = vectorcraft_ui_egui::desktop_menu::snapshot_if_changed(&mut self.app, ui.ctx(), self.menu_state)
+        {
+            menu.publish(snapshot);
+            self.menu_state = Some(state);
+        }
         // Preferences are written when confirmed, not only at exit: a session ended any other way
         // (the system shutting down, the process ended or crashing) used to lose them (#1747).
         if self.app.take_prefs_changed() {
@@ -90,6 +97,8 @@ impl eframe::App for App {
         }
     }
     fn on_exit(&mut self) {
+        #[cfg(target_os = "linux")]
+        self.menu.take();
         file_access::unconfined(|| save_prefs(&self.app));
         end_before_teardown(self.frames);
     }
@@ -125,6 +134,16 @@ impl App {
             }
             open_files(&mut self.app, files);
         }
+        #[cfg(target_os = "linux")]
+        if let Some(menu) = self.menu.as_mut() {
+            if let Some((state, snapshot)) = run_linux_logic(&mut self.app, ctx, menu.take_events(), self.menu_state) {
+                menu.publish(snapshot);
+                self.menu_state = Some(state);
+            }
+        } else {
+            self.app.tick(ctx);
+        }
+        #[cfg(not(target_os = "linux"))]
         self.app.tick(ctx);
         if self.pending_maximize {
             if let Some(w) = &self.winit_window {
@@ -139,6 +158,23 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
+}
+
+/// A compositor may run logic without presenting a frame. Publish command/control changes
+/// in that same iteration; `ui()` also publishes changes made by widgets when it does run.
+#[cfg(target_os = "linux")]
+pub(crate) fn run_linux_logic(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    clicks: impl IntoIterator<Item = craft_desktop::Click>,
+    mut previous: Option<u64>,
+) -> Option<(u64, craft_desktop::Menu)> {
+    app.tick(ctx);
+    for click in clicks {
+        vectorcraft_ui_egui::desktop_menu::activate(app, ctx, click.document, &click.action);
+        previous = None;
+    }
+    vectorcraft_ui_egui::desktop_menu::snapshot_if_changed(app, ctx, previous)
 }
 
 /// On macOS with accessibility, end the process once the app has saved what it keeps on quitting,

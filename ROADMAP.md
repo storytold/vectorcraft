@@ -1,5 +1,6 @@
 # VectorCraft Roadmap
 
+- 2026-10-21: Opt-in Automatic brightness follows the desktop; custom fixed palettes, accents and scale semantics are preserved. Fractional-monitor regression matrix added. Native KDE acceptance remains separate; headline scores unchanged.
 - Contour add-on (beyond Illustrator): drag a selected shape's edge outward or inward for a live, editable offset copy, with a floating bar for distance and Sharp, Round or Square corners; Bake turns it into paths. Scores and estimates unchanged.
 - Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged.
 
