@@ -41,6 +41,9 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
+    /// does not draw them drops them ([`canvas::show`]).
+    pub selection_marks: canvas::SelectionMarks,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
     pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
@@ -60,6 +63,8 @@ pub struct CanvasCache {
     pub presented: Option<egui::Rect>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
+    /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
+    pub windows: crate::doc_windows::Windows,
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).

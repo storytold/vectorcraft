@@ -155,7 +155,19 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
             .collect(),
         // topmost(m) == Some(i)
         PathfinderOp::Trim => {
-            (0..n).flat_map(|i| one(all_contours_to_path(&arr.contours_where(|w| arr.covered(w).next_back() == Some(i)), p), shapes[i].key)).collect()
+            let mut subpaths = vec![Vec::new(); n];
+            each_classified_face(
+                &arr,
+                n,
+                |w| arr.covered(w).next_back(),
+                |i, c, group| {
+                    if let Some(sp) = subpaths.get_mut(i) {
+                        let p = contours_to_path(c, group.iter().copied(), &arr.tidy);
+                        sp.extend(p.subpaths);
+                    }
+                },
+            );
+            subpaths.into_iter().zip(shapes).filter(|(sp, _)| !sp.is_empty()).flat_map(|(sp, s)| one(PathData::new(sp), s.key)).collect()
         }
         PathfinderOp::Merge => {
             let mut keys: Vec<u64> = Vec::new();
@@ -178,16 +190,22 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
             if n < 2 {
                 return Vec::new();
             }
-            (0..n - 1)
-                .flat_map(|i| {
-                    // m[n - 1] && topmost(&m[..n - 1]) == Some(i): the front shape, then i below it
-                    let c = arr.contours_where(|w| {
-                        let mut c = arr.covered(w).rev();
-                        c.next() == Some(n - 1) && c.next() == Some(i)
-                    });
-                    one(all_contours_to_path(&c, p), shapes[i].key)
-                })
-                .collect()
+            let mut subpaths = vec![Vec::new(); n - 1];
+            each_classified_face(
+                &arr,
+                n - 1,
+                |w| {
+                    let mut c = arr.covered(w).rev();
+                    if c.next() == Some(n - 1) { c.next() } else { None }
+                },
+                |i, c, group| {
+                    if let Some(sp) = subpaths.get_mut(i) {
+                        let p = contours_to_path(c, group.iter().copied(), &arr.tidy);
+                        sp.extend(p.subpaths);
+                    }
+                },
+            );
+            subpaths.into_iter().zip(shapes).filter(|(sp, _)| !sp.is_empty()).flat_map(|(sp, s)| one(PathData::new(sp), s.key)).collect()
         }
         PathfinderOp::Outline => outline_edges(&arr, shapes),
         PathfinderOp::HardMix | PathfinderOp::SoftMix => regions_of(&arr)
@@ -219,29 +237,29 @@ fn regions_of(arr: &Arrangement) -> Vec<Region> {
     out
 }
 
-/// Calls `f` with each face of `arr` whose coverage is one of `masks` (distinct): the index of
-/// its mask in `masks`, the contour pass it is in, and its contours, an outer contour and the
-/// holes of its mask directly inside it ([`face_groups`]). Each mask's faces come in the order
-/// of that mask's own contour pass.
+/// Calls `f` with each face of `arr` classified by `classify: impl Fn(&Multi) -> Option<usize>`
+/// into `0..num_classes`: the index of its class, the contour pass it is in, and its contours,
+/// an outer contour and the holes of its class directly inside it ([`face_groups`]).
 ///
-/// A contour pass walks the whole arrangement, so one pass per mask would cost masks × edges
-/// (two blends crossing make thousands of each). Instead the masks go into batches whose faces
-/// share no vertex (so no edge either): one pass per batch walks each face's contours exactly as
-/// its own mask's pass would, and the mask a contour bounds is the one of its batch at its first
-/// point.
-fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Contours, &[ContourIdx])) {
-    if masks.is_empty() {
+/// A contour pass walks the whole arrangement, so one pass per class would cost classes × edges.
+/// Instead the classes go into batches whose faces share no vertex (so no edge either): one pass
+/// per batch walks each face's contours exactly as its own class's pass would, and the class a
+/// contour bounds is the one of its batch at its first point.
+fn each_classified_face(
+    arr: &Arrangement,
+    num_classes: usize,
+    classify: impl Fn(&Multi) -> Option<usize>,
+    mut f: impl FnMut(usize, &Contours, &[ContourIdx]),
+) {
+    if num_classes == 0 {
         return;
     }
-    // Each mask is found by the inputs it covers.
-    let ids = CoverIds::new(masks.iter().map(|m| m.iter().enumerate().filter(|(_, b)| **b).map(|(k, _)| k).collect()).collect());
-    let id = |w: &Multi| ids.of(arr, w);
     let top = &arr.top;
-    // The masks of the faces around each vertex.
+    // The classes of the faces around each vertex.
     let mut around: HashMap<(u64, u64), Vec<usize>> = HashMap::new();
     for s in top.segment_indices() {
         let h = s.first_half();
-        let sides = [id(top.winding_clockwise(h)), id(top.winding_counter_clockwise(h))];
+        let sides = [classify(top.winding_clockwise(h)), classify(top.winding_counter_clockwise(h))];
         for end in [h, s.second_half()] {
             let at = around.entry(vertex_key(top.point(end).to_kurbo())).or_default();
             for m in sides.into_iter().flatten() {
@@ -251,16 +269,16 @@ fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Con
             }
         }
     }
-    let mut near = vec![Vec::new(); masks.len()];
+    let mut near = vec![Vec::new(); num_classes];
     for at in around.values() {
         for &a in at {
             near[a].extend(at.iter().copied().filter(|&b| b != a));
         }
     }
-    // Greedy colouring: each mask takes the first batch none of its neighbours is in.
-    let mut batch = vec![usize::MAX; masks.len()];
+    // Greedy colouring: each class takes the first batch none of its neighbours is in.
+    let mut batch = vec![usize::MAX; num_classes];
     let mut batches = 0;
-    for m in 0..masks.len() {
+    for m in 0..num_classes {
         let mut taken = vec![false; batches];
         for &n in &near[m] {
             if let Some(t) = taken.get_mut(batch[n]) {
@@ -271,7 +289,7 @@ fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Con
         batches = batches.max(batch[m] + 1);
     }
     for b in 0..batches {
-        let c = arr.contours_where(|w| id(w).is_some_and(|m| batch[m] == b));
+        let c = arr.contours_where(|w| classify(w).is_some_and(|m| batch[m] == b));
         let owner: Option<Vec<usize>> = c
             .contours()
             .map(|ct| {
@@ -281,9 +299,9 @@ fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Con
             .collect();
         let Some(owner) = owner else {
             // Not expected: every contour starts at a vertex of the arrangement. Fall back to a
-            // pass per mask for this batch.
-            for (m, mask) in masks.iter().enumerate().filter(|(m, _)| batch[*m] == b) {
-                let c = arr.contours(|k| k == *mask);
+            // pass per class for this batch.
+            for m in (0..num_classes).filter(|m| batch[*m] == b) {
+                let c = arr.contours_where(|w| classify(w) == Some(m));
                 let owner = vec![m; c.contours().count()];
                 for (_, group) in face_groups(&c, &owner) {
                     f(m, &c, &group);
@@ -295,6 +313,25 @@ fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Con
             f(m, &c, &group);
         }
     }
+}
+
+/// Calls `f` with each face of `arr` whose coverage is one of `masks` (distinct): the index of
+/// its mask in `masks`, the contour pass it is in, and its contours, an outer contour and the
+/// holes of its mask directly inside it ([`face_groups`]). Each mask's faces come in the order
+/// of that mask's own contour pass.
+///
+/// A contour pass walks the whole arrangement, so one pass per mask would cost masks × edges
+/// (two blends crossing make thousands of each). Instead the masks go into batches whose faces
+/// share no vertex (so no edge either): one pass per batch walks each face's contours exactly as
+/// its own mask's pass would, and the mask a contour bounds is the one of its batch at its first
+/// point.
+fn each_face(arr: &Arrangement, masks: &[&[bool]], f: impl FnMut(usize, &Contours, &[ContourIdx])) {
+    if masks.is_empty() {
+        return;
+    }
+    // Each mask is found by the inputs it covers.
+    let ids = CoverIds::new(masks.iter().map(|m| m.iter().enumerate().filter(|(_, b)| **b).map(|(k, _)| k).collect()).collect());
+    each_classified_face(arr, masks.len(), |w| ids.of(arr, w), f);
 }
 
 /// Lists of inputs, each ascending as [`Arrangement::covered`] gives them, found by the inputs
@@ -330,7 +367,18 @@ impl CoverIds {
 /// enclosing contour of its mask, as in that mask's own pass; an outer contour always starts a face
 /// of its own, even inside a hole of its mask (an island left in a cutout is a separate face, not
 /// part of the frame around it).
-fn face_groups(c: &linesweeper::topology::Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
+///
+/// The sweep's tree of contours is wrong where it cut a loop off a contour at a point the contour
+/// visits twice and the loop isn't nested in it: two holes touching at a point (the second comes
+/// out an island inside the first), or an outer contour touching its own hole (it comes out an
+/// island inside the hole). Such a loop winds the same way as the contour it was cut from, against
+/// its flag ([`Contour::outer`](linesweeper::topology::Contour::outer)), and the pass is then
+/// grouped by where the contours lie instead ([`face_groups_by_winding`]).
+fn face_groups(c: &Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
+    let areas: Vec<f64> = c.contours().map(|ct| ct.path.area()).collect();
+    if c.contours().zip(&areas).any(|(ct, &a)| ct.outer != (a > 0.0)) {
+        return face_groups_by_winding(c, owner, &areas);
+    }
     let mut children = vec![Vec::new(); owner.len()];
     let mut roots = Vec::new();
     for (i, &m) in owner.iter().enumerate() {
@@ -356,6 +404,47 @@ fn face_groups(c: &linesweeper::topology::Contours, owner: &[usize]) -> Vec<(usi
             (owner[r], group)
         })
         .collect()
+}
+
+/// [`face_groups`] without the sweep's tree: each hole (a contour whose area in `areas` isn't
+/// positive) goes with the smallest outer contour of its mask around it, and each outer contour,
+/// or hole with none around it, starts a face. Faces come in the order of their first contour,
+/// each with its contours in pass order.
+fn face_groups_by_winding(c: &Contours, owner: &[usize], areas: &[f64]) -> Vec<(usize, Vec<ContourIdx>)> {
+    let boxes: Vec<kurbo::Rect> = c.contours().map(|ct| ct.path.bounding_box()).collect();
+    let outer = |i: usize| areas.get(i).is_some_and(|&a| a > 0.0);
+    let mut root: Vec<usize> = (0..owner.len()).collect();
+    for (i, ct) in c.contours().enumerate() {
+        // Contours of one mask share no edge, so the middle of a hole's first piece is strictly
+        // inside or outside each outer contour of its mask.
+        let (false, Some(p), Some(b)) = (outer(i), ct.path.segments().next().map(|s| s.eval(0.5)), boxes.get(i)) else {
+            continue;
+        };
+        let around = c
+            .contours()
+            .enumerate()
+            .filter(|&(j, o)| {
+                outer(j) && owner.get(j) == owner.get(i) && boxes.get(j).is_some_and(|bj| bj.union(*b) == *bj) && o.path.winding(p) != 0
+            })
+            .min_by(|(j, _), (k, _)| areas.get(*j).unwrap_or(&f64::INFINITY).total_cmp(areas.get(*k).unwrap_or(&f64::INFINITY)))
+            .map(|(j, _)| j);
+        if let (Some(j), Some(r)) = (around, root.get_mut(i)) {
+            *r = j;
+        }
+    }
+    let mut slot: Vec<Option<usize>> = vec![None; owner.len()];
+    let mut groups: Vec<(usize, Vec<ContourIdx>)> = Vec::new();
+    for (i, &r) in root.iter().enumerate() {
+        let (Some(s), Some(&m)) = (slot.get_mut(r), owner.get(r)) else { continue };
+        let k = *s.get_or_insert_with(|| {
+            groups.push((m, Vec::new()));
+            groups.len() - 1
+        });
+        if let Some((_, g)) = groups.get_mut(k) {
+            g.push(ContourIdx(i));
+        }
+    }
+    groups
 }
 
 /// A point as a map key (the arrangement's vertices are exact).
@@ -1020,6 +1109,31 @@ mod tests {
             .prop_map(|(p, even_odd, key)| Shape::new(p, if even_odd { FillRule::EvenOdd } else { FillRule::NonZero }, key))
     }
 
+    /// Contours that touch at a point, which the sweep's tree of contours gets wrong
+    /// ([`face_groups`]): each face keeps its holes, and no hole is a face of its own.
+    #[test]
+    fn contours_touching_at_a_point_keep_their_faces() {
+        let sorted = |shapes: &[Shape]| {
+            let mut v: Vec<(Vec<usize>, f64)> =
+                regions(shapes).iter().map(|r| (r.sources.clone(), crate::area(&r.path, FillRule::NonZero))).collect();
+            v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+            v
+        };
+        // A frame whose cutout corner (60,110) touches its hole: the sweep makes the frame an
+        // island inside the hole.
+        let mut frame = rect(50.0, 100.0, 80.0, 130.0);
+        frame.subpaths.extend(rect(60.0, 110.0, 65.0, 115.0).subpaths);
+        let s = [Shape::new(rect(20.0, 70.0, 60.0, 110.0), FillRule::NonZero, 0), Shape::new(frame, FillRule::EvenOdd, 0)];
+        assert_eq!(sorted(&s), [(vec![0], 1500.0), (vec![0, 1], 100.0), (vec![1], 775.0)]);
+        // Two holes touching at (30,50): the sweep makes the second an island inside the first.
+        let s = [
+            Shape::new(rect(0.0, 0.0, 100.0, 100.0), FillRule::NonZero, 0),
+            Shape::new(rect(20.0, 40.0, 30.0, 50.0), FillRule::NonZero, 0),
+            Shape::new(rect(30.0, 50.0, 40.0, 60.0), FillRule::NonZero, 0),
+        ];
+        assert_eq!(sorted(&s), [(vec![0], 9800.0), (vec![0, 1], 100.0), (vec![0, 2], 100.0)]);
+    }
+
     #[test]
     fn crossing_strips_match_one_mask_at_a_time() {
         let mut v = Vec::new();
@@ -1277,5 +1391,69 @@ mod tests {
         assert_eq!(faces.len(), 1, "a segment past the cap falls back to filled areas");
         assert_eq!(faces[0].key, 7);
         assert!((crate::area(&faces[0].path, faces[0].rule) - 10000.0).abs() < 1e-6);
+    }
+
+    fn old_trim(shapes: &[Shape], precision: f64) -> Vec<Shape> {
+        let n = shapes.len();
+        let Some(arr) = arrangement(shapes, precision) else { return Vec::new() };
+        (0..n)
+            .flat_map(|i| {
+                let c = arr.contours_where(|w| arr.covered(w).next_back() == Some(i));
+                one(all_contours_to_path(&c, &arr.tidy), shapes[i].key)
+            })
+            .collect()
+    }
+
+    fn old_crop(shapes: &[Shape], precision: f64) -> Vec<Shape> {
+        let n = shapes.len();
+        if n < 2 {
+            return Vec::new();
+        }
+        let Some(arr) = arrangement(shapes, precision) else { return Vec::new() };
+        (0..n - 1)
+            .flat_map(|i| {
+                let c = arr.contours_where(|w| {
+                    let mut c = arr.covered(w).rev();
+                    c.next() == Some(n - 1) && c.next() == Some(i)
+                });
+                one(all_contours_to_path(&c, &arr.tidy), shapes[i].key)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn trim_and_crop_differential_matches_reference_on_overlapping_shapes() {
+        let shapes = vec![
+            Shape::new(rect(0.0, 0.0, 60.0, 60.0), FillRule::NonZero, 1),
+            Shape::new(rect(30.0, 0.0, 90.0, 60.0), FillRule::NonZero, 2),
+            Shape::new(rect(15.0, 15.0, 75.0, 75.0), FillRule::NonZero, 3),
+            Shape::new(rect(40.0, 40.0, 100.0, 100.0), FillRule::NonZero, 4),
+        ];
+
+        let trim_actual = pathfinder_with(PathfinderOp::Trim, &shapes, DEFAULT_PRECISION);
+        let trim_expected = old_trim(&shapes, DEFAULT_PRECISION);
+        assert_eq!(trim_actual.len(), trim_expected.len(), "trim shape count must match");
+        for (actual, expected) in trim_actual.iter().zip(&trim_expected) {
+            assert_eq!(actual.key, expected.key);
+            assert_eq!(actual.path, expected.path, "subpath order and contours must match reference trim");
+        }
+
+        let crop_actual = pathfinder_with(PathfinderOp::Crop, &shapes, DEFAULT_PRECISION);
+        let crop_expected = old_crop(&shapes, DEFAULT_PRECISION);
+        assert_eq!(crop_actual.len(), crop_expected.len(), "crop shape count must match");
+        for (actual, expected) in crop_actual.iter().zip(&crop_expected) {
+            assert_eq!(actual.key, expected.key);
+            assert_eq!(actual.path, expected.path, "subpath order and contours must match reference crop");
+        }
+
+        // Test with shape that has no face left (completely covered by front shape)
+        let covered = vec![
+            Shape::new(rect(10.0, 10.0, 20.0, 20.0), FillRule::NonZero, 10), // inside shape 20
+            Shape::new(rect(0.0, 0.0, 50.0, 50.0), FillRule::NonZero, 20),
+        ];
+        let trim_cov_actual = pathfinder_with(PathfinderOp::Trim, &covered, DEFAULT_PRECISION);
+        let trim_cov_expected = old_trim(&covered, DEFAULT_PRECISION);
+        assert_eq!(trim_cov_actual.len(), 1);
+        assert_eq!(trim_cov_actual, trim_cov_expected);
     }
 }

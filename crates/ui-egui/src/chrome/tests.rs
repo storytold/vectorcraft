@@ -7,6 +7,56 @@ fn the_active_tab_stays_in_view() {
     assert_eq!(super::first_tab_shown(&widths, None, 350.0), 0);
     assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
 }
+
+/// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).
+fn slots(docs: &[usize]) -> Vec<(usize, egui::Rect)> {
+    docs.iter().enumerate().map(|(k, &d)| (d, egui::Rect::from_min_size(egui::pos2(k as f32 * 100.0, 0.0), egui::vec2(100.0, 30.0)))).collect()
+}
+
+/// A document's view tabs make one group, which moves as one (#5663).
+#[test]
+fn a_documents_view_tabs_make_one_group() {
+    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
+    let spans: Vec<(usize, f32, f32)> = groups.iter().map(|(d, s)| (*d, s.min, s.max)).collect();
+    assert_eq!(spans, vec![(0, 0.0, 100.0), (1, 100.0, 300.0), (2, 300.0, 400.0)]);
+    assert!(super::tab_groups(&[]).is_empty());
+}
+
+/// A dragged tab drops past the middles of the tabs it crossed, as an index among all the open
+/// documents (#5663).
+#[test]
+fn a_dragged_tab_drops_past_the_middles_it_crossed() {
+    let groups = super::tab_groups(&slots(&[0, 1, 2, 3]));
+    let drop = |from, x| super::tab_drop(&groups, from, x);
+    assert_eq!(drop(0, 40.0), None, "still over itself");
+    assert_eq!(drop(0, 140.0), None, "not yet past the next tab's middle");
+    assert_eq!(drop(0, 160.0), Some((1, 200.0)), "past the second tab's middle: between it and the third");
+    assert_eq!(drop(0, 900.0), Some((3, 400.0)), "past the end: last");
+    assert_eq!(drop(3, -50.0), Some((0, 0.0)), "before the start: first");
+    assert_eq!(drop(3, 120.0), Some((1, 100.0)), "between the first two");
+    assert_eq!(drop(2, 260.0), None, "between its neighbours: where it is");
+    assert_eq!(super::tab_drop(&super::tab_groups(&slots(&[0])), 0, 500.0), None, "no other tab");
+    assert_eq!(super::tab_drop(&[], 0, 500.0), None);
+}
+
+/// Documents without a tab on the strip (floating, or past its end) keep their places in the
+/// documents' order; the drop names an index among all of them (#5663).
+#[test]
+fn a_drop_counts_the_documents_the_strip_does_not_show() {
+    // Documents 0, 2 and 5 have tabs; 1, 3 and 4 float.
+    let groups = super::tab_groups(&slots(&[0, 2, 5]));
+    let drop = |from, x| super::tab_drop(&groups, from, x).map(|(to, _)| to);
+    assert_eq!(drop(0, 260.0), Some(5), "after document 5: last, as 0 leaves its place");
+    assert_eq!(drop(0, 160.0), Some(4), "between 2 and 5: just before 5, which is index 4 once 0 has left its place");
+    assert_eq!(drop(5, -10.0), Some(0), "before document 0");
+    assert_eq!(drop(5, 60.0), Some(2), "before document 2: index 2, the floating document 1 stays before it");
+    assert_eq!(drop(2, 260.0), Some(5), "after document 5");
+    // With view tabs: document 1 has two, side by side; it moves as one.
+    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
+    assert_eq!(super::tab_drop(&groups, 1, 20.0), Some((0, 0.0)), "both views' document goes first");
+    assert_eq!(super::tab_drop(&groups, 0, 220.0), Some((1, 300.0)), "past document 1's middle, which both its tabs span");
+    assert_eq!(super::tab_drop(&groups, 0, 190.0), None, "not yet past it");
+}
 use std::sync::Arc;
 
 use super::{StatusReadoutWidths, status_readouts};
@@ -873,7 +923,7 @@ fn only_the_outlined_documents_tab_reads_outline() {
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     app.run("view.outline", json!({})).unwrap();
-    let titles: Vec<String> = app.session.documents().iter().enumerate().map(|(i, d)| super::tabs::doc_tab_title(&app, i, d)).collect();
+    let titles: Vec<String> = (0..app.session.documents().len()).filter_map(|i| super::document_window_title(&app, (i, 1))).collect();
     assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
     assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
 }
@@ -1802,4 +1852,180 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
+/// options are the session's, which the Properties panel's dropdown also sets: Match Size from
+/// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
+/// and closed while Global Edit is on, and absent when the selection cannot start it.
+#[test]
+fn the_control_bar_shows_the_global_edit_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, size: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": size, "height": size})).unwrap()["id"].clone()
+    };
+    let a = rect(&mut app, 20.0, 40.0);
+    rect(&mut app, 100.0, 40.0);
+    rect(&mut app, 200.0, 80.0);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(find(&frame(&mut app, vec![]), "Global Edit Options").is_none(), "nothing selected: no dropdown");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("one rectangle: the dropdown shows"));
+    let nodes = click(&mut app, center(&button));
+    assert!(find(&nodes, "Results: 3").is_some(), "the options open with their Results");
+    let size = find(&nodes, "Size").unwrap_or_else(|| panic!("the Size check"));
+    let nodes = click(&mut app, center(&size));
+    assert!(app.session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
+    assert!(find(&nodes, "Results: 2").is_some(), "Size narrows the Results");
+    app.run("select.globalEdit", json!({})).unwrap();
+    let ge = app.session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
+    assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
+    assert!(button.is_disabled(), "the options are off while Global Edit is on");
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    assert!(!results(&nodes), "Global Edit starting closes the open options");
+    assert!(!results(&frame(&mut app, vec![])));
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
+    // At any width the button either fits inside the bar or is left out, and a wider bar never
+    // leaves it out once a narrower one showed it.
+    let mut seen = false;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = find(&nodes, "Global Edit Options").and_then(|n| n.bounds());
+        if let Some(b) = shown {
+            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
+        }
+        assert!(!seen || shown.is_some(), "{width}: left out after a narrower bar showed it");
+        seen |= shown.is_some();
+    }
+    assert!(seen, "a wide bar has room for it");
+}
+
+/// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
+/// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
+/// narrower one showed them. The Align buttons, and for two objects the Distribute buttons, are
+/// trimmed the same way ahead of the Transform link (#5372).
+#[test]
+fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for count in [1, 2] {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<_> = (0..count)
+            .map(|i| app.run("shape.rectangle", json!({"x": 20 + 100 * i, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut seen = false;
+        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
+        let mut groups: Vec<(&str, Vec<&str>)> = vec![(
+            "Align",
+            vec![
+                "Horizontal Align Left",
+                "Horizontal Align Center",
+                "Horizontal Align Right",
+                "Horizontal & Vertical Align Center",
+                "Vertical Align Top",
+                "Vertical Align Center",
+                "Vertical Align Bottom",
+            ],
+        )];
+        if count == 2 {
+            groups.push((
+                "Distribute",
+                vec![
+                    "Vertical Distribute Top",
+                    "Vertical Distribute Center",
+                    "Vertical Distribute Bottom",
+                    "Horizontal Distribute Left",
+                    "Horizontal Distribute Center",
+                    "Horizontal Distribute Right",
+                ],
+            ));
+        }
+        let mut groups_seen = vec![false; groups.len()];
+        for width in (600..=2400).step_by(10) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+            let mut nodes = Vec::new();
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+                out.textures_delta.clear();
+                nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            }
+            let spacing = ctx.global_style().spacing.item_spacing.x;
+            // The right edge of the box of the field its label names. The text box sits inside the
+            // field's box with the same inset on both sides, and one item spacing after the label.
+            let right = |name: &str| {
+                let (id, label) = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))?;
+                let input = nodes.iter().find(|(_, n)| n.labelled_by().contains(id)).and_then(|(_, n)| n.bounds())?;
+                let inset = input.x0 - label.bounds()?.x1 - f64::from(spacing);
+                Some(input.x1 + inset)
+            };
+            let fields = ["X:", "Y:", "W:", "H:"].map(right);
+            assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
+            assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
+            // The bar's content ends at its 10-point inner margin.
+            if let Some(h) = fields[3] {
+                assert!(h <= f64::from(width) - 10.0, "{count} objects, {width}: H ends at {h}");
+            }
+            assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
+            seen |= fields[3].is_some();
+            // The Align and Distribute buttons show whole inside the margin, with the Transform
+            // link after them, or are left out; once shown, a wider bar keeps them.
+            let end = |name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds()).map(|b| b.x1);
+            let inside = |x: f64| x <= f64::from(width) - 10.0;
+            for ((group, names), was) in groups.iter().zip(groups_seen.iter_mut()) {
+                let ends: Vec<Option<f64>> = names.iter().map(|n| end(n)).collect();
+                let shown = ends.iter().all(Option::is_some);
+                assert!(shown || ends.iter().all(Option::is_none), "{count} objects, {width}: {group} {ends:?}");
+                if let Some(Some(last)) = ends.last() {
+                    assert!(inside(*last), "{count} objects, {width}: {group} ends at {last}");
+                    let transform = end("Transform");
+                    assert!(transform.is_some_and(inside), "{count} objects, {width}: Transform after {group} ends at {transform:?}");
+                }
+                assert!(!*was || shown, "{count} objects, {width}: {group} left out after a narrower bar showed it");
+                *was |= shown;
+            }
+        }
+        assert!(seen, "{count} objects: a wide bar has room for the fields");
+        assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
+    }
 }

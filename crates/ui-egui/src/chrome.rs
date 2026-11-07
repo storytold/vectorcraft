@@ -27,10 +27,10 @@ pub use hints::{hint_bar, hint_strings};
 pub use status_bar::status_bar;
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, status_readouts};
-pub(crate) use tabs::show_document;
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
+use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
 pub use tabs::{doc_tabs, isolation_bar, step_document};
+pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
 /// The application bar's height, in points (compact, as in PhotoCraft).
 pub const APP_BAR_HEIGHT: f32 = 32.0;

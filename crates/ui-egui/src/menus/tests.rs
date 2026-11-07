@@ -528,6 +528,28 @@ fn select_same_link_block_series_selects_a_thread_from_the_menu() {
 }
 
 #[test]
+fn select_same_text_fill_and_stroke_color_follows_text_stroke_color_in_the_menu() {
+    let mut app = app_with_a_rectangle();
+    let entries = menu_entries(&app);
+    let at = |id: &str| entries.iter().position(|e| e.command.as_deref() == Some(id));
+    let entry = at("select.same.textFillAndStrokeColor").map(|i| &entries[i]).expect("menu entry");
+    assert_eq!((entry.path.clone(), entry.label.as_str()), (vec!["Select".to_string(), "Same".to_string()], "Text Fill & Stroke Color"));
+    assert_eq!(at("select.same.textStrokeColor").map(|i| i + 1), at("select.same.textFillAndStrokeColor"));
+    let text = |app: &mut VectorcraftApp, y: i32, fill: &str, stroke: &str| {
+        let id = app.run("text.create", json!({"x": 0, "y": y, "text": "type"})).unwrap()["id"].clone();
+        app.run("text.setRangeStyle", json!({"id": id.clone(), "start": 0, "end": 4, "fill": fill, "stroke": stroke})).unwrap();
+        id
+    };
+    let a = text(&mut app, 40, "#ff0000", "#0000ff");
+    let b = text(&mut app, 80, "#ff0000", "#0000ff");
+    let _ = text(&mut app, 120, "#ff0000", "#00ff00");
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    invoke(&mut app, "select.same.textFillAndStrokeColor", json!({}));
+    let ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|i| i.0).collect();
+    assert_eq!(json!(ids), json!([a, b]));
+}
+
+#[test]
 fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     let mut app = app_with_a_rectangle();
     // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.
@@ -890,15 +912,17 @@ fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
     }
 }
 
-/// #3724: Window › New Window is greyed out until VectorCraft can open a second window on a
-/// document, instead of being enabled and answering with an internal milestone note.
+/// #4116: Window › New Window is enabled with a document open and opens a second view of it; with
+/// no document open it is greyed out.
 #[test]
-fn new_window_is_disabled_until_it_opens_a_window() {
+fn new_window_opens_a_view_of_the_current_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!enabled(&app, "window.newWindow"), "no document to open a window on");
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap_err(), "no document open");
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    assert!(!enabled(&app, "window.newWindow"), "New Window is enabled but opens no window");
-    let e = app.run("window.newWindow", json!({})).unwrap_err();
-    assert!(!e.contains("M11.5"), "a user-facing message, not a milestone: {e}");
+    assert!(enabled(&app, "window.newWindow"));
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(app.session.documents().len(), 1, "the same document, in a second window");
 }
 
 /// #4143: Window menu panels and panel submenus are listed in alphabetical order according to the

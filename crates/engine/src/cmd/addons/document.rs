@@ -1,9 +1,11 @@
 //! Document Tools (`addon.document.*`), a built-in add-on: Save a Timestamped Copy writes a copy of
 //! the document named with the date and time through File › Save a Copy's save; New Symbols from
 //! Layers makes a symbol of each layer's art as New Symbol does; Export All Open Documents writes a
-//! copy of every open document to one folder as Save a Copy does (#4920). Its submenu (Object › Plug-ins ›
-//! Document Tools) is the UI's.
+//! copy of every open document to one folder as Save a Copy does (#4920); Batch Trace Folder traces
+//! each image of a folder and saves the results to another ([`batch_trace`], #4921). Its submenu
+//! (Object › Plug-ins › Document Tools) is the UI's.
 
+mod batch_trace;
 #[cfg(test)]
 mod tests;
 
@@ -14,7 +16,7 @@ use vectorcraft_doc::{Node, NodeId, NodeKind, SymbolRegistration};
 
 use super::super::brushsym::{instance_in_place, normalize, place_xf, store_symbol};
 use super::super::fileio::{self, SaveMode};
-use super::super::{CommandSpec, bad, checked_ids_param, clock_date, cmd, date_param, has_doc, str_param, switch_or};
+use super::super::{CommandSpec, always, bad, checked_ids_param, clock_date, cmd, date_param, has_doc, str_param, switch_or};
 use crate::{Result, Session};
 
 /// The most numbers (`-2`, `-3`…) tried after a timestamped name that is taken.
@@ -39,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{folder, format?: vectorcraft|pdf|svg|svgz|ai|eps (default: pdf)} write a copy of every open document, in tab order, to `folder` as File › Save a Copy writes it, each named after its document (<name>.<ext>; -2, -3… added when that name is taken, so no file is replaced), one self-contained file each with all of its art (images embedded or included, every artboard; no remembered save options apply): every document keeps its path, title and modified state, and no undo step is made. A document that can't be written is listed in `failed` and the others are still written; the active document stays active → {files: [{title, path, warnings}], failed: [{title, error}], format}",
             has_doc,
             export_all_open
+        ),
+        cmd!(
+            "addon.document.batchTraceFolder",
+            "Batch Trace Folder",
+            ["Object", "Plug-ins", "Document Tools"],
+            None,
+            "{folder, destinationFolder, preset?: name (imageTrace.presets; default: Default), expand?: false (true: trace and expand, as Make and Expand), format?: vectorcraft (default)|svg|pdf|ai|eps, includeSubdirs?: false} open each image in folder (png, jpg, tif, bmp, gif, webp, psd), select it, trace it with the preset, save it into destinationFolder as <name>.<ext> (-2, -3… added when that name is taken, so no file is replaced) and close it again, whether it traced or not; the document that was active stays active. Optional settings use their defaults only when omitted; null and values of the wrong type return an error before any image is opened. Caps: 500 images, 8 folder levels; a folder with more than 1,000 entries is refused. Not on the web (no file system) → {traced: [{path, output}], failed: [{path, error}], format} (#4921)",
+            always,
+            batch_trace::batch_trace_folder
         ),
         cmd!(
             "addon.document.symbolsFromLayers",

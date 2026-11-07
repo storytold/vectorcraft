@@ -393,6 +393,7 @@
 	Variable Font	Font variabel
 	Text Fill Color	Warna isian teks
 	Text Stroke Color	Warna stroke teks
+	Text Fill & Stroke Color	Warna isian & stroke teks
 	All on Same Layers	Semua di lapisan yang sama
 	Direction Handles	Gagang arah
 	Brush Strokes	Sapuan kuas
@@ -585,6 +586,7 @@
 	Cascade	Bertingkat
 	Tile	Ubin
 	Float in Window	Mengambang di jendela
+	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
 	Workspace	Ruang kerja
 	Reset Essentials	Atur ulang Essentials
@@ -601,6 +603,11 @@
 	New Toolbar	Bilah alat baru
 	Show Toolbar	Tampilkan bilah alat
 	List Toolbars	Daftar bilah alat
+	Manage Toolbars…	Kelola bilah alat…
+	Manage Toolbars	Kelola bilah alat
+	Rename Toolbar	Ganti nama bilah alat
+	Duplicate Toolbar	Duplikatkan bilah alat
+	Delete Toolbar	Hapus bilah alat
 	Manage Workspaces…	Kelola ruang kerja…
 	Control	Kontrol
 	Contextual Task Bar	Bilah tugas kontekstual
@@ -633,6 +640,8 @@
 	Update Changed Links	Perbarui tautan yang berubah
 	Magic Wand	Tongkat ajaib
 	Navigator	Navigator
+	Navigator Panel Options	Opsi panel navigator
+	Draw Dashed Lines as Solid Lines	Gambar garis putus-putus sebagai garis utuh
 	Pattern Options	Opsi pola
 	Properties	Properti
 	Separations Preview	Pratinjau separasi
@@ -877,6 +886,10 @@ lighting	Light	Cahaya
 	Home	Home
 	Import Keyboard Shortcuts…	Impor pintasan papan ketik…
 	Justify all lines	Ratakan semua baris
+	Align Top	Sejajarkan ke atas
+	Align Center	Sejajarkan ke tengah vertikal
+	Align Bottom	Sejajarkan ke bawah
+	Justify Vertically	Ratakan vertikal
 	Justify with last line aligned left	Ratakan dengan baris terakhir rata kiri
 	Keyboard Shortcut Conflicts	Konflik pintasan papan ketik
 	Keyboard Shortcut Set	Set pintasan papan ketik
@@ -1177,6 +1190,8 @@ lighting	Light	Cahaya
 	Hand	Tangan
 	Join Tool	Alat sambung
 	Lasso Tool	Alat lasso
+	Enclosing Lasso Tool	Alat laso pengeliling
+	Enclosing Lasso	Laso pengeliling
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -1250,6 +1265,9 @@ lighting	Light	Cahaya
 	Zoom Tool	Alat zoom
 	Action {n}	Aksi {n}
 	Begin Recording	Mulai merekam
+	Exclude from playback	Kecualikan dari pemutaran
+	Include in playback	Sertakan dalam pemutaran
+	Include Action Steps	Sertakan langkah aksi
 	Center on Artboard	Pusatkan di artboard
 	Default Actions	Aksi default
 	▾ Default Actions	▾ Aksi default
@@ -1385,7 +1403,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Perataan Romawi vertikal standar
 	Strikethrough	Coret
 	Character:	Karakter:
+	Paragraph:	Paragraf:
 	Character options	Opsi karakter
+	Paragraph options	Opsi paragraf
 	Subscript	Subskrip
 	Subscript (on the roadmap)	Subskrip (masih dalam roadmap)
 	Superscript	Superskrip
@@ -1463,6 +1483,11 @@ digits	Malayalam	Malayalam
 	Save Transparency Flattener Preset…	Simpan preset flattener transparansi…
 	Basic Latin	Latin dasar
 	Currency & Symbols	Mata uang & simbol
+	Alternates for Current Selection	Alternatif untuk Pilihan Saat Ini
+	Select a character with the Type tool to see its alternates.	Pilih karakter dengan alat teks untuk melihat alternatifnya.
+	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
+	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
+	Double-click to replace	Klik ganda untuk mengganti
 	Double-click to insert	Klik ganda untuk menyisipkan
 	Entire Font	Seluruh font
 	glyph {id}	glif {id}
@@ -1644,6 +1669,7 @@ digits	Malayalam	Malayalam
 	Select text to set its OpenType features.	Pilih teks untuk mengatur fitur OpenType-nya.
 	Standard Ligatures	Ligatur standar
 	Stylistic Alternates	Alternatif gaya
+	Set {n}	Set {n}
 	Swash	Swash
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
@@ -1658,6 +1684,7 @@ digits	Malayalam	Malayalam
 	Left-to-Right Paragraph Direction	Arah paragraf kiri ke kanan
 	Line-end Punctuation Half Width	Tanda baca akhir baris lebar setengah
 	Insert Kashidas	Sisipkan kashida
+	Kashidas	Kashida
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
@@ -1729,6 +1756,9 @@ digits	Malayalam	Malayalam
 	More Paragraph options	Opsi paragraf lainnya
 	No document open	Tidak ada dokumen terbuka
 	Quick Actions	Tindakan cepat
+	Rearrange	Atur ulang
+	Select All Artboards	Seleksi semua artboard
+	Switch Orientation	Ganti orientasi
 	Rearrange All	Atur ulang semua
 	Rulers & Grids	Penggaris & kisi
 	Select a text object	Pilih objek teks
@@ -2200,6 +2230,7 @@ digits	Malayalam	Malayalam
 	“{file}” is protected by a password.	“{file}” dilindungi kata sandi.
 	Dim Images to:	Redupkan gambar menjadi:
 	Light Blue	Biru muda
+	Light Red	Merah terang
 	Layers Panel Options	Opsi panel lapisan
 	Row Size:	Ukuran baris:
 	Show Layers Only	Tampilkan lapisan saja
@@ -2288,6 +2319,12 @@ digits	Malayalam	Malayalam
 	Save the document first?	Simpan dokumen terlebih dahulu?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} file dalam {folder} {note}. Tampilkan folder paket?
 @plural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msgplural	{n} linked file not found|{n} linked files not found	{n} file tertaut tidak ditemukan
+@msg	fonts not copied: {fonts}	font tidak disalin: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	({n} file tertaut tidak ditemukan)
+@msg	(fonts not copied: {fonts})	(font tidak disalin: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	font tidak disalin: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Preset bawaan bersifat hanya-baca: Baru… memulai salinan yang dapat diedit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} pada artboard mewakili {real} {unit} dalam scene.
@@ -2443,6 +2480,10 @@ digits	Malayalam	Malayalam
 	Current Colors	Warna saat ini
 	Current Colors (0)	Warna saat ini (0)
 	Harmony Rules:	Aturan harmoni:
+	Segmented color wheel	Roda warna bersegmen
+	Show smooth color wheel	Tampilkan roda warna halus
+	Show segmented color wheel	Tampilkan roda warna bersegmen
+	Show color bars	Tampilkan bilah warna
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
 	Limit to Library:	Batasi ke pustaka:
@@ -3189,6 +3230,7 @@ theme	Appearance	Tampilan
 	Character / Paragraph	Karakter / Paragraf
 	Copy Artboard	Salin artboard
 	Cut Artboard	Potong artboard
+	Rename Artboards	Ganti nama artboard
 	Move Artboard Up/Down	Pindahkan artboard ke atas/bawah
 	Add Anchor (Pen)	Tambah jangkar (pena)
 	Add Anchor Point	Tambahkan titik jangkar
@@ -3322,6 +3364,7 @@ theme	Appearance	Tampilan
 	List Preferences	Daftarkan preferensi
 	Manually	Secara manual
 	Mark Older Files as [Converted] When Opened	Tandai file lama sebagai [Converted] saat dibuka
+	Use System Defaults for Edit Original	Gunakan default sistem untuk Edit asli
 	Match User Interface Brightness	Sesuaikan dengan kecerahan antarmuka pengguna
 	Light Gray	Abu-abu terang
 	Medium Gray	Abu-abu sedang
@@ -3389,6 +3432,7 @@ theme	Appearance	Tampilan
 	Type Object Selection by Path Only	Pemilihan objek teks hanya berdasarkan jalur
 	UI Scaling	Penskalaan UI
 	Use Compression	Gunakan kompresi
+	Include Editing Data for Other Apps	Sertakan data penyuntingan untuk aplikasi lain
 	Use Japanese Crop Marks	Gunakan tanda potong Jepang
 	Use Low Resolution Proxy for Linked EPS	Gunakan proksi resolusi rendah untuk EPS tertaut
 	Use Precise Cursors	Gunakan kursor presisi
@@ -3674,6 +3718,8 @@ effect	Regular	Reguler
 	In the selected objects	Di objek yang dipilih
 	Find in Folder…	Temukan di folder…
 	Replace With Font	Ganti dengan font
+	Replace With Font From	Ganti dengan font dari
+	System	Sistem
 	  — substituted by {style}	  — digantikan oleh {style}
 	  — {n} characters from another font	  — {n} karakter dari font lain
 	All Scripts	Semua skrip
@@ -4565,11 +4611,16 @@ imageTrace	Outline	Kontur
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	memiliki {_1}, yang belum dibaca VectorCraft dari berkas tersebut
 @msg	its objects are nested too deeply	objeknya bersarang terlalu dalam
 @msg	its section ending with `%{end}` doesn't end	bagian yang berakhir dengan `%{end}` tidak berakhir
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	kuas yang belum dapat dibaca VectorCraft tidak dimasukkan ke panel Kuas ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objek dengan beberapa isian atau goresan, efek, atau kuas masuk sebagai tampilan gambarnya ({_1}): penampilannya belum dapat diedit
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradien “{name}” tidak didefinisikan dalam berkas: warna polos dipakai sebagai pengganti
 @msg	an image VectorCraft can't read was left out	gambar yang tidak dapat dibaca VectorCraft tidak disertakan
 @msg	an image whose data is cut short was left out	gambar yang datanya terpotong tidak disertakan
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
+@msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	teks area dalam bingkai yang terlalu pendek untuk satu baris font yang ditampilkannya mendapat bingkai yang lebih tinggi ({_1}): tanpa itu teksnya tidak akan tampil
 @msg	its editing data doesn't say where its art is	data pengeditannya tidak menyatakan di mana karya seninya berada
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	berkas ini disimpan tanpa kompatibilitas PDF, dan data pengeditannya tidak dapat dibaca ({why})
@@ -5188,6 +5239,10 @@ mark-style	Japanese	Jepang
 @msg	choose a source folder	pilih folder sumber
 @msg	open a document with data sets	buka dokumen dengan himpunan data
 @msg	the action has no steps	action tidak memiliki langkah
+@msg	the action has no included steps	aksi tidak memiliki langkah yang disertakan
+@msg	no such action step	tidak ada langkah aksi seperti itu
+@msg	included must be true or false	included harus true atau false
+@msg	others must be true or false	others harus true atau false
 	Registration:	Registrasi:
 	By Layer	Per lapisan
 	By Object	Per objek
@@ -5216,6 +5271,7 @@ mark-style	Japanese	Jepang
 	Path Length	Panjang jalur
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	lapisan file tidak terbaca ({_1}): file masuk sebagai halamannya, dalam satu lapisan
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	lapisan file tidak terbaca dari data pengeditannya ({_1}): lapisannya berasal dari bagian PDF file
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	tidak semua ikatan variabel file terbaca (ikatan yang dilewati: {_1}): objek-objek itu tidak terikat ke variabelnya
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	pustaka variabel file hanya terbaca sebagian (entri yang dilewati: {_1}): panel Variabel menampilkan sisanya
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	pustaka variabel file tidak dapat dibaca: panel Variabel tidak menampilkannya
 @msg	a variable of unknown kind can't be bound to objects	variabel bertipe tidak dikenal tidak dapat diikat ke objek
@@ -5351,6 +5407,15 @@ swatch	Bright Violet	Violet cerah
 	Export Type:	Jenis ekspor:
 	Movie Clip	Klip film
 @msg	name is empty	nama kosong
+@msg	an action is already recording	sebuah tindakan sedang direkam
+@msg	an action is already playing	sebuah tindakan sedang diputar
+@msg	the action stopped playing: its document is no longer active	tindakan berhenti diputar: dokumennya tidak lagi aktif
+@msg	speed must be accelerated, step or pause	speed harus accelerated, step, atau pause
+@msg	seconds must be a whole number from 1 to 60	seconds harus bilangan bulat dari 1 sampai 60
+@msg	no such function key	tidak ada tombol fungsi seperti itu
+@msg	no such color	tidak ada warna seperti itu
+@msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
+@msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna
@@ -5629,10 +5694,23 @@ axis	Y Axis	Sumbu Y
 	Set Options	Opsi set
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
+	Playback Options…	Opsi pemutaran…
+	Playback Options	Opsi pemutaran
+	Accelerated	Dipercepat
+	Step by Step	Langkah demi langkah
+	Pause For	Jeda selama
 	Rename Action	Ganti nama tindakan
+	New Action…	Tindakan baru…
+	New Action	Tindakan baru
+	Create New Action	Buat tindakan baru
+	Play Action	Putar tindakan
+	Action Set:	Set tindakan:
+	Function Key:	Tombol fungsi:
+	Record	Rekam
 	Create New Set	Buat set baru
 	Stop Global Edit	Hentikan edit global
 	Global Edit Options	Opsi edit global
+	Leave Out of Global Edit	Keluarkan dari edit global
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edit global berfungsi pada jalur, jalur gabungan, instans simbol, dan grupnya
 	Match	Cocokkan
 	On Artboards	Di artboard
@@ -5898,6 +5976,9 @@ anchor	Points:	Titik:
 	Find Nearest Swatch…	Cari Swatch Terdekat…
 	Find Nearest Swatch	Cari Swatch Terdekat
 	Apply Nearest Swatch	Terapkan Swatch Terdekat
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Terapkan isian ke guratan
+	Apply Stroke to Fill	Terapkan guratan ke isian
 	Select objects to find the swatches nearest their colors.	Pilih objek untuk menemukan swatch yang paling dekat dengan warnanya.
 @msg	select objects or give `color`	pilih objek atau berikan `color`
 @msg	`color` is not a colour	`color` bukan warna
@@ -6017,6 +6098,7 @@ breakText	Glyphs	Glif
 	Gap 5	Jarak 5
 
 @msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objek yang tergambar berbeda dari halaman file itu sendiri diimpor sebagai gambar halaman: {_1}
 
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.
 @msg	invalid pattern tile choice	pilihan ubin pola tidak valid
@@ -6078,6 +6160,11 @@ breakText	Glyphs	Glif
 	Export All Open Documents as SVG	Ekspor Semua Dokumen Terbuka sebagai SVG
 @msgplural	Exported {n} document|Exported {n} documents	Berhasil mengekspor {n} dokumen
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Berhasil mengekspor {n} dokumen; {title} tidak ditulis: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Telusuri Folder secara Batch
+@msgplural	Traced {n} image|Traced {n} images	Berhasil menelusuri {n} gambar
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} gambar tidak dapat ditelusuri
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Berhasil menelusuri {n} gambar; tidak ditelusuri: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Jenis simbol:
 	Dynamic Symbol	Simbol dinamis
@@ -6118,3 +6205,68 @@ breakText	Glyphs	Glif
 	Create Swatch Legend	Buat Legenda Swatch
 	Create Swatch Legend…	Buat Legenda Swatch…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	Alat Teks
+	Text Tweaker…	Penyetel Teks…
+	Text Tweaker	Penyetel Teks
+	Attribute:	Atribut:
+	From:	Dari:
+	To:	Ke:
+	Bow	Busur
+	Spike	Puncak
+	Skip Spaces	Lewati Spasi
+	Release Type on a Path…	Lepaskan Teks pada Jalur…
+	Release Type on a Path	Lepaskan Teks pada Jalur
+	Text and Path	Teks dan jalur
+	Path Only	Hanya jalur
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	Gambar terlalu besar untuk disalin sebagai gambar: aplikasi lain tidak mendapatkan PNG darinya
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Pilih menurut Artboard
+	Select by Artboards…	Pilih menurut Artboard…
+	Selection Tools	Alat pemilihan
+	Search artboards	Cari artboard
+	Fully Inside	Sepenuhnya di dalam
+	Fully Outside	Sepenuhnya di luar
+	No artboards match.	Tidak ada artboard yang cocok.
+	Chosen: {n} of {total}	Dipilih: {n} dari {total}
+
+# Contour add-on
+	Contour	Kontur
+	Contour Tool	Alat kontur
+	Sharp	Tajam
+	Bake	Perluas
+	Turn the Contour into plain paths	Ubah kontur menjadi jalur biasa
+	Set Corners…	Atur sudut…
+	All Anchors	Semua jangkar
+	Odd-Numbered Anchors	Jangkar bernomor ganjil
+	Even-Numbered Anchors	Jangkar bernomor genap
+	Minimum angle	Sudut minimum
+	Maximum angle	Sudut maksimum
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Pilih yang Tertaut
+	Select Embedded	Pilih yang Tersemat
+	Select Missing	Pilih yang Hilang
+	Select Modified	Pilih yang Diubah
+	Select by Link Status	Pilih menurut Status Tautan
+	Select by Link Status…	Pilih menurut Status Tautan…
+	Search images	Cari gambar
+	No images match.	Tidak ada gambar yang cocok.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Telah memilih {n} gambar tertaut
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Telah memilih {n} gambar tersemat
+@msgplural	Selected {n} missing image|Selected {n} missing images	Telah memilih {n} gambar yang hilang
+@msgplural	Selected {n} modified image|Selected {n} modified images	Telah memilih {n} gambar yang diubah
+@msgplural	Selected {n} image|Selected {n} images	Telah memilih {n} gambar
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; {n} lainnya tersembunyi atau terkunci
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; {n} lainnya berada di layer templat
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; {n} lainnya berada di luar grup yang diisolasi
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; {n} lainnya tidak dapat dipilih sekarang
+
+# Compound Shapes add-on
+	Compound Shapes	Bentuk majemuk
+	Shape Mode Buttons Make Compound Shapes	Tombol mode bentuk membuat bentuk majemuk
+
+# 3D Box add-on
+	3D Box	Kotak 3D
+	3D Box Tool	Alat Kotak 3D

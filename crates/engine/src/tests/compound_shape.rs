@@ -664,3 +664,35 @@ fn expanded(s: &mut Session, id: NodeId) -> f64 {
     let made = run(s, "object.compoundShape.expand", json!({}));
     node_area(&node(s, NodeId(made["ids"][0].as_u64().unwrap())))
 }
+
+/// Locking (or hiding) the layer of an isolated compound shape locks its members too: a click or
+/// a marquee with the Selection tool selects none of them, as outside isolation mode (#5309).
+#[test]
+fn a_locked_or_hidden_layer_keeps_the_isolated_compound_shape_from_clicks() {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    for (prop, value) in [("locked", true), ("visible", false)] {
+        let (mut s, back, _front) = two_squares();
+        let id = NodeId(run(&mut s, "object.compoundShape.make", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "object.isolate", json!({"id": id.0}));
+        let layer = s.doc().unwrap().doc.parent_of(id).unwrap();
+        let v = ViewInfo::default();
+        s.select_tool("selection", v).unwrap();
+        let click = |s: &mut Session, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        click(&mut s, 25.0, 50.0);
+        assert_eq!(selected(&s), vec![back], "isolated, a click selects a member");
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "layer.setProps", json!({"id": layer.0, prop: value}));
+        click(&mut s, 25.0, 50.0);
+        assert!(selected(&s).is_empty(), "{prop}: the layer's art isn't selected by a click");
+        for (k, x, y) in
+            [(PointerKind::Down, -10.0, -10.0), (PointerKind::Drag, 60.0, 60.0), (PointerKind::Drag, 120.0, 120.0), (PointerKind::Up, 120.0, 120.0)]
+        {
+            s.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+        }
+        assert!(selected(&s).is_empty(), "{prop}: nor by a marquee");
+    }
+}

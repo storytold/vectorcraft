@@ -72,10 +72,10 @@ Shared PDF backend
 
 The patched hayro-interpret 0.7.0, hayro-syntax 0.7.2, hayro-jbig2 0.3.0, hayro-cmap 0.1.0
 and hayro-postscript 0.1.0 are fetched from https://github.com/storytold/craft-libs at revision
-92d392cff132eaf53e13afff77f38b5c11b73aa0. Their upstream project is
+9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb. Their upstream project is
 https://github.com/LaurenzV/hayro, licensed MIT OR Apache-2.0. The snapshot retains each
 crate's upstream licence files. The patch ledger is at
-https://github.com/storytold/craft-libs/blob/92d392cff132eaf53e13afff77f38b5c11b73aa0/vendor/README.craft-reader.md.
+https://github.com/storytold/craft-libs/blob/9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb/vendor/README.craft-reader.md.
 
 Assets already bundled through Hayro's default features retain their licences:
 - Foxit standard-14 substitutes: Copyright 2014 PDFium Authors. All rights reserved.
@@ -136,3 +136,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Indic hyphenation patterns (crates/text/patterns/):
+Copyright (C) 2016 Santhosh Thottingal, used under the MIT license option.
+Original copyright and full license notices are preserved in each hyph-*.tex file.
+Source: hyphenation/tex-hyphen, commit 5684c0f51c0b81133db2efbe60a408b4155a3ff5.

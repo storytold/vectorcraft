@@ -32,17 +32,25 @@
 //! gradient (`Bb` … `flag (name) x y angle length … Bg` … `BB`); `stroke fill Xd` says whether it
 //! paints at all. A blend filter's `mode opacity isolate knockout shape Xy` is its transparency.
 //!
+//! A stroke with a Calligraphic or Art brush is its own basic filter, `(Adobe Calligraphic Brush
+//! Tool)` or `(Adobe ArtOnPath Brush Tool)`, with its stroke's style and the brush's settings for
+//! the object as entries (see [`super::brush`]).
+//!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too), each with its own transparency and effects, and the effects of
+//! with a pattern or gradient too; strokes with a Calligraphic or Art brush too), each with its own
+//! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
-//! effects; others keep their drawn look.
+//! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
+//! object's chain) are read on a group with no fills or strokes of its own, which keeps its members.
 
 use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, WidthProfile};
+use vectorcraft_effects::is_pathfinder;
 
+use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
 use super::obj::V;
 use super::paint;
@@ -68,6 +76,10 @@ const ZIG_ZAG: &str = "Adobe Zigzag"; // brand-ok: the filter's name in the file
 const GAUSSIAN: &str = "Adobe PSL Gaussian Blur"; // brand-ok: the filter's name in the files
 const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
 const SHAPE_EFFECTS: &str = "Adobe Shape Effects"; // brand-ok: the filter's name in the files
+const PATHFINDER: &str = "Adobe Pathfinder"; // brand-ok: the filter's name in the files
+
+const CALLIGRAPHIC: &str = "Adobe Calligraphic Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
+const ART_BRUSH: &str = "Adobe ArtOnPath Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
 
 const CHAIN: &str = "Chain Style Filter";
 const STACK: &str = "Stack Style Filter";
@@ -101,6 +113,46 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     id.strip_prefix("warp.")
 }
 
+/// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
+/// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
+/// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
+/// read.
+const PATHFINDER_COMMANDS: [&str; 12] = [
+    "pathfinder.add",
+    "pathfinder.intersect",
+    "pathfinder.exclude",
+    "pathfinder.subtract",
+    "pathfinder.minusBack",
+    "pathfinder.divide",
+    "pathfinder.outline",
+    "pathfinder.trim",
+    "pathfinder.merge",
+    "pathfinder.crop",
+    "pathfinder.hardMix",
+    "pathfinder.softMix",
+];
+
+/// The keys of an Effect › Pathfinder filter's dictionary besides `Command` and `DisplayString`,
+/// each with the kind and the one value read: its Pathfinder Options, Soft Mix's mix and the Trap
+/// settings. Every operation needs each of them at this value, even where the operation doesn't use
+/// it, except that Soft Mix reads a `Mix` from 0.01 to 1 as its Mixing Rate (VectorCraft's own
+/// reader rule, learned from saved files: the rate is `Mix` times 100, within the effect's 1 to 100;
+/// a saved `Mix` outside that range keeps the drawn look).
+const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
+    ("ConvertCustom", Kind::Bool, 1.0),
+    ("ExtractUnpainted", Kind::Bool, 1.0),
+    ("Mix", Kind::Real, 0.5),
+    ("Precision", Kind::Real, 10.0),
+    ("RemovePoints", Kind::Bool, 0.0),
+    ("TrapAspect", Kind::Real, 1.0),
+    ("TrapConvertCustom", Kind::Bool, 0.0),
+    ("TrapMaxTint", Kind::Real, 1.0),
+    ("TrapReverse", Kind::Bool, 0.0),
+    ("TrapThickness", Kind::Real, 0.25),
+    ("TrapTint", Kind::Real, 0.4),
+    ("TrapTintTolerance", Kind::Real, 0.05),
+];
+
 /// A plain style's paint, as the object comes in.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct ArtStyle {
@@ -108,7 +160,9 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble, Convert to Shape and the Path effects (Offset Path, Outline Object, Outline Stroke) on the object: what any object is read with. Type takes the other plain styles too (its drawn look
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke)
+    /// and some Distort & Transform effects ([`any_object_takes`]) on the object
+    /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
     /// Its fills and strokes, bottom first.
@@ -122,6 +176,15 @@ pub(super) struct ArtStyle {
     /// The object's own opacity, blend mode, isolation and knockout (its blend filter), when the
     /// style has them.
     pub transparency: Option<(f32, BlendMode, bool, Knockout)>,
+    /// [`Self::effects`] holds Effect › Pathfinder effects, which only a group is read with.
+    pub pathfinder: bool,
+}
+
+impl ArtStyle {
+    /// Do its effects move the object's outline (Transform, Twist, Free Distort)?
+    pub fn moves_outline(&self) -> bool {
+        self.effects.iter().any(|e| matches!(e.id.as_str(), "distort.transform" | "distort.twist" | "distort.freeDistort"))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -133,10 +196,12 @@ pub(super) enum StyleItem {
         name: Option<String>,
         angle: f64,
     },
-    /// A fill with pattern swatch `name`, its space taken to art space by `matrix`.
+    /// A fill with pattern swatch `name`, its space taken to art space by `matrix`; `controls`, the
+    /// numbers before the matrix, apply first when the pattern was defined in the version 7 form.
     Pattern {
         name: String,
         matrix: Option<[f64; 6]>,
+        controls: Vec<f64>,
     },
     Stroke {
         paint: Paint,
@@ -146,6 +211,8 @@ pub(super) enum StyleItem {
         miter: f64,
         dash: Option<Dash>,
         profile: Option<WidthProfile>,
+        /// A brush: its name, and its settings for this object.
+        brush: Option<(String, PathBrush)>,
     },
 }
 
@@ -185,6 +252,8 @@ struct Filter {
     params: HashMap<String, f64>,
     /// How each key of its dictionary is written.
     kinds: HashMap<String, Kind>,
+    /// A key of its dictionary is written more than once.
+    repeated: bool,
     /// Its dictionary's arrays (`/Array : v /Real , … ; (key) ,`), by key.
     arrays: HashMap<String, Vec<f64>>,
     fill: Option<Paint>,
@@ -199,8 +268,11 @@ struct Filter {
     gradient: bool,
     /// The gradient's swatch and angle (`Bg`).
     gradient_of: Option<(Option<String>, f64)>,
-    /// `(name) … [matrix] p`.
-    pattern: Option<(String, Option<[f64; 6]>)>,
+    /// `(name) … [matrix] p`, and the numbers between the name and the matrix.
+    pattern: Option<(String, Option<[f64; 6]>, Vec<f64>)>,
+    /// The plug-in object it refers to (`/GObjRef : (name) (plug-in) /PluginObject`): its name and
+    /// plug-in name.
+    plugin_object: Option<(String, String)>,
     /// `mode opacity … Xy`.
     xy: Option<(usize, f32)>,
     /// `… isolate knockout … Xy`.
@@ -216,6 +288,7 @@ impl Default for Filter {
             compound: false,
             params: HashMap::new(),
             kinds: HashMap::new(),
+            repeated: false,
             arrays: HashMap::new(),
             fill: None,
             stroke: None,
@@ -228,6 +301,7 @@ impl Default for Filter {
             gradient: false,
             gradient_of: None,
             pattern: None,
+            plugin_object: None,
             xy: None,
             xy_group: None,
         }
@@ -357,8 +431,16 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     }
                 }
                 b"Array" => dict_array = Some(vec![]),
+                b"PluginObject" if in_basic => {
+                    let mut texts = operands.iter().rev().filter_map(V::text);
+                    if let (Some(plugin), Some(name), Some(f)) = (texts.next(), texts.next(), filters.last_mut()) {
+                        f.plugin_object = Some((name, plugin));
+                    }
+                    other_entry = Some(None);
+                }
                 b"Int" | b"Real" | b"Bool" => {
-                    let value = operands.iter().rev().find_map(V::num);
+                    // The number right before the type: an earlier one isn't this value.
+                    let value = operands.last().and_then(V::num);
                     operands.clear();
                     if let Some(a) = dict_array.as_mut() {
                         a.extend(value);
@@ -378,7 +460,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                             Some(value) => f.params.insert(key.clone(), value),
                             None => f.params.remove(&key),
                         };
-                        f.kinds.insert(key, kind);
+                        f.repeated |= f.kinds.insert(key, kind).is_some();
                     }
                     continue;
                 }
@@ -417,7 +499,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                         None => entry.map(|k| (k, Kind::Other)),
                     };
                     if let (Some((key, kind)), Some(f)) = (key, filters.last_mut()) {
-                        f.kinds.insert(key, kind);
+                        f.repeated |= f.kinds.insert(key, kind).is_some();
                     }
                 }
                 if let Some(f) = filters.last_mut() {
@@ -518,8 +600,10 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
                 }
                 _ => None,
             });
+            let controls: Vec<f64> =
+                vals.iter().skip_while(|v| !matches!(v, V::Str(_))).skip(1).take_while(|v| !matches!(v, V::Arr(_))).filter_map(V::num).collect();
             if let Some(name) = name {
-                f.pattern = Some((name, matrix));
+                f.pattern = Some((name, matrix, controls));
             }
         }
         _ => {}
@@ -987,7 +1071,42 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
         // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
         BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
         SHAPE_EFFECTS => return shape_effect(f),
+        PATHFINDER => return pathfinder_effect(f),
         _ => return None,
+    };
+    Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
+/// The Effect › Pathfinder effect of [`PATHFINDER_COMMANDS`] that an integer `Command` names, when
+/// every key of [`PATHFINDER_OPTIONS`] is there with its kind and value (Soft Mix's `Mix` from 0.01
+/// to 1, as its Mixing Rate in percent) and the only other key is the `DisplayString` text, each
+/// written once. `None` for anything else, which keeps the drawn look.
+fn pathfinder_effect(f: &Filter) -> Option<Effect> {
+    let known = f
+        .kinds
+        .iter()
+        .all(|(key, kind)| (key == "DisplayString" && *kind == Kind::Other) || key == "Command" || PATHFINDER_OPTIONS.iter().any(|(k, ..)| k == key));
+    if !known || f.repeated || !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
+        return None;
+    }
+    if f.kinds.get("Command") != Some(&Kind::Int) {
+        return None;
+    }
+    let command = f.params.get("Command").copied().filter(|c| c.is_finite() && c.fract() == 0.0 && *c >= 0.0)?;
+    let id = *PATHFINDER_COMMANDS.get(usize::try_from(command as i64).ok()?)?;
+    let soft_mix = id == "pathfinder.softMix";
+    let options = PATHFINDER_OPTIONS
+        .iter()
+        .all(|(key, kind, value)| f.kinds.get(*key) == Some(kind) && ((soft_mix && *key == "Mix") || f.params.get(*key) == Some(value)));
+    if !options {
+        return None;
+    }
+    let params = if soft_mix {
+        let mix = f.params.get("Mix").copied().filter(|m| (0.01..=1.0).contains(m))?;
+        // Rounded to six decimals: a `Mix` of 0.3 is a rate of 30.
+        json!({"mixingRate": (mix * 100.0 * 1e6).round() / 1e6})
+    } else {
+        json!({})
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
 }
@@ -998,7 +1117,7 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
     match f.name.as_str() {
         FILL if !f.paints.1 => Ok(None),
         FILL => match (&f.pattern, &f.gradient_of, &f.fill) {
-            (Some((name, matrix)), ..) => Ok(Some(StyleItem::Pattern { name: name.clone(), matrix: *matrix })),
+            (Some((name, matrix, controls)), ..) => Ok(Some(StyleItem::Pattern { name: name.clone(), matrix: *matrix, controls: controls.clone() })),
             (None, Some((name, angle)), _) => Ok(Some(StyleItem::Gradient { name: name.clone(), angle: *angle })),
             (None, None, _) if f.gradient => Ok(Some(StyleItem::Gradient { name: None, angle: 0.0 })),
             (None, None, Some(p)) => Ok(Some(StyleItem::Fill(p.clone()))),
@@ -1017,11 +1136,123 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
                 miter: f.miter,
                 dash: f.dash.clone(),
                 profile: width_profile(&f.arrays),
+                brush: None,
             })),
             _ => Err(()),
         },
+        CALLIGRAPHIC => calligraphic_stroke(f).map(Some).ok_or(()),
+        ART_BRUSH => art_stroke(f).map(Some).ok_or(()),
         _ => Err(()),
     }
+}
+
+/// A Calligraphic brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a
+/// colour, names no Calligraphic brush, or its settings aren't all there as numbers. An angle
+/// relative to the path isn't read.
+fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
+    let real = |key: &str| entry(f, key, Kind::Real).ok().flatten();
+    let code = |key: &str| entry(f, key, Kind::Int).ok().flatten();
+    if !f.paints.0 || f.gradient || f.pattern.is_some() || f.repeated {
+        return None;
+    }
+    if entry(f, "AngleRelativeTo", Kind::Int).ok()?.unwrap_or(0.0) != 0.0 {
+        return None;
+    }
+    let (name, plugin) = f.plugin_object.as_ref()?;
+    if plugin != CALLIGRAPHIC {
+        return None;
+    }
+    let values = [real("Angle")?, real("Roundness")?, real("Diameter")?];
+    let variation = [real("AngleVariation")?, real("RoundnessVariation")?, real("DiameterVariation")?].map(f64::abs);
+    let codes = [code("AngleDependsOn")?, code("RoundnessDependsOn")?, code("DiameterDependsOn")?];
+    Some(StyleItem::Stroke {
+        paint: f.stroke.clone()?,
+        width: f.width,
+        cap: f.cap,
+        join: f.join,
+        miter: f.miter,
+        dash: None,
+        profile: None,
+        brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
+    })
+}
+
+/// The entries an Art brush's filter may hold, with the settings [`art_stroke`] reads. Any other
+/// entry keeps the drawn look, a variable width's among them.
+const ART_ENTRIES: [&str; 18] = [
+    "StrokeStyle",
+    "DisplayString",
+    "Brush",
+    "Proportional",
+    "Segmented",
+    "UpsideDown",
+    "Counterclockwise",
+    "ScaleYDependsOn",
+    "Spacing",
+    "StartSegmentLength",
+    "EndSegmentLength",
+    "Adjustment",
+    "FoldAdjustment",
+    "Scaling",
+    "MinScaling",
+    "MaxScaling",
+    "Colorization",
+    "Adobe Effect Expand Before Version", // brand-ok: the entry's name in the files
+];
+
+/// An Art brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a color, names
+/// no Art brush, holds an entry that isn't read, or its settings aren't those of art that stretches
+/// along the path, unflipped, at the brush's own width (`Scaling` 1), in Tints (`Colorization` 1),
+/// with `FoldAdjustment` 1, which is [`vectorcraft_brush::ArtBrush`]'s `overlap: false`: its drawn
+/// look stays.
+fn art_stroke(f: &Filter) -> Option<StyleItem> {
+    if !f.paints.0
+        || f.gradient
+        || f.pattern.is_some()
+        || f.repeated
+        || !f.arrays.is_empty()
+        || !f.kinds.keys().all(|k| ART_ENTRIES.contains(&k.as_str()))
+    {
+        return None;
+    }
+    let (name, plugin) = f.plugin_object.as_ref()?;
+    if plugin != ART_BRUSH {
+        return None;
+    }
+    let off = |key: &str, kind: Kind| matches!(entry(f, key, kind), Ok(None | Some(0.0)));
+    let plain = off("Proportional", Kind::Bool)
+        && off("Segmented", Kind::Bool)
+        && off("UpsideDown", Kind::Int)
+        && off("Counterclockwise", Kind::Int)
+        && off("ScaleYDependsOn", Kind::Int)
+        && off("Spacing", Kind::Real)
+        && off("StartSegmentLength", Kind::Real)
+        && off("EndSegmentLength", Kind::Real);
+    if !plain || entry(f, "Adjustment", Kind::Int).ok()?.unwrap_or(1.0) != 1.0 || entry(f, "FoldAdjustment", Kind::Bool).ok()?.unwrap_or(1.0) != 1.0 {
+        return None;
+    }
+    let one = |key: &str| entry(f, key, Kind::Real).is_ok_and(|v| v.unwrap_or(1.0) == 1.0);
+    if entry(f, "Scaling", Kind::Real).ok()?? != 1.0 || !one("MinScaling") || !one("MaxScaling") {
+        return None;
+    }
+    if entry(f, "Colorization", Kind::Int).ok()?? != 1.0 {
+        return None;
+    }
+    let paint = f.stroke.clone()?;
+    // The tinted pieces are process colors, so a swatch's ink would be lost.
+    if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+        return None;
+    }
+    Some(StyleItem::Stroke {
+        paint,
+        width: f.width,
+        cap: f.cap,
+        join: f.join,
+        miter: f.miter,
+        dash: None,
+        profile: None,
+        brush: Some((name.clone(), PathBrush::Art)),
+    })
 }
 
 /// Builds an [`ArtStyle`] from a style's filter tree.
@@ -1064,7 +1295,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => {}
-                FILL | STROKE => match paint_item(c) {
+                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => match paint_item(c) {
                     Ok(Some(StyleItem::Stroke { .. })) => under.strokes = true,
                     Ok(Some(StyleItem::Pattern { .. })) => under.patterns = true,
                     _ => {}
@@ -1078,7 +1309,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => self.plain = false,
-                FILL | STROKE => {
+                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => {
                     paints += 1;
                     look.visible &= c.visible;
                     match paint_item(c) {
@@ -1092,9 +1323,9 @@ impl Builder<'_> {
                     }
                 }
                 // Convert to Shape on one fill or stroke isn't read yet: what it draws there is
-                // the drawn look's.
+                // the drawn look's. A fill's or stroke's own Pathfinder effect isn't read either.
                 _ => match effect(c, under) {
-                    Some(e) if !e.id.starts_with("convertToShape.") => look.effects.push(e),
+                    Some(e) if !e.id.starts_with("convertToShape.") && !is_pathfinder(&e.id) => look.effects.push(e),
                     _ => self.plain = false,
                 },
             }
@@ -1128,16 +1359,63 @@ impl Builder<'_> {
     }
 }
 
+/// Is `e`, on the whole object, an effect any object is read with? Of the Distort & Transform
+/// effects: Transform without copies (Random is never read), Twist, a Tweak that moves nothing,
+/// Pucker & Bloat at 0, and Free Distort when its corners make a parallelogram (an affine map).
+/// Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
+/// `read::ops`' `moves_with`.
+fn any_object_takes(e: &Effect) -> bool {
+    match e.id.as_str() {
+        "stylize.dropShadow"
+        | "stylize.innerGlow"
+        | "stylize.outerGlow"
+        | "stylize.feather"
+        | "stylize.roundCorners"
+        | "stylize.scribble"
+        | "convertToShape.rectangle"
+        | "convertToShape.roundedRectangle"
+        | "convertToShape.ellipse"
+        | "path.offsetPath"
+        | "path.outlineObject"
+        | "path.outlineStroke"
+        | "distort.twist"
+        | "distort.tweak" => true,
+        // Copies are drawn as one path, its fills under all its strokes, where the file paints each
+        // copy's fill and stroke in turn.
+        "distort.transform" => e.params["copies"].as_i64() == Some(0),
+        "distort.puckerBloat" => e.params["amount"].as_f64() == Some(0.0),
+        "distort.freeDistort" => affine(&e.params),
+        id => is_pathfinder(id),
+    }
+}
+
+/// Do Free Distort params `p`'s corners (top left, top right, bottom right, bottom left) make a
+/// parallelogram, so that the bilinear map is affine?
+fn affine(p: &serde_json::Value) -> bool {
+    let Some(c) = p["corners"].as_array() else { return false };
+    let at = |i: usize, axis: usize| c.get(i).and_then(|c| c.get(axis)).and_then(serde_json::Value::as_f64);
+    (0..2).all(|axis| match (at(0, axis), at(1, axis), at(2, axis), at(3, axis)) {
+        (Some(tl), Some(tr), Some(br), Some(bl)) => {
+            // The corners are fractions of the object's box, divided out of the file's rounded
+            // decimals; the tolerance is relative to how far apart they lie, not where.
+            let (lo, hi) = [tl, tr, br, bl].iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+            ((tl + br) - (tr + bl)).abs() <= 1e-5 * (hi - lo).max(1.0)
+        }
+        _ => false,
+    })
+}
+
 fn style(filters: &[Filter]) -> ArtStyle {
     let mut st = ArtStyle { plain: true, ..ArtStyle::default() };
     let Some(root) = filters.iter().position(|f| f.parent.is_none()) else { return st };
     let mut b = Builder { filters, plain: true };
+    let chained = filters[root].compound && filters[root].name == CHAIN;
     let top = if filters[root].compound { b.children(root) } else { vec![root] };
     for id in top {
         let f = &filters[id];
         match f.name.as_str() {
             STACK if f.compound => b.stack(id, &mut st),
-            FILL | STROKE | CHAIN => {
+            FILL | STROKE | CALLIGRAPHIC | ART_BRUSH | CHAIN => {
                 if let Some((item, look)) = b.item(id) {
                     st.items.push(item);
                     st.looks.push(look);
@@ -1151,11 +1429,18 @@ fn style(filters: &[Filter]) -> ArtStyle {
                     st.transparency = Some((opacity, super::read::blend_mode(mode), isolate, knockout));
                 }
             }
+            // The object's Pathfinder effects are read only in its own chain.
             _ => match effect(f, ANYTHING) {
-                Some(e) => st.effects.push(e),
-                None => b.plain = false,
+                Some(e) if chained || !is_pathfinder(&e.id) => st.effects.push(e),
+                _ => b.plain = false,
             },
         }
+    }
+    st.pathfinder = st.effects.iter().any(|e| is_pathfinder(&e.id));
+    // A group's Pathfinder effects are drawn before its other effects: one listed after another
+    // effect keeps the drawn look.
+    if st.effects.iter().skip_while(|e| is_pathfinder(&e.id)).any(|e| is_pathfinder(&e.id)) {
+        b.plain = false;
     }
     st.plain = b.plain;
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
@@ -1164,23 +1449,12 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(|e| {
-            matches!(
-                e.id.as_str(),
-                "stylize.dropShadow"
-                    | "stylize.innerGlow"
-                    | "stylize.outerGlow"
-                    | "stylize.feather"
-                    | "stylize.roundCorners"
-                    | "stylize.scribble"
-                    | "convertToShape.rectangle"
-                    | "convertToShape.roundedRectangle"
-                    | "convertToShape.ellipse"
-                    | "path.offsetPath"
-                    | "path.outlineObject"
-                    | "path.outlineStroke"
-            )
-        });
+        && st.effects.iter().all(any_object_takes)
+        // An effect that moves the outline is drawn on its own: with others, their order and what
+        // scales with it aren't kept.
+        && (!st.moves_outline() || st.effects.len() == 1)
+        // Pathfinder effects on a group with no fills or strokes of its own (`styled` checks the group).
+        && (!st.pathfinder || st.items.is_empty());
     st
 }
 

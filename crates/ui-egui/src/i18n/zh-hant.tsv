@@ -254,6 +254,9 @@ font-technology	Variable	可變
 	Basic Latin	基本拉丁文
 	Batch	批次
 	Begin Recording	開始錄製
+	Exclude from playback	從播放中排除
+	Include in playback	包含在播放中
+	Include Action Steps	包含動作步驟
 	Bend:	彎曲：
 	Bevel Join	斜角
 	Bitmap	點陣圖
@@ -815,6 +818,11 @@ font-technology	Variable	可變
 	Double-click to edit the characters' paint	按兩下以編輯字元的上色
 	Click to edit	按一下以編輯
 	Double-click to edit	按兩下以編輯
+	Alternates for Current Selection	目前選取字元的替代字
+	Select a character with the Type tool to see its alternates.	使用文字工具選取一個字元以檢視其替代字。
+	The selected character's font is not available.	選取字元的字體無法使用。
+	No alternates for the selected character.	選取的字元沒有替代字。
+	Double-click to replace	按兩下以取代
 	Double-click to insert	按兩下以插入
 	Double-click to rename	按兩下以重新命名
 	Double-click to target the contents	按兩下以指定內容
@@ -841,6 +849,7 @@ font-technology	Variable	可變
 	Duplicate Artboard	製作工作區域複本
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
+	Rename Artboards	重新命名工作區域
 	Duplicate Artboards	製作工作區域複本
 	Duplicate Brush	製作筆刷複本
 	Duplicate Character Style	製作字元樣式複本
@@ -1202,6 +1211,7 @@ file-filter	Templates	範本
 	Flip Row Order	反轉列順序
 	Flip Vertical	垂直翻轉
 	Float in Window	在視窗中浮動
+	Float All in Windows	全部在視窗中浮動
 	Focal Fill	焦點填色
 	Focal Stroke	焦點筆畫
 	Folder	資料夾
@@ -1366,6 +1376,10 @@ file-filter	Templates	範本
 	Hard Light	實光
 	Hard Mix	實色混合
 	Harmony Rules:	色彩調和規則：
+	Segmented color wheel	分段色輪
+	Show smooth color wheel	顯示平滑色輪
+	Show segmented color wheel	顯示分段色輪
+	Show color bars	顯示顏色條
 	Harmony Sets	色彩調和組
 	Height	高度
 	Height:	高度：
@@ -1630,6 +1644,10 @@ file-filter	Templates	範本
 	Join Tool	連接工具
 	Justification…	對齊設定…
 	Justify all lines	兩端對齊所有行
+	Align Top	靠上對齊
+	Align Center	垂直置中對齊
+	Align Bottom	靠下對齊
+	Justify Vertically	垂直齊行
 	Justify with last line aligned center	兩端對齊，最後一行置中
 	Justify with last line aligned left	兩端對齊，最後一行靠左
 	Justify with last line aligned right	兩端對齊，最後一行靠右
@@ -1915,6 +1933,8 @@ file-filter	Templates	範本
 @msg	`{key}` must be one of {_1}	`{key}` 必須是 {_1} 其中之一
 @msg	unknown preference `{key}`	未知的偏好設定 `{key}`
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	「資料復原」沒有可存放拷貝的位置：請設定「偏好設定 → 檔案處理 → 資料復原 → 資料夾」 (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	「資料復原」無法將拷貝存放到 {path}：{e}
+@msg	Plug-ins can't be loaded from {path}: {e}	無法從 {path} 載入增效模組：{e}
 @msg	`{area}` is no recovery area name	`{area}` 不是復原區域名稱
 @msg	`{name}` is no recovery entry name	`{name}` 不是復原項目名稱
 @msg	no clock to keep a heartbeat by	沒有可用來維持心跳的時鐘
@@ -1995,6 +2015,7 @@ file-filter	Templates	範本
 @msg	graphs come in as plain art, without their data or settings	圖表以一般圖稿匯入，不保留其資料與設定
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚無法讀取的筆刷未加入「筆刷」面板 ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
 @msg	patterns nested too deeply are filled with mid-grey	巢狀層級過深的圖樣以中灰色填滿
 @msg	shadings of an unknown type were left out	已略過類型未知的著色
@@ -2041,6 +2062,7 @@ file-filter	Templates	範本
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	其上的圖稿與頁面的圖稿有 {_1}% 不同：仍從其編輯資料匯入
 @msg	the file's layers weren't read ({_1}): it comes in as its page, in one layer	未讀取檔案的圖層 ({_1})：檔案以其頁面匯入，位於單一圖層中
 @msg	the file's layers weren't read from its editing data ({_1}): they come from its PDF part	未從檔案的編輯資料讀取圖層 ({_1})：圖層來自其 PDF 部分
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	未讀取檔案的全部變數繫結 (略過的繫結：{_1})：這些物件未繫結至其變數
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	只讀取了檔案的部分變數資料庫 (略過的項目：{_1})：「變數」面板會列出其餘部分
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	無法讀取檔案的變數資料庫：「變數」面板不會列出它
 @msg	a variable of unknown kind can't be bound to objects	種類不明的變數無法繫結至物件
@@ -2489,9 +2511,13 @@ file-filter	Templates	範本
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	資料集 {name} 未套用任何內容：沒有物件綁定到該資料集中有值的變數
 @msg	no bound object reports a value (locked objects and embedded images report none)	沒有綁定的物件回報值 (鎖定的物件和內嵌的影像不回報值)
 @msg	the action has no steps	動作沒有步驟
+@msg	the action has no included steps	動作沒有包含的步驟
+@msg	no such action step	沒有這個動作步驟
+@msg	included must be true or false	included 必須是 true 或 false
+@msg	others must be true or false	others 必須是 true 或 false
 @msg	cancelled; nothing was changed	已取消；未做任何變更
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	「儲存」會寫入 {_1}，而非 {_2}：若要寫入該格式，請使用 file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 會寫入舊版 .ai 檔案；.ait 範本一律與 PDF 相容
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 會寫入舊版 .ai 檔案，不會寫入 .ait 範本
 @msg	a mask has more than one art block	遮色片含有多個圖稿區塊
 @msg	mask art ends outside a mask dictionary	遮色片圖稿在遮色片字典之外結束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必須是 #rrggbb 格式的顏色
@@ -2571,6 +2597,8 @@ file-filter	Templates	範本
 	Large Thumbnail View	大縮圖檢視
 	Large Thumbnails	大縮圖
 	Lasso Tool	套索工具
+	Enclosing Lasso Tool	包圍套索工具
+	Enclosing Lasso	包圍套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -2621,6 +2649,7 @@ file-filter	Templates	範本
 	Ligatures are off while the text is tracked.	文字套用字距時，連字功能會關閉。
 	Light	淺色
 	Light Blue	淺藍色
+	Light Red	淺紅色
 	Lighten	變亮
 	Lightness	亮度
 	Limit Color Guide to Library	將色彩參考限制於資料庫
@@ -2723,6 +2752,7 @@ file-filter	Templates	範本
 	Manually	手動
 	Mark as trapped	標示為已陷印
 	Mark Older Files as [Converted] When Opened	開啟舊檔時標示為 [已轉換]
+	Use System Defaults for Edit Original	「編輯原稿」使用系統預設值
 	Marker…	標記…
 	Marks	標記
 	Marks and Bleed	標記與出血
@@ -2784,6 +2814,7 @@ file-filter	Templates	範本
 	Modified:	修改時間：
 	Modify	修改
 	Insert Kashidas	插入卡希達
+	Kashidas	卡希達
 	Long	長
 	Stylistic	風格化
 	Mojikumi Set	標點間距
@@ -2826,6 +2857,8 @@ file-filter	Templates	範本
 @msg	the blend has no spine	漸變物件沒有脊線
 @msg	the spine has no segments	脊線沒有線段
 @msg	no such spine point	沒有這個脊線點
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
+@msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -2849,6 +2882,8 @@ file-filter	Templates	範本
 	Name:	名稱：
 	Navigate	導覽
 	Navigator	導覽器
+	Navigator Panel Options	導覽器面板選項
+	Draw Dashed Lines as Solid Lines	將虛線繪製為實線
 	Needs the desktop app	需要桌面版應用程式
 	Neutral Gradients	中性漸層
 	New	新增
@@ -2974,6 +3009,11 @@ file-filter	Templates	範本
 	New Toolbar	新增工具列
 	Show Toolbar	顯示工具列
 	List Toolbars	列出工具列
+	Manage Toolbars…	管理工具列…
+	Manage Toolbars	管理工具列
+	Rename Toolbar	重新命名工具列
+	Duplicate Toolbar	製作工具列複本
+	Delete Toolbar	刪除工具列
 	New {kind} Style…	新增{kind}樣式…
 	New…	新增…
 	Next	下一個
@@ -3428,6 +3468,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
 	Rearrange All Artboards	重新排列所有工作區域
+	Rearrange	重新排列
+	Select All Artboards	選取所有工作區域
+	Switch Orientation	切換方向
 	Rearrange All	全部重新排列
 	Layout Order:	版面配置順序：
 	Change to Left-to-Right Layout	變更為由左至右版面配置
@@ -3590,6 +3633,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
 	Replace With Font	取代為字體
+	Replace With Font From	取代字體來源
+	System	系統
 	Replaces the saved preset of that name.	取代同名的已儲存預設集。
 	Replace…	取代…
 	Require a password to open the document	開啟文件時需要密碼
@@ -4146,7 +4191,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Patterns	圖樣
 	Stroke Options	筆畫選項
 	Character:	字元：
+	Paragraph:	段落：
 	Character options	字元選項
+	Paragraph options	段落選項
 	Stroke options	筆畫選項
 	Transform options	變形選項
 	Stroke Weight	筆畫寬度
@@ -4276,6 +4323,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Templates…	範本…
 	Text Displayed in Cell:	儲存格中顯示的文字：
 	Text Export Options	文字匯出選項
+	Text Fill & Stroke Color	文字填色與筆畫顏色
 	Text Fill Color	文字填色
 	Text Import Options	文字匯入選項
 	Text Stroke Color	文字筆畫顏色
@@ -4454,6 +4502,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Update Changed Links	更新已變更的連結
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
+@msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串連文字區域已略過
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字物件內變更書寫方向的文字會依其第一個字元的方向開啟
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串連區域、繞圖文字或複合路徑中用作遮色片的文字不會剪裁
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	檔案中沒有預覽的連結圖片在找到其檔案之前顯示預留位置：請在「連結」面板中重新連結
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容納所顯示字體一行的區域文字已加高框架 ({_1})：否則文字不會顯示
 	Update Modified Links	更新已修改的連結
 	UPPERCASE	全部大寫
@@ -4462,6 +4514,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Use Artboards	使用工作區域
 	Use Black Point Compensation	使用黑點補償
 	Use Compression	使用壓縮
+	Include Editing Data for Other Apps	包含供其他應用程式使用的編輯資料
 	Use document bleed settings	使用文件的出血設定
 	Use Even-Odd Fill Rule	使用奇偶填色規則
 	Use Japanese Crop Marks	使用日式裁切標記
@@ -4631,6 +4684,12 @@ digits	Malayalam	馬來亞拉姆數字
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 個檔案{note}。要顯示封裝資料夾嗎？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 個連結檔案
+@msgplural	{n} linked file not found|{n} linked files not found	找不到 {n} 個連結檔案
+@msg	fonts not copied: {fonts}	未複製的字體：{fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(找不到 {n} 個連結檔案)
+@msg	(fonts not copied: {fonts})	(未複製的字體：{fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	未複製的字體：{fonts}
 @plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	自儲存此文件後，有 {n} 個連結影像已變更。要顯示新版本嗎？
 @plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	另有 {n} 條規則：匯出時會全部寫出。
@@ -5208,6 +5267,15 @@ lighting	Light	光源
 	Export Type:	轉存類型:
 	Movie Clip	影片片段
 @msg	name is empty	名稱為空
+@msg	an action is already recording	已在錄製動作
+@msg	an action is already playing	已在播放動作
+@msg	the action stopped playing: its document is no longer active	動作已停止播放：其文件不再是作用中文件
+@msg	speed must be accelerated, step or pause	speed 必須為 accelerated、step 或 pause
+@msg	seconds must be a whole number from 1 to 60	seconds 必須為 1 到 60 之間的整數
+@msg	no such function key	沒有這個功能鍵
+@msg	no such color	沒有這個顏色
+@msg	{_1} cannot be used on Windows	{_1} 無法在 Windows 上使用
+@msg	more than one action is named “{_1}”	有多個動作名為「{_1}」
 @msg	no symbol named `{n}`	沒有名為 `{n}` 的符號
 	Smudge Stick…	塗抹棒…
 	Smudge Stick	塗抹棒
@@ -5361,10 +5429,23 @@ axis	Y Axis	Y 軸
 	Set Options	組選項
 	Action Options…	動作選項…
 	Action Options	動作選項
+	Playback Options…	播放選項…
+	Playback Options	播放選項
+	Accelerated	加速
+	Step by Step	逐步
+	Pause For	暫停
 	Rename Action	重新命名動作
+	New Action…	新增動作…
+	New Action	新增動作
+	Create New Action	建立新動作
+	Play Action	播放動作
+	Action Set:	動作組：
+	Function Key:	功能鍵：
+	Record	錄製
 	Create New Set	建立新組
 	Stop Global Edit	停止整體編輯
 	Global Edit Options	整體編輯選項
+	Leave Out of Global Edit	從整體編輯中排除
 	Match	符合
 	On Artboards	在工作區域上
 	All Artboards	所有工作區域
@@ -5373,6 +5454,8 @@ axis	Y Axis	Y 軸
 @msg	select one object	請選取一個物件
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	整體編輯適用於路徑、複合路徑、符號實體及其群組
 @msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	找不到相似的物件（旋轉或鏡像的副本不會相符）；請變更整體編輯選項後再試一次
+@msg	Global Edit is off	整體編輯未開啟
+@msg	only an object of the Global Edit other than the one it started from can be left out	只能從整體編輯中排除起始物件以外的物件
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`：應為 all 或 1, 3-5 這類範圍，而不是 {v}
 	Add to Symbols	新增至符號
 	Basic Shapes	基本形狀
@@ -5631,6 +5714,12 @@ anchor	Points:	點：
 	Horizontal Scale	水平縮放
 	Vertical Scale	垂直縮放
 @msg	{label} must be a number from {min} to {max}	{label} 必須是 {min} 到 {max} 之間的數字
+	Character Color	字元顏色
+	OpenType Features	OpenType 功能
+	Stylistic Sets	風格集
+	Set {n}	風格集 {n}
+@msg	features lists at most {max} tags	features 最多包含 {max} 個標籤
+@msg	unknown OpenType feature `{t}`	未知的 OpenType 功能 `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} 必須是大於 0 且不超過 {max} 的數字
 @msg	no character style `{name}`	找不到字元樣式 `{name}`
 
@@ -5660,6 +5749,9 @@ anchor	Points:	點：
 	Find Nearest Swatch…	尋找最接近的色票…
 	Find Nearest Swatch	尋找最接近的色票
 	Apply Nearest Swatch	套用最接近的色票
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	將填色套用至筆畫
+	Apply Stroke to Fill	將筆畫套用至填色
 	Select objects to find the swatches nearest their colors.	選取物件以尋找與其顏色最接近的色票。
 @msg	select objects or give `color`	請選取物件或提供 `color`
 @msg	`color` is not a colour	`color` 不是顏色
@@ -5780,6 +5872,7 @@ breakText	Glyphs	字符
 	Gap 5	間隙 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	與檔案本身頁面繪製不同的物件已作為頁面圖稿匯入：{_1}
 
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。
 @msg	invalid pattern tile choice	圖樣拼塊選項無效
@@ -5841,6 +5934,11 @@ breakText	Glyphs	字符
 	Export All Open Documents as SVG	將所有開啟的文件匯出為 SVG
 @msgplural	Exported {n} document|Exported {n} documents	已匯出 {n} 份文件
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	已匯出 {n} 份文件; 未寫入 {title}：{error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	批次描圖資料夾
+@msgplural	Traced {n} image|Traced {n} images	已描圖 {n} 個影像
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} 個影像無法描圖
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	已描圖 {n} 個影像; 無法描圖：{failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	符號類型:
 	Dynamic Symbol	動態符號
@@ -5881,3 +5979,68 @@ breakText	Glyphs	字符
 	Create Swatch Legend	建立色票圖例
 	Create Swatch Legend…	建立色票圖例…
 	HEX	HEX
+# Type Tools add-on (Object › Plug-ins › Type Tools).
+	Type Tools	文字工具
+	Text Tweaker…	文字微調…
+	Text Tweaker	文字微調
+	Attribute:	屬性：
+	From:	起始：
+	To:	結束：
+	Bow	弓形
+	Spike	尖峰
+	Skip Spaces	略過空格
+	Release Type on a Path…	釋放路徑文字…
+	Release Type on a Path	釋放路徑文字
+	Text and Path	文字和路徑
+	Path Only	僅路徑
+@msg	The art is too large to copy as a picture: other apps get no PNG of it	圖稿太大，無法作為圖片複製：其他應用程式不會取得它的 PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	依工作區域選取
+	Select by Artboards…	依工作區域選取…
+	Selection Tools	選取工具
+	Search artboards	搜尋工作區域
+	Fully Inside	完全在內
+	Fully Outside	完全在外
+	No artboards match.	沒有符合的工作區域。
+	Chosen: {n} of {total}	已選：{n} / {total}
+
+# Contour add-on
+	Contour	輪廓
+	Contour Tool	輪廓工具
+	Sharp	尖角
+	Bake	展開
+	Turn the Contour into plain paths	將輪廓轉為一般路徑
+	Set Corners…	設定轉角…
+	All Anchors	所有錨點
+	Odd-Numbered Anchors	奇數錨點
+	Even-Numbered Anchors	偶數錨點
+	Minimum angle	最小角度
+	Maximum angle	最大角度
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	選取已連結
+	Select Embedded	選取已內嵌
+	Select Missing	選取遺失
+	Select Modified	選取已修改
+	Select by Link Status	依連結狀態選取
+	Select by Link Status…	依連結狀態選取…
+	Search images	搜尋影像
+	No images match.	沒有符合的影像。
+@msgplural	Selected {n} linked image|Selected {n} linked images	已選取 {n} 個已連結的影像
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	已選取 {n} 個已內嵌的影像
+@msgplural	Selected {n} missing image|Selected {n} missing images	已選取 {n} 個遺失的影像
+@msgplural	Selected {n} modified image|Selected {n} modified images	已選取 {n} 個已修改的影像
+@msgplural	Selected {n} image|Selected {n} images	已選取 {n} 個影像
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}；另有 {n} 個已隱藏或鎖定
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}；另有 {n} 個位於範本圖層上
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}；另有 {n} 個位於隔離的群組之外
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}；另有 {n} 個現在無法選取
+
+# Compound Shapes add-on
+	Compound Shapes	複合形狀
+	Shape Mode Buttons Make Compound Shapes	形狀模式按鈕製作複合形狀
+
+# 3D Box add-on
+	3D Box	3D 盒子
+	3D Box Tool	3D 盒子工具

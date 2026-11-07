@@ -1,7 +1,7 @@
 //! The Links panel, its flyout, Link Info, Edit Original / Show in Folder, the Placement Options
 //! dialog and the Properties panel's image section, drawn headless.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use serde_json::json;
@@ -166,6 +166,44 @@ fn edit_original_and_show_in_folder_hand_the_file_to_the_system() {
     (app.services.open_file, app.services.reveal) = (None, None);
     assert!(app.run("links.reveal", json!({"id": linked})).is_err());
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
+}
+
+/// #5236: with Preferences › File Handling › Use System Defaults for Edit Original off, Edit
+/// Original opens a raster image in the app that made it, PhotoCraft, and falls back to the
+/// system's default app when PhotoCraft isn't installed or the file isn't a raster image.
+#[test]
+fn edit_original_opens_raster_images_in_photocraft_without_system_defaults() {
+    /// What each open asked for: (`true` for PhotoCraft, the path).
+    type Opened = Rc<RefCell<Vec<(bool, String)>>>;
+    let dir = Folder::new("with");
+    let (mut app, linked, _) = app(&dir);
+    let opened: Opened = Rc::default();
+    let installed = Rc::new(Cell::new(true));
+    let (o, w, i) = (opened.clone(), opened.clone(), installed.clone());
+    app.services.open_file = Some(Box::new(move |p: &str| {
+        o.borrow_mut().push((false, p.to_string()));
+        Ok(())
+    }));
+    app.services.open_in_photocraft = Some(Box::new(move |p: &str| {
+        if i.get() {
+            w.borrow_mut().push((true, p.to_string()));
+        }
+        Ok(i.get())
+    }));
+    // On (the default): the system's app.
+    let path = app.run("links.editOriginal", json!({"id": linked})).unwrap()["path"].as_str().unwrap().to_string();
+    app.run("prefs.set", json!({"key": "editOriginalSystemDefaults", "value": false})).unwrap();
+    app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    installed.set(false);
+    app.run("links.editOriginal", json!({"id": linked})).unwrap();
+    installed.set(true);
+    // A file that isn't a raster image goes to the system's app.
+    crate::io::open_original(&mut app, "/Art/plan.emf").unwrap();
+    assert_eq!(*opened.borrow(), [(false, path.clone()), (true, path.clone()), (false, path), (false, "/Art/plan.emf".to_string())]);
+    // PhotoCraft failing to open it is said, not hidden behind the system's app.
+    app.services.open_in_photocraft = Some(Box::new(|_: &str| Err("PhotoCraft didn't start".to_string())));
+    assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
+    assert_eq!(opened.borrow().len(), 4);
 }
 
 /// Edit Original hands only regular image and document files to the system's default app.

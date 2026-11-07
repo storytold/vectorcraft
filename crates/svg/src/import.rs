@@ -48,6 +48,7 @@ mod css_transform;
 mod depth;
 mod files;
 mod fx;
+mod linear_rgb;
 mod spread;
 mod symbol_units;
 mod text;
@@ -113,7 +114,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
-    let (svg, found) = prepass(svg, &scan.markers, &xml, opts);
+    let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -126,7 +127,8 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
-    let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
+    let text_xml = found.text_source.as_deref().map(parse).transpose()?;
+    let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     let files = found.files;
     let tree = {
         let opt = usvg::Options {
@@ -149,10 +151,14 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         slots,
         patterns: HashMap::new(),
         midpoints: midpoint_stops(&xml),
+        linear_rgb: linear_rgb::linear_rgb_ids(&xml, &tree),
         labels: labels(&xml),
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
+        symbol_names: HashSet::new(),
+        symbol_suffixes: HashMap::new(),
+        pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
         files,
         non_scaling: found.non_scaling,
@@ -161,6 +167,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         foreign: found.foreign,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
+        ellipses: found.ellipses,
         screen: k,
         converted_nodes: 1,
         max_nodes,
@@ -294,6 +301,8 @@ struct Importer {
     patterns: HashMap<usize, String>,
     /// Midpoint stops by gradient id (see [`midpoint_stops`]).
     midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Ids of the gradients mixed in linear light (see [`linear_rgb::linear_rgb_ids`]).
+    linear_rgb: HashSet<String>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
     /// Ids of the undisplayed objects shown for usvg ([`prepass`]).
@@ -302,6 +311,11 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
+    /// The names of the symbols made so far.
+    symbol_names: HashSet<String>,
+    /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
+    symbol_suffixes: HashMap<String, usize>,
+    pattern_suffixes: HashMap<String, usize>,
     /// Blend modes of the shadows and glows our export wrote, by filter id ([`fx::blends`]).
     blends: HashMap<String, String>,
     /// The files `<image>` elements link to.
@@ -318,6 +332,8 @@ struct Importer {
     sublayers: HashSet<String>,
     /// The groups made of them, made sublayers where they sit in a layer ([`promote_sublayers`]).
     sublayer_groups: HashSet<NodeId>,
+    /// Ids of the `<circle>` and `<ellipse>` elements ([`prepass`]).
+    ellipses: HashSet<String>,
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,

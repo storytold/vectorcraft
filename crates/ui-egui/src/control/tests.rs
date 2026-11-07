@@ -12,6 +12,23 @@ fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value
 }
 
 #[test]
+fn control_lists_and_selects_optional_addon_tools() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let listed = input_request(&mut app, "ui.tool.list", json!({}));
+    assert_eq!(listed["ok"], true);
+    let groups = listed["result"].as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = input_request(&mut app, "ui.tool.select", json!({"tool": tool.id}));
+        assert_eq!(selected["ok"], true, "{selected}");
+        assert_eq!(selected["result"]["tool"], tool.id);
+    }
+}
+
+#[test]
 fn ui_set_turns_the_image_trace_preview_off_and_on() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     assert!(app.ui.image_trace_preview);
@@ -274,6 +291,29 @@ fn synthetic_pointer_backquote_keeps_solid_object_in_place() {
     assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(solid)).unwrap(), &before_solid);
     let vectorcraft_color::Paint::Pattern { xf, .. } = after.appearance.fill_paint() else { panic!("pattern fill expected") };
     assert_eq!(xf.as_coeffs()[4], 20.0, "synthetic backquote drag changes pattern paint");
+}
+
+/// `ui.pointer` rejects a `backquote` that is not a boolean, given for the request or for any
+/// event, before any of the events runs.
+#[test]
+fn synthetic_pointer_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(input_request(&mut app, "ui.tool.select", json!({"tool": "selection"}))["ok"], true);
+    let before = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let down = json!({"kind": "down", "x": 125, "y": 125});
+    let drag = json!({"kind": "drag", "x": 145, "y": 125});
+    for params in [
+        json!({"events": [down, drag, {"kind": "up", "x": 145, "y": 125}], "backquote": "true"}),
+        json!({"events": [down, drag, {"kind": "up", "x": 145, "y": 125, "backquote": 1}]}),
+    ] {
+        let r = input_request(&mut app, "ui.pointer", params.clone());
+        assert_eq!(r["ok"], false, "{params}: {r}");
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("`backquote` must be a boolean")), "{r}");
+        assert_eq!(app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap(), &before, "{params}");
+    }
 }
 
 /// `ui.pointer` replies with the key object: a click on one of two selected objects makes it

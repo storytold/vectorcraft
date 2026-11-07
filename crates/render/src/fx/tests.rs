@@ -1076,3 +1076,44 @@ fn photoshop_filters_on_content_larger_than_the_budget() {
         assert!(lum(img.pixel(190, 100)) >= WHITE - 3 * 25, "{id}: outside {:?}", img.pixel(190, 100));
     }
 }
+
+/// #5308: an image's Inner Glow follows its visible pixels, not its frame. A 40 × 40 image whose
+/// left half is transparent and right half opaque black, on a black page, with a white glow from
+/// the edges: the transparent half stays black, and the glow lights the opaque half's left edge
+/// (inside the frame), on the single-threaded and the multithreaded renderer alike.
+#[test]
+fn an_image_inner_glow_follows_its_visible_pixels() {
+    use vectorcraft_doc::{ImageBlob, ImageObject, NodeKind};
+    let rgba: Vec<u8> = (0..40 * 40).flat_map(|i| if i % 40 < 20 { [0, 0, 0, 0] } else { [0, 0, 0, 255] }).collect();
+    let png = crate::encode::png::encode(&rgba, 40, 40, &Default::default()).unwrap();
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("half".into(), ImageBlob::new("image/png", png));
+    let im = ImageObject {
+        key: "half".into(),
+        width: 40,
+        height: 40,
+        xf: Affine::translate((30.0, 30.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.appearance.effects = vec![Effect {
+        id: "stylize.innerGlow".into(),
+        params: json!({"color": "#ffffff", "mode": "normal", "opacity": 100, "blur": 4}),
+        visible: true,
+    }];
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let opts = RenderOptions { background: Some([0, 0, 0, 255]), ..Default::default() };
+    for threads in [0, 3] {
+        let mut r = Renderer::new();
+        r.threads = threads;
+        let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+        for (x, y) in [(31, 50), (40, 31), (45, 50)] {
+            assert!(lum(img.pixel(x, y)) < 10, "threads {threads}: no glow on the transparent pixels at ({x}, {y}): {:?}", img.pixel(x, y));
+        }
+        assert!(lum(img.pixel(51, 50)) > 60, "threads {threads}: the glow lights the visible pixels' edge: {:?}", img.pixel(51, 50));
+        assert!(lum(img.pixel(68, 50)) > 60, "threads {threads}: and the frame's edge where the pixels reach it: {:?}", img.pixel(68, 50));
+        assert!(lum(img.pixel(60, 50)) < lum(img.pixel(51, 50)), "threads {threads}: fading inward");
+    }
+}

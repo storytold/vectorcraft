@@ -5,7 +5,8 @@
 //! Artboard duplicates its artboard (as Duplicate Artboards does, with
 //! its art when the Artboard tool's Move/Copy Artwork with Artboard is on). The highlighted row is the active artboard, the one the status bar's navigator shows and
 //! Fit Artboard in Window fits: clicking a row makes it active, double-clicking its number also
-//! fits it in the window. The options icon at a row's right end opens Artboard Options: a click on
+//! fits it in the window. Shift-click selects a range of artboards and Ctrl/Cmd-click adds or
+//! removes one, with any tool: another tool gives way to the Artboard tool first (#5698). The options icon at a row's right end opens Artboard Options: a click on
 //! the active artboard's icon, or a double-click on another row's icon. The lock column left of it
 //! shows a lock on a locked artboard, and a click there locks or unlocks the artboard
 //! (`artboard.setProps` with `locked`); Delete leaves locked artboards.
@@ -66,8 +67,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() else { return true };
     let r = ab.rect;
     super::properties::artboard_size_row(app, ui, i, r.width(), r.height());
-    if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() && app.run("artboard.new", json!({})).is_ok() {
-        select(app, n);
+    if widgets::icon_button(ui, "dc-new-item", tl!("New Artboard"), false, 24.0).clicked() {
+        add_new(app);
     }
     if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1, 24.0).clicked() {
         delete_selected(app);
@@ -99,10 +100,12 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     super::transform::reference_locator(ui, refi);
     let link = super::transform::proportional(app, ui);
     let rp = vectorcraft_geom::reference_point(r, refi);
+    // The W/H link sits between W and H, but is made after H so Tab goes from W straight to H and
+    // finds the link after it, as in the object Control bar.
+    let mut link_room = None;
     for (k, lbl, v) in [("x", "X:", rp.x - origin.x), ("y", "Y:", rp.y - origin.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
-        // The W/H link sits between W and H.
         if k == "height" {
-            super::transform::constrain_link(app, ui);
+            link_room = Some(super::transform::constrain_link_room(ui));
         }
         widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
         let set = if matches!(k, "width" | "height") {
@@ -119,6 +122,10 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             };
             super::transform::set_artboard(app, i, refi, xywh, link);
         }
+    }
+    if let Some(room) = link_room {
+        let id = ui.scope_id().with("cb-ab-constrain-link");
+        super::transform::constrain_link_at(app, ui, ui.interact(room, id, egui::Sense::click()));
     }
     true
 }
@@ -238,20 +245,10 @@ pub(crate) fn set_props(
     }
 }
 
-/// Rename the artboards of `indices` in one undo step (`artboard.setProps`): one artboard takes
-/// `name` (trimmed), and several take it numbered in panel order, `name-1`, `name-2` and so on.
+/// Rename the artboards of `indices` in one undo step (`artboard.rename`): one artboard takes `name`
+/// (trimmed), and several take it numbered in panel order, `name-1`, `name-2` and so on.
 fn rename(app: &mut VectorcraftApp, indices: &[usize], name: &str) -> Result<Value, String> {
-    let name = name.trim();
-    let mut all = indices.to_vec();
-    all.sort_unstable();
-    all.dedup();
-    let several = all.len() > 1;
-    let numbered = |k: usize| if several { format!("{name}-{}", k + 1) } else { name.to_string() };
-    let entries = all.iter().enumerate().map(|(k, i)| json!({"index": i, "name": numbered(k)})).collect();
-    match set_props_params(json!({}), entries) {
-        Some(p) => app.run("artboard.setProps", p),
-        None => Ok(Value::Null),
-    }
+    app.run("artboard.rename", json!({"indices": indices, "name": name}))
 }
 
 /// Open the name field on artboard `i`'s row. The name typed there goes to the artboards
@@ -261,32 +258,126 @@ fn start_rename(ctx: &egui::Context, app: &VectorcraftApp, i: usize) {
     set_pstate(ctx, "ab-edit-all", renamed_with(app, i));
 }
 
-/// Delete the picked artboards that aren't locked and select a remaining one.
-pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
-    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+/// The artboards Delete Artboards deletes (of `n`): the picked ones that aren't locked, without
+/// artboard 1 when that would be all of them. Empty when none can go, since one is always left.
+pub(crate) fn delete_targets(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     let mut all = deletable(app, n);
-    if all.is_empty() {
-        return;
-    }
     if n > 1 && all.len() == n {
         // Deleting all artboards keeps artboard 1 (the public Delete artboards guide).
         all.retain(|i| *i != 0);
     }
-    if n > all.len() && app.run("artboard.delete", json!({ "indices": all })).is_ok() {
+    if n > all.len() { all } else { vec![] }
+}
+
+/// Delete the picked artboards that aren't locked and select a remaining one.
+pub(crate) fn delete_selected(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    let all = delete_targets(app, n);
+    if !all.is_empty() && app.run("artboard.delete", json!({ "indices": all })).is_ok() {
         select(app, all.first().copied().unwrap_or(0).saturating_sub(1));
     }
 }
 
 /// Artboards panel › Delete Empty Artboards: delete the artboards with no artwork, then make the
 /// active artboard, where it is now, active again, or else the nearest one before it that is left.
-pub(crate) fn delete_empty(app: &mut VectorcraftApp) {
+pub(crate) fn delete_empty(app: &mut VectorcraftApp) -> Result<Value, String> {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let active = selected(app, n);
-    let Ok(r) = app.run("artboard.deleteEmpty", json!({})) else { return };
+    let r = app.run("artboard.deleteEmpty", json!({}))?;
     let deleted: Vec<usize> = r["deleted"].as_array().into_iter().flatten().filter_map(Value::as_u64).map(|i| i as usize).collect();
     // The last artboard up to the active one that is left, numbered as it is now.
     let kept = (0..=active).rev().find(|i| !deleted.contains(i)).unwrap_or(0);
     select(app, kept.saturating_sub(deleted.iter().filter(|d| **d < kept).count()));
+    Ok(r)
+}
+
+/// What the Artboard tool's canvas menu needs to know about the document's art, which takes a walk
+/// over it: [`right_click`] measures it once, and the menu reads it on every frame it is open.
+#[derive(Clone, Debug)]
+pub struct MenuFacts {
+    uid: u64,
+    revision: u64,
+    picked: Vec<usize>,
+    /// The right-click's point, in document coordinates: where the menu's Paste puts artboards.
+    pub(crate) at: vectorcraft_geom::Point,
+    /// Whether Delete Empty Artboards has an artboard to delete.
+    pub(crate) any_empty: bool,
+    /// Whether Fit to Artwork Bounds has art to fit a selected artboard to.
+    pub(crate) any_art: bool,
+}
+
+/// Whether an unlocked artboard of `indices` has art that Fit to Artwork Bounds fits it to.
+pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
+    app.session.active().is_some_and(|st| {
+        indices
+            .iter()
+            .filter_map(|i| st.doc.artboards.get(*i))
+            .any(|a| !a.locked && vectorcraft_render::encode::art_bounds_on(&st.doc, a.rect).is_some())
+    })
+}
+
+/// A right-click on the canvas at `p` with the Artboard tool: an artboard under the pointer that
+/// isn't selected becomes the only selected one, and the menu's facts are measured.
+pub(crate) fn right_click(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
+    let Some(st) = app.session.active() else { return };
+    let (uid, n, hit) = (st.uid, st.doc.artboards.len(), st.doc.artboard_at(p));
+    if let Some(i) = hit.filter(|i| !picked(app, n).contains(i)) {
+        select(app, i);
+    }
+    let all = picked(app, n);
+    let any_empty = vectorcraft_engine::find_command("artboard.deleteEmpty").is_some_and(|c| (c.enabled)(&app.session).is_ok());
+    let any_art = fit_has_art(app, &all);
+    let revision = app.session.active().map_or(0, |st| st.revision);
+    app.ui.context_artboards = Some(MenuFacts { uid, revision, picked: all, at: p, any_empty, any_art });
+}
+
+/// The facts of the open canvas menu, while they still describe the document and the selection.
+pub(crate) fn open_menu_facts(app: &VectorcraftApp) -> Option<&MenuFacts> {
+    let st = app.session.active()?;
+    let n = st.doc.artboards.len();
+    app.ui.context_artboards.as_ref().filter(|f| f.uid == st.uid && f.revision == st.revision && f.picked == picked(app, n))
+}
+
+/// Run an artboard command chosen from a menu or the command palette while the Artboard tool is in
+/// use, with the view and the tool's selection following it as they do in the Artboards panel: a
+/// new artboard becomes active, the copies are selected, and a deletion makes a remaining artboard
+/// active. None for any other command or tool.
+pub(crate) fn run_menu_item(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+    if app.session.tool_id() != "artboard" {
+        return None;
+    }
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    Some(match id {
+        "artboard.new" => app.run(id, p.clone()).inspect(|r| {
+            if let Some(i) = r["index"].as_u64() {
+                select(app, i as usize);
+            }
+        }),
+        "artboard.duplicate" => {
+            let all = picked(app, n);
+            app.run(id, p.clone()).inspect(|r| select_copies(app, &all, r))
+        }
+        "artboard.delete" => app.run(id, p.clone()).inspect(|_| {
+            let listed = p["indices"].as_array().and_then(|l| l.iter().filter_map(Value::as_u64).min());
+            let first = listed.or(p["index"].as_u64()).unwrap_or(0) as usize;
+            select(app, first.saturating_sub(1));
+        }),
+        "artboard.deleteEmpty" => delete_empty(app),
+        _ => return None,
+    })
+}
+
+/// `artboard.selectAll`: the Artboard tool, chosen first when another tool is in use, selects every
+/// artboard → the artboards selected, the active one first.
+pub(crate) fn select_all_command(app: &mut VectorcraftApp) -> Result<Value, String> {
+    if app.session.active().is_none() {
+        return Err("no document".into());
+    }
+    if app.session.tool_id() != "artboard" {
+        app.select_tool("artboard");
+    }
+    select_all(app);
+    Ok(json!({ "selected": app.session.tool_options()["selected"] }))
 }
 
 /// Shift-click on artboard `i`'s row while the Artboard tool is in use: the tool selects the
@@ -363,6 +454,15 @@ pub(crate) fn select(app: &mut VectorcraftApp, i: usize) {
     }
 }
 
+/// Add an artboard with the default settings (`artboard.new`) and make it the active artboard.
+pub(crate) fn add_new(app: &mut VectorcraftApp) {
+    if let Ok(r) = app.run("artboard.new", json!({}))
+        && let Some(new) = r["index"].as_u64()
+    {
+        select(app, new as usize);
+    }
+}
+
 /// A row dragged in the list: the artboard's index.
 #[derive(Clone, Copy)]
 struct RowDrag(usize);
@@ -381,8 +481,15 @@ fn duplicate(app: &mut VectorcraftApp, i: usize) {
 pub(crate) fn duplicate_picked(app: &mut VectorcraftApp) {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let all = picked(app, n);
-    let active = selected(app, n);
     let Ok(r) = app.run("artboard.duplicate", json!({ "indices": all })) else { return };
+    select_copies(app, &all, &r);
+}
+
+/// After `artboard.duplicate` of the artboards `all` returned `r`: select the copies, the active
+/// artboard's copy active.
+fn select_copies(app: &mut VectorcraftApp, all: &[usize], r: &Value) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    let active = selected(app, n);
     let copies: Vec<usize> =
         r["indices"].as_array().into_iter().flatten().filter_map(Value::as_u64).filter_map(|i| usize::try_from(i).ok()).collect();
     let Some(first) = all.iter().position(|i| *i == active).and_then(|k| copies.get(k)).or(copies.first()).copied() else { return };
@@ -488,6 +595,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
                 let m = ui.input(|inp| inp.modifiers);
+                // A Shift- or Ctrl/Cmd-click selects several artboards with any tool: it first
+                // switches to the Artboard tool, which holds the selection, so Properties and the
+                // Control bar then show the controls that change every selected artboard.
+                if resp.clicked() && (m.shift || m.command) && app.session.tool_id() != "artboard" {
+                    app.select_tool("artboard");
+                }
                 let tool = app.session.tool_id() == "artboard";
                 row_clicked |= resp.clicked();
                 if resp.clicked() && tool && m.shift {
@@ -564,8 +677,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() && alt_held(ui) {
             // Alt-click: Artboard Options for the new artboard, which OK adds.
             app.run("ui.newArtboard", json!({})).ok();
-        } else if new.clicked() && app.run("artboard.new", json!({})).is_ok() {
-            select(app, n);
+        } else if new.clicked() {
+            add_new(app);
         }
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Artboard"), false, n > 1 && !deletable(app, n).is_empty(), 24.0).clicked() {
             delete_selected(app);
@@ -582,7 +695,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let sel = selected(app, n);
     if menu_item(ui, tl!("New Artboard"), n > 0, false) {
-        app.run("artboard.new", json!({})).ok();
+        add_new(app);
     }
     if menu_item(ui, tl!("Duplicate Artboards"), n > 0, false) {
         duplicate_picked(app);
@@ -597,7 +710,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         start_rename(ui.ctx(), app, if all.contains(&sel) { sel } else { all.first().copied().unwrap_or(sel) });
     }
     if menu_item(ui, tl!("Delete Empty Artboards"), crate::menus::enabled(app, "artboard.deleteEmpty"), false) {
-        delete_empty(app);
+        delete_empty(app).ok();
     }
     ui.separator();
     if menu_item(ui, tl!("Convert to Artboards"), crate::menus::enabled(app, "artboard.convertToArtboards"), false) {

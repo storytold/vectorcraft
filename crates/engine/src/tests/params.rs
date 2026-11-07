@@ -74,6 +74,27 @@ fn an_unknown_key_is_named_with_the_nearest_accepted_one() {
     assert!(check_keys("x", "{a, …as file.new}", &json!({"b": 1})).is_err());
 }
 
+/// `stroke.set` names every key it reads (its own, `item`, and `ids`/`id`/`target`), so a
+/// misnamed one is refused instead of answering `objects: 1` with nothing changed.
+#[test]
+fn stroke_set_refuses_an_unknown_key() {
+    assert!(!UNCHECKED.contains(&"stroke.set"));
+    let e = refusal("stroke.set", json!({"ids": [7], "width": 0.5}));
+    assert!(e.starts_with("unknown parameter `width`") && e.contains("weight"), "{e}");
+    for ok in [
+        json!({"ids": [7], "weight": 0.5}),
+        json!({"id": 7, "weight": 1, "cap": "round", "join": "bevel", "miterLimit": 4, "align": "inside"}),
+        json!({"dash": [6, 3], "dashOffset": 1, "alignDashes": true, "startArrow": "Arrow", "endArrow": null, "arrowAlign": "tip"}),
+        json!({"profile": "lens", "item": null, "target": "contents"}),
+        // `item_target` reads `aligned` for an explicit item.
+        json!({"item": 1, "aligned": true, "weight": 2}),
+        // What document.inspect reports in strokeOptions reads back unchanged.
+        json!({"widthPoints": null, "gradientMode": "within"}),
+    ] {
+        assert!(check_params("stroke.set", &ok).is_ok(), "{ok}");
+    }
+}
+
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
 #[test]
 fn a_reference_to_an_unchecked_command_is_unchecked() {
@@ -105,7 +126,7 @@ fn effect_params_are_the_effects_own() {
         check_effect_params("effect.apply", e.id, &e.defaults).unwrap_or_else(|why| panic!("{}'s defaults: {why}", e.id));
     }
     let apply = |effect: &str, params| json!({"effect": effect, "params": params});
-    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius");
+    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius, linear");
     assert_eq!(
         refusal("appearance.addEffect", apply("stylize.dropShadow", json!({"opacty": 50}))),
         "unknown parameter `opacty`; did you mean `opacity`?"

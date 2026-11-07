@@ -1,9 +1,9 @@
-use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
+use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_valid};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeLayer, Writer, Written,
-    WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
+    Affine, AppearanceItem, BezPath, BlendMode, Document, FillRule, Node, NodeKind, Paint, PathData, Props, Rect, StrokeAlign, StrokeLayer, Writer,
+    Written, WrittenShape, blend_css, css, fmt_num, stroke, xml_escape,
 };
 
 /// A symbol's `<symbol>` def and the instance transforms that can `<use>` it.
@@ -31,6 +31,22 @@ pub(crate) struct Reuse {
 
 /// How deep symbols may sit in one another's art (deeper instances are left out).
 const MAX_SYMBOL_NEST: u32 = 8;
+
+/// Gradient placement and outside-aligned stroke masks need the shape's geometric box.
+/// Solid colours and patterns do not, so avoid walking their path geometry for a box.
+fn export_shape_bounds(n: &Node) -> Option<Rect> {
+    n.appearance
+        .items
+        .iter()
+        .any(|item| match item {
+            AppearanceItem::Fill(f) => f.visible && matches!(f.paint, Paint::Gradient(_)),
+            AppearanceItem::Stroke(s) => {
+                s.visible && s.width > 0.0 && !s.paint.is_none() && (matches!(s.paint, Paint::Gradient(_)) || s.align == StrokeAlign::Outside)
+            }
+        })
+        .then(|| n.geometric_bounds())
+        .flatten()
+}
 
 impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
@@ -489,7 +505,10 @@ impl Writer<'_> {
         self.layer_nest += layer;
         match n.url().filter(|_| n.visible && !self.anonymous) {
             Some(url) => {
-                self.line(&format!("<a xlink:href=\"{}\">", xml_escape(url)));
+                if !valid_xml_value(url) {
+                    self.warn("Link URLs containing invalid XML characters had those characters removed");
+                }
+                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_valid(url)));
                 self.depth += 1;
                 self.node_body(n);
                 self.depth -= 1;
@@ -575,7 +594,7 @@ impl Writer<'_> {
                 let dashed =
                     n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.is_dashed())));
                 let basic = self.basic_shape(path, self.xf, dashed);
-                self.shape(n, &d, basic, &[path], *rule, n.geometric_bounds());
+                self.shape(n, &d, basic, &[path], *rule, export_shape_bounds(n));
             }
             NodeKind::Compound { children, rule } => {
                 let paths: Vec<&PathData> = children.iter().filter(|c| c.visible).filter_map(|c| c.path_data()).filter(|p| !p.is_empty()).collect();
@@ -583,7 +602,7 @@ impl Writer<'_> {
                     return;
                 }
                 let d: Vec<String> = paths.iter().map(|p| self.path_d(p, self.xf)).collect();
-                self.shape(n, &d.join(" "), None, &paths, *rule, n.geometric_bounds());
+                self.shape(n, &d.join(" "), None, &paths, *rule, export_shape_bounds(n));
             }
             NodeKind::Text(t) => self.text_node(n, t),
             NodeKind::Image(im) => {

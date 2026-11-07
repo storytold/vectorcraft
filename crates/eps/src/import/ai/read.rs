@@ -35,6 +35,11 @@
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
 //!   become an RGBA PNG.
+//! - Linked images in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF` with the
+//!   operands `XI` takes and no samples. Each is a linked image of that file showing a placeholder
+//!   over the image's place until its file is found. An `XF` without a file name before it, or
+//!   with operands `XI` couldn't read, is left out with a warning. An `XI` after `XG` (newer files
+//!   write `() 1 XG` before their embedded images) stays an embedded image.
 //! - Placed (linked) files, as written in files users sent: `%AI5_BeginPlace`, `[matrix] llx lly urx
 //!   ury … (path)` and the operator `` ` ``, the file's preview between `%AI26_BeginPlacedObjectPreview`
 //!   and its end (`w h rowBytes 32 n `, then rows of premultiplied ARGB, the top one first), `~`. The
@@ -52,9 +57,15 @@
 //!   lines and `1 (style) XW`: the drawn look is kept, named after the object.
 //! - Patterns: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury` (the tile, in the pattern's
 //!   space, y up), the tile's art (on `%_` lines in newer files), `E`, `%AI3_EndPattern`; each is
-//!   read by a reader of its own and becomes a pattern swatch. A fill or stroke with one:
+//!   read by a reader of its own and becomes a pattern swatch. An unpainted path whose dictionary
+//!   marks it as the tile's box (`AIPattern_Editor_Backing_Tile_Rect`) is left out of the art. In
+//!   the version 7 form (§3.4) a list
+//!   of layers follows the tile, `[ (colors) @ (tile) & … ] E`, each layer's tile read from its
+//!   string with the colors' state (`_ &`: the tile's box filled). A fill or stroke with one:
 //!   `(name) x y scaleX scaleY angle reflect axis shear shearAxis [matrix] p` (`P`), the matrix
-//!   taking the pattern's space to art space (the other operands are what it is made of).
+//!   taking the pattern's space to art space (the other operands are what it is made of). With a
+//!   pattern defined in the version 7 form, the other operands are applied in order (§5.4.1) before
+//!   the initial matrix.
 //!
 //! - Type in the legacy format (version 7 specification §15): `type To` … `TO`, read by
 //!   [`legacy_text`].
@@ -66,6 +77,9 @@
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
 //!
+//! - Brushes: the brush plug-in objects and their art sections (`%AI8_BeginBrushPattern`), read by
+//!   [`super::brush`], replace the default brushes when the file has any.
+//!
 //! - Graphic styles: the style list (`%AI9_BeginArtStyleList`), one `(name)` per style in the
 //!   panel's order, each the name of an art style. The listed styles whose appearance reads
 //!   ([`appearance_from_art_style`](ops::appearance_from_art_style)) replace the default graphic
@@ -73,8 +87,18 @@
 //!   style's appearance and transparency is linked to it. A `1` naming a style the list doesn't
 //!   have is the object's own appearance, not a link.
 //!
-//! Sections the reader doesn't need (brushes, symbols, styles, filters) are skipped;
-//! type, symbols, fills with a pattern it can't read, placed files without a preview and operators
+//! - Symbols: `%AI14_BeginSymbol` (or `%AI10_`), `(name)`, `0 A 0 Xw 0 Ae`, the art (in the
+//!   symbol's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
+//!   point (1 to 9, from the top left, row by row), `%AI10_EndSymbol`; each is read by a reader of
+//!   its own into the document's symbols. `%AI24_BeginSymbolList` (or `%AI10_`) lists their names
+//!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
+//!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
+//!   it takes it to art space about the canvas point of art space's origin, as a pattern's
+//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
+//!   it.
+//!
+//! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
+//! can't read, fills with a pattern it can't read, placed files without a preview and operators
 //! it doesn't know are errors. So is data that ends inside a layer, a group or a compound path.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -96,7 +120,7 @@ use super::super::ate::CANVAS_CENTRE;
 use super::super::graphics::HAIRLINE;
 use super::lex::{Lexer, Tok};
 use super::obj::{self, Obj, V};
-use super::paint::{self, GradientDef, Instance, Named};
+use super::paint::{self, Global, GradientDef, Instance, Named, ShownNames};
 use crate::ps;
 
 mod art;
@@ -110,12 +134,12 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{PaletteSwatches, VariableRead, artboards, palette, variables};
+pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster};
+use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
-pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
@@ -146,6 +170,10 @@ pub struct Structure {
     /// Where the drawn looks lay that objects read with their art style took the place of (the
     /// document's coordinates): the page draws Illustrator's rendering of those styles there.
     pub restyled: Vec<Rect>,
+    /// Where linked images whose pixels the data doesn't keep (`XF`) show a placeholder (the
+    /// document's coordinates). A PostScript page doesn't draw them there; a PDF part draws the
+    /// image's pixels.
+    pub placeholders: Vec<Rect>,
     /// Placed files whose pixels the file puts at another point too: their image's id and the
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
@@ -155,14 +183,44 @@ pub struct Structure {
     pub envelopes_drawn: Vec<(NodeId, Node)>,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
+    pub canvas_scale: f64,
+    /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
+    /// id two objects have.
+    pub xml_ids: HashMap<String, Option<NodeId>>,
+    /// The objects the variable library binds to its variables, by their XML ids: the importer
+    /// binds those it keeps.
+    pub bindings: Vec<BindingRef>,
+    /// How many objects the library binds that aren't in `bindings` ([`VariableRead::bindings_skipped`]).
+    pub bindings_skipped: usize,
     pub warnings: Vec<String>,
+}
+
+/// The most XML ids of objects ([`Structure::xml_ids`]) kept.
+const MAX_XML_IDS: usize = 1_000_000;
+
+/// The most bytes of XML ids ([`Structure::xml_ids`]) kept, all ids together.
+pub(super) const MAX_XML_ID_BYTES: usize = 16 << 20;
+
+/// Record that the object `id` has the XML id `uid` in `xml_ids`, whose ids take `bytes` bytes. Two
+/// objects with one id are neither of them that id's. A new id is left out when `xml_ids` holds
+/// [`MAX_XML_IDS`] ids or its bytes would pass [`MAX_XML_ID_BYTES`].
+pub(super) fn remember_xml_id(xml_ids: &mut HashMap<String, Option<NodeId>>, bytes: &mut usize, uid: String, id: NodeId) {
+    if let Some(seen) = xml_ids.get_mut(&uid) {
+        if *seen != Some(id) {
+            *seen = None;
+        }
+    } else if xml_ids.len() < MAX_XML_IDS && bytes.saturating_add(uid.len()) <= MAX_XML_ID_BYTES {
+        *bytes += uid.len();
+        xml_ids.insert(uid, Some(id));
+    }
 }
 
 /// Read the structure of the editing data `data`, applying the file's `%AI24_LargeCanvasScale` only
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
 /// keep the reduced one, which the PDF import reads as it is (#2031).
 pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
-    let mut r = Reader::new(data);
+    let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
     r.run()?;
     r.finish()
@@ -172,11 +230,154 @@ pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
 /// data): the program's header gives the author and the custom colors the editing data's header
 /// doesn't.
 pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structure, String> {
-    let mut r = Reader::new(data);
+    let header = Reader::header_of(ps);
+    let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    // The program's custom colors have swatches of their names, which no gradient or pattern takes.
+    for n in &header.custom_colors {
+        r.global_names.reserve(&n.name);
+    }
     r.run()?;
-    r.program_header(ps);
+    r.program_header(header);
     r.finish()
+}
+
+/// The names the gradients and patterns of the editing data `data` get in the document
+/// ([`ShownNames`]), with the names its other swatches can have reserved first: Registration, the
+/// default swatches of both color modes when the palette the reader keeps is missing or empty, the
+/// names that palette gives, the named colors, and the names without a newline of the gradients
+/// and patterns. Names come only from what the reader reads: not from the alternates of versioned
+/// content, the prolog, resources, sections it skips (such as symbols and the text document) or
+/// what follows the trailer. The palette the reader keeps is the last one outside those and the
+/// sections it reads on their own.
+fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
+    /// The sections the reader reads on their own whose definitions and colors it keeps.
+    const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
+    /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
+    /// open inside it.
+    fn closes(begin: &str, end: &str, depth: &mut usize, m: &str) -> bool {
+        if !begin.is_empty() && m == begin {
+            *depth += 1;
+        } else if m == end {
+            match depth.checked_sub(1) {
+                Some(d) => *depth = d,
+                None => return true,
+            }
+        }
+        false
+    }
+    let mut names = ShownNames::default();
+    names.reserve(vectorcraft_color::swatch::REGISTRATION);
+    let mut colors = paint::ColorNames::default();
+    let mut lex = Lexer::new(data);
+    // What the reader skips wherever it is (the marker of one of its kind nested in it, its end
+    // marker, how many are open inside it, and where reading goes on when it doesn't end), the
+    // top-level section being passed over (the first three, and whether the reader reads it on its
+    // own), and where the palette being found starts.
+    let mut skip: Option<(&str, &str, usize, Option<usize>)> = None;
+    let mut section: Option<(&str, &str, usize, bool)> = None;
+    let (mut palette_at, mut palette) = (None, None);
+    // Where the first art styles section starts, and that section.
+    let (mut styles_at, mut styles) = (None, None);
+    // A pattern's name is the first string of its definition.
+    let mut head = false;
+    // ASCII85 data in comment lines is skipped past, as the reader skips it.
+    let mut dictionaries = ops::Dictionaries::default();
+    // The scan's state where the versioned content being skipped starts, to go back to.
+    let mut versioned = None;
+    loop {
+        let before = lex.offset();
+        let Some(t) = lex.next_token() else {
+            // Versioned content that doesn't end is read whole, as the reader reads it.
+            match skip.take() {
+                Some((.., Some(at))) => {
+                    lex.seek(at);
+                    dictionaries = versioned.take().unwrap_or_default();
+                    continue;
+                }
+                _ => break,
+            }
+        };
+        let markers = skip.map(|s| (s.0, s.1)).or(palette_at.map(|_| ("", "EndPalette"))).or(section.map(|s| (s.0, s.1)));
+        dictionaries.pass(&t.tok, &mut lex, markers);
+        match &t.tok {
+            Tok::Comment(c) => {
+                let line = String::from_utf8_lossy(c);
+                let m = marker(&line);
+                if let Some((begin, end, depth, _)) = skip.as_mut() {
+                    if closes(begin, end, depth, m) {
+                        skip = None;
+                    }
+                } else if let Some(at) = palette_at {
+                    if m == "EndPalette" {
+                        palette = Some(lex.slice(at, before));
+                        palette_at = None;
+                    }
+                } else if m.starts_with("Alternate_Content") && section.is_none_or(|s| s.3) {
+                    skip = Some(("Begin_Content_if_version_gt", "End_Versioned_Content", 0, Some(lex.offset())));
+                    versioned = Some(dictionaries.clone());
+                } else if m == "%BeginProlog" {
+                    skip = Some(("", "%EndProlog", 0, None));
+                } else if m == "%BeginResource" {
+                    skip = Some(("", "%EndResource", 0, None));
+                } else if let Some((begin, end, depth, _)) = section.as_mut() {
+                    if closes(begin, end, depth, m) {
+                        if let Some(at) = styles_at.take().filter(|_| *begin == "BeginArtStyles") {
+                            styles = Some(lex.slice(at, before));
+                        }
+                        section = None;
+                    }
+                } else if m == "BeginPalette" {
+                    palette_at = Some(lex.offset());
+                } else if let Some((begin, end)) = types::SKIPPED.iter().find(|(b, _)| *b == m) {
+                    section = Some((begin, end, 0, READ_APART.contains(begin)));
+                    head = m == "BeginPattern";
+                    if m == "BeginArtStyles" && styles.is_none() {
+                        styles_at = Some(lex.offset());
+                    }
+                } else if matches!(m, "%PageTrailer" | "%Trailer") {
+                    break;
+                }
+                continue;
+            }
+            // A palette's names are those of the palette kept, as the palette reads them.
+            _ if skip.is_some() || palette_at.is_some() || section.is_some_and(|s| !s.3) => continue,
+            Tok::Str(s) | Tok::Hex(s) if std::mem::take(&mut head) => {
+                let text = obj::text(s);
+                if !text.contains('\n') {
+                    names.reserve(&text);
+                }
+            }
+            _ => {}
+        }
+        colors.token(t.tok);
+    }
+    colors.gradients.iter().filter(|n| !n.contains('\n')).for_each(|n| names.reserve(n));
+    let palette = palette.map(super::palette::palette).unwrap_or_default();
+    if palette.is_empty() {
+        for mode in [ColorMode::Rgb, ColorMode::Cmyk] {
+            let (swatches, groups) = vectorcraft_color::default_swatches(mode.model());
+            for g in &groups {
+                names.reserve(&g.name);
+                g.swatches.iter().for_each(|s| names.reserve(&s.name));
+            }
+            swatches.iter().for_each(|s| names.reserve(&s.name));
+        }
+    }
+    palette.own_names().for_each(|n| names.reserve(n));
+    colors.names.iter().for_each(|n| names.reserve(n));
+    (names, styles)
+}
+
+/// What the brushes and brush art read so far give a brushed stroke.
+#[derive(Default)]
+struct BrushesKept {
+    /// The counts of brushes and art sections when this was worked out.
+    read: (usize, usize),
+    /// Which of [`Reader::brush_drafts`] are kept as brushes.
+    kept: Vec<bool>,
+    /// The art an Art brush draws as the file does.
+    bending: HashSet<String>,
 }
 
 struct Reader<'a> {
@@ -197,6 +398,8 @@ struct Reader<'a> {
     to_doc: Option<Affine>,
     cropmarks: Option<Rect>,
     artboards: Vec<document::AiArtboard>,
+    /// The index in `artboards` of the active artboard (`CropAreaActive`).
+    active_board: Option<usize>,
     /// The user the header's `%%For` names.
     author: Option<String>,
     /// The custom colors the header's `%%CMYKCustomColor` and `%%RGBCustomColor` define.
@@ -210,6 +413,8 @@ struct Reader<'a> {
     /// The Objects on Path records of the `/Document` dictionary and the ids of the objects.
     on_path: on_path::OnPath,
     gradients: HashMap<String, Gradient>,
+    /// The names the gradients and patterns get in the document, by their names in the file.
+    global_names: ShownNames,
     gradient_def: Option<GradientDef>,
     instance: Option<Instance>,
     pending_fill: Option<Paint>,
@@ -220,10 +425,15 @@ struct Reader<'a> {
     /// a global process colour, so these make swatches only for names no colour operator defines.
     stop_spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The file `XG` names for the image after it (`XF`), until an image is read.
+    image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
     place: Option<Place>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
+    /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
+    /// `N`) came since: its name and opacity mask still follow.
+    image_tail: bool,
     nodes: usize,
     /// What layers that show have that this reader doesn't read (errors).
     unsupported: BTreeSet<String>,
@@ -232,7 +442,24 @@ struct Reader<'a> {
     /// What layers that don't show have that this reader doesn't read.
     hidden_unread: BTreeSet<String>,
     unread: Vec<(NodeId, Vec<String>)>,
+    /// The art boxes (symbol space) of symbols whose definition can be measured but not read
+    /// whole, by their name in the file: their instances come in as the page draws them.
     symbol_bounds: HashMap<String, Rect>,
+    /// The symbols read, by their name in the file → their name in the document.
+    symbol_names: HashMap<String, String>,
+    /// The names the symbols read have in the document, and for each name read more than once,
+    /// the number its next copy is tried with.
+    symbol_taken: HashSet<String>,
+    symbol_suffix: HashMap<String, usize>,
+    /// The art boxes (symbol space) of symbols read, by their name in the file, once measured for
+    /// an instance that comes in as the page draws it.
+    symbol_art_bounds: HashMap<String, Option<Rect>>,
+    /// The symbol list's names, in the Symbols panel's order (`%AI24_BeginSymbolList`).
+    symbol_list: Option<Vec<String>>,
+    /// The symbols read were checked for instances of symbols the file doesn't have.
+    symbols_checked: bool,
+    /// This reader reads a symbol's definition (see [`Reader::define_symbol`]).
+    symbol: Option<SymbolHead>,
     /// Depth shared by pattern and symbol readers.
     subreader_depth: usize,
     pending_unread_fill: bool,
@@ -248,6 +475,12 @@ struct Reader<'a> {
     warnings: Vec<String>,
     /// Objects read as their drawn look (several fills or strokes, effects, brushes).
     drawn_looks: usize,
+    /// The objects read as their drawn look in the art of [`Reader::brush_art`], by name: counted in
+    /// [`Reader::drawn_looks`] once a brush that is kept uses the art.
+    brush_art_looks: HashMap<String, usize>,
+    /// The objects read as their drawn look in the art of the patterns kept, by the name the document
+    /// has the pattern by: a pattern defined again counts only its last definition.
+    pattern_looks: HashMap<String, usize>,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
     /// The blend part each object's dictionary names (`ShapeBlendPathType`, `ShapeBlendPathID`).
@@ -273,10 +506,13 @@ struct Reader<'a> {
     /// dictionary (its name, its opacity mask and the mask's art).
     mesh_ended: bool,
     /// A layer's own state (`Xy` after its art, before `LB`), until something says the art moves on.
-    layer_state: Option<(f32, BlendMode, bool, Knockout)>,
+    layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
-    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
+    /// The state a layer's last group or compound path had before an `Xy` right after its end,
+    /// which is the layer's instead when the layer's own `7 () XW` follows.
+    container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// Painted copies of clipping paths that have a fill (drawn under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
@@ -301,6 +537,8 @@ struct Reader<'a> {
     palette: super::palette::Palette,
     /// See [`Structure::restyled`].
     restyled: Vec<Rect>,
+    /// See [`Structure::placeholders`].
+    placeholders: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
@@ -314,6 +552,10 @@ struct Reader<'a> {
     obj_hidden: bool,
     /// The names of text objects, by their slot's id.
     slot_names: HashMap<NodeId, String>,
+    /// [`Structure::xml_ids`].
+    xml_ids: HashMap<String, Option<NodeId>>,
+    /// The bytes of the ids in `xml_ids`.
+    xml_id_bytes: usize,
     /// The artboard's size and centre in files without artboards or crop marks.
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
@@ -321,15 +563,34 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
+    canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
     pattern: Option<PatternHead>,
     /// The tile (y down) of each pattern read, by name.
     pattern_tiles: HashMap<String, Rect>,
+    /// The patterns read from a definition in the version 7 form, whose fills apply their other
+    /// operands before the matrix (see [`Reader::pattern_paint`]).
+    v7_patterns: HashSet<String>,
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// The file has brush objects (the brush manager's order or a brush).
+    brush_objects: bool,
+    /// The brush manager's order.
+    brush_order: Option<Vec<(super::brush::Tool, String)>>,
+    /// The brushes read, in the order of their objects.
+    brush_drafts: Vec<super::brush::BrushDraft>,
+    /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
+    brush_art: HashMap<String, Node>,
+    /// The brush art sections read so far, repeated names included.
+    brush_art_sections: usize,
+    /// What the brushes and brush art read so far give a brushed stroke.
+    brushes_kept: BrushesKept,
+    /// Brush objects that weren't read.
+    brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
@@ -343,7 +604,25 @@ fn marker(c: &str) -> &str {
     word.strip_prefix("AI").map(|r| r.trim_start_matches(|ch: char| ch.is_ascii_digit())).and_then(|r| r.strip_prefix('_')).unwrap_or(word)
 }
 
+/// Is `name` that of a text slot for type that a look draws ([`document::LOOK_SLOT`])?
+pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
+    name == Some(document::LOOK_SLOT)
+}
+
 impl<'a> Reader<'a> {
+    /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
+    /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
+    /// before the art styles section use them too.
+    fn with_names(data: &'a [u8]) -> Self {
+        let mut r = Self::new(data);
+        let (names, styles) = swatch_names(data);
+        r.global_names = names;
+        if let Some(section) = styles {
+            r.styles = super::style::art_styles(section);
+        }
+        r
+    }
+
     fn new(data: &'a [u8]) -> Self {
         let mut doc = Document::new(1.0, 1.0);
         doc.layers.clear();
@@ -361,6 +640,7 @@ impl<'a> Reader<'a> {
             to_doc: None,
             cropmarks: None,
             artboards: Vec::new(),
+            active_board: None,
             author: None,
             custom_colors: Vec::new(),
             custom_more: None,
@@ -368,6 +648,7 @@ impl<'a> Reader<'a> {
             variables: VariableRead::default(),
             on_path: on_path::OnPath::default(),
             gradients: HashMap::new(),
+            global_names: ShownNames::default(),
             gradient_def: None,
             instance: None,
             pending_fill: None,
@@ -375,15 +656,24 @@ impl<'a> Reader<'a> {
             spots: Vec::new(),
             stop_spots: Vec::new(),
             raster: None,
+            image_link: None,
             place: None,
             foreign_data: None,
             after_object: false,
+            image_tail: false,
             nodes: 0,
             unsupported: BTreeSet::new(),
             unknown: BTreeSet::new(),
             hidden_unread: BTreeSet::new(),
             unread: Vec::new(),
             symbol_bounds: HashMap::new(),
+            symbol_names: HashMap::new(),
+            symbol_taken: HashSet::new(),
+            symbol_suffix: HashMap::new(),
+            symbol_art_bounds: HashMap::new(),
+            symbol_list: None,
+            symbols_checked: false,
+            symbol: None,
             subreader_depth: 0,
             pending_unread_fill: false,
             pending_unread_stroke: false,
@@ -395,6 +685,8 @@ impl<'a> Reader<'a> {
             color_model: None,
             warnings: Vec::new(),
             drawn_looks: 0,
+            brush_art_looks: HashMap::new(),
+            pattern_looks: HashMap::new(),
             hidden_ids: HashSet::new(),
             blend_roles: HashMap::new(),
             blend_record: None,
@@ -413,11 +705,13 @@ impl<'a> Reader<'a> {
             mesh_ended: false,
             layer_state: None,
             mesh_undo: None,
+            container_undo: None,
             styles: HashMap::new(),
             style_list: vec![],
             style_links: vec![],
             palette: super::palette::Palette::default(),
             restyled: vec![],
+            placeholders: vec![],
             placed_elsewhere: vec![],
             unread_elsewhere: vec![],
             mesh: None,
@@ -425,14 +719,25 @@ impl<'a> Reader<'a> {
             done: false,
             obj_hidden: false,
             slot_names: HashMap::new(),
+            xml_ids: HashMap::new(),
+            xml_id_bytes: 0,
             art_size: None,
             template_center: None,
             large_canvas: None,
+            canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
+            v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            brush_objects: false,
+            brush_order: None,
+            brush_drafts: Vec::new(),
+            brush_art: HashMap::new(),
+            brush_art_sections: 0,
+            brushes_kept: BrushesKept::default(),
+            brushes_unread: 0,
             graph: None,
             multi_mask: None,
         }

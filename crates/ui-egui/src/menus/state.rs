@@ -79,6 +79,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
+        "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -134,7 +135,7 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 /// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
 /// another stands in for ([`swapped_out`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
-    let en = enabled(app, id);
+    let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
     if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
         return None;
     }
@@ -186,6 +187,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     if SUBJECT_COMMANDS.contains(&id) {
         return has_subject(app);
     }
+    // The Artboard tool's canvas menu measured this when it opened.
+    if id == "artboard.deleteEmpty"
+        && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
+    {
+        return facts.any_empty;
+    }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         // The system clipboard's contents can be pasted with an empty internal clipboard.
         return (c.enabled)(&app.session).is_ok() || app.system_paste && id.starts_with("edit.paste");
@@ -201,6 +208,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelOpen" => !app.opening.pending.is_empty(),
+        "file.openInBackground" => crate::opening::any_shown(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
@@ -242,7 +251,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
                 && crate::dialogs::char_style_options::can_reset(d)
         }),
-        "ui.newArtboard" => app.session.active().is_some(),
+        "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
@@ -283,11 +292,17 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Cascade and Float in Window are (#3724).
-        "window.newWindow" => false,
-        // Tile with two documents or more; Consolidate All Windows while they are tiled.
-        "window.arrange.tile" => app.session.documents().len() > 1,
-        "window.arrange.consolidateAllWindows" => app.ui.tiled && !app.session.documents().is_empty(),
+        "window.newWindow" => app.session.active().is_some(),
+        // Tile and Cascade with two windows or more (documents, or views of one from New Window);
+        // Float in Window for a current window under the tabs; Float All in Windows while a window
+        // is under the tabs; Consolidate All Windows while windows are tiled or floating.
+        "window.arrange.tile" | "window.arrange.cascade" => crate::doc_windows::windows(app).len() > 1,
+        "window.arrange.floatInWindow" => crate::doc_windows::current(app).is_some_and(|w| !crate::doc_windows::floats(app, w)),
+        "window.arrange.floatAllInWindows" => !crate::doc_windows::docked_windows(app).is_empty(),
+        "window.arrange.consolidateAllWindows" => {
+            let n = crate::doc_windows::windows(app).len();
+            n > 0 && (app.ui.tiled || crate::doc_windows::docked_windows(app).len() < n)
+        }
         "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }

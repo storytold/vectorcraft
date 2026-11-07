@@ -862,6 +862,52 @@ impl Spine {
     pub fn anchor_length(&self, i: usize) -> Option<f64> {
         self.anchors.get(i).copied()
     }
+    /// Arc length of the point of the spine nearest `p`. An open spine's end segments run on past
+    /// its ends as lines, so the result is below 0 before the start and above [`Spine::length`]
+    /// beyond the end. With `from`, the arc length of an earlier point a drag followed, each point
+    /// counts as farther by half its distance along the spine from there, so a pointer passing
+    /// near another part of the spine stays on the part it follows. Where two points count as
+    /// near as each other, the one earlier along the spine counts.
+    pub fn length_near(&self, p: Point, from: Option<f64>) -> f64 {
+        self.nearest(p, from).map_or(0.0, |(_, s)| s)
+    }
+    /// [`Spine::length_near`] with how near the point counts: its distance from `p`, plus half its
+    /// distance along the spine from `from`. `None` for a point that is not finite.
+    pub fn nearest(&self, p: Point, from: Option<f64>) -> Option<(f64, f64)> {
+        if !p.x.is_finite() || !p.y.is_finite() {
+            return None;
+        }
+        let last = self.pts.len().saturating_sub(2);
+        let mut best: Option<(f64, f64)> = None;
+        for (i, (w, c)) in self.pts.windows(2).zip(&self.cum).enumerate() {
+            let [a, b] = [w[0], w[1]];
+            let d = b - a;
+            let l2 = d.dot(d);
+            if !l2.is_finite() || l2 <= 0.0 {
+                continue;
+            }
+            let t = (p - a).dot(d) / l2;
+            let t = match (self.closed, i == 0, i == last) {
+                (false, true, true) => t,
+                (false, true, false) => t.min(1.0),
+                (false, false, true) => t.max(0.0),
+                _ => t.clamp(0.0, 1.0),
+            };
+            let s = c + t * l2.sqrt();
+            let dist = p.distance(a + d * t) + from.filter(|f| f.is_finite()).map_or(0.0, |f| self.apart(s, f) / 2.0);
+            if dist.is_finite() && best.is_none_or(|(b, _)| dist < b) {
+                best = Some((dist, s));
+            }
+        }
+        best
+    }
+    /// How far apart arc lengths `s` and `f` are along the spine: the shorter way round a closed
+    /// spine, across its first anchor.
+    pub fn apart(&self, s: f64, f: f64) -> f64 {
+        let len = self.length();
+        let d = (s - f).abs();
+        if self.closed && len > 0.0 { d.rem_euclid(len).min(len - d.rem_euclid(len)) } else { d }
+    }
     /// Point and tangent angle (radians) at arc-length fraction `f` (0..1).
     pub fn at(&self, f: f64) -> (Point, f64) {
         self.at_length(f.clamp(0.0, 1.0) * self.length())

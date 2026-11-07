@@ -232,6 +232,8 @@ fn a_document_reopens_at_its_saved_view() {
     // Moving around afterwards isn't an edit.
     app.view_mut().unwrap().zoom = 0.5;
     assert!(!app.session.active().unwrap().is_dirty());
+    // Reopened: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
     io::open_path(&mut app, &path).unwrap();
     let v = *app.view().unwrap();
     assert_eq!((v.zoom, v.center, v.rotation, v.fitted), (3.0, Point::new(70.0, 40.0), 30.0, true));

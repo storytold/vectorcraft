@@ -274,19 +274,18 @@ pub fn chord_from_event(key: Key, m: Modifiers) -> Option<String> {
 
 ui_mirror!(fn backtick_store() -> Option<String>);
 
-/// Notes what the backtick key (left of 1) typed in `events`: the one-character text whose key, a
-/// press of it without modifiers, comes right before it (egui-winit) or, when no press comes
-/// before, right after it (eframe's web build with no text field focused). egui reports that key
-/// as [`Key::Backtick`] on layouts where it types a character egui has no key for, such as `"` on
-/// Turkish Q.
+/// Notes what the backtick key (left of 1) typed in `events`: the last one-character text that
+/// [`crate::shortcuts::typing_presses`] pairs with a press of that key without modifiers, whether
+/// the press comes before its text (egui-winit) or after it (eframe's web build with no text field
+/// focused). egui reports that key as [`Key::Backtick`] on layouts where it types a character egui
+/// has no key for, such as `"` on Turkish Q.
 pub(crate) fn note_backtick_text(events: &[egui::Event]) {
-    let is_press = |e: Option<&egui::Event>| matches!(e, Some(egui::Event::Key { pressed: true, .. }));
-    let is_backtick =
-        |e: Option<&egui::Event>| matches!(e, Some(egui::Event::Key { key: Key::Backtick, pressed: true, modifiers, .. }) if modifiers.is_none());
-    let typed = events.iter().enumerate().rev().find_map(|(j, e)| match e {
-        egui::Event::Text(t) if t.chars().count() == 1 && !t.chars().any(char::is_whitespace) => {
-            let before = j.checked_sub(1).and_then(|j| events.get(j));
-            (is_backtick(before) || (!is_press(before) && is_backtick(events.get(j + 1)))).then(|| t.clone())
+    let typed_by = crate::shortcuts::typing_presses(events);
+    let typed = events.iter().zip(typed_by).rev().find_map(|(e, by)| match (e, by.and_then(|k| events.get(k))) {
+        (egui::Event::Text(t), Some(egui::Event::Key { key: Key::Backtick, modifiers, .. }))
+            if modifiers.is_none() && t.chars().count() == 1 && !t.chars().any(char::is_whitespace) =>
+        {
+            Some(t.clone())
         }
         _ => None,
     });
@@ -371,7 +370,9 @@ pub fn entries() -> &'static [Entry] {
             is_tool: false,
         }));
         for (id, label, sc, params) in menus::UI_COMMANDS {
-            if !seen.insert(id) || (sc.is_empty() && !params.starts_with("{}") && !params.starts_with("{path")) {
+            // Rename has no default key, and a key press names the selection: it needs no `id`.
+            let key_runs_it = !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || *id == "ui.rename";
+            if !seen.insert(id) || !key_runs_it {
                 continue;
             }
             v.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
@@ -1322,6 +1323,13 @@ mod tests {
         assert_eq!(backtick_text().as_deref(), Some("\""));
         note_backtick_text(&[text("`"), press(Key::Backtick)]);
         assert_eq!(backtick_text(), None);
+        // Several keys typed in one frame on the web: each text goes with the press after it.
+        let web = [text("a"), press(Key::A), text("\""), press(Key::Backtick), text("b"), press(Key::B)];
+        note_backtick_text(&web);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
+        note_backtick_text(&[text("`"), press(Key::Backtick)]);
+        note_backtick_text(&[press(Key::A), text("a"), press(Key::Backtick), text("\""), press(Key::B), text("b")]);
+        assert_eq!(backtick_text().as_deref(), Some("\""));
         // Only the unshifted key types that character.
         assert_eq!(on_layout("Shift+~".into(), Some("\"")), "Shift+~");
         assert_eq!(on_layout("Cmd+~".into(), Some("\"")), "Cmd+\"");
@@ -1443,6 +1451,35 @@ mod tests {
         assert_eq!(back, ov);
         assert!(import_json(&json!({"overrides": {"x": "Cmd+Nope+Q"}})).is_err());
         assert!(import_json(&json!({})).is_err());
+    }
+
+    /// The dialog's Import… leaves an action its function key when the imported set gives the key
+    /// to a command, through both Cancel and OK.
+    #[test]
+    fn importing_into_the_dialog_preserves_action_keys_on_ok() {
+        use crate::panels::actions::{Action, ActionSet, FunctionKey};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let f15 = FunctionKey { key: 15, cmd: false, shift: false };
+        let mut nudge = Action::new("Nudge", vec![]);
+        nudge.key = Some(f15);
+        app.ui.action_sets.push(ActionSet::new("Mine", vec![nudge]));
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.duplicate", "F15");
+        let bytes = serde_json::to_vec(&export_json("Imported", &ov)).unwrap();
+        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| Some("/sets/Imported.json".to_string())));
+        app.services.read = Some(Box::new(move |_: &str| Ok(bytes.clone())));
+        let key = |app: &VectorcraftApp| app.ui.action_sets.last().and_then(|s| s.actions.first()).and_then(|a| a.key);
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15), "the import alone keeps the action's key");
+        assert!(app.ui.shortcut_overrides.is_empty(), "the import is only in the dialog");
+        app.ui.dialog = None;
+        assert_eq!(key(&app), Some(f15), "Cancel keeps the action's key");
+        open(&mut app);
+        import_into_dialog(&mut app);
+        assert_eq!(key(&app), Some(f15));
+        confirm(&mut app).unwrap();
+        assert_eq!(key(&app), Some(f15), "OK keeps the action's function key");
     }
 
     #[test]

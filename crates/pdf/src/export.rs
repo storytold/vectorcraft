@@ -33,6 +33,7 @@ use crate::{Compatibility, ExportReport, PdfError, PdfOptions, Standard};
 mod entry;
 mod exporter;
 mod images;
+mod links;
 mod nodes;
 mod paint;
 mod text;
@@ -45,6 +46,8 @@ use exporter::{MAX_COORD, writable, xf};
 pub use exporter::{MIN_RASTER_PPI, pdf_raster_ppi};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
+#[cfg(test)]
+pub(crate) use nodes::MEASURES;
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {

@@ -2,9 +2,9 @@
 //!
 //! ```text
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
-//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2]
+//! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2] [--ppi 300]
 //! vectorcraft-cli commands
-//! vectorcraft-cli convert IN OUT [--scale 2] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+//! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
@@ -81,11 +81,12 @@ USAGE:
       allowed, and a kind left out grants none of its access. They imply --headless: a running app
       enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
 
-  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N]
+  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export each FILE in the format its extension picks (see Writable formats; a .ait FILE
-      is a template, written as file.saveAsTemplate writes it). --scale sizes raster exports
-      (pixels per point, default 1); other formats leave it out. Prints one JSON result per step.
+      is a template, written as file.saveAsTemplate writes it). Raster exports use the document's
+      raster effects resolution unless --scale (pixels per point) or --ppi (pixels per inch, wins
+      over --scale) is given; other formats leave them out. Prints one JSON result per step.
       --commands reads steps from FILE, or from standard input for -, where it stands among the
       --cmd and --export steps: a JSON array of {\"command\": ID, \"params\": {...}} (or \"id\" for
       \"command\"), or one such object per line (JSON Lines), at most 64 MiB and 100000 steps.
@@ -94,10 +95,10 @@ USAGE:
   vectorcraft-cli commands
       Print the command catalogue as JSON.
 
-  vectorcraft-cli convert IN OUT [--scale N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
+  vectorcraft-cli convert IN OUT [--scale N] [--ppi N] [--artboard I | --range R] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
       Open IN (any readable format) and export OUT in the format its extension picks (see Writable
-      formats). --scale sizes a raster OUT (pixels per point, default 1); other formats leave it
-      out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
+      formats). Raster resolution: --ppi, else 72 times --scale, else the document's raster effects
+      resolution; other formats leave them out. --artboard is 0-based, --range 1-based (\"1-3,5\"); a PDF gets every artboard
       unless one of them is given, EPS the bounds of the art, the other formats the first artboard.
       A .ait OUT is a template of every artboard, written as file.saveAsTemplate writes it (not with
       --artboard or --range).
@@ -279,13 +280,15 @@ fn commands() -> Result<(), String> {
 }
 
 fn convert(args: &[String]) -> Result<(), String> {
-    let valued = ["--scale", "-s", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
+    let valued =
+        ["--scale", "-s", "--ppi", "--artboard", "-a", "--range", "-r", "--decimals", "--ai-version", "--hidden-objects", "--transparent-images"];
     if help_requested(args, &valued) {
         return help();
     }
     let mut files = vec![];
     let (mut scale, mut artboard, mut range, mut outline_text, mut replace_lossy, mut editing_data, mut preserve_editing) =
-        (1.0f64, None::<u64>, None::<String>, false, false, false, false);
+        (None::<f64>, None::<u64>, None::<String>, false, false, false, false);
+    let mut ppi = None::<f64>;
     let mut decimals = None::<u64>;
     // Legacy `.ai` options, passed on as the export's own (`aiVersion`, `hiddenObjects`,
     // `transparentImages`); the engine checks their values.
@@ -293,7 +296,15 @@ fn convert(args: &[String]) -> Result<(), String> {
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
-            "--scale" | "-s" => scale = it.next().and_then(|v| v.parse().ok()).ok_or("--scale needs a number")?,
+            "--scale" | "-s" => scale = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--scale needs a number")?),
+            "--ppi" => {
+                ppi = Some(
+                    it.next()
+                        .and_then(|v| v.parse().ok())
+                        .filter(|n: &f64| n.is_finite() && *n > 0.0)
+                        .ok_or("--ppi needs a positive finite number")?,
+                );
+            }
             "--artboard" | "-a" => artboard = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--artboard needs an index")?),
             "--range" | "-r" => range = Some(it.next().cloned().ok_or("--range needs artboards such as 1-3,5")?),
             "--outline-text" => outline_text = true,
@@ -326,7 +337,7 @@ fn convert(args: &[String]) -> Result<(), String> {
         // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
         // PSD).
         let params = json!({"path": output, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
-        let mut params = with_pixel_scale(params, &output, scale);
+        let mut params = with_pixel_scale(params, &output, scale, ppi);
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
         }
@@ -372,12 +383,17 @@ fn is_template(path: &str) -> bool {
     vectorcraft_engine::cmd::fileio::format_for_name(path).is_some_and(|f| f.id == "ait")
 }
 
-/// The export `params` for `path`, with `--scale` (pixels per point) when its format is raster.
+/// The export `params` for `path`, with explicit raster resolution options only for raster formats.
 /// DXF has a `scale` of its own (drawing units per unit), which would resize the drawing and leave
 /// its units unset.
-fn with_pixel_scale(mut params: Value, path: &str, scale: f64) -> Value {
+fn with_pixel_scale(mut params: Value, path: &str, scale: Option<f64>, ppi: Option<f64>) -> Value {
     if vectorcraft_engine::cmd::fileio::writable_format(None, Some(path)).is_ok_and(|f| f.raster) {
-        params["scale"] = json!(scale);
+        if let Some(scale) = scale {
+            params["scale"] = json!(scale);
+        }
+        if let Some(ppi) = ppi {
+            params["ppi"] = json!(ppi);
+        }
     }
     params
 }
@@ -485,7 +501,7 @@ fn command_step(v: Value) -> Result<Step, String> {
 }
 
 fn run(args: &[String]) -> Result<(), String> {
-    let valued = ["--in", "-i", "--cmd", "-c", "--params", "-p", "--commands", "--export", "-o", "--scale", "-s"];
+    let valued = ["--in", "-i", "--cmd", "-c", "--params", "-p", "--commands", "--export", "-o", "--scale", "-s", "--ppi"];
     if help_requested(args, &valued) {
         return help();
     }
@@ -494,7 +510,8 @@ fn run(args: &[String]) -> Result<(), String> {
     // The step of the `--cmd` just given, which a `--params` sets.
     let mut params_for: Option<usize> = None;
     let mut stdin_read = false;
-    let mut scale = 1.0;
+    let mut scale = None::<f64>;
+    let mut ppi = None::<f64>;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("{a} needs {what}"));
@@ -531,7 +548,16 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             "--scale" | "-s" => {
                 let raw = val("a number")?;
-                scale = raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?;
+                scale = Some(raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?);
+            }
+            "--ppi" => {
+                let raw = val("a number")?;
+                ppi = Some(
+                    raw.parse::<f64>()
+                        .ok()
+                        .filter(|n| n.is_finite() && *n > 0.0)
+                        .ok_or_else(|| format!("--ppi {raw}: needs a positive finite number"))?,
+                );
             }
             other => return Err(format!("unknown run option `{other}`")),
         }
@@ -576,7 +602,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 let r = if is_template(&path) {
                     h.call("engine.execute", json!({"command": "file.saveAsTemplate", "params": {"path": path, "format": "ait"}}))
                 } else {
-                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, scale))
+                    h.call("app.export", with_pixel_scale(json!({"path": path}), &path, scale, ppi))
                 };
                 let r = r.map_err(|e| format!("step {n}: export {path}: {e}"))?;
                 emit(json!({"step": "export", "result": r}))?;

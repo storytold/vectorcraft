@@ -136,6 +136,38 @@ fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
     }
 }
 
+/// #4506: a 3D effect on a group draws its members' solids on the canvas as the export does, and
+/// the group's drawn bounds (what a change redraws) hold all of them.
+#[test]
+fn solid_effects_on_a_group_draw_as_exported_within_their_drawn_bounds() {
+    for (effect, params) in [
+        ("threeD.extrude", json!({"depth": 30, "rotationX": -30, "rotationY": 40})),
+        ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
+    ] {
+        let square = |id: u64, x: f64, c: Color| {
+            Arc::new(Node::path(
+                NodeId(id),
+                shapes::rectangle(vectorcraft_geom::Rect::new(x, 35.0, x + 25.0, 60.0)),
+                Appearance::basic(Paint::solid(c), Paint::None, 0.0),
+            ))
+        };
+        let mut g = Node::group(NodeId(0), vec![square(10, 15.0, Color::rgb(0.9, 0.2, 0.1)), square(11, 60.0, Color::rgb(0.1, 0.3, 0.9))]);
+        g.appearance.effects.push(fx(effect, params));
+        let d = doc_with(Document::new(100.0, 100.0), g);
+        let live = render(&d);
+        let exported = render(&vectorcraft_effects::bake_document(&d).unwrap());
+        assert_eq!(live.pixels, exported.pixels, "{effect}: canvas and baked/exported faces agree");
+        let g = &d.layers[0].children().unwrap()[0];
+        let art = vectorcraft_effects::solid_art(g).unwrap().visual_bounds().unwrap();
+        let drawn = drawn_bounds(&d, g).unwrap();
+        assert_eq!(drawn.union(art), drawn, "{effect}: the drawn bounds hold the art");
+        let blues = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[2] as u16 > p[0] as u16 * 2).count();
+        let reds = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[2] as u16 * 2).count();
+        assert!(blues > 100 && reds > 100, "{effect}: both members drawn ({reds} red, {blues} blue px)");
+    }
+}
+
 #[test]
 fn smooth_revolve_reduces_banding_without_changing_radial_resolution() {
     let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 20 L70 80").unwrap());
@@ -883,4 +915,18 @@ fn darkness_adjusts_gradient_stop_colors_before_interpolation() {
             }
         }
     }
+}
+
+/// A symbol instance with object effects is charged to the frame's symbol budget like one
+/// without: past the budget it isn't expanded.
+#[test]
+fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
+    let d = symbol_doc(vec![fx("distort.roughen", json!({}))]);
+    let inst = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
+    assert!(r.charge_fx_instance(&d, &inst), "one object fits");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+    assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
 }

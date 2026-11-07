@@ -14,13 +14,18 @@
 //! uses its resources as they are now.
 
 use std::cell::OnceCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeKind, PatternDef, Symbol, TextStyleDef};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeKind, PatternDef, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration,
+    TextStyleDef,
+};
+
+use super::super::brushsym::{set_natural_size, stored_natural_size};
 
 use super::super::patterncmds::add_pattern;
 use super::super::{Result, bad, unique_name};
@@ -149,6 +154,39 @@ struct Defs<'a> {
     char_styles: &'a [TextStyleDef],
     para_styles: &'a [TextStyleDef],
     brushes: Brushes<'a>,
+    /// Where each name is defined, built the first time a kind is followed.
+    index: DefIndex,
+}
+
+/// The positions of a kind's definitions by name.
+type NameIndex = HashMap<String, Vec<usize>>;
+
+/// [`Defs`]' definitions by name (graphic styles by id), each kind indexed the first time a
+/// reference to it is followed: finding a name's definitions by scanning them all made a
+/// document or library of N definitions that use each other cost N² comparisons.
+#[derive(Default)]
+struct DefIndex {
+    swatches: OnceCell<NameIndex>,
+    symbols: OnceCell<NameIndex>,
+    patterns: OnceCell<NameIndex>,
+    styles: OnceCell<HashMap<u32, Vec<usize>>>,
+    char_styles: OnceCell<NameIndex>,
+    para_styles: OnceCell<NameIndex>,
+    brushes: OnceCell<NameIndex>,
+}
+
+/// The items of `list` named `name`, in order, `index` holding their positions (built from
+/// `list` the first time).
+fn named<'l, T>(index: &OnceCell<NameIndex>, list: &'l [T], name_of: impl Fn(&T) -> &str, name: &str) -> impl Iterator<Item = &'l T> {
+    let index = index.get_or_init(|| {
+        let mut by: NameIndex = HashMap::new();
+        for (i, item) in list.iter().enumerate() {
+            by.entry(name_of(item).to_string()).or_default().push(i);
+        }
+        by
+    });
+    let at: &[usize] = index.get(name).map_or(&[], Vec::as_slice);
+    at.iter().filter_map(move |&i| list.get(i))
 }
 
 /// The brushes references lead to: a document's library, read the first time a brush is used
@@ -178,6 +216,7 @@ impl<'a> Defs<'a> {
             char_styles: &d.char_styles,
             para_styles: &d.para_styles,
             brushes: Brushes::Lazy(d, brushes),
+            index: DefIndex::default(),
         }
     }
 }
@@ -219,8 +258,16 @@ impl Used {
     fn note<'a>(&mut self, defs: &Defs<'a>, r: Ref<'_>, todo: &mut Vec<Source<'a>>) {
         let (res, name) = match r {
             Ref::Style(id) => {
-                if self.styles.insert(id) {
-                    todo.extend(defs.styles.iter().filter(|g| g.id != 0 && g.id == id).map(|g| Source::Appearance(&g.appearance)));
+                if self.styles.insert(id) && id != 0 {
+                    let index = defs.index.styles.get_or_init(|| {
+                        let mut by: HashMap<u32, Vec<usize>> = HashMap::new();
+                        for (i, g) in defs.styles.iter().enumerate() {
+                            by.entry(g.id).or_default().push(i);
+                        }
+                        by
+                    });
+                    let at = index.get(&id).map_or(&[][..], Vec::as_slice);
+                    todo.extend(at.iter().filter_map(|&i| defs.styles.get(i)).map(|g| Source::Appearance(&g.appearance)));
                 }
                 return;
             }
@@ -237,15 +284,16 @@ impl Used {
             return;
         }
         set.insert(name.to_string());
+        let ix = &defs.index;
         match res {
             // A tint swatch's base, a gradient swatch's linked stops.
-            Res::Swatch => todo.extend(defs.swatches.iter().filter(|w| w.name == name).map(|w| Source::Paint(&w.paint))),
-            Res::Symbol => todo.extend(defs.symbols.iter().filter(|s| s.name == name).map(|s| Source::Node(&s.art))),
-            Res::Pattern => todo.extend(defs.patterns.iter().filter(|p| p.name == name).flat_map(|p| p.art.iter().map(|a| Source::Node(a)))),
-            Res::CharStyle => todo.extend(defs.char_styles.iter().filter(|s| s.name == name).map(|s| Source::Attrs(&s.attrs))),
-            Res::ParaStyle => todo.extend(defs.para_styles.iter().filter(|s| s.name == name).map(|s| Source::Attrs(&s.attrs))),
+            Res::Swatch => todo.extend(named(&ix.swatches, &defs.swatches, |w| &w.name, name).map(|w| Source::Paint(&w.paint))),
+            Res::Symbol => todo.extend(named(&ix.symbols, defs.symbols, |s| &s.name, name).map(|s| Source::Node(&s.art))),
+            Res::Pattern => todo.extend(named(&ix.patterns, defs.patterns, |p| &p.name, name).flat_map(|p| p.art.iter().map(|a| Source::Node(a)))),
+            Res::CharStyle => todo.extend(named(&ix.char_styles, defs.char_styles, |s| &s.name, name).map(|s| Source::Attrs(&s.attrs))),
+            Res::ParaStyle => todo.extend(named(&ix.para_styles, defs.para_styles, |s| &s.name, name).map(|s| Source::Attrs(&s.attrs))),
             // A scatter or art brush's art, a pattern brush's tiles.
-            Res::Brush => todo.extend(defs.brushes.get().iter().filter(|b| b.name == name).flat_map(|b| b.art().into_iter().map(Source::Node))),
+            Res::Brush => todo.extend(named(&ix.brushes, defs.brushes.get(), |b| &b.name, name).flat_map(|b| b.art().into_iter().map(Source::Node))),
             _ => {}
         }
     }
@@ -585,6 +633,38 @@ fn shows_definitions(b: &Brush) -> bool {
     found
 }
 
+/// A symbol's Symbol Options, which its document keeps by symbol name: copied with the symbol and
+/// given to it under the name pasting adds it as.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SymbolOptions {
+    /// Natural size `(w, h)` (`None`: the document records none).
+    pub size: Option<(f64, f64)>,
+    pub registration: SymbolRegistration,
+    pub export_type: SymbolExportType,
+    /// 9-slice guides (`None`: 9-slice scaling off).
+    pub nine_slice: Option<SymbolNineSlice>,
+}
+
+impl SymbolOptions {
+    /// The options `d` keeps for symbol `name`.
+    fn of(d: &Document, name: &str) -> Self {
+        Self {
+            size: stored_natural_size(d, name),
+            registration: d.symbol_registration(name),
+            export_type: d.symbol_export_type(name),
+            nine_slice: d.symbol_nine_slice(name),
+        }
+    }
+
+    /// Make them the options of `d`'s symbol `name`.
+    fn give(&self, d: &mut Document, name: &str) {
+        set_natural_size(d, name, self.size);
+        d.set_symbol_registration(name, self.registration);
+        d.set_symbol_export_type(name, self.export_type);
+        d.set_symbol_nine_slice(name, self.nine_slice);
+    }
+}
+
 /// What pasting did to the document's resources (part of the paste result).
 #[derive(Debug, Default)]
 pub(crate) struct Imported {
@@ -628,6 +708,12 @@ impl Clipboard {
         Self {
             images: src.images.iter().filter(|(k, _)| used.has(Res::Image, k)).map(|(k, b)| (k.clone(), b.clone())).collect(),
             symbols: src.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).cloned().collect(),
+            symbol_options: src
+                .symbols
+                .iter()
+                .filter(|s| used.has(Res::Symbol, &s.name))
+                .map(|s| (s.name.clone(), SymbolOptions::of(src, &s.name)))
+                .collect(),
             patterns: src.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).cloned().collect(),
             swatches: src.swatches_iter().filter(|w| used.carries(w)).cloned().collect(),
             graphic_styles: src.graphic_styles.iter().filter(|g| g.id != 0 && used.styles.contains(&g.id)).cloned().collect(),
@@ -649,6 +735,7 @@ impl Clipboard {
             char_styles: &self.char_styles,
             para_styles: &self.para_styles,
             brushes: Brushes::Ready(&self.brushes),
+            index: DefIndex::default(),
         };
         Used::of(&defs, &self.nodes)
     }
@@ -671,7 +758,7 @@ impl Clipboard {
         self.import_swatches(d, &used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
         // they may brush; the others once those are in.
-        let mut added_brushes = self.import_brushes(d, &used, same_doc, false, &mut out);
+        let mut added_brushes: HashSet<String> = self.import_brushes(d, &used, same_doc, false, &mut out).into_iter().collect();
         // Character and paragraph styles (their colours relinked first).
         for (r, mine, theirs) in [(Res::CharStyle, &self.char_styles, &mut d.char_styles), (Res::ParaStyle, &self.para_styles, &mut d.para_styles)] {
             for def in mine.iter().filter(|s| used.has(r, &s.name)) {
@@ -681,16 +768,30 @@ impl Clipboard {
                 out.placed(r, &def.name, &p);
             }
         }
-        // Symbols and patterns, compared once relinked. Those added are relinked at the end, when
-        // every new name and graphic style id is known.
-        let mut added_symbols = vec![];
+        // Symbols and patterns, compared once relinked (symbols with their options too). Those
+        // added are relinked at the end, when every new name and graphic style id is known.
+        let mut added_symbols = HashSet::new();
         for def in self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)) {
+            let options = self.symbol_options.get(&def.name);
+            let theirs: HashMap<String, SymbolOptions> = match options {
+                Some(_) => {
+                    d.symbols.iter().filter(|s| copy_of(&def.name, &s.name)).map(|s| (s.name.clone(), SymbolOptions::of(d, &s.name))).collect()
+                }
+                None => HashMap::new(),
+            };
             let r = &out.relink;
-            let p = place(&mut d.symbols, def, same_doc, |a, b| same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art)));
-            added_symbols.extend(p.new_name(&def.name));
+            let p = place(&mut d.symbols, def, same_doc, |a, b| {
+                options.is_none_or(|o| theirs.get(&a.name) == Some(o)) && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+            });
+            if let Some(name) = p.new_name(&def.name) {
+                if let Some(o) = options {
+                    o.give(d, &name);
+                }
+                added_symbols.insert(name);
+            }
             out.placed(Res::Symbol, &def.name, &p);
         }
-        let mut added_patterns = vec![];
+        let mut added_patterns = HashSet::new();
         for def in self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)) {
             // Tile options alike, and the art once relinked.
             let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };

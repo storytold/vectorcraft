@@ -559,6 +559,9 @@ impl Document {
             reads += usize::from(read_full && depth > 0);
             let full = if read_full { full_bytes(&p, &blob) } else { None };
             if full.and_then(|b| read(&p, &b)).is_none() {
+                // A full read cached for another caller (one allowed to read the file) must not
+                // stand in for the one refused or not tried here: the preview shows instead.
+                cache().entries.remove(&(p.key.clone(), false));
                 let preview = if blob.is_proxy() { Some(blob.bytes.clone()) } else { blob.proxy.clone() };
                 if let Some(bytes) = preview {
                     read_preview(&p, &bytes);
