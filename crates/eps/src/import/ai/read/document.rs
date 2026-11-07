@@ -914,13 +914,20 @@ impl<'a> Reader<'a> {
     }
 
     /// The brushes read ([`brush::finish_brushes`]) and how many weren't; `None` when the file has
-    /// no brush objects (the document keeps the default brushes).
+    /// no brush objects (the document keeps the default brushes). The objects read as their drawn
+    /// look in the art the brushes use count toward the note on drawn looks, once for each art.
     fn brush_library(&mut self) -> Option<(Vec<vectorcraft_brush::Brush>, usize)> {
         if !self.brush_objects {
             return None;
         }
         let drafts = std::mem::take(&mut self.brush_drafts);
         let (lib, left_out) = brush::finish_brushes(drafts, &self.brush_art, self.brush_order.as_deref());
+        let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
+        for (name, art) in &self.brush_art {
+            if used.contains(&art.id) {
+                self.drawn_looks += self.brush_art_looks.get(name).copied().unwrap_or(0);
+            }
+        }
         Some((lib, left_out + self.brushes_unread))
     }
 
@@ -1125,6 +1132,7 @@ impl<'a> Reader<'a> {
                 warnings.push(brush::left_out_note(unread));
             }
         }
+        self.drawn_looks += self.pattern_looks.values().sum::<usize>();
         if self.drawn_looks > 0 {
             warnings.push(format!(
                 "objects with several fills or strokes, effects or brushes came in as their drawn look ({}): their appearance isn't editable yet",

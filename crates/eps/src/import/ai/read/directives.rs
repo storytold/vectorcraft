@@ -507,6 +507,7 @@ impl<'a> Reader<'a> {
         } else {
             self.v7_patterns.remove(&head.name);
         }
+        self.pattern_looks.insert(def.name.clone(), sub.drawn_looks);
         self.doc.patterns.push(def);
         for (key, blob) in sub.doc.images {
             self.doc.images.entry(key).or_insert(blob);
@@ -755,6 +756,7 @@ impl<'a> Reader<'a> {
             && sub.frames.len() == 1
             && sub.doc.images.is_empty();
         let Some(frame) = sub.frames.pop().filter(|f| whole && !f.children.is_empty()) else { return };
+        self.brush_art_looks.insert(name.clone(), sub.drawn_looks);
         let mut art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),

@@ -1679,6 +1679,21 @@ fn a_transparency_set_in_a_dictionary_s_art_stays_after_it() {
 }
 
 #[test]
+fn a_transparency_set_in_a_clipping_group_stays_after_it() {
+    // GUARDS: `Q` ends a clipping group but doesn't take the transparency back to what it was at
+    // its `q`: the writer sets `Xy` only when the next object's state differs from the last one it
+    // wrote. A Screen glow, then a clipping group whose path is set back to Normal, then type with
+    // no `Xy`: restored at `Q`, the type drew in Screen and nearly vanished on a light background.
+    let clip = format!("q\n0 1 0 0 0 Xy\n{}h\nW\nn\n{RED}{}f\nQ\n", rect_path(0.0, 0.0, 200.0, 100.0), rect_path(40.0, 0.0, 50.0, 10.0));
+    let body = format!("2 0.8 0 0 0 Xy\n{RED}{}f\n{clip}{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let a = art(&read_ok(&layer(&body)).doc);
+    assert_eq!(a.len(), 3, "{a:#?}");
+    assert_eq!((a[0].opacity, a[0].blend), (0.8, BlendMode::Screen), "the glow's own state");
+    assert!(matches!(a[1].kind, NodeKind::Group { clip: true, .. }), "{:?}", a[1].kind);
+    assert_eq!((a[2].opacity, a[2].blend), (1.0, BlendMode::Normal), "the state set inside the clipping group");
+}
+
+#[test]
 fn gradients() {
     let defs = "%AI5_BeginGradient: (G)\n(G) 1 2 Bd\n[\n<00FF>\n0\n0 0 0 0 1 0 0 2 1 6 %_BS\n\
                 %_0 0 0 0 1 0 0 2 1 6 40 0 Bs\n%_0 0 0 0 0 0 1 2 0.5 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
@@ -2379,6 +2394,44 @@ fn a_drawn_look_stands_for_its_object() {
     assert_eq!(a[0].opacity, 0.4);
     assert_eq!(a[0].children().unwrap().len(), 2, "the newer readers' part is left out");
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+}
+
+/// An object kept as its drawn look: the look (a group), then the object on `%_` lines and its style.
+fn drawn_look_art() -> String {
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    format!(
+        "0 Ae\nu\n{RED}{}f\n{}S\nU\n%_{hidden_rect}n\n%_/ArtDictionary :\n%_/XMLUID : (Look) ; (AI10_ArtUID) ,\n%_;\n1 (Look style) XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0),
+        rect_path(0.0, 0.0, 10.0, 10.0),
+    )
+}
+
+/// A pattern's art holding an object kept as its drawn look counts in the note, as a symbol's does;
+/// a definition the same name replaces later counts no longer.
+#[test]
+fn a_drawn_look_in_a_patterns_art_is_noted() {
+    let pattern = |art: &str| format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{art}E\n%AI3_EndPattern\n");
+    let looked = pattern(&drawn_look_art());
+    let r = read_ok(&format!("{looked}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let plain = pattern(&format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)));
+    let r = read_ok(&format!("{looked}{plain}{}", layer("")));
+    assert_eq!(r.doc.patterns.len(), 1, "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// A brush's art holding an object kept as its drawn look counts in the note once a brush that is
+/// kept uses the art; art no brush uses brings no note.
+#[test]
+fn a_drawn_look_in_a_brushs_art_is_noted_when_a_brush_uses_it() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", drawn_look_art());
+    let r = read_ok(&format!("{section}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert!(matches!(brush_named(&lib, "Spray"), vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{section}{}{}", plugin_object(CALLIGRAPHIC, "Nib", NIB), layer("")));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// Editing data with one layer holding an image: `matrix` (`[a b c d tx ty]`), its size, colour
@@ -5114,6 +5167,25 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+#[test]
+fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
+    // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
+    // its editing data) found no style and came in as their drawn look.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let styled = format!("u\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{ART_STYLES}{}", symbols(&symbol("Tag", &styled, 1)), layer("")));
+    let art = &r.doc.symbols.first().expect("the symbol").art;
+    let object = match &art.kind {
+        NodeKind::Group { children, .. } if children.len() == 1 => &children[0],
+        _ => art,
+    };
+    assert!(matches!(object.kind, NodeKind::Path { .. }), "the object, not its look: {art:#?}");
+    assert_eq!(object.appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = object.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
@@ -6555,7 +6627,7 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
         assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "mask colour must not leak");
         let m = a[0].extras().mask.as_ref().unwrap();
         assert_eq!((m.clip, m.invert, m.disabled, m.linked), (true, invert, disabled, linked));
-        let mask_path = &m.art.children().unwrap()[0].children().unwrap()[0];
+        let mask_path = &m.art.children().unwrap()[0];
         assert!(matches!(mask_path.kind, NodeKind::Path { .. }));
         assert_eq!(mask_path.geometric_bounds(), Some(Rect::new(10.0, 40.0, 30.0, 80.0)));
         assert_ne!(mask_path.id, a[0].id);
@@ -6563,6 +6635,37 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
     for broken in [mask.replace("%_X+\n", ""), mask.replace("%_U\n", ""), mask.replace("%_f", "%_unknownMaskOperator")] {
         assert!(read(stream(&layer(&format!("{owner}{broken}"))).as_bytes()).is_err());
     }
+}
+
+/// An opacity mask's art of one shown object is that object; other art is read into a group.
+#[test]
+fn opacity_mask_art_of_one_object_is_that_object() {
+    let owner = format!("{RED}{}f\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let square = "%_1 g\n%_10 20 m\n%_10 60 L\n%_30 60 L\n%_30 20 L\n%_f\n";
+    let read_art = |ops: &str| {
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{ops}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+        let r = read_ok(&layer(&format!("{owner}{mask}")));
+        art(&r.doc)[0].extras().mask.as_ref().unwrap().art.clone()
+    };
+    assert!(matches!(read_art(square).kind, NodeKind::Path { .. }));
+    // A group is one object: it stays a group, holding its path.
+    let grouped = read_art(&format!("%_u\n{square}%_U\n"));
+    let NodeKind::Group { children, clip: false } = &grouped.kind else { panic!("{:?}", grouped.kind) };
+    assert!(matches!(children.as_slice(), [p] if matches!(p.kind, NodeKind::Path { .. })));
+    // Two objects are held in a group.
+    let two = read_art(&format!("{square}{square}"));
+    assert!(matches!(&two.kind, NodeKind::Group { children, clip: false } if children.len() == 2), "{:?}", two.kind);
+    // A clipping path alone keeps its group, which clips.
+    let clipped = read_art("%_10 20 m\n%_10 60 L\n%_30 60 L\n%_30 20 L\n%_h\n%_W\n%_n\n");
+    assert!(matches!(&clipped.kind, NodeKind::Group { children, clip: true } if children.len() == 1), "{:?}", clipped.kind);
+    // A hidden object stays in a group, which doesn't draw it.
+    let hidden = read_art(&format!("%_1 Xw\n{square}%_0 Xw\n"));
+    let NodeKind::Group { children, clip: false } = &hidden.kind else { panic!("{:?}", hidden.kind) };
+    assert!(matches!(children.as_slice(), [p] if !p.visible && matches!(p.kind, NodeKind::Path { .. })));
+    // So does a guide, which a group leaves out when guides aren't drawn.
+    let guide = read_art("%_10 20 m\n%_30 60 L\n%_(N) *\n");
+    let NodeKind::Group { children, clip: false } = &guide.kind else { panic!("{:?}", guide.kind) };
+    assert!(matches!(children.as_slice(), [p] if matches!(p.kind, NodeKind::Path { guide: true, .. })));
 }
 
 /// `9 () XW` also follows legacy compound member groups. The final gradient paints
@@ -6826,6 +6929,26 @@ fn a_blend_comes_in_as_a_live_blend() {
     let [r, _, b] = color.to_rgb();
     assert!((r - 0.5).abs() < 0.02 && (b - 0.5).abs() < 0.02, "{r} {b}");
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
+/// A blend whose spine was never edited has no spine written, only its keys: its spine is the
+/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
+/// first), and the blend comes in live.
+#[test]
+fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
+    let spine_part = format!("%_N\n{}", blend_part("S", None));
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['B', 'A']));
+    assert!(body.contains(&spine_part));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
+    assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!(points.len(), 2, "{points:?}");
+    assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![0, 1]);
+    assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.

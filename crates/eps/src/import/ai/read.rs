@@ -250,7 +250,7 @@ pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structu
 /// content, the prolog, resources, sections it skips (such as symbols and the text document) or
 /// what follows the trailer. The palette the reader keeps is the last one outside those and the
 /// sections it reads on their own.
-fn swatch_names(data: &[u8]) -> ShownNames {
+fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
     /// The sections the reader reads on their own whose definitions and colors it keeps.
     const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
     /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
@@ -277,6 +277,8 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let mut skip: Option<(&str, &str, usize, Option<usize>)> = None;
     let mut section: Option<(&str, &str, usize, bool)> = None;
     let (mut palette_at, mut palette) = (None, None);
+    // Where the first art styles section starts, and that section.
+    let (mut styles_at, mut styles) = (None, None);
     // A pattern's name is the first string of its definition.
     let mut head = false;
     // ASCII85 data in comment lines is skipped past, as the reader skips it.
@@ -320,6 +322,9 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                     skip = Some(("", "%EndResource", 0, None));
                 } else if let Some((begin, end, depth, _)) = section.as_mut() {
                     if closes(begin, end, depth, m) {
+                        if let Some(at) = styles_at.take().filter(|_| *begin == "BeginArtStyles") {
+                            styles = Some(lex.slice(at, before));
+                        }
                         section = None;
                     }
                 } else if m == "BeginPalette" {
@@ -327,6 +332,9 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                 } else if let Some((begin, end)) = types::SKIPPED.iter().find(|(b, _)| *b == m) {
                     section = Some((begin, end, 0, READ_APART.contains(begin)));
                     head = m == "BeginPattern";
+                    if m == "BeginArtStyles" && styles.is_none() {
+                        styles_at = Some(lex.offset());
+                    }
                 } else if matches!(m, "%PageTrailer" | "%Trailer") {
                     break;
                 }
@@ -358,7 +366,7 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     }
     palette.own_names().for_each(|n| names.reserve(n));
     colors.names.iter().for_each(|n| names.reserve(n));
-    names
+    (names, styles)
 }
 
 /// What the brushes and brush art read so far give a brushed stroke.
@@ -467,6 +475,12 @@ struct Reader<'a> {
     warnings: Vec<String>,
     /// Objects read as their drawn look (several fills or strokes, effects, brushes).
     drawn_looks: usize,
+    /// The objects read as their drawn look in the art of [`Reader::brush_art`], by name: counted in
+    /// [`Reader::drawn_looks`] once a brush that is kept uses the art.
+    brush_art_looks: HashMap<String, usize>,
+    /// The objects read as their drawn look in the art of the patterns kept, by the name the document
+    /// has the pattern by: a pattern defined again counts only its last definition.
+    pattern_looks: HashMap<String, usize>,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
     /// The blend part each object's dictionary names (`ShapeBlendPathType`, `ShapeBlendPathID`).
@@ -599,10 +613,15 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
 
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
-    /// get in the document found first ([`swatch_names`]).
+    /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
+    /// before the art styles section use them too.
     fn with_names(data: &'a [u8]) -> Self {
         let mut r = Self::new(data);
-        r.global_names = swatch_names(data);
+        let (names, styles) = swatch_names(data);
+        r.global_names = names;
+        if let Some(section) = styles {
+            r.styles = super::style::art_styles(section);
+        }
         r
     }
 
@@ -668,6 +687,8 @@ impl<'a> Reader<'a> {
             color_model: None,
             warnings: Vec::new(),
             drawn_looks: 0,
+            brush_art_looks: HashMap::new(),
+            pattern_looks: HashMap::new(),
             hidden_ids: HashSet::new(),
             blend_roles: HashMap::new(),
             blend_record: None,
