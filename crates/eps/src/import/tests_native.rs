@@ -4095,6 +4095,25 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
 
+/// Right-aligned point type ends at its anchor: its made type lies where the page draws it, so the
+/// page's type has its text object and nothing is left out.
+#[test]
+fn right_aligned_point_type_holds_the_pages_type() {
+    // The anchor is at (50, 61.5) in the art; the line starts the width of "Hi there" left of it.
+    let doc = text_document(&[("Hi there\r", 1, (8191.5, 8180.0), (0.0, 0.0), -49.0)]);
+    let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0))), &doc);
+    let page = format!(
+        "{} 0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont (Hi there) dup stringwidth pop 50 exch sub 61.5 moveto show",
+        page_square(10, 10)
+    );
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
+    let texts = text_of(&r.document.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there"], "{:?}", r.warnings);
+    assert_eq!(texts[0].para.justify, vectorcraft_doc::Justify::Right);
+}
+
 /// A line break inside a paragraph (`\x03` in the text document) stays a line break in it.
 #[test]
 fn a_soft_return_is_a_line_break_in_its_paragraph() {
