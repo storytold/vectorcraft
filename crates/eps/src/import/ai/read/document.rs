@@ -1627,6 +1627,20 @@ impl LibraryWalk {
 }
 
 /// The library of the `variableSets` element `sets` (see [`variable_library`]).
+/// Whether an XML node in `o` or the dictionaries it holds has a value or a type
+/// (`xmlnode-nodevalue`, `xmlnode-nodetype`). `seen` counts the dictionaries looked at; past
+/// [`MAX_LIBRARY_NODES`] of them, or deeper than [`MAX_DEPTH`], the library is taken to hold some.
+fn holds_values(o: &Obj, seen: &mut usize, depth: usize) -> bool {
+    *seen = seen.saturating_add(1);
+    if *seen > MAX_LIBRARY_NODES || depth > MAX_DEPTH {
+        return true;
+    }
+    if o.ty == "XMLNode" && (o.get("xmlnode-nodevalue").is_some() || o.get("xmlnode-nodetype").is_some()) {
+        return true;
+    }
+    o.items().any(|c| holds_values(c, seen, depth + 1))
+}
+
 fn read_variable_sets(sets: &Obj) -> VariableRead {
     let mut walk = LibraryWalk::default();
     let mut vars = Variables::default();
@@ -1644,6 +1658,11 @@ fn read_variable_sets(sets: &Obj) -> VariableRead {
     }
     if walk.nodes > MAX_LIBRARY_NODES {
         return VariableRead { variables: Variables::default(), bindings: vec![], bindings_skipped: 0, skipped: 1, present: true };
+    }
+    if vars == Variables::default() && walk.bindings.is_empty() && !holds_values(sets, &mut 0, 0) {
+        // The empty library a file can keep: nodes with names and nothing else (no value, no
+        // type). There is nothing in it to list, so nothing was left out.
+        walk.skipped = 0;
     }
     VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
 }
