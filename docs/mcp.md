@@ -4700,7 +4700,10 @@ Modified documents get recovery copies (`file.recovery.save`; the app runs it ev
 `autosaveRecovery` is on, skipping documents of more than 20,000 objects while `recoveryOffForComplex` is on). A copy
 goes when its document is saved, reverted or closed, so copies still there after the app quits were left by a crash.
 The copies live in the `recoveryFolder` preference's folder (default: `Data Recovery` beside the app's preferences;
-none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage.
+none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage. `prefs.set` returns an error
+and changes nothing when a new `recoveryFolder` is missing, is not a folder, can't be listed, or is a folder that a
+folder can't be created in. It does not check an empty value or the folder the preference already holds, and the web
+build does not check folders. The folder in the example below must exist before the call.
 
 Each running app (each browser tab) keeps its copies in an area of its own (`<area>/<name>`): a sub-folder whose
 `.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute and a Web
@@ -5910,7 +5913,9 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
-`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean. `prefs.set` returns an error and
+changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
+value or the folder the preference already holds, and the web build does not check folders.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
