@@ -500,6 +500,7 @@ fn select_copies(app: &mut VectorcraftApp, all: &[usize], r: &Value) {
     }
 }
 
+/// Draw the artboard list and its commands, filling the space above a sized panel's footer.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
@@ -514,10 +515,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut row_clicked = false;
     // A row dropped on another row: (from, to), the index it lands at.
     let mut dropped = None;
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, 220.0, 2.0 + ui.spacing().item_spacing.y);
     let list_rect = widgets::list_box(ui, |ui| {
-        ui.set_min_height(110.0);
+        ui.set_min_height(if fixed { list_height.min(110.0) } else { 110.0 });
         ui.spacing_mut().item_spacing.y = 0.0;
-        let scrolled = egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(220.0).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt("ab-scroll")
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        let scrolled = scroll.show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
                 if resp.drag_started() {

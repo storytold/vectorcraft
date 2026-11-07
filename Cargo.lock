@@ -975,12 +975,12 @@ source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=241f63753522932804c8d0e7c3b0d50e4ca4100c#241f63753522932804c8d0e7c3b0d50e4ca4100c"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=241f63753522932804c8d0e7c3b0d50e4ca4100c#241f63753522932804c8d0e7c3b0d50e4ca4100c"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -1038,7 +1038,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
+source = "git+https://github.com/storytold/craft-libs?rev=241f63753522932804c8d0e7c3b0d50e4ca4100c#241f63753522932804c8d0e7c3b0d50e4ca4100c"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
