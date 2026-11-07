@@ -98,7 +98,14 @@ impl<'a> Reader<'a> {
             ..
         } = f;
         if matches!(kind, Kind::Clip) {
+            // `Q` restores the painting state, not the transparency: the writer sets `Xy` only when
+            // the next object's differs from the last one written, wherever that was, so a state set
+            // inside a clipping group stays after it (a glow set to Screen, then a clipping path set
+            // back to Normal: the type after the group has no `Xy` and is Normal).
+            let now = &self.gs;
+            let transparency = (now.opacity, now.blend, now.isolate, now.knockout, now.knockout_shape);
             self.gs = gs.clone();
+            (self.gs.opacity, self.gs.blend, self.gs.isolate, self.gs.knockout, self.gs.knockout_shape) = transparency;
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
         }
@@ -281,7 +288,8 @@ impl<'a> Reader<'a> {
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
                 // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
-                // ones: it has one appearance for all its paths.
+                // ones, and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                let shape = clip.iter().all(|(_, n)| n.knockout_shape);
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 let shared =
                     clip.split_first().and_then(|((_, first), others)| others.iter().all(|(_, n)| look(n) == look(first)).then(|| look(first)));
@@ -292,6 +300,7 @@ impl<'a> Reader<'a> {
                     n.opacity = opacity;
                     n.blend = blend;
                 }
+                n.knockout_shape = shape;
                 Some(n)
             }
         };
@@ -312,7 +321,7 @@ impl<'a> Reader<'a> {
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
         {
-            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout) = before;
+            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout, mesh.knockout_shape) = before;
         }
         let Kind::Layer(a) = f.kind else { return Ok(()) };
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 1)?;
@@ -379,7 +388,12 @@ impl<'a> Reader<'a> {
         let f = self.close("X+", |k| matches!(k, Kind::Mask))?;
         // The mask's art is one level under the object it masks.
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 2)?;
-        let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
+        // One shown object is the art itself. A hidden object or a guide stays in a group: the canvas draws the art's root
+        // whether it is shown or not and whether guides show, and a group doesn't draw a hidden member or a left-out guide.
+        let art = match children.as_slice() {
+            [only] if !clip && only.visible && !matches!(only.kind, NodeKind::Path { guide: true, .. }) => only.clone(),
+            _ => Arc::new(self.new_node(NodeKind::Group { children, clip }, &f.gs)),
+        };
         self.gs = f.gs;
         self.pending_unread_fill = f.pending_unread_fill;
         self.pending_unread_stroke = f.pending_unread_stroke;
@@ -388,7 +402,7 @@ impl<'a> Reader<'a> {
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
             return Err("mask art ends outside a mask dictionary".into());
         };
-        if o.art.replace(Arc::new(art)).is_some() {
+        if o.art.replace(art).is_some() {
             return Err("a mask has more than one art block".into());
         }
         o.unread = f.unread;
@@ -760,7 +774,8 @@ impl<'a> Reader<'a> {
                 // did (they were counted as read).
                 let mut blend = Node::new(self.doc.alloc_id(), kind);
                 (blend.name, blend.visible, blend.locked) = (steps.name.take(), steps.visible, steps.locked);
-                (blend.opacity, blend.blend, blend.isolate, blend.knockout) = (steps.opacity, steps.blend, steps.isolate, steps.knockout);
+                (blend.opacity, blend.blend, blend.isolate, blend.knockout, blend.knockout_shape) =
+                    (steps.opacity, steps.blend, steps.isolate, steps.knockout, steps.knockout_shape);
                 // Its note, URL and data (object tags) too.
                 blend.extras_mut().attrs = steps.extras_mut().attrs.take();
                 f.children.push(blend);

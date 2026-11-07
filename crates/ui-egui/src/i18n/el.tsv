@@ -844,6 +844,7 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Artboard	Δημιουργία αντιγράφου πίνακα σχεδίασης
 	Copy Artboard	Αντιγραφή πίνακα σχεδίασης
 	Cut Artboard	Αποκοπή πίνακα σχεδίασης
+	Rename Artboards	Μετονομασία πινάκων σχεδίασης
 	Duplicate Artboards	Δημιουργία αντιγράφων πινάκων σχεδίασης
 	Duplicate Brush	Δημιουργία αντιγράφου πινέλου
 	Duplicate Character Style	Δημιουργία αντιγράφου στυλ χαρακτήρων
@@ -3160,6 +3161,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
+	Rearrange	Αναδιάταξη
+	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
+	Switch Orientation	Αλλαγή προσανατολισμού
 	Rearrange All	Αναδιάταξη όλων
 	Layout Order:	Σειρά διάταξης:
 	Change to Left-to-Right Layout	Αλλαγή σε διάταξη από αριστερά προς τα δεξιά
@@ -4629,6 +4633,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an image whose data is cut short was left out	παραλείφθηκε εικόνα με περικομμένα δεδομένα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	οι περιοχές κειμένου με πλαίσια πολύ μικρά για μία γραμμή της γραμματοσειράς τους απέκτησαν μεγαλύτερο ύψος ({_1}), διαφορετικά το κείμενο δεν θα εμφανιζόταν

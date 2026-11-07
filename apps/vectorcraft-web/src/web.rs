@@ -370,7 +370,6 @@ impl eframe::App for WebShell {
         }
         let Some(app) = &mut self.app else { return };
         app.tick(ctx);
-        crate::api::poll_replies();
         app.finish_ime_logic(ctx);
     }
 
@@ -423,7 +422,6 @@ impl eframe::App for WebShell {
             }
             app.ui(ui);
         }
-        crate::api::poll_replies();
     }
 }
 
