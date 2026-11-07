@@ -52,7 +52,7 @@ enum Seq {
     InterruptNavigation,
     InterruptCommand,
     ResetCompleted(egui::ImeResetId),
-    /// Enter, which types a line break.
+    /// Enter, which types a line break. Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing.
     Enter(Mods),
     /// An editing key with modifiers, an arrow, Home, End, Tab or a clipboard event.
     Edit(TextInput),
@@ -74,7 +74,8 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // characters in one frame interleaves correctly. Taken as two passes (all text, then the keys)
     // the deletes land after the inserts and the diacritics are lost. Enter, the other editing keys
     // and the clipboard events join them: ← or a paste lands between the texts around it, and each
-    // Enter types its own line break. Each handled event is removed from the input.
+    // Enter types its own line break (or, as Cmd+Enter, ends editing there). Each handled event is
+    // removed from the input.
     let seq = type_sequence(ctx);
     let viewport = ctx.viewport_id();
     let mut old_composition_retired = false;
@@ -177,7 +178,7 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
                     let tk = if key == Key::Backspace { ToolKey::Backspace } else { ToolKey::Delete };
                     seq.push(Seq::Erase(tk, Mods { shift: m.shift, ..Mods::default() }));
                 }
-                // A command bound to the chord (Cmd+Enter) runs instead of the line break, in the
+                // A command bound to the chord (Cmd+Enter) runs instead of ending editing, in the
                 // shortcuts after this.
                 egui::Event::Key { key: Key::Enter, pressed, modifiers: m, .. } if !chord_runs_a_command(Key::Enter, m, true) => {
                     if pressed {
