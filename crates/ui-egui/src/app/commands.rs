@@ -93,6 +93,9 @@ impl VectorcraftApp {
         if cfg!(debug_assertions) {
             menus::check_params(&self.session, id, &params)?;
         }
+        // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names
+        // the view's active artboard.
+        io::remember_active_artboard(self);
         let artboards = self.artboard_tool_state();
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             self.follow_artboard_tool(artboards);
@@ -173,9 +176,6 @@ impl VectorcraftApp {
                 return r;
             }
         }
-        // A `.ai` file a command writes (a save, an export, a batch's save) names the view's
-        // active artboard.
-        io::remember_active_artboard(self);
         // Native files carry the view they reopen at.
         if fileio::SaveMode::of(id).is_some() {
             io::remember_view(self);
@@ -202,7 +202,7 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
+        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") {
             self.publish_clipboard();
         }
         self.sync_views();

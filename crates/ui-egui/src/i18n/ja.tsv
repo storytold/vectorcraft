@@ -1441,6 +1441,7 @@ digits	Malayalam	マラヤーラム数字
 	Duplicate Artboard	アートボードを複製
 	Copy Artboard	アートボードをコピー
 	Cut Artboard	アートボードをカット
+	Rename Artboards	アートボード名を変更
 	Duplicate Artboards	アートボードを複製
 	Duplicate Brush	ブラシを複製
 	Duplicate Character Style	文字スタイルを複製
@@ -2619,6 +2620,9 @@ mark-style	Japanese	日本式
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
 	Rearrange All Artboards	すべてのアートボードを再配置
+	Rearrange	再配置
+	Select All Artboards	すべてのアートボードを選択
+	Switch Orientation	方向を切り替え
 	Rearrange All	すべて再配置
 	Layout Order:	レイアウト順序:
 	Change to Left-to-Right Layout	左から右のレイアウトに変更

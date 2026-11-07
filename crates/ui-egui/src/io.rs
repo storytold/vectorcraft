@@ -207,6 +207,33 @@ mod tests {
         }
     }
 
+    /// A `.ai` file exported to a path (File › Export As, its dialog, a control request) names the
+    /// view's active artboard as its active one, and the open document is unchanged.
+    #[test]
+    fn an_ai_file_exported_to_a_path_names_the_views_active_artboard() {
+        let (mut app, written) = app();
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+        app.sync_views();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        let opts = fileio::LoadOptions { native: false, ..Default::default() };
+        let active = |app: &VectorcraftApp| {
+            let bytes = written.borrow_mut().pop().map(|(_, b)| b).unwrap();
+            let l = fileio::load_with("Art.ai", &bytes, &opts).unwrap();
+            assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+            assert_eq!(app.session.doc().unwrap().doc.opened_artboard, None, "the document is unchanged");
+            l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id))
+        };
+        for artboard in [2, 1] {
+            if let Some(v) = app.view_mut() {
+                v.artboard = artboard;
+            }
+            app.run("file.exportAs", json!({"format": "ai", "path": "Art.ai"})).unwrap();
+            assert_eq!(active(&app), Some(artboard), "File › Export As");
+            export(&mut app, Some("ai"), Some("Art.ai".into()), &json!({})).unwrap();
+            assert_eq!(active(&app), Some(artboard), "the Export As dialog");
+        }
+    }
+
     fn bytes_of(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Vec<u8> {
         let v = app.session.execute(cmd, &p).unwrap();
         vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()

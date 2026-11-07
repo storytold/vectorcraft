@@ -615,6 +615,7 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
             assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")), "{key}");
             assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
             assert_eq!(a.session.prefs.to_json(), before, "{key}: no preference changes");
+            assert!(!a.prefs_changed, "{key}: nothing to save");
         }
         // A typed folder that passes is saved, with the spaces around it as typed.
         let typed = format!(" {} ", dir.to_string_lossy());
@@ -627,7 +628,9 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(""), "{key}");
         // A folder already saved is not checked again, so OK works while it is unavailable.
+        std::fs::create_dir(&missing).unwrap();
         a.run("prefs.set", json!({"key": key, "value": missing})).unwrap();
+        std::fs::remove_dir(&missing).unwrap();
         open(&mut a, Some("File Handling"));
         a.ui.dialog.as_mut().unwrap().fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
         confirm(&mut a).unwrap();

@@ -1244,6 +1244,50 @@ fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
     assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
 }
 
+/// Copy and Cut take a selected story after a frame threaded in before the edited one took its whole
+/// text.
+#[test]
+fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
+    for cut in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("text.thread.create", json!({})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+        let text = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!((text(&app, a), text(&app, b), text(&app, c)), (String::new(), String::new(), story.clone()));
+        assert!(intercept_text_command(&mut app, if cut { "edit.cut" } else { "edit.copy" }).is_some());
+        let copied: Vec<String> = app
+            .session
+            .clipboard
+            .nodes
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(copied, std::slice::from_ref(&story), "cut: {cut}");
+        assert_eq!(text(&app, c).is_empty(), cut);
+        if cut {
+            // A story that holds no text has nothing to copy, so Cut does not run its delete.
+            app.run("select.all", json!({})).unwrap();
+            assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
+            assert!(!text_copy(&mut app));
+        }
+    }
+}
+
 /// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
 /// the text of every frame of the story.
 #[test]
