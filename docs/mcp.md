@@ -1134,6 +1134,21 @@ of the format they write (one object can carry several formats' options). A comm
 (`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
 journal recorded by an older version replays as it did, except for an effect `color` that the effect can't read.
 
+The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
+and `file.export` refuse a key that no format takes, and ignore a key that only another format takes
+(`{"format": "pdf", "quality": 80}` writes the PDF). `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
+refuse a key that PDF doesn't take, `document.exportEps` one that EPS doesn't take and `document.exportDxf` one that DXF
+doesn't take. Each of them refuses an unknown key inside an option object it takes (`marks`, `bleed`, `compression`,
+`output`, `advanced`, `security`, `flattener`), naming its path:
+
+```json
+{"id": "document.export", "params": {"format": "pdf", "marks": {"useDocumentBleed": true}}}
+→ invalid parameters for `document.export`: unknown parameter `marks.useDocumentBleed`; `marks` takes: …
+```
+
+A saved PDF preset that holds a key that is no longer read keeps loading. `document.save`, `file.saveAs`, `file.saveCopy`
+and `document.exportForScreens` don't apply this check.
+
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
 

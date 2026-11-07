@@ -64,7 +64,7 @@ fn an_unknown_key_is_named_with_the_nearest_accepted_one() {
         ("file.new", json!(null)),
         // Keys listed by reference, and any key where the description says so.
         ("file.newPresets.save", json!({"name": "a", "width": 300})),
-        ("document.export", json!({"format": "png", "anyFormatOption": 1})),
+        ("document.export", json!({"format": "png", "styling": "style"})),
         // Not a command: running it says so.
         ("no.such", json!({"x": 1})),
     ] {
@@ -72,6 +72,109 @@ fn an_unknown_key_is_named_with_the_nearest_accepted_one() {
     }
     assert!(check_keys("x", "{a, …as file.new}", &json!({"a": 1, "width": 2})).is_ok());
     assert!(check_keys("x", "{a, …as file.new}", &json!({"b": 1})).is_err());
+}
+
+/// An export's options: a key no format reads is refused, at the top level and in the PDF objects,
+/// under each command that takes them.
+#[test]
+fn export_options_refuse_a_key_no_format_reads() {
+    for id in ["document.export", "document.exportSelection", "document.serialize"] {
+        assert_eq!(
+            refusal(id, json!({"format": "pdf", "standard": "pdfX4", "noSuchOption": true})),
+            "unknown parameter `noSuchOption`; no format takes it (see document.formats)"
+        );
+        assert_eq!(refusal(id, json!({"format": "pdf", "standardd": "pdfX4"})), "unknown parameter `standardd`; did you mean `standard`?");
+        assert_eq!(
+            refusal(id, json!({"format": "pdf", "options": {"standard": "pdfX4"}})),
+            "unknown parameter `options`; no format takes it (see document.formats)"
+        );
+    }
+    // A command that writes one format refuses another format's option, and says which format.
+    for (id, why) in [
+        ("document.exportPdf", "PDF doesn't take it"),
+        ("document.pdfSettings", "PDF doesn't take it"),
+        ("pdf.preset.save", "PDF doesn't take it"),
+        ("document.exportEps", "EPS doesn't take it"),
+        ("document.exportDxf", "DXF doesn't take it"),
+    ] {
+        for key in ["noSuchOption", "quality"] {
+            assert_eq!(refusal(id, json!({key: 1})), format!("unknown parameter `{key}`; {why} (see document.formats)"));
+        }
+    }
+    assert_eq!(
+        refusal("document.exportEps", json!({"flattener": {"balanse": 50}})),
+        "unknown parameter `flattener.balanse`; did you mean `flattener.balance`?"
+    );
+    assert!(refusal("document.exportDxf", json!({"flattener": {}})).contains("DXF doesn't take it"));
+    assert!(refusal("document.exportEps", json!({"marks": {}})).contains("EPS doesn't take it"));
+    for id in ["document.pdfSettings", "pdf.preset.save"] {
+        assert!(refusal(id, json!({"marks": {"useDocumentBleed": true}})).starts_with("unknown parameter `marks.useDocumentBleed`;"), "{id}");
+    }
+    for (given, message) in [
+        (json!({"marks": {"useDocumentBleed": true}}), "unknown parameter `marks.useDocumentBleed`; `marks` takes:"),
+        (json!({"bleed": {"useDocumen": true}}), "unknown parameter `bleed.useDocumen`; did you mean `bleed.useDocument`?"),
+        (json!({"output": {"intent": "x"}}), "unknown parameter `output.intent`;"),
+        (json!({"advanced": {"outlineTxt": true}}), "unknown parameter `advanced.outlineTxt`; did you mean `advanced.outlineText`?"),
+        (json!({"security": {"openPasswrd": "x"}}), "unknown parameter `security.openPasswrd`; did you mean `security.openPassword`?"),
+        (json!({"compression": {"color": {"dpi": 300}}}), "unknown parameter `compression.color.dpi`;"),
+        (json!({"flattener": {"balanse": 50}}), "unknown parameter `flattener.balanse`; did you mean `flattener.balance`?"),
+    ] {
+        for id in ["document.export", "document.exportPdf"] {
+            let got = refusal(id, given.clone());
+            assert!(got.starts_with(message), "{id} {given}: {got}");
+        }
+    }
+}
+
+/// The check passes each key `document.formats` lists, each key a command's own description names,
+/// and each field of the PDF settings and the flattener options. A key an encoder reads that none
+/// of these names is outside this test.
+#[test]
+fn export_options_pass_every_listed_key() {
+    use crate::cmd::fileio::{FORMATS, dxf, eps, pdf::OPTIONS};
+    for f in FORMATS.iter().filter(|f| f.write) {
+        for o in f.options {
+            let params = json!({"format": f.id, o.name: null});
+            assert!(check_params("document.export", &params).is_ok(), "{params}");
+        }
+    }
+    for (id, options) in [("document.exportEps", eps::OPTIONS), ("document.exportDxf", dxf::OPTIONS), ("document.exportPdf", OPTIONS)] {
+        for o in options {
+            assert!(check_params(id, &json!({o.name: null})).is_ok(), "{id} {}", o.name);
+        }
+    }
+    for id in [
+        "document.export",
+        "document.exportSelection",
+        "document.serialize",
+        "document.exportPdf",
+        "document.pdfSettings",
+        "pdf.preset.save",
+        "document.exportEps",
+        "document.exportDxf",
+    ] {
+        // An export reads these two when it writes over the file a lossy document came from. The
+        // PDF settings and preset commands take them through document.exportPdf's description.
+        check_params(id, &json!({"path": "a", "acknowledgeLoss": true})).unwrap_or_else(|e| panic!("{id}: {e}"));
+        let keys = doc_keys(find_command(id).unwrap().params).unwrap().keys;
+        let refused: Vec<&str> = keys.into_iter().filter(|key| check_params(id, &json!({*key: null})).is_err()).collect();
+        // `document.exportPdf`'s description explains the page boxes as `BleedBox = …` between its
+        // keys, which reads as two more keys.
+        let prose = if id == "document.exportPdf" { vec!["BleedBox", "MediaBox"] } else { vec![] };
+        assert_eq!(refused, prose, "{id} names and refuses these");
+    }
+    let settings = serde_json::to_value(vectorcraft_pdf::PdfSettings::default()).unwrap();
+    for key in settings.as_object().unwrap().keys() {
+        assert!(OPTIONS.iter().any(|o| o.name == key), "document.formats doesn't list the PDF option `{key}`");
+    }
+    let mut every = settings;
+    every["flattener"] = serde_json::to_value(crate::cmd::flatten::FlattenOptions::default()).unwrap();
+    every["security"]["openPassword"] = json!("a");
+    every["security"]["permissionsPassword"] = json!("b");
+    every["preset"] = json!("High Quality Print");
+    for id in ["document.export", "document.exportPdf", "document.pdfSettings", "pdf.preset.save"] {
+        check_params(id, &every).unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
 }
 
 /// `stroke.set` names every key it reads (its own, `item`, and `ids`/`id`/`target`), so a

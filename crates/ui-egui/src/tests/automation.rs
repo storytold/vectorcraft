@@ -159,6 +159,28 @@ fn shortcut_sets_are_read_only_inside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export` refuses a key no format takes before anything is written, with a path or without.
+#[test]
+fn control_export_refuses_an_option_no_format_takes() {
+    let (mut app, tx, base) = confined("export-options");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let path = base.join("out/a.pdf");
+    let refused = |r: &Value| r["error"].as_str().is_some_and(|e| e.contains("unknown parameter"));
+    for mut params in [json!({"format": "pdf", "noSuchOption": true}), json!({"format": "pdf", "marks": {"useDocumentBleed": true}})] {
+        let r = request(&mut app, &tx, "app.export", params.clone());
+        assert!(refused(&r), "{r}");
+        params["path"] = json!(s(path.clone()));
+        params["wait"] = json!(true);
+        let r = request(&mut app, &tx, "app.export", params);
+        assert!(refused(&r), "{r}");
+        assert!(!path.exists());
+    }
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.render` (MCP's `render_preview` and `screenshot` in the app) draws the artboard pixel for
 /// pixel as `app.export` writes a PNG on white: two rectangles that meet at x 40.3 and a diagonal
 /// edge.
