@@ -732,6 +732,7 @@ fn the_wheel_scrolls_the_panel_unless_over_a_numeric_field() {
     }
 }
 
+/// A wheel turn over an unfocused field steps it without consuming an arrow key in the same frame.
 #[test]
 fn hover_wheel_keeps_arrow_keys_for_the_keyboard_focus() {
     let mut f = Field::new();
@@ -752,6 +753,7 @@ fn hover_wheel_keeps_arrow_keys_for_the_keyboard_focus() {
     assert!(!f.ctx.memory(|m| m.has_focus(f.id.get())));
 }
 
+/// Hover steps stop at both bounds, leave mixed values blank, and never edit disabled fields.
 #[test]
 fn hover_wheel_preserves_limits_mixed_values_and_disabled_fields() {
     for (value, enabled, dy, want) in [

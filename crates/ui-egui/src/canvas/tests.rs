@@ -4355,6 +4355,80 @@ fn zoom_with_mouse_wheel_preference() {
     assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
 }
 
+/// A numeric panel drawn after the canvas owns its wheel turn even when the pointer enters the
+/// canvas on the next frame (#5949). Only a subsequent turn over the canvas starts a zoom glide.
+#[test]
+fn wheel_over_a_numeric_panel_field_does_not_start_a_canvas_zoom_glide() {
+    use std::cell::Cell;
+    for focused in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        for key in ["zoomWithMouseWheel", "animatedZoom", "gpuPerformance"] {
+            app.run("prefs.set", json!({"key": key, "value": true})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let value = Cell::new(10.0);
+        let field_rect = Cell::new(egui::Rect::NOTHING);
+        let field_id = Cell::new(egui::Id::NULL);
+        let mut time = 0.0;
+        let mut run = |app: &mut VectorcraftApp, events| {
+            time += 0.016;
+            let raw = egui::RawInput {
+                time: Some(time),
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| {
+                // Match dock rendering order: canvas first, the numeric panel afterward.
+                let mut canvas_ui = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(Pos2::ZERO, vec2(550.0, 500.0))));
+                show(app, &mut canvas_ui);
+                let mut panel_ui = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(pos2(600.0, 20.0), vec2(150.0, 100.0))));
+                field_id.set(panel_ui.scope_id().with("number"));
+                if let Some(v) = crate::widgets::plain_field(&mut panel_ui, "number", value.get(), "", 0, 80.0) {
+                    value.set(v);
+                }
+                field_rect.set(panel_ui.min_rect());
+            });
+            out.textures_delta.clear();
+        };
+        run(&mut app, vec![]);
+        if focused {
+            ctx.memory_mut(|m| m.request_focus(field_id.get()));
+        }
+        let over_field = field_rect.get().center();
+        run(&mut app, vec![egui::Event::PointerMoved(over_field)]);
+        let before = *app.view().unwrap();
+        let turn = || egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, 1.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+            source: egui::MouseWheelSource::Unknown,
+        };
+        run(&mut app, vec![turn()]);
+        assert_eq!(value.get(), 11.0, "the hovered field steps, focused: {focused}");
+        assert_eq!(ctx.memory(|m| m.has_focus(field_id.get())), focused, "hover does not take focus");
+        assert_eq!(app.view().unwrap().zoom, before.zoom);
+        let over_canvas = app.canvas_rect.unwrap().center();
+        run(&mut app, vec![egui::Event::PointerMoved(over_canvas)]);
+        for _ in 0..20 {
+            run(&mut app, vec![]);
+            assert_eq!(app.view().unwrap().zoom, before.zoom, "a panel turn cannot leave a canvas glide, focused: {focused}");
+            assert_eq!(app.view().unwrap().center, before.center);
+        }
+        run(&mut app, vec![turn()]);
+        let first = app.view().unwrap().zoom;
+        assert!(first > before.zoom, "a turn over the canvas still zooms");
+        for _ in 0..20 {
+            run(&mut app, vec![]);
+        }
+        assert!(app.view().unwrap().zoom > first, "the canvas turn still glides over subsequent frames");
+        assert_eq!(value.get(), 11.0, "the canvas turn does not step the field");
+    }
+}
+
 /// #888: with Zoom with Mouse Wheel, a wheel notch's zoom glides in over a few frames, as a
 /// scroll does, instead of jumping on the frame it arrives; it ends at the same zoom.
 #[test]
