@@ -321,6 +321,162 @@ fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
     assert!(tab, "its tab is drawn in the app window");
 }
 
+/// Sets the height of the OS window `viewport`, as a user's resize does.
+fn resize_window(h: &mut Harness, viewport: ViewportId, height: f32) {
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect.set_height(height);
+    h.frames(3);
+}
+
+/// A click on the `side` pt square button with the highest `rank` in the OS window `viewport`, and
+/// the frames its menu takes to settle. Returns where the button is.
+fn open_button_menu(h: &mut Harness, viewport: ViewportId, side: f32, rank: impl Fn(Pos2) -> f32) -> Pos2 {
+    let ctx = h.ctx.clone();
+    let menu = ctx
+        .viewport_for(viewport, |vp| {
+            vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| (w.rect, w.sense.senses_click())).collect::<Vec<_>>()
+        })
+        .into_iter()
+        .filter(|(rect, clicks)| *clicks && rect.size() == vec2(side, side))
+        .map(|(rect, _)| rect.center())
+        .max_by(|a, b| rank(*a).total_cmp(&rank(*b)))
+        .expect("the menu's button");
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(menu), button(menu, true), button(menu, false)]);
+    h.frames(8);
+    menu
+}
+
+/// A click on the ≡ button in the OS window `viewport`, the 16 pt square at the right end of the
+/// panel's tab strip. Returns where the button is.
+fn open_panel_menu(h: &mut Harness, viewport: ViewportId) -> Pos2 {
+    open_button_menu(h, viewport, 16.0, |at| at.x)
+}
+
+/// The rect of the text `wanted` in the last frame of the OS window `viewport`: the last one drawn,
+/// so a menu's item comes before a panel's text of the same name.
+fn text_rect(h: &Harness, viewport: ViewportId, wanted: &str) -> Option<Rect> {
+    h.host.borrow().windows.get(&viewport).unwrap().texts.iter().rfind(|(text, _)| text.trim() == wanted).map(|(_, rect)| *rect)
+}
+
+/// Turns the wheel down by `by` points with the pointer at `over` in the OS window `viewport`, and
+/// lets the scrolling finish.
+fn wheel_down(h: &mut Harness, viewport: ViewportId, over: Pos2, by: f32) {
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([
+        Event::PointerMoved(over),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -by),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        },
+    ]);
+    h.frames(40);
+}
+
+/// A floating panel's window of each height keeps its ≡ menu inside it: the list scrolls, and the
+/// wheel brings the last item into the window. The list opens level with the button where the
+/// window has room for it, and does not slide up to fit. 100 pt is the shortest a window can be
+/// resized to, and there the list takes the whole window.
+#[test]
+fn a_long_panel_menu_scrolls_inside_a_short_native_window() {
+    for (height, level_with_the_button) in [(240.0, true), (100.0, false)] {
+        let mut h = Harness::new();
+        let viewport = h.float("layers");
+        resize_window(&mut h, viewport, height);
+        let menu = open_panel_menu(&mut h, viewport);
+        if level_with_the_button {
+            let first = text_rect(&h, viewport, "New Layer…").expect("the menu's first item");
+            assert!(first.top() >= menu.y - 16.0, "the first item at {first:?} is level with the button at {menu:?}");
+        }
+        let last_item = |h: &Harness| text_rect(h, viewport, "Dock Panel");
+        assert!(last_item(&h).is_none_or(|r| r.bottom() > height), "the {height} pt window starts at the top of the list");
+        wheel_down(&mut h, viewport, pos2(menu.x - 60.0, height - 30.0), 5000.0);
+        let item = last_item(&h).unwrap_or_else(|| panic!("the wheel brings the menu's last item into the {height} pt window"));
+        assert!(item.bottom() <= height, "the last item at {item:?} is inside the {height} pt window");
+    }
+}
+
+/// The Layers menu's Save Selection submenu lists every saved selection: in a short window the
+/// wheel brings the last one into view.
+#[test]
+fn a_long_panel_submenu_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    h.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    h.app.run("select.all", json!({})).unwrap();
+    // A document keeps at most 25 saved selections.
+    for n in 0..25 {
+        h.app.run("select.save", json!({"name": format!("Saved {n}")})).unwrap();
+    }
+    assert_submenu_reaches_its_end(&mut h, "layers", 240.0, "Save Selection", "Saved 0", "Saved 24");
+}
+
+/// The Swatches menu's Open Swatch Library lists the libraries between its head and tail items.
+#[test]
+fn the_library_submenu_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    assert_submenu_reaches_its_end(&mut h, "swatches", 240.0, "Open Swatch Library", "Default Swatches", "Other Library…");
+}
+
+/// The Layers panel's Filter popup, under the topmost 24 pt button: the wheel brings its last row
+/// into a short window.
+#[test]
+fn the_layers_filter_popup_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    let viewport = h.float("layers");
+    resize_window(&mut h, viewport, 160.0);
+    open_button_menu(&mut h, viewport, 24.0, |at| -at.y);
+    let over = text_rect(&h, viewport, "By Object").expect("the popup's By Object heading");
+    assert!(text_rect(&h, viewport, "Hidden").is_none_or(|end| end.bottom() > 160.0), "the popup opens at the top of its list");
+    wheel_down(&mut h, viewport, over.center(), 5000.0);
+    let end = text_rect(&h, viewport, "Hidden").expect("the wheel brings the popup's last row into the window");
+    assert!(end.bottom() <= 160.0, "the last row at {end:?} is inside the window");
+}
+
+/// The Color Guide's Limit to Library popup, on the leftmost button of the bottom bar: with the
+/// window made short while the popup is open, the wheel moves the list up past its Document
+/// Swatches row.
+#[test]
+fn the_color_guide_library_popup_scrolls_inside_a_short_native_window() {
+    let mut h = Harness::new();
+    let viewport = h.float("colorGuide");
+    resize_window(&mut h, viewport, 320.0);
+    open_button_menu(&mut h, viewport, 24.0, |at| at.y * 1000.0 - at.x);
+    resize_window(&mut h, viewport, 100.0);
+    let first = text_rect(&h, viewport, "Document Swatches").expect("the popup's Document Swatches row");
+    wheel_down(&mut h, viewport, first.center(), 5000.0);
+    let moved = text_rect(&h, viewport, "Document Swatches").is_none_or(|row| row.top() < first.top());
+    assert!(moved, "the wheel scrolls the list that starts at {first:?}");
+}
+
+/// In an OS window of `panel`, `height` tall, scrolls the ≡ menu until its row `row` shows, clicks
+/// the row to open its submenu, turns the wheel over the submenu's item `first`, and checks that its
+/// item `last` comes into the window.
+fn assert_submenu_reaches_its_end(h: &mut Harness, panel: &str, height: f32, row: &str, first: &str, last: &str) {
+    let viewport = h.float(panel);
+    resize_window(h, viewport, height);
+    let menu = open_panel_menu(h, viewport);
+    let inside = |h: &Harness| text_rect(h, viewport, row).filter(|rect| rect.bottom() < height - 12.0);
+    for _ in 0..40 {
+        if inside(h).is_some() {
+            break;
+        }
+        wheel_down(h, viewport, pos2(menu.x - 60.0, height - 30.0), 40.0);
+    }
+    let at = inside(h).unwrap_or_else(|| panic!("the {row} row")).center();
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(at), button(at, true), button(at, false)]);
+    h.frames(8);
+    let over = text_rect(h, viewport, first).unwrap_or_else(|| panic!("the {row} submenu's item {first}"));
+    assert!(text_rect(h, viewport, last).is_none_or(|end| end.bottom() > height), "the submenu opens at the top of its list");
+    for _ in 0..3 {
+        if text_rect(h, viewport, last).is_some() {
+            break;
+        }
+        wheel_down(h, viewport, pos2(over.center().x, height - 30.0), 5000.0);
+    }
+    let end = text_rect(h, viewport, last).unwrap_or_else(|| panic!("the {row} submenu's item {last}"));
+    assert!(end.bottom() <= height, "{last} at {end:?} is inside the {height} pt window");
+}
+
 #[test]
 fn keys_typed_in_a_native_window_run_the_main_windows_shortcuts() {
     let mut h = Harness::new();
