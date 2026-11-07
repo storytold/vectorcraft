@@ -14,6 +14,12 @@ use crate::import_fonts::program_facts;
 use vectorcraft_text::{FileFontInfo, FileGlyph};
 
 impl<'p> Builder<'p> {
+    /// Draw type in the fonts the file embeds (the default) or not ([`crate::ImportOptions::embedded_fonts`]).
+    pub(super) fn with_embedded_fonts(mut self, on: bool) -> Self {
+        self.embedded_fonts = on;
+        self
+    }
+
     pub(super) fn new(next: u64, colors: Colors<'p>, text_as: TextAs, route: bool) -> Self {
         Self {
             colors,

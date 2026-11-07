@@ -260,8 +260,7 @@ fn read_opened(
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route);
-    b.embedded_fonts = opts.embedded_fonts;
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route).with_embedded_fonts(opts.embedded_fonts);
     // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
     // show or print on its page's layer.
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
