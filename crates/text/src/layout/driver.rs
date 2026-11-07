@@ -65,8 +65,8 @@ pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
 /// Area type whose source lays out `lines` lines in its frame, more than fit here: a font that isn't
 /// available shows in the fallback font, whose lines may reach lower, and the source may set a last
 /// line whose descent passes the frame's bottom, which isn't drawn here. For importers: the frame is
-/// made taller, from its bottom, by at most a line's descent, when that lays out more of the
-/// source's lines and no more than it has. Horizontal type only. Whether it was.
+/// made taller, from its bottom, by its lines' deepest descent plus 0.05 pt, when that lays out
+/// more of the source's lines and no more than it has. Horizontal type only. Whether it was.
 pub fn fit_source_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
     let TextKind::Area { frame } = &t.kind else { return false };
     if t.vertical {
