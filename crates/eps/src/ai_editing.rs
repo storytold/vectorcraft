@@ -28,6 +28,25 @@
 //!   `0 (name) count Pg` before its swatches, `PB`), then the artboards as the `ArtboardArray` of the
 //!   `/Document` dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on
 //!   `%_` lines.
+//! - Variables (`writer::variables`): after the canvas size, the variable library as XML nodes
+//!   (`/XMLNode`: `xmlnode-nodename`, `xmlnode-nodevalue`, `xmlnode-nodetype`, `xmlnode-children`,
+//!   `xmlnode-attributes`) of an XML document `#document`: a `metadata` element holding
+//!   `variableSets`, one `variableSet` (`locked`: `none`, or `variableAndTypes` when the variables
+//!   are locked), its `variables` (a `variable` element with `varName` and `trait`: `textcontent`,
+//!   `visibility`, `fileref` or `graphdata`, none for a variable of unknown kind; a variable bound to
+//!   objects declared once for each, its `docRef` the object's XML id, `/XMLUIDREF`) and its
+//!   `v:sampleDataSets` (`i:activeDataSet`, the data set shown) of `v:sampleDataSet` elements
+//!   (`dataSetName`), each holding an element named after each variable it gives a value: a `p`
+//!   element for each line of a text value, a `/Bool` text whether the objects show, a linked file's
+//!   `file://` URL or path. An object bound to a variable without a name gets an XML id and an empty
+//!   `AIArtName`. Bindings to layers, to type, to graphs and to linked images written as other objects, and
+//!   graph values, values that don't fit their variable, linked files that aren't absolute paths,
+//!   drive and network paths with white space at either end, and values of variables whose names
+//!   have a colon, are left out, as is what the reader leaves out
+//!   (variables and data sets whose names are empty, repeated, longer than 255 characters or start
+//!   or end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to XML ids longer than
+//!   255 characters, names and values past 8,388,608 bytes in all), and values past 200,000 text
+//!   lines and values in all.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
 //!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
 //!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
@@ -209,6 +228,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
+    let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
         .layers
@@ -224,7 +244,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
     w.definitions(&mut s);
     s.push_str(&palette);
-    artboards(&mut s, doc, to_art, origin);
+    artboards(&mut s, doc, to_art, origin, &library);
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");
@@ -434,7 +454,7 @@ fn ruler_units(u: Unit) -> u8 {
 /// first) and its name; then the canvas's size. Every record holds all of these entries. The
 /// artboards and the canvas size are written in the `/Recorded` part of the `/Document`
 /// dictionary, followed by an empty `/NotRecorded` part.
-fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64)) {
+fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64), library: &str) {
     s.push_str("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n");
     for (i, ab) in doc.artboards.iter().enumerate() {
         let r = to_art.transform_rect_bbox(ab.rect);
@@ -454,6 +474,8 @@ fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64))
     }
     s.push_str("%_; (ArtboardArray) ,\n");
     let _ = writeln!(s, "%_{CANVAS_SIZE} /Int (AIDocumentCanvasSize) ,");
+    // The variable library, after the canvas size.
+    s.push_str(library);
     s.push_str("%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n");
 }
 

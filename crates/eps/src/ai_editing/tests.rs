@@ -3044,3 +3044,214 @@ fn sixteen_bit_cmyk_images_are_written_at_eight_bits() {
     assert_eq!(out.warnings, [writer::IMAGE_DEPTH]);
     assert!(program_shown(&doc).contains("/DeviceCMYK XN\n"));
 }
+
+// ---------- variables ----------
+
+/// A 200 × 100 document with variables: a text variable `name`, a visibility variable `show`
+/// bound to an unnamed square and to a rectangle `Badge`, an image variable `picture` bound to a
+/// linked image, a graph variable `chart` and a variable of unknown kind `other`; the data sets
+/// `First` (two lines of text, hidden, a linked file in a folder with a space and a `%`) and
+/// `Second` (empty text, shown, a linked file on a drive), `Second` shown; the variables locked.
+fn variables_doc() -> Document {
+    use vectorcraft_doc::{DataSet, DataValue, Variable, VariableKind};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let square = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance::basic(solid(GOLD), Paint::None, 0.0));
+    let mut badge =
+        Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(40.0, 10.0, 90.0, 30.0)), Appearance::basic(solid(BRAND), Paint::None, 0.0));
+    badge.name = Some("Badge".into());
+    let pic = image_node(
+        &mut doc,
+        ImageBlob::png(rgb_png()),
+        (3, 2),
+        Affine::new([10.0, 0.0, 0.0, 10.0, 100.0, 10.0]),
+        Some(vectorcraft_doc::LinkInfo::new("/tmp/a b/one.png")),
+    );
+    let ids = [square.id, badge.id, pic.id];
+    for n in [square, badge, pic] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let vars = &mut doc.variables;
+    for (name, kind) in [
+        ("name", VariableKind::Text),
+        ("show", VariableKind::Visibility),
+        ("picture", VariableKind::Image),
+        ("chart", VariableKind::Graph),
+        ("other", VariableKind::Unknown),
+    ] {
+        vars.variables.push(Variable { name: name.into(), kind });
+    }
+    vars.bind(ids[0], "show");
+    vars.bind(ids[1], "show");
+    vars.bind(ids[2], "picture");
+    let row = |name: &str, text: &str, show: bool, file: &str| DataSet {
+        name: name.into(),
+        values: [
+            ("name".to_string(), DataValue::Text(text.into())),
+            ("show".to_string(), DataValue::Visible(show)),
+            ("picture".to_string(), DataValue::Image(file.into())),
+        ]
+        .into(),
+    };
+    vars.datasets = vec![row("First", "Ann (one)\nLee & é", false, "/Users/test/Job 100%/pic.png"), row("Second", "", true, "C:\\Art\\two.png")];
+    vars.active_dataset = Some("Second".into());
+    vars.locked = true;
+    doc
+}
+
+/// The objects of `doc` bound to each variable, by kind and name, in document order.
+fn bound_objects(doc: &Document) -> Vec<String> {
+    let mut out = vec![];
+    for v in &doc.variables.variables {
+        for id in doc.variables.objects_of(&v.name) {
+            let n = doc.node(id).unwrap();
+            let kind = match &n.kind {
+                NodeKind::Image(im) => format!("image {:?}", im.link.as_ref().map(|l| l.path.clone())),
+                NodeKind::Path { .. } => "path".to_string(),
+                _ => "other".to_string(),
+            };
+            out.push(format!("{} → {kind} {:?}", v.name, n.name));
+        }
+    }
+    out
+}
+
+#[test]
+fn variables_data_sets_and_bindings_are_read_back() {
+    let doc = variables_doc();
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables, doc.variables.variables);
+    assert_eq!(back.variables.datasets, doc.variables.datasets);
+    assert_eq!(back.variables.active_dataset.as_deref(), Some("Second"));
+    assert!(back.variables.locked);
+    assert_eq!(bound_objects(&back), bound_objects(&doc));
+    assert_eq!(bound_objects(&back), ["show → path None", "show → path Some(\"Badge\")", "picture → image Some(\"/tmp/a b/one.png\") None"]);
+    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
+    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+    // The document read back is written the same way again.
+    let library = |p: String| p[p.find("%_/XMLNode :").unwrap()..p.find("(#document)").unwrap()].to_string();
+    assert_eq!(library(program_shown(&back)), library(program_shown(&doc)));
+}
+
+#[test]
+fn variables_and_data_sets_past_the_readers_caps_are_left_out() {
+    use vectorcraft_doc::{DataSet, Variable, VariableKind};
+    let mut doc = variables_doc();
+    for i in 0..300 {
+        doc.variables.variables.push(Variable { name: format!("extra{i}"), kind: VariableKind::Text });
+    }
+    for i in 0..1_000 {
+        doc.variables.datasets.push(DataSet { name: format!("Row {i}"), values: Default::default() });
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables[..], doc.variables.variables[..256]);
+    assert_eq!(back.variables.datasets[..], doc.variables.datasets[..1_000]);
+    assert_eq!(bound_objects(&back).len(), 3);
+    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
+    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+}
+
+#[test]
+fn long_xml_ids_and_text_of_many_lines_are_left_out() {
+    use vectorcraft_doc::DataValue;
+    let mut doc = variables_doc();
+    let badge = doc.variables.objects_of("show")[1];
+    doc.node_mut(badge).unwrap().name = Some("_".repeat(60));
+    let lines = "\n".repeat(150_000);
+    doc.variables.datasets[0].values.insert("name".into(), DataValue::Text(lines));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(bound_objects(&back), ["show → path None", "picture → image Some(\"/tmp/a b/one.png\") None"]);
+    assert_eq!(back.variables.datasets[0].values.get("name"), None);
+    assert_eq!(back.variables.datasets[1].values.get("name"), Some(&DataValue::Text(String::new())));
+    // Nothing is written that the reader leaves out.
+    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
+    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+}
+
+#[test]
+fn a_layer_bound_to_a_visibility_variable_is_reported_left_out() {
+    let mut doc = variables_doc();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.iter().all(|w| w != writer::BINDINGS));
+    let layer = doc.layers[0].id;
+    doc.variables.bind(layer, "show");
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::BINDINGS));
+    assert_eq!(bound_objects(&read_back(&doc)).len(), 3);
+}
+
+#[test]
+fn a_locked_library_without_variables_stays_locked() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.variables.locked = true;
+    assert!(read_back(&doc).variables.locked);
+}
+
+#[test]
+fn names_the_reader_does_not_read_as_they_are_are_left_out() {
+    use vectorcraft_doc::{DataSet, Variable, VariableKind};
+    let mut doc = variables_doc();
+    for name in ["x".repeat(256), " padded".into(), String::new(), "show".into()] {
+        doc.variables.variables.push(Variable { name: name.clone(), kind: VariableKind::Text });
+        doc.variables.datasets.push(DataSet { name, values: Default::default() });
+    }
+    doc.variables.datasets.push(DataSet { name: "First".into(), values: Default::default() });
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let expected = variables_doc();
+    assert_eq!(back.variables.variables, expected.variables.variables);
+    let mut datasets = expected.variables.datasets.clone();
+    datasets.push(DataSet { name: "show".into(), values: Default::default() });
+    assert_eq!(back.variables.datasets, datasets);
+    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
+    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+}
+
+#[test]
+fn a_document_without_variables_has_no_library() {
+    let p = program(&sample());
+    assert!(!p.contains("XMLNode"));
+}
+
+#[test]
+fn an_unlocked_library_without_a_data_set_is_read_back() {
+    let mut doc = variables_doc();
+    doc.variables.datasets.clear();
+    doc.variables.active_dataset = None;
+    doc.variables.locked = false;
+    let back = read_back(&doc);
+    let expected = vectorcraft_doc::Variables { bindings: back.variables.bindings.clone(), ..(*doc.variables).clone() };
+    assert_eq!(*back.variables, expected);
+    assert_eq!(bound_objects(&back), bound_objects(&doc));
+}
+
+#[test]
+fn bindings_and_values_the_reader_cant_take_are_left_out() {
+    use vectorcraft_doc::{DataValue, VariableKind};
+    let mut doc = variables_doc();
+    let layer = doc.layers[0].id;
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Ann", style);
+    let t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    let text_id = t.id;
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    doc.variables.bind(text_id, "name");
+    doc.variables.variables.push(vectorcraft_doc::Variable { name: "a:b".into(), kind: VariableKind::Text });
+    let first = &mut doc.variables.datasets[0].values;
+    first.insert("chart".into(), DataValue::Graph("a,b\n1,2".into()));
+    first.insert("a:b".into(), DataValue::Text("lost".into()));
+    let second = &mut doc.variables.datasets[1].values;
+    second.insert("picture".into(), DataValue::Image("relative/pic.png".into()));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::BINDINGS), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::VALUES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert!(back.variables.objects_of("name").is_empty());
+    assert_eq!(back.variables.datasets[0].values.get("chart"), None);
+    assert_eq!(back.variables.datasets[0].values.get("a:b"), None);
+    assert_eq!(back.variables.datasets[1].values.get("picture"), None);
+    assert_eq!(bound_objects(&back).len(), 3);
+}
