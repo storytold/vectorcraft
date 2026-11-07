@@ -35,6 +35,10 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // A command with a parameter schema runs only with params that pass it, and with the
+        // defaults of omitted values filled in; the journal keeps the params as given.
+        let checked = crate::schemas::check(spec, params)?;
+        let run_params = checked.as_ref().unwrap_or(params);
         // The crate's own tests are the audit of the params descriptions (#1442): a key a test
         // passes that its command's description doesn't name fails the test.
         #[cfg(test)]
@@ -91,7 +95,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = (spec.run)(s, params);
+            let r = (spec.run)(s, run_params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)

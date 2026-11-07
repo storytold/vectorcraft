@@ -126,6 +126,9 @@ pub struct CommandSpec {
     pub run: Run,
     /// Record in the journal (false for queries and selection-only helpers).
     pub journal: bool,
+    /// The parameters' schema: [`Session::execute`] checks the params against it before the
+    /// command runs, and `params` is the text it writes ([`crate::schemas`]).
+    pub schema: Option<&'static vectorcraft_apischema::ParamSchema>,
 }
 
 /// Serializable command metadata.
@@ -139,6 +142,9 @@ pub struct CommandInfo {
     pub enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_reason: Option<String>,
+    /// The parameters' schema as a JSON Schema 2020-12 object schema, for a command that has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<Value>,
 }
 
 impl CommandSpec {
@@ -152,6 +158,7 @@ impl CommandSpec {
             params: self.params,
             enabled: e.is_ok(),
             disabled_reason: e.err(),
+            schema: self.schema.map(vectorcraft_apischema::ParamSchema::to_json),
         }
     }
 }
@@ -234,10 +241,17 @@ pub fn has_clipboard(s: &Session) -> std::result::Result<(), String> {
 
 macro_rules! cmd {
     ($id:literal, $label:literal, [$($m:literal),*], $sc:expr, $params:literal, $en:expr, $run:expr) => {
-        $crate::cmd::CommandSpec { id: $id, label: $label, menu: &[$($m),*], shortcut: $sc, params: $params, enabled: $en, run: $run, journal: true }
+        $crate::cmd::CommandSpec { id: $id, label: $label, menu: &[$($m),*], shortcut: $sc, params: $params, enabled: $en, run: $run, journal: true, schema: None }
     };
     (query $id:literal, $label:literal, [$($m:literal),*], $sc:expr, $params:literal, $en:expr, $run:expr) => {
-        $crate::cmd::CommandSpec { id: $id, label: $label, menu: &[$($m),*], shortcut: $sc, params: $params, enabled: $en, run: $run, journal: false }
+        $crate::cmd::CommandSpec { id: $id, label: $label, menu: &[$($m),*], shortcut: $sc, params: $params, enabled: $en, run: $run, journal: false, schema: None }
+    };
+    // With a parameter schema: `schema: &SCHEMA` after the run function.
+    ($id:literal, $label:literal, [$($m:literal),*], $sc:expr, $params:literal, $en:expr, $run:expr, schema: $schema:expr) => {
+        $crate::cmd::CommandSpec { schema: Some($schema), ..$crate::cmd::cmd!($id, $label, [$($m),*], $sc, $params, $en, $run) }
+    };
+    (query $id:literal, $label:literal, [$($m:literal),*], $sc:expr, $params:literal, $en:expr, $run:expr, schema: $schema:expr) => {
+        $crate::cmd::CommandSpec { schema: Some($schema), ..$crate::cmd::cmd!(query $id, $label, [$($m),*], $sc, $params, $en, $run) }
     };
 }
 pub(crate) use cmd;

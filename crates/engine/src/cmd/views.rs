@@ -2,33 +2,105 @@
 //! toggles (Show Transparency Grid); the Character panel's Snap to Glyph options.
 
 use serde_json::{Value, json};
+use vectorcraft_apischema::{Bound, Param, ParamSchema, Type, Writes};
 use vectorcraft_doc::SavedView;
 use vectorcraft_geom::Point;
 
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param, switch_or};
 
+// The parameter schemas. Each command's params text is the text its schema writes
+// (`ParamSchema::params_text`), which a test in `crate::schemas` checks.
+
+static CAPS_LOCK: ParamSchema = ParamSchema::new(
+    &[Param::new("on", Type::Boolean).optional()],
+    "set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value",
+)
+.returns("{on}")
+.writes(Writes::Session);
+
+static NEW_VIEW: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("name", Type::String).default_note("the first free \"View N\"").null_omitted(),
+        Param::new("center", Type::Point),
+        Param::new("zoom", Type::Number { min: Some(Bound::Exclusive(0.0)), max: None, unit: None }).doc("1 = 100%"),
+        Param::new("rotation", Type::Number { min: None, max: None, unit: Some("deg") }).defaults_to("0"),
+    ],
+    "save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once)",
+)
+.returns("{name, index}");
+
+/// One rename or delete of Edit Views….
+const VIEW_EDIT: &[Param] = &[
+    Param::new("name", Type::String),
+    Param::new("newName", Type::String).optional().null_omitted(),
+    Param::new("delete", Type::Boolean).optional().null_omitted(),
+];
+
+static EDIT_VIEWS: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("name", Type::String).optional().null_omitted(),
+        Param::new("newName", Type::String).optional().null_omitted().doc("rename"),
+        Param::new("delete", Type::Boolean).optional().null_omitted(),
+        Param::new("edits", Type::Array(&Type::Object(VIEW_EDIT))).optional().null_omitted().doc("instead of name"),
+    ],
+    "rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
+);
+
+static LIST_VIEWS: ParamSchema = ParamSchema::new(&[], "").returns("{views: [{name, center, zoom, rotation}]}").writes(Writes::Nothing);
+
+static TRANSPARENCY_GRID: ParamSchema = ParamSchema::new(
+    &[Param::new("on", Type::Boolean).default_note("toggle").null_omitted()],
+    "show the transparency grid behind the active document's artboards (each document has its own setting)",
+)
+.returns("{on}");
+
+static GLYPH_SNAP: ParamSchema = ParamSchema::new(
+    &[
+        Param::new("baseline", Type::Boolean).optional(),
+        Param::new("xHeight", Type::Boolean).optional(),
+        Param::new("bounds", Type::Boolean).optional(),
+        Param::new("proximity", Type::Boolean).optional(),
+        Param::new("angular", Type::Boolean).optional(),
+        Param::new("anchors", Type::Boolean).optional(),
+    ],
+    "the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives: the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them",
+)
+.returns("the options")
+.writes(Writes::Preferences);
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!(query "view.capsLock", "Caps Lock Cursor State", [], None, "{on?: bool} set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value → {on}", always, caps_lock),
+        cmd!(
+            query "view.capsLock",
+            "Caps Lock Cursor State",
+            [],
+            None,
+            "{on?: bool} set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value → {on}",
+            always,
+            caps_lock,
+            schema: &CAPS_LOCK
+        ),
         cmd!(
             "view.saved.new",
             "New View…",
             ["View"],
             None,
-            "{name?, center: [x, y], zoom: (1 = 100%), rotation?: deg} save a view in the document (the app fills in the current one; default \"View N\"; at most 25, names up to 255 characters, each name once) → {name, index}",
+            "{name?: string (default: the first free \"View N\"), center: [x, y], zoom: number > 0 (1 = 100%), rotation?: number deg (default: 0)} save a view in the document (the app fills in the current one; at most 25, names up to 255 characters, each name once) → {name, index}",
             has_doc,
-            new_view
+            new_view,
+            schema: &NEW_VIEW
         ),
         cmd!(
             "view.saved.edit",
             "Edit Views…",
             ["View"],
             None,
-            "{name, newName?: rename, delete?: bool} | {edits: [{name, newName?, delete?}…]} rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
+            "{name?: string, newName?: string (rename), delete?: bool, edits?: [{name: string, newName?: string, delete?: bool}…] (instead of name)} rename or delete saved views, all in one undo step; names are those before the edit and must stay unique; no params → {views}",
             has_views,
-            edit_views
+            edit_views,
+            schema: &EDIT_VIEWS
         ),
-        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views),
+        cmd!(query "view.saved.list", "Saved Views", [], None, "{} → {views: [{name, center, zoom, rotation}]}", has_doc, list_views, schema: &LIST_VIEWS),
         cmd!(
             query "view.transparencyGrid",
             "Show Transparency Grid",
@@ -36,16 +108,18 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Shift+D"),
             "{on?: bool (default: toggle)} show the transparency grid behind the active document's artboards (each document has its own setting) → {on}",
             has_doc,
-            transparency_grid
+            transparency_grid,
+            schema: &TRANSPARENCY_GRID
         ),
         cmd!(
             query "view.snapToGlyph.options",
             "Snap to Glyph Options",
             [],
             None,
-            "{baseline?: bool, xHeight?: bool, bounds?: bool, proximity?: bool, angular?: bool, anchors?: bool} the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives — the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them → the options",
+            "{baseline?: bool, xHeight?: bool, bounds?: bool, proximity?: bool, angular?: bool, anchors?: bool} the Character panel's Snap to Glyph options, kept in the preferences (the glyphSnap group, all on by default): which guides View › Snap to Glyph gives: the baseline and x-height of a single line of type, Glyph Bounds (each glyph's edges), Proximity Guides (both edges of each character's width), Angular Guides (a glyph's slanted strokes, and every guide of rotated type) and the glyphs' anchor points; {} reads them → the options",
             always,
-            glyph_snap_options
+            glyph_snap_options,
+            schema: &GLYPH_SNAP
         ),
     ]
 }
@@ -278,6 +352,39 @@ mod tests {
         s.execute("view.saved.edit", &json!({"name": "V1", "delete": true})).unwrap();
         let long = "x".repeat(1000);
         assert_eq!(s.execute("view.saved.new", &json!({"name": long, "center": [0, 0], "zoom": 1})).unwrap()["name"], "x".repeat(255));
+    }
+
+    /// Each command refuses a value its schema doesn't take with an error naming the parameter, and
+    /// leaves the document, its views, its undo history and the settings as they were.
+    #[test]
+    fn each_view_command_refuses_a_bad_value_naming_the_parameter() {
+        let mut s = session_with_views(&["A"]);
+        for (id, params, named) in [
+            ("view.capsLock", json!({"on": "yes"}), "`on`"),
+            ("view.capsLock", json!({"of": true}), "`of`"),
+            ("view.saved.new", json!({"center": [0, 0], "zoom": 0}), "`zoom`"),
+            ("view.saved.new", json!({"center": [0, "0"], "zoom": 1}), "`center`"),
+            ("view.saved.new", json!({"center": [0, 0], "zoom": 1, "rotation": "15"}), "`rotation`"),
+            ("view.saved.new", json!({"name": 5, "center": [0, 0], "zoom": 1}), "`name`"),
+            ("view.saved.new", json!({"zoom": 1}), "`center`"),
+            ("view.saved.edit", json!({"name": "A", "delete": "yes"}), "`delete`"),
+            ("view.saved.edit", json!({"name": "A", "newName": 7}), "`newName`"),
+            ("view.saved.edit", json!({"edits": [{"name": "A", "delete": 1}]}), "`edits[0].delete`"),
+            ("view.saved.edit", json!({"edits": [{"newName": "B"}]}), "`edits[0].name`"),
+            ("view.saved.edit", json!({"edits": "A"}), "`edits`"),
+            ("view.saved.list", json!({"all": true}), "`all`"),
+            ("view.transparencyGrid", json!({"on": 1}), "`on`"),
+            ("view.snapToGlyph.options", json!({"bounds": "off"}), "`bounds`"),
+        ] {
+            let st = s.doc().unwrap();
+            let doc = (st.doc.views.clone(), st.history.undo.len(), st.is_dirty());
+            let (grid, caps, snap) = (st.transparency_grid, s.caps_lock, s.prefs.glyph_snap);
+            let e = s.execute(id, &params).unwrap_err().to_string();
+            assert!(e.contains(id) && e.contains(named), "{id} {params}: {e}");
+            let st = s.doc().unwrap();
+            assert_eq!((&st.doc.views, st.history.undo.len(), st.is_dirty()), (&doc.0, doc.1, doc.2), "{id} {params}");
+            assert_eq!((st.transparency_grid, s.caps_lock, s.prefs.glyph_snap), (grid, caps, snap), "{id} {params}");
+        }
     }
 
     /// Edit Views… is off until the document has a view.

@@ -6140,6 +6140,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-apischema"
+version = "0.21.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "vectorcraft-brush"
 version = "0.21.0"
 dependencies = [
@@ -6258,6 +6265,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-affinity",
+ "vectorcraft-apischema",
  "vectorcraft-brush",
  "vectorcraft-cad",
  "vectorcraft-color",

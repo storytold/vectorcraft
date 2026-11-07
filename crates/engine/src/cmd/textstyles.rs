@@ -47,7 +47,7 @@ impl Kind {
 
 /// One command spec (the `cmd!` macro wants literals; these ids are built with `concat!`).
 const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static str], params: &'static str, run: Run, journal: bool) -> CommandSpec {
-    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal }
+    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal, schema: None }
 }
 
 macro_rules! style_cmds {

@@ -1253,6 +1253,34 @@ reference that names no value fails the step, so a command never runs with one l
 vectorcraft-cli run --cmd file.new --params '{"width":600,"height":200}'   --cmd text.create --params '{"x":10,"y":60,"text":"plain and bold words","size":30}'   --cmd text.setRangeStyle --params '{"id":"$1.id","start":10,"end":14,"style":"Bold"}'
 ```
 
+### Parameter schemas
+
+Some commands have a machine-readable parameter schema: at present `view.capsLock`, `view.saved.new`,
+`view.saved.edit`, `view.saved.list`, `view.transparencyGrid` and `view.snapToGlyph.options`. The engine's
+`engine.commands` list gives such a command a `schema` field: an object schema in the shape of JSON Schema 2020-12
+(https://json-schema.org/draft/2020-12), with `type`, `properties`, `required`, `additionalProperties: false`,
+`minimum` and `exclusiveMinimum` for ranges, `enum`, and `default` for a default the engine fills in. VectorCraft's own
+fields are `x-since` (the API level that added the command or the parameter), `x-deprecatedSince`, `x-lenient`,
+`x-unit`, `x-kind` (`id`, `color` or `point`), `x-default` (a default the command works out, such as `toggle`),
+`x-cost`, `x-writes` (`nothing`, `session`, `preferences` or `document`) and `x-returns`. A parameter that reads null
+as left out is an `anyOf` with `{"type": "null"}`. The command's `params` text is written from the same schema.
+
+Every caller, the desktop app and a step of `command.batch` included, has the params of such a command checked against
+its schema before the command runs. A value of the wrong type, out of range or not in its list, a missing required
+parameter or an unknown key is refused with a parameter error that names the parameter, with the path to a value
+inside a list or an object, and the document and its undo history stay as they were:
+
+```json
+{"id": "view.saved.new", "params": {"center": [0, 0], "zoom": 0}}
+→ invalid parameters for `view.saved.new`: `zoom` must be a number > 0, not 0
+{"id": "view.saved.edit", "params": {"edits": [{"name": "A", "delete": 1}]}}
+→ invalid parameters for `view.saved.edit`: `edits[0].delete` must be true or false, not 1
+```
+
+An omitted value with a `default` takes it (`rotation` 0 in `view.saved.new`); the journal keeps the params as they
+were given. The schemas belong to API level 1 (`vectorcraft_engine::schemas::API_VERSION`); a change to any schema
+raises the level.
+
 ## Checking scripts written for the reference app
 
 `script.check {path? | data? | dataBase64?, name?, includes?}` reads a script written for the reference app
