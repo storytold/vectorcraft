@@ -850,26 +850,47 @@ fn components(uses: &[Vec<usize>]) -> Vec<(Vec<usize>, bool)> {
 
 /// The names in `d` that `looped` (a loop of definitions that use each other, [`loop_groups`])
 /// all have at once, each the same once relinked by `r` with those names: each one's name or a
-/// numbered copy of it, at most 256 combinations tried. `None` when no combination fits.
+/// numbered copy of it. The names are picked one definition at a time, in order, and each
+/// definition is compared as soon as the names of those it uses are picked, so a pick that does
+/// not fit is dropped with every combination that follows from it; at most 65,536 comparisons are
+/// made. `None` when no combination fits, or none was found within that many comparisons.
 fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<&'d str>> {
     let names: Vec<Vec<&str>> = looped.iter().map(|def| def.names_in(d)).collect();
-    let count = names.iter().try_fold(1usize, |n, l| n.checked_mul(l.len()).filter(|n| *n <= 256))?;
-    (0..count).find_map(|mut i| {
-        let pick: Vec<&str> = names
-            .iter()
-            .map(|l| {
-                let n = l.get(i % l.len()).copied().unwrap_or_default();
-                i /= l.len();
-                n
-            })
-            .collect();
-        let mut guess = r.clone();
-        for (def, name) in looped.iter().zip(&pick) {
-            let (res, own) = def.key();
-            guess.renames.entry(res).or_default().insert(own.to_string(), name.to_string());
+    if names.is_empty() || names.iter().any(Vec::is_empty) {
+        return None;
+    }    // The definitions compared once the name at each position is picked.
+    let mut compare_at: Vec<Vec<usize>> = vec![vec![]; looped.len()];
+    for (i, uses) in uses_of(looped).iter().enumerate() {
+        compare_at[uses.iter().copied().fold(i, usize::max)].push(i);
+    }
+    let (mut pick, mut guess, mut budget, mut k) = (vec![0usize; looped.len()], r.clone(), 1usize << 16, 0);
+    loop {
+        let (res, own) = looped[k].key();
+        guess.renames.entry(res).or_default().insert(own.to_string(), names[k][pick[k]].to_string());
+        let fits = compare_at[k].iter().all(|&i| {
+            budget = budget.saturating_sub(1);
+            looped[i].same_in(d, names[i][pick[i]], &guess)
+        });
+        if fits && k + 1 == looped.len() {
+            return Some(names.iter().zip(&pick).map(|(l, &p)| l[p]).collect());
         }
-        looped.iter().zip(&pick).all(|(def, name)| def.same_in(d, name, &guess)).then_some(pick)
-    })
+        if budget == 0 {
+            return None;
+        }
+        if fits {
+            k += 1;
+            pick[k] = 0;
+            continue;
+        }
+        // The next name at this position, or back to the position before.
+        loop {
+            pick[k] += 1;
+            if pick[k] < names[k].len() {
+                break;
+            }
+            k = k.checked_sub(1)?;
+        }
+    }
 }
 
 /// What pasting did to the document's resources (part of the paste result).
