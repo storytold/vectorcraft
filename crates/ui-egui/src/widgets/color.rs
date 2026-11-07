@@ -477,14 +477,15 @@ enum HexPaste {
 /// that stays. `whole` says the paste goes over all of the field's text. A code has three or six digits
 /// with or without `#`, and spaces and line breaks around it are ignored. Bare digits that do not go over
 /// the whole text are inserted when the result has at most six digits, except that three digits are
-/// inserted only when exactly three digits stay. Any other code replaces the field's text, and any other
-/// paste is ignored.
-fn hex_paste(text: &str, kept: usize, whole: bool) -> HexPaste {
+/// inserted only when exactly three digits stay. Bare digits are not inserted when `before_hash` says the
+/// caret is before a `#` that stays. Any other code replaces the field's text, and any other paste is
+/// ignored.
+fn hex_paste(text: &str, kept: usize, whole: bool, before_hash: bool) -> HexPaste {
     let code = text.trim();
     let digits = code.strip_prefix('#').unwrap_or(code);
     if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
         HexPaste::Ignore
-    } else if digits == text && !whole && kept + digits.len() <= 6 && (digits.len() != 3 || kept == 3) {
+    } else if digits == text && !whole && !before_hash && kept + digits.len() <= 6 && (digits.len() != 3 || kept == 3) {
         HexPaste::Insert
     } else if matches!(digits.len(), 3 | 6) {
         HexPaste::Replace(digits.to_string())
@@ -500,32 +501,45 @@ fn take_hex_paste(ui: &Ui, id: egui::Id, buf: &mut String) -> bool {
         return false;
     }
     let mut state = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
-    let (start, mut selected) = state.cursor.char_range().map_or((0, 0), |r| {
+    let (start, selected) = state.cursor.char_range().map_or((0, 0), |r| {
         let r = r.as_sorted_char_range();
         (r.start.0, r.end.0 - r.start.0)
     });
-    let mut replaced = false;
-    ui.input_mut(|i| {
-        i.events.retain(|e| {
-            let egui::Event::Paste(text) = e else { return true };
-            let len = buf.chars().count();
-            let hash = buf.starts_with('#') && start > 0;
-            match hex_paste(text, len.saturating_sub(selected + usize::from(hash)), selected > 0 && selected >= len) {
-                HexPaste::Insert => return true,
-                HexPaste::Replace(digits) => {
-                    *buf = digits;
-                    selected = 0;
-                    replaced = true;
-                }
-                HexPaste::Ignore => {}
-            }
-            false
-        });
-    });
+    let replaced = ui.input_mut(|i| take_hex_pastes(&mut i.events, buf, start, selected));
     if replaced {
         state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(buf.len()))));
         state.store(ui.ctx(), id);
     }
+    replaced
+}
+
+/// Removes the pastes from `events` that [`hex_paste`] does not leave to the text box, in order, and
+/// applies each one that replaces `buf`. The caret is at character `start` with `selected` characters
+/// selected. A replacement also drops the bare-digit pastes kept from earlier in the frame, which the text
+/// box would otherwise insert into the new digits. Returns whether a paste replaced `buf`.
+fn take_hex_pastes(events: &mut Vec<egui::Event>, buf: &mut String, start: usize, mut selected: usize) -> bool {
+    let mut replaced = false;
+    let mut kept_events = Vec::with_capacity(events.len());
+    for e in events.drain(..) {
+        let egui::Event::Paste(text) = &e else {
+            kept_events.push(e);
+            continue;
+        };
+        let len = buf.chars().count();
+        let hash = buf.starts_with('#') && start > 0;
+        let before_hash = buf.starts_with('#') && start == 0 && selected == 0;
+        match hex_paste(text, len.saturating_sub(selected + usize::from(hash)), selected > 0 && selected >= len, before_hash) {
+            HexPaste::Insert => kept_events.push(e),
+            HexPaste::Replace(digits) => {
+                *buf = digits;
+                selected = 0;
+                replaced = true;
+                kept_events.retain(|k| !matches!(k, egui::Event::Paste(_)));
+            }
+            HexPaste::Ignore => {}
+        }
+    }
+    *events = kept_events;
     replaced
 }
 
@@ -755,4 +769,56 @@ pub fn region_texture(
     let img = renderer.render_region(doc, region, scale, true);
     let color = crate::canvas::color_image(&img);
     ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}
+
+#[cfg(test)]
+mod hex_paste_tests {
+    use super::{HexPaste, hex_paste, take_hex_pastes};
+
+    fn paste(text: &str) -> egui::Event {
+        egui::Event::Paste(text.into())
+    }
+
+    /// A paste with the caret before a `#` that stays never inserts bare digits ahead of it.
+    #[test]
+    fn bare_digits_are_not_inserted_before_a_hash_that_stays() {
+        assert_eq!(hex_paste("c", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("c", 3, false, true), HexPaste::Ignore);
+        assert_eq!(hex_paste("fff", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("fff", 3, false, true), HexPaste::Replace("fff".into()));
+    }
+
+    /// Field text, caret, selected characters, pastes, text after, and pastes left for the text box.
+    type Case = (&'static str, usize, usize, &'static [&'static str], &'static str, usize);
+
+    #[test]
+    fn pastes_at_the_start_of_a_hash_field_and_over_it() {
+        let cases: [Case; 5] = [
+            ("#ab", 0, 0, &["fff"], "fff", 0),
+            ("#ab", 0, 0, &["c"], "#ab", 0),
+            ("#ab", 0, 1, &["c"], "#ab", 1),
+            ("#ab", 0, 3, &["fff"], "fff", 0),
+            ("#ab", 1, 0, &["c"], "#ab", 1),
+        ];
+        for (text, start, selected, pastes, after, left) in cases {
+            let mut buf = text.to_string();
+            let mut events: Vec<egui::Event> = pastes.iter().map(|p| paste(p)).collect();
+            take_hex_pastes(&mut events, &mut buf, start, selected);
+            assert_eq!((buf.as_str(), events.len()), (after, left), "{text:?} caret {start} selected {selected} pasting {pastes:?}");
+        }
+    }
+
+    /// A replacing paste drops the digits kept from earlier pastes in the same frame.
+    #[test]
+    fn a_replacing_paste_drops_earlier_inserts_in_the_frame() {
+        let mut buf = "a".to_string();
+        let mut events = vec![paste("b"), egui::Event::Text("x".into()), paste("fff")];
+        assert!(take_hex_pastes(&mut events, &mut buf, 1, 0));
+        assert_eq!(buf, "fff");
+        assert_eq!(events.len(), 1, "only the typed text is left");
+        let mut buf = "ab".to_string();
+        let mut events = vec![paste("c"), paste("d")];
+        assert!(!take_hex_pastes(&mut events, &mut buf, 2, 0));
+        assert_eq!((buf.as_str(), events.len()), ("ab", 2), "inserts alone stay for the text box");
+    }
 }
