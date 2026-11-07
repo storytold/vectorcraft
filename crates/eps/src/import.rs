@@ -303,7 +303,8 @@ pub fn import_trusting(bytes: &[u8], editing_data: bool, trust: bool) -> Result<
 /// The document of what `out` drew: one layer, clipped art in clipping groups (grouped art in
 /// groups), the spot inks as spot swatches, in CMYK when most process colours were.
 fn finish(mut out: Out) -> Imported {
-    let drawn = std::mem::take(&mut out.drawn);
+    let mut drawn = std::mem::take(&mut out.drawn);
+    graphics::merge_strips(&mut drawn, &mut out.shadings);
     let mut children = vectorcraft_doc::clipnest::nest(&mut out.doc, drawn);
     if !out.shadings.is_empty() {
         graphics::collapse(&mut children, &out.shadings);
