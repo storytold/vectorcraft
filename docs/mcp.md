@@ -662,6 +662,10 @@ them. `grays: "black"` puts RGB greys with R = G = B on the black plate instead,
 Convert to Grayscale before the switch would give); other colors convert as usual. The reply's `changed` counts the
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
+`edit.colorSettings`, `file.documentColorMode`, `color.convert`, `color.loadProfile`, `color.removeProfile`,
+`view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and `swatch.setSpot` reject a
+param of the wrong type, such as `"bpc": "no"`, `"on": 1` or `"to": 5`, and change nothing. Omitting a param or giving
+null keeps its default.
 
 SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
 symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently

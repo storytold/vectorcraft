@@ -542,3 +542,92 @@ fn intents_reach_the_document_conversion() {
     assert_ne!(first(&a), first(&b));
     let _ = Intent::Perceptual;
 }
+
+/// The error `cmd` gives for `params`: it must name `msg`.
+fn refused(s: &mut Session, cmd: &str, params: Value, msg: &str) {
+    let e = match s.execute(cmd, &params) {
+        Ok(r) => panic!("{cmd} {params} gave {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains(msg), "{cmd} {params}: {e}");
+}
+
+#[test]
+fn color_settings_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let before = cms::active_settings();
+    let rev = s.doc().unwrap().revision;
+    let c = "edit.colorSettings";
+    refused(&mut s, c, json!({"bpc": "no"}), "`bpc` must be true or false");
+    refused(&mut s, c, json!({"rgb": 5}), "`rgb` must be a string");
+    refused(&mut s, c, json!({"cmyk": true}), "`cmyk` must be a string");
+    refused(&mut s, c, json!({"intent": 2}), "`intent` must be a string");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // Omitted and null params keep the settings.
+    s.execute(c, &json!({"bpc": null, "rgb": null})).unwrap();
+    assert_eq!(cms::active_settings(), before);
+    refused(&mut s, "color.convert", json!({"color": "#808080", "to": 1}), "`to` must be a string");
+    refused(&mut s, "color.convert", json!({"color": "#808080", "intent": ["relative"]}), "`intent` must be a string");
+    assert_eq!(s.execute("color.convert", &json!({"color": "#808080", "to": null})).unwrap()["model"], "rgb");
+    refused(&mut s, "color.loadProfile", json!({"path": 7}), "`path` must be a string");
+    refused(&mut s, "color.removeProfile", json!({"name": 7}), "`name` must be a string");
+}
+
+#[test]
+fn document_color_mode_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#ff0000"));
+    let fill = fill_of(&s, a);
+    let undo = s.doc().unwrap().history.undo.len();
+    for c in ["file.documentColorMode", "object.convertDocumentColorMode"] {
+        refused(&mut s, c, json!({"mode": "cmyk", "convert": "no"}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "rgb", "convert": 0}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "cmyk", "grays": 1}), "`grays` must be a string");
+        refused(&mut s, c, json!({"mode": "cmyk", "intent": false}), "`intent` must be a string");
+    }
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.color_mode, ColorMode::Rgb);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+    assert_eq!(fill_of(&s, a), fill, "the colors are unchanged");
+}
+
+#[test]
+fn proof_views_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let view = vectorcraft_render::proof::view();
+    let rev = s.doc().unwrap().revision;
+    refused(&mut s, "view.proofSetup", json!({"simulatePaper": "yes"}), "`simulatePaper` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"proof": 1}), "`proof` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"target": 3}), "`target` must be a string");
+    refused(&mut s, "view.proofColors", json!({"on": "true"}), "`on` must be true or false");
+    refused(&mut s, "view.overprintPreview", json!({"on": 1}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"on": "false"}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"plates": "Cyan"}), "`plates` must be an array of these names: Cyan, Magenta");
+    refused(&mut s, "view.separationsPreview", json!({"plates": ["Cyan", 2]}), "`plates` must be an array of these names");
+    refused(&mut s, "view.separationsPreview", json!({"only": 0}), "`only` must be a string");
+    refused(&mut s, "view.separationsPreview", json!({"toggle": ["Cyan"]}), "`toggle` must be a string");
+    assert_eq!(vectorcraft_render::proof::view(), view, "the proof view is unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // A null `on` toggles, as an omitted one does.
+    let r = s.execute("view.proofColors", &json!({"on": null})).unwrap();
+    assert_eq!(r["proofColors"], !view.proof_colors);
+    s.execute("view.proofColors", &json!({"on": view.proof_colors})).unwrap();
+}
+
+#[test]
+fn set_spot_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 0, "m": 60, "y": 100, "k": 0}, "global": true})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    refused(&mut s, "swatch.setSpot", json!({"name": "Ink", "spot": "true"}), "`spot` must be true or false");
+    refused(&mut s, "swatch.setSpot", json!({"name": 1}), "`name` must be a string");
+    assert!(!s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "the swatch stays a process color");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("swatch.setSpot", &json!({"name": "Ink", "spot": null})).unwrap();
+    assert!(s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "a null `spot` is the default, true");
+}
