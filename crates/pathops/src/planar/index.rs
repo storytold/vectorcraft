@@ -219,10 +219,10 @@ impl<T> RectIndex<T> {
                 }
             }
         }
-        found.sort_unstable();
-        found.dedup();
         #[cfg(test)]
         note_work(found.len());
+        found.sort_unstable();
+        found.dedup();
         found.into_iter().filter_map(move |i| self.items.get(i)).filter(move |(r, _)| r.inflate(tol, tol).contains(p)).map(|(_, t)| t)
     }
 }
