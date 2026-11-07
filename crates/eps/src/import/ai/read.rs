@@ -475,6 +475,12 @@ struct Reader<'a> {
     warnings: Vec<String>,
     /// Objects read as their drawn look (several fills or strokes, effects, brushes).
     drawn_looks: usize,
+    /// The objects read as their drawn look in the art of [`Reader::brush_art`], by name: counted in
+    /// [`Reader::drawn_looks`] once a brush that is kept uses the art.
+    brush_art_looks: HashMap<String, usize>,
+    /// The objects read as their drawn look in the art of the patterns kept, by the name the document
+    /// has the pattern by: a pattern defined again counts only its last definition.
+    pattern_looks: HashMap<String, usize>,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
     /// The blend part each object's dictionary names (`ShapeBlendPathType`, `ShapeBlendPathID`).
@@ -679,6 +685,8 @@ impl<'a> Reader<'a> {
             color_model: None,
             warnings: Vec::new(),
             drawn_looks: 0,
+            brush_art_looks: HashMap::new(),
+            pattern_looks: HashMap::new(),
             hidden_ids: HashSet::new(),
             blend_roles: HashMap::new(),
             blend_record: None,
