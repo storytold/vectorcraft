@@ -770,6 +770,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         let gone = selection.guides.clone();
         d.retain_guides(selection, |i, _| !gone.contains(&i));
         let mut survivors = vec![];
+        let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
@@ -803,11 +804,10 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     d.remove(p)?;
                 }
             } else {
-                let path_node = super::path::path_mut(d, *id)?;
-                path_node.subpaths = subpaths;
-                survivors.push(*id);
+                survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, *id, subpaths)?);
             }
         }
+        pieces.finish(d)?;
         selection.set(survivors);
         selection.anchors.clear();
         selection.segments.clear();

@@ -1220,40 +1220,40 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             if d.node(*id).is_none() {
                 continue;
             }
-            let remove_node = {
-                let path = path_mut(d, *id)?;
+            let subpaths: Vec<SubPath> = {
+                let path = d.node(*id).and_then(|n| n.path_data()).ok_or(EngineError::NoNode(*id))?;
                 if let Some(refs) = segments.get(id) {
                     // A segment pick cuts its connection, keeping every neighboring cubic.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
-                        .into_iter()
+                    path.subpaths
+                        .iter()
+                        .cloned()
                         .enumerate()
                         .flat_map(|(si, sp)| {
                             let cuts = refs.iter().filter_map(|&(s, seg)| (s == si).then_some(seg)).collect();
                             without_segments(sp, &cuts)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 } else {
                     // Remove every selected anchor against the original indexes, keeping surviving
                     // stretches separate rather than joining across deleted anchors.
-                    path.subpaths = std::mem::take(&mut path.subpaths)
-                        .into_iter()
+                    path.subpaths
+                        .iter()
+                        .cloned()
                         .enumerate()
                         .flat_map(|(si, sp)| {
                             let gone = set.iter().filter_map(|&(s, ai)| (s == si).then_some(ai)).collect();
                             without_anchors(sp, &gone)
                         })
                         .filter(|s| s.anchors.len() >= 2)
-                        .collect();
+                        .collect()
                 }
-                path.subpaths.retain(|s| s.anchors.len() >= 2);
-                path.subpaths.is_empty()
             };
-            if remove_node {
+            if subpaths.is_empty() {
                 emptied.put(d, *id, vec![])?;
             } else {
-                // The remainder is selected whole, so the next Delete removes it.
-                survivors.push(*id);
+                // Every remaining piece is selected whole, so the next Delete removes them.
+                survivors.extend(replace_deleted_pieces(d, &mut emptied, *id, subpaths)?);
             }
         }
         emptied.finish(d)?;
@@ -1261,6 +1261,18 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Deletion splits an ordinary contour into sibling objects. Existing multi-subpath paths and
+/// explicit compound members keep their compound semantics, even when a member has one contour.
+pub(super) fn replace_deleted_pieces(d: &mut Document, beside: &mut Beside, id: NodeId, subpaths: Vec<SubPath>) -> Result<Vec<NodeId>> {
+    let single = d.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.len() == 1);
+    if single && compound_or_self(d, id) == id {
+        super::draw2::replace_with_pieces(d, beside, id, subpaths.into_iter().map(PathData::single).collect())
+    } else {
+        path_mut(d, id)?.subpaths = subpaths;
+        Ok(vec![id])
+    }
 }
 
 /// Remove anchors and their incident segments, keeping each surviving stretch as an open path.
