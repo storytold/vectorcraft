@@ -4,9 +4,10 @@
 //! which `theme::install_fonts` adds after the UI fonts, so Japanese never gets here; nothing else
 //! is bundled for them: the first time a frame paints a character the UI fonts
 //! don't have, an installed font covering it is looked for (in the background on native) and added
-//! to egui's families as their last fallback, on the UI face's baseline, from the next frame on.
-//! Text the UI fonts cover costs no font loading or memory. On the web, which has no system fonts,
-//! such characters stay missing-glyph boxes (Japanese too, unless built with craft-fonts).
+//! to egui's families as their last fallback, on the baseline of each family's first face, from
+//! the next frame on. Text the UI fonts cover costs no font loading or memory. On the web, which
+//! has no system fonts, such characters stay missing-glyph boxes (Japanese too, unless built with
+//! craft-fonts).
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -109,9 +110,9 @@ impl UiFonts {
         missing
     }
 
-    /// Add `faces` to every egui family, after the fonts it has, on the UI face's baseline.
+    /// Add `faces` to every egui family, after the fonts it has, on the baseline of the family's
+    /// first face.
     fn install(&mut self, ctx: &egui::Context, faces: &[Arc<FontFace>]) {
-        let (families, row): (Vec<FontFamily>, _) = ctx.fonts(|f| (f.definitions().families.keys().cloned().collect(), row_metrics(f.definitions())));
         for face in faces {
             let name = format!("{} {} #{}", face.family, face.style, face.face_index());
             if !self.added.insert(name.clone()) {
@@ -120,10 +121,11 @@ impl UiFonts {
             // The face's file data, shared with the process-wide font database (which keeps every
             // face it loads for the session) instead of copied: one handle is leaked per font added.
             let face: &'static FontFace = Box::leak(Box::new(face.clone()));
-            let tweak = row.map_or_else(FontTweak::default, |row| baseline_tweak(row, face.file_data(), face.face_index()));
-            let data = FontData { index: face.face_index(), tweak, ..FontData::from_static(face.file_data()) };
-            let families = families.iter().map(|family| InsertFontFamily { family: family.clone(), priority: FontPriority::Lowest }).collect();
-            ctx.add_font(FontInsert { name, data, families });
+            let data = FontData { index: face.face_index(), ..FontData::from_static(face.file_data()) };
+            for (name, data, families) in ctx.fonts(|f| baseline_copies(f.definitions(), &name, &data)) {
+                let families = families.into_iter().map(|family| InsertFontFamily { family, priority: FontPriority::Lowest }).collect();
+                ctx.add_font(FontInsert { name, data, families });
+            }
         }
         if !faces.is_empty() {
             ctx.request_repaint();
@@ -139,14 +141,34 @@ impl UiFonts {
     }
 }
 
-/// The ascent and row height of the Proportional family's first face, in ems of the font size,
-/// with that face's `FontTweak` scale applied, as egui lays out its rows. `None` when the family is
-/// empty or its face can't be read.
-fn row_metrics(defs: &FontDefinitions) -> Option<(f32, f32)> {
-    let name = defs.families.get(&FontFamily::Proportional)?.first()?;
-    let data = defs.font_data.get(name)?;
+/// The copies of the fallback face `data` that `defs`' families take, one for each baseline they
+/// need: each copy is `data` with the `y_offset_factor` that puts its glyphs on the baseline of the
+/// first face of the families listed with it. Families whose first faces need the same shift share
+/// a copy. The first copy (the Proportional family's, when `defs` has it) is named `name`; each
+/// other copy adds the name of its families' first face.
+pub(crate) fn baseline_copies(defs: &FontDefinitions, name: &str, data: &FontData) -> Vec<(String, FontData, Vec<FontFamily>)> {
+    let mut copies: Vec<(String, FontData, Vec<FontFamily>)> = vec![];
+    for (family, stack) in &defs.families {
+        let head = stack.first().and_then(|head| Some((head.as_str(), defs.font_data.get(head)?)));
+        let shift = head.and_then(|(_, data)| row_metrics(data)).map_or(0.0, |row| baseline_shift(row, (*data.font).as_ref(), data.index));
+        if let Some((_, _, families)) = copies.iter_mut().find(|(_, copy, _)| copy.tweak.y_offset_factor.to_bits() == shift.to_bits()) {
+            families.push(family.clone());
+            continue;
+        }
+        let copy_name = if copies.is_empty() { name.to_owned() } else { format!("{name} / {}", head.map_or("", |(head, _)| head)) };
+        let tweak = FontTweak { y_offset_factor: shift, ..data.tweak.clone() };
+        copies.push((copy_name, FontData { tweak, ..data.clone() }, vec![family.clone()]));
+    }
+    copies
+}
+
+/// The ascent, row height and vertical offset of a family's first face `data`, in ems of the font
+/// size, with that face's `FontTweak` scale applied, as egui lays out its rows. `None` when the
+/// face can't be read.
+fn row_metrics(data: &FontData) -> Option<(f32, f32, f32)> {
     let (ascent, height) = em_metrics((*data.font).as_ref(), data.index)?;
-    Some((ascent * data.tweak.scale, height * data.tweak.scale))
+    let scale = data.tweak.scale;
+    Some((ascent * scale, height * scale, data.tweak.y_offset_factor * scale))
 }
 
 /// The ascent and row height (ascent, descent and line gap) of the face at `index` of `data`, in ems.
@@ -155,15 +177,15 @@ fn em_metrics(data: &[u8], index: u32) -> Option<(f32, f32)> {
     Some((ascent / upem, (ascent - descent + gap) / upem))
 }
 
-/// The tweak that puts a fallback face's glyphs on the baseline of the row's first face, whose
-/// ascent and row height in ems are `row`. egui draws a fallback glyph's baseline at its face's
-/// ascent plus half the difference between the two row heights, so a face with a taller ascent or
-/// descent sits off the baseline by the shift computed here, in ems of the font size. One shift
-/// serves every family: it is measured against the Proportional family's first face.
-fn baseline_tweak(row: (f32, f32), face: &[u8], index: u32) -> FontTweak {
-    let (row_ascent, row_height) = row;
-    let shift = em_metrics(face, index).map_or(0.0, |(ascent, height)| row_ascent - (ascent + 0.5 * (row_height - height)));
-    FontTweak { y_offset_factor: if shift.is_finite() { shift.clamp(-0.5, 0.5) } else { 0.0 }, ..Default::default() }
+/// The `y_offset_factor` that puts the glyphs of the face at `index` of `face` on the baseline of
+/// the row's first face, whose ascent, row height and offset in ems are `row`. egui draws a
+/// fallback glyph's baseline at its face's ascent plus half the difference between the two row
+/// heights, so a face with a taller ascent or descent sits off the baseline by the shift computed
+/// here, in ems of the font size, limited to half an em either way.
+fn baseline_shift(row: (f32, f32, f32), face: &[u8], index: u32) -> f32 {
+    let (row_ascent, row_height, row_offset) = row;
+    let shift = em_metrics(face, index).map_or(0.0, |(ascent, height)| row_ascent + row_offset - (ascent + 0.5 * (row_height - height)));
+    if shift.is_finite() { shift.clamp(-0.5, 0.5) } else { 0.0 }
 }
 
 /// Call `f` with the text of `shape` and the shapes it holds.
@@ -270,9 +292,10 @@ mod tests {
         assert!(has_glyph(&ctx, 'L'));
     }
 
-    /// An installed face with a taller ascent and descent than the UI face (a CJK system face's
-    /// proportions) draws on the UI face's baseline: `H` and the test face's 编 (the same `H`
-    /// outline, which stands on the baseline) end at the same height.
+    /// An installed face with a taller ascent and descent than the UI faces (a CJK system face's
+    /// proportions) draws on the baseline of each family's first face, the monospace families'
+    /// included: `H` and the test face's 编 (the same `H` outline, which stands on the baseline) end
+    /// at the same height.
     #[test]
     fn fallback_faces_sit_on_the_ui_baseline() {
         use vectorcraft_text::test_fonts::{TALL_IDEOGRAPH_FAMILY, tall_ideograph_font};
@@ -289,8 +312,7 @@ mod tests {
         frame(&ctx, &mut fonts, "H");
         assert!(has_glyph(&ctx, '编'), "the test face draws 编");
         let bottom = |g: &egui::epaint::text::Glyph| g.pos.y + g.uv_rect.offset.y + g.uv_rect.size.y;
-        let families =
-            [FontFamily::Proportional, FontFamily::Name(crate::theme::FONT_UI.into()), FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into())];
+        let families: Vec<FontFamily> = ctx.fonts(|f| f.definitions().families.keys().cloned().collect());
         for family in families {
             for size in [13.0_f32, 24.0, 40.0] {
                 let galley = ctx.fonts_mut(|f| f.layout_no_wrap("H编".into(), FontId::new(size, family.clone()), egui::Color32::WHITE));
@@ -299,6 +321,61 @@ mod tests {
                 // Half a point: one device pixel at 2 pixels per point, for each glyph's rounding.
                 let drift = bottom(&row[1]) - bottom(&row[0]);
                 assert!(drift.abs() <= 0.5, "{family:?} at {size} pt: 编 ends {drift:.2} pt below H (negative: above)");
+            }
+        }
+    }
+
+    /// The bundled craft-fonts faces draw on the baseline of each family's first face: a glyph of
+    /// each ends as far below `H`'s baseline as it does below its own face's baseline when that face
+    /// heads a family.
+    #[test]
+    fn craft_fonts_sit_on_the_baseline_of_each_family() {
+        use vectorcraft_text::CraftFont;
+        use vectorcraft_text::craft_fonts::{georgian_ui_fonts, japanese_ui_fonts};
+        // The face each family draws a script in, with a character of it: (regular face, semibold
+        // family's face, character).
+        let first = |faces: Vec<&'static CraftFont>| faces.first().copied();
+        let deva = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.scripts.contains(&"Deva"));
+        let probes: Vec<(&CraftFont, &CraftFont, char)> = [
+            first(japanese_ui_fonts(false)).zip(first(japanese_ui_fonts(true))).map(|(regular, bold)| (regular, bold, '編')),
+            first(georgian_ui_fonts()).map(|f| (f, f, 'ა')),
+            deva.map(|f| (f, f, 'क')),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if probes.is_empty() {
+            eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+            return;
+        }
+        let mut defs = crate::theme::interface_fonts();
+        let families: Vec<FontFamily> = defs.families.keys().cloned().collect();
+        let probe_name = |f: &CraftFont| format!("probe {}", crate::theme::craft_font_name(f));
+        let probe = |f: &CraftFont| FontFamily::Name(probe_name(f).into());
+        for &(regular, bold, _) in &probes {
+            for f in [regular, bold] {
+                defs.font_data.insert(probe_name(f), Arc::new(FontData::from_static(f.bytes)));
+                defs.families.insert(probe(f), vec![probe_name(f)]);
+            }
+        }
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(2.0);
+        ctx.set_fonts(defs);
+        frame(&ctx, &mut UiFonts::default(), "H");
+        let bottom = |g: &egui::epaint::text::Glyph| g.pos.y + g.uv_rect.offset.y + g.uv_rect.size.y;
+        let glyphs = |text: &str, font: FontId| ctx.fonts_mut(|f| f.layout_no_wrap(text.into(), font, egui::Color32::WHITE)).rows[0].glyphs.clone();
+        for family in families {
+            let semibold = family == FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into());
+            for &(regular, bold, c) in &probes {
+                let face = if semibold { bold } else { regular };
+                for size in [13.0_f32, 24.0, 40.0] {
+                    let own = glyphs(&c.to_string(), FontId::new(size, probe(face)));
+                    let row = glyphs(&format!("H{c}"), FontId::new(size, family.clone()));
+                    assert_eq!((own.len(), row.len()), (1, 2), "{c} lays out as one glyph");
+                    // Half a point: one device pixel at 2 pixels per point, for each glyph's rounding.
+                    let drift = (bottom(&row[1]) - row[0].pos.y) - (bottom(&own[0]) - own[0].pos.y);
+                    assert!(drift.abs() <= 0.5, "{family:?} at {size} pt: {c} ({}) ends {drift:.2} pt below its baseline", face.family);
+                }
             }
         }
     }
