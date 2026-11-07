@@ -1094,7 +1094,94 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     } else {
         object.appearance.contents_index
     };
-    Some(Appearance { items, effects: st.effects.clone(), contents_index })
+    let appearance = Appearance { items, effects: st.effects.clone(), contents_index };
+    // Zig Zag's ridges are placed by VectorCraft's own rule: on objects other than type it is kept
+    // only where they draw the outline the drawn look has.
+    if !slot && st.effects.iter().any(|e| e.id == "distort.zigZag") && !draws_look_outline(object, &appearance, look) {
+        return None;
+    }
+    Some(appearance)
+}
+
+/// How far, in points, an outline drawn with a reshaping effect may lie from its drawn look's
+/// ([`draws_look_outline`]): the look's coordinates are written to a few decimals.
+const OUTLINE_TOLERANCE: f64 = 0.25;
+
+/// Most points compared, one outline's flattened points times the other's segments.
+const MAX_OUTLINE_PAIRS: usize = 4_000_000;
+
+/// Does path or compound path `object` with `appearance`'s effects draw every outline of its drawn look
+/// `look`, as `look` draws its own (each within [`OUTLINE_TOLERANCE`] of the other)? `false` for
+/// anything else: a look holding other than paths, outlines too detailed to compare.
+fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bool {
+    fn leaves(n: &Node, out: &mut Vec<vectorcraft_geom::PathData>, depth: usize) -> bool {
+        match &n.kind {
+            NodeKind::Path { path, .. } => {
+                out.push(path.clone());
+                true
+            }
+            NodeKind::Compound { children, .. } => {
+                out.push(vectorcraft_geom::PathData::new(
+                    children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect(),
+                ));
+                true
+            }
+            NodeKind::Group { clip: false, .. } if depth < MAX_DEPTH => n.children().into_iter().flatten().all(|c| leaves(c, out, depth + 1)),
+            _ => false,
+        }
+    }
+    /// The segments of `paths` flattened, at most `max` of them.
+    fn segments(paths: &[vectorcraft_geom::PathData], max: usize) -> Option<Vec<kurbo::Line>> {
+        let mut out = vec![];
+        let (mut start, mut last) = (None, None);
+        let mut over = false;
+        for p in paths {
+            vectorcraft_geom::flatten(p.to_bezpath(), OUTLINE_TOLERANCE / 10.0, |el| {
+                let mut add = |a: kurbo::Point, b: kurbo::Point| {
+                    if out.len() < max {
+                        out.push(kurbo::Line::new(a, b));
+                    } else {
+                        over = true;
+                    }
+                };
+                match el {
+                    kurbo::PathEl::MoveTo(q) => (start, last) = (Some(q), Some(q)),
+                    kurbo::PathEl::LineTo(q) => {
+                        if let Some(l) = last {
+                            add(l, q);
+                        }
+                        last = Some(q);
+                    }
+                    kurbo::PathEl::ClosePath => {
+                        if let (Some(l), Some(s)) = (last, start) {
+                            add(l, s);
+                        }
+                        last = start;
+                    }
+                    _ => {}
+                }
+            });
+        }
+        (!over && !out.is_empty()).then_some(out)
+    }
+    /// Does every end of segments `a` lie within the tolerance of segments `b`?
+    fn near(a: &[kurbo::Line], b: &[kurbo::Line]) -> bool {
+        use kurbo::ParamCurveNearest;
+        a.iter().all(|s| b.iter().any(|t| t.nearest(s.p0, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE))
+    }
+    let (mut ours, mut theirs) = (vec![], vec![]);
+    if !matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !leaves(object, &mut ours, 0) || !leaves(look, &mut theirs, 0) {
+        return false;
+    }
+    // The object's outline reshaped as it is drawn: its effects from its own bounds.
+    for path in &mut ours {
+        let bounds = kurbo::Shape::bounding_box(&path.to_bezpath());
+        *path = vectorcraft_effects::apply_geometry(&appearance.effects, path, bounds);
+    }
+    let max = MAX_OUTLINE_PAIRS.isqrt();
+    let Some(ours) = segments(&ours, max) else { return false };
+    // Each of the look's outlines (a fill and a stroke draw the same one) is the object's.
+    theirs.iter().all(|t| segments(std::slice::from_ref(t), max).is_some_and(|t| near(&t, &ours) && near(&ours, &t)))
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
