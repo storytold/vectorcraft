@@ -345,8 +345,9 @@ struct Para {
     space_before: f64,
     space_after: f64,
     hyphenate: bool,
-    /// Key 7: the share of its type size a line takes as its auto leading (1.2: 120%). `None`:
-    /// the default.
+    /// Key 7: the share of its type size a line takes as its auto leading (1.2: 120%, the default;
+    /// Justification… sets 0 to 500%:
+    /// https://helpx.adobe.com/illustrator/using/line-character-spacing.html). `None`: the default.
     auto_leading: Option<f64>,
     /// Keys 10 to 15, in the order of Paragraph panel menu › Hyphenation…: Words Longer Than,
     /// After First, Before Last, Hyphen Limit, Hyphenation Zone (pt) and Hyphenate Capitalized
@@ -1073,7 +1074,8 @@ fn char_style(s: &Style, scale: f64) -> CharStyle {
         font_style: style,
         size: s.size * scale,
         // Auto leading stays auto: the layout gives each line the paragraph's share of the largest
-        // type on it, as the file's own layout does.
+        // type on it, as the file's own layout does ("The largest leading value in a line of type
+        // determines the leading for that line": https://helpx.adobe.com/illustrator/using/line-character-spacing.html).
         leading: s.leading.map(|l| l * scale),
         tracking: s.tracking,
         baseline_shift: s.baseline_shift * scale,

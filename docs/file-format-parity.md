@@ -50,7 +50,8 @@ private editing data. VectorCraft:
   An opacity mask's art of one shown object, other than a guide or a clipping path, opens as that object in the
   editing data of a `.ai`, EPS or PDF; other art opens in a group.
   Type from the text document keeps auto leading as auto, each line taking the paragraph's share
-  (Auto Leading) of the largest type on it, and the paragraph's hyphenation options. Area type of one
+  (Auto Leading) of the largest type on it ([Line and character spacing](https://helpx.adobe.com/illustrator/using/line-character-spacing.html)),
+  and the paragraph's hyphenation options. Area type of one
   frame whose last lines the file sets but which don't fit here (the fallback font, or a descent
   past the frame's bottom) gets a frame taller from its bottom, with a warning.
   RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
