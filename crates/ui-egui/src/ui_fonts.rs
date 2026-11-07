@@ -4,16 +4,16 @@
 //! which `theme::install_fonts` adds after the UI fonts, so Japanese never gets here; nothing else
 //! is bundled for them: the first time a frame paints a character the UI fonts
 //! don't have, an installed font covering it is looked for (in the background on native) and added
-//! to egui's families as their last fallback, from the next frame on. Text the UI fonts cover costs
-//! no font loading or memory. On the web, which has no system fonts, such characters stay
-//! missing-glyph boxes (Japanese too, unless built with craft-fonts).
+//! to egui's families as their last fallback, on the UI face's baseline, from the next frame on.
+//! Text the UI fonts cover costs no font loading or memory. On the web, which has no system fonts,
+//! such characters stay missing-glyph boxes (Japanese too, unless built with craft-fonts).
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use egui::epaint::Shape;
 use egui::epaint::text::{FontInsert, FontPriority, InsertFontFamily};
-use egui::{FontData, FontFamily, FontId, LayerId};
+use egui::{FontData, FontDefinitions, FontFamily, FontId, FontTweak, LayerId};
 use vectorcraft_text::{FontDb, FontFace};
 
 #[derive(Default)]
@@ -109,9 +109,9 @@ impl UiFonts {
         missing
     }
 
-    /// Add `faces` to every egui family, after the fonts it has.
+    /// Add `faces` to every egui family, after the fonts it has, on the UI face's baseline.
     fn install(&mut self, ctx: &egui::Context, faces: &[Arc<FontFace>]) {
-        let families: Vec<FontFamily> = ctx.fonts(|f| f.definitions().families.keys().cloned().collect());
+        let (families, row): (Vec<FontFamily>, _) = ctx.fonts(|f| (f.definitions().families.keys().cloned().collect(), row_metrics(f.definitions())));
         for face in faces {
             let name = format!("{} {} #{}", face.family, face.style, face.face_index());
             if !self.added.insert(name.clone()) {
@@ -120,7 +120,8 @@ impl UiFonts {
             // The face's file data, shared with the process-wide font database (which keeps every
             // face it loads for the session) instead of copied: one handle is leaked per font added.
             let face: &'static FontFace = Box::leak(Box::new(face.clone()));
-            let data = FontData { index: face.face_index(), ..FontData::from_static(face.file_data()) };
+            let tweak = row.map_or_else(FontTweak::default, |row| baseline_tweak(row, face.file_data(), face.face_index()));
+            let data = FontData { index: face.face_index(), tweak, ..FontData::from_static(face.file_data()) };
             let families = families.iter().map(|family| InsertFontFamily { family: family.clone(), priority: FontPriority::Lowest }).collect();
             ctx.add_font(FontInsert { name, data, families });
         }
@@ -136,6 +137,33 @@ impl UiFonts {
             self.install(ctx, &faces);
         }
     }
+}
+
+/// The ascent and row height of the Proportional family's first face, in ems of the font size,
+/// with that face's `FontTweak` scale applied, as egui lays out its rows. `None` when the family is
+/// empty or its face can't be read.
+fn row_metrics(defs: &FontDefinitions) -> Option<(f32, f32)> {
+    let name = defs.families.get(&FontFamily::Proportional)?.first()?;
+    let data = defs.font_data.get(name)?;
+    let (ascent, height) = em_metrics((*data.font).as_ref(), data.index)?;
+    Some((ascent * data.tweak.scale, height * data.tweak.scale))
+}
+
+/// The ascent and row height (ascent, descent and line gap) of the face at `index` of `data`, in ems.
+fn em_metrics(data: &[u8], index: u32) -> Option<(f32, f32)> {
+    let (upem, ascent, descent, gap) = vectorcraft_text::line_metrics(data, index)?;
+    Some((ascent / upem, (ascent - descent + gap) / upem))
+}
+
+/// The tweak that puts a fallback face's glyphs on the baseline of the row's first face, whose
+/// ascent and row height in ems are `row`. egui draws a fallback glyph's baseline at its face's
+/// ascent plus half the difference between the two row heights, so a face with a taller ascent or
+/// descent sits off the baseline by the shift computed here, in ems of the font size. One shift
+/// serves every family: it is measured against the Proportional family's first face.
+fn baseline_tweak(row: (f32, f32), face: &[u8], index: u32) -> FontTweak {
+    let (row_ascent, row_height) = row;
+    let shift = em_metrics(face, index).map_or(0.0, |(ascent, height)| row_ascent - (ascent + 0.5 * (row_height - height)));
+    FontTweak { y_offset_factor: if shift.is_finite() { shift.clamp(-0.5, 0.5) } else { 0.0 }, ..Default::default() }
 }
 
 /// Call `f` with the text of `shape` and the shapes it holds.
@@ -240,6 +268,39 @@ mod tests {
             assert!(names.iter().all(|n| !n.starts_with("craft-fonts")), "{names:?}");
         }
         assert!(has_glyph(&ctx, 'L'));
+    }
+
+    /// An installed face with a taller ascent and descent than the UI face (a CJK system face's
+    /// proportions) draws on the UI face's baseline: `H` and the test face's 编 (the same `H`
+    /// outline, which stands on the baseline) end at the same height.
+    #[test]
+    fn fallback_faces_sit_on_the_ui_baseline() {
+        use vectorcraft_text::test_fonts::{TALL_IDEOGRAPH_FAMILY, tall_ideograph_font};
+        let db = FontDb::with_font_dirs(vec![]);
+        db.add_font(tall_ideograph_font().expect("the test face builds"));
+        let face = db.face(TALL_IDEOGRAPH_FAMILY, "Regular").expect("the test face loads");
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(2.0);
+        crate::theme::install_fonts(&ctx);
+        let mut fonts = UiFonts::default();
+        frame(&ctx, &mut fonts, "H");
+        assert!(!has_glyph(&ctx, '编'), "no UI face has 编");
+        fonts.install(&ctx, &[face]);
+        frame(&ctx, &mut fonts, "H");
+        assert!(has_glyph(&ctx, '编'), "the test face draws 编");
+        let bottom = |g: &egui::epaint::text::Glyph| g.pos.y + g.uv_rect.offset.y + g.uv_rect.size.y;
+        let families =
+            [FontFamily::Proportional, FontFamily::Name(crate::theme::FONT_UI.into()), FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into())];
+        for family in families {
+            for size in [13.0_f32, 24.0, 40.0] {
+                let galley = ctx.fonts_mut(|f| f.layout_no_wrap("H编".into(), FontId::new(size, family.clone()), egui::Color32::WHITE));
+                let row = &galley.rows[0].glyphs;
+                assert_eq!(row.len(), 2, "H编 lays out as two glyphs");
+                // Half a point: one device pixel at 2 pixels per point, for each glyph's rounding.
+                let drift = bottom(&row[1]) - bottom(&row[0]);
+                assert!(drift.abs() <= 0.5, "{family:?} at {size} pt: 编 ends {drift:.2} pt below H (negative: above)");
+            }
+        }
     }
 
     #[test]
