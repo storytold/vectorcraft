@@ -607,6 +607,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
     confirm::show_waiting(app);
@@ -739,7 +740,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {
