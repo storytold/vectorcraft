@@ -98,7 +98,7 @@ ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }
 hayro-ccitt = "0.3"
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
-jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
+jpeg-encoder = { version = "0.7", default-features = false, features = ["std"] }
 gif = { version = "0.14", default-features = false, features = ["std", "raii_no_panic"] }
 # CMYK image samples (vectorcraft-doc's cmyk module): the image crate's own TIFF and JPEG
 # decoders, read directly (the image crate converts CMYK to RGB).
