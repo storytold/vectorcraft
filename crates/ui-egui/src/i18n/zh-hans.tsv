@@ -829,6 +829,7 @@
 	Duplicate Artboard	复制画板
 	Copy Artboard	拷贝画板
 	Cut Artboard	剪切画板
+	Rename Artboards	重命名画板
 	Duplicate Artboards	复制画板
 	Duplicate Brush	复制画笔
 	Duplicate Character Style	制作字符样式副本
@@ -2478,6 +2479,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
 	Rearrange All Artboards	重新排列所有画板
+	Rearrange	重新排列
+	Select All Artboards	选择所有画板
+	Switch Orientation	切换方向
 	Rearrange All	全部重新排列
 	Layout Order:	布局顺序：
 	Change to Left-to-Right Layout	更改为由左至右版面配置

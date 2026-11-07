@@ -438,7 +438,7 @@ opens the picker through `run_command` with the remote backend.
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. |
 | `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a Photoshop file as its merged image). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). `run_command document.formats` lists the formats. |
-| `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a `.ai` file reads `compress` but not `version`, `preview` or `precision`). `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warning for a top-level `compress`, `version`, `preview` or `precision`. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. |
+| `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a `.ai` file reads `compress` but not `version`, `preview` or `precision`). For a `.ai` file, these warnings name the kind of `.ai` written: a legacy .ai (version 7) for `aiVersion: "7"`, a non-PDF-compatible .ai for `pdfCompatible: false`, and a PDF-compatible .ai otherwise, including a save that reuses the options the document was last saved with. `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warnings for a top-level `compress`, `version`, `preview` or `precision` and for each key in `options` that the format doesn't read. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF and WMF write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
@@ -1068,10 +1068,15 @@ A command that takes its own date (`file.new {created}`, a save's `modified`) st
 variable. A blank, negative or non-numeric value is ignored and the clock decides, so an export is
 never refused over the environment. SVG output carries no time and was already reproducible.
 
-Two things stay on the real clock and are not pinned by the variable: the recovery heartbeat, and
-the random seed PDF encryption draws on. **A PDF exported with a password therefore still differs
-between runs** whatever `SOURCE_DATE_EPOCH` says, because that seed supplies its AES
-initialisation vectors and its file `/ID`. Reproducible output means an unencrypted export.
+Two things are not pinned by the variable: the recovery heartbeat, which stays on the real clock,
+and the random seed PDF encryption draws on, which mixes the OS random source with the clock. **A
+PDF exported with a password at PDF 1.4 or later therefore still differs between runs** whatever
+`SOURCE_DATE_EPOCH` says, because that seed supplies random bytes in its encryption dictionary and,
+at PDF 1.6 and later, its AES initialization vectors. Encryption at PDF 1.3 (RC4 40-bit) draws
+nothing from the seed, so that export repeats with the variable set. Encryption keeps the file `/ID`
+the export already wrote, which also repeats with the variable set; the seed supplies an `/ID` only
+for a file that has none. Reproducible output means an unencrypted export or a password-protected
+PDF 1.3 export.
 
 ### Parameter keys
 
@@ -3421,7 +3426,8 @@ the art on that artboard, in one undo step. The art is what an export draws, mea
 effects on paths, compound paths and symbol instances. An object counts for every artboard its bounds overlap, also
 when it reaches past the artboard's edge, and a group or a clipping layer counts whole. An artboard with no art on it,
 or a locked one, keeps its size and place. The call fails with `the artboard is locked` when every artboard it names is
-locked, and with `no artwork` when none of the others has art.
+locked, and with `no artwork` when none of the others has art. When every artboard already fits its art, no undo step
+is recorded.
 `artboard.fitToSelection {index?}` (Object › Artboards › Fit to Selected Art) fits artboard `index` to the selected
 art. Both commands take 0-based indexes and resize the first artboard when the call names none. The desktop app adds
 the selected artboards (those the Artboard tool has selected, else the active one) as `indices` to the
@@ -3964,7 +3970,8 @@ Then `edit.paste` adds a copy of each artboard, together right of the last one a
 in the layers it came from, in one undo step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put
 them where they were; `edit.pasteOnAllArtboards` pastes only the art), in this document or another; the result's
 `artboards` lists the new artboards' indices and `artboard` is the first of them, and the Artboard tool, when chosen,
-selects them. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
+selects them. `edit.paste {artboardsAt: [x, y]}` instead centers the copied artboards on that point, as they lay, and a
+value that is not `[x, y]` fails with `` `artboardsAt` must be [x, y] ``. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
 Window › Artboards › Duplicate Artboards passes the selected artboards (those the Artboard tool has selected, else the
 active one) as `indices`, and a row dragged onto New Artboard passes its artboard as `index`.
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
@@ -4024,6 +4031,52 @@ artwork when an object (hidden, locked and template art included; guides not) ha
 it; a group counts by its members, a clip group or clipping layer by its members inside the clip. Locked artboards stay; when every artboard is empty and none is locked, artboard 1 stays (with a locked
 artboard left, artboard 1 can go). With
 nothing to delete the command is disabled and fails with `no empty artboards to delete`.
+
+Rename Artboards: `artboard.rename {index? | indices?, name}` renames artboards in one undo step, by default those the
+Artboard tool has selected, else its active one. One artboard takes `name`, trimmed. Several take it numbered in artboard
+order, `name-1`, `name-2` and so on. A locked artboard is renamed too. An empty name fails with
+`` `name` must not be empty ``, a name that is not a string fails with `` `name` must be a string ``, and an artboard
+that is not in the document fails with `no such artboard`. When every artboard already has its new name, the command
+records no undo step → `{renamed: [index…]}`. With no params, a menu click opens the `renameArtboards` dialog (fields
+`name` and `indices`), and OK with an empty name changes nothing. The Artboards panel's name field runs this command too.
+
+Switch Orientation: `artboard.switchOrientation {index? | indices?, scaleArt?, patterns?, lockedAndHidden?}` swaps the width and height of each
+artboard in one undo step, by default those the Artboard tool has selected, else its active one. Each top-left corner
+stays put, as with the Properties panel's Portrait and Landscape buttons. This rule for several artboards is VectorCraft's
+own. A square artboard and a locked one stay as they are, and the call fails with `the artboard is locked` when every
+artboard it names is locked. When no artboard changes, the command records no undo step → `{switched: [index…]}`.
+`scaleArt` scales the art with each artboard and defaults to the Artboard tool's Scale Artwork with Artboard option.
+`patterns` and `lockedAndHidden` work as they do on `artboard.setProps`.
+
+When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.rename` or `artboard.switchOrientation`
+names no artboard, its journal entry records the artboards it acted on as `selectedArtboards`. A replay of the journal
+acts on those artboards, and a recorded action leaves the value out and acts on the selection when it plays.
+
+`artboard.selectAll {}` chooses the Artboard tool when another tool is in use and selects every artboard. The active
+artboard stays active, the art's selection stays as it is, and no undo step is recorded → `{selected: [index…]}`, the
+active artboard first.
+
+The canvas context menu with the Artboard tool lists the entries of the public
+[Use the artboard context menu](https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/use-artboard-context-menu.html)
+page in the page's order, and no entries for objects or the view: Cut (`artboard.cut`), Copy (`artboard.copy`), Paste
+(`edit.paste`), Undo, Redo, New Artboard (`artboard.new`), Duplicate Artboards (`artboard.duplicate`), Rename
+(`artboard.rename`), Delete Artboards (`artboard.delete` with `indices`), Delete Empty Artboards
+(`artboard.deleteEmpty`), Select All Artboards (`artboard.selectAll`), Lock Artboards and Unlock Artboards
+(`artboard.setProps` with `locked`), Rearrange (`artboard.rearrange`), Fit to Artwork Bounds (`artboard.fitToArt`),
+Switch Orientation (`artboard.switchOrientation`), Artboard Options (`tool.options {tool: "artboard"}`) and Export
+(`file.exportForScreens`). Exit Isolation Mode and the Unlock submenu for locked objects under the pointer follow them.
+Cut, Copy, Duplicate Artboards, Rename, Delete Artboards, Lock Selected, Unlock Selected, Fit to Artwork Bounds, Switch
+Orientation and Export act on the artboards the tool has selected, else the active one. Artboard Options opens on the
+active artboard. New Artboard, Paste, Undo, Redo, Delete Empty Artboards, Select All Artboards and Rearrange do not act on
+the selected artboards. Lock All and Unlock All act on every artboard, and Lock All Except Selected acts on the artboards
+that are not selected. A right-click on an artboard that is not selected first selects it alone. An entry that cannot
+run is left out: Cut with a locked artboard or every artboard selected, Delete Artboards with no artboard to delete, Select All Artboards with every artboard selected, Rearrange with
+one artboard, Fit to Artwork Bounds with no art on a selected unlocked artboard, Switch Orientation with no selected
+artboard to change, and a lock entry with no artboard to change. The menu measures the art for Delete Empty Artboards and
+Fit to Artwork Bounds once, at the right-click. Paste centers copied artboards on the right-click's point
+(`edit.paste {artboardsAt: [x, y]}`) and centers copied objects there too (`center`). Chosen from a menu or the command
+palette with the tool in use, `artboard.new` makes the new artboard active, `artboard.duplicate` selects the copies,
+and `artboard.delete` and `artboard.deleteEmpty` make a remaining artboard active.
 
 Locked artboards: `artboard.setProps {index, locked: true}` locks an artboard and `{index, locked: false}` unlocks it,
 each in one undo step. The Artboards panel's lock column, left of a row's options icon, shows a lock on a locked
@@ -4675,7 +4728,10 @@ Modified documents get recovery copies (`file.recovery.save`; the app runs it ev
 `autosaveRecovery` is on, skipping documents of more than 20,000 objects while `recoveryOffForComplex` is on). A copy
 goes when its document is saved, reverted or closed, so copies still there after the app quits were left by a crash.
 The copies live in the `recoveryFolder` preference's folder (default: `Data Recovery` beside the app's preferences;
-none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage.
+none when the app runs with `VECTORCRAFT_NO_PREFS`) or, on the web, in browser storage. `prefs.set` returns an error
+and changes nothing when a new `recoveryFolder` is missing, is not a folder, can't be listed, or is a folder that a
+folder can't be created in. It does not check an empty value or the folder the preference already holds, and the web
+build does not check folders. The folder in the example below must exist before the call.
 
 Each running app (each browser tab) keeps its copies in an area of its own (`<area>/<name>`): a sub-folder whose
 `.lock` file it keeps locked while it runs, or on the web an area with a heartbeat it refreshes every minute and a Web
@@ -5885,7 +5941,9 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
-`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean. `prefs.set` returns an error and
+changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
+value or the folder the preference already holds, and the web build does not check folders.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}

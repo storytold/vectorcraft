@@ -598,36 +598,17 @@ fn editing_copy(bytes: &[u8]) -> vectorcraft_doc::Document {
     l.doc
 }
 
-/// `nodes` as the editing copy reads them back: an opacity mask's art that isn't a group comes
-/// back as a plain group holding it.
-fn mask_art_grouped(nodes: &mut [std::sync::Arc<vectorcraft_doc::Node>]) {
-    use vectorcraft_doc::{Node, NodeKind};
-    for n in nodes {
-        let n = std::sync::Arc::make_mut(n);
-        if let Some(m) = n.extras_mut().mask.as_mut()
-            && !matches!(m.art.kind, NodeKind::Group { .. })
-        {
-            let art = m.art.clone();
-            m.art = std::sync::Arc::new(Node::new(art.id, NodeKind::Group { children: vec![art], clip: false }));
-        }
-        if let Some(c) = n.children_mut() {
-            mask_art_grouped(c);
-        }
-    }
-}
-
 /// Transparency, a compound path, a clipping group, an opacity mask and a clipping layer come back
 /// from the editing copy for other apps alone, its page matching it, with every save option that
 /// writes the copy; the version 7 `.ai` keeps the compound path and the clipping group.
 #[test]
 fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
     let mut s = see_through_session();
-    let mut before = (*s.doc().unwrap().doc).clone();
-    // The mask's art is one path; it reads back as a group holding the path.
+    let before = (*s.doc().unwrap().doc).clone();
+    // The mask's art is one path, and it reads back as that path.
     let mut arts = vec![];
     before.walk(|n| arts.extend(n.extras().mask.as_ref().map(|m| matches!(m.art.kind, vectorcraft_doc::NodeKind::Path { .. }))));
     assert_eq!(arts, [true]);
-    mask_art_grouped(&mut before.layers);
     let want = see_through_outline(&before);
     for opts in [json!({"format": "ai"}), json!({"format": "ai", "compress": false}), json!({"format": "ai", "pdfCompatible": true})] {
         let bytes = b64(&s.execute("document.export", &opts).unwrap());

@@ -1869,6 +1869,9 @@ digits	Malayalam	Malajalam
 	More Paragraph options	Więcej opcji akapitu
 	No document open	Brak otwartego dokumentu
 	Quick Actions	Szybkie operacje
+	Rearrange	Przestaw
+	Select All Artboards	Zaznacz wszystkie obszary kompozycji
+	Switch Orientation	Przełącz orientację
 	Rearrange All	Przestaw wszystkie
 	Rulers & Grids	Linijki i siatki
 	Select a text object	Zaznacz obiekt tekstowy
@@ -3364,6 +3367,7 @@ theme	Appearance	Wygląd
 	Character / Paragraph	Znak / akapit
 	Copy Artboard	Kopiuj obszar kompozycji
 	Cut Artboard	Wytnij obszar kompozycji
+	Rename Artboards	Zmień nazwy obszarów kompozycji
 	Move Artboard Up/Down	Przesuń obszar kompozycji w górę/dół
 	Add Anchor (Pen)	Dodaj punkt (pióro)
 	Add Anchor Point	Dodaj punkt kontrolny

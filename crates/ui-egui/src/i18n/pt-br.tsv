@@ -790,6 +790,7 @@
 	Duplicate Artboard	Duplicar Mesa de Trabalho
 	Copy Artboard	Copiar Mesa de Trabalho
 	Cut Artboard	Recortar Mesa de Trabalho
+	Rename Artboards	Renomear Mesas de Trabalho
 	Duplicate Artboards	Duplicar Mesas de Trabalho
 	Duplicate Brush	Duplicar Pincel
 	Duplicate Character Style	Duplicar Estilo de Caractere
@@ -2139,6 +2140,9 @@ digits	Malayalam	Malaiala
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
 	Rearrange All Artboards	Reorganizar Todas as Mesas de Trabalho
+	Rearrange	Reorganizar
+	Select All Artboards	Selecionar Todas as Mesas de Trabalho
+	Switch Orientation	Trocar Orientação
 	Rearrange All	Reorganizar Tudo
 	Layout Order:	Ordem do Layout:
 	Change to Left-to-Right Layout	Mudar para Layout da Esquerda para a Direita

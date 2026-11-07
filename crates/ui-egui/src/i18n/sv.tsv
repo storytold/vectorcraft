@@ -874,6 +874,7 @@ font-technology	Variable	Variabla
 	Duplicate Artboard	Duplicera rityta
 	Copy Artboard	Kopiera rityta
 	Cut Artboard	Klipp ut rityta
+	Rename Artboards	Byt namn på ritytor
 	Duplicate Artboards	Duplicera ritytor
 	Duplicate Brush	Duplicera pensel
 	Duplicate Character Style	Duplicera teckenstil
@@ -2509,6 +2510,9 @@ digits	Malayalam	Malayalam
 	Real World:	Verkligt mått:
 	Real-time Drawing and Editing	Ritning och redigering i realtid
 	Rearrange All Artboards	Ordna om alla ritytor
+	Rearrange	Ordna om
+	Select All Artboards	Markera alla ritytor
+	Switch Orientation	Byt orientering
 	Rearrange All	Ordna om alla
 	Layout Order:	Layoutordning:
 	Change to Left-to-Right Layout	Byt till layout vänster till höger
