@@ -16,6 +16,8 @@ pub mod blend_options;
 mod brush_art_options;
 pub mod brush_delete;
 pub mod brush_options;
+pub mod cdr_import;
+pub mod cdr_options;
 pub mod char_style_options;
 pub mod color_balance;
 pub mod color_guide_options;
@@ -376,6 +378,8 @@ registry! {
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
+    CdrImport: [cdr_import::KIND] => cdr_import::SPEC,
+    CdrOptions: [cdr_options::KIND] => cdr_options::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
     PsdOptions: ["psdOptions"] => png_options::SPEC,

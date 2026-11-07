@@ -35,6 +35,8 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
+# CorelDRAW (.cdr) documents: open, place and export (fileio/cdr.rs).
+vectorcraft-cdr = { workspace = true }
 image = { workspace = true }
 hayro-jpeg2000 = { version = "=0.3.5", default-features = false, features = ["std", "simd"] }
 flate2 = { workspace = true }

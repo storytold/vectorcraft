@@ -1,0 +1,28 @@
+[package]
+name = "vectorcraft-cdr"
+description = "CorelDRAW (.cdr) compatibility: detection, validation, import and export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+vectorcraft-geom = { workspace = true }
+vectorcraft-color = { workspace = true }
+vectorcraft-doc = { workspace = true }
+vectorcraft-effects = { workspace = true }
+vectorcraft-pathops = { workspace = true }
+kurbo = { workspace = true }
+image = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# TraceDraw's clean-room CDR reader and writer (MIT OR Apache-2.0), pinned to a commit: versions 7
+# to 22 in RIFF and ZIP. See crates/cdr/README.md and NOTICE.
+tracedraw-cdr = { git = "https://github.com/igtoth/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
+tracedraw-core = { git = "https://github.com/igtoth/tracedraw", rev = "4fe0109e3fca04b697c8c55b09f4587e8c316ce7" }
+
+[dev-dependencies]
+vectorcraft-text = { workspace = true, features = ["bundled-fonts"] }

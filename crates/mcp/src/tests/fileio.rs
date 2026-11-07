@@ -78,7 +78,8 @@ fn export_tool_lists_engine_formats_and_options() {
             "emf",
             "wmf",
             "tga",
-            "psd"
+            "psd",
+            "cdr"
         ])
     );
     for k in ["artboard", "range", "options"] {
