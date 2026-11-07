@@ -1,0 +1,13 @@
+[package]
+name = "vectorcraft-js"
+description = "JavaScript for scripts: an ECMAScript 5.1 lexer and parser to a syntax tree with source positions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest = { workspace = true }
