@@ -147,6 +147,12 @@
 //!   reader reads back as the same graph ([`crate::ai_graph`]) is written as its group between
 //!   `%_Gs`, its functional records and `%_GS`, each series' group tagged `Go` right after its end;
 //!   any other graph, and a graph with art left out, as its art, with a warning.
+//! - Blends, as the reader reads them (`blend.rs`): the blend's key objects and spine as a group on
+//!   `%_` lines, each key's `/ArtDictionary` naming it a key and its id and the spine's naming it the
+//!   spine (written when the blend has a spine of its own); its steps drawn, a group;
+//!   `(Adobe Path Blends) 1 0 n XP` and the blend's record of its spacing, orientation and keys as hex
+//!   on `%` lines; its name and transparency as a group's after its end (`writer::blends`). A blend is
+//!   written live only when the reader reads it back with its settings.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
@@ -175,7 +181,8 @@
 //! and instances of
 //! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
 //! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
-//! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
+//! guides, export types and dynamic type left out, blends the reader wouldn't read back live as
+//! their steps, other live objects (placed documents included) as their art,
 //! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
@@ -288,6 +295,8 @@ fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep
     let links = writer::style_links(doc);
     // Before baking, which leaves the wrap objects that may be written as they are unchanged.
     let wraps_held = if keep_wraps { writer::wraps_held(doc, &styled) } else { HashSet::new() };
+    // The blends baking leaves as they are, which may be written live.
+    let unbaked_blends = writer::unbaked_blends(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -318,6 +327,8 @@ fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
     w.brushes_live = scale == 1.0;
+    w.blends_live = scale == 1.0;
+    w.unbaked_blends = unbaked_blends;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
     w.wraps_held = wraps_held;

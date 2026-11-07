@@ -127,7 +127,22 @@ private editing data. VectorCraft:
   on its stroke; other brushed strokes are
   written as their brush's art. A document that uses a new document's brushes writes none until a path keeps one on
   its stroke; then the brushes are written, and the file opens without the new document's Pattern and Bristle
-  brushes.
+  brushes. Blends are written live: their key objects, their spine when they have one of their own, their steps
+  drawn, and their spacing (Smooth Color, Specified Steps, Specified Distance) and orientation (Align to Page, Align to
+  Path); a replaced spine is written with an anchor where each key object sits, so it opens with those anchors and
+  lays out the same steps. Blends with easing, a color shift or start points, with effects, an appearance or an
+  opacity mask of their own, of objects other than paths, compound paths and groups, of clipping groups, of more than
+  62 key objects, with a hidden key object, holding another blend, of key objects with geometry or Pathfinder effects
+  or a group's own fills and strokes, of key objects the editing copy would change (empty paths or subpaths, paths and
+  compound path members of several subpaths, several fills or strokes, strokes a plain line can't draw, dashes of more than 64 lengths, hidden fills or strokes, fills or strokes other than a color, in a Lab color or with
+  transparency or effects of their own, effects, opacity masks), where one key object has a fill or stroke of no paint
+  or a stroke of no width and another has one that draws, whose spine has more than one part, whose step count
+  is close to where rounding changes it, or that VectorCraft's reader wouldn't open with their settings or as they
+  are drawn, are written as their steps with a warning, as are blends inside objects with geometry or Pathfinder
+  effects or a group's own fills and strokes, blends in opacity masks, pattern tiles, symbols and art cut to a
+  clipping object or nested eight levels deep in art written in place of other objects (symbol instances, live
+  objects, brushed strokes), blends whose art would pass the most objects VectorCraft's reader reads, and every blend
+  on a large canvas.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,

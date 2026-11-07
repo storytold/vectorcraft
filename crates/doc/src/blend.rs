@@ -2174,6 +2174,70 @@ pub fn blend_steps(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<usize> {
     StepCount::default().blend(keys, spec, Rail::new(keys, spec).as_ref()).0
 }
 
+/// Does each pair of `keys` blended with `spec` ask for the same number of steps
+/// ([`blend_step_count`]) when each coordinate it counts from moves by up to `length` points and,
+/// for Smooth Color, the difference between keys of different colors by up to `color` (0 to 1)?
+/// False when a count sits that close to where it changes, and for Smooth Color by distance when
+/// the keys are at most `4 × length` wide or high. Specified Steps always asks for the same number.
+pub fn blend_steps_settled(keys: &[Arc<Node>], spec: &BlendSpec, length: f64, color: f64) -> bool {
+    let rail = Rail::new(keys, spec);
+    keys.windows(2).enumerate().all(|(i, w)| {
+        let [a, b] = w else { return true };
+        match spec.spacing {
+            BlendSpacing::Steps(_) => true,
+            // The count is `len / d` rounded, which grows with `len`.
+            BlendSpacing::Distance(d) => {
+                let len = rail.as_ref().map_or_else(|| center_of(a).distance(center_of(b)), |r| r.len(i));
+                let count = |len: f64| blend_step_count(a, b, BlendSpacing::Distance(d), len);
+                count(len - length) == count(len + length)
+            }
+            BlendSpacing::SmoothColor => smooth_color_settled(a, b, length, color),
+        }
+    })
+}
+
+/// [`blend_steps_settled`] for one pair of Smooth Color keys. Each count [`blend_step_count`]
+/// takes grows with what it counts from (the color difference, the keys' reach, the distance
+/// between their edges in key sizes), so the pair is settled when the least and the most of
+/// these ask for the same count.
+fn smooth_color_settled(a: &Node, b: &Node, length: f64, color: f64) -> bool {
+    let bounds = a.visual_bounds().zip(b.visual_bounds());
+    let by_level = |d: f64| level_steps(d.max(0.0)) as usize;
+    match (color_distance(a, b), bounds) {
+        // Colors that differ, but by too little to count, or by little more: moving them may cross
+        // where they stop counting as the same. (The same colors stay the same.)
+        (Some(d), _) if d > 0.0 && d * 255.0 <= 1e-3 + color * 255.0 => false,
+        (Some(d), Some((ba, bb))) if d * 255.0 > 1e-3 => {
+            let (ca, cb) = (ba.center(), bb.center());
+            let reach =
+                [(ca.x - cb.x).abs(), (ca.y - cb.y).abs(), ba.width(), ba.height(), bb.width(), bb.height()].into_iter().fold(0.0f64, f64::max);
+            // The centers and sizes move by up to twice `length`.
+            let by_density = |r: f64| (8.0 * r.max(0.0) + 0.5).floor().clamp(1.0, 254.0) as usize;
+            let least = by_level(d - color).min(by_density(reach - 2.0 * length));
+            let most = by_level(d + color).min(by_density(reach + 2.0 * length));
+            reach.is_finite() && least == most
+        }
+        (Some(d), None) if d * 255.0 > 1e-3 => by_level(d - color) == by_level(d + color),
+        (_, Some((ba, bb))) => {
+            let (w, h) = ((ba.width() + bb.width()) / 2.0, (ba.height() + bb.height()) / 2.0);
+            if w <= 4.0 * length || h <= 4.0 * length {
+                return false;
+            }
+            let dx = (ba.x0 - bb.x0).abs().max((ba.x1 - bb.x1).abs());
+            let dy = (ba.y0 - bb.y0).abs().max((ba.y1 - bb.y1).abs());
+            // Each edge moves by up to `length`: the distances between them by up to twice that,
+            // and the mean sizes too.
+            let q = |dx: f64, dy: f64, w: f64, h: f64| (dx.max(0.0) / w).max(dy.max(0.0) / h);
+            let count = |q: f64| ((q + 0.5).floor() - 1.0).clamp(1.0, 1000.0) as usize;
+            let m = 2.0 * length;
+            let least = q(dx - m, dy - m, w + m, h + m);
+            let most = q(dx + m, dy + m, w - m, h - m);
+            least.is_finite() && most.is_finite() && count(least) == count(most)
+        }
+        (_, None) => true,
+    }
+}
+
 /// Evaluate a blend: the keys and generated steps in paint order. The steps keep to
 /// [`MAX_BLEND_STEPS`] in all ([`blend_steps`]).
 pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
