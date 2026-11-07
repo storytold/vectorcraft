@@ -6344,7 +6344,7 @@ fn editing_keys_after_an_ime_commit_apply_in_the_same_frame() {
 }
 
 /// Cmd/Ctrl+Enter bound to a command runs the command and types no line break, also when a plain
-/// Enter comes in the same frame. Unbound, it types a line break as Enter does.
+/// Enter comes in the same frame. Unbound, it ends editing and keeps the text.
 #[test]
 fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -6359,18 +6359,83 @@ fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
         modifiers: egui::Modifiers::COMMAND,
     });
     typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
-    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter");
     crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Cmd+Enter");
     crate::shortcut_editor::sync(&app.ui);
     let grid = app.ui.view.grid;
     typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    let ran = (plain(&app, id), app.ui.view.grid);
+    let ran = (plain(&app, id), app.ui.view.grid, app.session.tool_wants_text());
     typing_frame(&mut app, &ctx, [tap(egui::Key::Enter).to_vec(), cmd_enter.to_vec()].concat());
     app.ui.shortcut_overrides.clear();
     crate::shortcut_editor::sync(&app.ui);
-    assert_eq!((ran.0.as_str(), ran.1), ("a\n", !grid), "Cmd+Enter runs Show Grid only");
-    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert_eq!((ran.0.as_str(), ran.1, ran.2), ("a", !grid, true), "Cmd+Enter runs Show Grid only");
+    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert!(app.session.tool_wants_text(), "a bound Cmd+Enter does not end editing");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter: no line break");
+    assert!(!app.session.tool_wants_text(), "unbound, Cmd+Enter ends editing");
+    assert_eq!(app.session.tool_id(), "selection");
+}
+
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing like Escape: a repeat of it, and text,
+/// keys and a paste after it in the same frame, leave the type as it was. Enter, Shift+Enter and
+/// Ctrl+Enter on macOS still type line breaks.
+#[test]
+fn cmd_enter_ends_text_editing_and_keeps_the_text() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let key = |pressed, repeat, modifiers| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat, modifiers };
+    let mac_ctrl = egui::Modifiers { ctrl: true, ..Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::NONE), key(false, false, egui::Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::SHIFT), key(false, false, egui::Modifiers::SHIFT)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, mac_ctrl), key(false, false, mac_ctrl)]);
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+    assert!(app.session.tool_wants_text());
+    let held = vec![
+        key(true, false, egui::Modifiers::COMMAND),
+        key(true, true, egui::Modifiers::COMMAND),
+        egui::Event::Text("b".into()),
+        egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+        egui::Event::Paste("c".into()),
+        egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+    ];
+    typing_frame(&mut app, &ctx, held);
+    assert!(!app.session.tool_wants_text(), "editing ended");
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n", "the text is kept, and nothing after the chord changes it");
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)], "the type stays selected");
+    typing_frame(&mut app, &ctx, vec![key(true, true, egui::Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![key(false, false, egui::Modifiers::COMMAND)]);
+    assert!(app.ui.dialog.is_none(), "the repeats of the chord open no dialog");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+}
+
+/// While the IME composes, Cmd+Enter is the IME's: it does not end editing, drop the marked text or
+/// type a line break, in the frame that starts the composition or in a later one.
+#[test]
+fn cmd_enter_while_composing_keeps_the_composition_and_editing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let cmd_enter = [true, false].map(|pressed| egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, [vec![preedit("か", 1)], cmd_enter.to_vec()].concat());
+    assert!(app.session.tool_composing(), "the same frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "the same frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "the same frame keeps the marked text and types no line break");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert!(app.session.tool_composing(), "a later frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "a later frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "a later frame keeps the marked text and types no line break");
 }
 
 /// Reset to a blank document, select the Type tool and click document point (100, 100), returning
