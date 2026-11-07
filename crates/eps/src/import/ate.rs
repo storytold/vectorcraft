@@ -796,21 +796,29 @@ fn path_spacing(f: &Val, effect: PathEffect) -> f64 {
             .collect();
         for w in glyphs.windows(2) {
             let [(p, a0, along, foot), (q, a1, next, next_foot)] = w else { continue };
+            // 3D Ribbon's level baseline faces the way the path runs, so where the path runs left its
+            // baseline and foot are turned round: `side` turns them back.
+            let side = |baseline: &kurbo::Vec2| if effect == PathEffect::Ribbon3d && baseline.x < 0.0 { -1.0 } else { 1.0 };
+            let (side, next_side) = (side(along), side(next));
             let (along, next) = if effect == PathEffect::Ribbon3d {
-                (kurbo::Vec2::new(foot.y, -foot.x), kurbo::Vec2::new(next_foot.y, -next_foot.x))
+                (kurbo::Vec2::new(foot.y, -foot.x) * side, kurbo::Vec2::new(next_foot.y, -next_foot.x) * next_side)
             } else {
                 (*along, *next)
             };
             // The turn is measured against a foot square to the path: Rainbow's and 3D Ribbon's own,
             // else the baseline turned a right angle, as theirs is (Skew's feet stay upright).
-            let square = if matches!(effect, PathEffect::Rainbow | PathEffect::Ribbon3d) { *foot } else { kurbo::Vec2::new(-along.y, along.x) };
+            let square =
+                if matches!(effect, PathEffect::Rainbow | PathEffect::Ribbon3d) { *foot * side } else { kurbo::Vec2::new(-along.y, along.x) };
             let turn = next.dot(square).atan2(next.dot(along));
             // The length of the arc between the centres (the path is taken to be round there). A
-            // corner (a turn of more than a radian between two glyphs) isn't round: left out.
+            // corner (a turn of more than a radian between two glyphs) isn't round: left out. So is a
+            // 3D Ribbon pair either side of where the path turns back, when an alignment puts their
+            // baselines on opposite sides of the path.
             let half = turn.abs() * 0.5;
             let chord = (*q - *p).hypot();
-            let length = if half > 1e-9 { chord * half / half.sin() } else { chord } + turn * offset;
-            if turn.abs() <= 1.0 && length.is_finite() && a0.is_finite() && a1.is_finite() {
+            let length = if half > 1e-9 { chord * half / half.sin() } else { chord } + turn * offset * side;
+            let apart = side != next_side && offset != 0.0;
+            if !apart && turn.abs() <= 1.0 && length.is_finite() && a0.is_finite() && a1.is_finite() {
                 sum += ((a0 + a1) * 0.5 - length) * turn;
                 turns += turn * turn;
             }
@@ -1685,16 +1693,22 @@ mod tests {
     /// A line's layout whose glyphs have their centres and baselines `glyphs` and upright feet, as
     /// Skew's are.
     fn upright_layout(advances: &[f64], glyphs: &[(Point, kurbo::Vec2)]) -> Val {
+        let glyphs: Vec<(Point, [f64; 4])> = glyphs.iter().map(|(centre, along)| (*centre, [along.x, along.y, 0.0, 1.0])).collect();
+        line_layout(advances, &glyphs, "")
+    }
+
+    /// A line's layout, `extra` in its `G`, whose glyphs have their centres and matrices `glyphs`.
+    fn line_layout(advances: &[f64], glyphs: &[(Point, [f64; 4])], extra: &str) -> Val {
         let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![0.0]);
-        for (i, (a, (centre, along))) in advances.iter().zip(glyphs).enumerate() {
-            xs.push(centre.x - along.x * a * 0.5);
-            ys.push(centre.y - along.y * a * 0.5);
-            matrices.extend([along.x, along.y, 0.0, 1.0, 0.0, 0.0]);
+        for (i, (a, (centre, [m0, m1, m2, m3]))) in advances.iter().zip(glyphs).enumerate() {
+            xs.push(centre.x - m0 * a * 0.5);
+            ys.push(centre.y - m1 * a * 0.5);
+            matrices.extend([*m0, *m1, *m2, *m3, 0.0, 0.0]);
             ends.push(ends[i] + a);
         }
         let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
         let doc = format!(
-            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
+            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G {extra} /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
             nums(&xs),
             nums(&ys),
             nums(&matrices),
@@ -1709,6 +1723,50 @@ mod tests {
         let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
         let layout = round_layout_with(&advances, 100.0, true, 100.0 / 110.0, "", true);
         let spacing = path_spacing(&layout, PathEffect::Ribbon3d);
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// Where the path runs left, 3D Ribbon's level baseline faces left and its foot turns round with
+    /// it. Round a circle of radius 100 through the place where the path runs straight up, the glyphs
+    /// on either side of it are still read as following one curve: spacing 10.
+    #[test]
+    fn the_spacing_of_3d_ribbon_type_holds_where_the_path_turns_back() {
+        let advances = [20.0, 30.0];
+        let mut angle = std::f64::consts::PI - 0.1;
+        let mut glyphs = vec![];
+        for (i, a) in advances.iter().enumerate() {
+            if i > 0 {
+                angle += (advances[i - 1] + a) * 0.5 * (100.0 / 110.0) / 100.0;
+            }
+            let along = kurbo::Vec2::new(-angle.sin(), angle.cos());
+            let side = if along.x < 0.0 { -1.0 } else { 1.0 };
+            glyphs.push((Point::new(100.0 * angle.cos(), 100.0 * angle.sin()), [side, 0.0, -along.y * side, along.x * side]));
+        }
+        assert!(glyphs.first().is_some_and(|(_, m)| m[0] < 0.0) && glyphs.last().is_some_and(|(_, m)| m[0] > 0.0));
+        let spacing = path_spacing(&line_layout(&advances, &glyphs, ""), PathEffect::Ribbon3d);
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// With Ascender (baselines 20 towards the feet), glyphs facing left lie outside the path and
+    /// glyphs facing right inside it. The pair either side of where the path runs straight up is left
+    /// out, and the others give spacing 10.
+    #[test]
+    fn aligned_3d_ribbon_type_leaves_out_the_pair_where_the_path_turns_back() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        let mut angle = std::f64::consts::PI - 0.5;
+        let mut glyphs = vec![];
+        for (i, a) in advances.iter().enumerate() {
+            if i > 0 {
+                angle += (advances[i - 1] + a) * 0.5 / 110.0;
+            }
+            let along = kurbo::Vec2::new(-angle.sin(), angle.cos());
+            let side = if along.x < 0.0 { -1.0 } else { 1.0 };
+            let radius = 100.0 - 20.0 * side;
+            glyphs.push((Point::new(radius * angle.cos(), radius * angle.sin()), [side, 0.0, -along.y * side, along.x * side]));
+        }
+        let sides: Vec<f64> = glyphs.iter().map(|(_, m)| m[0]).collect();
+        assert_eq!(sides, [-1.0, -1.0, -1.0, 1.0, 1.0]);
+        let spacing = path_spacing(&line_layout(&advances, &glyphs, "/0 << /0 [ 0 20 ] >>"), PathEffect::Ribbon3d);
         assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
     }
 
