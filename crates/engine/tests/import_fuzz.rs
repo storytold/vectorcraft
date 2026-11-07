@@ -2244,6 +2244,39 @@ proptest! {
         let text = type42_composite_eps(&font, gid);
         survive("damaged Type 42 glyphs", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
     }
+
+    /// CID-keyed fonts with hostile CMaps (codespace ranges of any length, mappings past them)
+    /// and Type 0 CIDFonts with damaged binary data (offset table, charstrings, subroutine table,
+    /// any FDBytes and GDBytes), shown with any bytes: drawn, measured and outlined, or refused.
+    #[test]
+    fn eps_cid_fonts_never_panic(
+        space in prop::collection::vec((prop::collection::vec(any::<u8>(), 0..6), prop::collection::vec(any::<u8>(), 0..6)), 0..4),
+        cids in prop::collection::vec((prop::collection::vec(any::<u8>(), 1..5), any::<u16>()), 0..6),
+        data in prop::collection::vec(any::<u8>(), 0..200),
+        fd_bytes in 0u8..6,
+        gd_bytes in 0u8..6,
+        len_iv in -2i8..8,
+        shown in prop::collection::vec(any::<u8>(), 0..24),
+    ) {
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let ranges: String = space.iter().map(|(lo, hi)| format!("<{}> <{}>\n", hex(lo), hex(hi))).collect();
+        let maps: String = cids.iter().map(|(c, cid)| format!("<{}> <{}> {cid}\n", hex(c), hex(c))).collect();
+        let text = format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+             /CIDInit /ProcSet findresource begin 20 dict begin /CIDFontName /F def /CIDFontType 0 def\n\
+             /FDArray [4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 4 dict dup begin /lenIV {len_iv} def\n\
+             /SubrMapOffset 3 def /SDBytes 2 def /SubrCount 4 def end def currentdict end] def\n\
+             /CIDMapOffset 0 def /FDBytes {fd_bytes} def /GDBytes {gd_bytes} def /CIDCount 40 def\n\
+             (Hex) {} StartData\n{}\n\
+             /CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /M def\n\
+             {} begincodespacerange\n{ranges}endcodespacerange\n{} begincidrange\n{maps}endcidrange\n\
+             endcmap CMapName currentdict /CMap defineresource pop end end\n\
+             /C /M [/F] composefont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+             10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n",
+            data.len(), hex(&data), space.len(), cids.len(), hex(&shown), hex(&shown), hex(&shown)
+        );
+        survive("hostile CID-keyed fonts", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
 }
 
 /// The TrueType font [`type42_composite_eps`] carries.

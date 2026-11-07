@@ -68,6 +68,11 @@ pub(crate) struct Interp<'a> {
     /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
     /// `type42`), the most recent last.
     pub type42: Vec<(Shared<Obj>, Rc<super::type42::Font>)>,
+    /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
+    /// recent last.
+    pub cmaps: super::cid::CMaps,
+    /// The font number `usefont` gave the CMap mappings that follow.
+    pub cmap_font: i64,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,
@@ -118,7 +123,7 @@ impl<'a> Interp<'a> {
         let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
-            for (op, name) in Op::ALL {
+            for (op, name) in Op::ALL.iter().filter(|(op, _)| !Op::PROCSET.contains(op)) {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
@@ -136,6 +141,21 @@ impl<'a> Interp<'a> {
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
         resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
+        // The procedure sets that build CMaps and CIDFonts (CIDInit) and font sets (FontSetInit),
+        // and the predefined Identity CMaps.
+        let cid_init: Dict = Op::PROCSET.iter().map(|op| (Key::name(op.name()), Obj::Op(*op))).collect();
+        let font_set_init = Dict::from([(Key::name("StartData"), Obj::Op(Op::StartData))]);
+        resources.borrow_mut().insert(
+            Key::name("ProcSet"),
+            Obj::dict(Dict::from([(Key::name("CIDInit"), Obj::dict(cid_init)), (Key::name("FontSetInit"), Obj::dict(font_set_init))])),
+        );
+        resources.borrow_mut().insert(
+            Key::name("CMap"),
+            Obj::dict(Dict::from([
+                (Key::name("Identity-H"), super::cid::identity("Identity-H", false)),
+                (Key::name("Identity-V"), super::cid::identity("Identity-V", true)),
+            ])),
+        );
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -179,6 +199,8 @@ impl<'a> Interp<'a> {
             fault: None,
             glyph_width: None,
             type42: vec![],
+            cmaps: vec![],
+            cmap_font: 0,
             g,
             saved: vec![],
             out,
@@ -1353,7 +1375,7 @@ impl<'a> Interp<'a> {
 
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
     /// is open the old value is kept for `restore`.
-    fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
+    pub fn insert(&mut self, d: &DictRef, k: Key, v: Option<Obj>) -> Res {
         let old = {
             let mut dm = d.borrow_mut();
             if v.is_some() && dm.len() >= MAX_ALLOC && !dm.contains_key(&k) {

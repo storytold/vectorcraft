@@ -35,6 +35,7 @@
 
 mod ai;
 mod ate;
+mod cid;
 mod data;
 mod graphics;
 mod interp;
@@ -48,6 +49,8 @@ mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_cid;
 #[cfg(test)]
 mod tests_composite;
 #[cfg(test)]
