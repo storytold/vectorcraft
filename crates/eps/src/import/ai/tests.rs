@@ -7068,7 +7068,7 @@ fn the_brush_managers_order_gives_each_brushs_kind_in_order() {
 }
 
 /// A file's brushes replace the default ones, in the manager's order, with their values. A pattern
-/// brush is left out (which slot holds which tile isn't known), with a note.
+/// brush with a start or end tile is left out (which slot holds which isn't known), with a note.
 #[test]
 fn a_files_brushes_come_in_with_their_values_in_the_panels_order() {
     let r = read_ok(&format!("{}{}", five_brushes(), layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
@@ -7126,6 +7126,37 @@ fn an_older_art_brush_comes_in_with_its_art() {
     assert_eq!(a.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
     assert_eq!(lib.len(), 1, "a brush naming no art is left out");
     assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
+/// A Pattern brush comes in when its tiles don't depend on which corner slot is which: its side
+/// tile from the first slot, and the art of its second and third slots, when they name the same,
+/// at both kinds of corner; at its scale. One whose corner slots differ, or that names a start or
+/// end tile, is left out with a note.
+#[test]
+fn a_pattern_brush_whose_tiles_are_known_comes_in() {
+    let objects = [
+        plugin_object(PATTERN_BRUSH, "Rail", "1 / Post art/ Knot art/ Knot art/ / / 0 1 /  1 0 0.5 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Plain", "1 / Post art/ / / / / 0 1 /  1 0 2 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Mixed", "1 / Post art/ Knot art/ Bend art/ / / 0 1 /  1 0 1 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Fence", FENCE),
+    ]
+    .concat();
+    let art: String = [("Post art", 4.0), ("Knot art", 6.0), ("Bend art", 8.0)].iter().map(|(n, s)| brush_art(n, *s)).collect();
+    let r = read_ok(&format!("{art}{objects}{}", layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Rail", "Plain"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (2)")), "{:?}", r.warnings);
+    let size = |n: &vectorcraft_doc::Node| n.geometric_bounds().map(|b| (b.width(), b.height()));
+    let vectorcraft_brush::BrushKind::Pattern(p) = brush_named(&lib, "Rail") else { panic!("pattern") };
+    assert_eq!(size(&p.side), Some((4.0, 4.0)), "the side tile");
+    assert_eq!(p.outer_corner.as_ref().and_then(size), Some((6.0, 6.0)));
+    assert_eq!(p.inner_corner.as_ref().and_then(size), Some((6.0, 6.0)));
+    assert!(p.start.is_none() && p.end.is_none());
+    assert!((p.scale - 50.0).abs() < 1e-9);
+    assert_eq!(p.colorization, vectorcraft_brush::Colorization::None, "the art keeps its colors");
+    let vectorcraft_brush::BrushKind::Pattern(p) = brush_named(&lib, "Plain") else { panic!("pattern") };
+    assert!(p.outer_corner.is_none() && p.inner_corner.is_none());
+    assert!((p.scale - 200.0).abs() < 1e-9);
 }
 
 /// A brush's art filled with a pattern the file defines before it is read, with that pattern.
