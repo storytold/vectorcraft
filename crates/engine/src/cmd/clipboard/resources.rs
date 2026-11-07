@@ -684,13 +684,15 @@ impl SymbolOptions {
     }
 }
 
-/// A character or paragraph style, symbol (with the Symbol Options copied with it) or pattern to
-/// place ([`Clipboard::import_used`]).
+/// A character or paragraph style, symbol (with the Symbol Options copied with it), pattern or
+/// brush (placed with the others only when they are placed in use order) to place
+/// ([`Clipboard::import_used`]).
 #[derive(Clone, Copy)]
 enum Def<'c> {
     Style(Res, &'c TextStyleDef),
     Symbol(&'c Symbol, Option<&'c SymbolOptions>),
     Pattern(&'c PatternDef),
+    Brush(&'c Brush),
 }
 
 impl<'c> Def<'c> {
@@ -699,6 +701,7 @@ impl<'c> Def<'c> {
             Def::Style(r, s) => (*r, &s.name),
             Def::Symbol(s, _) => (Res::Symbol, &s.name),
             Def::Pattern(p) => (Res::Pattern, &p.name),
+            Def::Brush(b) => (Res::Brush, &b.name),
         }
     }
 
@@ -713,6 +716,7 @@ impl<'c> Def<'c> {
             Def::Style(_, s) => attrs_refs(&s.attrs, &mut g),
             Def::Symbol(s, _) => node_refs(&s.art, &mut g),
             Def::Pattern(p) => p.art.iter().for_each(|a| node_refs(a, &mut g)),
+            Def::Brush(b) => b.art().into_iter().for_each(|a| node_refs(a, &mut g)),
         }
     }
 
@@ -734,17 +738,19 @@ impl<'c> Def<'c> {
                 let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
                 d.pattern(name).is_some_and(|x| bare(x) == bare(p) && same_art(r, &x.art, &p.art))
             }
+            Def::Brush(b) => vectorcraft_brush::library(d).iter().any(|x| x.name == name && same_brush(r, x, b)),
         }
     }
 
     /// The names of its kind in `d` that are its name or a numbered copy of it.
-    fn names_in<'d>(&self, d: &'d Document) -> Vec<&'d str> {
+    fn names_in(&self, d: &Document) -> Vec<String> {
         let (res, name) = self.key();
-        let names: Vec<&str> = match res {
-            Res::CharStyle => d.char_styles.iter().map(|s| s.name.as_str()).collect(),
-            Res::ParaStyle => d.para_styles.iter().map(|s| s.name.as_str()).collect(),
-            Res::Symbol => d.symbols.iter().map(|s| s.name.as_str()).collect(),
-            _ => d.patterns.iter().map(|p| p.name.as_str()).collect(),
+        let names: Vec<String> = match res {
+            Res::CharStyle => d.char_styles.iter().map(|s| s.name.clone()).collect(),
+            Res::ParaStyle => d.para_styles.iter().map(|s| s.name.clone()).collect(),
+            Res::Symbol => d.symbols.iter().map(|s| s.name.clone()).collect(),
+            Res::Brush => vectorcraft_brush::library(d).into_iter().map(|b| b.name).collect(),
+            _ => d.patterns.iter().map(|p| p.name.clone()).collect(),
         };
         names.into_iter().filter(|n| copy_of(name, n)).collect()
     }
@@ -854,8 +860,8 @@ fn components(uses: &[Vec<usize>]) -> Vec<(Vec<usize>, bool)> {
 /// definition is compared as soon as the names of those it uses are picked, so a pick that does
 /// not fit is dropped with every combination that follows from it; at most 65,536 comparisons are
 /// made. `None` when no combination fits, or none was found within that many comparisons.
-fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<&'d str>> {
-    let names: Vec<Vec<&str>> = looped.iter().map(|def| def.names_in(d)).collect();
+fn names_of_loop(d: &Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<String>> {
+    let names: Vec<Vec<String>> = looped.iter().map(|def| def.names_in(d)).collect();
     if names.is_empty() || names.iter().any(Vec::is_empty) {
         return None;
     }
@@ -867,13 +873,13 @@ fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<
     let (mut pick, mut guess, mut budget, mut k) = (vec![0usize; looped.len()], r.clone(), 1usize << 16, 0);
     loop {
         let (res, own) = looped[k].key();
-        guess.renames.entry(res).or_default().insert(own.to_string(), names[k][pick[k]].to_string());
+        guess.renames.entry(res).or_default().insert(own.to_string(), names[k][pick[k]].clone());
         let fits = compare_at[k].iter().all(|&i| {
             budget = budget.saturating_sub(1);
-            looped[i].same_in(d, names[i][pick[i]], &guess)
+            looped[i].same_in(d, &names[i][pick[i]], &guess)
         });
         if fits && k + 1 == looped.len() {
-            return Some(names.iter().zip(&pick).map(|(l, &p)| l[p]).collect());
+            return Some(names.iter().zip(&pick).map(|(l, &p)| l[p].clone()).collect());
         }
         if budget == 0 {
             return None;
@@ -997,7 +1003,7 @@ impl Clipboard {
 
     /// [`Self::import_into`] for the resources `used` names. The character and paragraph styles
     /// come before the symbols and patterns, whose art may set type in them; with `in_use_order`,
-    /// each style, symbol and pattern comes after the styles, symbols and patterns it uses
+    /// each style, symbol, pattern and brush comes after the styles, symbols, patterns and brushes it uses
     /// ([`use_order`]), so that it is compared and relinked with their names here, and each loop
     /// of definitions that use each other is matched on its own ([`loop_groups`]).
     fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
@@ -1005,14 +1011,19 @@ impl Clipboard {
         self.import_images(d, used, same_doc, &mut out);
         self.import_swatches(d, used, choices, same_doc, &mut out);
         // Brushes whose art shows no symbols or patterns, before the symbols and patterns whose art
-        // they may brush; the others once those are in.
-        let mut added_brushes: HashSet<String> = self.import_brushes(d, used, same_doc, false, &mut out).into_iter().collect();
+        // they may brush; the others once those are in. With `in_use_order`, the brushes are
+        // placed in use order with the others.
+        let mut added_brushes: HashSet<String> =
+            if in_use_order { HashSet::new() } else { self.import_brushes(d, used, same_doc, false, &mut out).into_iter().collect() };
         let mut defs: Vec<Def<'_>> = vec![];
         for (r, list) in [(Res::CharStyle, &self.char_styles), (Res::ParaStyle, &self.para_styles)] {
             defs.extend(list.iter().filter(|s| used.has(r, &s.name)).map(|s| Def::Style(r, s)));
         }
         defs.extend(self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).map(|s| Def::Symbol(s, self.symbol_options.get(&s.name))));
         defs.extend(self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).map(Def::Pattern));
+        if in_use_order {
+            defs.extend(self.brushes.iter().filter(|b| used.has(Res::Brush, &b.name)).map(Def::Brush));
+        }
         // Groups to place in order; true for a loop of definitions that use each other.
         let groups: Vec<(Vec<Def<'_>>, bool)> = if in_use_order {
             let (order, rest) = use_order(defs);
@@ -1040,7 +1051,6 @@ impl Clipboard {
             if let Some(group) = starts {
                 match names_of_loop(d, group, &out.relink) {
                     Some(names) => {
-                        let names: Vec<String> = names.into_iter().map(str::to_string).collect();
                         for (def, name) in group.iter().zip(names) {
                             let (res, own) = def.key();
                             if own != name {
@@ -1100,9 +1110,21 @@ impl Clipboard {
                     added_patterns.extend(p.new_name(&def.name));
                     out.placed(Res::Pattern, &def.name, &p);
                 }
+                Def::Brush(b) => {
+                    let mut lib = vectorcraft_brush::library(d);
+                    let r = &out.relink;
+                    let p = place(&mut lib, b, same_doc, |ours, theirs| !fresh && same_brush(r, ours, theirs));
+                    if let Some(name) = p.new_name(&b.name) {
+                        vectorcraft_brush::store(d, &lib);
+                        added_brushes.insert(name);
+                    }
+                    out.placed(Res::Brush, &b.name, &p);
+                }
             }
         }
-        added_brushes.extend(self.import_brushes(d, used, same_doc, true, &mut out));
+        if !in_use_order {
+            added_brushes.extend(self.import_brushes(d, used, same_doc, true, &mut out));
+        }
         self.import_graphic_styles(d, used, same_doc, &mut out);
         for (r, name, def) in added_styles {
             let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };

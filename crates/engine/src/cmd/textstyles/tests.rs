@@ -979,6 +979,43 @@ fn a_style_in_a_loop_is_not_matched_to_a_style_that_paints_with_another_pattern(
     assert_eq!(s.doc().unwrap().doc, d);
 }
 
+/// A brush in a loaded style's pattern whose art sets type in a style renamed on the way in
+/// ("Accent 2") is the same brush when the file is loaded again.
+#[test]
+fn reloaded_brushes_follow_the_renamed_styles_their_art_uses() {
+    let (mut src, id) = session_with_text("Ink");
+    src.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": id})).unwrap();
+    src.execute("brush.new", &json!({"type": "art", "name": "Lettering", "ids": [id]})).unwrap();
+    let path = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 40, "height": 10})).unwrap()["id"].clone();
+    src.execute("brush.apply", &json!({"name": "Lettering", "ids": [path]})).unwrap();
+    src.execute("object.pattern.make", &json!({"name": "Tiles", "edit": false, "ids": [path]})).unwrap();
+    let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Tiles", "ids": [other]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Tiled", "id": other})).unwrap();
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&src.doc().unwrap().doc, false));
+    let (mut s, _) = session_with_text("X");
+    s.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 10}})).unwrap();
+    let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert!(r["added"].as_array().unwrap().contains(&json!("Accent 2")), "{r}");
+    let d = s.doc().unwrap().doc.clone();
+    let lib = vectorcraft_brush::library(&d);
+    let brush = lib.iter().find(|b| b.name == "Lettering").unwrap();
+    let mut styles = vec![];
+    for a in brush.art() {
+        a.walk(&mut |n| {
+            if let NodeKind::Text(t) = &n.kind {
+                styles.extend(t.runs.iter().filter_map(|r| r.style.style_name.clone()));
+            }
+        });
+    }
+    assert_eq!(styles, ["Accent 2"]);
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r["added"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc, d);
+}
+
 /// A style name from a saved document stays the name used by type in imported pattern art.
 #[test]
 fn loaded_style_keeps_the_name_used_by_pattern_type() {
