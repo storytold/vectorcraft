@@ -1293,6 +1293,21 @@ fn compound_paths_and_clipping() {
     assert!(filled.iter().all(|p| matches!(p.kind, NodeKind::Path { clipping: false, .. })), "{filled:?}");
     assert_eq!((fill(&children[1]).color(), children[1].appearance.stroke().is_none()), (blue, true));
     assert_eq!(fill(&children[2]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    // A subpath that doesn't clip keeps its fill; only the clipping subpath's fill is read apart.
+    let green = Some(Color::rgb(0.0, 1.0, 0.0));
+    let plain = format!(
+        "0 Ae\nq\n{RED}{}f\n*u\n0 0 1 0 0 0 1 Xa\n{}f\n0 1 0 0 0 1 0 Xa\n{}h\nW\nf\n*U\nQ\n",
+        rect_path(0.0, 0.0, 30.0, 30.0),
+        rect_path(5.0, 5.0, 25.0, 25.0),
+        rect_path(10.0, 10.0, 20.0, 20.0)
+    );
+    let doc = read_ok(&layer(&plain)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    let NodeKind::Compound { children: subpaths, .. } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    let kinds: Vec<_> = subpaths.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color())).collect();
+    assert_eq!(kinds, [(false, blue), (true, None)]);
+    let NodeKind::Compound { children: apart, .. } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert_eq!((apart.len(), fill(&children[1]).color()), (1, green), "only the clipping subpath's fill: {apart:?}");
     // A tag after the compound clipping path is its own.
     let doc = read_ok(&layer(&mixed.replace("*U\n", "*U\n/edge (clip) XT\n"))).doc;
     let NodeKind::Group { children, .. } = &art(&doc)[0].kind else { panic!("a clipping group") };

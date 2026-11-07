@@ -150,10 +150,14 @@ impl<'a> Reader<'a> {
                 // A group in a compound path (`*u u … U *U`) only holds its paths.
                 let mut kids = ungrouped(kids);
                 // A compound clipping path keeps its subpaths' fill when they all paint alike. When they paint
-                // differently, the fills of the filled ones are a compound path of their own, under what it clips.
+                // differently, the fills of the filled clipping ones are a compound path of their own, under what it clips.
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 if clipping && kids.windows(2).any(|w| look(&w[0]) != look(&w[1])) {
-                    let fills: Vec<Node> = kids.iter_mut().filter_map(|k| self.fill_apart(k)).collect();
+                    let fills: Vec<Node> = kids
+                        .iter_mut()
+                        .filter(|k| matches!(k.kind, NodeKind::Path { clipping: true, .. }))
+                        .filter_map(|k| self.fill_apart(k))
+                        .collect();
                     painted = self.compound(fills, &gs);
                 }
                 let Some(n) = self.compound(kids, &gs) else {
