@@ -5809,6 +5809,28 @@ axis	Y Axis	Axe Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
+	ID: {id}	ID : {id}
+	Version: {version}	Version : {version}
+	File SHA-256: {hash}	SHA-256 du fichier : {hash}
+	Read the objects it is given	Lire les objets qui lui sont transmis
+	Change, add and delete objects in the document	Modifier, ajouter et supprimer des objets du document
+	Keep data of its own with the document	Conserver ses propres données avec le document
+	Change how the objects its effect is applied to are drawn	Modifier le rendu des objets auxquels son effet est appliqué
+	Write the document as a file in its own format	Écrire le document dans un fichier à son propre format
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
+@msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	au plus {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
+@msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…
 	New Set	Nouveau jeu

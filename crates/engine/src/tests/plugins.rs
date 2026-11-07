@@ -523,6 +523,230 @@ fn invalid_install_flags_are_refused() {
     assert!(vectorcraft_plugins::registry::get(light).is_none());
 }
 
+/// A test filter `id` (named "Test `id`") whose manifest lists `permissions` (a JSON list) and that
+/// returns `output`.
+fn asking(id: &str, permissions: &str, output: &Value) -> Vec<u8> {
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","version":"2.1","kind":"filter","permissions":{permissions}}}"#);
+    wat::parse_str(tpl::returning(&manifest, &output.to_string())).unwrap()
+}
+
+/// A plug-in whose manifest lists permissions installs only once they are all granted (`grant`),
+/// which `plugin.inspect` tells beforehand (`needsApproval`) with the permissions and the module's
+/// hash. The grant is recorded with that hash: replacing the plug-in with one that lists the same
+/// permissions needs no new grant, and one that lists another needs one. Removing it forgets the
+/// grant. A plug-in without `permissions` installs as before, with the ones its kind implies.
+#[test]
+fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
+    let mut s = session();
+    let id = "test.engine.permissions.install";
+    let empty = json!({"objects": []});
+    let data = |perms: &str| vectorcraft_format::base64_encode(&asking(id, perms, &empty));
+    let reads = data(r#"["doc.read"]"#);
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": reads}));
+    assert_eq!((&inspected["needsApproval"], &inspected["permissions"]), (&json!(true), &json!(["doc.read"])));
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&asking(id, r#"["doc.read"]"#, &empty));
+    assert_eq!(inspected["hash"], hash);
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "inspecting installs nothing");
+    // Refused without a grant that holds every permission it lists, naming them.
+    for (grant, says) in [
+        (Value::Null, "asks for the permissions doc.read"),
+        (json!([]), "asks for the permissions doc.read"),
+        (json!(["doc.write"]), "asks for the permissions doc.read"),
+        (json!(["doc.read", "net.fetch"]), "unknown permission `net.fetch`"),
+        (json!("doc.read"), "`grant` must be a list"),
+        (json!([1]), "`grant` must be a list"),
+    ] {
+        let e = s.execute("plugin.install", &json!({"dataBase64": reads, "grant": grant})).unwrap_err().to_string();
+        assert!(e.contains(says), "grant {grant}: {e}");
+        assert!(vectorcraft_plugins::registry::get(id).is_none(), "installed with grant {grant}");
+    }
+    // `hash` pins the module the user was shown.
+    for wrong in [json!("0".repeat(64)), json!(1)] {
+        let e = s.execute("plugin.install", &json!({"dataBase64": reads, "grant": ["doc.read"], "hash": wrong})).unwrap_err().to_string();
+        assert!(e.contains("SHA-256 `hash`"), "hash {wrong}: {e}");
+        assert!(vectorcraft_plugins::registry::get(id).is_none(), "installed with hash {wrong}");
+    }
+    let installed = run(&mut s, "plugin.install", json!({"dataBase64": reads, "grant": ["doc.read"], "hash": hash}));
+    assert_eq!(installed["permissions"], json!(["doc.read"]));
+    let g = vectorcraft_plugins::registry::granted(id).unwrap();
+    assert_eq!((g.hash.as_str(), g.permissions.as_slice()), (hash.as_str(), &[vectorcraft_plugins::permissions::Permission::DocRead][..]));
+    // Replaced with another module that lists the same permissions: no new grant needed, and the
+    // grant now records the new module's hash.
+    let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], false);
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}));
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, vectorcraft_plugins::permissions::sha256_hex(&other));
+    // One that asks for more is refused until it is granted all of them.
+    let more = data(r#"["doc.read","doc.write"]"#);
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": more}))["needsApproval"], true);
+    let e = s.execute("plugin.install", &json!({"dataBase64": more})).unwrap_err().to_string();
+    assert!(e.contains("doc.read, doc.write") && e.contains("`grant`"), "{e}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().manifest().permissions().len(), 1, "the one installed stays");
+    run(&mut s, "plugin.install", json!({"dataBase64": more, "grant": ["doc.write", "doc.read", "state"]}));
+    assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().permissions.len(), 2, "only what it lists is recorded");
+    // Removed, it is asked again.
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(vectorcraft_plugins::registry::granted(id).is_none());
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": reads}))["needsApproval"], true);
+    // A plug-in without `permissions` installs as before, with its kind's.
+    let plain = install(&mut s, DESATURATE);
+    assert_eq!(plain["permissions"], json!(["doc.read", "doc.write", "state"]));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(DESATURATE)}))["needsApproval"], false);
+}
+
+/// The host enforces what a filter was granted: without `doc.write` an output that changes the
+/// document is refused and nothing changes, without `doc.read` it is given no objects, and without
+/// `state` it is given no data kept with the document and may not write any.
+#[test]
+fn a_filter_does_only_what_its_permissions_allow() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let filter = |s: &mut Session, pid: &str| s.execute("plugin.run", &json!({"id": pid, "ids": [id.0]}));
+    let grant = |s: &mut Session, wasm: &[u8], perms: Value| {
+        run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": perms}));
+    };
+    // Denied `doc.write`: renaming the object is refused, and the document and history stay.
+    let reader = "test.engine.permissions.reader";
+    grant(&mut s, &asking(reader, r#"["doc.read"]"#, &json!({"objects": [{"id": id.0, "name": "Changed"}]})), json!(["doc.read"]));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = filter(&mut s, reader).unwrap_err().to_string();
+    assert!(e.contains("wasn't granted `doc.write`"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Deleting it (leaving it out of the output) and adding objects are changes too.
+    for out in [json!({"objects": []}), json!({"objects": [{"id": id.0}, {"path": triangle()}]})] {
+        grant(&mut s, &asking(reader, r#"["doc.read"]"#, &out), json!(["doc.read"]));
+        assert!(filter(&mut s, reader).is_err(), "{out}");
+        assert_eq!(s.doc().unwrap().doc, before, "{out}");
+    }
+    // Returning the object unchanged changes nothing, so it may.
+    grant(&mut s, &asking(reader, r#"["doc.read"]"#, &json!({"objects": [{"id": id.0}]})), json!(["doc.read"]));
+    filter(&mut s, reader).unwrap();
+    assert_eq!(s.doc().unwrap().doc.layers, before.layers);
+    // Granted `doc.write` alone: it is given no objects, so its triangle is added beside the
+    // rectangle rather than replacing it.
+    let writer = "test.engine.permissions.writer";
+    let manifest = format!(r#"{{"id":"{writer}","name":"W","kind":"filter","permissions":["doc.write"]}}"#);
+    let added = json!({"objects": [{"path": triangle(), "name": "Given nothing"}]});
+    let src = tpl::when_given(&manifest, tpl::Given::Input, r#"{"objects":[]}"#, &added.to_string());
+    grant(&mut s, &wat::parse_str(src).unwrap(), json!(["doc.write"]));
+    let made = filter(&mut s, writer).unwrap();
+    let new = NodeId(made["ids"][0].as_u64().unwrap());
+    assert_eq!(node(&s, new).name.as_deref(), Some("Given nothing"));
+    assert!(s.doc().unwrap().doc.node(id).is_some(), "the rectangle it wasn't given stays");
+    // Without `state`: kept data is not handed over, and writing some is refused.
+    run(
+        &mut s,
+        "plugin.install",
+        json!({"dataBase64": vectorcraft_format::base64_encode(&asking("test.engine.permissions.keeper", "null", &json!({"objects": [{"id": id.0}], "documentData": {"pen": 1}})))}),
+    );
+    filter(&mut s, "test.engine.permissions.keeper").unwrap();
+    let stateless = "test.engine.permissions.keeper";
+    let manifest = format!(r#"{{"id":"{stateless}","name":"K","kind":"filter","permissions":["doc.read","doc.write"]}}"#);
+    let src =
+        tpl::when_given(&manifest, tpl::Given::Params, r#""documentData":null"#, &json!({"objects": [{"id": id.0, "name": "No data"}]}).to_string());
+    grant(&mut s, &wat::parse_str(src).unwrap(), json!(["doc.read", "doc.write"]));
+    filter(&mut s, stateless).unwrap();
+    assert_eq!(node(&s, id).name.as_deref(), Some("No data"), "given no kept data");
+    let before = s.doc().unwrap().doc.clone();
+    grant(
+        &mut s,
+        &asking(stateless, r#"["doc.read","doc.write"]"#, &json!({"objects": [{"id": id.0}], "documentData": {"pen": 2}})),
+        json!(["doc.read", "doc.write"]),
+    );
+    let e = filter(&mut s, stateless).unwrap_err().to_string();
+    assert!(e.contains("wasn't granted `state`"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().doc.plugin_data(stateless), Some(&json!({"pen": 1})));
+}
+
+/// What the user granted is kept in the plug-in store with the module: the next session installs
+/// the plug-in again without asking. A stored plug-in that lists permissions nobody granted it is
+/// skipped, even when another store granted it, and so is one in the Additional Plug-ins Folder
+/// until it is granted on its own.
+#[test]
+fn granted_permissions_are_kept_and_folders_skip_the_rest() {
+    let folder = crate::tests_links::Folder::new("plugin-store-grants");
+    let id = "test.engine.permissions.stored";
+    let wasm = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    assert!(folder.0.join("grants.json").is_file());
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again from the store, as granted");
+    // Only a store's own grants count: the same module in another store without a grant is
+    // skipped, and a grant given elsewhere is not written to that store.
+    let other = crate::tests_links::Folder::new("plugin-store-grants-other");
+    std::fs::write(other.0.join("copy.wasm"), &wasm).unwrap();
+    vectorcraft_plugins::registry::remove(id);
+    let mut elsewhere = session();
+    elsewhere.attach_plugin_store(other.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "granted in another store only");
+    let e = elsewhere.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap_err().to_string();
+    assert!(e.contains("`grant`"), "a grant kept in another store doesn't count here: {e}");
+    let lone = "test.engine.permissions.lone";
+    let lone_wasm = asking(lone, r#"["doc.read"]"#, &json!({"objects": []}));
+    run(&mut elsewhere, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&lone_wasm), "grant": ["doc.read"]}));
+    let kept = std::fs::read_to_string(other.0.join("grants.json")).unwrap();
+    assert!(kept.contains(lone) && !kept.contains(id), "{kept}");
+    run(&mut elsewhere, "plugin.remove", json!({"id": lone}));
+    assert!(!other.0.join("grants.json").exists(), "the last grant removed takes the file with it");
+    // Without the grant it is skipped, and the file stays.
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    std::fs::remove_file(folder.0.join("grants.json")).unwrap();
+    let mut third = session();
+    third.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "nobody granted it");
+    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 1, "the module stays in the store");
+
+    // The Additional Plug-ins Folder skips it with a note until it is granted.
+    let dir = crate::tests_links::Folder::new("plugin-folder-grants");
+    std::fs::write(dir.0.join("asks.wasm"), &wasm).unwrap();
+    let r = run(&mut third, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    assert_eq!(r["loaded"], json!([]));
+    let why = r["failed"][0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval") && why.contains("doc.read"), "{why}");
+    run(&mut third, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    let r = run(&mut third, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    assert_eq!(r["loaded"], json!([id]));
+    run(&mut third, "plugin.remove", json!({"id": id}));
+    // With a store attached, only that store's grants load it from the folder: a grant given in a
+    // session without a store doesn't count.
+    let mut storeless = session();
+    run(&mut storeless, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    vectorcraft_plugins::registry::remove(id);
+    assert!(vectorcraft_plugins::registry::granted(id).is_some(), "granted in the process");
+    let empty = crate::tests_links::Folder::new("plugin-store-grants-empty");
+    let mut scoped = session();
+    scoped.attach_plugin_store(empty.0.clone());
+    let r = run(&mut scoped, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    vectorcraft_plugins::registry::revoke(id);
+    assert_eq!(r["loaded"], json!([]), "a grant outside this store doesn't load it");
+    let why = r["failed"][0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval"), "{why}");
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "not installed");
+    // The preference's folder is loaded again for a session whose store holds other grants.
+    let pref_dir = crate::tests_links::Folder::new("plugin-folder-pref-grants");
+    std::fs::write(pref_dir.0.join("asks.wasm"), &wasm).unwrap();
+    let pref = json!({"key": "pluginsFolder", "value": pref_dir.0.display().to_string()});
+    run(&mut scoped, "prefs.set", pref.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "nothing granted in this store");
+    let granting = crate::tests_links::Folder::new("plugin-store-grants-pref");
+    let mut granted = session();
+    granted.attach_plugin_store(granting.0.clone());
+    run(&mut granted, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]}));
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    run(&mut granted, "prefs.set", pref);
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "loaded under this store's grant");
+    run(&mut granted, "plugin.remove", json!({"id": id}));
+}
+
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next
 /// start without asking, with its budget.
 #[test]

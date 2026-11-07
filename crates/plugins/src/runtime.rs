@@ -85,6 +85,7 @@ pub struct Plugin {
     module: Module,
     limits: Limits,
     size: usize,
+    hash: String,
     source: Option<String>,
     serial: u64,
 }
@@ -174,7 +175,8 @@ impl Plugin {
                 imp.name()
             )));
         }
-        let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), source: None, serial: 0 };
+        let hash = crate::permissions::sha256_hex(bytes);
+        let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
         let deadline = Deadline::new(&p.limits);
         let mut live = p.instantiate()?;
         let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
@@ -213,6 +215,10 @@ impl Plugin {
     /// Module size in bytes.
     pub fn size(&self) -> usize {
         self.size
+    }
+    /// The module's SHA-256, in lower-case hexadecimal.
+    pub fn hash(&self) -> &str {
+        &self.hash
     }
     /// Where the module was loaded from, if it came from a file.
     pub fn source(&self) -> Option<&str> {

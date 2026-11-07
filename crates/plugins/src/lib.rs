@@ -21,7 +21,8 @@
 //! time it is drawn, from an appearance stack; an **exporter** ([`export`]) writes the whole
 //! document in a file format of its own. The process-wide [`registry`] holds the installed
 //! plug-ins. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
-//! them well: labels, units, groups, help and conditions ([`dialog`]).
+//! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
+//! the set of [`permissions`] its manifest lists, which the user approves when it is installed.
 #![forbid(unsafe_code)]
 
 pub mod dialog;
@@ -29,6 +30,7 @@ pub mod effect;
 pub mod export;
 pub mod manifest;
 pub mod objects;
+pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod wat;

@@ -5667,6 +5667,28 @@ axis	Y Axis	Oś Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): zainstaluj wtyczkę z `allowHeavy: true`, gdy użytkownik się zgodzi
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Zainstalować „{name}”, wtyczkę, która prosi o te uprawnienia?
+	ID: {id}	ID: {id}
+	Version: {version}	Wersja: {version}
+	File SHA-256: {hash}	SHA-256 pliku: {hash}
+	Read the objects it is given	Odczytywać obiekty, które otrzymuje
+	Change, add and delete objects in the document	Zmieniać, dodawać i usuwać obiekty w dokumencie
+	Keep data of its own with the document	Przechowywać własne dane w dokumencie
+	Change how the objects its effect is applied to are drawn	Zmieniać sposób rysowania obiektów, do których zastosowano jej efekt
+	Write the document as a file in its own format	Zapisywać dokument jako plik we własnym formacie
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ma wartość {_1}; ten host obsługuje poziomy API wtyczek od 1 do {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` musi być listą nazw uprawnień
+@msg	`grant` names an unknown permission `{shown}`	`grant` wymienia nieznane uprawnienie `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	wtyczka rodzaju `{_1}` potrzebuje uprawnienia `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	najwyżej {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	uprawnienie `{shown}` nie dotyczy wtyczki rodzaju `{_1}`
+@msg	permission `{shown}` is listed twice	uprawnienie `{shown}` występuje dwa razy
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
+@msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” prosi o uprawnienia {asked}: zainstaluj ją z `grant`, który je wymienia, gdy użytkownik się zgodzi
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nie otrzymała `{p}`, którego potrzebuje jej wynik: nic nie zmieniono
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduł nie ma skrótu SHA-256 podanego w `hash`: nic nie zainstalowano
 # Actions panel: action sets (#3712).
 	New Set…	Nowy zestaw…
 	New Set	Nowy zestaw
