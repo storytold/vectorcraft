@@ -3890,9 +3890,7 @@ fn objects_next_to_each_other_keep_their_own_transparency() {
             let at = format!("{a:?} {first:?} then {b:?} {second:?}");
             let kids = back.layers[0].children().unwrap();
             assert_eq!(kids.len(), 2, "{at}");
-            for (n, (kind, want)) in kids.iter().zip([(a, first), (b, second)]) {
-                // The reader takes no knockout shape flag for an image.
-                let want = if matches!(kind, Image) { (want.0, want.1, false) } else { want };
+            for (n, want) in kids.iter().zip([first, second]) {
                 assert_eq!((n.opacity, n.blend, n.knockout_shape), want, "{at}");
             }
             let l = &back.layers[0];
