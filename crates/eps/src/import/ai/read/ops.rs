@@ -1005,13 +1005,24 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 /// compound shape) whose style is one fill and one stroke at most in solid colours: they paint
 /// every member's outline, below or above the members as the style's contents row says, as a
 /// group's own fills and strokes do here (`vectorcraft_effects::group`). A gradient or a pattern on a group lies across the
-/// group in a way its drawn look doesn't say, so such a group keeps its drawn look.
+/// group in a way its drawn look doesn't say, so such a group keeps its drawn look. So does one
+/// with a member reshaped by a live effect of its own ([`reshaped`]): the group's fills and strokes
+/// paint its members' outlines as they are, not as the effect draws them.
 fn group_paints(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     st.simple
         && matches!(object.kind, NodeKind::Group { clip: false, .. })
         && !object.is_compound_shape()
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { brush: None, .. }))
+        && !object.children().into_iter().flatten().any(|c| reshaped(c, 1))
+}
+
+/// Does `n` or anything in it (to [`MAX_DEPTH`]) have a visible effect that reshapes its outline?
+/// Deeper than that counts as yes.
+fn reshaped(n: &Node, depth: usize) -> bool {
+    depth > MAX_DEPTH
+        || n.appearance.effects.iter().any(|e| e.visible && vectorcraft_effects::is_geometry(&e.id))
+        || n.children().into_iter().flatten().any(|c| reshaped(c, depth + 1))
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
@@ -1274,6 +1285,21 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// A group whose member (here a group in it) is moved by a live Transform effect doesn't take
+    /// a fill of its own: that would paint the member where it was, not where it is drawn.
+    #[test]
+    fn a_group_with_a_reshaped_member_takes_no_fill_of_its_own() {
+        use crate::import::ai::style::{ArtStyle, StyleItem};
+        use vectorcraft_color::Color;
+        let st = ArtStyle { simple: true, items: vec![StyleItem::Fill(Paint::solid(Color::rgb(0.0, 0.0, 1.0)))], ..ArtStyle::default() };
+        let plain = Node::group(NodeId(1), vec![square(2, Paint::solid(Color::rgb(1.0, 0.0, 0.0)))]);
+        assert!(group_paints(&Node::group(NodeId(3), vec![Arc::new(plain.clone())]), &st));
+        let mut moved = plain;
+        let transform = vectorcraft_effects::new_effect("distort.transform", &serde_json::json!({ "moveH": 5.0 })).unwrap();
+        moved.appearance.effects.push(transform);
+        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(moved)]), &st));
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
