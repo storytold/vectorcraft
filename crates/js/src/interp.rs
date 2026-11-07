@@ -1428,14 +1428,21 @@ impl Interp {
         if n > MAX_APPLY_ARGS {
             return Err(self.throw(ErrorType::Range, "too many arguments"));
         }
+        let saved = self.temp_roots.len();
         let mut out = Vec::with_capacity(n);
         for i in 0..n {
-            let v = self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list)?;
-            self.temp_roots.push(v.clone());
-            out.push(v);
+            match self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list) {
+                Ok(v) => {
+                    self.temp_roots.push(v.clone());
+                    out.push(v);
+                }
+                Err(e) => {
+                    self.temp_roots.truncate(saved);
+                    return Err(e);
+                }
+            }
         }
-        let keep = self.temp_roots.len() - n;
-        self.temp_roots.truncate(keep);
+        self.temp_roots.truncate(saved);
         Ok(out)
     }
 

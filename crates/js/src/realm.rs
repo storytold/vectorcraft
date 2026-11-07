@@ -174,7 +174,8 @@ impl Realm {
         interp.source_units = 0;
         interp.throw_site = None;
         interp.last_thrown = Value::Undefined;
-        let code = match interp.encode_source(source).and_then(|units| interp.compile_source(&units, false, CodeKind::Global)) {
+        let strict = interp.options.strict;
+        let code = match interp.encode_source(source).and_then(|units| interp.compile_source(&units, strict, CodeKind::Global)) {
             Ok(code) => code,
             Err(CompileError::Syntax(e)) => return Err(e.into()),
             Err(CompileError::Internal(m)) => return Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),

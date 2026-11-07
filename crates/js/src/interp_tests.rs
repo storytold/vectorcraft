@@ -406,6 +406,28 @@ fn bind_last_thrown_binds_undefined_after_a_run_that_did_not_throw() {
 }
 
 #[test]
+fn a_strict_realm_runs_scripts_as_strict_mode_code() {
+    let mut realm = Realm::with_options(Options { strict: true, ..Options::default() }, Limits::default());
+    assert_eq!(realm.run("with ({}) {}").map_err(|e| e.kind), Err(RunErrorKind::Syntax));
+    assert_eq!(realm.run("(function () { return this; })()"), Ok(JsValue::Undefined));
+    assert_eq!(realm.run("(function () { return typeof this; })()"), Ok(JsValue::String("undefined".into())));
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("with ({}) {} 1"), Ok(JsValue::Number(1.0)));
+    assert_eq!(realm.run("(function () { return typeof this; })()"), Ok(JsValue::String("object".into())));
+}
+
+#[test]
+fn an_apply_that_throws_while_reading_its_arguments_keeps_nothing_alive() {
+    // Each call reads a fresh array at index 0 before index 1 throws; the arrays must not stay
+    // reachable after the call ends.
+    let mut realm = small(Limits { heap_bytes: 2 << 20, ..Limits::default() });
+    let src = "function f() {} var caught = 0; \
+        var list = {length: 2, get 0() { var a = []; for (var k = 0; k < 100; k++) a[k] = k; return a; }, get 1() { throw 'stop'; }}; \
+        for (var i = 0; i < 5000; i++) { try { f.apply(null, list); } catch (e) { caught++; } } caught";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(5000.0)));
+}
+
+#[test]
 fn wasm_builds_have_smaller_default_limits() {
     let limits = Limits::default();
     #[cfg(target_arch = "wasm32")]
