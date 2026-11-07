@@ -1,7 +1,7 @@
 use super::layers::closed_where_ends_meet;
 use super::slots::{
     Content, MAX_PAIRS, OUTLINE_REACH, PAGE_TYPE_LEFT_OUT, PAGE_TYPE_UNCHECKED, SlotInfo, assign, covered, extent, join_pieces, letters, same_type,
-    words,
+    word_pieces, words,
 };
 use super::{Affine, Arc, Node, NodeId, NodeKind, Point, Rect, Story, TextKind};
 
@@ -268,9 +268,10 @@ fn plain_text(n: &Node) -> String {
     if let NodeKind::Text(t) = &n.kind { t.plain_text() } else { String::new() }
 }
 
-/// The words of the page's text object `o`, each as its [`spelling`], the empty ones left out.
+/// The words of the page's text object `o` (see [`word_pieces`]), each as its [`spelling`], the
+/// empty ones left out.
 fn object_words(o: &[Arc<Node>]) -> Vec<String> {
-    o.iter().flat_map(|n| plain_text(n).split_whitespace().map(spelling).collect::<Vec<_>>()).filter(|w| !w.is_empty()).collect()
+    o.iter().flat_map(|n| word_pieces(&plain_text(n)).map(spelling).collect::<Vec<_>>()).filter(|w| !w.is_empty()).collect()
 }
 
 /// Each slot's made type as its content, else nothing yet. Made type that shows has where it draws,
