@@ -832,10 +832,12 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
 
 /// Does the area outside the artboards draw darker? Artboard Options › Fade Region Outside Artboard
 /// darkens it while the Artboard tool is active, and with Update While Dragging off it draws as
-/// usual while the tool moves or resizes an artboard. Exports and prints never draw the fade.
+/// usual while the tool moves or resizes an artboard. Presentation Mode, exports and prints never
+/// draw the fade.
 fn fades_outside_artboards(app: &VectorcraftApp) -> bool {
     let prefs = &app.session.prefs;
-    app.session.tool_id() == "artboard"
+    app.ui.screen_mode != 3
+        && app.session.tool_id() == "artboard"
         && prefs.fade_region_outside_artboard
         && (prefs.artboard_update_while_dragging || !app.session.tool_transforming())
 }
@@ -861,29 +863,62 @@ fn fade_outside_artboards(painter: &egui::Painter, xf: &Xf, doc: &vectorcraft_do
 }
 
 /// The parts of `bounds` that no rectangle of `boards` covers, as rectangles that do not overlap:
-/// for each band between consecutive top and bottom edges, the spans between the boards that
-/// cross it.
+/// for each band between consecutive top and bottom edges, the gaps between the boards that cross
+/// it. A gap with the same left and right edges as a gap of the band above extends that gap's
+/// rectangle down, so each board edge adds at most a few rectangles.
 fn outside_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
     let mut ys: Vec<f64> = boards.iter().flat_map(|b| [b.y0, b.y1]).filter(|y| *y > bounds.y0 && *y < bounds.y1).collect();
     ys.extend([bounds.y0, bounds.y1]);
     ys.sort_by(f64::total_cmp);
     ys.dedup();
-    let mut out = vec![];
+    let mut by_top: Vec<Rect> = boards.iter().copied().filter(|b| b.y0 < bounds.y1 && b.y1 > bounds.y0).collect();
+    by_top.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+    let mut next = 0;
+    // The boards that cross the current band, left to right.
+    let mut active: Vec<Rect> = vec![];
+    let mut out: Vec<Rect> = vec![];
+    // The indices in `out` of the band above's rectangles, left to right.
+    let mut above: Vec<usize> = vec![];
     for band in ys.windows(2) {
         let &[y0, y1] = band else { continue };
-        let mut spans: Vec<(f64, f64)> =
-            boards.iter().filter(|b| b.y0 <= y0 && b.y1 >= y1).map(|b| (b.x0.max(bounds.x0), b.x1.min(bounds.x1))).filter(|(a, b)| a < b).collect();
-        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        while let Some(b) = by_top.get(next).copied().filter(|b| b.y0 <= y0) {
+            let at = active.partition_point(|a| a.x0 <= b.x0);
+            active.insert(at, b);
+            next += 1;
+        }
+        active.retain(|b| b.y1 >= y1);
+        let mut gaps = vec![];
         let mut x = bounds.x0;
-        for (a, b) in spans {
-            if a > x {
-                out.push(Rect::new(x, y0, a, y1));
+        for b in &active {
+            let (a, e) = (b.x0.max(bounds.x0), b.x1.min(bounds.x1));
+            if a >= e {
+                continue;
             }
-            x = x.max(b);
+            if a > x {
+                gaps.push((x, a));
+            }
+            x = x.max(e);
         }
         if x < bounds.x1 {
-            out.push(Rect::new(x, y0, bounds.x1, y1));
+            gaps.push((x, bounds.x1));
         }
+        let mut prev = above.iter().copied().peekable();
+        let mut row = Vec::with_capacity(gaps.len());
+        for (a, e) in gaps {
+            while prev.next_if(|&i| out[i].x0 < a).is_some() {}
+            match prev.peek().copied() {
+                Some(i) if out[i].x0 == a && out[i].x1 == e => {
+                    out[i].y1 = y1;
+                    row.push(i);
+                    prev.next();
+                }
+                _ => {
+                    row.push(out.len());
+                    out.push(Rect::new(a, y0, e, y1));
+                }
+            }
+        }
+        above = row;
     }
     out
 }

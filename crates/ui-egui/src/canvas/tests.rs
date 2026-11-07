@@ -9156,6 +9156,39 @@ fn the_artboard_tool_fades_the_pasteboard() {
     assert!(!fades(&mut app, &ctx), "the preference off");
 }
 
+/// Presentation Mode shows only the art: with the Artboard tool active and the fade on, it draws no
+/// fade, and the fade comes back when Presentation Mode ends.
+#[test]
+fn presentation_mode_draws_no_fade() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.run("view.presentation", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 3);
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert!(!fades(&mut app, &ctx), "Presentation Mode");
+    app.run("view.presentation", json!({})).unwrap();
+    assert!(fades(&mut app, &ctx), "after Presentation Mode");
+}
+
+/// A row of boards aligned at the top, each a different height, gives a number of parts that grows
+/// with the number of boards, not with its square, and the parts still add up to the uncovered area.
+#[test]
+fn outside_rects_of_a_row_of_boards_stay_few() {
+    let n = 200;
+    let boards: Vec<Rect> =
+        (0..n).map(|i| Rect::new(20.0 * f64::from(i) + 10.0, 10.0, 20.0 * f64::from(i) + 20.0, 20.0 + 10.0 * f64::from(i))).collect();
+    let bounds = Rect::new(0.0, 0.0, 20.0 * f64::from(n) + 10.0, 10.0 * f64::from(n) + 40.0);
+    let parts = outside_rects(bounds, &boards);
+    assert!(parts.len() <= 3 * n as usize, "{} parts for {n} boards", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let covered: f64 = boards.iter().map(area).sum();
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - covered);
+}
+
 /// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
 /// the art, over a point of an object outside the artboard and not over a point of an object on it,
 /// in an upright view and in a rotated one.
