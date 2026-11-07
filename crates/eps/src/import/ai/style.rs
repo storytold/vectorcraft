@@ -42,7 +42,7 @@
 //! `StrokeOffsetInside` (1: inside, 0: outside, as its `DisplayString` names it) as entries.
 //!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
+//! with a pattern or gradient too; strokes with a gradient, a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
 //! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
@@ -220,6 +220,8 @@ pub(super) enum StyleItem {
         profile: Option<WidthProfile>,
         /// Which side of the path it paints (centred, or inside or outside a closed path).
         align: StrokeAlign,
+        /// A gradient swatch it paints with instead of `paint`, placed as its drawn look has it.
+        gradient: Option<String>,
         /// A brush: its name, and its settings for this object.
         brush: Option<(String, PathBrush)>,
     },
@@ -1151,20 +1153,25 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
     if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) {
         return Err(());
     }
-    match &f.stroke {
-        Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
-            paint: p.clone(),
-            width: f.width,
-            cap: f.cap,
-            join: f.join,
-            miter: f.miter,
-            dash: f.dash.clone(),
-            profile: width_profile(&f.arrays),
-            align,
-            brush: None,
-        })),
-        _ => Err(()),
-    }
+    // A gradient stroke names its swatch; where it lies is the drawn look's (`read::ops`' `styled`).
+    let (paint, gradient) = match (&f.stroke, &f.gradient_of) {
+        _ if f.pattern.is_some() => return Err(()),
+        (_, Some((Some(name), _))) if f.gradient => (Paint::None, Some(name.clone())),
+        (Some(p), _) if !f.gradient => (p.clone(), None),
+        _ => return Err(()),
+    };
+    Ok(Some(StyleItem::Stroke {
+        paint,
+        width: f.width,
+        cap: f.cap,
+        join: f.join,
+        miter: f.miter,
+        dash: f.dash.clone(),
+        profile: width_profile(&f.arrays),
+        align,
+        gradient,
+        brush: None,
+    }))
 }
 
 /// A Stroke Offset filter `f`: a stroke whose own style is in its dictionary, aligned inside its
@@ -1203,6 +1210,7 @@ fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
+        gradient: None,
         brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
     })
 }
@@ -1282,6 +1290,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
+        gradient: None,
         brush: Some((name.clone(), PathBrush::Art)),
     })
 }

@@ -983,7 +983,7 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
         || object.children().into_iter().flatten().any(|c| strokes(c, 1));
-    !st.items.iter().any(|i| matches!(i, StyleItem::Gradient { .. }))
+    !st.items.iter().any(|i| matches!(i, StyleItem::Gradient { .. } | StyleItem::Stroke { gradient: Some(_), .. }))
         && outlines_only(object)
         && object.children().into_iter().flatten().all(|c| moves_alike(c, 1))
         && st.effects.iter().all(|e| match e.id.as_str() {
@@ -1081,7 +1081,21 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         return None;
                     }
                 }
-                stroke_layer(item)?
+                let mut layer = stroke_layer(item)?;
+                // A gradient stroke paints its swatch where the drawn look has it, when no other
+                // gradient of the style is that swatch (which placement is whose isn't known).
+                if let (StyleItem::Stroke { gradient: Some(name), .. }, AppearanceItem::Stroke(s)) = (item, &mut layer) {
+                    let shared = st.items.iter().filter(|i| match i {
+                        StyleItem::Gradient { name: other, .. } => other.as_ref() == Some(name),
+                        StyleItem::Stroke { gradient: other, .. } => other.as_ref() == Some(name),
+                        _ => false,
+                    });
+                    if shared.count() != 1 {
+                        return None;
+                    }
+                    s.paint = placed.get(paints.names.get(Global::Gradient, name))?.clone();
+                }
+                layer
             }
         };
         if let Some(look) = st.looks.get(n) {
@@ -1110,6 +1124,8 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
             StyleItem::Stroke { brush: Some(_), .. } => return None,
+            // A gradient stroke is placed on each object as its drawn look has it.
+            StyleItem::Stroke { gradient: Some(_), .. } => return None,
             StyleItem::Stroke { .. } => stroke_layer(item)?,
             StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
         };
@@ -1123,7 +1139,7 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
 
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush } = item else { return None };
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush, .. } = item else { return None };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
     (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile, layer.align) = (*cap, *join, *miter, dash.clone(), profile.clone(), *align);
     layer.brush = brush.as_ref().map(|(name, _)| name.clone());
