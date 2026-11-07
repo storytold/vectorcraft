@@ -71,6 +71,48 @@ fn define_grid_opens_on_the_grid_and_applies_its_fields() {
     assert_eq!(kind(&app), Some(super::perspective_grid::KIND));
 }
 
+/// A three-digit code pasted or typed into a Define Grid color field sets that grid color.
+#[test]
+fn define_grid_takes_a_three_digit_color() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // One frame of the dialog layer: every text drawn, with its center.
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
+        texts
+    };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    for (how, input) in [("pasted", egui::Event::Paste("0f0".into())), ("typed", egui::Event::Text("0f0".into()))] {
+        app.run("ui.perspectiveGridDialog", json!({})).unwrap();
+        set(&mut app, "leftColor", json!("#123456"));
+        for _ in 0..3 {
+            frame(&mut app, vec![]);
+        }
+        let texts = frame(&mut app, vec![]);
+        let at = texts.iter().find(|(t, _)| t == "123456").unwrap_or_else(|| panic!("no Left Grid field in {texts:?}")).1;
+        frame(&mut app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+        frame(&mut app, vec![button(at, false)]);
+        frame(&mut app, vec![]);
+        frame(&mut app, vec![input]);
+        frame(&mut app, vec![enter.clone()]);
+        assert_eq!(kind(&app), None, "{how}: Enter closes the dialog");
+        assert_eq!(grid(&app).left_color.hex(), "#00ff00", "{how}: the grid takes the color");
+    }
+}
+
 #[test]
 fn define_grid_is_a_view_menu_item() {
     let app = app();
