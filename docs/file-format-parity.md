@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Paste: cells copied from a spreadsheet paste as a table of point type over gridlines, #5296; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (legacy `.ai` export: a flattened transparent image's clip follows its edge smoothly, #5264; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -90,7 +90,7 @@ private editing data. VectorCraft:
   the options dialog's artboard picker (thumbnails to check, default all) is a file of its own,
   `{name}-{artboard}.ai` when there are several. It has no transparency: objects are written opaque, and images
   with see-through pixels, opacity or a blending mode are flattened (an opaque image of themselves and the art
-  under them, clipped to where they show; that art stays) or omitted (Transparent Images,
+  under them, clipped to where they show, along a smooth outline traced at the image's own resolution; that art stays) or omitted (Transparent Images,
   `transparentImages: "flatten"|"omit"`). Type is written as editable text objects (point type, area type and type
   on a path, with their fonts' PostScript names, sizes, colours, alignment, indents, leading, tracking and
   scaling), which the reading app sets in those fonts; characters outside Windows-1252, vertical type, ruby, inline
@@ -193,6 +193,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Legacy `.ai` (version 7) export: the clipping path around a flattened transparent image followed 2 pt cells, a staircase that was visibly jagged at the image's resolution. It now follows the image's own pixels (in blocks only past 4 million pixels), grown by one pixel so the whole anti-aliased edge is inside, and runs through the middle of each pixel edge with Douglas–Peucker simplification, so slopes and curves are sloped lines instead of steps (#5264). Version 7 images have no alpha channel (§8.1 of the published format specification), so the image itself is still opaque. Test `legacy_ai::a_flattened_images_clip_follows_its_edge_smoothly` (crate `vectorcraft-engine`); scores unchanged |
 | 2026-11-06 | minor | Paste: cells copied from Excel, Google Sheets, LibreOffice Calc or Numbers (tab-separated text, quoted cells too) paste as a group of point type, one object per cell in columns and rows, over 0.5 pt gridlines; other text pastes as before; scores and estimates unchanged (#5296) |
 | 2026-11-06 | minor | SVG import: filter and mask regions clip (SVG 1.1 §15.5, §14.4). An object whose imported blur, shadow or glow reaches past its filter's region comes in inside a clip group cut to the region (#5876), and a mask's art is cut to the mask's region, in user space or the object's bounding box (#5875). Objects that fit their regions, and our own exports, are unchanged; primitive subregions are still ignored. Tests `import_live::a_blur_is_cut_at_its_filter_region`, `import_live::a_mask_counts_only_inside_its_region` (crate `vectorcraft-svg`); scores unchanged |
 | 2026-11-06 | minor | SVG import: a Gaussian blur keeps the colour space its filter asks for with `color-interpolation-filters` (initially `linearRGB`, SVG 1.1 §15.7.6): a linear-light blur becomes Gaussian Blur with the new `linear` parameter, which blurs the colours in linear light (black beside white meets at about 188/255 instead of 128), and SVG export writes it back on the `feGaussianBlur` (#5877). Blurs that ask for sRGB, and the blurs our own export writes, are as before. CSS export still writes `blur()`. Tests `pixel::tests::linear_light_blur_mixes_light_not_values` (crate `vectorcraft-effects`), `import_live::a_gaussian_blur_keeps_its_colour_space` (crate `vectorcraft-svg`); scores unchanged |
