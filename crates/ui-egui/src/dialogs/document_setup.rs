@@ -129,9 +129,9 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             let hex = colors.get(i).map_or("", |h| h.trim_start_matches('#'));
             let (chip, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
             if let Some(c) = vectorcraft_color::Color::from_hex(hex) {
-                ui.painter().rect_filled(chip, 2.0, crate::panels::c32(&c));
+                ui.painter().rect_filled(chip, t.cr_small(), crate::panels::c32(&c));
             }
-            ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+            ui.painter().rect_stroke(chip, t.cr_small(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
             let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
             if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
                 let mut v = colors.clone();

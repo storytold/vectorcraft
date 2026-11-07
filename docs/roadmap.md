@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (one corner scale and 24 pt fields (#3915); Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -198,6 +198,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 | 2026-10-25 | minor | M10/G1: a selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); estimates unchanged |
 | 2026-10-24 | minor | Docs catch-up: Current focus's three G11 lines merged into one (#864 and #885 remain; #937, #983/#1037 and #834 fixed) and its two stale G2 lines (filters left, the Effect Gallery to build) removed; G2 stays the gallery's thumbnails and in-dialog preview, 1–2 h. Estimates unchanged. |
 | 2026-10-24 | minor | M10/G5: brush libraries (Window › Brush Libraries, the Brushes panel's Brush Libraries Menu, four generated libraries, Save Brushes, Other Library…); estimates unchanged |
+| 2026-10-23 | minor | Shared editable fields and spinner/preset groups are square where their parts meet, take the colour scheme's control corners at their ends, and match the standard 24 pt control height throughout the interface; Opacity shares one border with its popup arrow; scores and estimates unchanged. |
 | 2026-10-23 | minor | M10/G5: symbol libraries (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu, Save Symbols, Other Library…); estimates unchanged |
 | 2026-10-23 | minor | M2/G1: a double-click on the Line Segment, Arc, Rectangular Grid or Polar Grid tool opens its Tool Options (#2691, in part); estimates unchanged |
 | 2026-10-23 | minor | G12 and M14: General › Constrain Angle acts for the arrow keys, Shift drags and new objects (#394); estimates unchanged |

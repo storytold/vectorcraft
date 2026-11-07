@@ -378,7 +378,7 @@ pub(super) fn current_section(d: &Dialog, sections: &[&'static str]) -> &'static
 /// The frame of the section list column, at least as tall as the section content.
 pub(super) fn section_frame(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     let t = Tokens::get(ui.ctx());
-    egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+    egui::Frame::NONE.fill(t.panel_darker).corner_radius(t.cr()).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
         ui.set_width(LIST_WIDTH);
         ui.set_min_height(380.0);
         ui.vertical(add);
