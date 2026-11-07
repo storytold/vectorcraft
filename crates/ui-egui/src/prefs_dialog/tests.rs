@@ -976,6 +976,74 @@ fn preference_inputs_expose_their_visible_labels() {
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Keyboard Increment:");
 }
 
+/// Render the real category without the dialog's scroll viewport clipping later rows.
+fn preference_category_harness(category: &'static str) -> egui_kittest::Harness<'static, (VectorcraftApp, Dialog)> {
+    let mut app = app();
+    app.services.pick_folder = Some(Box::new(|| None));
+    open(&mut app, Some(category));
+    let dialog = app.ui.dialog.take().unwrap();
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 1400.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, (app, dialog): &mut (VectorcraftApp, Dialog)| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            category_fields(ui, app, dialog, category);
+        },
+        (app, dialog),
+    );
+    h.run_steps(3);
+    h
+}
+
+#[test]
+fn preference_colour_well_exposes_its_row_label_and_value() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = preference_category_harness("Guides & Grid");
+    let expected = format!("{}ff", h.state().1.str("patternTileEdgeColor").to_lowercase());
+    let colour = h.get_by_role_and_label(egui::accesskit::Role::ColorWell, "Tile Edge Color:");
+    assert_eq!(colour.accesskit_node().value().as_deref(), Some(expected.as_str()));
+}
+
+#[test]
+fn preference_scale_labels_both_controls_across_focus_changes() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut h = preference_category_harness("User Interface");
+    let expected = h.state().1.f64("uiScaling", 1.0);
+    for focus in [None, Some(Role::SpinButton), Some(Role::Slider)] {
+        if let Some(role) = focus {
+            h.get_by_role_and_label(role, "Scale:").focus();
+            h.run_steps(3);
+            assert!(h.get_by_role_and_label(role, "Scale:").accesskit_node().is_focused());
+        }
+        for role in [Role::Slider, Role::SpinButton] {
+            let control = h.get_by_role_and_label(role, "Scale:");
+            assert_eq!(control.accesskit_node().numeric_value(), Some(expected));
+        }
+    }
+}
+
+#[test]
+fn preference_anchor_slider_exposes_its_row_label_and_value() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let h = preference_category_harness("Selection & Anchor Display");
+    let slider = h.get_by_role_and_label(Role::Slider, "Size:");
+    assert_eq!(slider.accesskit_node().numeric_value(), Some(h.state().1.f64("anchorSize", 3.0)));
+}
+
+#[test]
+fn preference_folder_label_preserves_the_choose_action_name() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable;
+    let h = preference_category_harness("File Handling");
+    let _ = h.get_by_role_and_label(Role::TextInput, "Folder:");
+    let _ = h.get_by_role_and_label(Role::Button, "Choose…");
+    assert!(h.query_by_role_and_label(Role::Button, "Folder:").is_none());
+}
+
 /// Under automation roots, OK refuses a typed folder outside them before it looks at the folder.
 #[test]
 fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it() {
