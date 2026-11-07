@@ -3,7 +3,7 @@
 //! commands of the Edit menu (Find and Replace, Find Next, Paste without Formatting).
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Document, Justify, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, Document, Justify, LockedArtboards, Node, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::typecmd::refresh_bounds;
@@ -650,15 +650,24 @@ pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bo
     out
 }
 
+/// The text objects Find and Replace and Find Next reach: on visible, unlocked layers, and not
+/// inside a hidden or locked group, which hides or locks what it holds as a layer does (#5900).
 fn all_texts(d: &Document) -> Vec<NodeId> {
+    fn visit(n: &Node, locks: &LockedArtboards<'_>, v: &mut Vec<NodeId>) {
+        if !n.visible || n.locked {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Text(_)) && !locks.holds_id(n.id) {
+            v.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            visit(c, locks, v);
+        }
+    }
     let mut v = vec![];
     let locks = d.locked_artboards();
-    for l in d.layers.iter().filter(|l| l.visible && !l.locked) {
-        l.walk(&mut |n| {
-            if matches!(n.kind, NodeKind::Text(_)) && n.visible && !n.locked && !locks.holds_id(n.id) {
-                v.push(n.id);
-            }
-        });
+    for l in &d.layers {
+        visit(l, &locks, &mut v);
     }
     v
 }
