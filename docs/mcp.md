@@ -3872,6 +3872,12 @@ first; no spaces), stored back as the object name.
 `typeSizeIncrement`, `baselineShiftIncrement`) with `measure: "general"|"type"`; they are kept in points and also take
 a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `Centimeters`, `Pixels`, `Feet & Inches`,
 `Meters`, `Yards`, `Feet` (the preferences use `points`, `picas`, … `feetInches`, `meters`, `yards`, `feet`).
+`edit.preferences {category?}` opens the Preferences dialog (`preferences`) with its search field focused. Its
+`__search` field (`ui.dialog.set`) holds the search text: while it has text, the category list is replaced by the
+settings whose label, section or category contains it, ignoring case, in the interface language or in English, or by
+"No settings found". Choosing a setting sets `__category` to its category, sets `__found` to its key (the row is
+highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F focuses the field again; Escape in the
+field with text clears it, and Escape in the empty field closes the dialog.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}

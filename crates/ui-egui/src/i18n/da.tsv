@@ -3403,6 +3403,8 @@ theme	Appearance	Udseende
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
+	Search Preferences	Søg i præferencer
+	No settings found	Ingen indstillinger fundet
 	Scale Corners	Skalér hjørner
 	Scale Cursor Proportional to UI	Skalér markør proportionalt med brugergrænsefladen
 	Scale Strokes & Effects	Skalér konturer & effekter
