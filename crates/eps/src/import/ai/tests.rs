@@ -5863,6 +5863,13 @@ fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
     let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(3.0)))));
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A Zig Zag of no size on an open path through the corners of its look's square, joined
+    // across it: the vertices match, the segments between them don't, so the drawn look stays.
+    let flat = "0 /Real (amount) ,\n1 /Real (absoluteness) ,\n0 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let bowtie = "%_20 20 m\n%_60 50 L\n%_60 20 L\n%_20 50 L\n%_F\n";
+    let crossed = format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{}f\nU\n{bowtie}1 (Bent) XW\n", rect_path(20.0, 20.0, 60.0, 50.0));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", flat, BLUE_FILL), layer(&crossed)));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// The gradient `G`, white to black, defined for a document.

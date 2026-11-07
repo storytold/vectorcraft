@@ -1164,12 +1164,24 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
         }
         (!over && !out.is_empty()).then_some(out)
     }
-    /// Does every end of segments `a` lie within the tolerance of segments `b`? Both ends: the last
-    /// point of an open outline starts no segment.
+    /// Does every point of segments `a` lie within the tolerance of segments `b`? Each segment is
+    /// checked at both ends (the last point of an open outline starts no segment) and at points
+    /// at most the tolerance apart between them (two outlines can share their vertices and join
+    /// them differently). `false` past [`MAX_OUTLINE_PAIRS`] points compared.
     fn near(a: &[kurbo::Line], b: &[kurbo::Line]) -> bool {
-        use kurbo::ParamCurveNearest;
+        use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
         let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE);
-        a.iter().all(|s| close(s.p0) && close(s.p1))
+        let mut budget = MAX_OUTLINE_PAIRS;
+        for s in a {
+            let steps = (s.arclen(1e-6) / OUTLINE_TOLERANCE).ceil();
+            let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
+            let Some(left) = budget.checked_sub(steps.saturating_add(1).saturating_mul(b.len())) else { return false };
+            budget = left;
+            if !(0..=steps).all(|k| close(s.eval(k as f64 / steps as f64))) {
+                return false;
+            }
+        }
+        true
     }
     let (mut ours, mut theirs) = (vec![], vec![]);
     if !matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !leaves(object, &mut ours, 0) || !leaves(look, &mut theirs, 0) {
