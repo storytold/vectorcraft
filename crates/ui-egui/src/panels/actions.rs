@@ -236,17 +236,43 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
         return Err("an action is already playing".into());
     }
     let options = app.ui.action_playback;
-    if options.speed == PlaybackSpeed::Accelerated && !has_stop(&commands) {
+    if has_stop(&commands) {
+        return play_with_stops(app, a.name, commands, options);
+    }
+    if options.speed == PlaybackSpeed::Accelerated {
         return app.run("command.batch", json!({"label": a.name, "commands": commands}));
     }
     let mut steps: std::collections::VecDeque<Value> = commands.into();
+    let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
+    let result = play_step(app, &a.name, first)?;
+    let pending = steps.len();
+    if pending > 0 {
+        let hold = options.speed == PlaybackSpeed::Step;
+        let doc = active_doc(app);
+        let played_in = app.tick_iteration.filter(|&t| t == app.host_iteration);
+        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold, doc, played_in, stop: None });
+        if let Some(ctx) = &app.ui_ctx {
+            ctx.request_repaint();
+        }
+    }
+    Ok(json!({"results": [result], "pending": pending}))
+}
+
+/// Runs one step of a paced playback as its own undo step, named `label` → the step's result.
+fn play_step(app: &mut VectorcraftApp, label: &str, step: Value) -> Result<Value, String> {
+    let r = app.run("command.batch", json!({"label": label, "commands": [step]}))?;
+    Ok(r.get("results").and_then(|r| r.get(0)).cloned().unwrap_or(Value::Null))
+}
+
+/// [`play`] for an action with a stop: runs what comes before the first stop, or at Step by Step and
+/// Pause For the first step, and leaves the rest to [`tick_playback`] and [`continue_playback`].
+fn play_with_stops(app: &mut VectorcraftApp, label: String, commands: Vec<Value>, options: PlaybackOptions) -> Result<Value, String> {
+    let mut steps: std::collections::VecDeque<Value> = commands.into();
     let run = next_run(&mut steps, options.speed);
     let ran = !run.is_empty();
-    let results = if ran { play_steps(app, &a.name, run)? } else { vec![] };
-    if !steps.is_empty() {
-        app.ui.action_playing = Some(Playing { label: a.name, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
-        after_run(app, ran);
-    }
+    let results = if ran { play_steps(app, &label, run)? } else { vec![] };
+    app.ui.action_playing = Some(Playing { label, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
+    after_run(app, ran);
     Ok(playback_result(app, results))
 }
 
@@ -516,7 +542,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     if playing.steps.is_empty() {
         app.ui.action_playing = None;
     }
-    if let Err(e) = play_steps(app, &label, vec![step]) {
+    if let Err(e) = play_step(app, &label, step) {
         app.ui.action_playing = None;
         app.status(e);
         return None;
@@ -1454,6 +1480,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
     widgets::divider(ui);
+    if waiting_at_stop(app) {
+        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
+    }
     // Bottom bar: stop, record, play, new set, new action, delete.
     ui.horizontal(|ui| {
         let recording = app.ui.recording.is_some();
@@ -1500,9 +1529,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.status(e);
     }
     let _ = icons::exists;
-    if waiting_at_stop(app) {
-        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
-    }
     if app.ui.action_sets.is_empty() {
         dim_label(ui, tl!("No actions. Press ● to record."));
     }
