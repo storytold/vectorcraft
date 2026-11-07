@@ -4207,8 +4207,8 @@ Artboard Options' Global checkboxes are application preferences, not artboard pr
 (`prefs.set {values: {fadeRegionOutsideArtboard: false}}`; also Edit › Preferences › General › Artboard Options). With
 the first on, the canvas draws everything outside the artboards darker while the Artboard tool is active, the pasteboard
 and the art on it: each color channel at 60% of its value, VectorCraft's own amount. With the second off, that area
-draws as usual while the Artboard tool moves or resizes an artboard and darker again when the drag ends. Exports and print do not change. The
-user guide describes both checkboxes under Artboard options
+draws as usual while the Artboard tool moves or resizes an artboard and darker again when the drag ends. Presentation
+Mode, exports and print do not change. The user guide describes both checkboxes under Artboard options
 (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf).
 
 ```json
