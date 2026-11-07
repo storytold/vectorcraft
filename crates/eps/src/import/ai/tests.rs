@@ -5161,10 +5161,15 @@ fn editing_data_past_the_limit_is_refused() {
 fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
     let frame = zstd(b" ");
     let frames = |n: usize| -> Vec<u8> { [&b"%AI24_ZStandard_Data"[..], &frame.repeat(n), &[0; 64]].concat() };
-    let started = std::time::Instant::now();
-    assert_eq!(decode_private(&frames(4000)).unwrap().len(), 4000);
-    assert!(decode_private(&frames(50_000)).unwrap_err().contains("Zstandard"));
-    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+    let (few, many) = (frames(4000), frames(50_000));
+    let before = padding_looks();
+    assert_eq!(decode_private(&few).unwrap().len(), 4000);
+    assert!(decode_private(&many).unwrap_err().contains("Zstandard"));
+    // The first byte of each of the 4,000 frames and of the 4,097 read before the cap, and the
+    // 64 zeros of padding once: looking past the frames to the padding before each frame would
+    // look at 64 or more bytes per frame.
+    let looked = padding_looks() - before;
+    assert!(looked <= 2 * (4000 + 4097 + 64), "looked at {looked} bytes for padding");
 }
 
 /// A Zstandard frame that ends in a zero byte keeps it: only the zeros after the last frame are
