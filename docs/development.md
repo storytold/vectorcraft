@@ -130,6 +130,18 @@ The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On 
 - **Pen pressure under X11 and XWayland (#764):** winit 0.30 hands a pen to an X11 window as a mouse, without its pressure. When the window is on X11, XWayland included, the desktop app opens a second X connection (x11rb's `RustConnection`) and reads XInput2 raw events for every device (`apps/vectorcraft/src/tablet.rs`, from PhotoCraft's `crates/tablet`). A device with an `Abs Pressure` valuator is a pen, unless its XInput type is `TOUCHPAD` or `TOUCHSCREEN`. While a pen is the pointer that moved last, its pressure, scaled from the valuator's range to 0..1, reaches the tools that use pressure: the Paintbrush's pressure-sensitive brushes and the Liquify tools' Use Pressure Pen. The reader also reads `Abs Tilt X` and `Abs Tilt Y` (from a pen that has both) in degrees, scaled to ±60° when the valuator's range does not fit in ±90, and `Abs Rotary Z` (an Art Pen's barrel rotation) as a turn with the middle of the range at 0°; the Paintbrush records them for brushes with Tilt, Bearing and Rotation variation. A pen device whose name or XInput type contains `eraser` (in any case) is the pen's eraser end: while the pointer is over the window, the canvas selects the Eraser tool when the eraser end moves, and it selects the tool used before when the tip moves again (`crates/ui-egui/src/stylus.rs`). The X server needs XInput 2.1 or later; otherwise the log has a `tablet pressure:` warning with the reason, and the pen draws at full pressure.
 - **Pen tilt and rotation on macOS (#764):** with each tablet event's pressure (#852), `apps/vectorcraft/src/mac_tablet.rs` reads its `tilt`, −1..1 on each axis, scaled to ±60° with each axis keeping AppKit's sign (x positive to the right, y positive towards the bottom and the user), and its `rotation`, negated to run clockwise. Until a pen reports a tilt or a rotation other than 0 after it comes near the tablet, that value reads as none, since a pen without one reports 0. The Paintbrush records them as it does under X11.
 
+### NixOS: `nix develop`
+
+NixOS has no `/usr/lib`, so nothing is on `LD_LIBRARY_PATH` and a plain `cargo run` finds none of the libraries the app loads at run time: the Wayland ones winit opens the window through, the EGL loader wgpu renders through, and libdbus-1, which rfd's file dialogs reach xdg-desktop-portal through (a dialog then never appears and the pick returns no path).
+
+```
+ERROR vectorcraft: winit EventLoopError: ... The wayland library could not be loaded
+ERROR eframe::native::run: Exiting because of error: WGPU error: Failed to create surface for any enabled backend: {}
+ERROR rfd::backend::xdg_desktop_portal::portal::libdbus: Can't connect to a portal: libdbus-1.so not found
+```
+
+`nix develop` (the [`flake.nix`](../flake.nix) in the repository root) puts the Wayland, X11, EGL-loader and D-Bus libraries on `LD_LIBRARY_PATH`, so `cargo run --release -p vectorcraft` works from that shell as on any other distribution, file dialogs included, and the XWayland run above works too. `nix run` builds the app and wraps the binary the same way. The Mesa drivers stay the system's, from `/run/opengl-driver` (`hardware.graphics.enable`): that is the driver stack the compositor runs on, and wgpu picks the GL backend through it. The shell deliberately brings no Rust toolchain — the one on `PATH` keeps its build cache, where a second `rustc` would make every build recompile the workspace from scratch; `nix develop .#rust` is there for a machine with no Rust at all.
+
 ## Fonts: craft-fonts (optional build input)
 
 Font files are never committed to this repository. Fonts shared by the Crafting Apps live in
