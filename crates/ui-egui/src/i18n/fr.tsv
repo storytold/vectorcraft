@@ -4838,6 +4838,8 @@ axis	Both	Les deux
 effect	Soft	Doux
 	Edge	Bord
 	System Title Bar	Barre de titre du système
+	VectorCraft Title Bar on Every Desktop	Barre de titre de VectorCraft sur tous les bureaux
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Tant qu’elle est définie, la variable d’environnement VECTORCRAFT_TITLEBAR choisit la barre de titre.
 	Value Axis	Axe des valeurs
 	On Left Side	À gauche
 	On Right Side	À droite

@@ -157,6 +157,10 @@ pub struct Prefs {
     /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
     /// Read when the app starts. macOS always uses the system's.
     pub system_title_bar: bool,
+    /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
+    /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` take precedence over it.
+    pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -433,6 +437,7 @@ impl Default for Prefs {
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
             system_title_bar: false,
+            app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),

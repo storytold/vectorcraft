@@ -4842,6 +4842,8 @@ effect	Horizontal	가로
 effect	Vertical	세로
 	Edge	가장자리
 	System Title Bar	시스템 제목 표시줄
+	VectorCraft Title Bar on Every Desktop	모든 데스크톱에서 VectorCraft 제목 표시줄
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	환경 변수 VECTORCRAFT_TITLEBAR가 설정되어 있는 동안에는 이 변수가 제목 표시줄을 정합니다.
 	Value Axis	값 축
 	On Left Side	왼쪽
 	On Right Side	오른쪽

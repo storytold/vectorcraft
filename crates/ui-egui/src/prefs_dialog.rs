@@ -19,6 +19,10 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__taskBar", "General", "Enable Contextual Task Bar"),
 ];
 
+/// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
+/// BSDs, where the desktop may draw the window's frame. macOS and Windows never read it.
+const APP_TITLE_BAR_SHOWN: bool = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+
 pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     // One field per preference key or group (the flattener presets have commands of their own).
     let mut fields: Map<String, Value> = app.session.prefs.to_json().as_object().cloned().unwrap_or_default();
@@ -32,6 +36,9 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
+    // Read-only: whether VECTORCRAFT_TITLEBAR chose this window's frame (VectorCraft Title Bar on
+    // Every Desktop's note).
+    fields.insert("__titlebarFromEnv".into(), json!(app.titlebar_from_env));
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
 }
 
@@ -297,8 +304,25 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             PrefKind::Bool if sp.key == "systemTitleBar" => {
                 if cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) {
                     bool_row(ui, d, sp.key, sp.label);
-                    // The window's decorations are chosen once, when the app starts.
-                    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    // The window's decorations are chosen once, when the app starts. On Linux and the
+                    // BSDs the note goes under the next row, which also applies at the next start.
+                    if !APP_TITLE_BAR_SHOWN {
+                        ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
+                    }
+                }
+            }
+            // Linux and the BSDs only, where the desktop may draw the frame: dimmed while System
+            // Title Bar is on or VECTORCRAFT_TITLEBAR is set, which take precedence over it.
+            PrefKind::Bool if sp.key == "appTitleBar" => {
+                if APP_TITLE_BAR_SHOWN {
+                    let from_env = d.bool("__titlebarFromEnv");
+                    ui.add_enabled_ui(!from_env && !d.bool("systemTitleBar"), |ui| bool_row(ui, d, sp.key, sp.label));
+                    let note = if from_env {
+                        tl!("The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.")
+                    } else {
+                        tl!("Applies the next time VectorCraft starts.")
+                    };
+                    ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
