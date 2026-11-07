@@ -1441,6 +1441,7 @@ digits	Malayalam	マラヤーラム数字
 	Duplicate Artboard	アートボードを複製
 	Copy Artboard	アートボードをコピー
 	Cut Artboard	アートボードをカット
+	Rename Artboards	アートボード名を変更
 	Duplicate Artboards	アートボードを複製
 	Duplicate Brush	ブラシを複製
 	Duplicate Character Style	文字スタイルを複製
@@ -2619,6 +2620,9 @@ mark-style	Japanese	日本式
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
 	Rearrange All Artboards	すべてのアートボードを再配置
+	Rearrange	再配置
+	Select All Artboards	すべてのアートボードを選択
+	Switch Orientation	方向を切り替え
 	Rearrange All	すべて再配置
 	Layout Order:	レイアウト順序:
 	Change to Left-to-Right Layout	左から右のレイアウトに変更
@@ -3090,7 +3094,9 @@ mark-style	Japanese	日本式
 	Strikethrough	打ち消し線
 	Stroke Options	線オプション
 	Character:	文字:
+	Paragraph:	段落:
 	Character options	文字オプション
+	Paragraph options	段落オプション
 	Stroke options	線オプション
 	Transform options	変形オプション
 	Stroke:	線:
@@ -4151,6 +4157,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such anchor	指定されたアンカーポイントが見つかりません
 @msg	no such segment	指定されたセグメントが見つかりません
 @msg	no such spine point	指定されたスパインポイントが見つかりません
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` には最大 10000 個のスパインポイントのインデックスのリストを指定してください
+@msg	`with` moves points, not a handle	`with` はポイントを移動します。ハンドルには使えません
 @msg	no such spine segment	指定されたスパインセグメントが見つかりません
 @msg	no such subpath	指定されたサブパスが見つかりません
 @msg	object {id} is not a path	オブジェクト {id} はパスではありません
@@ -4404,6 +4412,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	グラデーション「{name}」はファイル内で定義されていません: 代わりに単色を使用しています
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft がまだ読み込めないブラシ {_1} 個はブラシパネルに追加されませんでした
@@ -5784,6 +5796,9 @@ anchor	Points:	ポイント:
 	Find Nearest Swatch…	最も近いスウォッチを検索…
 	Find Nearest Swatch	最も近いスウォッチを検索
 	Apply Nearest Swatch	最も近いスウォッチを適用
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	塗りを線に適用
+	Apply Stroke to Fill	線を塗りに適用
 	Select objects to find the swatches nearest their colors.	カラーに最も近いスウォッチを探すオブジェクトを選択してください。
 @msg	select objects or give `color`	オブジェクトを選択するか `color` を指定してください
 @msg	`color` is not a colour	`color` はカラーではありません
@@ -6049,3 +6064,30 @@ breakText	Glyphs	字形
 	Even-Numbered Anchors	偶数番目のアンカー
 	Minimum angle	最小角度
 	Maximum angle	最大角度
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	リンク済みを選択
+	Select Embedded	埋め込みを選択
+	Select Missing	見つからない画像を選択
+	Select Modified	変更された画像を選択
+	Select by Link Status	リンクの状態で選択
+	Select by Link Status…	リンクの状態で選択…
+	Search images	画像を検索
+	No images match.	一致する画像はありません。
+@msgplural	Selected {n} linked image|Selected {n} linked images	リンク済みの画像を {n} 個選択しました
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	埋め込み画像を {n} 個選択しました
+@msgplural	Selected {n} missing image|Selected {n} missing images	見つからない画像を {n} 個選択しました
+@msgplural	Selected {n} modified image|Selected {n} modified images	変更された画像を {n} 個選択しました
+@msgplural	Selected {n} image|Selected {n} images	画像を {n} 個選択しました
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}。ほかに {n} 個が非表示またはロックされています
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}。ほかに {n} 個がテンプレートレイヤー上にあります
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}。ほかに {n} 個が分離したグループの外にあります
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}。ほかに {n} 個は今は選択できません
+
+# Compound Shapes add-on
+	Compound Shapes	複合シェイプ
+	Shape Mode Buttons Make Compound Shapes	シェイプモードボタンで複合シェイプを作成
+
+# 3D Box add-on
+	3D Box	3Dボックス
+	3D Box Tool	3Dボックスツール

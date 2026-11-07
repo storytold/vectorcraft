@@ -1,6 +1,6 @@
 use super::options::{AntiAlias, RenderOptions};
 use super::threads::single_threaded_context;
-use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, live};
+use super::{Affine, Arc, BezPath, Document, FillRule, HashMap, Ink, Node, Rect, RenderContext, StrokeLayer, SymbolBoxes, TextObject, kurbo, live};
 
 /// Hasher for pointer-keyed caches: a multiply-xorshift (SipHash showed up in frame profiles).
 #[derive(Default, Clone, Copy)]
@@ -51,10 +51,25 @@ pub(crate) struct StrokeEntry {
 /// The slices of a stroke whose gradient runs along or across it, each with its paint and bounds.
 pub(crate) type Slices = Arc<Vec<(BezPath, vectorcraft_color::Paint, Rect)>>;
 
-/// [`Slices`] cached for a stroke: (owning node, slices, last frame used).
+/// The key of cached [`Slices`]: ([`Renderer::stroke_owner`] of the stroke's object, stroke layer
+/// address, tolerance level).
+pub(crate) type SliceKey = (usize, usize, i32);
+
+/// What the [`SliceKey`] of the latest slices of an object's stroke is found under once the object
+/// has changed: (the object's id, the stroke's place in its appearance items, tolerance level).
+pub(crate) type MovedSliceKey = (u64, usize, i32);
+
+/// [`Slices`] cached for a stroke: (owning node, the node whose path and stroke the slices were
+/// made from, either the owning node or an earlier copy of it that the owning node is moved from,
+/// the slices, the offset they are drawn moved by, the fill rule they were made with, whether they
+/// were made along the path [`Node::stroke_path`] makes from that node, last frame used).
 pub(crate) struct SliceEntry {
     pub(crate) node: Arc<Node>,
+    pub(crate) made: Arc<Node>,
     pub(crate) slices: Slices,
+    pub(crate) by: kurbo::Vec2,
+    pub(crate) rule: FillRule,
+    pub(crate) own: bool,
     pub(crate) stamp: u64,
 }
 

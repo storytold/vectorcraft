@@ -151,6 +151,13 @@ pub struct VectorcraftApp {
     /// moves ([`native_menu::sync`]).
     run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
+    /// A `ui.pointer` request taken from the channel while synthetic input sent before it was not
+    /// yet applied: it runs, ahead of the channel, on the first frame after that input is applied.
+    deferred_control: Option<ControlRequest>,
+    /// When synthetic input was last dropped before a UI pass took it, the sequence number of the
+    /// next control request ([`ControlRequest::next_seq`]): a `ui.pointer` request made before it
+    /// came after that input and is answered with an error.
+    synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).

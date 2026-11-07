@@ -530,6 +530,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
     let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
     let contour = vectorcraft_tools::addons::contour::ID;
+    let box3d = vectorcraft_tools::addons::box3d::ID;
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
     assert_eq!(
         addon,
@@ -543,7 +544,8 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "sharedEdge",
             "smartPen",
             enclosing,
-            contour
+            contour,
+            box3d
         ]
     );
     for advanced in [false, true] {
@@ -559,7 +561,8 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
     assert_eq!(listed(enclosing), Some(("Enclosing Lasso", vec![enclosing])));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
-    for tool in ["extendPath", "smartPen", enclosing, contour] {
+    assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));
+    for tool in ["extendPath", "smartPen", enclosing, contour, box3d] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }

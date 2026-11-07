@@ -849,6 +849,7 @@ font-technology	Variable	可變
 	Duplicate Artboard	製作工作區域複本
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
+	Rename Artboards	重新命名工作區域
 	Duplicate Artboards	製作工作區域複本
 	Duplicate Brush	製作筆刷複本
 	Duplicate Character Style	製作字元樣式複本
@@ -2856,6 +2857,8 @@ file-filter	Templates	範本
 @msg	the blend has no spine	漸變物件沒有脊線
 @msg	the spine has no segments	脊線沒有線段
 @msg	no such spine point	沒有這個脊線點
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` 必須是最多 10000 個脊線點索引的清單
+@msg	`with` moves points, not a handle	`with` 移動的是點，不是控制把手
 @msg	no such spine segment	沒有這個脊線線段
 @msg	a key object sits on that point	該點上有關鍵物件
 @msg	a spine keeps at least two points	脊線至少要保留兩個點
@@ -3465,6 +3468,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
 	Rearrange All Artboards	重新排列所有工作區域
+	Rearrange	重新排列
+	Select All Artboards	選取所有工作區域
+	Switch Orientation	切換方向
 	Rearrange All	全部重新排列
 	Layout Order:	版面配置順序：
 	Change to Left-to-Right Layout	變更為由左至右版面配置
@@ -4185,7 +4191,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Patterns	圖樣
 	Stroke Options	筆畫選項
 	Character:	字元：
+	Paragraph:	段落：
 	Character options	字元選項
+	Paragraph options	段落選項
 	Stroke options	筆畫選項
 	Transform options	變形選項
 	Stroke Weight	筆畫寬度
@@ -4494,6 +4502,10 @@ digits	Malayalam	馬來亞拉姆數字
 	Update Changed Links	更新已變更的連結
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
+@msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串連文字區域已略過
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字物件內變更書寫方向的文字會依其第一個字元的方向開啟
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串連區域、繞圖文字或複合路徑中用作遮色片的文字不會剪裁
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	檔案中沒有預覽的連結圖片在找到其檔案之前顯示預留位置：請在「連結」面板中重新連結
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容納所顯示字體一行的區域文字已加高框架 ({_1})：否則文字不會顯示
 	Update Modified Links	更新已修改的連結
 	UPPERCASE	全部大寫
@@ -5737,6 +5749,9 @@ anchor	Points:	點：
 	Find Nearest Swatch…	尋找最接近的色票…
 	Find Nearest Swatch	尋找最接近的色票
 	Apply Nearest Swatch	套用最接近的色票
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	將填色套用至筆畫
+	Apply Stroke to Fill	將筆畫套用至填色
 	Select objects to find the swatches nearest their colors.	選取物件以尋找與其顏色最接近的色票。
 @msg	select objects or give `color`	請選取物件或提供 `color`
 @msg	`color` is not a colour	`color` 不是顏色
@@ -6002,3 +6017,30 @@ breakText	Glyphs	字符
 	Even-Numbered Anchors	偶數錨點
 	Minimum angle	最小角度
 	Maximum angle	最大角度
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	選取已連結
+	Select Embedded	選取已內嵌
+	Select Missing	選取遺失
+	Select Modified	選取已修改
+	Select by Link Status	依連結狀態選取
+	Select by Link Status…	依連結狀態選取…
+	Search images	搜尋影像
+	No images match.	沒有符合的影像。
+@msgplural	Selected {n} linked image|Selected {n} linked images	已選取 {n} 個已連結的影像
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	已選取 {n} 個已內嵌的影像
+@msgplural	Selected {n} missing image|Selected {n} missing images	已選取 {n} 個遺失的影像
+@msgplural	Selected {n} modified image|Selected {n} modified images	已選取 {n} 個已修改的影像
+@msgplural	Selected {n} image|Selected {n} images	已選取 {n} 個影像
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}；另有 {n} 個已隱藏或鎖定
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}；另有 {n} 個位於範本圖層上
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}；另有 {n} 個位於隔離的群組之外
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}；另有 {n} 個現在無法選取
+
+# Compound Shapes add-on
+	Compound Shapes	複合形狀
+	Shape Mode Buttons Make Compound Shapes	形狀模式按鈕製作複合形狀
+
+# 3D Box add-on
+	3D Box	3D 盒子
+	3D Box Tool	3D 盒子工具

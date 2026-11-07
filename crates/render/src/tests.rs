@@ -30,6 +30,7 @@ mod placed_document;
 mod rasterize;
 mod setup;
 mod strokegradient;
+mod thincoverage;
 mod tileedge;
 mod viewraster;
 mod widthzoom;

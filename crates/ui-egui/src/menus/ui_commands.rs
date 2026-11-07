@@ -524,6 +524,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
+        "window.pathfinder.compoundShapes",
+        "Shape Mode Buttons Make Compound Shapes",
+        "",
+        "{} toggles the Compound Shapes add-on's setting: on, the Pathfinder panel's Shape Mode buttons make a compound shape and Alt-click gives the permanent Pathfinder result; off (the default), the other way round. Members of a compound shape selected always take the mode",
+    ),
+    (
         "window.taskBar.pin",
         "Pin Bar Position",
         "",
@@ -850,6 +856,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
     ),
     (
+        "ui.rename",
+        "Rename",
+        "",
+        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, or a row the panel's search, filter or Show Layers Only hides, is an error and nothing opens → {id, name}",
+    ),
+    (
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
@@ -860,6 +872,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "New Artboard Options…",
         "",
         "{} open Artboard Options for a new artboard, filled in as artboard.new {} would make it (Artboard N, the last artboard's size, 20 pt to its right): dialog `artboardOptions` with new: true, fields name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.new with the fields and makes the new artboard the active one; Cancel adds nothing",
+    ),
+    (
+        "artboard.selectAll",
+        "Select All Artboards",
+        "",
+        "{} the Artboard tool, chosen first when another tool is in use, selects every artboard, and the active artboard stays active; the art's selection stays as it is, and no undo step is recorded → {selected: [index…]} (the active artboard first)",
     ),
     (
         "ui.layersPanelOptions",
@@ -1032,7 +1050,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|artboard.rename|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, renameArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -1174,6 +1192,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "file.cancelOpen",
+        "Cancel Opening",
+        "",
+        "{} stop opening every file being read in the background (its progress window's Cancel): the files don't open → {cancelled: n}",
+    ),
+    (
+        "file.openInBackground",
+        "Continue in Background",
+        "",
+        "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
     ),
     (
         "ui.dxfOptionsDialog",

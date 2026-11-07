@@ -1417,7 +1417,9 @@ digits	Malayalam	Malayalam
 	Standard Vertical Roman Alignment	Standaard verticale Romeinse uitlijning
 	Strikethrough	Doorhalen
 	Character:	Teken:
+	Paragraph:	Alinea:
 	Character options	Tekenopties
+	Paragraph options	Alineaopties
 	Subscript	Subscript
 	Subscript (on the roadmap)	Subscript (op de roadmap)
 	Superscript	Superscript
@@ -1768,6 +1770,9 @@ digits	Malayalam	Malayalam
 	More Paragraph options	Meer alineaopties
 	No document open	Geen document geopend
 	Quick Actions	Snelle acties
+	Rearrange	Herschikken
+	Select All Artboards	Alle tekengebieden selecteren
+	Switch Orientation	Stand wisselen
 	Rearrange All	Alles herschikken
 	Rulers & Grids	Linialen & rasters
 	Select a text object	Selecteer een tekstobject
@@ -3239,6 +3244,7 @@ theme	Appearance	Vormgeving
 	Character / Paragraph	Teken / alinea
 	Copy Artboard	Tekenbord kopiëren
 	Cut Artboard	Tekenbord knippen
+	Rename Artboards	Tekengebieden hernoemen
 	Move Artboard Up/Down	Tekenbord omhoog/omlaag verplaatsen
 	Add Anchor (Pen)	Anker toevoegen (Pen)
 	Add Anchor Point	Ankerpunt toevoegen
@@ -4623,6 +4629,10 @@ imageTrace	Outline	Contour
 @msg	an image VectorCraft can't read was left out	een afbeelding die VectorCraft niet kan lezen, is weggelaten
 @msg	an image whose data is cut short was left out	een afbeelding waarvan de gegevens zijn afgekapt, is weggelaten
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
+@msg	linked type areas past VectorCraft's limits were left out	gekoppelde tekstvlakken buiten de limieten van VectorCraft zijn weggelaten
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst die binnen een tekstobject van schrijfrichting verandert, wordt geopend in de richting van het eerste teken
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst die als masker wordt gebruikt in gekoppelde vlakken, tekstomloop of een samengesteld pad knipt niet uit
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gekoppelde afbeeldingen zonder voorbeeld in het bestand tonen een tijdelijke aanduiding totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	vlaktekst in kaders die te kort zijn voor één regel van het lettertype waarin de tekst wordt weergegeven, heeft hogere kaders gekregen ({_1}): anders zou de tekst niet zichtbaar zijn
 @msg	its editing data doesn't say where its art is	zijn bewerkingsgegevens zeggen niet waar de illustratie zich bevindt
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	dit bestand is opgeslagen zonder PDF-compatibiliteit en de bewerkingsgegevens kunnen niet worden gelezen ({why})
@@ -5580,6 +5590,8 @@ swatch	Bright Violet	Felviolet
 @msg	missing number `{key}`	getal `{key}` ontbreekt
 @msg	missing integer `{key}`	geheel getal `{key}` ontbreekt
 @msg	no such spine point	dat aspunt bestaat niet
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` moet een lijst van hoogstens 10000 aspuntindexen zijn
+@msg	`with` moves points, not a handle	`with` verplaatst punten, geen handgreep
 @msg	no such spine segment	dat assegment bestaat niet
 @msg	not a blend	geen vermenging
 @msg	select a blend or give `id`	selecteer een vermenging of geef `id` op
@@ -6010,6 +6022,9 @@ anchor	Points:	Punten:
 	Find Nearest Swatch…	Dichtstbijzijnde staal zoeken…
 	Find Nearest Swatch	Dichtstbijzijnde staal zoeken
 	Apply Nearest Swatch	Dichtstbijzijnde staal toepassen
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Vulling op streek toepassen
+	Apply Stroke to Fill	Streek op vulling toepassen
 	Select objects to find the swatches nearest their colors.	Selecteer objecten om de stalen te vinden die het dichtst bij hun kleuren liggen.
 @msg	select objects or give `color`	selecteer objecten of geef `color` op
 @msg	`color` is not a colour	`color` is geen kleur
@@ -6274,3 +6289,30 @@ breakText	Glyphs	Glyphs
 	Even-Numbered Anchors	Even ankerpunten
 	Minimum angle	Minimale hoek
 	Maximum angle	Maximale hoek
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Gekoppelde selecteren
+	Select Embedded	Ingesloten selecteren
+	Select Missing	Ontbrekende selecteren
+	Select Modified	Gewijzigde selecteren
+	Select by Link Status	Selecteren op koppelingsstatus
+	Select by Link Status…	Selecteren op koppelingsstatus…
+	Search images	Afbeeldingen zoeken
+	No images match.	Geen afbeelding komt overeen.
+@msgplural	Selected {n} linked image|Selected {n} linked images	{n} gekoppelde afbeelding geselecteerd|{n} gekoppelde afbeeldingen geselecteerd
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} ingesloten afbeelding geselecteerd|{n} ingesloten afbeeldingen geselecteerd
+@msgplural	Selected {n} missing image|Selected {n} missing images	{n} ontbrekende afbeelding geselecteerd|{n} ontbrekende afbeeldingen geselecteerd
+@msgplural	Selected {n} modified image|Selected {n} modified images	{n} gewijzigde afbeelding geselecteerd|{n} gewijzigde afbeeldingen geselecteerd
+@msgplural	Selected {n} image|Selected {n} images	{n} afbeelding geselecteerd|{n} afbeeldingen geselecteerd
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; nog {n} is verborgen of vergrendeld|{selected}; nog {n} zijn verborgen of vergrendeld
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; nog {n} staat op een sjabloonlaag|{selected}; nog {n} staan op sjabloonlagen
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; nog {n} staat buiten de geïsoleerde groep|{selected}; nog {n} staan buiten de geïsoleerde groep
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; nog {n} kan nu niet worden geselecteerd|{selected}; nog {n} kunnen nu niet worden geselecteerd
+
+# Compound Shapes add-on
+	Compound Shapes	Samengestelde vormen
+	Shape Mode Buttons Make Compound Shapes	Vormmodus-knoppen maken samengestelde vormen
+
+# 3D Box add-on
+	3D Box	3D-doos
+	3D Box Tool	3D-doosgereedschap

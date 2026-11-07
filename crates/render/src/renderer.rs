@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{STROKES_OUTLINED, anchors_moved, offset_between};
+pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;
@@ -33,6 +33,7 @@ impl Renderer {
     pub fn new() -> Self {
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
+            text_ids: PtrMap::default(),
             text_fonts: 0,
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             threads: default_threads(),
@@ -76,6 +77,7 @@ impl Renderer {
             twice_drawn: 0,
             clip_paints: FrameCache::new(lru::CLIP_BUDGET, 256),
             stroke_slices: PtrMap::default(),
+            moved_slices: PtrMap::default(),
             adjusts: HashMap::new(),
             dim_images: None,
             inline_depth: 0,
@@ -195,6 +197,8 @@ impl Renderer {
         }
         if self.stroke_slices.len() > 256 {
             self.stroke_slices.retain(|_, e| g - e.stamp <= 3);
+            let slices = &self.stroke_slices;
+            self.moved_slices.retain(|_, k| slices.contains_key(k));
         }
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
@@ -205,6 +209,7 @@ impl Renderer {
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);
         self.texts.sweep(g);
+        self.text_ids.retain(|_, key| self.texts.contains_key(key));
         self.char_strokes.sweep(g);
         self.clips.sweep(g);
         self.clip_paints.sweep(g);

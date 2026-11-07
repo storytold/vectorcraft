@@ -125,6 +125,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
+        "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
+        "file.openInBackground" => Ok(crate::opening::hide_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -494,6 +496,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "window.taskBar" => flag(&mut app.ui.task_bar),
+        "window.pathfinder.compoundShapes" => flag(&mut app.ui.shape_modes_compound),
         "window.taskBar.pin" => {
             let place = &mut app.ui.task_bar_place;
             opt_bool(p, "pinned").map(|pinned| {
@@ -577,6 +580,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
+        crate::addons::select::link_status::COMMAND => crate::addons::select::link_status::run(app, p),
         crate::addons::document::SAVE_COPY => crate::addons::document::save_copy(app, p),
         crate::addons::document::EXPORT_ALL => crate::addons::document::export_all(app, p),
         crate::addons::document::BATCH_TRACE => crate::addons::document::batch_trace(app, p),
@@ -705,8 +709,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
+        "artboard.selectAll" => crate::panels::artboards::select_all_command(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),

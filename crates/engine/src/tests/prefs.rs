@@ -173,6 +173,98 @@ fn reset_category_and_all() {
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
 }
 
+/// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
+/// other values in the same call included, and the document gets no undo step.
+#[test]
+fn set_refuses_a_missing_folder_or_a_file_as_a_recovery_or_plugins_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-refused");
+    let file = folder.file("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.prefs.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        for path in [file.clone(), folder.file("missing")] {
+            let e = s.execute("prefs.set", &json!({"key": key, "value": path})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            let e = s.execute("prefs.set", &json!({"values": {key: path, "keyboardIncrement": 7, "unitsGeneral": "millimeters"}})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            assert_eq!(s.prefs, before, "{key}: no preference changes");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{key}: no undo step");
+        }
+    }
+}
+
+/// `prefs.set` refuses a recovery folder that no folder can be created in or that can't be listed,
+/// and a plug-ins folder that can't be listed.
+#[cfg(unix)]
+#[test]
+fn set_refuses_a_recovery_or_plugins_folder_it_cannot_use() {
+    use std::os::unix::fs::PermissionsExt;
+    /// Gives a folder mode 0o755 again when dropped, also when an assertion fails, so the test
+    /// folder can be removed.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let folder = crate::tests_links::Folder::new("prefs-set-unusable");
+    let mut s = Session::new();
+    let before = s.prefs.clone();
+    let locked = folder.0.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    let unlock_locked = Unlock(locked.clone());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // An account that may write anyway (root) has nothing to refuse.
+    if std::fs::create_dir(locked.join("probe")).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": locked.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+    }
+    drop(unlock_locked);
+    let unlisted = folder.0.join("unlisted");
+    std::fs::create_dir(&unlisted).unwrap();
+    let unlock_unlisted = Unlock(unlisted.clone());
+    std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
+    // An account that may list anyway (root) has nothing to refuse.
+    if std::fs::read_dir(&unlisted).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+        let e = s.execute("prefs.set", &json!({"key": "pluginsFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Plug-ins can't be loaded from "), "{e}");
+    }
+    drop(unlock_unlisted);
+    assert_eq!(s.prefs, before);
+}
+
+/// `prefs.set` saves a folder that passes as given and leaves nothing behind in it. An empty value
+/// and a folder the preference already holds are not checked, nor is a held folder when the call
+/// leaves it out, so they work while the folder is unavailable.
+#[test]
+fn set_takes_a_usable_empty_or_already_held_recovery_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-usable");
+    let mut s = Session::new();
+    let typed = format!(" {} ", folder.0.display());
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": typed})).unwrap();
+    assert_eq!(s.prefs.recovery_folder, typed);
+    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 0, "the write check leaves nothing behind");
+
+    let gone = folder.0.join("gone");
+    std::fs::create_dir(&gone).unwrap();
+    let gone = gone.to_string_lossy().into_owned();
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": gone})).unwrap();
+    std::fs::remove_dir(&gone).unwrap();
+    s.execute("prefs.set", &json!({"values": {"recoveryFolder": gone, "keyboardIncrement": 7}})).unwrap();
+    s.execute("prefs.set", &json!({"key": "keyboardIncrement", "value": 3})).unwrap();
+    assert_eq!((s.prefs.recovery_folder.as_str(), s.prefs.keyboard_increment), (gone.as_str(), 3.0));
+
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        s.execute("prefs.set", &json!({"key": key, "value": ""})).unwrap();
+        assert_eq!(s.prefs.to_json()[key], json!(""), "{key}");
+    }
+}
+
 #[test]
 fn list_describes_every_pref() {
     let mut s = Session::new();
@@ -1126,8 +1218,8 @@ fn a_drag_from_a_fill_moves_only_the_selected_anchors_of_partly_selected_paths()
 }
 
 /// A path selected whole inside a selected group moves once, with the group, when the selection
-/// also holds a direct-selected anchor: a Group Selection drag from the path's fill (which adds
-/// the group) and an arrow key move both by 10 pt.
+/// also holds a direct-selected anchor: a completed Group Selection click adds the group, then
+/// a drag and an arrow key move both by 10 pt. A leaf drag before that click keeps its sibling still.
 #[test]
 fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     use vectorcraft_tools::PointerKind::{Down, Drag, Up};
@@ -1142,7 +1234,14 @@ fn a_path_in_a_selected_group_moves_once_with_selected_anchors() {
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
     gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
-    assert!(s.doc().unwrap().selection.contains(g), "the press added the group");
+    assert!(!s.doc().unwrap().selection.contains(g), "the leaf drag keeps its selection");
+    assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (160.0, 100.0), 310.0), "the leaf and selected anchor move");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": other.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Up, 125.0, 125.0)]);
+    assert!(s.doc().unwrap().selection.contains(g), "the completed click added the group");
+    gesture(&mut s, v, &[(Down, 125.0, 125.0), (Drag, 130.0, 125.0), (Drag, 135.0, 125.0), (Up, 135.0, 125.0)]);
     assert_eq!((top_left(&s, a), top_left(&s, b), first_x(&s)), ((110.0, 100.0), (170.0, 100.0), 310.0), "the drag");
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("select.set", &json!({"ids": [g.0, a.0]})).unwrap();
@@ -1999,6 +2098,52 @@ fn a_move_held_by_a_paths_stroke_lands_the_path_on_a_ruler_guide() {
         assert!((edge - g).abs() < 1e-9 && align, "pressed at {x}: the edge is {} pt off the guide (align: {align})", edge - g);
         s.execute("edit.undo", &json!({})).unwrap();
     }
+}
+
+/// #5746: a rectangle dragged until its left edge and its top edge are each 1 px from a ruler
+/// guide lands on both guides, with "align", whichever guide was added last and wherever it was
+/// grabbed; between two upright guides, its left edge lands on the one within reach; and an edge
+/// Smart Guides line up with another object stays there, not on a ruler guide as near.
+#[test]
+fn a_moved_rectangle_lines_its_edges_up_with_two_ruler_guides() {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::PointerKind::{Down, Drag, Up};
+    let v = ViewInfo::default();
+    // (guides as (vertical, pos), where it is grabbed, the top left it lands on)
+    type Case = (&'static [(bool, f64)], (f64, f64), (f64, f64));
+    let cases: [Case; 3] = [
+        (&[(true, 250.0), (false, 320.0)], (200.0, 100.0), (250.0, 320.0)),
+        (&[(false, 320.0), (true, 250.0)], (100.0, 175.0), (250.0, 320.0)),
+        (&[(true, 250.0), (true, 455.0)], (200.0, 175.0), (250.0, 100.0)),
+    ];
+    for (guides, (x, y), want) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+        for (vertical, pos) in guides {
+            s.execute("guide.add", &json!({"vertical": vertical, "pos": pos})).unwrap();
+        }
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        // 1 px past the guides: the left edge at 251, the top edge at 321 (or where it was).
+        let (to_x, to_y) = (x + 151.0, if want.1 == 100.0 { y } else { y + 221.0 });
+        gesture(&mut s, v, &[(Down, x, y), (Drag, (x + to_x) / 2.0, (y + to_y) / 2.0), (Drag, to_x, to_y)]);
+        let align = s.overlays(v).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "align"));
+        gesture(&mut s, v, &[(Up, to_x, to_y)]);
+        assert_eq!(top_left(&s, id), want, "guides {guides:?}, grabbed at ({x}, {y})");
+        assert!(align, "guides {guides:?}, grabbed at ({x}, {y}): no align");
+    }
+    // Dragged by its centre until its left edge is at 401: 1 px from another rectangle's left
+    // edge (400) and 1 px from a ruler guide (402).
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
+    let id = NodeId(s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 200, "height": 150})).unwrap()["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 400, "y": 400, "width": 60, "height": 60})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 402.0})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("selection", v).unwrap();
+    gesture(&mut s, v, &[(Down, 200.0, 175.0), (Drag, 350.0, 175.0), (Drag, 501.0, 175.0), (Up, 501.0, 175.0)]);
+    assert_eq!(top_left(&s, id), (400.0, 100.0), "a Smart Guides alignment gave way to a ruler guide");
 }
 
 /// #3701: at 28,757%, Direct Selection pressed 1.5 px beside a rectangle's straight left side and

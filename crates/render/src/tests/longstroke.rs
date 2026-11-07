@@ -2,7 +2,7 @@
 //! and for dashes `dash_kept`), and draws the same pixels as when it is outlined whole.
 
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, Node, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, Node, StrokeLayer, WidthProfile};
 use vectorcraft_geom::{PathData, Point, Vec2};
 
 use crate::renderer::{CROP_STROKES, crop_line};
@@ -64,6 +64,47 @@ fn zigzag() -> BezPath {
         }
     }
     bp
+}
+
+#[test]
+fn a_long_profile_stroke_keeps_its_widths_when_outlined_near_the_view() {
+    let mut lens = stroke(16.0, LineJoin::Miter, LineCap::Square);
+    lens.profile = WidthProfile::preset("lens");
+    let mut taper = stroke(12.0, LineJoin::Round, LineCap::Round);
+    taper.profile = WidthProfile::preset("taperEnd");
+    let mut asymmetric = stroke(12.0, LineJoin::Miter, LineCap::Square);
+    asymmetric.profile = Some(WidthProfile { points: vec![(0.0, 2.0, 0.1), (1.0, 0.1, 2.0)] });
+    let mut two = zigzag();
+    two.move_to(Point::new(0.0, 100.0));
+    for i in 1..3000 {
+        two.line_to(Point::new(i as f64 * 8.0, 100.0));
+    }
+    for (name, d, at, cropped) in [
+        ("open zigzag, lens at middle", doc(&zigzag(), lens), Point::new(12_000.0, 15.0), true),
+        ("open zigzag, taper at start", doc(&zigzag(), taper.clone()), Point::new(0.0, 15.0), true),
+        ("open zigzag, taper at end", doc(&zigzag(), taper.clone()), Point::new(23_990.0, 15.0), true),
+        ("open zigzag, asymmetric profile", doc(&zigzag(), asymmetric), Point::new(12_000.0, 15.0), true),
+        ("two open subpaths", doc(&two, taper.clone()), Point::new(12_000.0, 60.0), true),
+        ("closed ring at seam", doc(&ring(4000, 5000.0), taper.clone()), Point::new(5000.0, 0.0), false),
+        ("closed ring away from seam", doc(&ring(4000, 5000.0), taper), Point::new(0.0, 5000.0), false),
+    ] {
+        let mut renderer = Renderer::new();
+        let near = render(&mut renderer, &d, at);
+        assert_eq!(renderer.strokes.values().any(|e| e.crop.is_some()), cropped, "{name}: crop choice");
+        let full = whole(&d, at);
+        let mismatched: Vec<_> = near
+            .pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(full.pixels.as_chunks::<4>().0.iter())
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .take(8)
+            .map(|(i, (a, b))| (i % SIZE as usize, i / SIZE as usize, a.to_vec(), b.to_vec()))
+            .collect();
+        assert!(mismatched.is_empty(), "{name}: pixels differ at {mismatched:?}");
+    }
 }
 
 /// A closed polygon of `n` anchors round a circle of radius `r` about the origin.

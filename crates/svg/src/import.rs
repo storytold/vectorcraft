@@ -48,6 +48,7 @@ mod css_transform;
 mod depth;
 mod files;
 mod fx;
+mod linear_rgb;
 mod spread;
 mod symbol_units;
 mod text;
@@ -150,6 +151,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         slots,
         patterns: HashMap::new(),
         midpoints: midpoint_stops(&xml),
+        linear_rgb: linear_rgb::linear_rgb_ids(&xml, &tree),
         labels: labels(&xml),
         hidden: found.hidden,
         uses: found.uses,
@@ -299,6 +301,8 @@ struct Importer {
     patterns: HashMap<usize, String>,
     /// Midpoint stops by gradient id (see [`midpoint_stops`]).
     midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Ids of the gradients mixed in linear light (see [`linear_rgb::linear_rgb_ids`]).
+    linear_rgb: HashSet<String>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
     /// Ids of the undisplayed objects shown for usvg ([`prepass`]).

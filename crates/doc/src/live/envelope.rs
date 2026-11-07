@@ -76,6 +76,12 @@ pub struct EnvelopeOptions {
     pub distort_linear_gradients: bool,
     /// Distort Pattern Fills (with Distort Appearance): pattern tiles bend with the art.
     pub distort_pattern_fills: bool,
+    /// With Distort Appearance, how far the box the content maps from reaches past its geometric
+    /// bounds at the top, bottom, left and right, as shares of their height and width. An envelope
+    /// opened from a `.ai` whose saved size includes its strokes has these margins. New envelopes
+    /// have none. Leaving Edit Contents measures them again when the strokes reach differently.
+    #[serde(skip_serializing_if = "crate::skip::is_default")]
+    pub bounds_margin: [f32; 4],
 }
 
 impl Default for EnvelopeOptions {
@@ -86,6 +92,7 @@ impl Default for EnvelopeOptions {
             distort_appearance: false,
             distort_linear_gradients: false,
             distort_pattern_fills: false,
+            bounds_margin: [0.0; 4],
         }
     }
 }
@@ -98,6 +105,7 @@ impl EnvelopeOptions {
         distort_appearance: true,
         distort_linear_gradients: false,
         distort_pattern_fills: false,
+        bounds_margin: [0.0; 4],
     };
     /// Do gradients bend with the art?
     pub fn gradients(&self) -> bool {
@@ -107,6 +115,45 @@ impl EnvelopeOptions {
     pub fn patterns(&self) -> bool {
         self.distort_appearance && self.distort_pattern_fills
     }
+    /// The box content with geometric bounds `r` maps from. Margins that aren't finite, are
+    /// negative or give a box that isn't finite count as none.
+    fn source_box(&self, r: Rect) -> Rect {
+        let [top, bottom, left, right] = self.bounds_margin.map(f64::from);
+        if !self.distort_appearance || !self.bounds_margin.iter().all(|m| m.is_finite() && *m >= 0.0) {
+            return r;
+        }
+        let grown = crate::marks::outset(r, [top * r.height(), bottom * r.height(), left * r.width(), right * r.width()]);
+        if grown.is_finite() { grown } else { r }
+    }
+}
+
+/// The bounds of `content` in the axes of `frame`, with its strokes and geometric. Strokes scale
+/// with the frame as [`Node::transform`] scales them.
+pub fn envelope_content_boxes(content: &[Arc<Node>], frame: Affine) -> Option<(Rect, Rect)> {
+    let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
+    let to_frame = frame.inverse();
+    let (stroked, plain) = content.iter().fold((None, None), |(stroked, plain), c| {
+        let mut m = (**c).clone();
+        m.transform(to_frame, true);
+        (vectorcraft_geom::union_opt(stroked, m.visual_bounds()), vectorcraft_geom::union_opt(plain, m.geometric_bounds()))
+    });
+    Some((stroked?, plain?))
+}
+
+/// The [`EnvelopeOptions::bounds_margin`] of content with bounds `stroked` and `plain`. `None` for
+/// content with no width or no height, or for margins an `f32` can't hold.
+pub fn envelope_stroke_margin(stroked: Rect, plain: Rect) -> Option<[f32; 4]> {
+    if plain.width() < 1e-6 || plain.height() < 1e-6 {
+        return None;
+    }
+    let margin = [
+        (plain.y0 - stroked.y0) / plain.height(),
+        (stroked.y1 - plain.y1) / plain.height(),
+        (plain.x0 - stroked.x0) / plain.width(),
+        (stroked.x1 - plain.x1) / plain.width(),
+    ]
+    .map(|m| m as f32);
+    margin.iter().all(|m| m.is_finite()).then_some(margin)
 }
 
 /// Handle slots of a [`MeshPoint`]: towards the next column, previous column, next row, previous row.
@@ -218,9 +265,9 @@ pub struct EnvelopeMap<'a> {
 }
 
 impl<'a> EnvelopeMap<'a> {
-    /// The map of an envelope of `kind` around `content` with `frame`. `None` when the content
-    /// has no bounds.
-    pub fn new(content: &[Arc<Node>], kind: &'a EnvelopeKind, frame: Affine) -> Option<Self> {
+    /// The map of an envelope of `kind` around `content` with `frame` and `options`. `None` when
+    /// the content has no bounds.
+    pub fn new(content: &[Arc<Node>], kind: &'a EnvelopeKind, frame: Affine, options: EnvelopeOptions) -> Option<Self> {
         let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
         let to_frame = frame.inverse();
         let src = if frame == Affine::IDENTITY {
@@ -232,13 +279,14 @@ impl<'a> EnvelopeMap<'a> {
                 Some(vectorcraft_geom::union_opt(acc, m.geometric_bounds()))
             })??
         };
+        let src = options.source_box(src);
         Some(Self { src, frame, to_frame, surface: surface_of(kind, src, frame) })
     }
 
     /// The map of envelope node `n` (`None` for other nodes).
     pub fn of(n: &'a Node) -> Option<Self> {
         match &n.kind {
-            NodeKind::Envelope { content, kind, frame, .. } => Self::new(content, kind, **frame),
+            NodeKind::Envelope { content, kind, frame, options, .. } => Self::new(content, kind, **frame, *options),
             _ => None,
         }
     }
@@ -302,7 +350,7 @@ pub(super) fn expand_envelope(
     frame: Affine,
     hooks: Hooks,
 ) -> Vec<Node> {
-    let Some(map) = EnvelopeMap::new(content, kind, frame) else { return content.iter().map(|c| (**c).clone()).collect() };
+    let Some(map) = EnvelopeMap::new(content, kind, frame, options) else { return content.iter().map(|c| (**c).clone()).collect() };
     let src = map.src();
     let fid = if fidelity.is_finite() { fidelity.clamp(0.0, 100.0) / 100.0 } else { 0.5 };
     let f = |p: Point| map.map(p);
@@ -319,7 +367,7 @@ pub(super) fn expand_envelope(
 }
 
 /// Envelope bounds: a mesh's points, a top object's path, the warp's surface (sampled).
-pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine) -> Option<Rect> {
+pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine, options: EnvelopeOptions) -> Option<Rect> {
     match kind {
         EnvelopeKind::Mesh { rows, cols, points, handles } if !handles.is_empty() => envelope_grid(*rows, *cols, points, handles)?.outline().bounds(),
         EnvelopeKind::Mesh { points, .. } => {
@@ -327,6 +375,6 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
             Some(points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)))
         }
         EnvelopeKind::TopObject { path } => path.bounds(),
-        EnvelopeKind::Warp { .. } => EnvelopeMap::new(content, kind, frame)?.bounds(),
+        EnvelopeKind::Warp { .. } => EnvelopeMap::new(content, kind, frame, options)?.bounds(),
     }
 }

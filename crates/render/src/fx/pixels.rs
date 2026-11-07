@@ -236,7 +236,10 @@ impl Renderer {
             bounds = fx.spread(before, space.line);
             let outline = image_outline.as_ref().map(|g| (g, FillRule::NonZero)).or(content.outline);
             match fx {
-                RasterFx::GaussianBlur { radius } => effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let blur = if *linear { effects::pixel::gaussian_rgba_linear } else { effects::pixel::gaussian_rgba };
+                    blur(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px)
+                }
                 RasterFx::Feather { radius } => {
                     effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px);
                     if let Some((g, rule)) = outline {
@@ -648,7 +651,7 @@ impl Renderer {
                 AppearanceItem::Stroke(st) => {
                     let st = &*f.stroke(st);
                     let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(ig));
-                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
+                    crate::stroke::outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
                 }
             };
             let outset = n.appearance.outset();

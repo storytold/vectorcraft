@@ -887,6 +887,28 @@ fn gaussian_and_plane_blurs_keep_their_mass() {
     assert!((plane.iter().sum::<f32>() - 100.0).abs() < 0.5 && plane[15 * w + 13] > 0.0 && plane[13 * w + 15] > 0.0);
 }
 
+/// Blurred in linear light, black beside white meets at about 188/255 (half the light, encoded),
+/// where the plain blur meets at about 128; flat areas and alpha stay as they are (#5877).
+#[test]
+fn linear_light_blur_mixes_light_not_values() {
+    // Large enough that the transparency past the edges doesn't reach the middle.
+    let (w, h) = (120, 60);
+    let src = image(w, h, |x, _| if x < 60 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    let (mut plain, mut linear) = (src.clone(), src.clone());
+    gaussian_rgba(&mut plain, w, h, 3.0);
+    gaussian_rgba_linear(&mut linear, w, h, 3.0);
+    let mid = |d: &[u8]| (f32::from(at(d, w, 59, 30)[0]) + f32::from(at(d, w, 60, 30)[0])) / 2.0;
+    assert!((mid(&plain) - 128.0).abs() < 6.0, "{}", mid(&plain));
+    assert!((mid(&linear) - 188.0).abs() < 6.0, "{}", mid(&linear));
+    assert_eq!((at(&linear, w, 30, 30), at(&linear, w, 90, 30)), ([0, 0, 0, 255], [255, 255, 255, 255]));
+    // Premultiplied input: a half-transparent white square blurs to white at any alpha.
+    let mut soft = image(30, 30, |x, y| if (10..20).contains(&x) && (10..20).contains(&y) { [128, 128, 128, 128] } else { [0, 0, 0, 0] });
+    gaussian_rgba_linear(&mut soft, 30, 30, 2.0);
+    for p in soft.as_chunks::<4>().0 {
+        assert!(p[0] <= p[3] && p[3] <= 128 && (p[3] < 8 || p[0] + 2 >= p[3]), "{p:?}");
+    }
+}
+
 /// Timings on a 2000 × 2000 raster (`cargo test -p vectorcraft-effects --release -- --ignored
 /// --nocapture pixel_timings`).
 #[test]

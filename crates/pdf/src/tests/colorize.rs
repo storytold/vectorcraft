@@ -166,6 +166,34 @@ fn separations_print_the_image_on_its_ink_plate() {
     }
 }
 
+/// A linked image showing the missing-link placeholder is written in the placeholder's own colors
+/// though it keeps a colorize paint for its file, and printed separations separate it as an
+/// uncolorized image.
+#[test]
+fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
+    let placeholder = || {
+        let mut d = doc(ColorMode::Cmyk, None);
+        let bytes = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+        d
+    };
+    let plain = placeholder();
+    let mut d = placeholder();
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0))));
+    let (colorized, uncolorized) = (images(&pdf(&d)), images(&pdf(&plain)));
+    assert!(!colorized.is_empty());
+    assert_eq!(colorized, uncolorized, "the placeholder as it is, without a soft mask from its coverage");
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    assert!(!job.plates.is_empty());
+    for p in &job.plates {
+        let n = &p.layers[0].children().unwrap()[0];
+        let NodeKind::Image(im) = &n.kind else { panic!("the image") };
+        assert_eq!((im.key.as_str(), n.extras().colorize.is_none()), ("pic", true), "separated as the image it shows");
+    }
+}
+
 /// A pixelated colorized image (an envelope's with Anti-Alias off) is written without
 /// /Interpolate, as an uncolorized one is.
 #[test]

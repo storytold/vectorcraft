@@ -81,8 +81,9 @@ impl BuilderMap {
                 })
                 .collect()
         };
-        // A line keeps its pieces under the outline of a closed path in front of it, so a merge
-        // or an erase removes them as it does the rest of the line.
+        // A line keeps its pieces under the outline of a closed path or along a line in front of
+        // it, so a merge or an erase removes them as it does the rest of the line. The pieces in
+        // front come first, so a hit where pieces lie on each other takes the one in front.
         let lines = arr.lines.into_iter().chain(arr.lines_under).collect();
         Self { shapes, regions: faces_of(arr.regions), lines: bounded(lines), edges: bounded(arr.edges) }
     }
