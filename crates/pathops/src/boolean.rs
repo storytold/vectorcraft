@@ -5,6 +5,7 @@
 //! [`tidy_segments`] then re-joins pieces that came from the same smooth curve by refitting, so
 //! results have roughly as few anchors as the inputs.
 
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::HashSet;
 
@@ -318,6 +319,9 @@ impl Arrangement {
         Ok(Self { top, rules: paths.iter().map(|p| p.1).collect(), tidy })
     }
 
+    /// A flag per input telling whether it covers a face of winding `w`: the form the tests compare
+    /// [`Self::covered`] with.
+    #[cfg(test)]
     pub(crate) fn mask(&self, w: &Multi) -> Vec<bool> {
         // A zero winding is outside under both rules, so only the non-zero ones can set a flag.
         let mut m = vec![false; self.rules.len()];
@@ -334,22 +338,38 @@ impl Arrangement {
         w.iter().filter(|&(i, k)| self.rules.get(i).is_some_and(|&r| inside(r, k))).map(|(i, _)| i)
     }
 
-    /// [`Arrangement::contours`] with the test on the windings themselves (see [`Self::covered`]).
+    /// [`Arrangement::contours_covering`] with the test on the windings themselves (see [`Self::covered`]).
     pub(crate) fn contours_where(&self, pred: impl Fn(&Multi) -> bool) -> Contours {
         #[cfg(test)]
         CONTOUR_PASSES.with(|n| n.set(n.get() + 1));
         self.top.contours(pred)
     }
 
+    /// The contours of the faces where `pred` holds for the flags of [`Self::mask`]: the form the
+    /// tests compare [`Self::contours_covering`] with.
+    #[cfg(test)]
     pub(crate) fn contours(&self, pred: impl Fn(&[bool]) -> bool) -> Contours {
         self.contours_where(|w| pred(&self.mask(w)))
     }
 
-    /// [`Self::contours`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
+    /// The contours of the faces where `pred` holds for the inputs that cover them
+    /// ([`Self::covered`], ascending). One list is refilled for each winding the pass tests, so a
+    /// test costs the size of the face's cover, not the number of inputs.
+    pub(crate) fn contours_covering(&self, pred: impl Fn(&[usize]) -> bool) -> Contours {
+        let cover = RefCell::new(Vec::new());
+        self.contours_where(|w| {
+            let mut c = cover.borrow_mut();
+            c.clear();
+            c.extend(self.covered(w));
+            pred(&c)
+        })
+    }
+
+    /// [`Self::contours_covering`] with a panic in the sweep's contour pass turned into an error, as `new` does for the
     /// sweep itself (native builds only: on the web a panic aborts, whatever is caught here). Used by the calls that can return an error; the rest have none to return and let the engine's
     /// guard report it.
-    pub(crate) fn try_contours(&self, pred: impl Fn(&[bool]) -> bool) -> Result<Contours, PathOpsError> {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
+    pub(crate) fn try_contours(&self, pred: impl Fn(&[usize]) -> bool) -> Result<Contours, PathOpsError> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours_covering(pred))).map_err(|_| PathOpsError::Degenerate)
     }
 
     /// All distinct non-empty coverages that occur next to some edge, each as the inputs it covers
@@ -710,7 +730,7 @@ pub fn boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, o
 pub fn try_boolean(a: &PathData, a_rule: FillRule, b: &PathData, b_rule: FillRule, op: BoolOp, precision: f64) -> Result<PathData, PathOpsError> {
     let (pa, pb) = (fill_bezpath(a), fill_bezpath(b));
     let arr = Arrangement::new(vec![(pa.clone(), a_rule), (pb.clone(), b_rule)])?;
-    let c = arr.try_contours(|m| op.apply(m[0], m[1]))?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1)))?;
     if !arrangement_adds_up(&arr, [&pa, &pb])
         && let Some(r) = resolved_boolean([(&pa, a_rule), (&pb, b_rule)], op, precision)
     {
@@ -798,7 +818,7 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
     if !arrangement_adds_up(&arr, [&ra, &rb]) {
         return None;
     }
-    let c = arr.try_contours(|m| op.apply(m[0], m[1])).ok()?;
+    let c = arr.try_contours(|c| op.apply(c.contains(&0), c.contains(&1))).ok()?;
     // The refit keeps the operands' own anchors, not only those of their resolved contours.
     let tidy = Tidy::keeping(precision, [pa, pb]);
     Some(all_contours_to_path(&c, &tidy))
@@ -806,19 +826,19 @@ fn resolved_boolean(inputs: [(&BezPath, FillRule); 2], op: BoolOp, precision: f6
 
 /// [`boolean_n`] that reports a refused input ([`PathOpsError::TooComplex`], non-finite
 /// coordinates) instead of returning an empty path.
-pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> Result<PathData, PathOpsError> {
+pub fn try_boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> Result<PathData, PathOpsError> {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     let arr = Arrangement::new(bps)?;
     Ok(all_contours_to_path(&arr.try_contours(pred)?, &arr.tidy))
 }
 
-/// N-ary boolean: the area where `pred(inside_flags)` holds, `inside_flags[i]` telling whether a
-/// point is inside `paths[i]` under its fill rule. A refused input gives an empty path; callers that
-/// can report an error use [`try_boolean_n`].
-pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[bool]) -> bool) -> PathData {
+/// N-ary boolean: the area where `pred(inside)` holds, `inside` listing the indices `i`, ascending,
+/// of the `paths[i]` a point is inside under their fill rules. A refused input gives an empty path;
+/// callers that can report an error use [`try_boolean_n`].
+pub fn boolean_n(paths: &[(&PathData, FillRule)], pred: impl Fn(&[usize]) -> bool) -> PathData {
     let bps: Vec<(BezPath, FillRule)> = paths.iter().map(|(p, r)| (fill_bezpath(p), *r)).collect();
     match Arrangement::new(bps) {
-        Ok(arr) => all_contours_to_path(&arr.contours(pred), &arr.tidy),
+        Ok(arr) => all_contours_to_path(&arr.contours_covering(pred), &arr.tidy),
         Err(_) => PathData::default(),
     }
 }
@@ -1055,7 +1075,110 @@ mod tests {
     #[cfg(panic = "unwind")]
     fn a_panic_in_the_contour_pass_becomes_an_error() {
         let arr = Arrangement::new(vec![(fill_bezpath(&square(0.0, 0.0, 10.0)), FillRule::NonZero)]).unwrap();
-        assert!(arr.try_contours(|m| m[0]).is_ok());
+        assert!(arr.try_contours(|c| c.contains(&0)).is_ok());
         assert_eq!(arr.try_contours(|_| panic!("simulated panic in the sweep")).err(), Some(PathOpsError::Degenerate));
+    }
+
+    /// Squares that overlap, nest, touch or lie apart, and 72 that overlap in rows, stacked in an
+    /// order other than across the page.
+    fn square_sets() -> Vec<(&'static str, Vec<PathData>)> {
+        let mut many: Vec<PathData> = (0..70)
+            .map(|i| {
+                let x = 10.0 * f64::from((i * 37) % 70);
+                square(x, 7.0 * f64::from(i % 5), 15.0)
+            })
+            .collect();
+        many.insert(20, square(100.0, -5.0, 60.0));
+        many.push(square(400.0, 10.0, 30.0));
+        vec![
+            ("overlapping", vec![square(0.0, 0.0, 100.0), square(50.0, 50.0, 100.0), square(25.0, 75.0, 100.0)]),
+            ("nested", vec![square(0.0, 0.0, 300.0), square(50.0, 50.0, 200.0), square(100.0, 100.0, 100.0), square(140.0, 140.0, 20.0)]),
+            ("touching", vec![square(0.0, 0.0, 100.0), square(100.0, 0.0, 100.0), square(0.0, 100.0, 100.0), square(100.0, 100.0, 100.0)]),
+            ("apart", vec![square(0.0, 0.0, 10.0), square(50.0, 0.0, 10.0), square(0.0, 50.0, 10.0)]),
+            ("many", many),
+        ]
+    }
+
+    /// The contours of a pass, in order, each with its path and whether it is an outer contour.
+    fn contour_list(c: &Contours) -> Vec<(BezPath, bool)> {
+        c.contours().map(|ct| (ct.path.clone(), ct.outer)).collect()
+    }
+
+    type FlagTest = Box<dyn Fn(&[bool]) -> bool>;
+    type CoverTest = Box<dyn Fn(&[usize]) -> bool>;
+
+    /// Each test of the boolean operations, Offset Path, the Pathfinder operations, compound shapes
+    /// and Intertwine finds the same contours in the same order from the inputs covering each face
+    /// as from a flag per input.
+    #[test]
+    fn contour_passes_on_the_covering_inputs_match_the_flag_tests() {
+        for (what, set) in square_sets() {
+            let n = set.len();
+            let arr = Arrangement::new(set.iter().map(|p| (fill_bezpath(p), FillRule::NonZero)).collect()).unwrap();
+            let mut tests: Vec<(String, FlagTest, CoverTest)> = vec![];
+            for op in [BoolOp::Union, BoolOp::Intersect, BoolOp::Difference, BoolOp::Xor] {
+                tests.push((
+                    format!("{op:?}"),
+                    Box::new(move |m: &[bool]| op.apply(m[0], m[1])),
+                    Box::new(move |c: &[usize]| op.apply(c.contains(&0), c.contains(&1))),
+                ));
+            }
+            // Offset Path sweeps three inputs, so there any cover is one of them.
+            tests.push((
+                "offset outward".into(),
+                Box::new(|m: &[bool]| m[0] || m[1] || m[2]),
+                Box::new(|c: &[usize]| c.first().is_some_and(|&i| i < 3)),
+            ));
+            tests.push(("offset inward".into(), Box::new(|m: &[bool]| m[0] && !m[1]), Box::new(|c: &[usize]| c.contains(&0) && !c.contains(&1))));
+            tests.push(("unite".into(), Box::new(|m: &[bool]| m.contains(&true)), Box::new(|c: &[usize]| !c.is_empty())));
+            tests.push(("intersect".into(), Box::new(|m: &[bool]| m.iter().all(|&b| b)), Box::new(move |c: &[usize]| c.len() == n)));
+            tests.push(("minus front".into(), Box::new(|m: &[bool]| m[0] && !m[1..].contains(&true)), Box::new(|c: &[usize]| c == [0])));
+            tests.push((
+                "minus back".into(),
+                Box::new(move |m: &[bool]| m[n - 1] && !m[..n - 1].contains(&true)),
+                Box::new(move |c: &[usize]| c == [n - 1]),
+            ));
+            tests.push((
+                "exclude".into(),
+                Box::new(|m: &[bool]| m.iter().filter(|&&b| b).count() % 2 == 1),
+                Box::new(|c: &[usize]| c.len() % 2 == 1),
+            ));
+            tests.push(("intertwine".into(), Box::new(|m: &[bool]| m[0] && m[1] && !m[2..].contains(&true)), Box::new(|c: &[usize]| c == [0, 1])));
+            // A compound shape whose members take two inputs each, with every shape mode in turn.
+            let modes = [BoolOp::Union, BoolOp::Difference, BoolOp::Intersect, BoolOp::Xor];
+            let compound = move |here: &dyn Fn(usize) -> bool| {
+                let mut area = false;
+                for (k, start) in (0..n).step_by(2).enumerate() {
+                    let h = here(start);
+                    area = if k == 0 { h } else { modes[k % modes.len()].apply(area, h) };
+                }
+                area
+            };
+            tests.push((
+                "compound shape".into(),
+                Box::new(move |m: &[bool]| compound(&|s| m[s..(s + 2).min(n)].contains(&true))),
+                Box::new(move |c: &[usize]| compound(&|s| c.get(c.partition_point(|&i| i < s)).is_some_and(|&i| i < s + 2))),
+            ));
+            for (op, flags, cover) in &tests {
+                let old = contour_list(&arr.contours(flags));
+                assert_eq!(contour_list(&arr.contours_covering(cover)), old, "{what}: {op}");
+                assert_eq!(contour_list(&arr.try_contours(cover).unwrap()), old, "{what}: {op}");
+            }
+        }
+    }
+
+    /// A contour pass hands its test the inputs covering each face, not a flag for every input:
+    /// with 100 squares apart, no test sees more than one.
+    #[test]
+    fn a_contour_pass_tests_only_the_inputs_covering_each_face() {
+        let set: Vec<(BezPath, FillRule)> = (0..100).map(|i| (fill_bezpath(&square(20.0 * f64::from(i), 0.0, 10.0)), FillRule::NonZero)).collect();
+        let arr = Arrangement::new(set).unwrap();
+        let widest = std::cell::Cell::new(0);
+        let c = arr.contours_covering(|c| {
+            widest.set(widest.get().max(c.len()));
+            !c.is_empty()
+        });
+        assert_eq!(widest.get(), 1);
+        assert_eq!(c.contours().count(), 100);
     }
 }

@@ -151,7 +151,7 @@ fn offset_with_check(
         vec![(fill, FillRule::NonZero), (ring, FillRule::NonZero), (open_bp, FillRule::NonZero)],
         MAX_OFFSET_SEGMENT_PAIRS,
     )?;
-    let c = if delta >= 0.0 { arr.contours(|m| m[0] || m[1] || m[2]) } else { arr.contours(|m| m[0] && !m[1]) };
+    let c = if delta >= 0.0 { arr.contours_covering(|c| !c.is_empty()) } else { arr.contours_covering(|c| c.contains(&0) && !c.contains(&1)) };
     // When `d` exceeds a curvature radius the stroker's inner offset inverts and its loops cancel
     // winding, leaving faces uncovered that are really within `d` of the path. Every face of the
     // true offset is bounded by arrangement edges, so a contour is spurious iff a point deep inside

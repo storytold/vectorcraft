@@ -300,7 +300,8 @@ fn compound_shape_area_in(n: &Node, hook: Option<OutlineHook>, nodes: &SymbolNod
     Some(po::boolean_n(&refs, |inside| {
         let (mut start, mut area) = (0, false);
         for (k, (op, count)) in members.iter().enumerate() {
-            let here = inside.get(start..start + count).is_some_and(|flags| flags.contains(&true));
+            // `inside` is ascending: the first leaf at or after `start` tells whether one of this member's is in it.
+            let here = inside.get(inside.partition_point(|&i| i < start)).is_some_and(|&i| i < start + count);
             start += count;
             area = if k == 0 { here } else { op.apply(area, here) };
         }
