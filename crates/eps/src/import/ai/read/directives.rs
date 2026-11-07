@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::super::brush;
 use super::art::{four, sane, two};
+use super::ops::Dictionaries;
 use super::types::{
     FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
     PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
@@ -330,15 +331,18 @@ impl<'a> Reader<'a> {
         self.section(end).map(|_| ())
     }
 
-    /// [`Self::skip_to`] → what was skipped, up to the comment that ends it.
+    /// [`Self::skip_to`] → what was skipped, up to the comment that ends it. ASCII85 data in comment
+    /// lines is skipped past as [`Self::add_object_entry`] skips it.
     fn section(&mut self, end: &str) -> Result<&'a [u8], String> {
         let begin = SKIPPED.iter().find(|(_, e)| *e == end).map_or("", |(b, _)| *b);
         let begin = if end == "End_Versioned_Content" { "Begin_Content_if_version_gt" } else { begin };
         let start = self.lex.offset();
         let mut depth = 0usize;
+        let mut dictionaries = Dictionaries::default();
         loop {
             let before = self.lex.offset();
             let Some(t) = self.lex.next_token() else { break };
+            dictionaries.pass(&t.tok, &mut self.lex, Some((begin, end)));
             if let Tok::Comment(c) = t.tok {
                 let line = String::from_utf8_lossy(c);
                 let m = marker(&line);
@@ -1109,7 +1113,7 @@ mod tests {
         assert!(nodes > 0);
         let draft = |i: usize| brush::BrushDraft {
             name: format!("Brush {i}"),
-            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string() },
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), plain: false },
         };
         let drafts: Vec<_> = (0..5).map(draft).collect();
         let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);
@@ -1119,6 +1123,7 @@ mod tests {
         // A second brush of the same name is left out without using the budget.
         let mut repeated: Vec<_> = (0..2).map(draft).collect();
         repeated.insert(1, draft(0));
+        assert_eq!(brush::kept_brushes(&repeated, &reader.brush_art, 2 * nodes), [true, false, true]);
         let (kept, left_out) = brush::finish_brushes_within(repeated, &reader.brush_art, None, 2 * nodes);
         assert_eq!((kept.len(), left_out), (2, 1));
     }

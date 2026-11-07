@@ -125,6 +125,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
+        "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
+        "file.openInBackground" => Ok(crate::opening::hide_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),

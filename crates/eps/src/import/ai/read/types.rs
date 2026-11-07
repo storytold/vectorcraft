@@ -339,7 +339,7 @@ pub(super) const IGNORED: &[&str] = &[
     "Ar",
     "Xs",
     "Xt",
-    // A brushed path's width at each anchor (`(…) Xt n XD`), on its hidden source path.
+    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
     "XD",
     "Xi",
     "XI",
