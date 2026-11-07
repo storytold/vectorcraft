@@ -685,7 +685,7 @@ fn gamut_check(s: &mut Session, p: &Value) -> Result<Value> {
     let mut cols: Vec<Color> = vec![];
     let colors = p.get("colors").filter(|v| !v.is_null());
     if let Some(v) = colors.filter(|v| !v.is_array()) {
-        return Err(bad("color.gamutCheck", format!("bad color {v}")));
+        return Err(bad("color.gamutCheck", format!("`colors` must be an array of colors, not {v}")));
     }
     if let Some(a) = colors.and_then(Value::as_array) {
         for v in a {

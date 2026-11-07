@@ -571,8 +571,13 @@ fn color_settings_refuse_a_param_of_the_wrong_type() {
     refused(&mut s, "color.convert", json!({"color": "#808080", "to": 1}), "`to` must be a string");
     refused(&mut s, "color.convert", json!({"color": "#808080", "intent": ["relative"]}), "`intent` must be a string");
     assert_eq!(s.execute("color.convert", &json!({"color": "#808080", "to": null})).unwrap()["model"], "rgb");
+    let profiles = || cms::profiles().into_iter().map(|i| i.name).collect::<Vec<_>>();
+    let listed = profiles();
     refused(&mut s, "color.loadProfile", json!({"path": 7}), "`path` must be a string");
     refused(&mut s, "color.removeProfile", json!({"name": 7}), "`name` must be a string");
+    assert_eq!(profiles(), listed, "no profile is loaded or removed");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
 }
 
 #[test]
@@ -638,9 +643,9 @@ fn gamut_check_refuses_colors_that_are_not_a_list() {
     let mut s = session();
     rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#0000ff"));
     s.execute("select.set", &json!({"ids": []})).unwrap();
-    refused(&mut s, "color.gamutCheck", json!({"colors": "#00ff00"}), "bad color \"#00ff00\"");
-    refused(&mut s, "color.gamutCheck", json!({"colors": 5}), "bad color 5");
-    refused(&mut s, "color.gamutCheck", json!({"colors": {"c": 100, "m": 0, "y": 0, "k": 0}}), "bad color");
+    refused(&mut s, "color.gamutCheck", json!({"colors": "#00ff00"}), "`colors` must be an array of colors, not \"#00ff00\"");
+    refused(&mut s, "color.gamutCheck", json!({"colors": 5}), "`colors` must be an array of colors, not 5");
+    refused(&mut s, "color.gamutCheck", json!({"colors": {"c": 100, "m": 0, "y": 0, "k": 0}}), "`colors` must be an array of colors");
     // A null list checks the document, as an omitted one does.
     let r = s.execute("color.gamutCheck", &json!({"colors": null})).unwrap();
     assert_eq!(r, s.execute("color.gamutCheck", &json!({})).unwrap());

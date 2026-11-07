@@ -4452,6 +4452,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for it is taken in the Fonts folder	შრიფტების საქაღალდეში მისთვის ყველა დანომრილი სახელი დაკავებულია
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` არის ნაბიჯის მიმართვა {r}, რომელსაც მხოლოდ `run` და `command_batch` ხსნის
 @msg	`ids` must be an array of object ids, not {v}	`ids` უნდა იყოს ობიექტების id-ების მასივი და არა {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` უნდა იყოს ფერების მასივი და არა {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` უნდა იყოს საყრდენი წერტილების ინდექსების მასივი და არა {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ნაბიჯ {i}-ის შედეგს ასეთი მნიშვნელობა არ აქვს (ლიტერალური $-ისთვის დაწერეთ $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: ამის წინ ნაბიჯი {i} არ არის (ნაბიჯები 0-დან ითვლება; ლიტერალური $-ისთვის დაწერეთ $$)

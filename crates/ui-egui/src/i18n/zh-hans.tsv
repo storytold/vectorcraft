@@ -4545,6 +4545,7 @@ imageTrace	Outline	轮廓
 @msg	No linked files to look for	没有要查找的链接文件
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` 必须是由锚点索引组成的数组，而不是 {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`：步骤 {i} 的结果中没有此值 (要表示 $ 本身，请写 $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`：此步骤之前没有步骤 {i} (步骤从 0 开始计数；要表示 $ 本身，请写 $$)

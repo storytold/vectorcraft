@@ -2419,6 +2419,7 @@ file-filter	Templates	範本
 @msg	No linked files to look for	沒有要尋找的連結檔案
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` 必須是由錨點索引組成的陣列，而非 {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`：步驟 {i} 的結果中沒有此值 (若要表示 $ 本身，請寫 $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`：此步驟之前沒有步驟 {i} (步驟從 0 起算；若要表示 $ 本身，請寫 $$)

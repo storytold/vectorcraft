@@ -4660,6 +4660,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Tidak ada berkas tertaut untuk dicari
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` adalah referensi langkah {r}, yang hanya diselesaikan oleh `run` dan `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` harus berupa array id objek, bukan {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` harus berupa array warna, bukan {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` harus berupa array indeks jangkar, bukan {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: hasil langkah {i} tidak memiliki nilai seperti itu (tulis $$ untuk $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: tidak ada langkah {i} sebelum langkah ini (langkah dihitung mulai dari 0; tulis $$ untuk $ literal)

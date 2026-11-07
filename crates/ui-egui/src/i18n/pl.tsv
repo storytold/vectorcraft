@@ -4858,6 +4858,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musi być tablicą indeksów punktów, nie {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: wynik kroku {i} nie ma takiej wartości (wpisz $$, aby uzyskać znak $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: przed tym krokiem nie ma kroku {i} (kroki liczone od 0; wpisz $$, aby uzyskać znak $)
