@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string, ids?|id?: object ids (default: the selection)} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} append to the selected text objects",
             has_selection,
             insert_char
         ),
@@ -580,12 +580,42 @@ pub(crate) fn special_char(name: &str) -> Option<&'static str> {
     })
 }
 
+/// The character a Windows Alt + keypad code with a leading 0 types (`Alt+0176` → `°`), as
+/// `type.insert {code}` takes it: 128–159 in the Windows-1252 code page (`0151` → `—`), the
+/// Unicode code point otherwise (`8364` → `€`). Control characters type nothing.
+/// <https://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP1252.TXT>
+pub(crate) fn alt_code_char(code: u64) -> Option<char> {
+    const CP1252: [u16; 32] = [
+        0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0, 0, 0x2018, 0x2019, 0x201C,
+        0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178,
+    ];
+    let cp = match code {
+        128..=159 => u32::from(*CP1252.get(usize::try_from(code - 128).ok()?)?),
+        _ => u32::try_from(code).ok()?,
+    };
+    char::from_u32(cp).filter(|c| !c.is_control() || *c == '\t')
+}
+
+/// The character `type.insert {unicode}` names: its code point in hex, as `00B0`, `U+00B0` or
+/// `0x00B0`.
+fn unicode_char(u: &str) -> Option<char> {
+    let u = u.trim();
+    let hex = u.strip_prefix("U+").or_else(|| u.strip_prefix("u+")).or_else(|| u.strip_prefix("0x")).unwrap_or(u);
+    char::from_u32(u32::from_str_radix(hex, 16).ok()?).filter(|c| !c.is_control() || *c == '\t')
+}
+
 fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.insert";
     let text = match (str_param(p, "char"), str_param(p, "text")) {
         (Some(c), _) => special_char(c).ok_or_else(|| bad(C, format!("unknown character `{c}`")))?.to_string(),
         (None, Some(t)) => t.to_string(),
-        _ => return Err(bad(C, "give `char` or `text`")),
+        _ => match (p.get("code"), str_param(p, "unicode")) {
+            (Some(code), _) => alt_code_char(code.as_u64().ok_or_else(|| bad(C, "`code` must be a whole number"))?)
+                .ok_or_else(|| bad(C, format!("no character has code {code}")))?
+                .to_string(),
+            (None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
+            _ => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
+        },
     };
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
