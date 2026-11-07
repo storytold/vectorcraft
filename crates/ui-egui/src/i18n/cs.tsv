@@ -3671,6 +3671,8 @@ theme	Appearance	Motiv
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
+	Search Preferences	Hledat v předvolbách
+	No settings found	Nenalezena žádná nastavení
 	Scale Corners	Měnit velikost rohů
 	Scale Cursor Proportional to UI	Měnit velikost kurzoru úměrně rozhraní
 	Scale Strokes & Effects	Měnit velikost tahů a efektů

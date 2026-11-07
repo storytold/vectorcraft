@@ -3217,6 +3217,8 @@ theme	Appearance	იერსახე
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
+	Search Preferences	პარამეტრებში ძიება
+	No settings found	პარამეტრები ვერ მოიძებნა
 	Scale Corners	კუთხეების მასშტაბირება
 	Scale Cursor Proportional to UI	კურსორის მასშტაბირება ინტერფეისის პროპორციულად
 	Scale Strokes & Effects	კონტურებისა და ეფექტების მასშტაბირება

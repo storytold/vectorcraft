@@ -3413,6 +3413,8 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Search Preferences	Voorkeuren doorzoeken
+	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
 	Scale Cursor Proportional to UI	Cursor proportioneel schalen met UI
 	Scale Strokes & Effects	Streken & effecten schalen
