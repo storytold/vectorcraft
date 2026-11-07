@@ -520,12 +520,43 @@ mod menu_room_tests {
     #[test]
     fn menu_stops_above_the_bottom_bars() {
         // Window 1000 pt tall, bars start at 948: a menu opening at y = 100 gets 836 pt, not 888.
-        assert_eq!(menu_room(948.0, 100.0), 836.0);
+        assert_eq!(menu_room(948.0, 100.0, 980.0), 836.0);
     }
 
     #[test]
     fn menu_keeps_a_minimum_height() {
-        assert_eq!(menu_room(300.0, 290.0), 120.0);
+        assert_eq!(menu_room(300.0, 290.0, 280.0), 120.0);
+    }
+
+    /// A native panel window can be 100 pt tall, shorter than the minimum: the list then takes the
+    /// whole window, so its last items can scroll into view.
+    #[test]
+    fn a_window_shorter_than_the_minimum_limits_the_menu() {
+        assert_eq!(menu_room(100.0, 24.0, 92.0), 92.0);
+    }
+
+    /// The floor one window records does not reach a menu in another window of the same context.
+    #[test]
+    fn the_menu_floor_applies_in_the_window_that_recorded_it() {
+        let ctx = egui::Context::default();
+        let frame = |viewport_id: egui::ViewportId, height: f32, floor: Option<f32>| {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, height)));
+            let mut seen = 0.0;
+            let viewports = std::iter::once((viewport_id, egui::ViewportInfo::default())).collect();
+            let mut full = ctx.run_ui(egui::RawInput { viewport_id, viewports, screen_rect, ..Default::default() }, |ui| {
+                if let Some(y) = floor {
+                    set_menu_floor(ui.ctx(), y);
+                }
+                seen = dropdowns::menu_floor(ui.ctx());
+            });
+            full.textures_delta.clear();
+            seen
+        };
+        assert_eq!(frame(egui::ViewportId::ROOT, 1000.0, Some(948.0)), 948.0, "the main window stops at its bottom bars");
+        let panel = egui::ViewportId::from_hash_of("panel window");
+        assert_eq!(frame(panel, 240.0, None), 240.0, "a shorter panel window stops at its own bottom edge");
+        assert_eq!(frame(panel, 1400.0, None), 1400.0, "and a taller one too");
+        assert_eq!(frame(egui::ViewportId::ROOT, 1000.0, None), 948.0, "the main window keeps its floor");
     }
 }
 
