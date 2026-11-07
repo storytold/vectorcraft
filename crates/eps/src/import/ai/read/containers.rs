@@ -332,17 +332,22 @@ impl<'a> Reader<'a> {
             *clipping = false;
         }
         let mut fill = Node::new(self.doc.alloc_id(), kind);
-        // A compound clipping path's subpaths: copies of their own that don't clip.
+        // A compound clipping path's subpaths: copies with ids of their own, linked to the same swatches, that don't clip.
         for c in fill.children_mut().into_iter().flatten() {
-            let c = Arc::make_mut(c);
-            self.reid(c);
-            if let NodeKind::Path { clipping, .. } = &mut c.kind {
+            let mut copy = self.doc.reid(c);
+            self.reid_masks(&mut copy, 0);
+            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
                 *clipping = false;
             }
+            *c = Arc::new(copy);
         }
         (fill.opacity, fill.blend, fill.isolate, fill.knockout, fill.knockout_shape, fill.visible, fill.locked) =
             (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape, n.visible, n.locked);
-        if let Some(mask) = n.extras().mask.clone() {
+        // The opacity mask's art is a copy with ids of its own, linked to the same swatches.
+        if let Some(mut mask) = n.extras().mask.clone() {
+            let mut art = self.doc.reid(&mask.art);
+            self.reid_masks(&mut art, 0);
+            mask.art = Arc::new(art);
             fill.extras_mut().mask = Some(mask);
         }
         let (mut fills, mut rest) = ((*n.appearance).clone(), (*n.appearance).clone());
