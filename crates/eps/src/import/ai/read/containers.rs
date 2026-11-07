@@ -336,12 +336,20 @@ impl<'a> Reader<'a> {
             *clipping = false;
         }
         let mut fill = Node::new(self.doc.alloc_id(), kind);
+        // The copies of a path read on `%_` lines are on those lines too, as `add` records them.
+        let hidden = self.hidden_ids.contains(&n.id);
+        if hidden {
+            self.hidden_ids.insert(fill.id);
+        }
         // A compound clipping path's subpaths: copies with ids of their own, linked to the same swatches, that don't clip.
         for c in fill.children_mut().into_iter().flatten() {
             let mut copy = self.doc.reid(c);
             self.reid_masks(&mut copy, 0);
             if let NodeKind::Path { clipping, .. } = &mut copy.kind {
                 *clipping = false;
+            }
+            if hidden {
+                self.hidden_ids.insert(copy.id);
             }
             *c = Arc::new(copy);
         }
