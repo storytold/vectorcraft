@@ -177,11 +177,12 @@ fn sublayers_groups_compounds_clip_groups_and_hidden_objects_come_in() {
     let page = [10, 20, 30, 80].map(|x| page_square(x, 10)).join("\n") + "\n" + clip_fill;
     let r = import(&eps(&page, &art)).unwrap();
     let outer = &r.document.layers[0];
-    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[3]", "group[1]", "other"]);
+    assert_eq!(kinds(outer), ["group[1]", "compound[2]", "clip[2]", "group[1]", "other"]);
     let children = outer.children().unwrap();
     assert!(children[0].visible && !children[3].visible, "the hidden object is hidden, not left out");
-    // The clip path comes first in its group.
-    assert!(matches!(children[2].children().unwrap()[0].kind, NodeKind::Path { clipping: true, .. }));
+    // The clip path comes first in its group, with its fill.
+    let clip = &children[2].children().unwrap()[0];
+    assert!(matches!(clip.kind, NodeKind::Path { clipping: true, .. }) && clip.clip_paint().fill.is_some(), "{clip:?}");
     // The sublayer is a layer of the layer.
     assert!(matches!(&children[4].kind, NodeKind::Layer { .. }));
     assert_eq!(children[4].name.as_deref(), Some("Inner"));

@@ -515,7 +515,8 @@ struct Reader<'a> {
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
-    /// Painted copies of clipping paths that have a fill (drawn under what they clip).
+    /// The fills of compound clipping paths whose subpaths paint differently, as compound paths of their own (drawn
+    /// under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
     looks: HashSet<NodeId>,

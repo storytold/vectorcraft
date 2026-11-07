@@ -187,9 +187,9 @@ fn a_note_before_a_group_or_compound_path_is_not_theirs() {
     }
 }
 
-/// A clipping path's note is its own, not that of the copy that paints its fill.
+/// A filled clipping path keeps its note, and no other object takes it.
 #[test]
-fn a_clipping_paths_note_is_not_copied_to_its_painted_fill() {
+fn a_filled_clipping_paths_note_is_its_own() {
     let body =
         format!("0 Ae\nq\n{RED}%AI3_Note:clip\n{}W\nf\n%AI3_Note:\n{}f\nQ\n", rect_path(5.0, 5.0, 25.0, 25.0), rect_path(0.0, 0.0, 30.0, 30.0));
     let doc = read_ok(&layer(&body)).doc;
@@ -203,7 +203,7 @@ fn a_clipping_paths_note_is_not_copied_to_its_painted_fill() {
     walk(&art(&doc), &mut all);
     let noted: Vec<_> = all.iter().filter(|(_, n)| n == "clip").collect();
     assert_eq!(noted, [&(true, "clip".to_string())], "{all:?}");
-    assert!(all.len() >= 3, "the painted copy is there: {all:?}");
+    assert_eq!(all.len(), 3, "the group, its clipping path and the art: {all:?}");
 }
 
 /// `1 Ap` shows the center point of the paths after it until `0 Ap` (§12, showCenter), which leaves
@@ -294,8 +294,8 @@ fn object_tags_without_an_object_before_them_tag_nothing() {
     assert!(err.contains("operators VectorCraft doesn't know"), "{err}");
 }
 
-/// A clipping path's tags are its own, not those of the copy that paints its fill, and a clip
-/// group's tags after `Q` are the group's. One object keeps at most 64 tags in its data.
+/// A filled clipping path's tags are its own, and a clip group's tags after `Q` are the group's.
+/// One object keeps at most 64 tags in its data.
 #[test]
 fn object_tags_on_clipping_paths_and_the_tag_limit() {
     let body = format!(
@@ -307,6 +307,7 @@ fn object_tags_on_clipping_paths_and_the_tag_limit() {
     let top = &art(&doc);
     assert_eq!(top.len(), 1);
     assert_eq!(tags(&top[0]).1, [tag("group", "clipped")]);
+    assert_eq!(top[0].children().unwrap().len(), 2, "the clipping path and the art");
     let tagged: Vec<_> = top[0].children().unwrap().iter().filter(|k| !tags(k).1.is_empty()).map(|k| k.kind.clone()).collect();
     assert_eq!(tagged.len(), 1, "{tagged:?}");
     assert!(matches!(tagged[0], NodeKind::Path { clipping: true, .. }), "{tagged:?}");
@@ -1245,20 +1246,61 @@ fn compound_paths_and_clipping() {
     // The clipping path goes first.
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert!(matches!(children[1].kind, NodeKind::Path { clipping: false, .. }));
-    // A clipping path with a fill paints it too, under the art it clips; without one, nothing.
+    // A clipping path with a fill keeps it, and paints it under the art it clips (`Node::clip_paint`); without one,
+    // nothing.
+    let blue = Some(Color::rgb(0.0, 0.0, 1.0));
     let filled = format!("0 Ae\nq\n{RED}{}f\n0 0 1 0 0 0 1 Xa\n{}W\nf\nQ\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0));
     let doc = read_ok(&layer(&filled)).doc;
     let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
     let kinds: Vec<_> = children.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color())).collect();
-    assert_eq!(kinds, [(true, None), (false, Some(Color::rgb(0.0, 0.0, 1.0))), (false, Some(Color::rgb(1.0, 0.0, 0.0)))]);
+    assert_eq!(kinds, [(true, blue), (false, Some(Color::rgb(1.0, 0.0, 0.0)))]);
+    assert_eq!(children[0].clip_paint().fill.map(|f| fill(&f).color()), Some(blue));
     // A clipping path in a layer clips the layer.
     let doc = read_ok(&layer(&format!("{}f\n{}W\nn\n", rect_path(0.0, 0.0, 9.0, 9.0), rect_path(0.0, 0.0, 5.0, 5.0)))).doc;
     let NodeKind::Layer { clip, children, .. } = &doc.layers[0].kind else { panic!() };
     assert!(*clip && matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
+    // A filled clipping path in a layer keeps its fill too.
+    let doc = read_ok(&layer(&format!("{RED}{}f\n0 0 1 0 0 0 1 Xa\n{}W\nf\n", rect_path(0.0, 0.0, 9.0, 9.0), rect_path(0.0, 0.0, 5.0, 5.0)))).doc;
+    let NodeKind::Layer { clip: true, children, .. } = &doc.layers[0].kind else { panic!("{:?}", doc.layers[0].kind) };
+    let kinds: Vec<_> = children.iter().map(|c| (matches!(c.kind, NodeKind::Path { clipping: true, .. }), fill(c).color())).collect();
+    assert_eq!(kinds, [(true, blue), (false, Some(Color::rgb(1.0, 0.0, 0.0)))]);
+    // A compound clipping path keeps its subpaths' fill.
+    let compound = format!(
+        "0 Ae\nq\n{RED}{}f\n0 0 1 0 0 0 1 Xa\n*u\n{}h\nW\nf\n{}h\nW\nf\n*U\nQ\n",
+        rect_path(0.0, 0.0, 30.0, 30.0),
+        rect_path(5.0, 5.0, 25.0, 25.0),
+        rect_path(10.0, 10.0, 20.0, 20.0)
+    );
+    let doc = read_ok(&layer(&compound)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 2, "{children:?}");
+    assert_eq!((fill(&children[0]).color(), fill(&children[1]).color()), (blue, Some(Color::rgb(1.0, 0.0, 0.0))));
+    // One subpath filled and a later one stroked: the compound clipping path keeps the stroke, and the filled subpath's
+    // fill is a compound path of its own under the art, so the stroked subpath stays unfilled.
+    let mixed = format!(
+        "0 Ae\nq\n{RED}{}f\n0 0 1 0 0 0 1 Xa\n0 1 0 0 0 1 0 XA\n3 w\n*u\n{}h\nW\nf\n{}h\nW\nS\n*U\nQ\n",
+        rect_path(0.0, 0.0, 30.0, 30.0),
+        rect_path(5.0, 5.0, 25.0, 25.0),
+        rect_path(10.0, 10.0, 20.0, 20.0)
+    );
+    let doc = read_ok(&layer(&mixed)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children.len() == 3, "{children:?}");
+    let stroke = children[0].appearance.stroke().map(|s| (s.paint.color(), s.width));
+    assert_eq!((fill(&children[0]).color(), stroke), (None, Some((Some(Color::rgb(0.0, 1.0, 0.0)), 3.0))));
+    let NodeKind::Compound { children: filled, .. } = &children[1].kind else { panic!("{:?}", children[1].kind) };
+    assert_eq!(filled.len(), 1, "only the filled subpath: {filled:?}");
+    assert!(filled.iter().all(|p| matches!(p.kind, NodeKind::Path { clipping: false, .. })), "{filled:?}");
+    assert_eq!((fill(&children[1]).color(), children[1].appearance.stroke().is_none()), (blue, true));
+    assert_eq!(fill(&children[2]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    // A tag after the compound clipping path is its own.
+    let doc = read_ok(&layer(&mixed.replace("*U\n", "*U\n/edge (clip) XT\n"))).doc;
+    let NodeKind::Group { children, .. } = &art(&doc)[0].kind else { panic!("a clipping group") };
+    assert_eq!((tags(&children[0]).1, tags(&children[1]).1), (vec![tag("edge", "clip")], vec![]));
 }
 
-/// A stroked clipping path (`W S`, `W B`, or a gradient fill with `1 BB`) keeps its stroke on the clipping path, and a
-/// fill goes on the painted copy under the clipped art.
+/// A stroked clipping path (`W S`, `W B`, or a gradient fill with `1 BB`) keeps its stroke and its fill on the clipping
+/// path.
 #[test]
 fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
     let blue = Some(Color::rgb(0.0, 0.0, 1.0));
@@ -1279,17 +1321,11 @@ fn a_clipping_paths_stroke_stays_on_the_clipping_path() {
     let stroked = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nS\nQ\n");
     assert_eq!(children(&read_ok(&layer(&stroked)).doc), [(true, None, false, Some((blue, 3.0))), (false, red, false, None)]);
     let both = format!("0 Ae\nq\n{RED}{under}f\n0 1 0 0 0 1 0 Xa\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nB\nQ\n");
-    assert_eq!(
-        children(&read_ok(&layer(&both)).doc),
-        [(true, None, false, Some((blue, 3.0))), (false, Some(Color::rgb(0.0, 1.0, 0.0)), false, None), (false, red, false, None)]
-    );
+    assert_eq!(children(&read_ok(&layer(&both)).doc), [(true, Some(Color::rgb(0.0, 1.0, 0.0)), false, Some((blue, 3.0))), (false, red, false, None)]);
     let defs = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n0 0 0 0 1 0 0 2 0 6 %_BS\n%_0 0 0 0 1 0 0 2 0 6 0 0 Bs\n\
                 %_0 0 0 0 0 0 1 2 1 6 100 50 Bs\nBD\n%AI5_EndGradient\n";
     let gradient = format!("0 Ae\nq\n{RED}{under}f\n0 0 1 0 0 0 1 XA\n3 w\n{clip}W\nBb\n0 0 0 0 Bh\n1 (G) 5 5 0 20 1 0 0 1 0 0 1 Bg\nf\n1 BB\nQ\n");
-    assert_eq!(
-        children(&read_ok(&format!("{defs}{}", layer(&gradient))).doc),
-        [(true, None, false, Some((blue, 3.0))), (false, None, true, None), (false, red, false, None)]
-    );
+    assert_eq!(children(&read_ok(&format!("{defs}{}", layer(&gradient))).doc), [(true, None, true, Some((blue, 3.0))), (false, red, false, None)]);
     // Several clipping paths each keep their own stroke, opacity and blend mode: the second one clips a clipping group
     // inside the first one's.
     let inner = rect_path(10.0, 10.0, 20.0, 20.0);
@@ -1331,8 +1367,7 @@ fn the_compound_of_clipping_paths_keeps_their_knockout_shape() {
 
 /// Several clipping paths in a clipping group, a layer or an opacity mask's art clip to their intersection: each `W`
 /// reduces the clip set by the ones before it (AI7 spec §5.6.2). Each clipping path after the first clips a clipping
-/// group inside the one before it, and the innermost one holds the art; a clipping path's painted fill stays at its own
-/// level.
+/// group inside the one before it, and the innermost one holds the art; a filled clipping path keeps its fill.
 #[test]
 fn several_clipping_paths_clip_to_their_intersection() {
     let square = rect_path(0.0, 0.0, 80.0, 80.0);
@@ -1364,11 +1399,12 @@ fn several_clipping_paths_clip_to_their_intersection() {
     assert_eq!((two.len(), two[0].len()), (2, 2), "{two:?}");
     assert_eq!(two[0][0], (true, None, ra));
     assert_eq!(two[1], [(true, None, rb), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
-    // Three clipping paths nest twice; a filled clipping path's painted copy is clipped by the paths before it only.
+    // Three clipping paths nest twice; a filled clipping path keeps its fill at its own level, so the fill is clipped
+    // by that path and the paths before it only.
     let three =
         group(&format!("0 Ae\nq\n{a}h\nW\nn\n0 0 1 0 0 0 1 Xa\n{b}h\nW\nf\n{}h\nW\nn\n{RED}{square}f\nQ\n", rect_path(30.0, 10.0, 50.0, 90.0)));
     assert_eq!(three.len(), 3, "{three:?}");
-    assert_eq!(three[1][..2], [(true, None, rb), (false, blue, rb)]);
+    assert_eq!((three[1].len(), three[1][0]), (2, (true, blue, rb)), "{three:?}");
     assert_eq!(three[2], [(true, None, r(30.0, 10.0, 50.0, 90.0)), (false, red, r(0.0, 0.0, 80.0, 80.0))]);
     // As with one clipping path, every object in the group is clipped by all of them, in the order written, wherever
     // it is written.
@@ -1764,6 +1800,31 @@ fn a_compound_path_holding_its_drawn_look_paints_its_paths_apart() {
     a.iter().for_each(|n| leaves(n, &mut painted));
     let fills: Vec<_> = painted.iter().map(Paint::color).collect();
     assert_eq!(fills, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{a:#?}");
+}
+
+/// Clipping paths in a compound path that holds its drawn look clip as one compound path. Each one's fill is a path of
+/// its own under the art they clip, with the clipping path's opacity mask, so overlapping fills and fills that differ
+/// paint as each clipping path paints them.
+#[test]
+fn clipping_paths_beside_a_compound_paths_look_keep_their_fills() {
+    let (a, b) = (rect_path(0.0, 0.0, 20.0, 20.0), rect_path(5.0, 5.0, 25.0, 25.0));
+    let look = format!("0 Ae\nu\n{RED}{}f\n0 0 0 0 0 0 1 Xa\n{}f\nU\n9 () XW\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(10.0, 10.0, 15.0, 15.0));
+    let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)).lines().map(|l| format!("%_{l}\n")).collect();
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let children = |second: &str, after_first: &str| {
+        let body = format!("0 Ae\n*u\n{RED}{a}h\nW\nf\n{after_first}{second}{b}h\nW\nf\n{look}*U\n");
+        let a = art(&read_ok(&layer(&body)).doc);
+        let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{a:#?}") };
+        children.iter().map(|c| (c.kind.clone(), fill(c).color(), c.extras().mask.is_some())).collect::<Vec<_>>()
+    };
+    let (red, blue) = (Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let paths = |c: &[(NodeKind, Option<Color>, bool)]| {
+        assert!(matches!(c[0].0, NodeKind::Compound { .. }) && c.len() == 4, "{c:?}");
+        c[..3].iter().map(|(k, c, m)| (matches!(k, NodeKind::Path { clipping: false, .. }), *c, *m)).collect::<Vec<_>>()
+    };
+    assert_eq!(paths(&children("", "")), [(false, None, false), (true, red, false), (true, red, false)]);
+    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", "")), [(false, None, false), (true, red, false), (true, blue, false)]);
+    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", &mask)), [(false, None, false), (true, red, true), (true, blue, false)]);
 }
 
 #[test]
@@ -3700,7 +3761,7 @@ fn legacy_type_in_a_mask_rendering_mode_clips_its_clipping_group() {
     assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }) && matches!(inner[1].kind, NodeKind::Path { clipping: false, .. }));
 }
 
-/// A filled clipping path (`W` then `f`) beside type used as a mask: its painted fill stays at its own path's level,
+/// A filled clipping path (`W` then `f`) beside type used as a mask keeps its fill, which paints at its own path's level,
 /// as beside another clipping path (the reader's rule for `W` paths). Written after the type, it is painted within the
 /// type's mask, since a later mask narrows the clip set by the earlier ones (§5.6.2); written before it, the type doesn't
 /// clip it.
@@ -3709,23 +3770,21 @@ fn a_filled_clipping_path_beside_legacy_type_used_as_a_mask() {
     let square = format!("1 0 0 Xa\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
     let filled = format!("0 0 1 Xa\n{}h\nW\nf\n", rect_path(0.0, 0.0, 30.0, 30.0));
     let text = point_type("7 Tr", "Hi");
-    let is_fill = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(0.0, 0.0, 1.0));
+    let is_clip = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: true, .. }) && fill(n).color() == Some(Color::rgb(0.0, 0.0, 1.0));
     let is_art = |n: &Node| matches!(n.kind, NodeKind::Path { clipping: false, .. }) && fill(n).color() == Some(Color::rgb(1.0, 0.0, 0.0));
-    // The type first: the path's fill is in the clipping group the path clips, inside the type's.
+    // The type first: the filled path clips a clipping group inside the type's.
     let doc = legacy_read(&format!("q\n{text}{filled}{square}Q\n")).doc;
     let a = art(&doc);
     let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
     assert!(matches!(children[0].kind, NodeKind::Text(_)) && children.len() == 2, "{children:?}");
     let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
-    assert!(matches!(inner[0].kind, NodeKind::Path { clipping: true, .. }), "{inner:?}");
-    assert!(is_fill(&inner[1]) && is_art(&inner[2]) && inner.len() == 3, "{inner:?}");
-    // The path first: its fill is in the outer clipping group, which only the path clips; the type clips the art.
+    assert!(is_clip(&inner[0]) && is_art(&inner[1]) && inner.len() == 2, "{inner:?}");
+    // The path first: it clips the outer clipping group, so only the path clips its fill; the type clips the art.
     let doc = legacy_read(&format!("q\n{filled}{text}{square}Q\n")).doc;
     let a = art(&doc);
     let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{:?}", a[0].kind) };
-    assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }), "{children:?}");
-    assert!(is_fill(&children[1]) && children.len() == 3, "{children:?}");
-    let NodeKind::Group { children: inner, clip: true } = &children[2].kind else { panic!("{:?}", children[2].kind) };
+    assert!(is_clip(&children[0]) && children.len() == 2, "{children:?}");
+    let NodeKind::Group { children: inner, clip: true } = &children[1].kind else { panic!("{:?}", children[1].kind) };
     assert!(matches!(inner[0].kind, NodeKind::Text(_)) && is_art(&inner[1]) && inner.len() == 2, "{inner:?}");
 }
 
@@ -5206,8 +5265,9 @@ fn artboards_after_what_stops_the_reading() {
 
 #[test]
 fn a_compound_clipping_path_with_a_fill_paints_once_under_its_clip() {
-    // GUARDS: the painted copies of a compound's clipping subpaths went into the compound itself,
-    // doubling each subpath, so under even-odd the clip cancelled to nothing.
+    // GUARDS: copies that painted a compound's clipping subpaths went into the compound itself,
+    // doubling each subpath, so under even-odd the clip cancelled to nothing. The compound
+    // clipping path keeps the fill itself.
     let art_ = format!(
         "0 Ae\nq\n{RED}{}f\n1 XR\n*u\n0 0 0 0 0 0 1 Xa\n{}W\nf\n{}W\nf\n*U\nQ\n",
         rect_path(0.0, 0.0, 100.0, 100.0),
@@ -5216,14 +5276,13 @@ fn a_compound_clipping_path_with_a_fill_paints_once_under_its_clip() {
     );
     let doc = read_ok(&layer(&art_)).doc;
     let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("a clipping group") };
-    assert_eq!(children.len(), 3, "{children:#?}");
+    assert_eq!(children.len(), 2, "{children:#?}");
     let NodeKind::Compound { children: clip, rule } = &children[0].kind else { panic!("{:?}", children[0].kind) };
     assert_eq!(*rule, vectorcraft_geom::FillRule::EvenOdd);
     assert_eq!(clip.len(), 2);
     assert!(clip.iter().all(|c| matches!(c.kind, NodeKind::Path { clipping: true, .. })));
-    let NodeKind::Compound { children: painted, .. } = &children[1].kind else { panic!("{:?}", children[1].kind) };
-    assert_eq!((painted.len(), fill(&children[1]).color()), (2, Some(Color::rgb(0.0, 0.0, 1.0))));
-    assert_eq!(fill(&children[2]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(fill(&children[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
 }
 
 #[test]
@@ -8664,13 +8723,13 @@ fn a_multi_layer_mask_in_a_group_or_sublayer() {
 
 #[test]
 fn a_multi_layer_masks_path_can_be_painted_or_compound() {
-    // `W f`: the path also paints, under what the mask covers.
+    // `W f`: the path also paints, under what the mask covers; it keeps its fill.
     let painted = format!("{}Mb\n0 0 0 1 k\n{}h\nW\nf\nMd\n{}MB\n{END7}", begin7("A", 1), rect_path(40.0, 40.0, 120.0, 120.0), masked(15.0));
     let doc = read7(&painted).doc;
-    assert_eq!(layer_trees(&doc)[0].1, "k[c p p]");
+    assert_eq!(layer_trees(&doc)[0].1, "k[c p]");
     let group = doc.layers[0].children().unwrap()[0].clone();
     let kids = group.children().unwrap();
-    assert_eq!(fill(&kids[1]).color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), "the painted path first");
+    assert_eq!(fill(&kids[0]).color(), Some(Color::cmyk(0.0, 0.0, 0.0, 1.0)), "the clipping path's fill");
     // A compound path of clipping paths.
     let compound = format!(
         "{}Mb\n*u\n{}h\nW\nn\n{}h\nW\nn\n*U\nMd\n{}MB\n{END7}",
