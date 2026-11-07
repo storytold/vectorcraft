@@ -2933,6 +2933,8 @@ for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke
 holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
+`object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
+art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
