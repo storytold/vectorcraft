@@ -3473,6 +3473,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串接文字区域已省略
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字对象内更改书写方向的文字按其第一个字符的方向打开
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串接区域、绕排文字或复合路径中用作蒙版的文字不会剪切
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	文件中没有预览的链接图片在找到其文件之前显示占位符：请在“链接”面板中重新链接
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容纳所显示字体一行的区域文字已加高框架 ({_1})：否则文字不会显示

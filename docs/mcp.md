@@ -5099,6 +5099,8 @@ and Cut take. Typing, Delete and Cut replace the whole story as one undo step (`
 frames whose text goes), and a fill, stroke, `type.step` or Character or Paragraph panel change applies to the text of
 every frame (the Character panel sends `text.setRangeStyle {id, story: true}`, which styles every frame's text in one
 undo step). Remove Line Breaks, Remove Paragraph Breaks and Convert to Text also act on the text of every frame, as
+one undo step. The panels change the frames that are in the edited frame's thread at the time of the change, locked and
+hidden frames included, and not a frame that has left it. A caret move or a click ends the story selection.
 one undo step. A caret move or a click ends the story selection. Switching to the Eyedropper keeps the story selected,
 and switching back to a Type tool restores it. `appearance.copyFrom` and `paint.sampleColor` then apply to the text of
 every frame as one undo step, and `appearance.copyFrom` leaves out a frame that is its `source`. While the story stays

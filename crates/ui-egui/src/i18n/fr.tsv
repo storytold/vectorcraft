@@ -4672,6 +4672,7 @@ axis	Both	Les deux
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	le texte captif dans des cadres trop bas pour une ligne de la police dans laquelle il s’affiche a reçu des cadres plus hauts ({_1}) : il ne s’afficherait pas autrement
