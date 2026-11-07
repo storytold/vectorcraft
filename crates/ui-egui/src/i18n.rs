@@ -97,7 +97,7 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 28] = [
+pub static LANGUAGES: [LangInfo; 29] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
     // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
@@ -352,6 +352,16 @@ pub static LANGUAGES: [LangInfo; 28] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
+    // Norwegian Bokmal. `nb-NO` from browsers and Windows/macOS; `no` and `nn` POSIX locales
+    // resolve here too (see `candidates`). Plurals follow the English rule: one (1), other.
+    LangInfo {
+        code: "nb",
+        name: "Norsk",
+        source: include_str!("i18n/nb.tsv"),
+        plural: plural_one_other,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
 ];
 
 impl LangInfo {
@@ -439,6 +449,11 @@ fn candidates(tag: &str) -> Vec<String> {
         // Chinese by region when no script is given.
         let script = if parts.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")) { "zh-hant" } else { "zh-hans" };
         out.insert(out.len() - 1, script.to_string());
+    }
+    if matches!(primary, "no" | "nb" | "nn") && !out.iter().any(|c| c == "nb") {
+        // Norwegian arrives as `nb` (Bokmal) from browsers, Windows and macOS, but as `no` or
+        // `nn` from POSIX locales; all three select this Bokmal catalog rather than English.
+        out.insert(out.len() - 1, "nb".to_string());
     }
     out
 }
