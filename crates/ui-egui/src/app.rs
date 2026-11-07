@@ -70,6 +70,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
                 fill: None,
