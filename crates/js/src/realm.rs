@@ -145,9 +145,12 @@ impl Realm {
         &self.interp.limits
     }
 
-    /// Sets the limits for the next run.
+    /// Sets the limits for the next run. A heap that is already larger than the new
+    /// [`Limits::heap_bytes`] ends the next run with the heap limit unless a collection frees
+    /// enough of it.
     pub fn set_limits(&mut self, limits: Limits) {
         self.interp.limits = limits;
+        self.interp.reset_gc_threshold();
     }
 
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.

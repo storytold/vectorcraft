@@ -317,6 +317,85 @@ fn strings_from_host_functions_count_toward_the_heap() {
 }
 
 #[test]
+fn declarations_check_the_heap_before_they_are_bound() {
+    // Each script declares more than fits in the heap. The run ends with the heap limit before
+    // the bindings are made, so the estimate never goes past the limit.
+    // Short names keep the source strings well inside the heap while the bindings are not.
+    let limits = Limits { heap_bytes: 2 << 20, ..Limits::default() };
+    let short = |mut i: usize| {
+        let mut name = String::from("_");
+        loop {
+            name.push(char::from(b'a' + (i % 26) as u8));
+            i /= 26;
+            if i == 0 {
+                return name;
+            }
+        }
+    };
+    let vars = (0..40_000).map(short).collect::<Vec<_>>().join(",");
+    let funs = (0..20_000).map(|i| format!("function f{i}() {{}}")).collect::<String>();
+    let cases = [
+        format!("var {vars};"),
+        funs.clone(),
+        format!("(function () {{ eval('var {vars};'); }})();"),
+        format!("(function () {{ eval('{funs}'); }})();"),
+        format!("(0, eval)('\"use strict\"; var {vars};');"),
+        format!("Function('var {vars};')();"),
+        format!("Function('{funs}')();"),
+    ];
+    let mut wrong = Vec::new();
+    for (i, src) in cases.iter().enumerate() {
+        let mut realm = small(limits.clone());
+        let r = realm.run(src).map_err(|e| e.kind);
+        let bytes = realm.interp().heap.bytes;
+        if r != Err(RunErrorKind::Limit(LimitKind::Heap)) || bytes > limits.heap_bytes {
+            wrong.push((i, r, bytes));
+        }
+    }
+    assert!(wrong.is_empty(), "cases that bound past the limit: {wrong:?}");
+    let few = (0..1000).map(|i| format!("b{i}")).collect::<Vec<_>>().join(",");
+    let mut realm = small(limits);
+    assert_eq!(realm.run(&format!("var {few}; b999 = 1; Function('var {few}; return 2')() + b999")), Ok(JsValue::Number(3.0)));
+}
+
+#[test]
+fn declarations_take_fuel() {
+    let vars = (0..10_000).map(|i| format!("a{i}")).collect::<Vec<_>>().join(",");
+    let mut realm = small(Limits { fuel: 1000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, &format!("var {vars};")), LimitKind::Fuel);
+    assert_eq!(limit(&mut realm, &format!("Function('var {vars};')();")), LimitKind::Fuel);
+}
+
+#[test]
+fn a_lower_heap_limit_applies_to_what_is_already_live() {
+    // A heap already past the new limit ends the next run.
+    let mut realm = small(Limits::default());
+    realm.run("var keep = []; for (var i = 0; i < 100000; i++) keep[i] = {i: i};").unwrap();
+    realm.set_limits(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "for (var j = 0; j < 1000; j++) ({j: j});"), LimitKind::Heap);
+    realm.set_limits(Limits::default());
+    realm.run("keep = null;").unwrap();
+    realm.set_limits(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    assert_eq!(realm.run("for (var j = 0; j < 1000; j++) ({j: j}); j"), Ok(JsValue::Number(1000.0)));
+    // A heap below the new limit cannot grow past it: the next collection runs by the new limit,
+    // not by when it would have run under the old, higher one.
+    let mut realm = small(Limits::default());
+    realm.run("var keep = []; for (var i = 0; i < 100000; i++) keep[i] = {i: i};").unwrap();
+    let live = realm.collect_garbage();
+    realm.set_limits(Limits { heap_bytes: live + (1 << 20), ..Limits::default() });
+    assert_eq!(limit(&mut realm, "var more = []; for (var j = 0; j < 20000; j++) more[j] = {j: j};"), LimitKind::Heap);
+}
+
+#[test]
+fn to_number_skips_the_white_space_the_lexer_skips() {
+    let mut realm = small(Limits::default());
+    assert_eq!(realm.run("var n = +'\\u180E'; n !== n"), Ok(JsValue::Bool(true)), "U+180E is not white space");
+    assert_eq!(realm.run("var m = +'\\u180E1'; m !== m"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("+' \\t\\n\\u2028\\u3000\\uFEFF 1 \\u00A0'"), Ok(JsValue::Number(1.0)));
+    assert_eq!(realm.run("+'   1 '"), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
 fn an_infinite_loop_ends_with_the_fuel_limit() {
     let mut realm = small(Limits { fuel: 100_000, ..Limits::default() });
     assert_eq!(limit(&mut realm, "for (;;) {}"), LimitKind::Fuel);

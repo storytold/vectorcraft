@@ -283,8 +283,10 @@ enum Cell {
 /// The estimated bytes of a property or a binding entry. A collection adds its name's code units
 /// separately, counting a buffer that several names or strings share once.
 pub(crate) const PROP_BYTES: usize = 64;
-const OBJECT_BYTES: usize = 96;
-const ENV_BYTES: usize = 64;
+/// The estimated bytes of an object without its properties.
+pub(crate) const OBJECT_BYTES: usize = 96;
+/// The estimated bytes of an environment without its bindings.
+pub(crate) const ENV_BYTES: usize = 64;
 /// The estimated bytes of a rope node.
 pub(crate) const ROPE_BYTES: usize = 48;
 

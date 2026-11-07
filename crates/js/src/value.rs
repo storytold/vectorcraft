@@ -202,10 +202,10 @@ impl Drop for Str {
     }
 }
 
-/// White space and line terminators as StrWhiteSpaceChar (section 9.3.1) counts them.
+/// White space and line terminators as StrWhiteSpaceChar (section 9.3.1) counts them: the same
+/// classes the lexer uses between tokens.
 pub(crate) fn is_str_space(u: u16) -> bool {
-    matches!(u, 0x09 | 0x0A | 0x0B | 0x0C | 0x0D | 0x20 | 0xA0 | 0x1680 | 0x180E | 0x2028 | 0x2029 | 0x202F | 0x205F | 0x3000 | 0xFEFF)
-        || (0x2000..=0x200A).contains(&u)
+    crate::chars::is_whitespace(u32::from(u)) || crate::chars::is_line_terminator(u32::from(u))
 }
 
 /// ToNumber applied to a string (section 9.3.1): the StringNumericLiteral grammar, NaN for

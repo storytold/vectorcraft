@@ -23,8 +23,8 @@ use crate::ast::BinaryOp;
 use crate::bytecode::{Code, CodeKind, Op, Source};
 use crate::compiler::{CompileFail, compile_program};
 use crate::heap::{
-    ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OPEN, ObjId, Object, PROP_BYTES, Prop,
-    PropMap, ROPE_BYTES, Roots, WRITABLE, key, string_bytes,
+    ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
+    Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, key, string_bytes,
 };
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
@@ -186,6 +186,30 @@ fn index_keys_bytes(len: usize) -> usize {
     total
 }
 
+/// The estimated bytes of a binding or property named by `len` code units.
+fn binding_bytes(len: usize) -> usize {
+    PROP_BYTES + string_bytes(len)
+}
+
+/// At least the bytes that a function object made from `code` adds to the heap: the function,
+/// its prototype object, their properties and the environment holding a function expression's
+/// own name.
+fn closure_bytes(code: &Code) -> usize {
+    let props = if code.strict { 5 } else { 3 };
+    let named = code.self_name.as_ref().map_or(0, |n| ENV_BYTES + binding_bytes(n.len()));
+    2 * OBJECT_BYTES + props * binding_bytes("constructor".len()) + named
+}
+
+/// At least the bytes that declaration binding instantiation (section 10.5) adds to the heap for
+/// the function declarations and variables of `code`.
+fn declaration_bytes(code: &Code) -> usize {
+    let funs = code.fun_decls.iter().fold(0usize, |total, (name, fi)| {
+        let closure = code.functions.get(*fi as usize).map_or(0, |f| closure_bytes(f));
+        total.saturating_add(binding_bytes(name.len()) + closure)
+    });
+    code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
+}
+
 /// A call to a function written in JavaScript, ready to enter.
 struct Entry {
     callee: ObjId,
@@ -270,6 +294,11 @@ impl Interp {
 
     fn next_threshold(&self) -> usize {
         (self.heap.bytes.saturating_mul(2)).max(MIN_GC_BYTES).min(self.limits.heap_bytes)
+    }
+
+    /// Recomputes when the next collection runs, after the limits change.
+    pub(crate) fn reset_gc_threshold(&mut self) {
+        self.gc_threshold = self.next_threshold();
     }
 
     // ---- errors ----
@@ -1558,6 +1587,20 @@ impl Interp {
         if self.frames.len() >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
+        let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
+        let arguments =
+            if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
+        let need = declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(params).saturating_add(arguments);
+        if self.heap.bytes.saturating_add(need) > self.limits.heap_bytes {
+            let mark = self.temp_roots.len();
+            self.temp_roots.push(Value::Object(callee));
+            self.temp_roots.push(this.clone());
+            self.temp_roots.extend(construct.map(Value::Object));
+            self.temp_roots.extend(args.iter().cloned());
+            let reserved = self.reserve_heap(need);
+            self.temp_roots.truncate(mark);
+            reserved?;
+        }
         let this = if code.strict {
             this
         } else {
@@ -1585,16 +1628,19 @@ impl Interp {
         Ok(())
     }
 
-    /// Declaration binding instantiation for function code (section 10.5).
+    /// Declaration binding instantiation for function code (section 10.5). Each parameter and
+    /// declaration takes a unit of fuel.
     fn instantiate_function(&mut self, code: &Rc<Code>, outer: EnvId, args: &[Value], callee: ObjId) -> JsResult<EnvId> {
         let mut bindings = PropMap::default();
         for (i, p) in code.params.iter().enumerate() {
+            self.use_fuel()?;
             bindings.insert(p.clone(), Binding { value: args.get(i).cloned().unwrap_or(Value::Undefined), mutable: true, deletable: false });
         }
         let name_bytes = bindings.iter().map(|(k, _)| string_bytes(k.len())).sum::<usize>();
         let env = self.heap.alloc_env(Env::Decl { bindings, outer: Some(outer) });
         self.heap.bytes += name_bytes;
         for (name, fi) in &code.fun_decls {
+            self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, env)?;
             self.env_insert(env, name.clone(), Binding { value: Value::Object(f), mutable: true, deletable: false })?;
@@ -1605,6 +1651,7 @@ impl Interp {
             self.env_insert(env, key("arguments"), Binding { value: Value::Object(a), mutable: !code.strict, deletable: false })?;
         }
         for v in &code.vars {
+            self.use_fuel()?;
             if !has(self, v) {
                 self.env_insert(env, v.clone(), Binding { value: Value::Undefined, mutable: true, deletable: false })?;
             }
@@ -1722,6 +1769,7 @@ impl Interp {
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         let units = s.flat();
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
+        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
         let (caller_env, caller_var_env, this) = (frame.env, frame.var_env, frame.this.clone());
         let (env, var_env) = if code.strict {
@@ -1741,6 +1789,7 @@ impl Interp {
         if self.reentry >= self.limits.reentry {
             return Err(Abrupt::Limit(LimitKind::Reentry));
         }
+        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let (env, global) = (self.global_env, self.global);
         let (env, var_env) = if code.strict && is_eval {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) });
@@ -1777,15 +1826,18 @@ impl Interp {
         Ok(())
     }
 
-    /// Declaration binding instantiation for global and eval code (section 10.5).
+    /// Declaration binding instantiation for global and eval code (section 10.5). The caller has
+    /// reserved [`declaration_bytes`] of `code`; each declaration takes a unit of fuel.
     fn instantiate_global(&mut self, code: &Rc<Code>, var_env: EnvId, is_eval: bool) -> JsResult<()> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         for (name, fi) in &code.fun_decls {
+            self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, var_env)?;
             self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
         }
         for v in &code.vars {
+            self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
         }
         Ok(())
