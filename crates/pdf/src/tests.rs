@@ -30,6 +30,7 @@ mod layers;
 mod links;
 pub(super) mod live_text;
 mod marks;
+mod measuring;
 mod mesh_export;
 mod output;
 mod pdf13;

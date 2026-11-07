@@ -3219,6 +3219,9 @@ proptest! {
         fidelity in prop::sample::select(vec!["50", "0", "100", "101", "-1", "1e308", "nan"]),
         size in prop::sample::select(vec!["[1 1]", "[3 2]", "[0 0]", "[51 1]", "[100000 100000]", "[-1 2]", "[1e308 1]"]),
         corner in prop::sample::select(vec!["10 10", "1e308 -1e308", "nan 0", "10 10 10 10", "0"]),
+        art_width in prop::sample::select(vec!["81", "80", "0", "-5", "1e308", "nan"]),
+        art_height in prop::sample::select(vec!["81", "80", "0", "-5", "1e308", "nan"]),
+        weight in prop::sample::select(vec!["1", "0", "1e308", "-1"]),
         edit in 0i64..2,
         cut in 0usize..2_000,
         edits in prop::collection::vec((0usize..2_000, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '(', ')', '/', ':', ';', ',', '[', ']', '%', '_', 'X', 'u', 'U'])), 0..8),
@@ -3231,9 +3234,9 @@ proptest! {
             n("10", "90"),
             n("90", "90")
         );
-        let content = "%_u\n%_1 0 0 1 0 0 Xa\n%_10 10 m\n%_10 90 L\n%_90 90 L\n%_90 10 L\n%_f\n%_U\n";
+        let content = format!("%_u\n%_1 0 0 1 0 0 Xa\n%_0 1 1 0 1 0 0 XA\n%_{weight} w\n%_10 10 m\n%_10 90 L\n%_90 90 L\n%_90 10 L\n%_b\n%_U\n");
         let keys = format!(
-            "%_{word} /Int (AIDeformOptionsKey) ,\n%_{fidelity} /Int (AIDeformFidelityKey) ,\n%_{edit} /Bool (AIDeformEditModeKey) ,\n%_{style} /Int (DeformStyle) ,\n%_0.5 /Real (DeformValue) ,\n%_1 /Bool (Rotate) ,\n"
+            "%_{word} /Int (AIDeformOptionsKey) ,\n%_{fidelity} /Int (AIDeformFidelityKey) ,\n%_{edit} /Bool (AIDeformEditModeKey) ,\n%_{style} /Int (DeformStyle) ,\n%_0.5 /Real (DeformValue) ,\n%_1 /Bool (Rotate) ,\n%_{art_width} /Real (AIDeformArtWidthKey) ,\n%_{art_height} /Real (AIDeformArtHeightKey) ,\n"
         );
         let art = format!(
             "%_u\n{mesh}%_U\n%_/ArtDictionary :\n{keys}%_X=\n{content}%_X+\n%_ (AIDeformArtKey) ,\n%_{kind} /Int (AIDeformStyle) ,\n%_;\n%_\nu\n1 0 0 1 0 0 Xa\n12 12 m\n12 88 L\n88 88 L\nf\nU\n(Adobe Deform Plugin) 1 0 0 XP\n0 0 1 1 0 0 Xa\n0 0 m\n5 5 L\nf\n"
@@ -3410,6 +3413,54 @@ proptest! {
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose type (point type turned, vertical type, area type, threaded area type and type
+    /// on a path, their stubs with the frames' paths, and the text document they name, as the `.ai`
+    /// writer writes them) is damaged: read from its editing data alone and beside a page.
+    #[test]
+    fn ai_text_documents_never_panic(
+        cut in 0usize..30_000,
+        edits in prop::collection::vec((0usize..30_000, prop::sample::select(vec!['0', '1', '9', ' ', '\n', '(', ')', '[', ']', '<', '>', '/', '%', '_', 'n', 'f', 'z', '~'])), 0..16),
+    ) {
+        use vectorcraft_doc::{CharStyle, Node, NodeKind, TextKind, TextObject};
+        use vectorcraft_geom::{Affine, Point, Rect, shapes};
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut point = TextObject::point(Point::new(10.0, 30.0), "Turned\ntype", CharStyle::default());
+        point.xf *= Affine::rotate(0.4);
+        let mut area = TextObject::point(Point::ZERO, "Area type", CharStyle::default());
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 40.0, 90.0, 90.0)) };
+        area.xf = Affine::IDENTITY;
+        let mut on_path = TextObject::point(Point::ZERO, "On a path", CharStyle::default());
+        on_path.kind = TextKind::OnPath { path: shapes::ellipse(Rect::new(100.0, 20.0, 180.0, 80.0)), start: 0.25, end: None };
+        on_path.xf = Affine::IDENTITY;
+        let mut down = TextObject::point(Point::new(190.0, 10.0), "Down", CharStyle::default());
+        down.vertical = true;
+        let mut down_area = area.clone();
+        down_area.vertical = true;
+        down_area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(150.0, 40.0, 180.0, 90.0)) };
+        let mut first = area.clone();
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 5.0, 50.0, 35.0)) };
+        first.runs = vec![vectorcraft_doc::TextRun::new("A story through two frames", CharStyle::default())];
+        let mut second = first.clone();
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(60.0, 5.0, 90.0, 35.0)) };
+        second.runs = vec![vectorcraft_doc::TextRun::new("", CharStyle::default())];
+        for t in [point, area, on_path, down, down_area] {
+            let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let (first, second) = (Node::new(doc.alloc_id(), NodeKind::Text(Box::new(first))), Node::new(doc.alloc_id(), NodeKind::Text(Box::new(second))));
+        doc.text_threads.push(vec![first.id, second.id]);
+        doc.insert(Some(layer), usize::MAX, first).unwrap();
+        doc.insert(Some(layer), usize::MAX, second).unwrap();
+        let program = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap().program;
+        let written = String::from_utf8_lossy(&program);
+        prop_assert_eq!(written.matches("/AI11Text :").count(), 7, "every text object is written as text");
+        let text = mutate_text(&written, cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("hostile .ai type", || vectorcraft_eps::ai_alone(&private).ok().map(|r| r.0))?;
+        survive("hostile .ai type beside a page", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose variable library is damaged or hostile: the library is counted for the warning
     /// whether the layers are read or not (an inserted `Z` can make an operator the reader doesn't
     /// handle, and then the layers aren't read).
@@ -3584,6 +3635,15 @@ proptest! {
         }
     }
 
+    /// A `.ai` whose Art brushed path is damaged or hostile: the brush's object and art, the style's
+    /// entries and the path, cut short or edited, read and drawn.
+    #[test]
+    fn ai_art_brushed_paths_never_panic(cut in 0usize..1_600, edits in prop::collection::vec((0usize..1_600, prop::sample::select(vec!['0', '9', '-', '.', 'e', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', 'u', 'U', 'A', 'Z'])), 0..12)) {
+        let text = mutate_text(&art_brushed_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai Art brushed path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// Brush objects of every kind with any parameters, the brush manager's order with any names,
     /// and brush art sections nested or cut short: read with the layers, or as a library without
     /// them, the brushes kept within their ranges.
@@ -3633,8 +3693,8 @@ proptest! {
     }
 }
 
-/// Editing data with two symbols (S2's art holds an instance of S1), the symbol list and a layer of
-/// instances, as the format writes them.
+/// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
+/// symbol list and a layer of instances, as the format writes them.
 fn symbols_text() -> String {
     use vectorcraft_testkit::ai;
     let def = |name: &str, art: &str, reg: u32| {
@@ -3643,7 +3703,12 @@ fn symbols_text() -> String {
         )
     };
     let inst = |name: &str, m: &str| format!("/SymbolInstance :\n({name}) /SymbolRef ,\n{m} /RTransformMatrix\n;\n9 () XW\n");
-    let defs = def("S1", "0 1 1 0 1 0 0 Xa\n-2 -2 m\n2 -2 L\n2 2 L\n-2 2 L\nf\n", 5) + &def("S2", &inst("S1", "1 0 0 -1 -8081 8237"), 1);
+    // Non-native art keeps ASCII85 data in comment lines, some of them `%_` lines holding a `(`.
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n\
+                   %,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n";
+    let defs = def("F", &format!("{foreign}-2 -2 m\n2 -2 L\n2 2 L\nf\n"), 5)
+        + &def("S1", "0 1 1 0 1 0 0 Xa\n-2 -2 m\n2 -2 L\n2 2 L\n-2 2 L\nf\n", 5)
+        + &def("S2", &inst("S1", "1 0 0 -1 -8081 8237"), 1);
     let list = "%AI24_BeginSymbolList\n(S2)\n(S1)\n%AI24_EndSymbolList\n";
     let page = ai::layer(
         "L",
@@ -3668,7 +3733,7 @@ fn the_symbols_fuzz_data_opens_live() {
     let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&symbols_text())].concat();
     let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     assert!(layered, "{warnings:?}");
-    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).filter(|n| *n != "F").collect();
     assert_eq!(names, ["S2", "S1"]);
     let mut instances = 0;
     doc.walk(|n| instances += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })));
@@ -3740,6 +3805,36 @@ fn the_objects_on_path_fuzz_data_opens_live() {
     let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     let g = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
     assert!(g.extras().objects_on_path.is_some(), "{g:?}");
+}
+
+/// Editing data with an Art brush, its art, and a path with its drawn look and the brush in its art
+/// style, as the format writes them.
+fn art_brushed_text() -> String {
+    use vectorcraft_testkit::ai;
+    let tool = "Adobe ArtOnPath Brush Tool";
+    let object = format!(
+        "%AI8_BeginPluginObject\n({tool})\n(R)\n(2 / A/ / / / / 0 0/ 5 0 0 0 /  1) -\n( 1 1 0 1 0 0 0 1 1 0 0 0 0 1) .\n%AI8_EndPluginObject\n"
+    );
+    let art = "%AI8_BeginBrushPattern\n(A)\n0 A\n0 g\n0 0 m\n40 0 L\n40 8 L\nf\n%AI8_EndBrushPattern\n";
+    let style = format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(S) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n({tool}) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         0 /Bool (Proportional) ,\n0 /Bool (Segmented) ,\n1 /Real (Scaling) ,\n1 /Real (MinScaling) ,\n1 /Real (MaxScaling) ,\n1 /Int (Adjustment) ,\n1 /Bool (FoldAdjustment) ,\n1 /Int (Colorization) ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 K\n0 1 0 0 0 Xy\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n/GObjRef : (R) ({tool}) /PluginObject ; (Brush) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+    );
+    let path = "0 Ae\nu\n0 g\n10 10 m\n90 10 L\n90 30 L\nf\nU\n0 0 Xd\n6 () XW\n%_10 20 m\n%_90 20 L\n%_90 80 L\n%_n\n1 (S) XW\n";
+    ai::editing_data(100.0, 100.0, &format!("{object}{art}{style}{}", ai::layer("L", path)))
+}
+
+/// The data [`ai_art_brushed_paths_never_panic`] damages, as it is, opens with its path live and the
+/// brush on its stroke.
+#[test]
+fn the_art_brushed_fuzz_data_opens_live() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&art_brushed_text())].concat();
+    // Trusted: the empty page it is read beside isn't compared with its art.
+    let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    let n = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("R"), "{warnings:?} {n:?}");
 }
 
 /// The ids of the objects of an Objects on Path group in the fuzz cases.
@@ -4165,6 +4260,7 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%_/AI11Text :\n%_0 /StoryIndex ,\n%_;\n",
             "/SymbolInstance :",
             "/Binary : /ASCII85Decode ,",
+            "/AI11TextDocument : /ASCII85Decode ,",
             "~>",
             "p",
             "P",
@@ -4564,11 +4660,15 @@ proptest! {
 
     /// A group with an Effect › Pathfinder style whose dictionary is hostile: any `Command`, keys of
     /// any type and value (missing, repeated, unknown, not finite), shown or hidden, the style cut
-    /// short anywhere; in editing data, an EPS and a `.ai`. A `Command` other than 0 never becomes
-    /// a live effect.
+    /// short anywhere; in editing data, an EPS and a `.ai`. The dictionary may also start with every
+    /// option at the value read and any `Mix`. A `Command` other than 0 to 11 never becomes a live
+    /// effect, and a live Soft Mix's Mixing Rate is a number from 1 to 100.
     #[test]
     fn ai_pathfinder_styles_never_panic(
-        command in prop_oneof![(-3i64..16).prop_map(|c| c.to_string()), arb_num()],
+        command in prop_oneof![(-3i64..16).prop_map(|c| c.to_string()), Just("11".to_string()), arb_num()],
+        defaults in any::<bool>(),
+        bare in any::<bool>(),
+        mix in prop_oneof![arb_num(), prop::sample::select(vec!["0.5", "0.3", "0.01", "0.0099", "1", "1.0001", "NaN", "1e999"]).prop_map(str::to_string)],
         keys in prop::collection::vec(
             (
                 prop::sample::select(vec!["Mix", "Precision", "RemovePoints", "ExtractUnpainted", "ConvertCustom", "TrapTint", "TrapThickness", "Command", "Extra"]),
@@ -4581,7 +4681,19 @@ proptest! {
         cut in 0usize..4_000,
     ) {
         use vectorcraft_testkit::ai;
+        let options = if defaults {
+            format!(
+                "1 /Bool (ConvertCustom) ,\n1 /Bool (ExtractUnpainted) ,\n{mix} /Real (Mix) ,\n10 /Real (Precision) ,\n0 /Bool (RemovePoints) ,\n\
+                 1 /Real (TrapAspect) ,\n0 /Bool (TrapConvertCustom) ,\n1 /Real (TrapMaxTint) ,\n0 /Bool (TrapReverse) ,\n0.25 /Real (TrapThickness) ,\n\
+                 0.4 /Real (TrapTint) ,\n0.05 /Real (TrapTintTolerance) ,\n"
+            )
+        } else {
+            String::new()
+        };
+        // With every option there, the random keys are left out half the time, so the style can be read.
+        let keys = if defaults && bare { &keys[..0] } else { &keys[..] };
         let dict: String = keys.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+        let dict = format!("{options}{dict}");
         let styles = format!(
             "%AI9_BeginArtStyles\n/KnownStyle :\n(PF) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
              /BasicFilter :\n(Adobe Pathfinder) 1 0 /Filter ,\n{} /Visible ,\n/Dictionary : /NotRecorded ,\n{command} /Int (Command) ,\n{dict}; /Dict ;\n /Part ,\n\
@@ -4593,12 +4705,17 @@ proptest! {
         let group = "0 Ae\nu\n1 0 0 1 0 0 Xa\n10 10 m\n10 60 L\n80 60 L\n80 10 L\nf\nU\n\
                      %_0 Ae\n%_u\n%_1 0 0 1 0 0 Xa\n%_10 10 m\n%_10 50 L\n%_50 50 L\n%_50 10 L\n%_f\n%_0 0 1 0 0 0 1 Xa\n%_40 20 m\n%_40 60 L\n%_80 60 L\n%_80 20 L\n%_f\n%_U\n1 (PF) XW\n";
         let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", group)));
-        let live = command.parse::<f64>().is_ok_and(|c| c == 0.0);
+        let live = command.parse::<f64>().is_ok_and(|c| (0.0..=11.0).contains(&c) && c.fract() == 0.0);
         let check = |d: Option<Document>| {
-            if let Some(d) = &d
-                && !live
-            {
-                d.walk(|n| assert!(!n.appearance.effects.iter().any(|e| e.id.starts_with("pathfinder.")), "Command {command}: {:?}", n.appearance.effects));
+            if let Some(d) = &d {
+                d.walk(|n| {
+                    let effects = &n.appearance.effects;
+                    assert!(live || !effects.iter().any(|e| e.id.starts_with("pathfinder.")), "Command {command}: {effects:?}");
+                    for e in effects.iter().filter(|e| e.id == "pathfinder.softMix") {
+                        let rate = e.params.get("mixingRate").and_then(Value::as_f64);
+                        assert!(rate.is_some_and(|r| (1.0..=100.0).contains(&r)), "Mix {mix}: {effects:?}");
+                    }
+                });
             }
             d
         };
