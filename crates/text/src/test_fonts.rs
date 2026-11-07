@@ -988,6 +988,34 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
     Some(builder.build())
 }
 
+/// The family of [`tall_ideograph_font`].
+pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
+
+/// A face that maps the ideograph 编 to the bundled Source Sans 3 `H` outline, which stands on the
+/// baseline, with a taller ascent (1,058 units per 1,000) and descent (262) than Source Sans 3 in
+/// its `hhea` and `OS/2` tables and no line gap: the vertical proportions of a CJK system face.
+pub fn tall_ideograph_font() -> Option<Vec<u8>> {
+    const ASCENT: i16 = 1058;
+    const DESCENT: i16 = 262;
+    let mut data = remapped_source_sans(TALL_IDEOGRAPH_FAMILY, "TallIdeographSans-Regular", &[('编', 'H')])?;
+    let tables: Vec<(Tag, usize)> = {
+        let font = skrifa::FontRef::new(&data).ok()?;
+        font.table_directory.table_records().iter().map(|r| (Tag::new(&r.tag().to_be_bytes()), r.offset() as usize)).collect()
+    };
+    let (ascent, descent, gap) = (ASCENT.to_be_bytes(), (-DESCENT).to_be_bytes(), [0, 0]);
+    for (tag, at) in tables {
+        if tag == Tag::new(b"hhea") {
+            // ascender, descender and lineGap at bytes 4 to 10.
+            data.get_mut(at + 4..at + 10)?.copy_from_slice(&[ascent, descent, gap].concat());
+        } else if tag == Tag::new(b"OS/2") {
+            // sTypoAscender, sTypoDescender, sTypoLineGap, usWinAscent and usWinDescent at bytes 68 to 78.
+            let win = [ASCENT.unsigned_abs().to_be_bytes(), DESCENT.unsigned_abs().to_be_bytes()];
+            data.get_mut(at + 68..at + 78)?.copy_from_slice(&[ascent, descent, gap, win[0], win[1]].concat());
+        }
+    }
+    Some(data)
+}
+
 /// The family of [`soft_hyphen_outline_font`].
 pub const SOFT_HYPHEN_OUTLINE_FAMILY: &str = "Soft Hyphen Profile Sans";
 
