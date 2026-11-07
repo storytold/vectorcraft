@@ -6382,6 +6382,13 @@ envelopes, the path for a top-object envelope); the content keeps the envelope's
 opacity mask.
 Type inside an envelope distorts as its glyph outlines, run by run in each run's paint, on the canvas and in every
 export (SVG, PDF, EPS, EMF/WMF, DXF).
+An envelope maps type from the bounds of its glyph outlines, underlines and strikethroughs instead of its laid-out
+box (ascent to descent, or an area's frame) when the type is on its own, in groups and layers, or used as a clipping
+path. Inline graphics in the type count by their boxes. Rotated type and type in perspective map from the bounds of
+their outlines as they are drawn. `object.envelope.makeWithMesh`, `object.envelope.makeWithTopObject` and
+`object.envelope.resetWithMesh` with `maintainShape: false` use those bounds. Type that draws nothing keeps its
+laid-out box, and so does type inside any other object, such as a blend, a repeat or a symbol instance. This is
+VectorCraft's own rule, and envelopes of type in saved files redraw by it.
 Everything inside bends with the envelope: images as a raster mesh warp (cut into pieces by Fidelity, each a clipped
 image under its own affine map; SVG shares the pixels between the pieces), symbol instances as their symbol's art,
 and with Distort Appearance strokes (as their filled outlines) and geometry effects; with it, Distort Linear Gradients
