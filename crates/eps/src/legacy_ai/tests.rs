@@ -147,6 +147,14 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
                 *n = Arc::new(outlined(t, images));
             }
             let n = Arc::make_mut(n);
+            // An image is written without `Interpolate` (as `colorimage`): printed, its pixels are
+            // hard, and the reader draws a coarse one (2 pt a pixel or more) that way.
+            if let NodeKind::Image(im) = &n.kind {
+                let [a, b, c, d, ..] = im.xf.as_coeffs();
+                if a.hypot(b) >= 2.0 && c.hypot(d) >= 2.0 {
+                    n.extras_mut().pixelated = true;
+                }
+            }
             if o.hidden == HiddenObjects::Visible && !matches!(n.kind, NodeKind::Layer { .. }) {
                 n.visible = true;
             }
