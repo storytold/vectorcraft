@@ -700,6 +700,25 @@ pub fn import_json(v: &Value) -> Result<(String, Overrides), String> {
     Ok((v.get("set").and_then(Value::as_str).map_or(CUSTOM, set_name).to_string(), out))
 }
 
+/// Export Text: the set's name, then the dialog's Tools and Menu Commands lists in its order, one
+/// row per line with the name and the shortcuts as the dialog shows them, separated by a tab. A
+/// row with no shortcut ends after the tab.
+pub fn export_text(set: &str, overrides: &Overrides) -> String {
+    let km = keymap_with(overrides);
+    let backtick = backtick_text();
+    let shown_set = if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set };
+    let mut out = format!("{}\n{} {shown_set}\n", tl!("Keyboard Shortcuts"), tl!("Set:"));
+    for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
+        out += &format!("\n{}\n", tl!(heading));
+        for e in entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)) {
+            let name = if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) };
+            let sc = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+            out += &format!("{name}\t{sc}\n");
+        }
+    }
+    out
+}
+
 // ---------- UI commands ----------
 
 pub fn open(app: &mut VectorcraftApp) {
@@ -797,6 +816,31 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 None => match app.services.download.as_mut() {
                     Some(dl) => dl("VectorCraft Shortcuts.json", &bytes).map(|()| Value::Null),
                     None => Ok(v),
+                },
+            }
+        }
+        "shortcuts.exportText" => {
+            let path = match p.get("path") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(path)) => Some(path.clone()),
+                Some(_) => {
+                    let key = "path";
+                    return Some(Err(format!("`{key}` must be a string")));
+                }
+            };
+            let text = export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
+            let pick =
+                crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt"])], ..crate::FilePick::named("VectorCraft Shortcuts.txt") };
+            match path.or_else(|| crate::picks::save(app, &pick)) {
+                Some(path) => match app.services.write.as_mut() {
+                    Some(w) => w(&path, text.as_bytes()).map(|_| json!({"path": path})),
+                    None => Err("no file writer".into()),
+                },
+                // Its save dialog is open: the file is written when it answers.
+                None if app.file_dialog_open() => Err("cancelled".into()),
+                None => match app.services.download.as_mut() {
+                    Some(dl) => dl("VectorCraft Shortcuts.txt", text.as_bytes()).map(|()| Value::Null),
+                    None => Ok(json!({"text": text})),
                 },
             }
         }
@@ -947,6 +991,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if ui.button(tl!("Export…")).clicked() {
                 d.fields.insert("__export".into(), json!(true));
             }
+            if ui.button(tl!("Export Text…")).clicked() {
+                d.fields.insert("__exportText".into(), json!(true));
+            }
             if ui.button(tl!("Reset to Defaults")).clicked() {
                 km.to_mut().reset_all();
                 d.fields.insert("set".into(), json!(PRESETS[0]));
@@ -1090,6 +1137,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let import = d.fields.remove("__import").is_some();
     let export = d.fields.remove("__export").is_some();
+    let export_text = d.fields.remove("__exportText").is_some();
     app.ui.dialog = Some(d);
     // Their file dialogs, shown off the UI thread, import into or export from the dialog as it is
     // when they answer.
@@ -1098,6 +1146,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if export {
         crate::picks::button(app, export_from_dialog);
+    }
+    if export_text {
+        crate::picks::button(app, export_text_from_dialog);
     }
     if cancel {
         app.ui.dialog = None;
@@ -1137,6 +1188,16 @@ fn import_into_dialog(app: &mut VectorcraftApp) {
 
 /// The dialog's Export…: its working set, as edited so far.
 fn export_from_dialog(app: &mut VectorcraftApp) {
+    export_dialog_set(app, "shortcuts.export");
+}
+
+/// The dialog's Export Text…: its working set, as edited so far, as a text file.
+fn export_text_from_dialog(app: &mut VectorcraftApp) {
+    export_dialog_set(app, "shortcuts.exportText");
+}
+
+/// Runs `command` on the dialog's working set and set name.
+fn export_dialog_set(app: &mut VectorcraftApp, command: &str) {
     if !shortcuts_dialog(app) {
         app.status(crate::picks::dialog_gone());
         return;
@@ -1144,7 +1205,7 @@ fn export_from_dialog(app: &mut VectorcraftApp) {
     let (ov, set) = app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), d.str("set"))).unwrap_or_default();
     let saved = std::mem::replace(&mut app.ui.shortcut_overrides, ov);
     let saved_set = std::mem::replace(&mut app.ui.shortcut_set, set);
-    if let Some(Err(e)) = run_command(app, "shortcuts.export", &json!({})) {
+    if let Some(Err(e)) = run_command(app, command, &json!({})) {
         app.status(e);
     }
     app.ui.shortcut_overrides = saved;
@@ -1451,6 +1512,82 @@ mod tests {
         assert_eq!(back, ov);
         assert!(import_json(&json!({"overrides": {"x": "Cmd+Nope+Q"}})).is_err());
         assert!(import_json(&json!({})).is_err());
+    }
+
+    /// An Export Text line: the row's name as the dialog shows it, a tab and `shortcut`.
+    fn text_row(key: &str, shortcut: &str) -> String {
+        let e = entry(key).unwrap_or_else(|| panic!("no entry {key}"));
+        if e.is_tool || e.group.is_empty() { format!("{}\t{shortcut}", e.label) } else { format!("{} › {}\t{shortcut}", e.group, e.label) }
+    }
+
+    /// Export Text writes the set's name, then the Tools and the Menu Commands rows in the dialog's
+    /// order, each with its shortcut as the dialog shows it.
+    #[test]
+    fn export_text_lists_the_dialogs_rows_with_their_shortcuts() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
+        let text = export_text("VectorCraft Defaults", &ov);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[..4], ["Keyboard Shortcuts", "Set: VectorCraft Defaults", "", "Tools"]);
+        let menu_at = lines.iter().position(|l| *l == "Menu Commands").expect("a Menu Commands section");
+        assert_eq!(lines[menu_at - 1], "", "a blank line before Menu Commands");
+        let km = keymap_with(&ov);
+        let names = |tools: bool| -> Vec<String> {
+            entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| text_row(&e.key, "")).collect()
+        };
+        let names_of = |rows: &[&str]| -> Vec<String> { rows.iter().map(|l| format!("{}\t", l.split('\t').next().unwrap_or_default())).collect() };
+        assert_eq!(names_of(&lines[4..menu_at - 1]), names(true), "the Tools rows, in the dialog's order");
+        assert_eq!(names_of(&lines[menu_at + 1..]), names(false), "the Menu Commands rows, in the dialog's order");
+        let pen = menus::pretty_shortcut(default_of("tool:pen").expect("the Pen tool has a default key"));
+        assert!(lines[4..menu_at].contains(&text_row("tool:pen", &pen).as_str()), "{text}");
+        let prefs = menus::pretty_shortcut(&effective_with(&km, "edit.preferences").expect("the shortcut set"));
+        assert!(prefs.ends_with('9'), "{prefs}");
+        assert!(lines[menu_at..].contains(&text_row("edit.preferences", &prefs).as_str()), "{text}");
+        assert!(text.ends_with('\n'));
+    }
+
+    /// A command without a shortcut is listed with nothing after the tab: one without a default key
+    /// and one whose shortcut the set clears.
+    #[test]
+    fn export_text_lists_a_command_without_a_shortcut_with_an_empty_shortcut() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "");
+        assert!(default_of("align.horizontalLeft").is_none());
+        let text = export_text(CUSTOM, &ov);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[1], "Set: Custom");
+        for key in ["align.horizontalLeft", "edit.preferences"] {
+            assert!(lines.contains(&text_row(key, "").as_str()), "{key}: {text}");
+        }
+    }
+
+    /// `shortcuts.exportText` writes the set's name as the set was named, and a path that can't be
+    /// written or isn't a string gives an error and writes nothing.
+    #[test]
+    fn export_text_command_writes_the_sets_name_and_rejects_a_bad_path() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            if path.starts_with("/missing/") {
+                return Err(format!("can't write {path}"));
+            }
+            w.borrow_mut().push((path.to_string(), String::from_utf8(b.to_vec()).map_err(|e| e.to_string())?));
+            Ok(())
+        }));
+        app.run("shortcuts.import", json!({"data": export_json("Studio", &Overrides::new())})).unwrap();
+        assert_eq!(app.run("shortcuts.exportText", json!({"path": "/sets/Studio.txt"})), Ok(json!({"path": "/sets/Studio.txt"})));
+        assert_eq!(
+            app.run("shortcuts.exportText", json!({"path": "/missing/dir/Studio.txt"})),
+            Err("can't write /missing/dir/Studio.txt".to_string())
+        );
+        assert_eq!(app.run("shortcuts.exportText", json!({"path": 5})), Err("`path` must be a string".to_string()));
+        let files = written.borrow();
+        let [(path, text)] = files.as_slice() else { panic!("{files:?}") };
+        assert_eq!(path, "/sets/Studio.txt");
+        assert!(text.starts_with("Keyboard Shortcuts\nSet: Studio\n\nTools\n"), "{text}");
+        assert_eq!(*text, export_text("Studio", &Overrides::new()));
     }
 
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
