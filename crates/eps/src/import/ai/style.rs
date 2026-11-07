@@ -111,12 +111,32 @@ pub(super) fn warp_style(n: i64) -> Option<&'static str> {
     id.strip_prefix("warp.")
 }
 
-/// The keys of an Effect › Pathfinder › Add filter's dictionary besides `DisplayString`, each with
-/// the kind and the one value read: `Command` 0 is Add, and the rest are its Pathfinder Options,
-/// Soft Mix and Trap settings
-/// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137).
-const PATHFINDER_ADD: [(&str, Kind, f64); 13] = [
-    ("Command", Kind::Int, 0.0),
+/// The Effect › Pathfinder effects by the `Command` number of their filter. `Command` 0 is Add
+/// (https://community.adobe.com/questions-652/liveeffect-xml-effect-is-added-under-the-object-795137);
+/// the numbers 1 to 11 are VectorCraft's own reader rules, learned from saved files. Trap (12) isn't
+/// read.
+const PATHFINDER_COMMANDS: [&str; 12] = [
+    "pathfinder.add",
+    "pathfinder.intersect",
+    "pathfinder.exclude",
+    "pathfinder.subtract",
+    "pathfinder.minusBack",
+    "pathfinder.divide",
+    "pathfinder.outline",
+    "pathfinder.trim",
+    "pathfinder.merge",
+    "pathfinder.crop",
+    "pathfinder.hardMix",
+    "pathfinder.softMix",
+];
+
+/// The keys of an Effect › Pathfinder filter's dictionary besides `Command` and `DisplayString`,
+/// each with the kind and the one value read: its Pathfinder Options, Soft Mix's mix and the Trap
+/// settings. Every operation needs each of them at this value, even where the operation doesn't use
+/// it, except that Soft Mix reads a `Mix` from 0.01 to 1 as its Mixing Rate (VectorCraft's own
+/// reader rule, learned from saved files: the rate is `Mix` times 100, within the effect's 1 to 100;
+/// a saved `Mix` outside that range keeps the drawn look).
+const PATHFINDER_OPTIONS: [(&str, Kind, f64); 12] = [
     ("ConvertCustom", Kind::Bool, 1.0),
     ("ExtractUnpainted", Kind::Bool, 1.0),
     ("Mix", Kind::Real, 0.5),
@@ -1055,18 +1075,38 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
     Some(Effect { id: id.into(), params, visible: f.visible })
 }
 
-/// Effect › Pathfinder › Add, when every key of [`PATHFINDER_ADD`] is there with its kind and value
-/// and the only other key is the `DisplayString` text, each written once. `None` for anything else,
-/// which keeps the drawn look.
+/// The Effect › Pathfinder effect of [`PATHFINDER_COMMANDS`] that an integer `Command` names, when
+/// every key of [`PATHFINDER_OPTIONS`] is there with its kind and value (Soft Mix's `Mix` from 0.01
+/// to 1, as its Mixing Rate in percent) and the only other key is the `DisplayString` text, each
+/// written once. `None` for anything else, which keeps the drawn look.
 fn pathfinder_effect(f: &Filter) -> Option<Effect> {
-    let known = f.kinds.iter().all(|(key, kind)| (key == "DisplayString" && *kind == Kind::Other) || PATHFINDER_ADD.iter().any(|(k, ..)| k == key));
+    let known = f
+        .kinds
+        .iter()
+        .all(|(key, kind)| (key == "DisplayString" && *kind == Kind::Other) || key == "Command" || PATHFINDER_OPTIONS.iter().any(|(k, ..)| k == key));
     if !known || f.repeated || !f.arrays.is_empty() || f.fill.is_some() || f.stroke.is_some() || f.gradient || f.pattern.is_some() {
         return None;
     }
-    if !PATHFINDER_ADD.iter().all(|(key, kind, value)| f.kinds.get(*key) == Some(kind) && f.params.get(*key) == Some(value)) {
+    if f.kinds.get("Command") != Some(&Kind::Int) {
         return None;
     }
-    Some(Effect { id: "pathfinder.add".into(), params: json!({}), visible: f.visible })
+    let command = f.params.get("Command").copied().filter(|c| c.is_finite() && c.fract() == 0.0 && *c >= 0.0)?;
+    let id = *PATHFINDER_COMMANDS.get(usize::try_from(command as i64).ok()?)?;
+    let soft_mix = id == "pathfinder.softMix";
+    let options = PATHFINDER_OPTIONS
+        .iter()
+        .all(|(key, kind, value)| f.kinds.get(*key) == Some(kind) && ((soft_mix && *key == "Mix") || f.params.get(*key) == Some(value)));
+    if !options {
+        return None;
+    }
+    let params = if soft_mix {
+        let mix = f.params.get("Mix").copied().filter(|m| (0.01..=1.0).contains(m))?;
+        // Rounded to six decimals: a `Mix` of 0.3 is a rate of 30.
+        json!({"mixingRate": (mix * 100.0 * 1e6).round() / 1e6})
+    } else {
+        json!({})
+    };
+    Some(Effect { id: id.into(), params, visible: f.visible })
 }
 
 /// The fill or stroke basic filter `f` paints, `Ok(None)` when it paints nothing, `Err` when it

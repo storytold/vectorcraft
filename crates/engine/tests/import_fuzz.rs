@@ -4564,11 +4564,15 @@ proptest! {
 
     /// A group with an Effect › Pathfinder style whose dictionary is hostile: any `Command`, keys of
     /// any type and value (missing, repeated, unknown, not finite), shown or hidden, the style cut
-    /// short anywhere; in editing data, an EPS and a `.ai`. A `Command` other than 0 never becomes
-    /// a live effect.
+    /// short anywhere; in editing data, an EPS and a `.ai`. The dictionary may also start with every
+    /// option at the value read and any `Mix`. A `Command` other than 0 to 11 never becomes a live
+    /// effect, and a live Soft Mix's Mixing Rate is a number from 1 to 100.
     #[test]
     fn ai_pathfinder_styles_never_panic(
-        command in prop_oneof![(-3i64..16).prop_map(|c| c.to_string()), arb_num()],
+        command in prop_oneof![(-3i64..16).prop_map(|c| c.to_string()), Just("11".to_string()), arb_num()],
+        defaults in any::<bool>(),
+        bare in any::<bool>(),
+        mix in prop_oneof![arb_num(), prop::sample::select(vec!["0.5", "0.3", "0.01", "0.0099", "1", "1.0001", "NaN", "1e999"]).prop_map(str::to_string)],
         keys in prop::collection::vec(
             (
                 prop::sample::select(vec!["Mix", "Precision", "RemovePoints", "ExtractUnpainted", "ConvertCustom", "TrapTint", "TrapThickness", "Command", "Extra"]),
@@ -4581,7 +4585,19 @@ proptest! {
         cut in 0usize..4_000,
     ) {
         use vectorcraft_testkit::ai;
+        let options = if defaults {
+            format!(
+                "1 /Bool (ConvertCustom) ,\n1 /Bool (ExtractUnpainted) ,\n{mix} /Real (Mix) ,\n10 /Real (Precision) ,\n0 /Bool (RemovePoints) ,\n\
+                 1 /Real (TrapAspect) ,\n0 /Bool (TrapConvertCustom) ,\n1 /Real (TrapMaxTint) ,\n0 /Bool (TrapReverse) ,\n0.25 /Real (TrapThickness) ,\n\
+                 0.4 /Real (TrapTint) ,\n0.05 /Real (TrapTintTolerance) ,\n"
+            )
+        } else {
+            String::new()
+        };
+        // With every option there, the random keys are left out half the time, so the style can be read.
+        let keys = if defaults && bare { &keys[..0] } else { &keys[..] };
         let dict: String = keys.iter().map(|(k, kind, v)| format!("{v} /{kind} ({k}) ,\n")).collect();
+        let dict = format!("{options}{dict}");
         let styles = format!(
             "%AI9_BeginArtStyles\n/KnownStyle :\n(PF) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
              /BasicFilter :\n(Adobe Pathfinder) 1 0 /Filter ,\n{} /Visible ,\n/Dictionary : /NotRecorded ,\n{command} /Int (Command) ,\n{dict}; /Dict ;\n /Part ,\n\
@@ -4593,12 +4609,17 @@ proptest! {
         let group = "0 Ae\nu\n1 0 0 1 0 0 Xa\n10 10 m\n10 60 L\n80 60 L\n80 10 L\nf\nU\n\
                      %_0 Ae\n%_u\n%_1 0 0 1 0 0 Xa\n%_10 10 m\n%_10 50 L\n%_50 50 L\n%_50 10 L\n%_f\n%_0 0 1 0 0 0 1 Xa\n%_40 20 m\n%_40 60 L\n%_80 60 L\n%_80 20 L\n%_f\n%_U\n1 (PF) XW\n";
         let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", group)));
-        let live = command.parse::<f64>().is_ok_and(|c| c == 0.0);
+        let live = command.parse::<f64>().is_ok_and(|c| (0.0..=11.0).contains(&c) && c.fract() == 0.0);
         let check = |d: Option<Document>| {
-            if let Some(d) = &d
-                && !live
-            {
-                d.walk(|n| assert!(!n.appearance.effects.iter().any(|e| e.id.starts_with("pathfinder.")), "Command {command}: {:?}", n.appearance.effects));
+            if let Some(d) = &d {
+                d.walk(|n| {
+                    let effects = &n.appearance.effects;
+                    assert!(live || !effects.iter().any(|e| e.id.starts_with("pathfinder.")), "Command {command}: {effects:?}");
+                    for e in effects.iter().filter(|e| e.id == "pathfinder.softMix") {
+                        let rate = e.params.get("mixingRate").and_then(Value::as_f64);
+                        assert!(rate.is_some_and(|r| (1.0..=100.0).contains(&r)), "Mix {mix}: {effects:?}");
+                    }
+                });
             }
             d
         };
