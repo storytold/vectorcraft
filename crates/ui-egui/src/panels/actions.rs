@@ -345,8 +345,9 @@ pub(crate) fn has_stop(commands: &[Value]) -> bool {
     commands.iter().any(is_stop)
 }
 
-/// The message and Allow Continue setting in a stop's params; each may be left out. A value of
-/// another type, or params that are neither null nor an object, is an error.
+/// The message and Allow Continue setting in a stop's params; each may be left out. A saved stop
+/// with no params reads as null here. A value of another type, or params that are neither null
+/// nor an object, is an error.
 pub(crate) fn stop_params(p: &Value) -> Result<(String, bool), String> {
     if !(p.is_null() || p.is_object()) {
         return Err("`params` must be an object".into());
@@ -873,6 +874,9 @@ const SELECTED_STEP: &str = "actions-selected-step";
 /// Record Stop's OK runs this, and the new stop is the selected step. → {set, action, step}, or
 /// {recording: true}
 pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    if !p.is_object() {
+        return Err("`params` must be an object".into());
+    }
     let (message, allow_continue) = stop_params(p)?;
     let step = (STOP_STEP.to_string(), json!({"message": message, "allowContinue": allow_continue}));
     let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
@@ -3681,13 +3685,14 @@ mod tests {
             (json!(5), "`params` must be an object"),
             (json!([1]), "`params` must be an object"),
             (json!("message"), "`params` must be an object"),
+            (json!(null), "`params` must be an object"),
         ] {
             assert_eq!(app.run(INSERT_STOP, params.clone()).unwrap_err(), want, "{params}");
             assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
         }
         app.run(START_RECORDING, json!({})).unwrap();
         assert_eq!(app.run(INSERT_STOP, json!({"message": 5})).unwrap_err(), "message must be text");
-        for params in [json!(5), json!([1]), json!(true)] {
+        for params in [json!(5), json!([1]), json!(true), json!(null)] {
             assert_eq!(app.run(INSERT_STOP, params.clone()).unwrap_err(), "`params` must be an object", "{params}");
         }
         app.run(STOP_RECORDING, json!({})).unwrap();
