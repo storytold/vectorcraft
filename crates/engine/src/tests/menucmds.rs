@@ -3462,6 +3462,39 @@ fn placeholder_and_insert_characters() {
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
 }
 
+/// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
+/// 128–159, the code point otherwise), `unicode` as a hex code point.
+#[test]
+fn insert_a_character_by_its_code() {
+    let mut s = session();
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    for p in [
+        json!({"code": 176}),
+        json!({"code": 177}),
+        json!({"code": 151}),
+        json!({"code": 215}),
+        json!({"code": 8364}),
+        json!({"unicode": "00B0"}),
+        json!({"unicode": "U+2014"}),
+    ] {
+        s.execute("type.insert", &p).unwrap();
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
+    for p in [
+        json!({"code": 129}),
+        json!({"code": 7}),
+        json!({"code": -1}),
+        json!({"code": 1_114_112}),
+        json!({"unicode": "D800"}),
+        json!({"unicode": "zz"}),
+        json!({}),
+    ] {
+        assert!(s.execute("type.insert", &p).is_err(), "{p}");
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
+}
+
 #[test]
 fn area_placeholder_fills_frame() {
     let mut s = session();

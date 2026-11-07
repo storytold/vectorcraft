@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
+            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), selectedArtboards?: [n…] (the journal records that default here, for a replay), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -25,18 +25,42 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy Artboard",
             [],
             None,
-            "{index? | indices?, art?} (defaults as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?} (as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, false)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.copy")?;
+                artboard_copy(s, p, false)
+            }
         ),
         cmd!(
             "artboard.cut",
             "Cut Artboard",
             [],
             None,
-            "{index? | indices?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, true)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.cut")?;
+                artboard_copy(s, p, true)
+            }
+        ),
+        cmd!(
+            "artboard.rename",
+            "Rename Artboards",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), name} (default: the artboards the Artboard tool has selected, else its active one) rename the artboards in one undo step: one takes `name` (trimmed), and several take it numbered in artboard order, `name-1`, `name-2` and so on; a locked artboard is renamed too. An empty name is an error, and when every artboard already has its new name nothing changes and no undo step is recorded → {renamed: [index…]}",
+            has_doc,
+            artboard_rename
+        ),
+        cmd!(
+            "artboard.switchOrientation",
+            "Switch Orientation",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), scaleArt?: bool (default: the Artboard tool's Scale Artwork with Artboard option), patterns?, lockedAndHidden?: bool (as artboard.setProps)} (default: the artboards the Artboard tool has selected, else its active one) each artboard swaps its width and height and keeps its top-left corner, in one undo step; a square artboard and a locked one stay as they are, the call fails with `the artboard is locked` when every artboard it names is locked, and when nothing else changes no undo step is recorded → {switched: [index…]}",
+            has_doc,
+            artboard_switch_orientation
         ),
         cmd!(
             "text.setFormat",
@@ -82,24 +106,120 @@ fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
 /// of them is in the document) and its Move/Copy Artwork with Artboard option.
 fn boards_and_art(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
     check_switches(p, &["art"], cmd)?;
+    let indices = named_or_selected(s, p, cmd)?;
+    Ok((indices, bool_or(p, "art", s.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true))))
+}
+
+/// [`boards_and_art`], with both values added to the running command's journal entry, so a replay
+/// acts on the same artboards and art whatever the Artboard tool's state is then. `edit.cut` and
+/// `edit.copy` call [`artboard_copy`] without this and take no such params.
+fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
+    let (indices, art) = boards_and_art(s, p, cmd)?;
+    note_artboards(s, p, &indices);
+    s.note_journal("art", json!(art));
+    Ok((indices, art))
+}
+
+/// Add `selectedArtboards` to the running command's journal entry when `p` names no artboard, so a
+/// replay acts on the artboards the Artboard tool had selected. An action leaves it out
+/// (`REPLAY_ONLY`) and keeps an `index` or `indices` the call gave.
+fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
+    if p.get("index").is_none() && p.get("indices").is_none() {
+        s.note_journal("selectedArtboards", json!(indices));
+    }
+}
+
+/// The artboards `cmd` acts on: `index` or `indices`, else `selectedArtboards` (a replay of the
+/// journal), else those the Artboard tool has selected, else its active one.
+fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec<usize>> {
     let t = s.tool_options_of("artboard");
     let d = &s.doc()?.doc;
-    let indices = if p.get("index").is_some() || p.get("indices").is_some() {
-        artboard_indices(d, p, cmd)?
-    } else {
-        let mut picked: Vec<u64> = t["selected"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_u64)
-            .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
-            .collect();
-        if picked.is_empty() {
-            picked.push(t["active"].as_u64().unwrap_or(0));
-        }
-        artboard_indices(d, &json!({ "indices": picked }), cmd)?
+    if p.get("index").is_some() || p.get("indices").is_some() {
+        return artboard_indices(d, p, cmd);
+    }
+    if let Some(recorded) = p.get("selectedArtboards") {
+        return artboard_indices(d, &json!({ "indices": recorded }), cmd);
+    }
+    let mut picked: Vec<u64> = t["selected"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_u64)
+        .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
+        .collect();
+    if picked.is_empty() {
+        picked.push(t["active"].as_u64().unwrap_or(0));
+    }
+    artboard_indices(d, &json!({ "indices": picked }), cmd)
+}
+
+/// Rename Artboards: one artboard takes the name, and several take it numbered in artboard order, in
+/// one undo step. Nothing runs when each already has its new name.
+fn artboard_rename(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.rename";
+    let name = match p.get("name") {
+        Some(Value::String(n)) if !n.trim().is_empty() => n.trim(),
+        Some(Value::String(_)) => return Err(bad(C, "`name` must not be empty")),
+        _ => return Err(bad(C, "`name` must be a string")),
     };
-    Ok((indices, bool_or(p, "art", t["moveArt"].as_bool().unwrap_or(true))))
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    let several = indices.len() > 1;
+    let entries: Vec<(usize, String)> = indices
+        .iter()
+        .enumerate()
+        .map(|(k, i)| (*i, if several { format!("{name}-{}", k + 1) } else { name.to_string() }))
+        .filter(|(i, new)| d.artboards.get(*i).is_some_and(|a| a.name != *new))
+        .collect();
+    let renamed: Vec<usize> = entries.iter().map(|(i, _)| *i).collect();
+    if !entries.is_empty() {
+        let list: Vec<Value> = entries.iter().map(|(i, new)| json!({"index": i, "name": new})).collect();
+        s.execute("artboard.setProps", &json!({ "artboards": list }))?;
+    }
+    Ok(json!({ "renamed": renamed }))
+}
+
+/// Switch Orientation: each artboard that is neither square nor locked swaps its width and height
+/// and keeps its top-left corner, in one undo step. Nothing runs when none of them changes.
+fn artboard_switch_orientation(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.switchOrientation";
+    // Swapping width and height keeps the area, so `artboard.setProps` scales no strokes or corners.
+    const FROM_PREFS: [&str; 2] = ["patterns", "lockedAndHidden"];
+    check_switches(p, &["scaleArt"], C)?;
+    check_switches(p, &FROM_PREFS, C)?;
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    if indices.iter().all(|i| d.artboards.get(*i).is_some_and(|a| a.locked)) {
+        refuse_locked(d, &indices)?;
+    }
+    let turned: Vec<(usize, Rect)> = indices
+        .iter()
+        .filter_map(|i| d.artboards.get(*i).map(|a| (*i, a)))
+        .filter(|(_, a)| !a.locked && (a.rect.width() - a.rect.height()).abs() > 1e-6)
+        .map(|(i, a)| (i, a.rect))
+        .collect();
+    let switched: Vec<usize> = turned.iter().map(|(i, _)| *i).collect();
+    if !turned.is_empty() {
+        let list: Vec<Value> = turned.iter().map(|(i, r)| json!({"index": i, "width": r.height(), "height": r.width()})).collect();
+        let scale = bool_or(p, "scaleArt", s.tool_options_of("artboard")["scaleArt"].as_bool().unwrap_or(false));
+        s.note_journal("scaleArt", json!(scale));
+        let mut set = json!({ "artboards": list, "scaleArt": scale });
+        for key in FROM_PREFS {
+            if let Some(v) = p.get(key) {
+                set[key] = v.clone();
+            }
+        }
+        // What the step takes from the preferences joins this command's journal entry.
+        let (_, noted) = s.execute_step("artboard.setProps", &set)?;
+        for key in FROM_PREFS {
+            if let Some(v) = noted.get(key) {
+                s.note_journal(key, v.clone());
+            }
+        }
+    }
+    Ok(json!({ "switched": switched }))
 }
 
 /// The one artboard `cmd` acts on: `index`, an artboard of `d`, with the errors of
@@ -170,7 +290,7 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 /// their places relative to each other, together right of the last artboard.
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["patterns"], "artboard.duplicate")?;
-    let (indices, art) = boards_and_art(s, p, "artboard.duplicate")?;
+    let (indices, art) = boards_and_art_noted(s, p, "artboard.duplicate")?;
     let arts = artboards_art(s, &indices, art, false)?;
     let all: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &all)?, ..Scaling::default() };

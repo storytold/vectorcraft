@@ -181,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),
@@ -217,7 +217,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Contents",
             ["Object", "Envelope Distort"],
             None,
-            "{editing?: bool} toggle Edit Contents / Edit Envelope → {editing}",
+            "{editing?: bool} toggle Edit Contents / Edit Envelope; leaving Edit Contents measures an envelope's boundsMargin again when the content's strokes reach differently than when Edit Contents began → {editing}",
             has_envelope,
             env_edit_contents
         ),

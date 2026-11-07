@@ -250,7 +250,7 @@ pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structu
 /// content, the prolog, resources, sections it skips (such as symbols and the text document) or
 /// what follows the trailer. The palette the reader keeps is the last one outside those and the
 /// sections it reads on their own.
-fn swatch_names(data: &[u8]) -> ShownNames {
+fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
     /// The sections the reader reads on their own whose definitions and colors it keeps.
     const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
     /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
@@ -277,8 +277,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let mut skip: Option<(&str, &str, usize, Option<usize>)> = None;
     let mut section: Option<(&str, &str, usize, bool)> = None;
     let (mut palette_at, mut palette) = (None, None);
+    // Where the first art styles section starts, and that section.
+    let (mut styles_at, mut styles) = (None, None);
     // A pattern's name is the first string of its definition.
     let mut head = false;
+    // ASCII85 data in comment lines is skipped past, as the reader skips it.
+    let mut dictionaries = ops::Dictionaries::default();
+    // The scan's state where the versioned content being skipped starts, to go back to.
+    let mut versioned = None;
     loop {
         let before = lex.offset();
         let Some(t) = lex.next_token() else {
@@ -286,11 +292,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
             match skip.take() {
                 Some((.., Some(at))) => {
                     lex.seek(at);
+                    dictionaries = versioned.take().unwrap_or_default();
                     continue;
                 }
                 _ => break,
             }
         };
+        let markers = skip.map(|s| (s.0, s.1)).or(palette_at.map(|_| ("", "EndPalette"))).or(section.map(|s| (s.0, s.1)));
+        dictionaries.pass(&t.tok, &mut lex, markers);
         match &t.tok {
             Tok::Comment(c) => {
                 let line = String::from_utf8_lossy(c);
@@ -306,12 +315,16 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                     }
                 } else if m.starts_with("Alternate_Content") && section.is_none_or(|s| s.3) {
                     skip = Some(("Begin_Content_if_version_gt", "End_Versioned_Content", 0, Some(lex.offset())));
+                    versioned = Some(dictionaries.clone());
                 } else if m == "%BeginProlog" {
                     skip = Some(("", "%EndProlog", 0, None));
                 } else if m == "%BeginResource" {
                     skip = Some(("", "%EndResource", 0, None));
                 } else if let Some((begin, end, depth, _)) = section.as_mut() {
                     if closes(begin, end, depth, m) {
+                        if let Some(at) = styles_at.take().filter(|_| *begin == "BeginArtStyles") {
+                            styles = Some(lex.slice(at, before));
+                        }
                         section = None;
                     }
                 } else if m == "BeginPalette" {
@@ -319,6 +332,9 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                 } else if let Some((begin, end)) = types::SKIPPED.iter().find(|(b, _)| *b == m) {
                     section = Some((begin, end, 0, READ_APART.contains(begin)));
                     head = m == "BeginPattern";
+                    if m == "BeginArtStyles" && styles.is_none() {
+                        styles_at = Some(lex.offset());
+                    }
                 } else if matches!(m, "%PageTrailer" | "%Trailer") {
                     break;
                 }
@@ -350,7 +366,18 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     }
     palette.own_names().for_each(|n| names.reserve(n));
     colors.names.iter().for_each(|n| names.reserve(n));
-    names
+    (names, styles)
+}
+
+/// What the brushes and brush art read so far give a brushed stroke.
+#[derive(Default)]
+struct BrushesKept {
+    /// The counts of brushes and art sections when this was worked out.
+    read: (usize, usize),
+    /// Which of [`Reader::brush_drafts`] are kept as brushes.
+    kept: Vec<bool>,
+    /// The art an Art brush draws as the file does.
+    bending: HashSet<String>,
 }
 
 struct Reader<'a> {
@@ -448,6 +475,12 @@ struct Reader<'a> {
     warnings: Vec<String>,
     /// Objects read as their drawn look (several fills or strokes, effects, brushes).
     drawn_looks: usize,
+    /// The objects read as their drawn look in the art of [`Reader::brush_art`], by name: counted in
+    /// [`Reader::drawn_looks`] once a brush that is kept uses the art.
+    brush_art_looks: HashMap<String, usize>,
+    /// The objects read as their drawn look in the art of the patterns kept, by the name the document
+    /// has the pattern by: a pattern defined again counts only its last definition.
+    pattern_looks: HashMap<String, usize>,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
     /// The blend part each object's dictionary names (`ShapeBlendPathType`, `ShapeBlendPathID`).
@@ -476,7 +509,7 @@ struct Reader<'a> {
     layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
-    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
@@ -554,6 +587,8 @@ struct Reader<'a> {
     brush_art: HashMap<String, Node>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
+    /// What the brushes and brush art read so far give a brushed stroke.
+    brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
@@ -576,10 +611,15 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
 
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
-    /// get in the document found first ([`swatch_names`]).
+    /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
+    /// before the art styles section use them too.
     fn with_names(data: &'a [u8]) -> Self {
         let mut r = Self::new(data);
-        r.global_names = swatch_names(data);
+        let (names, styles) = swatch_names(data);
+        r.global_names = names;
+        if let Some(section) = styles {
+            r.styles = super::style::art_styles(section);
+        }
         r
     }
 
@@ -645,6 +685,8 @@ impl<'a> Reader<'a> {
             color_model: None,
             warnings: Vec::new(),
             drawn_looks: 0,
+            brush_art_looks: HashMap::new(),
+            pattern_looks: HashMap::new(),
             hidden_ids: HashSet::new(),
             blend_roles: HashMap::new(),
             blend_record: None,
@@ -694,6 +736,7 @@ impl<'a> Reader<'a> {
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
             brush_art_sections: 0,
+            brushes_kept: BrushesKept::default(),
             brushes_unread: 0,
             graph: None,
             multi_mask: None,

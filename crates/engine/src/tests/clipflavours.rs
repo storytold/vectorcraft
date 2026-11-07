@@ -334,6 +334,41 @@ fn import_text_then_paste_gives_point_text() {
 }
 
 #[test]
+fn spreadsheet_cells_paste_as_a_table_of_type_over_gridlines() {
+    let mut s = session();
+    // As Excel puts three rows of two columns on the clipboard, an empty cell included.
+    let r = run(&mut s, "clipboard.importText", json!({"text": "Fruit\tQty\r\nApples\t3\r\nPears\t\r\n"}));
+    assert_eq!((r["count"].clone(), r["rows"].clone(), r["columns"].clone()), (json!(1), json!(3), json!(2)));
+    run(&mut s, "edit.paste", json!({"center": [200, 150]}));
+    let first = pasted(&s);
+    assert_eq!(first.len(), 1);
+    let table = &first[0];
+    assert_eq!(table.name.as_deref(), Some("Table"));
+    let kids = table.children().unwrap();
+    let grid = &kids[0];
+    assert_eq!(grid.name.as_deref(), Some("Gridlines"));
+    assert_eq!(grid.children().unwrap().len(), 4 + 3, "four row lines, three column lines");
+    // One type object a cell that holds text, each inside its own cell.
+    let cells: Vec<_> = kids[1..].iter().map(|n| (text_of(n).plain_text(), n.geometric_bounds().unwrap())).collect();
+    let texts: Vec<&str> = cells.iter().map(|(t, _)| t.as_str()).collect();
+    assert_eq!(texts, ["Fruit", "Qty", "Apples", "3", "Pears"]);
+    let at = |t: &str| cells.iter().find(|c| c.0 == t).unwrap().1;
+    assert!(at("Qty").x0 > at("Apples").x1, "the second column starts past the widest of the first");
+    assert!((at("Qty").x0 - at("3").x0).abs() < 1e-6 && (at("Fruit").x0 - at("Pears").x0).abs() < 1e-6, "columns line up");
+    assert!(at("Apples").y0 > at("Fruit").y1 && at("Pears").y0 > at("Apples").y1, "rows go down: {cells:?}");
+    let b = table.geometric_bounds().unwrap();
+    assert!((b.center().x - 200.0).abs() < 1.0 && (b.center().y - 150.0).abs() < 1.0, "{b:?}");
+    // table: false, and text that isn't a spreadsheet's, paste as one point type object.
+    for (text, table) in [("a\tb\nc\td", json!(false)), ("\tindented\n\tcode", Value::Null), ("x\ty\nz", Value::Null)] {
+        run(&mut s, "clipboard.importText", json!({"text": text, "table": table}));
+        run(&mut s, "edit.paste", json!({}));
+        let p = pasted(&s);
+        assert_eq!((p.len(), text_of(&p[0]).plain_text()), (1, text.to_string()), "{text:?}");
+    }
+    assert!(s.execute("clipboard.importText", &json!({"text": "a\tb", "table": "yes"})).is_err());
+}
+
+#[test]
 fn type_only_copies_offer_their_text() {
     let mut s = session();
     assert!(run(&mut s, "clipboard.exportText", json!({}))["text"].is_null());
