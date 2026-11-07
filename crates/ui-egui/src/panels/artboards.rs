@@ -394,6 +394,7 @@ pub(crate) fn duplicate_picked(app: &mut VectorcraftApp) {
     }
 }
 
+/// Draw the artboard list and its commands, filling the space above a sized panel's footer.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();

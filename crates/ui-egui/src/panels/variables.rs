@@ -97,6 +97,7 @@ pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
     app.run("dataset.delete", json!({})).ok();
 }
 
+/// Draw document variables, data sets and their two-row footer of capture and binding controls.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
         widgets::dim_label(ui, tl!("No document"));

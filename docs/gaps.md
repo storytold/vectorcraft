@@ -1,12 +1,14 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+
+> **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
 ## Feature submission evidence
 
-Icon-strip flyouts resize from the canvas-side edge and bottom, keeping the icon-column edge anchored (#5713). Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
-
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
+
+Icon-strip flyouts resize from the canvas-side edge and bottom, keeping the icon-column edge anchored (#5713). Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
 
 **PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
 
@@ -38,10 +40,6 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-05 | minor | G15: long open strokes with an undashed width profile are outlined near the view while keeping profile positions on the full path; a 200,000-segment outline took 59.95 ms before and 8.44 ms after in local median runs. Closed and dashed profile strokes remain whole; estimate unchanged. |
-| 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; a 200,000-anchor path's segment cursor took 58.15 ms before and 29.33 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
-| 2026-11-05 | minor | G15: Selection skips building corner and pie widgets when the pointer is well outside a large selection; empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in local median runs. Other cursor targets remain active; estimate unchanged. |
-| 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; after the path hit-test improvement, a 200,000-anchor path's segment cursor took 3.72 ms before and 2.66 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |
 | 2026-11-05 | minor | G15: large-selection transforms reuse object locations found during command validation; a 20,000-object nudge took 58.07 ms before and 51.26 ms after in paired median runs. Estimate unchanged. |
 | 2026-11-06 | minor | Icon-strip flyouts resize on their free edges and retain sizes with workspaces (#5713); saved heights beat auto-fit; panel footers stay at the bottom after enlargement. Scores and estimates unchanged. |
 | 2026-11-05 | minor | G9, G14: `.ai` paths with a Calligraphic brush open brushed (the brush on the stroke, at its weight) where the object's settings are the brush's own, and the brush's Tilt, Bearing and Rotation codes come in as those channels; Windows reads the pen's tilt and barrel rotation from Windows Ink (#372). Checked against a user's file of 6D Art Pen strokes, used locally; not tried with a pen. Scores and estimates unchanged. |
@@ -658,22 +656,6 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G15 Performance budgets and a GPU renderer
 
-- **Improved (2026-11-05):** after an edit, a long open stroke with an undashed width profile
-  outlines the part near the view and keeps each point's original position along the profile.
-  A 200,000-segment outline took 59.95 ms whole and 8.44 ms cropped in local median runs; this
-  measures outline construction, not a complete frame. Closed and dashed profile strokes still
-  use their full outline. Pixel comparisons cover curved and straight open paths, their ends,
-  asymmetric profiles, two subpaths, and the closed-path fallback. The idle budget remains open.
-- **Improved (2026-11-05):** when more than 128 objects are selected, Selection skips making
-  corner and pie widgets if the pointer is farther than their reach from the selected art.
-  Empty-canvas hover with 20,000 selected paths took 28.72 ms before and 16.41 ms after in
-  local median runs. Pie widgets just beyond the art and rotated bounding-box handles still
-  take the cursor. This is a directional measurement, not an idle performance-budget result.
-- **Improved (2026-11-05):** Direct Selection reuses its document hit result when choosing the
-  cursor over a path. With the path hit-test improvement below, the cursor over a segment of a
-  200,000-anchor path took 3.72 ms before and 2.66 ms after in local median runs; a nearby point
-  took 4.04 ms before and 2.98 ms after.
-  Anchor, segment and plain cursor choices remain the same. The idle-frame budget remains open.
 - **Improved (2026-11-05):** hovering over a nearby plain stroke or path outline checks the
   candidate segments directly. On a 200,000-anchor open path, a hit near its middle took about
   11–13 ms before and 1.0–1.4 ms after in paired runs on a busy Windows machine. A miss between
@@ -716,14 +698,11 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G16 Localization: the three missing key languages
 
-- **Evidence (2026-11-06):** Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged. See [Hindi notes](localization-hi.md).
-
 - **Evidence:** Brazilian Portuguese catalog complete under the tests (menus, literals, messages; one|other plurals; #1914). Vietnamese catalog complete under the tests (menus, literals, messages; one plural form). Czech render-site bypasses reduced in file dialogs, diagnostics, preset names and contributor tooltips; gradient grammar and printer-mark context corrected (see [localization-parity.md](localization-parity.md)). Native review and the remaining missing-language work remain.
 
-- **Missing:** Arabic catalog and right-to-left layout; current gaps in other catalogs and native
-  review; Hindi wording/layout review and a web Devanagari font; a Korean UI font for the web.
-  Hindi now has a catalog and the pinned egui fork shapes Devanagari. Indonesian already has a
-  catalog (see [localization-parity.md](localization-parity.md)); it is not an absent language.
+- **Missing:** Hindi, Arabic, Indonesian catalogs; a Korean UI font for the web build; a right-to-left interface and interface
+  shaping for Arabic and Devanagari; messages for Simplified Chinese; native review of
+  every catalog. Measured in [localization-parity.md](localization-parity.md).
 - **Estimate:** 50–85 h plus human review (Brazilian Portuguese completed 2026-10-14).
 
 ## G17 Ecosystem: third-party plug-ins
@@ -807,7 +786,6 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | G15: nearby hits on plain long strokes and outlines check their candidate segments directly; a 200,000-anchor middle hit took about 11–13 ms before and 1.0–1.4 ms after in paired runs. An inside-bounds miss fell from 18.7 ms to 1.6 ms. Estimate unchanged; idle budget run still open. |
 | 2026-11-05 | minor | G15: an image zoomed in on is separated, colorized or proofed only for the tiles in view (#4155); 100% zoom on that file 8.6 s → 0.05 s. Estimate unchanged. |
 | 2026-11-05 | minor | G15: a document's first frame renders on the render worker (#4155); the longest UI-thread stall opening that file went from 8.7 s to 64 ms. Estimate unchanged. |

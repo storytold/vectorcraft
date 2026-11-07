@@ -9,10 +9,12 @@ pub(crate) fn panel_footer_bottom(ui: &Ui) -> Option<f32> {
     ui.stack().iter().find_map(|stack| stack.tags().get_downcast::<Option<f32>>(PANEL_FOOTER)).copied().flatten()
 }
 
+/// Space left for a list above the footer and any intervening controls, or its unfitted fallback.
 pub(crate) fn panel_list_height(ui: &Ui, fallback: f32, after: f32) -> f32 {
     panel_footer_bottom(ui).map_or(fallback, |bottom| (bottom - ui.next_widget_position().y - FOOTER_HEIGHT - after).max(0.0))
 }
 
+/// Pad short content so a footer of `height` ends at the panel's saved bottom edge.
 pub(crate) fn panel_footer_space(ui: &mut Ui, height: f32) {
     if let Some(bottom) = panel_footer_bottom(ui) {
         ui.add_space((bottom - ui.next_widget_position().y - height).max(0.0));
@@ -192,6 +194,7 @@ pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
 mod footer_tests {
     use super::{PANEL_FOOTER, bottom_bar, panel_footer};
 
+    /// Blank footer space intercepts clicks instead of selecting list rows underneath it.
     #[test]
     fn blank_footer_space_does_not_click_a_row_scrolled_behind_it() {
         use egui::{Event, PointerButton, Rect, Sense, UiBuilder, UiStackInfo, pos2};

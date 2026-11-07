@@ -1346,6 +1346,7 @@ struct PanelContent<'a> {
 }
 
 impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
+    /// Draw a registered panel body, fitting untouched flyouts and pinning sized panels' footers.
     fn body(&mut self, ui: &mut egui::Ui, id: &String) {
         if id == CANVAS {
             self.app.canvas_area(ui);

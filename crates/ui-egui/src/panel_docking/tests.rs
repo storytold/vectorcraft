@@ -17,6 +17,7 @@ struct Harness {
 }
 
 impl Harness {
+    /// Create a blank document and settle the initial docking layout over three frames.
     fn new() -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -42,6 +43,7 @@ impl Harness {
         self.run(input);
     }
 
+    /// Draw one application frame and retain its cursor and accessibility output for assertions.
     fn run(&mut self, input: egui::RawInput) {
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(input, |ui| {

@@ -212,6 +212,7 @@ fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) {
     }
 }
 
+/// Browse and insert glyphs from the chosen font, with font controls below the glyph grid.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let db = FontDb::global();

@@ -1,12 +1,14 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+
+> **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
 ## Feature submission evidence
 
-Icon-strip flyouts resize from the canvas-side edge and bottom, keeping the icon-column edge anchored (#5713). Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
-
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
+
+Icon-strip flyouts resize from the canvas-side edge and bottom, keeping the icon-column edge anchored (#5713). Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
 
 **PR #3273 revision — 2026-11-04:** Thin curved stroke coverage ported to the current raster-only cache, cropped-long-stroke and effect paths with guarded flattening; vector export geometry unchanged. Scores and estimates unchanged.
 
@@ -38,8 +40,8 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-06 | minor | Icon-strip flyouts resize on their free edges and retain sizes with workspaces (#5713); saved heights beat auto-fit; panel footers stay at the bottom after enlargement. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |
+| 2026-11-06 | minor | Icon-strip flyouts resize on their free edges and retain sizes with workspaces (#5713); saved heights beat auto-fit; panel footers stay at the bottom after enlargement. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |
 | 2026-11-05 | minor | Pencil and Paintbrush: a new stroke with Keep selected off leaves nothing selected, the earlier selection included, while Keep selected on selects only the new path (#5752); scores and estimates unchanged. |
 | 2026-11-05 | minor | Layers panel: a layer whose Layer Options › Print is off shows its name italic, as the reference application shows non-printing layers, and keeps it while the row is dragged (#5739); scores and estimates unchanged. |
@@ -92,9 +94,6 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 | Organise layers and artboards and export assets (Export for Screens, SVG, PNG, PDF per artboard) | yes | Layers panel rework, Artboards panel and tool, Export for Screens and Asset Export done; Art Optimized supersample closes ghost borders (#983 / #1037) | 0 |
 | Print production: CMYK and spot colour, bleed and marks, PDF/X out, separations preview | yes | PDF/X-1a/3/4, presets, marks and bleed, ICC output intent, Separations Preview, Print with PostScript output | 0 |
 | Exchange files with Illustrator users: open their `.ai`/EPS/PDF, hand back a file they can open | partial (doesn't block alpha) | `.ai`, EPS and PDF open as editable art, but real files can get the wrong layer structure (#951); Save As `.ai` is PDF-compatible, which Illustrator opens without its own editing data (#868), or legacy version 7, which keeps layers, groups and type as text, one artboard per file, and waits for users' testing. EPS legacy mesh corners, vector opacity masks and raster print-page comparison now preserve editable art under synthetic regressions. This is the beta main-format gap ([gaps.md](gaps.md) G9) | 10–20 (for beta) |
-
-Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are implemented;
-native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
 
 ## Current focus
 
@@ -181,7 +180,6 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-04 | minor | New Document: the units chosen in Preset Details belong to the chosen preset; Recent and Saved cards keep their own units; scores and estimates unchanged. |
 | 2026-11-03 | minor | M7: the OpenType panel offers the selected font's available Stylistic Sets with custom or numbered names; estimates unchanged. |
 | 2026-11-03 | minor | M1: Enclosing Lasso adds freehand whole-object selection under Object › Plug-ins; estimates unchanged. |
