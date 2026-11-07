@@ -478,7 +478,17 @@ impl Tool for EyedropperTool {
         } else {
             sample_source(cx, ev.pos)
         };
-        let Some((src, _)) = source else { return vec![] };
+        let Some((src, _)) = source else {
+            // Empty artboard: the colour under the cursor is the paper. A gradient stop still
+            // waits for an object, Alt has nothing to paint onto, and hidden art still occupies
+            // its bounds (a click there is a miss, not the paper showing through).
+            let on_art = cx.doc.artboards.iter().any(|a| a.rect.contains(ev.pos));
+            let covered = cx.doc.layers.iter().any(|layer| layer.geometric_bounds().is_some_and(|r| r.contains(ev.pos)));
+            if stop.is_some() || ev.mods.alt || !on_art || covered {
+                return vec![];
+            }
+            return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color_json(&cx.doc.setup.paper()) }))];
+        };
         let Some(n) = cx.doc.node(src) else { return vec![] };
         if ev.mods.alt && stop.is_none() {
             let how = if ev.mods.shift { "append" } else { "reverse" };
@@ -569,7 +579,14 @@ mod tests {
         // On the stroke edge → the stroke colour.
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": color_json(&Color::BLACK)}))]);
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+        // On the artboard, past every object: the paper colour.
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)),
+            vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]
+        );
+        // Outside every artboard there is nothing to sample.
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 2000.0, 2000.0)).is_empty());
     }
 
     /// On a clip group's mask edge, where the art it clips lies over it, the eyedropper copies the
