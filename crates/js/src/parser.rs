@@ -7,6 +7,8 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::LineTable;
 use crate::ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionKind, LogicalOp, Name, Program, Property,
@@ -18,20 +20,14 @@ use crate::token::{Directive, Keyword, Punct, Span, Token, TokenKind, strict_res
 
 type Result<T> = std::result::Result<T, SyntaxError>;
 
-/// A label in scope, and whether it labels an iteration statement (`continue` may name only
-/// those).
-#[derive(Clone, Debug)]
-struct Label {
-    name: String,
-    is_loop: bool,
-}
-
 /// What the code being parsed allows, saved and replaced at each function body.
 #[derive(Clone, Debug, Default)]
 struct Context {
     strict: bool,
     in_function: bool,
-    labels: Vec<Label>,
+    /// The labels in scope, each with whether it labels an iteration statement (`continue` may
+    /// name only those). Labels in scope have distinct names.
+    labels: HashMap<String, bool>,
     /// Iteration statements open in the current function.
     loops: u32,
     /// Iteration and `switch` statements open in the current function.
@@ -543,10 +539,9 @@ impl<'s> Parser<'s> {
                 let name = name.clone();
                 self.check_identifier(&self.tok, &name)?;
                 let token = self.bump()?;
-                let found = self.ctx.labels.iter().rev().find(|l| l.name == name);
-                match found {
+                match self.ctx.labels.get(&name) {
                     None => return Err(self.error_at_token(&token, format!("undefined label '{name}'"))),
-                    Some(l) if !is_break && !l.is_loop => {
+                    Some(&is_loop) if !is_break && !is_loop => {
                         return Err(self.error_at_token(&token, format!("label '{name}' does not name a loop, so continue cannot use it")));
                     }
                     Some(_) => {}
@@ -674,14 +669,15 @@ impl<'s> Parser<'s> {
     /// `in_list`: the labeled statement stands in a statement list, so outside strict mode code
     /// its body may be a function declaration.
     fn parse_labeled(&mut self, in_list: bool) -> Result<StmtId> {
-        let mut labels = Vec::new();
+        let mut labels: Vec<(Name, Span)> = Vec::new();
+        let mut chain = HashSet::new();
         while let TokenKind::Ident(name) = &self.tok.kind {
             if !self.peek().is_some_and(|t| t.is_punct(Punct::Colon)) {
                 break;
             }
             let name = name.clone();
             self.check_identifier(&self.tok, &name)?;
-            if self.ctx.labels.iter().any(|l| l.name == name) || labels.iter().any(|(l, _): &(Name, Span)| l.name == name) {
+            if self.ctx.labels.contains_key(&name) || !chain.insert(name.clone()) {
                 return Err(self.error_at_token(&self.tok, format!("duplicate label '{name}'")));
             }
             let token = self.bump()?;
@@ -689,11 +685,12 @@ impl<'s> Parser<'s> {
             labels.push((Name { name, span: token.span }, token.span));
         }
         let is_loop = self.at_keyword(Keyword::For) || self.at_keyword(Keyword::While) || self.at_keyword(Keyword::Do);
-        let outer = self.ctx.labels.len();
-        self.ctx.labels.extend(labels.iter().map(|(n, _)| Label { name: n.name.clone(), is_loop }));
+        self.ctx.labels.extend(chain.into_iter().map(|name| (name, is_loop)));
         self.function_allowed = in_list && !self.ctx.strict;
         let body = self.parse_statement();
-        self.ctx.labels.truncate(outer);
+        for (label, _) in &labels {
+            self.ctx.labels.remove(&label.name);
+        }
         let mut body = body?;
         for (label, label_start) in labels.into_iter().rev() {
             let span = Span::new(label_start.start, self.ast.stmt_span(body).end);
@@ -792,8 +789,9 @@ impl<'s> Parser<'s> {
                 return Err(self.error_at_token(token, format!("'{}' is a reserved word in strict mode", n.name)));
             }
         }
-        for (i, (p, token)) in params.iter().enumerate() {
-            if params.iter().take(i).any(|(q, _)| q.name == p.name) {
+        let mut seen = HashSet::new();
+        for (p, token) in params {
+            if !seen.insert(p.name.as_str()) {
                 return Err(self.error_at_token(token, format!("duplicate parameter name '{}' is not allowed in strict mode", p.name)));
             }
         }

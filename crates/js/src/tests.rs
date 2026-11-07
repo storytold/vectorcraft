@@ -377,6 +377,31 @@ fn identifiers_with_unicode_and_escapes() {
 }
 
 #[test]
+fn identifier_characters_follow_their_unicode_categories() {
+    // Letters (Lu, Ll, Lt, Lm, Lo, Nl) start an identifier; marks (Mn, Mc), decimal digits (Nd)
+    // and connector punctuation (Pc) may follow.
+    for good in [
+        "var \u{995}\u{9cd}\u{9b7} = 1;",
+        "var \u{b95}\u{bcd}\u{b95} = 1;",
+        "var a\u{9be} = 1;",
+        "var x\u{966} = 1;",
+        "var a\u{203f}b = 1;",
+        "var \u{2b0} = 1;",
+        "var \u{2160} = 1;",
+        "var \u{1c5} = 1;",
+        "var \u{5d0}\u{5b7} = 1;",
+    ] {
+        ok(good);
+    }
+    // Other numbers (No) are not identifier characters, and a mark cannot start an identifier.
+    for bad in ["var a\u{b2} = 1;", "var x\u{bd} = 1;", "var \u{9be}a = 1;", "var \u{300}a = 1;", "var \u{966} = 1;"] {
+        assert!(err(bad).message.contains("unexpected character"), "{bad:?}");
+    }
+    assert!(parse("var \\u09BEa = 1;", &Options::default()).is_err());
+    assert!(parse("var a\\u00B2 = 1;", &Options::default()).is_err());
+}
+
+#[test]
 fn comments_and_line_terminators() {
     let p = ok("a /* one\ntwo */ b");
     assert_eq!(p.body.len(), 2, "a comment with a line break separates statements");
@@ -628,6 +653,21 @@ fn long_flat_runs_do_not_nest() {
     ok(&format!("x{};", ".y".repeat(N)));
     ok(&format!("x{};", "()".repeat(N)));
     ok(&"a;\n".repeat(N));
+}
+
+#[test]
+fn long_label_chains_and_parameter_lists_are_checked_in_linear_time() {
+    // Each check looks a name up in a hash set or map. Comparing every name with every earlier
+    // one would take about 2 * 10^10 steps at this size.
+    const N: usize = 200_000;
+    let labels: String = (0..N).map(|i| format!("l{i}: ")).collect();
+    let body: String = (0..N).map(|i| format!("m{i}: break l{i}; ")).collect();
+    ok(&format!("{labels}for (;;) {{ {body}continue l0; }}"));
+    assert!(err(&format!("{labels}l0: x;")).message.contains("duplicate label"));
+    assert!(err(&format!("{labels}for (;;) {{ m: break l{N}; }}")).message.contains("undefined label"));
+    let params = (0..N).map(|i| format!("p{i}")).collect::<Vec<_>>().join(", ");
+    ok(&format!("function f({params}) {{ 'use strict'; }}"));
+    assert!(err(&format!("function f({params}, p0) {{ 'use strict'; }}")).message.contains("duplicate parameter"));
 }
 
 #[test]
