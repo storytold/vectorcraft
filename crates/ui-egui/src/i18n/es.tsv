@@ -3939,7 +3939,7 @@ axis	Both	Ambos
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	no hay ninguna biblioteca `{id}`
 @msg	select some type first	selecciona primero algún texto
-@msg	kerning must be a number, "auto", or "optical"	El interletraje debe ser un número, «auto» u «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning debe ser un número, «auto» u «optical»
 @msg	the selection has no gradient fill	la selección no tiene un degradado de relleno
 @msg	the selection has no gradient stroke	la selección no tiene un degradado de trazo
 @msg	the selection has no pattern fill	la selección no tiene un motivo de relleno
@@ -4166,9 +4166,9 @@ axis	Both	Ambos
 @msg	bad shortcut	atajo no válido
 @msg	bad stream length	longitud de flujo no válida
 @msg	bad trailer	trailer no válido
-@msg	balance must be between 0 and 100	el equilibrio debe estar entre 0 y 100
+@msg	balance must be between 0 and 100	balance debe estar entre 0 y 100
 @msg	batch step {_1} (`{id}`) failed: {e}	falló el paso {_1} del lote (`{id}`): {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	el brillo debe ser dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness debe ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	no se puede codificar el documento: {0}
 @msg	can't parse shortcut `{c}`	no se puede interpretar el atajo `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	no se puede interpretar el atajo `{s}` de `{k}`
@@ -4193,7 +4193,7 @@ axis	Both	Ambos
 @msg	compound paths can only contain paths	los trazados compuestos solo pueden contener trazados
 @msg	compressed (RLE) bitmaps can't be read yet	todavía no se pueden leer mapas de bits comprimidos (RLE)
 @msg	damaged	dañado
-@msg	decimals must be {_1}–{_2} (got {_3})	los decimales deben ser {_1}–{_2} (se recibió {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals debe ser {_1}–{_2} (se recibió {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	divide en 1 a {MAX_PIECES} sectores
 @msg	effect {k} is `{_1}`, not `{id}`	el efecto {k} es `{_1}`, no `{id}`
 @msg	empty brush stroke	trazo de pincel vacío
@@ -4391,7 +4391,7 @@ axis	Both	Ambos
 @msg	replace: the object to replace was changed or deleted	replace: se modificó o eliminó el objeto que se iba a reemplazar
 @msg	pattern missing	falta el motivo
 @msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
-@msg	percent must be above 0 and at most 6400, not {p}	el porcentaje debe ser mayor que 0 y como máximo 6400, no {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent debe ser mayor que 0 y como máximo 6400, no {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	elige un color, degradado o motivo para guardarlo como muestra
 @msg	plane must be left, right or ground	plane debe ser left, right o ground
 @msg	plug-in ABI: {0}	ABI del plugin: {0}
@@ -4412,8 +4412,8 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	el resultado excedería el lienzo (coordenadas fuera de rango)
 @msg	objects can't be nested more than 32 deep	los objetos no pueden anidarse a más de 32 niveles
 @msg	the SVG's elements are nested more than {0} deep	los elementos del SVG están anidados a más de {0} niveles
-@msg	scale must be a number from {_1} to {_2}, not {_3}	la escala debe ser un número de {_1} a {_2}, no {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	la escala debe ser un número de {_1} a {_2}, no {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale debe ser un número de {_1} a {_2}, no {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale debe ser un número de {_1} a {_2}, no {s}
 @msg	select (or target) objects whose appearance isn't basic	selecciona (o apunta a) objetos cuya apariencia no sea básica
 @msg	select a Live Paint group	selecciona un grupo de pintura interactiva
 @msg	select a blend	selecciona una fusión

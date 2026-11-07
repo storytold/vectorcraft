@@ -1699,14 +1699,14 @@ file-filter	Templates	範本
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次啟動時在 {name} 上於視窗出現前結束，因此這次在 {summary} 上啟動。若要再次嘗試該圖形處理器，請變更「偏好設定 › 效能 › 圖形處理器」，或設定 WGPU_BACKEND 後再啟動
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次啟動時在列出圖形處理器期間結束，因此這次只以 OpenGL 在 {summary} 上啟動。若要再次嘗試其他圖形後端，請變更「偏好設定 › 效能 › 圖形處理器」，或設定 WGPU_BACKEND 後再啟動
 @msg	not a DXF drawing	不是 DXF 圖面
-@msg	scale must be a number from {_1} to {_2}, not {s}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {s}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale 必須是 {_1} 到 {_2} 之間的數字，而非 {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	要符合的工作區域尺寸必須為正數，且不超過 {_1} pt
 @msg	the drawing has no layout `{_1}` (it has {_2})	圖面中沒有配置 `{_1}` (它有 {_2})
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	這是 DWG 圖面，無法讀取：請在 CAD 應用程式中將其儲存為 ASCII DXF，再開啟該檔案
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	以此比例，圖面為 {w} × {h} pt，超過畫布所能容納：請選擇較小的比例，或使其符合工作區域
 @msg	the scale is not a usable number	比例不是可用的數字
 @msg	the drawing is too large to open	圖面過大，無法開啟
-@msg	scale must be a number from {_1} to {_2}, not {_3}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale 必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
 @msg	an image has no pixels and was left out	已略過沒有像素的影像
 @msg	object {0} cannot have children	物件 {0} 不能有子物件
 @msg	range `{s}` is empty	範圍 `{s}` 是空的
@@ -1808,7 +1808,7 @@ file-filter	Templates	範本
 @msg	{name}: no local header	{name}：沒有區域檔頭
 @msg	Flatten Transparency: select objects to flatten	透明度平面化：請選取要平面化的物件
 @msg	Flatten Transparency: {e}	透明度平面化：{e}
-@msg	balance must be between 0 and 100	平衡必須介於 0 到 100 之間
+@msg	balance must be between 0 and 100	balance 必須介於 0 到 100 之間
 @msg	resolutions must be between 1 and 2400 ppi	解析度必須介於 1 到 2400 ppi 之間
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	未知的預設集 `{name}` (high、medium、low 或已儲存的預設集：請參閱 flattener.presets.list)
 @msg	`at` must be [x, y]	`at` 必須是 [x, y]
@@ -1972,7 +1972,7 @@ file-filter	Templates	範本
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)
 @msg	no selected slice in the image: select slices, or save all of them	影像中沒有已選取的切片：請選取切片，或全部儲存
 @msg	nothing to save: the document has no visible art	沒有可儲存的內容：文件中沒有可見的圖稿
-@msg	percent must be above 0 and at most 6400, not {p}	百分比必須大於 0 且不超過 6400，而非 {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent 必須大於 0 且不超過 6400，而非 {p}
 @msg	unknown preset `{name}` (see webExport.presets.list)	未知的預設集 `{name}` (請參閱 webExport.presets.list)
 @msg	width and height are at least 1 pixel	寬度和高度至少為 1 像素
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 必須是 1、3 或 5
@@ -2132,7 +2132,7 @@ file-filter	Templates	範本
 @msg	is not an image VectorCraft reads	不是 VectorCraft 可讀取的影像
 @msg	not found	找不到
 @msg	SVG parse error: {0}	SVG 剖析錯誤：{0}
-@msg	decimals must be {_1}–{_2} (got {_3})	小數位數必須為 {_1}–{_2} (收到 {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals 必須為 {_1}–{_2} (收到 {_3})
 @msg	Exporting {_1}	正在匯出 {_1}
 @msg	Packaging {_1}	正在封裝 {_1}
 @msg	Placing {_1}	正在置入 {_1}
@@ -2296,7 +2296,7 @@ file-filter	Templates	範本
 @msg	choose a folder to export to	請選擇要匯出至的資料夾
 @msg	the selection has no URL (or they differ)	選取範圍沒有 URL (或其 URL 各不相同)
 @msg	select some type first	請先選取一些文字
-@msg	kerning must be a number, "auto", or "optical"	字距微調必須是數字、「auto」或「optical」
+@msg	kerning must be a number, "auto", or "optical"	kerning 必須是數字、「auto」或「optical」
 @msg	the selection has no gradient fill	選取範圍沒有漸層填色
 @msg	the selection has no gradient stroke	選取範圍沒有漸層筆畫
 @msg	the selection has no pattern fill	選取範圍沒有圖樣填色
@@ -2451,7 +2451,7 @@ file-filter	Templates	範本
 @msg	before must name a panel	before 必須指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停駐動作包含未知的面板或過長的分割路徑
 @msg	group must be true or false	group 必須是 true 或 false
-@msg	panel is not in a dock group	面板不在停駐群組中
+@msg	panel is not in a dock group	panel 不在停駐群組中
 @msg	only a dock group above or below others collapses, not one beside another	只有位於其他群組上方或下方的停駐群組可以摺疊，並排的不行
 @msg	icon must be true or false	icon 必須為 true 或 false
 @msg	icon only docks a panel in the icon column, with no anchor	icon 只會將面板停駐到圖示欄中，不能帶 anchor

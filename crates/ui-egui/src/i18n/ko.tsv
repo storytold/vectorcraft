@@ -4002,14 +4002,14 @@ theme	Appearance	외관
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 창이 나타나기 전에 {name}에서 끝나서 {summary}에서 시작했습니다. 이 그래픽 프로세서를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	지난번 VectorCraft 시작이 그래픽 프로세서 목록을 가져오는 중에 끝나서 OpenGL만 사용해 {summary}에서 시작했습니다. 다른 그래픽 백엔드를 다시 시도하려면 환경 설정 › 성능 › 그래픽 프로세서를 변경하거나 WGPU_BACKEND를 설정하고 시작하세요
 @msg	not a DXF drawing	DXF 도면이 아닙니다
-@msg	scale must be a number from {_1} to {_2}, not {s}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {s}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale은 {_1}에서 {_2} 사이의 숫자여야 합니다: {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	맞출 아트보드는 최대 {_1} pt까지의 양수 크기여야 합니다
 @msg	the drawing has no layout `{_1}` (it has {_2})	도면에 레이아웃 `{_1}`이(가) 없습니다(있는 레이아웃: {_2})
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	DWG 도면은 읽을 수 없습니다. CAD 앱에서 ASCII DXF로 저장한 후 여세요
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	이 배율에서는 도면이 {w} × {h} pt로 캔버스 크기를 넘습니다. 더 작은 배율을 고르거나 아트보드에 맞추세요
 @msg	the scale is not a usable number	배율이 사용할 수 없는 숫자입니다
 @msg	the drawing is too large to open	도면이 너무 커서 열 수 없습니다
-@msg	scale must be a number from {_1} to {_2}, not {_3}	배율은 {_1}에서 {_2} 사이의 숫자여야 합니다: {_3}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale은 {_1}에서 {_2} 사이의 숫자여야 합니다: {_3}
 @msg	an image has no pixels and was left out	픽셀이 없는 이미지를 제외했습니다
 @msg	object {0} cannot have children	개체 {0}에는 하위 항목을 둘 수 없습니다
 @msg	range `{s}` is empty	범위 `{s}`이(가) 비어 있습니다
@@ -4126,7 +4126,7 @@ theme	Appearance	외관
 @msg	{name}: no local header	{name}: 로컬 헤더가 없습니다
 @msg	Flatten Transparency: select objects to flatten	투명도 병합: 병합할 개체를 선택하세요
 @msg	Flatten Transparency: {e}	투명도 병합: {e}
-@msg	balance must be between 0 and 100	균형은 0에서 100 사이여야 합니다
+@msg	balance must be between 0 and 100	balance는 0에서 100 사이여야 합니다
 @msg	resolutions must be between 1 and 2400 ppi	해상도는 1에서 2400 ppi 사이여야 합니다
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	알 수 없는 프리셋 `{name}`(high, medium, low 또는 저장된 프리셋: flattener.presets.list 참조)
 @msg	`at` must be [x, y]	`at`은 [x, y]여야 합니다
@@ -4201,7 +4201,7 @@ theme	Appearance	외관
 @msg	nothing to align	정렬할 항목이 없습니다
 @msg	select a clip group	클립 그룹을 선택하세요
 @msg	select two or more objects to distribute	분포할 개체를 두 개 이상 선택하세요
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	축은 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{v}`
 @msg	give horizontal or vertical	horizontal 또는 vertical을 지정하세요
 @msg	selection has no bounds	선택 영역에 경계가 없습니다
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	클리핑 마스크로 쓰려면 맨 위 개체가 패스, 컴파운드 패스 또는 텍스트 개체여야 합니다
@@ -4296,7 +4296,7 @@ theme	Appearance	외관
 @msg	no artboard {i} (0-based; the document has {_1})	아트보드 {i}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
 @msg	no selected slice in the image: select slices, or save all of them	이미지에 선택한 슬라이스가 없습니다. 슬라이스를 선택하거나 모두 저장하세요
 @msg	nothing to save: the document has no visible art	저장할 항목이 없습니다. 문서에 보이는 아트웍이 없습니다
-@msg	percent must be above 0 and at most 6400, not {p}	퍼센트는 0 초과 6400 이하여야 합니다: {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent는 0 초과 6400 이하여야 합니다: {p}
 @msg	unknown preset `{name}` (see webExport.presets.list)	알 수 없는 프리셋 `{name}`(webExport.presets.list 참조)
 @msg	width and height are at least 1 pixel	너비와 높이는 1픽셀 이상이어야 합니다
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize`는 1, 3 또는 5여야 합니다
@@ -4459,7 +4459,7 @@ theme	Appearance	외관
 @msg	is not an image VectorCraft reads	VectorCraft가 읽는 이미지가 아닙니다
 @msg	not found	찾을 수 없습니다
 @msg	SVG parse error: {0}	SVG 구문 분석 오류: {0}
-@msg	decimals must be {_1}–{_2} (got {_3})	소수 자릿수는 {_1}~{_2}이어야 합니다({_3} 입력됨)
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals는 {_1}~{_2}이어야 합니다({_3} 입력됨)
 @msg	Exporting {_1}	{_1} 내보내는 중
 @msg	Packaging {_1}	{_1} 패키지 만드는 중
 @msg	Placing {_1}	{_1} 가져오는 중
@@ -4517,7 +4517,7 @@ theme	Appearance	외관
 @msg	no preset editor	프리셋 편집기가 없습니다
 @msg	no perspective grid preset named `{name}`	`{name}`이라는 원근 격자 프리셋이 없습니다
 @msg	no active perspective plane	활성 원근 평면이 없습니다
-@msg	plane must be left, right or ground	평면은 왼쪽, 오른쪽 또는 바닥이어야 합니다
+@msg	plane must be left, right or ground	plane은 left, right 또는 ground여야 합니다
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
 @msg	{_1} is a live effect (Effect › Plug-ins)	{_1}은(는) 라이브 효과입니다(효과 › 플러그인)
@@ -4629,7 +4629,7 @@ theme	Appearance	외관
 @msg	choose a folder to export to	내보낼 폴더를 선택하세요
 @msg	the selection has no URL (or they differ)	선택 항목에 URL이 없거나 서로 다릅니다
 @msg	select some type first	먼저 문자를 선택하세요
-@msg	kerning must be a number, "auto", or "optical"	커닝은 숫자, “auto” 또는 “optical”이어야 합니다
+@msg	kerning must be a number, "auto", or "optical"	kerning은 숫자, “auto” 또는 “optical”이어야 합니다
 @msg	the selection has no gradient fill	선택 항목에 칠 그레이디언트가 없습니다
 @msg	the selection has no gradient stroke	선택 항목에 선 그레이디언트가 없습니다
 @msg	the selection has no pattern fill	선택 항목에 칠 패턴이 없습니다
@@ -4887,7 +4887,7 @@ effect	Vertical	세로
 @msg	before must name a panel	before는 패널을 지정해야 합니다
 @msg	docking action contains an unknown panel or an excessive split path	도킹 동작에 알 수 없는 패널이나 지나치게 많은 분할 경로가 있습니다
 @msg	group must be true or false	group은 true 또는 false여야 합니다
-@msg	panel is not in a dock group	패널이 도크 그룹에 없습니다
+@msg	panel is not in a dock group	panel이 도크 그룹에 없습니다
 @msg	only a dock group above or below others collapses, not one beside another	다른 그룹의 위나 아래에 있는 도크 그룹만 접을 수 있으며, 옆에 있는 그룹은 접을 수 없습니다
 @msg	icon must be true or false	icon은 true 또는 false여야 합니다
 @msg	icon only docks a panel in the icon column, with no anchor	icon은 anchor 없이 패널을 아이콘 열에만 도킹합니다

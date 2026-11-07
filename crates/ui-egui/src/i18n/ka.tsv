@@ -3735,7 +3735,7 @@ font-technology	Variable	ცვლადი
 @plural	{n} stroke|{n} strokes	კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
-@msg	kerning must be a number, "auto", or "optical"	კერნინგი უნდა იყოს რიცხვი, „auto“ ან „optical“
+@msg	kerning must be a number, "auto", or "optical"	kerning უნდა იყოს რიცხვი, „auto“ ან „optical“
 @msg	the selection has no gradient fill	მონიშნულს შევსების გრადიენტი არ აქვს
 @msg	the selection has no gradient stroke	მონიშნულს კონტურის გრადიენტი არ აქვს
 @msg	the selection has no pattern fill	მონიშნულს შევსების პატერნი არ აქვს
@@ -3966,7 +3966,7 @@ font-technology	Variable	ცვლადი
 @msg	compound paths can only contain paths	შედგენილი ტრაექტორია მხოლოდ ტრაექტორიებს შეიძლება შეიცავდეს
 @msg	compressed (RLE) bitmaps can't be read yet	შეკუმშული (RLE) ბიტმაპების წაკითხვა ჯერ არ ხერხდება
 @msg	damaged	დაზიანებულია
-@msg	decimals must be {_1}–{_2} (got {_3})	ციფრები მძიმის შემდეგ უნდა იყოს {_1}–{_2} (მიღებულია {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals უნდა იყოს {_1}–{_2} (მიღებულია {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	დაყავით 1-დან {MAX_PIECES}-მდე ნაჭრად
 @msg	effect {k} is `{_1}`, not `{id}`	ეფექტი {k} არის `{_1}` და არა `{id}`
 @msg	empty brush stroke	ცარიელი ფუნჯის შტრიხი
@@ -4151,9 +4151,9 @@ font-technology	Variable	ცვლადი
 @msg	replace: the object to replace was changed or deleted	replace: ჩასანაცვლებელი ობიექტი შეიცვალა ან წაიშალა
 @msg	pattern missing	პატერნი აკლია
 @msg	patterns nested too deeply are filled with mid-grey	ზედმეტად ღრმად ჩადგმული პატერნები საშუალო ნაცრისფრით ივსება
-@msg	percent must be above 0 and at most 6400, not {p}	პროცენტი უნდა იყოს 0-ზე მეტი და არაუმეტეს 6400-ისა და არა {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent უნდა იყოს 0-ზე მეტი და არაუმეტეს 6400-ისა და არა {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	ფერის ნიმუშად შესანახად აირჩიეთ ფერი, გრადიენტი ან პატერნი
-@msg	plane must be left, right or ground	სიბრტყე უნდა იყოს left, right ან ground
+@msg	plane must be left, right or ground	plane უნდა იყოს left, right ან ground
 @msg	plug-in ABI: {0}	პლაგინის ABI: {0}
 @msg	plug-in exceeded its {0}	პლაგინმა გადააჭარბა ლიმიტს: {0}
 @msg	plug-in failed: {0}	პლაგინის შეცდომა: {0}
@@ -4170,8 +4170,8 @@ font-technology	Variable	ცვლადი
 @msg	recovery copy `{file}`: {e}	აღდგენის ასლი `{file}`: {e}
 @msg	resolutions must be between 1 and 2400 ppi	გარჩევადობა უნდა იყოს 1-დან 2400 ppi-მდე
 @msg	result would exceed the canvas (coordinates out of range)	შედეგი ტილოს გასცდება (კოორდინატები დიაპაზონს გარეთაა)
-@msg	scale must be a number from {_1} to {_2}, not {_3}	მასშტაბი უნდა იყოს რიცხვი {_1}-დან {_2}-მდე და არა {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	მასშტაბი უნდა იყოს რიცხვი {_1}-დან {_2}-მდე და არა {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale უნდა იყოს რიცხვი {_1}-დან {_2}-მდე და არა {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale უნდა იყოს რიცხვი {_1}-დან {_2}-მდე და არა {s}
 @msg	select (or target) objects whose appearance isn't basic	მონიშნეთ (ან მიზნად აირჩიეთ) ობიექტები, რომელთა იერსახე საბაზისო არ არის
 @msg	select a Live Paint group	მონიშნეთ ცოცხალი შეღებვის ჯგუფი
 @msg	select a blend	მონიშნეთ გადასვლა
@@ -4483,7 +4483,7 @@ font-technology	Variable	ცვლადი
 @msg	before must name a panel	before უნდა ასახელებდეს პანელს
 @msg	docking action contains an unknown panel or an excessive split path	მიმაგრების მოქმედება შეიცავს უცნობ პანელს ან ზედმეტად გრძელ გაყოფის გზას
 @msg	group must be true or false	group უნდა იყოს true ან false
-@msg	panel is not in a dock group	პანელი არ არის დოკის ჯგუფში
+@msg	panel is not in a dock group	panel არ არის დოკის ჯგუფში
 @msg	only a dock group above or below others collapses, not one beside another	იკეცება მხოლოდ სხვების ზემოთ ან ქვემოთ მდებარე დოკის ჯგუფი, არა სხვის გვერდით მდებარე
 @msg	icon must be true or false	icon უნდა იყოს true ან false
 @msg	icon only docks a panel in the icon column, with no anchor	icon პანელს მხოლოდ ხატულების სვეტში ამაგრებს, anchor-ის გარეშე

@@ -2169,6 +2169,69 @@ fn translated_messages_keep_the_double_quoted_values_of_their_english() {
     assert!(missing.is_empty(), "{} rows drop a double-quoted value:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// Whether `text` holds `word` with no ASCII letter, digit or underscore right before or after it,
+/// so `true` counts in `true이거나` but not in `untrue`.
+fn holds_ascii_word(text: &str, word: &str) -> bool {
+    let joins = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back().is_none_or(|c| !joins(c));
+        let after = text[at + word.len()..].chars().next().is_none_or(|c| !joins(c));
+        before && after
+    })
+}
+
+/// The literal values `true`, `false` and `null` that `s` names outside its backticked and
+/// double-quoted spans.
+fn bare_literals(s: &str) -> Vec<&'static str> {
+    let mut outside = String::new();
+    let mut quoted = false;
+    for part in s.split('`').step_by(2) {
+        for (i, piece) in part.split('"').enumerate() {
+            if i > 0 {
+                quoted = !quoted;
+            }
+            if !quoted {
+                outside.push_str(piece);
+                outside.push(' ');
+            }
+        }
+    }
+    ["true", "false", "null"].into_iter().filter(|lit| holds_ascii_word(&outside, lit)).collect()
+}
+
+#[test]
+fn bare_literals_finds_true_false_and_null_outside_backticks_and_quotes() {
+    assert_eq!(bare_literals("clip must be true or false"), ["true", "false"]);
+    assert_eq!(bare_literals("`leading` must be from 0.1 to 5000, or null for Auto"), ["null"]);
+    assert_eq!(bare_literals(r#"`true` is "false", not untrue"#), Vec::<&str>::new());
+    assert!(holds_ascii_word("true이거나", "true"));
+    assert!(!holds_ascii_word("isTrue or falsey", "false"));
+}
+
+/// A translated status or error message keeps each `true`, `false` and `null` its English text
+/// names without backticks, spelled as the English spells it, since that is the value a command
+/// reads.
+#[test]
+fn translated_messages_keep_the_bare_literals_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for lit in bare_literals(english) {
+                    if !holds_ascii_word(form, lit) {
+                        missing.push(format!("{}: {lit} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a bare true, false or null:\n{}", missing.len(), missing.join("\n"));
+}
+
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
