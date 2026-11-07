@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-05 · **Change:** minor (Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (resizable icon-strip flyouts and bottom-aligned panel footers, #5713; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
