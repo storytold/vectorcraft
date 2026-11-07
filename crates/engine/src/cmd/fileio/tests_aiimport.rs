@@ -148,6 +148,61 @@ fn an_ai_file_opens_with_its_active_artboard() {
     assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
 }
 
+/// A `.ai` save names the view's active artboard in its editing copy, else the one the document
+/// opened on, else the first; the file read from that copy opens on it.
+#[test]
+fn an_ai_save_names_its_active_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    let opts = LoadOptions { native: false, ..Default::default() };
+    let active = |s: &mut Session, format: &str| {
+        let cmd = if format == "ait" { "file.saveAsTemplate" } else { "file.saveCopy" };
+        let saved = s.execute(cmd, &json!({"format": format})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+        let l = load::load_with(&format!("a.{format}"), &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+        assert_eq!(l.doc.artboards.len(), 3);
+        l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0)
+    };
+    assert_eq!(active(&mut s, "ai"), 0);
+    // The view's.
+    s.doc_mut().unwrap().active_artboard = Some(ids[2]);
+    assert_eq!((active(&mut s, "ai"), active(&mut s, "ait")), (2, 2));
+    // The one the document opened on, when the view names none or an artboard it doesn't have.
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).opened_artboard = Some(ids[1]);
+    for view in [None, Some(99)] {
+        s.doc_mut().unwrap().active_artboard = view;
+        assert_eq!(active(&mut s, "ai"), 1, "{view:?}");
+    }
+    // The view's first artboard over the one the document opened on.
+    s.doc_mut().unwrap().active_artboard = Some(ids[0]);
+    assert_eq!(active(&mut s, "ai"), 0);
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, Some(ids[1]), "the document is unchanged");
+}
+
+/// A `.ai` export (`document.serialize`, `document.export`, with or without `selectedOnly`) names
+/// the view's active artboard in its editing copy, as a save does.
+#[test]
+fn an_ai_export_names_its_active_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let ids: Vec<u32> = s.doc().unwrap().doc.artboards.iter().map(|a| a.id).collect();
+    s.doc_mut().unwrap().active_artboard = Some(ids[2]);
+    let opts = LoadOptions { native: false, ..Default::default() };
+    for (cmd, selected) in [("document.serialize", false), ("document.serialize", true), ("document.export", false)] {
+        let out = s.execute(cmd, &json!({"format": "ai", "selectedOnly": selected})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+        let l = load::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{cmd}: {:?}", l.warnings);
+        let active = l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id));
+        assert_eq!(active, Some(2), "{cmd} {selected}");
+    }
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, None, "the document is unchanged");
+}
+
 #[test]
 fn an_ai_unread_group_keeps_its_layers_and_live_neighbor() {
     let live = format!("0 0 1 0 k\n{}f", ai::rect(10.0, 10.0, 14.0, 14.0));

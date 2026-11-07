@@ -136,6 +136,13 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         members.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, painted_reach(symbols, c)))
     };
     match &n.kind {
+        // A group's or layer's 3D effect: the art of its members' solids.
+        NodeKind::Layer { .. } | NodeKind::Group { clip: false, .. }
+            if effects::has_solid(n)
+                && let Some(art) = effects::solid_art(n) =>
+        {
+            drawn_bounds(symbols, &art)
+        }
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);
             let art = art.as_ref().unwrap_or(n);

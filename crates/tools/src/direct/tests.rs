@@ -1862,6 +1862,29 @@ fn a_move_of_objects_lands_an_edge_on_the_grid() {
     }
 }
 
+/// #3835: with Snap to Grid on, a straight segment dragged by a point along it lands its anchors
+/// on the grid, not that point. B's top edge, (300, 300)–(400, 300), pressed at (350, 300) and
+/// dragged by (22, 23), moves its anchors to 322–422 across and 323 down: the right end is nearest
+/// the gridline 423 and the edge nearest 324, so the move is (23, 24). Snapping the pressed point
+/// instead would move it by (19, 24), onto the intersection (369, 324), leaving both anchors off
+/// the grid. An anchor pressed on still lands on an intersection itself.
+#[test]
+fn a_dragged_segment_lands_its_anchors_on_the_grid() {
+    let (d, _, b) = two_squares();
+    let p = paint();
+    let mut s = anchors_of(b, &[(0, 0), (0, 1)]);
+    s.segments.insert(b, [(0, 0)].into_iter().collect());
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, &c, (350.0, 300.0), (372.0, 323.0), Mods::default()).0, json!({"dx": 23.0, "dy": 24.0}));
+    let (v, _) = drag(&mut t, &c, (350.0, 300.0), (363.0, 301.0), Mods { shift: true, ..Mods::default() });
+    let (x, y) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+    assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "{v}");
+    let one = anchors_of(b, &[(0, 0)]);
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &one, &p) };
+    assert_eq!(drag(&mut t, &c, (300.0, 300.0), (322.0, 323.0), Mods::default()).0, json!({"dx": 24.0, "dy": 24.0}));
+}
+
 /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its
 /// line when it snaps, as the Selection tool does: level by 13.04 with Snap to Grid on, B's
 /// right side (413.04) lands on the gridline 414, and its top stays at 300, between 297 and

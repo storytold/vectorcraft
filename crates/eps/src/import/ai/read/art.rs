@@ -35,6 +35,9 @@ impl<'a> Reader<'a> {
         // The type takes the state's transparency, as a path does; an `Xy` after it sets the slot's own.
         n.opacity = gs.opacity;
         n.blend = gs.blend;
+        n.knockout_shape = gs.knockout_shape;
+        // An `Xy` before the text object was the object's, not its layer's, when the layer's `LB` follows.
+        self.layer_state = None;
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }
@@ -316,6 +319,7 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
+                node.knockout_shape = gs.knockout_shape;
                 self.add(node, hidden)?;
                 self.mesh_ended = true;
                 return Ok(());
@@ -332,6 +336,7 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         self.add(node, hidden)?;
         self.mesh_ended = true;
         Ok(())
@@ -698,6 +703,7 @@ impl<'a> Reader<'a> {
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         node.extras_mut().mask = mask.map(Box::new);
         node.extras_mut().colorize = colorize.map(Box::new);
         self.add(node, hidden)?;

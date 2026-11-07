@@ -754,7 +754,10 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         // keeps it as its only member).
         Some((image, false)) => Some(rasterfx::replace_with_image(v, image)),
         image => {
-            let m = if container {
+            let m = if container && effects::has_solid(&v) {
+                // A group's or layer's 3D effect: the shaded faces of its members' solids.
+                effects::expand_leaf(d, &v, &mut stroke_art)
+            } else if container {
                 // A group's or layer's own fills and strokes become art among its members.
                 effects::evaluate_container(Some(&*d), &v).map(|mut m| {
                     members = expand_pieces(d, &mut m, false, brushes, &mut stroke_art);
