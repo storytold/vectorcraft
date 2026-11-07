@@ -42,6 +42,8 @@ struct Host {
     time: f64,
     /// Every command sent to a window, in order.
     commands: Vec<(ViewportId, ViewportCommand)>,
+    /// The monitor size each window reports.
+    monitor_size: Option<egui::Vec2>,
 }
 
 impl Host {
@@ -51,6 +53,7 @@ impl Host {
             outer_rect: Some(rect),
             focused: Some(self.focus == id),
             native_pixels_per_point: Some(1.0),
+            monitor_size: self.monitor_size,
             ..Default::default()
         };
         std::iter::once((ViewportId::ROOT, info(ViewportId::ROOT, SCREEN.translate(ORIGIN.to_vec2()))))
@@ -199,6 +202,7 @@ impl Harness {
             focus: ViewportId::ROOT,
             time: 0.0,
             commands: Vec::new(),
+            monitor_size: None,
         }));
         let shared = host.clone();
         egui::Context::set_immediate_viewport_renderer(move |ctx, viewport| Host::render(&shared, ctx, viewport));
@@ -319,6 +323,61 @@ fn a_floated_panel_opens_its_own_os_window_where_the_backend_has_viewports() {
         .into_iter()
         .any(|(hit, _)| hit == craft_ui::docking::Hit::Tab("swatches".into()));
     assert!(tab, "its tab is drawn in the app window");
+}
+
+/// A new launch on a desktop of `monitors`, with `saved` as the panel layout: where the window of
+/// the floating Swatches panel opens.
+fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMonitor]) -> Rect {
+    let mut h = Harness::new();
+    h.host.borrow_mut().monitor_size = Some(vec2(1920.0, 1080.0));
+    h.app.services.dock_monitors = monitors.to_vec();
+    h.app.ui.docking = Some(saved.clone());
+    h.frames(3);
+    let viewport = h.viewport("swatches");
+    h.host.borrow().windows[&viewport].rect
+}
+
+/// Two monitors side by side, with the main window on the left one (#5582).
+#[test]
+fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let both = [left.clone(), right.clone()];
+
+    let mut h = Harness::new();
+    h.host.borrow_mut().monitor_size = Some(vec2(1920.0, 1080.0));
+    h.app.services.dock_monitors = both.to_vec();
+    let viewport = h.float("swatches");
+    let size = h.host.borrow().windows[&viewport].rect.size();
+    let placed_at = pos2(2400.0, 300.0);
+    h.host.borrow_mut().windows.get_mut(&viewport).unwrap().rect = Rect::from_min_size(placed_at, size);
+    // The layout follows the window after craft-ui's wait for a move to settle, half a second.
+    h.frames(30);
+
+    let layout = layout_of(&h.app.ui);
+    let window = &layout.floating[0];
+    assert_eq!(window.native.map(|[x, y, ..]| pos2(x, y)), Some(placed_at));
+    assert_eq!(window.monitor.as_ref(), Some(&right), "the window stores the monitor it is on");
+    // The preferences keep the layout as JSON.
+    let saved: craft_ui::docking::Layout<String> = serde_json::from_str(&serde_json::to_string(&layout).unwrap()).unwrap();
+
+    assert_eq!(reopened(&saved, &both).min, placed_at, "the monitor is connected: the saved place");
+
+    // The monitor got a new name and the same place.
+    let renamed = [left.clone(), crate::DockMonitor { name: Some("DP-2".into()), ..right.clone() }];
+    assert_eq!(reopened(&saved, &renamed).min, placed_at);
+
+    // A layout saved before the monitors were listed stores none.
+    let mut unstored = saved.clone();
+    unstored.floating[0].monitor = None;
+    assert_eq!(reopened(&unstored, &both).min, placed_at, "a place on a connected monitor is kept");
+
+    // The monitor is gone: the main window's monitor, at the same offset from its origin.
+    assert_eq!(reopened(&saved, std::slice::from_ref(&left)).min, pos2(placed_at.x - 1920.0, placed_at.y));
+
+    // No monitor list (a host that can't list them): onto the main window's monitor by egui's size.
+    let no_list = reopened(&saved, &[]);
+    assert_eq!(no_list.min, pos2(1920.0 - size.x, placed_at.y));
 }
 
 #[test]
