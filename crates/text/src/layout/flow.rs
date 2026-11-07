@@ -543,7 +543,9 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     // Justification adds nothing to the list marker's glyphs.
     let mut held = held;
     held.extend(index..paragraph.marker.min(body));
-    let last_of_para = position.end >= n || position.end.checked_sub(1).and_then(|i| sg.get(i)).is_some_and(|g| g.ch == '\u{2028}');
+    // A line a soft return ends is justified as a wrapped one is: only the paragraph's last line
+    // keeps the alignment of Justify Left, Center or Right.
+    let last_of_para = position.end >= n;
     LineGeometry {
         position,
         index,
