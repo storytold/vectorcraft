@@ -801,7 +801,10 @@ fn path_spacing(f: &Val, effect: PathEffect) -> f64 {
             } else {
                 (*along, *next)
             };
-            let turn = next.dot(*foot).atan2(next.dot(along));
+            // The turn is measured against a foot square to the path: Rainbow's and 3D Ribbon's own,
+            // else the baseline turned a right angle, as theirs is (Skew's feet stay upright).
+            let square = if matches!(effect, PathEffect::Rainbow | PathEffect::Ribbon3d) { *foot } else { kurbo::Vec2::new(-along.y, along.x) };
+            let turn = next.dot(square).atan2(next.dot(along));
             // The length of the arc between the centres (the path is taken to be round there). A
             // corner (a turn of more than a radian between two glyphs) isn't round: left out.
             let half = turn.abs() * 0.5;
@@ -1636,6 +1639,68 @@ mod tests {
         let level = round_layout_with(&advances, 80.0, true, 80.0 / 110.0, "/0 << /0 [ 0 20 ] >>", true);
         let spacing = path_spacing(&level, PathEffect::Ribbon3d);
         assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// Skew's feet stay upright, so on a straight path at 30 degrees they are not square to it. The
+    /// path turns nowhere, so glyphs set further apart than their advances give no spacing, going
+    /// right or left.
+    #[test]
+    fn skewed_type_on_a_straight_tilted_path_has_no_spacing() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        for degrees in [30.0f64, 210.0] {
+            let along = kurbo::Vec2::new(degrees.to_radians().cos(), degrees.to_radians().sin());
+            let (mut at, mut glyphs) = (0.0, vec![]);
+            for (i, a) in advances.iter().enumerate() {
+                if i > 0 {
+                    at += (advances[i - 1] + a) * 0.5 * 1.2;
+                }
+                glyphs.push((Point::ORIGIN + along * at, along));
+            }
+            let layout = upright_layout(&advances, &glyphs);
+            for effect in [PathEffect::Skew, PathEffect::StairStep, PathEffect::Gravity] {
+                let spacing = path_spacing(&layout, effect);
+                assert!(spacing.abs() < 1e-9, "{degrees}, {effect:?}: {spacing}");
+            }
+        }
+    }
+
+    /// Round the bottom of a circle the path runs left, and Skew's upright feet point away from the
+    /// side the path turns to: the turn is still measured as Rainbow's is. Outside a circle of
+    /// radius 100, 10 above the path, the centres are 100/110 of the advances apart: spacing 10.
+    #[test]
+    fn skewed_type_running_left_round_a_curve_gives_its_spacing() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        let mut angle = std::f64::consts::FRAC_PI_2 - 0.2;
+        let mut glyphs = vec![];
+        for (i, a) in advances.iter().enumerate() {
+            if i > 0 {
+                angle += (advances[i - 1] + a) * 0.5 * (100.0 / 110.0) / 100.0;
+            }
+            glyphs.push((Point::new(100.0 * angle.cos(), 100.0 * angle.sin()), kurbo::Vec2::new(-angle.sin(), angle.cos())));
+        }
+        let spacing = path_spacing(&upright_layout(&advances, &glyphs), PathEffect::Skew);
+        assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// A line's layout whose glyphs have their centres and baselines `glyphs` and upright feet, as
+    /// Skew's are.
+    fn upright_layout(advances: &[f64], glyphs: &[(Point, kurbo::Vec2)]) -> Val {
+        let (mut xs, mut ys, mut matrices, mut ends) = (vec![], vec![], vec![], vec![0.0]);
+        for (i, (a, (centre, along))) in advances.iter().zip(glyphs).enumerate() {
+            xs.push(centre.x - along.x * a * 0.5);
+            ys.push(centre.y - along.y * a * 0.5);
+            matrices.extend([along.x, along.y, 0.0, 1.0, 0.0, 0.0]);
+            ends.push(ends[i] + a);
+        }
+        let nums = |v: &[f64]| v.iter().map(|n| format!("{n}")).collect::<Vec<_>>().join(" ");
+        let doc = format!(
+            "/0 << /99 /F /6 [ << /99 /L /6 [ << /99 /S /6 [ << /99 /G /21 << /1 [ {} ] /2 [ {} ] /3 [ {} ] /4 [ {} ] >> >> ] >> ] >> ] >>",
+            nums(&xs),
+            nums(&ys),
+            nums(&matrices),
+            nums(&ends)
+        );
+        read(doc.as_bytes()).unwrap().get("0").unwrap().clone()
     }
 
     /// 3D Ribbon keeps its baselines level, so its glyphs' feet show how the path turns.
