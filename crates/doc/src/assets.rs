@@ -34,7 +34,16 @@ impl Document {
 
     /// The name of the next unnamed asset: one more than the highest `Asset N` so far.
     pub fn next_asset_name(&self) -> String {
-        let n = self.assets.iter().filter_map(|a| a.name.strip_prefix(ASSET)?.parse::<u64>().ok()).max().unwrap_or(0);
+        let n = self
+            .assets
+            .iter()
+            .filter_map(|a| {
+                let digits = a.name.strip_prefix(ASSET)?;
+                // `parse` alone would accept a leading `+`.
+                digits.bytes().all(|b| b.is_ascii_digit()).then(|| digits.parse::<u64>().ok()).flatten()
+            })
+            .max()
+            .unwrap_or(0);
         format!("{ASSET}{}", n.saturating_add(1))
     }
 
@@ -59,5 +68,25 @@ impl Document {
         let mut v: Vec<(Vec<usize>, NodeId)> = ids.into_iter().filter_map(|id| paths.get(&id).map(|p| (p.clone(), id))).collect();
         v.sort();
         v.into_iter().map(|(_, id)| id).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn name_after(names: &[&str]) -> String {
+        let mut doc = Document::new(100.0, 100.0);
+        for (i, n) in names.iter().enumerate() {
+            doc.assets.push(ExportAsset { id: i as u64 + 1, name: (*n).to_string(), nodes: vec![] });
+        }
+        doc.next_asset_name()
+    }
+
+    #[test]
+    fn next_asset_name_ignores_non_digit_suffixes() {
+        assert_eq!(name_after(&["Asset +5"]), "Asset 1");
+        assert_eq!(name_after(&["Asset ", "Asset 5x"]), "Asset 1");
+        assert_eq!(name_after(&["Asset 5"]), "Asset 6");
     }
 }
