@@ -319,6 +319,7 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
+                node.knockout_shape = gs.knockout_shape;
                 self.add(node, hidden)?;
                 self.mesh_ended = true;
                 return Ok(());
@@ -335,6 +336,7 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         self.add(node, hidden)?;
         self.mesh_ended = true;
         Ok(())
@@ -701,6 +703,7 @@ impl<'a> Reader<'a> {
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         node.extras_mut().mask = mask.map(Box::new);
         node.extras_mut().colorize = colorize.map(Box::new);
         self.add(node, hidden)?;

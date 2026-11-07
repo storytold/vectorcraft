@@ -495,7 +495,7 @@ struct Reader<'a> {
     layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
-    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
