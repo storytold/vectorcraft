@@ -3960,6 +3960,9 @@ axis	Both	Обидві
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
+	Dock to Top	Прикріпити вгорі
+	Dock to Bottom	Прикріпити внизу
+	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів

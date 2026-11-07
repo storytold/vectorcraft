@@ -3966,6 +3966,9 @@ axis	Both	Оба
 	Put back in the toolbar	Вернуть на панель инструментов
 	Float Panel	Сделать панель плавающей
 	Dock Panel	Прикрепить панель
+	Dock to Top	Прикрепить сверху
+	Dock to Bottom	Прикрепить снизу
+	Dock Control Bar	Прикрепить панель управления
 	Drag to float the toolbar	Перетащите, чтобы сделать панель инструментов плавающей
 	Drag to the window's left edge to dock	Перетащите к левому краю окна для прикрепления
 	Float Tool Group	Сделать группу инструментов плавающей
