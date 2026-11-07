@@ -5114,6 +5114,25 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+#[test]
+fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
+    // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
+    // its editing data) found no style and came in as their drawn look.
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let styled = format!("u\n{RED}{}f\nU\n%_{hidden_rect}f\n1 (Blue) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{}{ART_STYLES}{}", symbols(&symbol("Tag", &styled, 1)), layer("")));
+    let art = &r.doc.symbols.first().expect("the symbol").art;
+    let object = match &art.kind {
+        NodeKind::Group { children, .. } if children.len() == 1 => &children[0],
+        _ => art,
+    };
+    assert!(matches!(object.kind, NodeKind::Path { .. }), "the object, not its look: {art:#?}");
+    assert_eq!(object.appearance.fill().and_then(|f| f.paint.color()), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = object.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
