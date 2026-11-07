@@ -5296,6 +5296,62 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `Glow`: a path filled with gradient swatch `under`, then gradient swatch
+/// `over` at 50 % Screen above it.
+fn two_gradient_style(under: &str, over: &str) -> String {
+    let fill = |name: &str| {
+        format!(
+            "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+             /FillStyle : 0 O\n1 ({name}) 0 0 0 1 1 0 0 1 0 0 Bg\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+        )
+    };
+    format!(
+        "/KnownStyle :\n(Glow) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}\
+         /BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /BlendStyle : 2 0.5 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         {}/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n",
+        fill(over),
+        fill(under)
+    )
+}
+
+#[test]
+fn a_path_with_several_gradient_fills_comes_in_as_itself_where_its_look_places_them() {
+    // GUARDS: a path whose style stacks fills with their own opacity and blend mode came in as its drawn look.
+    let defs = "%AI5_BeginGradient: (A)\n(A) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+                %AI5_BeginGradient: (B)\n(B) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let rect = rect_path(0.0, 0.0, 100.0, 50.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    // The drawn look: the path filled with each gradient where the app placed it (its transparency
+    // left out: only where the gradients lie is read from it).
+    let look = |name: &str, x0: f64| format!("{rect}Bb\n1 ({name}) {x0} 25 0 50 1 0 0 1 0 0 Bg\nf\n0 BB\n");
+    let square = |under: &str, over: &str| format!("0 Ae\nu\n{}{}U\n%_{hidden_rect}f\n1 (Glow) XW\n", look(under, 0.0), look(over, 50.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&square("A", "B"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let fills: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match (i, i.paint()) {
+            (AppearanceItem::Fill(f), Paint::Gradient(g)) => (g.swatch.clone(), g.geom.map(|g| g.start.x), f.opacity, f.blend),
+            _ => panic!("{i:?}"),
+        })
+        .collect();
+    assert_eq!(fills, [(Some("A".into()), Some(0.0), 1.0, BlendMode::Normal), (Some("B".into()), Some(50.0), 0.5, BlendMode::Screen)]);
+    // Two fills of one swatch: which placement is whose isn't known, so the drawn look stays.
+    let same = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "A"), layer(&square("A", "A"))));
+    assert!(same.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", same.warnings);
+    // A look that doesn't paint the gradient (a raster, say): the drawn look stays.
+    let flat = format!("0 Ae\nu\n{RED}{rect}f\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
+    let flat = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&flat)));
+    assert!(flat.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", flat.warnings);
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
