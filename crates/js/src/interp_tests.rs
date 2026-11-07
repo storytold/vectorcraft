@@ -353,6 +353,28 @@ fn function_source_text_counts_toward_the_heap() {
 }
 
 #[test]
+fn for_in_names_take_fuel_and_heap_under_later_limits() {
+    // The first run, under the default limits, builds an object with many properties. Later runs
+    // with smaller limits list its names only within their own fuel and heap.
+    let mut realm = small(Limits::default());
+    assert_eq!(realm.run("var o = {}; for (var i = 0; i < 100000; i++) o['k' + i] = i; o.k99999"), Ok(JsValue::Number(99999.0)));
+    realm.set_limits(Limits { fuel: 1000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "for (var k in o) break;"), LimitKind::Fuel);
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("var n = 0; for (var k in o) n++; n"), Ok(JsValue::Number(100_000.0)));
+    realm.interp().collect_garbage();
+    let live = realm.interp().heap.bytes;
+    // The list of names takes more than 3 MB (at least 32 + 2 * 2 bytes each), so 1 MiB more than
+    // the live heap holds the object but not the list.
+    let heap_bytes = live + (1 << 20);
+    realm.set_limits(Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run("o.k0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(limit(&mut realm, "for (var k in o) break;"), LimitKind::Heap);
+    // The run ends before the list is made, so the estimate stays within the limit.
+    assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
+}
+
+#[test]
 fn declarations_check_the_heap_before_they_are_bound() {
     // Each script declares more than fits in the heap. The run ends with the heap limit before
     // the bindings are made, so the estimate never goes past the limit.

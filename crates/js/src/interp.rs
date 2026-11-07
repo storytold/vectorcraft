@@ -1388,7 +1388,7 @@ impl Interp {
     /// that an object nearer the start of the chain has (enumerable or not).
     ///
     /// For a String object, the heap budget for all its index names is checked before any is
-    /// built, and each name takes a unit of fuel.
+    /// built. Each index name and each property visited takes a unit of fuel.
     fn enumerable_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
@@ -1411,6 +1411,9 @@ impl Interp {
             if is_array {
                 seen.insert(key("length"));
             }
+            for _ in 0..self.object(o)?.props.len() {
+                self.use_fuel()?;
+            }
             let obj = self.object(o)?;
             for (k, p) in obj.props.iter() {
                 if seen.insert(k.clone()) && p.enumerable() {
@@ -1429,14 +1432,18 @@ impl Interp {
         } else {
             let o = self.to_object(&v)?;
             // A wrapper made by ToObject is not on the stack; a collection while the names are
-            // listed must not free it.
+            // listed or their bytes reserved must not free it.
             let saved = self.temp_roots.len();
             self.temp_roots.push(Value::Object(o));
-            let keys = self.enumerable_keys(o);
+            let keys = self.enumerable_keys(o).and_then(|keys| {
+                let bytes = keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
+                self.reserve_heap(bytes)?;
+                self.heap.bytes = self.heap.bytes.saturating_add(bytes);
+                Ok(keys)
+            });
             self.temp_roots.truncate(saved);
             (keys?, Some(o))
         };
-        self.heap.bytes += keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         let iter = self.heap.alloc_object(Object::new(Class::ForIn(Box::new(ForIn { keys, pos: 0, object })), None));
         self.replace(1, Value::Object(iter))
     }
