@@ -94,14 +94,29 @@ pub fn opacity_blend(
 }
 
 /// The 3×3 reference point locator: nine squares, the eight outer ones joined by a line around
-/// the box (the centre one stands alone), the current one filled. Returns a new index when clicked.
+/// the box (the centre one stands alone), the current one filled. Returns a new index when a square
+/// is clicked or an arrow key moves the point.
+///
+/// The grid is one Tab stop. While it has the keyboard focus it shows an outline, and ←, →, ↑ and
+/// ↓ move the point one square, stopping at the edges; from no point (`current` 9 or more) they
+/// move from the center. Screen readers get a radio group named Reference Point, with the current
+/// point as its value, holding the nine squares as radio buttons.
 pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
+    reference_point_named(ui, current, tl!("Reference Point"))
+}
+
+/// [`reference_point`] for a locator that a label other than Reference Point names, such as
+/// `Pivot:`: screen readers name the radio group after `label`, without its final colon.
+pub fn reference_point_named(ui: &mut Ui, current: usize, label: &str) -> Option<usize> {
+    let name = label.trim_end().trim_end_matches([':', '：']).trim_end();
     let t = Tokens::get(ui.ctx());
     // 5 pt squares with 4 pt gaps; the origin is snapped to whole points so the 1 pt lines through
     // the squares' centres stay crisp.
     let (sq, step) = (5.0, 9.0);
     let size = 2.0 * step + sq;
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    // The grid takes the focus; the squares take clicks only, so Tab does not stop on each one.
+    let grid = ui.interact(rect, ui.scope_id().with("refpt"), Sense::focusable_noninteractive());
     let o = rect.min.round();
     let centre = |i: usize| o + Vec2::new(sq / 2.0 + (i % 3) as f32 * step, sq / 2.0 + (i / 3) as f32 * step);
     let line = Stroke::new(1.0, t.text_dim);
@@ -119,10 +134,22 @@ pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
         tl!("Bottom"),
         tl!("Bottom Right"),
     ];
+    grid.widget_info(|| {
+        let mut info = egui::WidgetInfo::labeled(egui::Role::RadioGroup, ui.is_enabled(), name);
+        info.current_text_value = names.get(current).map(|n| n.to_string());
+        info
+    });
+    if grid.has_focus() && ui.is_enabled() {
+        out = reference_point_keys(ui, grid.id, current);
+    }
+    // The squares go in a child `Ui` whose screen-reader parent is the group, so that the group
+    // holds them.
+    let scope = ui.scope_id();
+    let squares = ui.new_child(egui::UiBuilder::new().max_rect(rect).accessibility_parent(grid.id));
     for (i, name) in names.into_iter().enumerate() {
         let r = Rect::from_center_size(centre(i), Vec2::splat(sq));
-        let resp = ui.interact(r.expand(2.0), ui.scope_id().with(("refpt", i)), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, ui.is_enabled(), i == current, name));
+        let resp = squares.interact(r.expand(2.0), scope.with(("refpt", i)), Sense::CLICK);
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, squares.is_enabled(), i == current, name));
         if resp.clicked() {
             out = Some(i);
         }
@@ -133,7 +160,46 @@ pub fn reference_point(ui: &mut Ui, current: usize) -> Option<usize> {
             ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, if resp.hovered() { t.text } else { t.text_dim }), StrokeKind::Inside);
         }
     }
+    if grid.has_focus() {
+        ui.painter().rect_stroke(rect.expand(2.0), 2.0, Stroke::new(1.0, t.accent), StrokeKind::Inside);
+    }
     out
+}
+
+/// The point this frame's arrow keys move the focused reference point grid `id` to from
+/// `current`, when it differs.
+fn reference_point_keys(ui: &Ui, id: egui::Id, current: usize) -> Option<usize> {
+    use egui::{Event, Key};
+    // The arrows move the point and do not move the focus. egui keeps the filter only when the grid
+    // also had the focus in the frame before, and applies it from the next frame; until then, an
+    // arrow the grid takes cancels the focus move that egui set at the start of the frame.
+    let filter = egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() };
+    ui.memory_mut(|m| m.set_focus_lock_filter(id, filter));
+    let mut at = if current < 9 { current } else { 4 };
+    let mut arrows = false;
+    ui.input_mut(|i| {
+        i.events.retain(|e| {
+            let Event::Key { key, pressed: true, modifiers, .. } = e else { return true };
+            if !modifiers.is_none() {
+                return true;
+            }
+            let (col, row) = (at % 3, at / 3);
+            at = match key {
+                Key::ArrowLeft => row * 3 + col.saturating_sub(1),
+                Key::ArrowRight => row * 3 + (col + 1).min(2),
+                Key::ArrowUp => row.saturating_sub(1) * 3 + col,
+                Key::ArrowDown => (row + 1).min(2) * 3 + col,
+                _ => return true,
+            };
+            arrows = true;
+            false
+        });
+    });
+    if !arrows {
+        return None;
+    }
+    ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    (at != current).then_some(at)
 }
 
 /// An angle dial `size` points across: a circle with a hand from its centre at `angle` (degrees,

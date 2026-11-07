@@ -628,7 +628,7 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.add_enabled_ui(!tiles && !placed, |ui| {
             let origin = choice::<Origin>(d, "placement.origin").unwrap_or_default();
             let current = Origin::ALL.iter().position(|o| *o == origin).unwrap_or(4);
-            if let Some(o) = widgets::reference_point(ui, current).and_then(|i| Origin::ALL.get(i)) {
+            if let Some(o) = widgets::reference_point_named(ui, current, tl!("Placement:")).and_then(|i| Origin::ALL.get(i)) {
                 set(d, "placement.origin", json!(o.id()));
             }
             ui.label("X:");
