@@ -279,6 +279,10 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let (mut palette_at, mut palette) = (None, None);
     // A pattern's name is the first string of its definition.
     let mut head = false;
+    // ASCII85 data in comment lines is skipped past, as the reader skips it.
+    let mut dictionaries = ops::Dictionaries::default();
+    // The scan's state where the versioned content being skipped starts, to go back to.
+    let mut versioned = None;
     loop {
         let before = lex.offset();
         let Some(t) = lex.next_token() else {
@@ -286,11 +290,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
             match skip.take() {
                 Some((.., Some(at))) => {
                     lex.seek(at);
+                    dictionaries = versioned.take().unwrap_or_default();
                     continue;
                 }
                 _ => break,
             }
         };
+        let markers = skip.map(|s| (s.0, s.1)).or(palette_at.map(|_| ("", "EndPalette"))).or(section.map(|s| (s.0, s.1)));
+        dictionaries.pass(&t.tok, &mut lex, markers);
         match &t.tok {
             Tok::Comment(c) => {
                 let line = String::from_utf8_lossy(c);
@@ -306,6 +313,7 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                     }
                 } else if m.starts_with("Alternate_Content") && section.is_none_or(|s| s.3) {
                     skip = Some(("Begin_Content_if_version_gt", "End_Versioned_Content", 0, Some(lex.offset())));
+                    versioned = Some(dictionaries.clone());
                 } else if m == "%BeginProlog" {
                     skip = Some(("", "%EndProlog", 0, None));
                 } else if m == "%BeginResource" {
@@ -351,6 +359,17 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     palette.own_names().for_each(|n| names.reserve(n));
     colors.names.iter().for_each(|n| names.reserve(n));
     names
+}
+
+/// What the brushes and brush art read so far give a brushed stroke.
+#[derive(Default)]
+struct BrushesKept {
+    /// The counts of brushes and art sections when this was worked out.
+    read: (usize, usize),
+    /// Which of [`Reader::brush_drafts`] are kept as brushes.
+    kept: Vec<bool>,
+    /// The art an Art brush draws as the file does.
+    bending: HashSet<String>,
 }
 
 struct Reader<'a> {
@@ -476,7 +495,7 @@ struct Reader<'a> {
     layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
-    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
@@ -554,6 +573,8 @@ struct Reader<'a> {
     brush_art: HashMap<String, Node>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
+    /// What the brushes and brush art read so far give a brushed stroke.
+    brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
@@ -694,6 +715,7 @@ impl<'a> Reader<'a> {
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
             brush_art_sections: 0,
+            brushes_kept: BrushesKept::default(),
             brushes_unread: 0,
             graph: None,
             multi_mask: None,

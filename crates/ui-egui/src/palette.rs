@@ -77,6 +77,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !app.ui.palette_open {
         return;
     }
+    crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());

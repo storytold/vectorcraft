@@ -230,6 +230,66 @@ fn a_gradient_goes_into_a_library_and_paints_another_object() {
     assert!(s.execute("library.use", &json!({"library": lib, "kind": "fillGradient", "item": "Nope"})).is_err());
 }
 
+/// Compound paths, groups and colorized objects add the paint their Fill proxy shows: a color by
+/// its hex, a gradient with its stops.
+#[test]
+fn colors_and_gradients_come_from_compound_paths_groups_and_colorized_objects() {
+    use std::sync::Arc;
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Node, NodeKind};
+    let mut s = session();
+    let lib = run(&mut s, "library.create", json!({}))["id"].as_str().unwrap().to_string();
+    let solid = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let graded = run(&mut s, "shape.rectangle", json!({"x": 30, "y": 0, "width": 20, "height": 20}))["id"].clone();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#0000ff"}]);
+    run(&mut s, "paint.setFill", json!({"color": "#123456", "ids": [solid]}));
+    run(&mut s, "paint.setFill", json!({"gradient": {"kind": "linear", "stops": stops}, "ids": [graded]}));
+    let sources = [NodeId(solid.as_u64().unwrap()), NodeId(graded.as_u64().unwrap())];
+    // For each source: a compound path and a group painted as it is, and a gray rectangle
+    // colorized with its fill.
+    let mut made: Vec<(NodeId, bool)> = vec![];
+    s.edit("Make", |d, _| {
+        let l = d.layers[0].id;
+        for (k, src) in sources.into_iter().enumerate() {
+            let source = d.node(src).unwrap().clone();
+            let fill = source.appearance.fill().unwrap().paint.clone();
+            let gradient = matches!(fill, Paint::Gradient(_));
+            let member = |d: &mut vectorcraft_doc::Document| {
+                let mut m = source.clone();
+                (m.id, m.appearance) = (d.alloc_id(), Default::default());
+                Arc::new(m)
+            };
+            let (a, b) = (member(d), member(d));
+            let mut compound = Node::new(d.alloc_id(), NodeKind::Compound { children: vec![a], rule: Default::default() });
+            let mut group = Node::group(d.alloc_id(), vec![b]);
+            compound.appearance = source.appearance.clone();
+            group.appearance = source.appearance.clone();
+            let mut colorized = source.clone();
+            colorized.id = d.alloc_id();
+            colorized.appearance.set_fill(Paint::solid(Color::rgb8(128, 128, 128)));
+            colorized.extras_mut().colorize = Some(Box::new(fill));
+            for (j, n) in [compound, group, colorized].into_iter().enumerate() {
+                made.push((n.id, gradient));
+                d.insert(Some(l), 2 + 3 * k + j, n).unwrap();
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    for (id, gradient) in made {
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        if gradient {
+            run(&mut s, "library.add", json!({"library": lib, "kind": "fillGradient"}));
+            let got = run(&mut s, "library.get", json!({"library": lib}));
+            let last = &got["gradients"].as_array().unwrap().last().unwrap()["gradient"]["gradient"]["stops"];
+            assert_eq!(last.as_array().map(Vec::len), Some(3), "{id:?}: {got}");
+        } else {
+            let added = run(&mut s, "library.add", json!({"library": lib, "kind": "fillColor"}));
+            assert_eq!(added["name"], "#123456", "{id:?}");
+        }
+    }
+}
+
 /// A gradient added from an object that was rotated keeps the direction it shows there.
 #[test]
 fn a_gradient_from_rotated_art_keeps_its_direction() {

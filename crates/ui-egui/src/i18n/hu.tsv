@@ -903,6 +903,7 @@ font-technology	Variable	Változó
 	Customize…	Testreszabás…
 	Cut	Kivágás
 	Cut Artboard	Rajztábla kivágása
+	Rename Artboards	Rajztáblák átnevezése
 	Cut Path	Útvonal elvágása
 	Cut Path at Selected Anchor Points	Útvonal elvágása a kijelölt horgonypontoknál
 	Cyan	Cián
@@ -3114,6 +3115,9 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Rearrange	Átrendezés
+	Select All Artboards	Összes rajztábla kijelölése
+	Switch Orientation	Tájolás váltása
 	Rearrange All	Összes átrendezése
 	Rearrange All Artboards	Összes rajztábla átrendezése
 	Rearrange All Artboards…	Összes rajztábla átrendezése…
