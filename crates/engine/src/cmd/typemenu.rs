@@ -625,6 +625,22 @@ fn is_word(c: char) -> bool {
 
 /// Byte ranges of `needle` in `hay`.
 pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
+    find_all_between(hay, needle, match_case, whole_word, None, None)
+}
+
+/// [`find_all`] in run `i` of `runs`: a whole word looks past the run's ends at the characters
+/// next to it, so a change of style inside a word is not a word boundary (#5901). Matches stay
+/// inside the run.
+fn find_in_run(runs: &[TextRun], i: usize, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
+    let Some(run) = runs.get(i) else { return vec![] };
+    let before = runs.get(..i).and_then(|r| r.iter().rev().find_map(|r| r.text.chars().next_back()));
+    let after = runs.get(i + 1..).and_then(|r| r.iter().find_map(|r| r.text.chars().next()));
+    find_all_between(&run.text, needle, match_case, whole_word, before, after)
+}
+
+/// [`find_all`], with `before` and `after` the characters on either side of `hay` (none at the
+/// text's ends), which a whole word must not touch either.
+fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool, before: Option<char>, after: Option<char>) -> Vec<(usize, usize)> {
     let nc: Vec<char> = needle.chars().collect();
     if nc.is_empty() {
         return vec![];
@@ -635,9 +651,9 @@ pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bo
     let mut i = 0;
     while i + nc.len() <= hc.len() {
         if (0..nc.len()).all(|k| eq(hc[i + k].1, nc[k])) {
-            let before = i.checked_sub(1).map(|j| hc[j].1);
-            let after = hc.get(i + nc.len()).map(|x| x.1);
-            if !whole_word || (!before.is_some_and(is_word) && !after.is_some_and(is_word)) {
+            let prev = i.checked_sub(1).map_or(before, |j| hc.get(j).map(|x| x.1));
+            let next = hc.get(i + nc.len()).map_or(after, |x| Some(x.1));
+            if !whole_word || (!prev.is_some_and(is_word) && !next.is_some_and(is_word)) {
                 let start = hc[i].0;
                 let end = hc.get(i + nc.len()).map(|x| x.0).unwrap_or(hay.len());
                 out.push((start, end));
@@ -685,7 +701,7 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     let total: usize = ids
         .iter()
         .filter_map(|id| match &st.doc.node(*id)?.kind {
-            NodeKind::Text(t) => Some(t.runs.iter().map(|r| find_all(&r.text, &find, mc, ww).len()).sum::<usize>()),
+            NodeKind::Text(t) => Some((0..t.runs.len()).map(|i| find_in_run(&t.runs, i, &find, mc, ww).len()).sum::<usize>()),
             _ => None,
         })
         .sum();
@@ -702,7 +718,7 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
             let mut base = 0;
             for (ri, r) in t.runs.iter().enumerate() {
                 if r.inline.is_none() {
-                    for (a, b) in find_all(&r.text, &find, mc, ww) {
+                    for (a, b) in find_in_run(&t.runs, ri, &find, mc, ww) {
                         if r.text.get(a..b) != Some(rep.as_str()) {
                             hits.push((ri, base + a, base + b, a, b));
                         }
