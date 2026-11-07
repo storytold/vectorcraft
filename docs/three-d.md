@@ -14,7 +14,34 @@ Select a path or compound path, then choose **Effect › 3D and Materials › Ex
   artboard.
 
 Preview changes are temporary until OK; Cancel restores the document; OK is one undo step. An object takes one
-3D effect: edit its options in the Appearance panel, or remove it before applying another.
+3D effect: edit its options in the Appearance panel or the 3D and Materials panel, or remove it before applying
+another.
+
+## 3D and Materials panel
+
+**Window › 3D and Materials** opens a panel that edits the 3D effect of the selection without a dialog, as the
+public [3D and Materials panel options](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/3d-materials-panel-options.html)
+and [Create 3D vector artwork](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-vector-artwork.html)
+pages describe it.
+
+- The object types **Plane**, **Extrude**, **Revolve** and **Inflate** sit at the top. A type applies its effect
+  to each selected object that has no 3D effect (Plane is Rotate, Extrude is Extrude & Bevel), and changes the
+  3D effect of each other selected object in place (`effect.setParams` with `threeDType`): the settings both
+  effects take keep their values, and the rest start at the new effect's defaults. One click is one undo step,
+  and an object whose effect already has the type does not change.
+- Below them are the Object, Rotation and Lighting tabs of the effect's options dialog, with the same controls
+  and ranges, showing the 3D effect of the first selected object (its own effects first, then those of its fills
+  and strokes). A changed setting goes to the 3D effect of each selected object whose effect takes that setting;
+  other effects and objects without a 3D effect do not change. A setting the selected 3D effects hold with
+  different values shows its default with its reset dot filled. Its reset dot, a choice from its menu or a click
+  on its checkbox sets it on all of them; a typed or dragged number sets it when it differs from the default
+  shown.
+  The list of lights shows the first object's lights, and an edit to it (Add Light, Delete Light, or a setting
+  of one light in a list) reaches only the objects whose list of lights matches the first object's.
+- Each change is one undo step. Dragging a value or a slider previews it on the artboard and records one step
+  when the pointer is released; a typed value is recorded when it is entered. Drawing the panel records nothing.
+- The Materials tab, shadows and ray-traced rendering are not built (see below). The rotation and light rings on
+  the artboard are part of the options dialog only.
 
 ## Extrude & Bevel
 

@@ -43,6 +43,7 @@ pub mod swatches;
 pub mod symbols;
 pub mod tabs;
 pub mod text_styles;
+pub mod three_d;
 pub mod transform;
 pub mod transparency;
 pub mod variables;
@@ -179,6 +180,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         links::ID => links::show(app, ui),
         asset_export::ID => asset_export::show(app, ui),
         css_properties::ID => css_properties::show(app, ui),
+        three_d::ID => three_d::show(app, ui),
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),

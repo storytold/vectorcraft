@@ -2223,6 +2223,21 @@ The document stores their numeric settings; manual edits remain possible through
 {"name":"run_command","arguments":{"command":"effect.lightingPreset","params":{"index":0,"item":null,"preset":"topLeft"}}}
 ```
 
+## 3D object type
+
+`effect.setParams {index: int, threeDType: "plane" | "extrude" | "revolve" | "inflate", params?, item?, ids?, aligned?}`
+changes an applied 3D effect into Rotate, Extrude & Bevel, Revolve or Inflate in place, as the object types of
+**Window › 3D and Materials** do ([3D and Materials panel](three-d.md#3d-and-materials-panel)). The settings both
+effects take keep their values (rotation angles are wrapped into -180..180 when the new type is not Revolve), the
+settings only the new effect takes start at its defaults, and `params` then merge into the new effect's settings,
+checked as that effect's. It is one undo step. Any other `threeDType` value, or an effect at `index` that is not a
+3D effect, is an error and changes nothing. The type the effect already has, with no `params`, `visible` or
+`warpStyle`, changes nothing, records no undo step and returns `{ids: []}`.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"threeDType":"inflate","params":{"volume":70}}}}
+```
+
 ## Extrude & Bevel, Inflate and Rotate
 
 `effect.apply {effect: "threeD.extrude" | "threeD.inflate" | "threeD.rotate", params: {...}, ids?, item?}` applies

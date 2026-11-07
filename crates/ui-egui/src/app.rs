@@ -557,6 +557,8 @@ impl VectorcraftApp {
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
         palette::show(self, &ctx);
+        // After every panel had its chance to draw in this pass.
+        crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }

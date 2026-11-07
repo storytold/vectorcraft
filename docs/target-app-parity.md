@@ -519,6 +519,7 @@ since 2026-10-01.
 ## Evidence: what ships today, by area
 
 - 3D lighting presets: `crates/effects/src/lighting_presets.rs`, `crates/engine/src/cmd/effectcmd/lighting_presets_tests.rs` and the pointer tests in `crates/ui-egui/src/dialogs/revolve/tests.rs` cover recognition, atomic targeting, native round trips, preview, Cancel, reset and Undo.
+- Window › 3D and Materials panel: `crates/ui-egui/src/panels/three_d.rs` applies a 3D effect by object type (Plane, Extrude, Revolve, Inflate), changes an applied one in place (`effect.setParams` `threeDType`) and edits it with the options dialog's Object, Rotation and Lighting controls, one undo step per change; `crates/engine/src/cmd/effectcmd/three_d_type_tests.rs` and `crates/ui-egui/src/panels/tests_three_d.rs` cover it. No Materials tab.
 
 - **Status-bar pointer readout (2026-10-18):** uses the same effective ruler origin as the position fields, then formats the relative X/Y in General units. The absolute pointer position, document, selection, Undo/Redo and saved state are preserved. Three `chrome::tests::status_coordinates_*` painted-text regressions cover zero/positive/negative origins, unit conversion, global/artboard mode, active artboard, reset and missing pointer/document. Original headless status-bar captures were reviewed before and after the change. Scores and hours are unchanged.
 

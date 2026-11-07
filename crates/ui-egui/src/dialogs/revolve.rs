@@ -60,7 +60,10 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// The tabs and controls of the 3D effect in `d.fields["__effect"]`, editing `d.fields`; the
+/// dialog's body and the 3D and Materials panel draw them. With `__panel` set (the panel), the
+/// controls that only the dialog's artboard gizmos use are left out.
+pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.spacing_mut().item_spacing.y = 4.0;
     let id = d.str("__effect");
     if id != REVOLVE {
@@ -115,7 +118,9 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(6.0);
     egui::CollapsingHeader::new(tl!("Advanced")).id_salt("revolve-advanced").show(ui, |ui| {
         number(ui, d, "segments", tl!("Segments"), (8.0, 128.0), "", 0, None);
-        super::form::check(ui, d, "__showAxis", tl!("Show axis"));
+        if !d.bool("__panel") {
+            super::form::check(ui, d, "__showAxis", tl!("Show axis"));
+        }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             let visible = d.fields.get("expandVisibleOnly").and_then(Value::as_bool).unwrap_or(true);
@@ -275,7 +280,8 @@ fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, default: boo
             d.fields.insert(key.into(), json!(!on));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, key, on != default, if default { "true" } else { "false" }) {
+        let mixed = d.fields.get(key).is_some_and(Value::is_null);
+        if reset_dot(ui, key, mixed || on != default, if default { "true" } else { "false" }) {
             d.fields.insert(key.into(), json!(default));
         }
     });
@@ -550,7 +556,9 @@ fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, range: (f64,
         if let Some(n) = slider.0.map(|n| rail_min + f64::from(n) * (rail_max - rail_min)).or(slider.2) {
             next = Some(n);
         }
-        if reset_dot(ui, key, (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
+        // A setting the 3D and Materials panel's selected effects hold with different values is null.
+        let mixed = d.fields.get(key).is_some_and(Value::is_null);
+        if reset_dot(ui, key, mixed || (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
             next = Some(from(default));
         }
     });
