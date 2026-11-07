@@ -48,9 +48,11 @@ pub enum RasterFx {
     Feather {
         radius: f64,
     },
-    /// Blur the whole object (σ = radius / 2).
+    /// Blur the whole object (σ = radius / 2): its colours mixed as they are, or in linear light
+    /// (`linear`, as an SVG filter asks with `color-interpolation-filters="linearRGB"`).
     GaussianBlur {
         radius: f64,
+        linear: bool,
     },
     /// A Photoshop-style filter over the object's pixels (Radial Blur, Unsharp Mask…).
     Pixel(PixelFx),
@@ -77,7 +79,7 @@ impl RasterFx {
             RasterFx::DropShadow { dx, dy, blur, .. } => dx.abs().max(dy.abs()) + 1.5 * blur,
             RasterFx::OuterGlow { blur, .. } => 1.5 * blur,
             RasterFx::InnerGlow { .. } | RasterFx::Feather { .. } => 0.0,
-            RasterFx::GaussianBlur { radius } => 1.5 * radius,
+            RasterFx::GaussianBlur { radius, .. } => 1.5 * radius,
             RasterFx::Pixel(p) => p.outset(bounds),
             RasterFx::Rasterize(r) => r.outset(),
         }
@@ -366,7 +368,7 @@ pub fn blend_mode(s: &str) -> BlendMode {
 }
 
 /// An effect's `color` parameter (`"#rrggbb"`, `[r, g, b]` 0..1 or a colour object).
-pub(crate) fn color_param(p: &Value, default: Color) -> Color {
+pub fn color_param(p: &Value, default: Color) -> Color {
     match p.get("color") {
         Some(Value::String(s)) => Color::from_hex(s).unwrap_or(default),
         Some(Value::Array(a)) if a.len() >= 3 => {
@@ -416,7 +418,7 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
                     center: text(&p, "source", "edge").eq_ignore_ascii_case("center"),
                 },
                 "stylize.feather" => RasterFx::Feather { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0) },
-                "blur.gaussian" => RasterFx::GaussianBlur { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0) },
+                "blur.gaussian" => RasterFx::GaussianBlur { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0), linear: flag(&p, "linear", false) },
                 RASTERIZE => RasterFx::Rasterize(Rasterize::parse(&p)),
                 id => RasterFx::Pixel(pixel::parse(id, &p)?),
             })

@@ -347,7 +347,9 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
         let paint = |c: Color, o: f32| (c.to_hex(), num(o as f64 * 100.0));
         let (id, params) = match eval(f, k)? {
             V::Graphic => continue,
-            V::Blurred(sd, _) => ("blur.gaussian", json!({ "radius": blur(sd) })),
+            // SVG blurs in linear light unless the filter asks for sRGB (`color-interpolation-filters`).
+            V::Blurred(sd, true) => ("blur.gaussian", json!({ "radius": blur(sd), "linear": true })),
+            V::Blurred(sd, false) => ("blur.gaussian", json!({ "radius": blur(sd) })),
             V::Feathered(sd) => ("stylize.feather", json!({ "radius": blur(sd) })),
             V::Stack(layers) => match layers.as_slice() {
                 [V::Paint { shape, color, opacity, clipped: false }, V::Graphic] if !shape.inverted => {

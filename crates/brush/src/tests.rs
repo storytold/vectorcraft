@@ -562,6 +562,43 @@ fn pattern_corner_source_none_leaves_that_kind_of_corner_empty() {
 }
 
 #[test]
+fn pattern_without_start_tile_runs_side_to_path_start() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = Some(rect_art(20.0, 4.0));
+    }
+    let with_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(with_start[0].geometric_bounds().unwrap().width(), 20.0);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.start = None;
+    }
+    let without_start = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_start.len(), 10);
+    assert!(near(without_start[0].geometric_bounds().unwrap().x0, 0.0, 1e-6));
+    assert!(near(without_start[0].geometric_bounds().unwrap().width(), 10.0, 1e-6));
+}
+
+#[test]
+fn pattern_without_end_tile_runs_side_to_path_end() {
+    let path = line(0.0, 0.0, 100.0, 0.0);
+    let doc = Document::new(1.0, 1.0);
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = Some(rect_art(20.0, 4.0));
+    }
+    let with_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert!(with_end.iter().any(|n| near(n.geometric_bounds().unwrap().width(), 20.0, 1e-6)));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.end = None;
+    }
+    let without_end = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(without_end.len(), 10);
+    assert!(near(without_end.last().unwrap().geometric_bounds().unwrap().x1, 100.0, 1e-6));
+}
+
+#[test]
 fn pattern_corner_sources_round_trip_and_stay_out_of_brushes_without_them() {
     let saved = serde_json::to_value(pattern_brush(PatternFit::Stretch, true)).unwrap();
     assert!(saved.get("outer_source").is_none() && saved.get("inner_source").is_none(), "{saved}");
@@ -664,6 +701,55 @@ fn tints_colorization_uses_stroke_colour() {
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
 }
 
+/// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
+/// process stroke color takes that share of its inks. Tints of a process color stay process.
+#[test]
+fn tints_of_black_ink_are_its_amount_of_the_stroke_color() {
+    let tinted = |art: Color, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let ink = Color::cmyk(0.0, 0.0, 0.0, 0.6);
+    let close = |a: Color, b: Color| {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (a, b) else { panic!("{a:?} {b:?}") };
+        (c - c2).abs() < 1e-5 && (m - m2).abs() < 1e-5 && (y - y2).abs() < 1e-5 && (k - k2).abs() < 1e-5
+    };
+    assert!(close(tinted(ink, Color::cmyk(0.0, 0.0, 0.0, 1.0)), ink));
+    assert!(close(tinted(ink, Color::cmyk(0.0, 1.0, 1.0, 0.0)), Color::cmyk(0.0, 0.6, 0.6, 0.0)));
+    let [r, g, b] = tinted(ink, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.4).abs() < 1e-5 && (b - 0.4).abs() < 1e-5, "{r} {g} {b}");
+    let Color::Gray { k } = tinted(ink, Color::gray(0.5)) else { panic!("tints of a gray stroke color stay gray") };
+    assert!((k - 0.3).abs() < 1e-5, "{k}");
+}
+
+/// Under Tints and Shades black ink stays black, however light 100% K displays, and a band of black
+/// ink is its amount: K 0.5 is the stroke color. A process or gray stroke color stays in its model.
+#[test]
+fn tints_and_shades_of_black_ink_go_by_its_amount() {
+    let mapped = |k: f32, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, k)));
+        colorize(&mut n, Colorization::TintsAndShades, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5);
+    let inks = |c: Color| {
+        let Color::Cmyk { c, m, y, k } = c else { panic!("a process color: {c:?}") };
+        [c, m, y, k]
+    };
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    assert!(close(inks(mapped(1.0, orange)), [0.0, 0.0, 0.0, 1.0]), "black stays black");
+    assert!(close(inks(mapped(0.5, orange)), [0.0, 0.6, 1.0, 0.0]), "the stroke color");
+    assert!(close(inks(mapped(0.25, orange)), [0.0, 0.3, 0.5, 0.0]), "a tint");
+    assert!(close(inks(mapped(0.75, orange)), [0.0, 0.3, 0.5, 0.5]), "a shade");
+    let Color::Gray { k } = mapped(0.75, Color::gray(0.4)) else { panic!("a gray stroke color stays gray") };
+    assert!((k - 0.7).abs() < 1e-5, "{k}");
+    let [r, g, b] = mapped(1.0, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!(r < 1e-5 && g < 1e-5 && b < 1e-5, "black stays black: {r} {g} {b}");
+}
+
 /// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
 fn type_art(fill: Paint, stroke: Paint) -> Node {
     use vectorcraft_doc::{CharStyle, TextObject};
@@ -725,6 +811,26 @@ fn stain_mixes_type_strokes_too() {
     let mut art = type_art(linked.clone(), linked);
     tint_node(&mut art, &blue, 1.0);
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
+}
+
+/// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
+/// swatch links.
+#[test]
+fn a_fill_with_no_opacity_leaves_the_symbol_art_linked() {
+    let spot = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4), swatch: Some("Spot".into()), tint: 1.0 };
+    let art = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(spot.clone(), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.0;
+    }
+    assert_eq!(stain(&inst), None);
+    assert_eq!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+    // Any opacity above 0 still stains.
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.01;
+    }
+    assert_ne!(instance_art(&art, &inst).appearance.fill_paint(), spot);
 }
 
 #[test]
@@ -852,6 +958,163 @@ fn pressure_varies_angle_and_roundness() {
     };
     assert!(near(wide(0.0), 0.1, 0.05), "{}", wide(0.0));
     assert!(near(wide(1.0), 10.0, 0.05), "{}", wide(1.0));
+    // The angle turns on past 180°: 170 + 40 is 210°, the nib at 30° (not stopped at 180°).
+    let turned = Calligraphic { angle: 170.0, roundness: 10.0, variation: [40.0, 0.0, 0.0], ..c([Pressure, Fixed, Fixed]) };
+    let expected = 2.0 * (25.0 * 0.25 + 0.25 * 0.75f64).sqrt();
+    let h = draw(turned, 1.0);
+    assert!(near(h, expected, 0.05), "{h} vs {expected}");
+}
+
+/// A stroke that recorded the pen's tilt (`tilt`: 0 upright to 1 flat), bearing and barrel
+/// rotation (degrees counter-clockwise), each the same all along it where given.
+fn posed(tilt: Option<f64>, bearing: Option<f64>, rotation: Option<f64>) -> StrokeLayer {
+    let flat = |v: f64| vec![(0.0, v), (1.0, v)];
+    StrokeLayer {
+        tilt: tilt.map(|t| vectorcraft_doc::PressureProfile { points: flat(t) }),
+        bearing: bearing.map(|b| vectorcraft_doc::AngleProfile { points: flat(b) }),
+        rotation: rotation.map(|r| vectorcraft_doc::AngleProfile { points: flat(r) }),
+        ..stroke(1.0)
+    }
+}
+
+/// #764: with Roundness on Tilt the nib goes from roundness − variation with the pen lying flat to
+/// roundness + variation with it upright, along the stroke as the pen leaned.
+#[test]
+fn tilt_maps_to_roundness_along_the_stroke() {
+    let c = Calligraphic {
+        roundness: 50.0,
+        size: 10.0,
+        variation: [0.0, 50.0, 0.0],
+        modes: Some([Variation::Fixed, Variation::Tilt, Variation::Fixed]),
+        ..Default::default()
+    };
+    let b = Brush { name: "t".into(), kind: BrushKind::Calligraphic(c) };
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &b, &line(0.0, 0.0, 100.0, 0.0), &upright_to_flat);
+    // Upright: round (half 5); half way: roundness 50 (half 2.5); flat: a hairline.
+    assert!(near(half_width(&out, 0.5, 1.5), 5.0, 0.1), "{}", half_width(&out, 0.5, 1.5));
+    assert!(near(half_width(&out, 49.5, 50.5), 2.5, 0.1), "{}", half_width(&out, 49.5, 50.5));
+    assert!(half_width(&out, 98.5, 99.5) < 0.2, "{}", half_width(&out, 98.5, 99.5));
+}
+
+/// #764: with Angle on Bearing or on Rotation and a variation of 180°, the nib turns with the way
+/// the pen leans or with its barrel.
+#[test]
+fn bearing_and_rotation_turn_the_nib() {
+    let horizontal = line(0.0, 0.0, 100.0, 0.0);
+    let height = |mode: Variation, st: &StrokeLayer| {
+        let c = Calligraphic {
+            roundness: 10.0,
+            size: 10.0,
+            variation: [180.0, 0.0, 0.0],
+            modes: Some([mode, Variation::Fixed, Variation::Fixed]),
+            ..Default::default()
+        };
+        let b = Brush { name: "b".into(), kind: BrushKind::Calligraphic(c) };
+        bounds(&stroke_pieces(&Document::new(1.0, 1.0), &b, &horizontal, st)).height()
+    };
+    // Leaning right (0°): the nib lies along the stroke (1 pt across); leaning up the page (90°)
+    // or down it (−90°), the nib stands across it (10 pt).
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(0.0), None)), 1.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(90.0), None)), 10.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(Some(0.5), Some(-90.0), None)), 10.0, 0.05));
+    // The barrel turned a quarter turn stands it across the stroke too.
+    assert!(near(height(Variation::Rotation, &posed(None, None, Some(0.0))), 1.0, 0.05));
+    assert!(near(height(Variation::Rotation, &posed(None, None, Some(90.0))), 10.0, 0.05));
+    // Each reads only its own recording.
+    assert!(near(height(Variation::Rotation, &posed(None, Some(90.0), None)), 1.0, 0.05));
+    assert!(near(height(Variation::Bearing, &posed(None, None, Some(90.0))), 1.0, 0.05));
+}
+
+/// A stroke without the pen's tilt, bearing or rotation (a mouse, a pen without that input, or a
+/// path the brush was applied to) draws Tilt, Bearing and Rotation values at the brush's own value.
+#[test]
+fn pen_modes_without_a_recording_draw_the_value_itself() {
+    let horizontal = line(0.0, 0.0, 100.0, 0.0);
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+        let c = Calligraphic { angle: 90.0, roundness: 50.0, size: 10.0, variation: [90.0, 50.0, 6.0], modes: Some([mode; 3]) };
+        let b = Brush { name: "n".into(), kind: BrushKind::Calligraphic(c) };
+        let h = bounds(&stroke_pieces(&Document::new(1.0, 1.0), &b, &horizontal, &stroke(1.0))).height();
+        assert!(near(h, 10.0, 0.05), "{mode:?}: {h}");
+        let sc = Scatter {
+            size: (50.0, 300.0),
+            modes: Some([mode, Variation::Fixed, Variation::Fixed, Variation::Fixed]),
+            ..scatter(&scatter_brush(100.0))
+        };
+        let s = Brush { name: "s".into(), kind: BrushKind::Scatter(sc) };
+        let heights: Vec<f64> =
+            stroke_pieces(&Document::new(1.0, 1.0), &s, &horizontal, &stroke(1.0)).iter().map(|n| n.geometric_bounds().unwrap().height()).collect();
+        assert!(!heights.is_empty() && heights.iter().all(|h| near(*h, 7.0, 1e-6)), "{mode:?}: {heights:?}");
+    }
+}
+
+/// A mouse stroke records no pressure, tilt, bearing or rotation. On it, a brush whose values are
+/// on Tilt, Bearing or Rotation draws exactly what the same brush on Pressure draws, the output a
+/// mouse stroke gave before these modes existed.
+#[test]
+fn a_mouse_stroke_draws_pen_modes_as_pressure_did() {
+    let doc = Document::new(1.0, 1.0);
+    let wavy = {
+        let mut bp = line(0.0, 0.0, 60.0, 0.0);
+        bp.curve_to((90.0, 0.0), (90.0, 40.0), (120.0, 40.0));
+        bp
+    };
+    let mouse = stroke(1.0);
+    assert!(mouse.pressure.is_none() && mouse.tilt.is_none() && mouse.bearing.is_none() && mouse.rotation.is_none());
+    let calli = |mode: Variation| {
+        let c = Calligraphic { angle: 30.0, roundness: 40.0, size: 8.0, variation: [60.0, 30.0, 4.0], modes: Some([mode; 3]) };
+        stroke_pieces(&doc, &Brush { name: "c".into(), kind: BrushKind::Calligraphic(c) }, &wavy, &mouse)
+    };
+    let scattered = |mode: Variation| {
+        let sc = Scatter {
+            size: (50.0, 300.0),
+            spacing: (80.0, 160.0),
+            scatter: (-40.0, 40.0),
+            rotation: (-90.0, 90.0),
+            modes: Some([mode; 4]),
+            ..scatter(&scatter_brush(100.0))
+        };
+        stroke_pieces(&doc, &Brush { name: "s".into(), kind: BrushKind::Scatter(sc) }, &wavy, &mouse)
+    };
+    let (calli_before, scatter_before) = (calli(Variation::Pressure), scattered(Variation::Pressure));
+    assert!(!calli_before.is_empty() && !scatter_before.is_empty());
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+        assert_eq!(calli(mode), calli_before, "{mode:?}");
+        assert_eq!(scattered(mode), scatter_before, "{mode:?}");
+    }
+}
+
+/// The scatter brush of `b`.
+fn scatter(b: &Brush) -> Scatter {
+    let BrushKind::Scatter(sc) = &b.kind else { panic!("not a scatter brush") };
+    sc.clone()
+}
+
+/// #764: Scatter values on Tilt go from the first value with the pen lying flat to the second
+/// upright; on Bearing, from the first at −180° to the second at 180°.
+#[test]
+fn scatter_values_follow_tilt_and_bearing() {
+    let bp = line(0.0, 0.0, 400.0, 0.0);
+    let boxes = |b: &Brush, st: &StrokeLayer| -> Vec<Rect> {
+        stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st).iter().map(|n| n.geometric_bounds().unwrap()).collect()
+    };
+    // Size on Tilt, 50 % to 300 %: upright at the start (12 pt tall), flat at the end (2 pt).
+    let upright_to_flat = StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) };
+    let h: Vec<f64> = boxes(&sized_scatter(50.0, 300.0, Variation::Tilt), &upright_to_flat).iter().map(Rect::height).collect();
+    assert!(near(h[0], 12.0, 0.2) && h[h.len() - 1] < 3.0, "{h:?}");
+    assert!(h.windows(2).all(|w| w[1] <= w[0] + 1e-9), "shrinks as the pen tips over: {h:?}");
+    // Rotation on Bearing, −180° to 180°: the copies turn with the bearing, a quarter turn
+    // standing the 10 × 4 pt art on end.
+    let sc = Scatter {
+        rotation: (-180.0, 180.0),
+        modes: Some([Variation::Fixed, Variation::Fixed, Variation::Fixed, Variation::Bearing]),
+        ..scatter(&scatter_brush(100.0))
+    };
+    let turning = Brush { name: "r".into(), kind: BrushKind::Scatter(sc) };
+    for (bearing, (w, h)) in [(0.0, (10.0, 4.0)), (90.0, (4.0, 10.0)), (-90.0, (4.0, 10.0))] {
+        let b = boxes(&turning, &posed(Some(0.5), Some(bearing), None));
+        assert!(!b.is_empty() && b.iter().all(|r| near(r.width(), w, 1e-6) && near(r.height(), h, 1e-6)), "{bearing}: {b:?}");
+    }
 }
 
 /// Brushes saved before the variation modes keep their look: a variation means Random, none
@@ -883,7 +1146,7 @@ fn brushes_without_modes_vary_randomly_as_before() {
         stroke_pieces(&Document::new(1.0, 1.0), &old, &bp, &pressed(vec![(0.0, 0.0), (1.0, 1.0)]))
     );
     // Modes are saved by name.
-    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure"]));
+    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure", "tilt", "bearing", "rotation"]));
     assert!(Variation::ALL.iter().all(|v| Variation::parse(v.id()) == Some(*v)));
 }
 
@@ -1097,7 +1360,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     let mut brushed = rect_art(10.0, 4.0);
     brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
     for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed)] {
-        doc.symbols.push(Symbol { name: name.into(), art: std::sync::Arc::new(art.clone()) });
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art.clone()) });
         doc.patterns.push(PatternDef::new(name, vec![std::sync::Arc::new(art)]));
     }
     let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
@@ -1107,6 +1370,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     };
     let art = Node::group(NodeId(0), [instance("plain"), instance("brushed"), painted("plain"), painted("brushed")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -1119,6 +1383,46 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
         let fills: Vec<Paint> =
             children.iter().filter(|c| c.path_data().is_some()).filter_map(|c| c.appearance.fill().map(|f| f.paint.clone())).collect();
         assert_eq!(fills, [Paint::Pattern { pattern: "plain".into(), xf: vectorcraft_geom::Affine::IDENTITY }, Paint::None]);
+    }
+}
+
+/// A symbol instance at the root of an opacity mask is filtered like one among the children: when
+/// its symbol draws a brushed stroke the mask goes (it would run the brush again from inside the
+/// mask, without end), and a mask whose root symbol is plain stays.
+#[test]
+fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
+    use vectorcraft_doc::{OpacityMask, Symbol};
+    let mut doc = Document::new(100.0, 100.0);
+    let mut brushed = rect_art(10.0, 4.0);
+    brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
+    // A brush the library lacks draws a plain stroke: its mask stays.
+    let mut unresolved = rect_art(10.0, 4.0);
+    unresolved.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("missing".into()), ..stroke(1.0) }));
+    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed), ("unresolved", unresolved)] {
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
+    }
+    let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let masked = |symbol: &str| {
+        let mut n = rect_art(10.0, 4.0);
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(instance(symbol), true)));
+        n
+    };
+    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed"), masked("unresolved")].map(std::sync::Arc::new).into());
+    let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
+    let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty());
+    for piece in &out {
+        let roots: Vec<Option<&str>> = piece
+            .children()
+            .unwrap()
+            .iter()
+            .map(|c| match c.extras().mask.as_ref().map(|m| &m.art.kind) {
+                Some(NodeKind::SymbolInstance { symbol, .. }) => Some(symbol.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(roots, [Some("plain"), None, Some("unresolved")], "the plain and unresolved masks stay and the brushed one goes");
     }
 }
 

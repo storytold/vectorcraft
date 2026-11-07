@@ -53,8 +53,8 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
-    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, envelope_bounds, envelope_expand, envelope_frame,
-    envelope_grid, envelope_mapper, envelope_of, envelope_overlay, smooth_handles,
+    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, envelope_bounds, envelope_content_boxes,
+    envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin, smooth_handles,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{
@@ -233,15 +233,142 @@ mod tests {
         assert_eq!(envelope_mapper(&kind, Rect::new(0.0, 0.0, 100.0, 100.0))(p), p);
     }
 
+    /// `bounds_margin` grows the box an envelope maps from, only while Distort Appearance is on. It
+    /// holds shares of the box, and an envelope with an uneven frame maps from the same box in that
+    /// frame. A native file writes it only when it isn't zero.
+    #[test]
+    fn an_envelope_maps_from_its_box_with_its_margins() {
+        let rect = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 110.0, 70.0)), crate::Appearance::default_art());
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+        let content = [Arc::new(rect)];
+        let src = |content: &[Arc<Node>], frame: Affine, options: EnvelopeOptions| EnvelopeMap::new(content, &kind, frame, options).unwrap().src();
+        // Top, bottom, left and right.
+        let on = EnvelopeOptions { bounds_margin: [0.125, 0.25, 0.0625, 0.5], ..EnvelopeOptions::NEW };
+        let geometric = Rect::new(10.0, 20.0, 110.0, 70.0);
+        let grown = Rect::new(3.75, 13.75, 160.0, 82.5);
+        assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions::default()), geometric);
+        assert_eq!(src(&content, Affine::IDENTITY, on), grown);
+        assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions { distort_appearance: false, ..on }), geometric);
+        for bad in [f32::NAN, f32::INFINITY, -0.05] {
+            assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions { bounds_margin: [bad, 0.25, 0.0625, 0.5], ..on }), geometric);
+        }
+        // A finite share of a box too wide to grow leaves the box as it is.
+        let wide = Node::path(NodeId(3), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 1e308, 10.0)), crate::Appearance::default_art());
+        let wide = [Arc::new(wide)];
+        let huge = EnvelopeOptions { bounds_margin: [0.0, 0.0, f32::MAX, 0.0], ..on };
+        assert_eq!(src(&wide, Affine::IDENTITY, huge), src(&wide, Affine::IDENTITY, EnvelopeOptions::NEW));
+        // Bounds follow the box: a warp that doesn't bend covers it.
+        let b = envelope_bounds(&content, &kind, Affine::IDENTITY, on).unwrap();
+        assert!((b.x0 - 3.75).abs() < 1e-6 && (b.y1 - 82.5).abs() < 1e-6, "{b:?}");
+        // Art taken through an uneven frame maps from the same box in that frame.
+        let frame = Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale_non_uniform(2.0, 0.5);
+        let mut placed = (*content[0]).clone();
+        placed.transform(frame, true);
+        let framed = src(&[Arc::new(placed)], frame, on);
+        assert!((framed.x0 - 3.75).abs() + (framed.y0 - 13.75).abs() + (framed.x1 - 160.0).abs() + (framed.y1 - 82.5).abs() < 1e-6, "{framed:?}");
+
+        // A frame that turns and scales gives the same margins as the art had before it took them.
+        let mut stroked = (*content[0]).clone();
+        if let Some(s) = stroked.appearance.stroke_mut() {
+            s.width = 10.0;
+        }
+        let margin = |n: &Node, frame: Affine| {
+            let (with, plain) = envelope_content_boxes(&[Arc::new(n.clone())], frame).unwrap();
+            envelope_stroke_margin(with, plain).unwrap()
+        };
+        let before = margin(&stroked, Affine::IDENTITY);
+        assert_eq!(before.map(|m| (m * 1000.0).round()), [100.0, 100.0, 50.0, 50.0]);
+        let frame = Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale(2.0);
+        let mut turned = stroked.clone();
+        turned.transform(frame, true);
+        assert_eq!(margin(&turned, frame).map(|m| (m * 1000.0).round()), before.map(|m| (m * 1000.0).round()));
+        // Margins an `f32` can't hold are none.
+        assert_eq!(envelope_stroke_margin(Rect::new(-5e41, 0.0, 100.0, 100.0), Rect::new(0.0, 0.0, 100.0, 100.0)), None);
+
+        assert!(serde_json::to_value(EnvelopeOptions::default()).unwrap().get("boundsMargin").is_none());
+        let saved = serde_json::to_value(on).unwrap();
+        assert_eq!(saved["boundsMargin"], serde_json::json!([0.125, 0.25, 0.0625, 0.5]));
+        assert_eq!(serde_json::from_value::<EnvelopeOptions>(saved).unwrap(), on);
+    }
+
+    /// How far the border of `m` strays from the ellipse in `r`, in points (measured across the
+    /// ellipse's short radius), checked at 20 places along every border edge.
+    fn mesh_border_off_ellipse(m: &GradientMesh, r: Rect) -> f64 {
+        let (rows, cols) = (m.rows as usize, m.cols as usize);
+        let edges = (0..cols).flat_map(|c| [m.edge_u(0, c), m.edge_u(rows, c)]).chain((0..rows).flat_map(|k| [m.edge_v(k, 0), m.edge_v(k, cols)]));
+        let (c, a, b) = (r.center(), r.width() / 2.0, r.height() / 2.0);
+        edges
+            .flat_map(|e| (0..=20).map(move |i| e.eval(f64::from(i) / 20.0)))
+            .map(|p| ((p.x - c.x) / a).hypot((p.y - c.y) / b) - 1.0)
+            .fold(0.0f64, |w, d| w.max(d.abs() * a.min(b)))
+    }
+
+    /// #3187: a gradient mesh made from an ellipse keeps the ellipse's shape: a Mesh tool click
+    /// (a 1×1 mesh with lines through the point) and Create Gradient Mesh's 4×4 grid both lay
+    /// their border on the outline, within about twice the 0.35 pt the outline is flattened to.
+    /// The 1×1 mesh was up to 7 pt off this 400 × 300 pt ellipse.
+    #[test]
+    fn a_mesh_from_an_ellipse_keeps_its_outline() {
+        const OFF: f64 = 0.75;
+        let r = Rect::new(100.0, 100.0, 500.0, 400.0);
+        let e = shapes::ellipse(r);
+        for (rows, cols) in [(1, 1), (4, 4), (2, 5)] {
+            let m = GradientMesh::for_path(&e, rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+            let off = mesh_border_off_ellipse(&m, r);
+            assert!(off < OFF, "{rows}×{cols} mesh: border {off} pt off the ellipse");
+        }
+        let made = GradientMesh::for_path(&e, 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let mut m = made.clone();
+        // Off centre, so each line splits its edges unevenly.
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let off = mesh_border_off_ellipse(&m, r);
+        assert!(off < OFF, "after a Mesh tool click: {off} pt");
+        // Deleting the lines again (Alt-click) gives the border back as it was.
+        assert!(m.remove_point_lines(i));
+        assert_eq!((m.rows, m.cols), (1, 1));
+        for (k, (now, was)) in m.points.iter().zip(&made.points).enumerate() {
+            let moved = now.handles.iter().zip(&was.handles).map(|(a, b)| (*a - *b).hypot()).fold(0.0, f64::max);
+            assert!(now.p.distance(was.p) < 1e-6 && moved < 1e-3, "point {k}: {now:?}, made as {was:?}");
+        }
+        // With a handle at the new border point shortened since, the two edges no longer make one
+        // curve: the merged edge is straight rather than grown past its ends.
+        let mut m = made.clone();
+        let i = m.add_lines_at(Point::new(200.0, 330.0), 0.0).unwrap();
+        let top = m.idx(0, 1);
+        m.points[top].handles[H_LEFT] *= 1e-4;
+        assert!(m.remove_point_lines(i));
+        let (a, b) = (m.points[0].p, m.points[1].p);
+        assert!((m.points[0].handles[H_RIGHT] - (b - a) / 3.0).hypot() < 1e-9, "{:?}", m.points[0].handles);
+        // A rectangle's mesh keeps straight edges with handles a third of the way along.
+        let m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 90.0, 60.0)), 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let e = m.edge_u(0, 0);
+        assert!(e.p1.distance(Point::new(30.0, 0.0)) < 1e-6 && e.p2.distance(Point::new(60.0, 0.0)) < 1e-6, "{e:?}");
+    }
+
     #[test]
     fn mesh_insert_and_remove_lines() {
         let mut m =
             GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), 1, 1, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
-        let i = m.add_lines_at(Point::new(30.0, 60.0)).unwrap();
+        let i = m.add_lines_at(Point::new(30.0, 60.0), 0.0).unwrap();
         assert_eq!((m.rows, m.cols), (2, 2));
         assert!(m.points[i].p.distance(Point::new(30.0, 60.0)) < 0.5, "{:?}", m.points[i].p);
         assert!(m.remove_point_lines(i));
         assert_eq!((m.rows, m.cols), (1, 1));
+    }
+
+    /// A point outside the mesh within the tolerance locates the nearest point of its edge.
+    #[test]
+    fn mesh_locate_within_reaches_the_edge() {
+        let m = GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), 2, 2, Color::BLACK, MeshAppearance::Flat, 0.0).unwrap();
+        let p = Point::new(102.0, 30.0);
+        assert_eq!(m.locate(p), None);
+        assert_eq!(m.locate_within(p, 1.0), None);
+        let (r, c, u, v) = m.locate_within(p, 3.0).unwrap();
+        assert_eq!((r, c), (0, 1));
+        assert_eq!(u, 1.0, "on the right edge");
+        let q = m.eval(r, c, u, v);
+        assert!(q.distance(Point::new(100.0, 30.0)) < 1e-6, "{q:?}");
+        assert_eq!(m.locate_within(Point::new(30.0, 60.0), 3.0), m.locate(Point::new(30.0, 60.0)));
     }
 
     /// Corners all in CMYK mix in CMYK (the inks halfway), not in RGB.

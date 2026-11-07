@@ -2,6 +2,7 @@ use super::{
     BTreeMap, BTreeSet, DataSet, DataValue, EngineError, MAX_NAME, Result, Session, Value, Variable, VariableKind, Variables, absolute_path, bad,
     json, read_file_head, str_param, variables_unlocked, write_file,
 };
+use crate::cmd::place::text::windows_1252;
 
 /// Cap on a graph variable's CSV (MCP and files are untrusted).
 pub(super) const MAX_GRAPH_CSV: usize = 256 * 1024;
@@ -13,20 +14,45 @@ const MAX_CSV_ROWS: usize = 1_000;
 
 const MAX_CSV_COLS: usize = 256;
 
-/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`.
-fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<Vec<u8>> {
-    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
+/// Bytes of a datasets CSV from `path`, `data`, `dataBase64` or `csv`, and whether they came
+/// as text (`data` or `csv`).
+fn datasets_csv_bytes(p: &Value, cmd: &str) -> Result<(Vec<u8>, bool)> {
+    let (bytes, text) = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64"), str_param(p, "csv")) {
         // One byte past the cap is enough to refuse the file below.
-        (Some(path), ..) => read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?,
-        (None, Some(text), ..) => text.as_bytes().to_vec(),
-        (None, None, Some(b64), _) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?,
-        (None, None, None, Some(csv)) => csv.as_bytes().to_vec(),
+        (Some(path), ..) => (read_file_head(&absolute_path(path), MAX_CSV_BYTES + 1)?, false),
+        (None, Some(text), ..) => (text.as_bytes().to_vec(), true),
+        (None, None, Some(b64), _) => (vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(cmd, "bad dataBase64"))?, false),
+        (None, None, None, Some(csv)) => (csv.as_bytes().to_vec(), true),
         _ => return Err(bad(cmd, "give `path`, `data`, `dataBase64` or `csv`")),
     };
     if bytes.len() > MAX_CSV_BYTES {
         return Err(bad(cmd, format!("CSV is larger than {MAX_CSV_BYTES} bytes")));
     }
-    Ok(bytes)
+    Ok((bytes, text))
+}
+
+/// The text of a datasets CSV given as a file or as `dataBase64`: UTF-16 after a UTF-16
+/// byte-order mark, else UTF-8, with or without a byte-order mark, else Windows-1252. A file
+/// that starts with a byte-order mark must be valid in its encoding, and a file without one must
+/// not hold NUL bytes (UTF-16 without a byte-order mark).
+fn datasets_csv_text(bytes: &[u8], cmd: &str) -> Result<String> {
+    let utf16 = |rest: &[u8], le: bool| {
+        let (units, odd) = rest.as_chunks::<2>();
+        let units = units.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+        let text = char::decode_utf16(units).collect::<std::result::Result<String, _>>();
+        text.ok().filter(|_| odd.is_empty()).ok_or_else(|| bad(cmd, "CSV is not UTF-16"))
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => return utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => return utf16(rest, false),
+        _ if bytes.contains(&0) => return Err(bad(cmd, "CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark")),
+        _ => {}
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok(text.to_string()),
+        Err(_) if bytes.starts_with(b"\xEF\xBB\xBF") => Err(bad(cmd, "CSV is not UTF-8")),
+        Err(_) => Ok(bytes.iter().map(|&b| windows_1252(b)).collect()),
+    }
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.
@@ -76,7 +102,8 @@ fn tab_separated(text: &str) -> bool {
 /// by commas, or by tabs when [`tab_separated`] says so. `"` quotes a cell (doubled inside),
 /// which may then hold separators and line breaks, as [`csv_escape`] writes them. An unquoted
 /// cell is trimmed. A quoted cell keeps what its quotes hold as written, spaces included, and
-/// drops white space after the closing quote at the end of the cell. Blank lines are skipped.
+/// drops white space after the closing quote at the end of the cell. A line whose cells are all
+/// blank and unquoted is skipped; a quoted empty cell keeps its line as a row.
 fn parse_datasets_csv(text: &str, cmd: &str) -> Result<Vec<CsvRow>> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let sep = if tab_separated(text) { '\t' } else { ',' };
@@ -106,7 +133,10 @@ fn parse_datasets_csv(text: &str, cmd: &str) -> Result<Vec<CsvRow>> {
             Some('\n') | None if !in_quotes => {
                 quoted.push(closed.is_some());
                 row.push(end_csv_cell(&mut cur, &mut closed));
-                if row.iter().any(|c| !c.trim().is_empty()) {
+                if row.len() > MAX_CSV_COLS {
+                    return Err(bad(cmd, format!("line {line}: more than {MAX_CSV_COLS} columns")));
+                }
+                if row.iter().any(|c| !c.trim().is_empty()) || quoted.contains(&true) {
                     rows.push((start, std::mem::take(&mut row), std::mem::take(&mut quoted)));
                     // +1 for the header.
                     if rows.len() > MAX_CSV_ROWS + 1 {
@@ -148,21 +178,25 @@ fn end_csv_cell(cur: &mut String, closed: &mut Option<usize>) -> String {
 }
 
 fn csv_escape(s: &str) -> String {
-    // An empty string is quoted so that it reads back as an empty value, not as a missing one.
-    if s.is_empty() || s.contains([',', '"', '\n', '\r']) || s != s.trim() { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
+    // An empty string is quoted so that it reads back as an empty value, not as a missing one. A
+    // tab is quoted so that a header of one variable whose name holds a tab isn't read as
+    // tab-separated.
+    if s.is_empty() || s.contains([',', '"', '\n', '\r', '\t']) || s != s.trim() { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() }
 }
 
-/// A visibility cell: true/false, 1/0, yes/no (ASCII, case-insensitive).
-fn parse_visible_cell(s: &str, var: &str, cmd: &str) -> Result<bool> {
+/// A visibility cell: true/false, 1/0, yes/no (ASCII, case-insensitive). An error names the
+/// file line `line`.
+fn parse_visible_cell(s: &str, var: &str, line: usize, cmd: &str) -> Result<bool> {
     match s.trim().to_ascii_lowercase().as_str() {
         "true" | "1" | "yes" => Ok(true),
         "false" | "0" | "no" => Ok(false),
-        _ => Err(bad(cmd, format!("value for `{var}` must be true or false"))),
+        _ => Err(bad(cmd, format!("line {line}: value for `{var}` must be true or false"))),
     }
 }
 
-/// The value of a cell. A quoted empty text cell is an empty text value; any other empty cell is no value.
-fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &str) -> Result<Option<DataValue>> {
+/// The value of a cell on file line `line`. A quoted empty text cell is an empty text value; any
+/// other empty cell is no value. An error names the line and the reason.
+fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, line: usize, cmd: &str) -> Result<Option<DataValue>> {
     // A text cell is not trimmed here (the parser trims unquoted cells); image, graph and
     // visibility cells are trimmed.
     let t = if kind == VariableKind::Text { cell } else { cell.trim() };
@@ -173,8 +207,9 @@ fn cell_to_value(kind: VariableKind, cell: &str, quoted: bool, var: &str, cmd: &
         VariableKind::Text => DataValue::Text(t.to_string()),
         VariableKind::Image => DataValue::Image(t.to_string()),
         VariableKind::Graph if t.len() <= MAX_GRAPH_CSV => DataValue::Graph(t.to_string()),
-        VariableKind::Graph => return Err(bad(cmd, format!("value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
-        VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, cmd)?),
+        VariableKind::Graph => return Err(bad(cmd, format!("line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes"))),
+        VariableKind::Visibility => DataValue::Visible(parse_visible_cell(t, var, line, cmd)?),
+        VariableKind::Unknown => return Err(bad(cmd, format!("line {line}: value for `{var}` must match its variable kind"))),
     }))
 }
 
@@ -185,25 +220,84 @@ fn value_to_cell(v: &DataValue) -> String {
     }
 }
 
-/// Build the CSV of every dataset (header `name` then variables in definition order).
-fn datasets_to_csv(vars: &Variables) -> String {
-    let mut out = String::from("name");
-    for v in &vars.variables {
-        out.push(',');
-        out.push_str(&csv_escape(&v.name));
+/// The header cell that [`datasets_to_csv`] writes for `v`, as [`header_variable`] reads it: `#`
+/// before a visibility variable's name, `@` before an image variable's name, and the name alone
+/// for a text or graph variable.
+fn export_header(v: &Variable) -> String {
+    match v.kind {
+        VariableKind::Visibility => format!("#{}", v.name),
+        VariableKind::Image => format!("@{}", v.name),
+        VariableKind::Text | VariableKind::Graph | VariableKind::Unknown => v.name.clone(),
     }
-    out.push('\n');
-    for ds in &vars.datasets {
-        out.push_str(&csv_escape(&ds.name));
-        for v in &vars.variables {
-            out.push(',');
-            if let Some(val) = ds.values.get(&v.name) {
-                out.push_str(&csv_escape(&value_to_cell(val)));
-            }
+}
+
+/// What [`dataset_import`] does with each variable's column of the CSV that [`datasets_to_csv`]
+/// writes, in a document without the variables: the first list names the variables whose header
+/// or values it refuses, so it doesn't import the file (a `%` header, a `#` header whose values
+/// aren't true or false, a header that names a variable an earlier column named), and the second
+/// the variables it reads as another variable (a text variable whose name starts with `#` or `@`,
+/// and a graph variable, which no header cell defines).
+fn kinds_a_new_document_loses(vars: &Variables) -> (Vec<&str>, Vec<&str>) {
+    const C: &str = "dataset.import";
+    let none = BTreeMap::new();
+    let mut defined = Vec::new();
+    let (mut refused, mut other) = (Vec::new(), Vec::new());
+    let mut seen = BTreeSet::new();
+    for (i, v) in vars.variables.iter().enumerate() {
+        let header = export_header(v);
+        let cell = header.trim();
+        let read = if cell.is_empty() { None } else { header_variable(cell, i + 1, &none, &mut defined, C).ok() };
+        // The import refuses a header that names a variable an earlier column named.
+        let Some((name, kind)) = read.filter(|(name, _)| seen.insert(name.clone())) else {
+            refused.push(v.name.as_str());
+            continue;
+        };
+        let cells_read = vars.datasets.iter().filter_map(|d| d.values.get(&v.name)).all(|val| {
+            let cell = value_to_cell(val);
+            cell_to_value(kind, &cell, cell.is_empty(), &name, 2, C).is_ok()
+        });
+        if !cells_read {
+            refused.push(v.name.as_str());
+        } else if name != v.name || kind != v.kind {
+            other.push(v.name.as_str());
         }
+    }
+    (refused, other)
+}
+
+/// Build the CSV of every dataset: a header of each variable's [`export_header`] in definition
+/// order, then one row per dataset. The dataset names are not written. Refused when a variable's
+/// header is another variable's name, which the import reads as that variable (a visibility
+/// variable `Show` next to a text variable `#Show`). A dataset with no value for any variable would
+/// be a blank line, which the import skips, so its row gets a quoted empty cell: in the first column
+/// whose variable isn't a text variable, where it reads back as no value, or else in the first
+/// column, where it reads back as an empty text.
+fn datasets_to_csv(vars: &Variables, cmd: &str) -> Result<String> {
+    let names: BTreeSet<&str> = vars.variables.iter().map(|v| v.name.as_str()).collect();
+    let mut header = Vec::with_capacity(vars.variables.len());
+    for v in &vars.variables {
+        let cell = export_header(v);
+        if cell != v.name && names.contains(cell.as_str()) {
+            let (name, other) = (&v.name, &cell);
+            return Err(bad(cmd, format!("the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them")));
+        }
+        header.push(csv_escape(&cell));
+    }
+    let mut out = header.join(",");
+    out.push('\n');
+    let keep = vars.variables.iter().position(|v| v.kind != VariableKind::Text).unwrap_or(0);
+    for ds in &vars.datasets {
+        let mut row: Vec<String> =
+            vars.variables.iter().map(|v| ds.values.get(&v.name).map(|val| csv_escape(&value_to_cell(val))).unwrap_or_default()).collect();
+        if row.iter().all(String::is_empty)
+            && let Some(cell) = row.get_mut(keep)
+        {
+            *cell = csv_escape("");
+        }
+        out.push_str(&row.join(","));
         out.push('\n');
     }
-    out
+    Ok(out)
 }
 
 /// The variable that a datasets CSV header cell (trimmed, not empty) in 1-based `column` names,
@@ -246,35 +340,33 @@ fn header_variable(
     }
 }
 
-/// Import datasets from CSV. A first header cell `name` makes the first column the dataset
-/// names; the other headers name variables, as [`header_variable`] reads them, and the
-/// variables the document doesn't define yet are defined, unbound. Without the `name` column,
-/// every header names a variable and the rows take the first free names "Data Set 1", "Data
-/// Set 2" and so on. Existing rows of the same name are replaced; new names are appended. One
-/// undo step.
+/// Import datasets from CSV. Every header cell names a variable, as [`header_variable`] reads it,
+/// and the variables the document doesn't define yet are defined, unbound. Two headers that name
+/// one variable are refused. The rows replace every dataset of the document and are named "Data
+/// Set 1", "Data Set 2" and so on, in file order. The document's variables and their bindings
+/// stay. One undo step, and none when the variables and datasets stay as they were.
 pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.import";
-    let bytes = datasets_csv_bytes(p, C)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| bad(C, "CSV is not UTF-8"))?;
-    let rows = parse_datasets_csv(text, C)?;
+    let (bytes, given_as_text) = datasets_csv_bytes(p, C)?;
+    // `data` and `csv` are already text, NUL characters included (`dataset.export` writes them).
+    let text = if given_as_text { String::from_utf8(bytes).map_err(|_| bad(C, "CSV is not UTF-8"))? } else { datasets_csv_text(&bytes, C)? };
+    let rows = parse_datasets_csv(&text, C)?;
     let Some((_, header, _)) = rows.first() else {
         return Err(bad(C, "CSV is empty"));
     };
-    let name_column = header.first().is_some_and(|h| h.trim().eq_ignore_ascii_case("name"));
-    let (kinds, existing_names) = {
-        let st = s.doc()?;
-        let kinds: BTreeMap<String, VariableKind> = st.doc.variables.variables.iter().map(|v| (v.name.clone(), v.kind)).collect();
-        let existing: BTreeSet<String> = st.doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
-        (kinds, existing)
-    };
+    let kinds: BTreeMap<String, VariableKind> = s.doc()?.doc.variables.variables.iter().map(|v| (v.name.clone(), v.kind)).collect();
     let mut columns: Vec<(usize, String, VariableKind)> = Vec::new();
     let mut defined: Vec<Variable> = Vec::new();
-    for (i, h) in header.iter().enumerate().skip(usize::from(name_column)) {
+    for (i, h) in header.iter().enumerate() {
         let cell = h.trim();
         if cell.is_empty() {
             return Err(bad(C, format!("empty header in column {}", i + 1)));
         }
         let (name, kind) = header_variable(cell, i + 1, &kinds, &mut defined, C)?;
+        if let Some(&(first, ..)) = columns.iter().find(|(_, n, _)| *n == name) {
+            let (first, column) = (first + 1, i + 1);
+            return Err(bad(C, format!("columns {first} and {column} both name the variable `{name}`")));
+        }
         columns.push((i, name, kind));
     }
     // Lock Variables refuses New Variable, so the import is refused when a header would define one.
@@ -285,78 +377,73 @@ pub(super) fn dataset_import(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "CSV has a header but no data rows"));
     }
     let mut parsed: Vec<DataSet> = Vec::new();
-    // The names of the rows read so far, and the last number given to a row without a name.
-    let (mut seen, mut number) = (BTreeSet::new(), 0usize);
-    for &(line, ref row, ref quoted) in rows.iter().skip(1) {
-        let raw_name = if name_column { row.first().map_or("", |c| c.trim()) } else { "" };
-        let name = if raw_name.is_empty() {
-            // Same numbering as Capture Data Set when a row leaves the name blank or the file has
-            // no name column. The search starts after the last number given.
-            let (n, name) = (number + 1..)
-                .map(|n| (n, format!("Data Set {n}")))
-                .find(|(_, n)| !seen.contains(n) && !existing_names.contains(n))
-                .unwrap_or_else(|| (line, format!("Data Set {line}")));
-            number = n;
-            name
-        } else if raw_name.chars().count() > MAX_NAME {
-            return Err(bad(C, format!("line {line}: `name` is longer than {MAX_NAME} characters")));
-        } else {
-            raw_name.to_string()
-        };
-        if !seen.insert(name.clone()) {
-            return Err(bad(C, format!("line {line}: dataset `{name}` appears twice")));
-        }
+    for (n, &(line, ref row, ref quoted)) in rows.iter().skip(1).enumerate() {
+        let name = format!("Data Set {}", n + 1);
         let mut values = BTreeMap::new();
         for &(col, ref var, kind) in &columns {
             let cell = row.get(col).map(String::as_str).unwrap_or("");
             let was_quoted = quoted.get(col).copied().unwrap_or(false);
-            match cell_to_value(kind, cell, was_quoted, var, C) {
-                Ok(Some(v)) => {
-                    values.insert(var.clone(), v);
-                }
-                Ok(None) => {}
-                Err(_) => return Err(bad(C, format!("line {line}: value for `{var}` must match its variable kind"))),
+            if let Some(v) = cell_to_value(kind, cell, was_quoted, var, line, C)? {
+                values.insert(var.clone(), v);
             }
         }
         parsed.push(DataSet { name, values });
     }
     let names: Vec<String> = parsed.iter().map(|d| d.name.clone()).collect();
     let new_variables: Vec<String> = defined.iter().map(|v| v.name.clone()).collect();
-    let (imported, updated) = s.edit("Import Data Sets", |d, _| {
-        d.variables.variables.extend(defined);
-        let mut imported = 0usize;
-        let mut updated = 0usize;
-        for row in parsed {
-            if let Some(existing) = d.variables.datasets.iter_mut().find(|x| x.name == row.name) {
-                *existing = row;
-                updated += 1;
-            } else {
-                d.variables.datasets.push(row);
-                imported += 1;
-            }
+    let deleted: Vec<String> = s.doc()?.doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
+    // The import is one undo step, and an import that leaves the variables and data sets as they
+    // were adds none, so the active data set stays when nothing changes.
+    super::edit_variables(s, "Import Data Sets", |vars| {
+        if defined.is_empty() && vars.datasets == parsed {
+            return Ok(());
         }
-        Ok((imported, updated))
+        vars.variables.extend(defined);
+        vars.datasets = parsed;
+        vars.active_dataset = None;
+        Ok(())
     })?;
-    Ok(json!({"imported": imported, "updated": updated, "names": names, "defined": new_variables}))
+    Ok(json!({"imported": names.len(), "names": names, "defined": new_variables, "deletedDataSets": deleted}))
 }
 
-/// Export every dataset as CSV (`name` then variables). With `path`, write the file; else return `{csv}`.
+/// Export every dataset as CSV ([`datasets_to_csv`]: one column per variable, no dataset names).
+/// With `path`, write the file; else return
+/// `{csv}`. The reply's `warning` names the variables whose column makes a document without them
+/// refuse the file, or else the variables it doesn't read back with their kind
+/// ([`kinds_a_new_document_loses`]); the app shows it in its status bar.
+/// A document with more data sets or variables than [`dataset_import`] reads is refused.
 pub(super) fn dataset_export(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.export";
     let st = s.doc()?;
     if st.doc.variables.variables.is_empty() {
         return Err(bad(C, "define a variable first"));
     }
-    let csv = datasets_to_csv(&st.doc.variables);
+    if st.doc.variables.datasets.len() > MAX_CSV_ROWS {
+        return Err(bad(C, format!("more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}")));
+    }
+    if st.doc.variables.variables.len() > MAX_CSV_COLS {
+        return Err(bad(C, format!("more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}")));
+    }
+    let csv = datasets_to_csv(&st.doc.variables, C)?;
     if csv.len() > MAX_CSV_BYTES {
         return Err(bad(C, format!("CSV would be larger than {MAX_CSV_BYTES} bytes")));
     }
-    match str_param(p, "path") {
+    let mut out = match str_param(p, "path") {
         Some(path) => {
             let path = absolute_path(path);
             write_file(&path, csv.as_bytes())?;
-            Ok(json!({"path": path, "datasets": st.doc.variables.datasets.len()}))
+            json!({"path": path, "datasets": st.doc.variables.datasets.len()})
         }
-        None => Ok(json!({"csv": csv, "datasets": st.doc.variables.datasets.len()})),
+        None => json!({"csv": csv, "datasets": st.doc.variables.datasets.len()}),
+    };
+    let (refused, lost) = kinds_a_new_document_loses(&st.doc.variables);
+    let list = |vars: &[&str]| vars.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+    if !refused.is_empty() {
+        let names = list(&refused);
+        out["warning"] = json!(format!("a new document refuses this file because of these variables: {names}"));
+    } else if !lost.is_empty() {
+        let names = list(&lost);
+        out["warning"] = json!(format!("a new document won't read these variables back with their kind: {names}"));
     }
+    Ok(out)
 }

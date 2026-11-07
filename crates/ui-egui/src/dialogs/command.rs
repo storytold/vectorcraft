@@ -3,11 +3,12 @@
 
 use std::sync::LazyLock;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::{DialogSpec, form};
-use crate::VectorcraftApp;
 use crate::state::Dialog;
+use crate::theme::Tokens;
+use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |d| tl!(&d.str("__label")).to_string(),
@@ -15,7 +16,40 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let command = d.str("__command");
         let (lengths, order) = (lengths(&command), order(&command));
         let rank = |k: &str| order.iter().position(|o| *o == k).unwrap_or(order.len());
-        form::param_fields(ui, d, &|k| lengths.contains(&k), &|k| choices(&command, k), &rank, app.session.general_unit());
+        // Area Type Options › Text Flow is a pair of radio buttons after the other options.
+        let flow = if command == "text.areaOptions" { d.fields.remove("flow") } else { None };
+        // Area Type Options: a Row Gutter still as it opened, on rows without a gutter of their own,
+        // follows the Gutter as it is changed.
+        let linked = d.fields.get("__rowGutterLinked").is_some() && d.fields.get("__rowGutterLinked") == d.fields.get("rowGutter");
+        let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
+        let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
+        form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
+        if linked
+            && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
+            && let Some(g) = d.fields.get("gutter").cloned()
+        {
+            d.fields.insert("rowGutter".into(), g.clone());
+            d.fields.insert("__rowGutterLinked".into(), g);
+        }
+        if let Some(v) = flow {
+            let mut rows = v.as_str() == Some("rows");
+            ui.add_space(4.0);
+            egui::Grid::new("text-flow").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                let row = ui.label(egui::RichText::new(format!("{}:", tl!("Text Flow"))).color(Tokens::get(ui.ctx()).text));
+                ui.label_inputs_by(row.id, |ui| {
+                    ui.horizontal(|ui| {
+                        if widgets::radio(ui, tl!("By Rows"), rows, true) {
+                            rows = true;
+                        }
+                        if widgets::radio(ui, tl!("By Columns"), !rows, true) {
+                            rows = false;
+                        }
+                    });
+                });
+                ui.end_row();
+            });
+            d.fields.insert("flow".into(), json!(if rows { "rows" } else { "columns" }));
+        }
         if previews(d) {
             let (cmd, params) = call(d);
             form::preview(app, ui, d, &d.str("__label"), &cmd, params);
@@ -27,11 +61,16 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// Does this dialog show a Preview checkbox? Only Grid Repeat Options does: the public page for
-/// the grid options lists one, and the radial and mirror pages do not. (Cancel rolls a preview
-/// back whichever dialog started it.)
+/// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
+/// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
+/// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
+/// works the same way (#5532). (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
-    d.str("__command") == "object.repeat.options" && d.fields.contains_key("gridType")
+    match d.str("__command").as_str() {
+        "object.repeat.options" => d.fields.contains_key("gridType"),
+        "type.pathOptions" | crate::addons::typetools::RELEASE => true,
+        _ => false,
+    }
 }
 
 /// The command the dialog runs and its parameters: the fields shown and the fixed ones.
@@ -39,6 +78,13 @@ fn call(d: &Dialog) -> (String, Value) {
     let mut params = form::params(d);
     if let (Some(o), Some(Value::Object(fixed))) = (params.as_object_mut(), d.fields.get("__params")) {
         o.extend(fixed.clone());
+    }
+    // Area Type Options: a Row Gutter left as it opened, on rows without a gutter of their own,
+    // isn't sent, so the rows take the Gutter.
+    if let (Some(o), Some(linked)) = (params.as_object_mut(), d.fields.get("__rowGutterLinked"))
+        && d.fields.get("rowGutter") == Some(linked)
+    {
+        o.remove("rowGutter");
     }
     (d.str("__command"), params)
 }
@@ -56,7 +102,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "shape.flare" => &["diameter", "pathLength"],
         "perspective.grid.set" => &["cell", "distance"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
-        "text.areaOptions" => &["width", "height", "gutter", "inset", "firstBaselineMin"],
+        "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin"],
         "type.pathOptions" => &["spacing"],
         "object.pathfinder.trap" => &["thickness"],
         _ => &[],
@@ -70,6 +116,7 @@ fn order(command: &str) -> &'static [&'static str] {
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
+        crate::addons::typetools::RELEASE => &["mode", "keepOriginal"],
         _ => &[],
     }
 }
@@ -79,6 +126,7 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
     match (command, key) {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
@@ -91,6 +139,19 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
         _ => None,
     }
 }
+
+/// Object › Rasterize › Color Model: the values `object.rasterize` takes, the document's own
+/// colour model first (#5660).
+fn rasterize_color_models(command: &str, key: &str, cmyk: bool) -> Option<form::Choices> {
+    match (command, key) {
+        ("object.rasterize", "colorModel") => Some(if cmyk { RASTERIZE_CMYK } else { RASTERIZE_RGB }),
+        _ => None,
+    }
+}
+
+/// Object › Rasterize › Color Model in an RGB and in a CMYK document.
+const RASTERIZE_RGB: form::Choices = &[("RGB", "rgb"), ("Grayscale", "grayscale"), ("Bitmap", "bitmap")];
+const RASTERIZE_CMYK: form::Choices = &[("CMYK", "cmyk"), ("Grayscale", "grayscale"), ("Bitmap", "bitmap")];
 
 /// Type on a Path Options › Align to Path.
 const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "descender"), ("Center", "center"), ("Baseline", "baseline")];
@@ -175,6 +236,125 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter
+    /// between rows of its own.
+    #[test]
+    fn area_type_options_dialog_sets_the_gutter_between_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(18.0)));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        app.ui.dialog.as_mut().unwrap().fields.insert("rowGutter".into(), json!(30.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let area = |app: &VectorcraftApp| {
+            let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+            (t.area.gutter, t.area.row_gutter)
+        };
+        assert_eq!(area(&app), (18.0, Some(30.0)));
+        // Rows with a gutter of their own keep it when only the Gutter changes.
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(12.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(area(&app), (12.0, Some(30.0)));
+        // Without one, a changed Gutter is the rows' too.
+        app.run("text.areaOptions", json!({"gutter": 18})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        app.ui.dialog.as_mut().unwrap().fields.insert("gutter".into(), json!(10.0));
+        // The Row Gutter shown follows it.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields.get("rowGutter"), Some(&json!(10.0)));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(area(&app), (10.0, None));
+    }
+
+    /// Area Type Options › Text Flow (#4978): two radio buttons, By Columns as new area type has
+    /// it, and OK fills the cells by rows when By Rows is picked.
+    #[test]
+    fn area_type_options_dialog_sets_the_text_flow() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("flow"), "columns", "drawing the radio buttons keeps the value");
+        app.ui.dialog.as_mut().unwrap().fields.insert("flow".into(), json!("rows"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!(t.area.flow, vectorcraft_doc::TextFlow::Rows);
+    }
+
+    /// Object › Rasterize › Color Model is a dropdown of the models `object.rasterize` takes, the
+    /// document's own first (#5660): every value runs, and picking Grayscale rasterizes in grays.
+    #[test]
+    fn rasterize_color_model_is_a_dropdown_of_the_models_the_command_takes() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        for (mode, own) in [("rgb", "RGB"), ("cmyk", "CMYK")] {
+            let models = rasterize_color_models("object.rasterize", "colorModel", mode == "cmyk").unwrap();
+            assert_eq!(models.first(), Some(&(own, mode)), "the document's own model first");
+            for (_, value) in models {
+                let mut s = Session::new();
+                s.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": mode})).unwrap();
+                s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+                s.execute("object.rasterize", &json!({"ppi": 72, "colorModel": value})).unwrap_or_else(|e| panic!("{mode} {value}: {e}"));
+            }
+        }
+        assert!(rasterize_color_models("object.rasterize", "background", false).is_none());
+        assert!(rasterize_color_models("document.rasterEffectsSettings", "colorModel", false).is_none());
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id]})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        crate::menus::invoke(&mut app, "object.rasterize", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("colorModel"), "rgb");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        assert!(h.query_by_role_and_label(Role::TextInput, "Color Model:").is_none(), "not a text field");
+        h.get_by_role_and_label(Role::ComboBox, "Color Model:").click();
+        h.run_steps(3);
+        h.get_by_label("Grayscale").click();
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().str("colorModel"), "grayscale");
+        let app = h.state_mut();
+        crate::dialogs::confirm(app).unwrap();
+        let st = app.session.active().unwrap();
+        let key = st.selection.objects.iter().find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
+            Some(NodeKind::Image(i)) => Some(i.key.clone()),
+            _ => None,
+        });
+        let img = image::load_from_memory(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap().to_rgba8();
+        let p = img.get_pixel(img.width() / 2, img.height() / 2).0;
+        assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
     }
 
     /// Graph Type › Value Axis is a dropdown of the values `graph.setType` takes, and OK puts the

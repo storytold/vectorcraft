@@ -8,11 +8,11 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
+use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, PenAt, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -103,7 +103,7 @@ fn densified(sp: &SubPath, flat_tol: f64, max_du: f64) -> Option<Vec<Point>> {
     let mut bp = BezPath::new();
     sp.to_bezpath_into(&mut bp);
     let mut pts = vec![];
-    kurbo::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
+    vectorcraft_geom::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
         if let PathEl::MoveTo(q) | PathEl::LineTo(q) = e {
             pts.push(q);
         }
@@ -245,6 +245,16 @@ fn oriented(art: &Node, dir: Direction, flip_along: bool, flip_across: bool) -> 
     }
     let b = a.geometric_bounds()?;
     (b.width() > 1e-9).then_some((a, b))
+}
+
+/// Orient a tile's repeat frame with its art. The frame can be smaller than the art.
+fn oriented_tile(art: &Node, frame: Option<Rect>, flip_along: bool, flip_across: bool) -> Option<(Node, Rect)> {
+    let (node, bounds) = oriented(art, Direction::LeftToRight, flip_along, flip_across)?;
+    let Some(frame) = frame else { return Some((node, bounds)) };
+    let x = if flip_along { (-frame.x1, -frame.x0) } else { (frame.x0, frame.x1) };
+    let y = if flip_across { (-frame.y1, -frame.y0) } else { (frame.y0, frame.y1) };
+    let frame = Rect::new(x.0, y.0, x.1, y.1);
+    (frame.width() > 1e-9 && frame.height() > 1e-9).then_some((node, frame))
 }
 
 /// Piecewise-linear map from art x (offset from the art's left edge) to arc length.
@@ -526,18 +536,19 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
 }
 
 /// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
-/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
-/// draws, so a copy's random values stay the same whatever the other modes.
-fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+/// value between them, and a mode that follows the pen the first where `pen` reads 0 for it and
+/// the second where it reads 1. Every value draws, so a copy's random values stay the same
+/// whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
     let r = rng.range(a, b);
-    match mode {
-        Variation::Fixed => a,
-        Variation::Random => r,
-        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    match pen.control(mode) {
+        Some(c) => a + (b - a) * c,
+        None if mode == Variation::Random => r,
+        None => a,
     }
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
     let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
     let mut rng = Rng::new(seed_of(bp, name));
@@ -548,8 +559,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             break;
         }
         let l = t.len();
-        // The pen pressure at arc length `at` (half way without a recorded one).
-        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
+        // What the pen recorded at arc length `at` (the values themselves without a recording).
+        let pen_at = |at: f64| PenAt::of(stroke, if l > 1e-9 { at / l } else { 0.0 });
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -557,8 +568,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             if guard > 20000 {
                 break;
             }
-            // Size and spacing place the next copy, so they take the pressure at the last one.
-            let p = pressure_at(s.unwrap_or(0.0));
+            // Size and spacing place the next copy, so they take the pen at the last one.
+            let p = pen_at(s.unwrap_or(0.0));
             let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
             let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
@@ -570,7 +581,7 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
                 break;
             }
             s = Some(pos);
-            let p = pressure_at(pos);
+            let p = pen_at(pos);
             let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
             let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);
@@ -800,13 +811,13 @@ fn masked(n: Node, quad: &[Point], p: Point, towards: Vec2) -> Option<Node> {
 }
 
 pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
-    let orient = |n: &Node| oriented(n, Direction::LeftToRight, pb.flip_along, pb.flip_across);
-    let Some(side) = orient(&pb.side) else { return vec![] };
+    let orient = |n: &Node, frame| oriented_tile(n, frame, pb.flip_along, pb.flip_across);
+    let Some(side) = orient(&pb.side, pb.side_frame) else { return vec![] };
     let k = weight * pb.scale.max(1.0) / 100.0;
-    let outer = pb.outer_corner.as_ref().and_then(orient);
-    let inner = pb.inner_corner.as_ref().and_then(orient);
-    let start = pb.start.as_ref().and_then(orient);
-    let end = pb.end.as_ref().and_then(orient);
+    let outer = pb.outer_corner.as_ref().and_then(|n| orient(n, pb.outer_corner_frame));
+    let inner = pb.inner_corner.as_ref().and_then(|n| orient(n, pb.inner_corner_frame));
+    let start = pb.start.as_ref().and_then(|n| orient(n, pb.start_frame));
+    let end = pb.end.as_ref().and_then(|n| orient(n, pb.end_frame));
     let tw = side.1.width() * k;
     let gap = tw * pb.spacing.max(0.0) / 100.0;
     // Each kind of corner takes its own art, else its source, else the other kind's art.

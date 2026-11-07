@@ -72,6 +72,17 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
+/// The document an export of `st` in format `f` writes ([`export_source`]): a `.ai` or `.ait`
+/// file names the view's active artboard ([`DocState::active_artboard`]) as its active one, as a
+/// save does. The open document is unchanged.
+pub fn export_doc<'a>(st: &'a DocState, f: &Format, p: &Value) -> Result<Cow<'a, Document>> {
+    let mut doc = export_source(st, p)?;
+    if let Some(id) = super::save::moved_active_artboard(st, &doc, f) {
+        doc.to_mut().opened_artboard = Some(id);
+    }
+    Ok(doc)
+}
+
 /// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
 /// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
 pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
@@ -146,6 +157,21 @@ pub(super) fn art_over(doc: &Document, rect: vectorcraft_geom::Rect) -> Document
     d
 }
 
+/// `doc` with the background colors of `artboards` drawn behind its art
+/// ([`Document::with_artboard_fills`]), what exports and print draw, unless `p` turns
+/// `includeArtboardFill` off (Export for Screens › Include Artboard Fill; on by default).
+pub(crate) fn with_artboard_fills<'a>(
+    doc: &'a Document,
+    p: &Value,
+    artboards: impl IntoIterator<Item = usize>,
+) -> std::result::Result<Cow<'a, Document>, String> {
+    let include = match p.get("includeArtboardFill") {
+        None | Some(Value::Null) => true,
+        Some(v) => v.as_bool().ok_or("`includeArtboardFill` must be true or false")?,
+    };
+    Ok(include.then(|| doc.with_artboard_fills(artboards)).flatten().map_or(Cow::Borrowed(doc), Cow::Owned))
+}
+
 /// `p` without its artboard choice, also inside its SVG options (for documents made of one
 /// synthetic artboard, and for callers that pick the artboard themselves).
 pub(super) fn without_artboards(p: &Value) -> Value {
@@ -175,7 +201,7 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
         return Ok((Cow::Owned(doc), display_doc_title));
     }
     let st = s.doc()?;
-    let doc = export_source(st, p)?;
+    let doc = export_doc(st, f, p)?;
     let display_doc_title = super::has_own_title(&doc);
     Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }

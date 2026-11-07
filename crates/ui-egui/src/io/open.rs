@@ -6,7 +6,7 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel, Libraries panel files are added to it,
-/// flattener, PDF, print and perspective grid presets files are imported, a shortcut set another
+/// flattener, PDF, print, perspective grid and export presets files are imported, a shortcut set another
 /// app saved (`.kys`) opens Import Shortcut Set, and a script written for the reference app
 /// (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…). → `document.open`'s result for
 /// a document opened now (its `warnings` say what didn't come in as it was), else null.
@@ -28,21 +28,18 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
         return dialogs::script_check::command(app, &p).map(|_| Value::Null);
     }
     if let Some(OpensAs::Presets { import, what }) = opens {
-        let r = app.run(import, serde_json::json!({"data": String::from_utf8_lossy(bytes)}))?;
-        let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        app.status(format!("Imported {what}: {}", names.join(", ")));
+        import_presets(app, import, what, serde_json::json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}))?;
         return Ok(Value::Null);
     }
     if opens == Some(OpensAs::Library) {
-        return crate::panels::libraries::import(app, json!({"data": String::from_utf8_lossy(bytes)})).map(|_| Value::Null);
+        return crate::panels::libraries::import(app, json!({"dataBase64": vectorcraft_format::base64_encode(bytes)})).map(|_| Value::Null);
     }
     let swatches = opens == Some(OpensAs::SwatchLibrary);
     if swatches || opens == Some(OpensAs::StyleLibrary) {
         let p = match path {
             Some(path) => serde_json::json!({ "path": path }),
-            // `.ase` swatch libraries are binary.
-            None if swatches => serde_json::json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)}),
-            None => serde_json::json!({"name": name, "data": String::from_utf8_lossy(bytes)}),
+            // The file's bytes as they are (`.ase` swatch libraries are binary).
+            None => serde_json::json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)}),
         };
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| Value::Null);
@@ -67,7 +64,7 @@ pub enum OpensAs {
     ShortcutSet,
     /// A script written for the reference app: checked without running it (Check Script…).
     Script,
-    /// Flattener, PDF, print or perspective grid presets: imported with command `import`, and
+    /// Flattener, PDF, print, perspective grid or export presets: imported with command `import`, and
     /// `what` names them in the status bar.
     Presets { import: &'static str, what: &'static str },
     /// A Libraries panel file: added to the Libraries panel as a new library.
@@ -76,6 +73,18 @@ pub enum OpensAs {
     SwatchLibrary,
     /// A graphic style library: opened in the library panel.
     StyleLibrary,
+}
+
+/// What the status bar calls the presets of an export presets file.
+pub(crate) const EXPORT_PRESETS: &str = "export presets";
+
+/// Run presets command `import` with `p` (the file) and say in the status bar which presets
+/// (`what`) it added → its result.
+pub(crate) fn import_presets(app: &mut VectorcraftApp, import: &str, what: &str, p: Value) -> Result<Value, String> {
+    let r = app.run(import, p)?;
+    let names: Vec<&str> = r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    app.status(format!("Imported {what}: {}", names.join(", ")));
+    Ok(r)
 }
 
 /// The kind of file named `name` (by its extension) that File → Open installs, imports, checks,
@@ -89,6 +98,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+        (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
     ];
     if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
         Some(OpensAs::Plugin)
@@ -122,9 +132,14 @@ pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: O
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
     if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
-        app.status(format!("Opened with {} note(s): {}", w.len(), w[0].as_str().unwrap_or_default()));
+        app.status(opened_with_notes(w.len(), w[0].as_str().unwrap_or_default()));
     }
     crate::dialogs::missing_links::after_open(app, r);
+}
+
+/// The status bar's line for a document opened with `n` notes, the first of them `first`.
+pub(crate) fn opened_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Opened with {n} note: {first}", "Opened with {n} notes: {first}", &[("first", first)])
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -214,15 +229,9 @@ pub fn open_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, Str
     r
 }
 
-/// Home › Recent Files and File › Open Recent: focus an already-open tab for that path instead of
-/// calling `document.open` again (#3455).
-pub fn open_recent_reporting(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> {
-    if let Some(r) = try_activate_open_document(app, path)? {
-        return Ok(r);
-    }
-    open_reporting(app, path)
-}
-
+/// A file already open in a tab is not opened again: its tab comes to the front, unsaved edits
+/// and all (#3455), without the questions asked after an open (missing links and fonts).
+/// → `{activated: true, …}` as `document.open`'s result, or None.
 fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Option<Value>, String> {
     let Some(index) = document_index_for_path(app, path) else {
         return Ok(None);
@@ -237,7 +246,9 @@ fn try_activate_open_document(app: &mut VectorcraftApp, path: &str) -> Result<Op
         "activated": true,
     });
     app.run("document.activate", json!({ "index": index }))?;
-    opened(app, &r);
+    app.sync_views();
+    // Home, shown over the document that was already active, gives way to it too.
+    app.ui.home = None;
     Ok(Some(r))
 }
 
@@ -264,6 +275,25 @@ pub fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<Value, String> 
 /// [`open_path`]; with `background`, a document (not a file that installs, imports or asks
 /// first) is decoded off the UI thread ([`crate::opening::start`]).
 pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) -> Result<Value, String> {
+    // Automation confined to some folders reaches no file outside them, open in a tab or not.
+    vectorcraft_engine::file_access::check_read(path)?;
+    // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
+    // is already open, or still being read, instead of opening a second copy. While a dialog or
+    // a drag acts on the active document, its tab comes to the front once that ends
+    // ([`crate::opening::poll`]), as a file that finishes opening then does.
+    if document_index_for_path(app, path).is_some() && !crate::opening::may_switch(app) {
+        if !app.opening.activate.iter().any(|(p, _)| same_open_path(p, path)) {
+            let scope = vectorcraft_engine::file_access::ScopeHandle::capture();
+            app.opening.activate.push((path.to_string(), scope));
+        }
+        return Ok(Value::Null);
+    }
+    if let Some(r) = try_activate_open_document(app, path)? {
+        return Ok(r);
+    }
+    if app.opening.pending.iter().any(|p| same_open_path(&p.path, path)) {
+        return Ok(Value::Null);
+    }
     // A shortcut set is read by Import Shortcut Set, up to its reader's cap.
     if dialogs::shortcut_import::is_kys(path) {
         dialogs::shortcut_import::command(app, &json!({ "path": path }))?;

@@ -196,7 +196,11 @@ fn ai_without_pdf_content_and_compression() {
     };
     let (full, _) = ai(&mut s, json!({}));
     let (blank, warnings) = ai(&mut s, json!({"pdfCompatible": false}));
-    assert!(warnings.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("without PDF content")), "{warnings}");
+    let says = |w: &Value, text: &str| w.as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains(text));
+    assert!(says(&warnings, "without PDF content") && says(&warnings, "apps that read its editing data open it"), "{warnings}");
+    // Without the editing copy, other apps show empty pages.
+    let (_, plain) = ai(&mut s, json!({"pdfCompatible": false, "editingData": false}));
+    assert!(says(&plain, "VectorCraft opens it as before") && !says(&plain, "editing data"), "{plain}");
     // The pages are empty (an import of a page finds no art), the document comes back whole.
     let page = |s: &mut Session, b: &[u8]| {
         s.execute("document.open", &json!({"name": "x.ai", "dataBase64": vectorcraft_format::base64_encode(b), "pages": "1"})).unwrap();
@@ -211,6 +215,86 @@ fn ai_without_pdf_content_and_compression() {
     let (packed, _) = ai(&mut s, json!({"compress": true}));
     let (loose, _) = ai(&mut s, json!({"compress": false}));
     assert!(loose.len() > packed.len(), "{} vs {}", loose.len(), packed.len());
+}
+
+#[test]
+fn ai_option_errors_name_a_file_saved_without_pdf_content() {
+    let mut s = three_boards();
+    for p in
+        [json!({"format": "ai", "pdfCompatible": false, "artboard": "2"}), json!({"format": "ai", "pdfCompatible": false, "includeLinked": "yes"})]
+    {
+        let e = s.execute("file.saveCopy", &p).unwrap_err().to_string();
+        assert!(e.contains("non-PDF-compatible .ai options: invalid type"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "pdfCompatible": false, "artboard": "2"})).unwrap_err().to_string();
+    assert!(e.contains("`document.export`") && e.contains("non-PDF-compatible .ai options: invalid type"), "{e}");
+    let p = json!({"format": "ait", "pdfCompatible": false, "includeLinked": "yes"});
+    let e = s.execute("file.saveAsTemplate", &p).unwrap_err().to_string();
+    assert!(e.contains("non-PDF-compatible .ait template options: invalid type"), "{e}");
+    // A template saved without PDF content is written.
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "ait", "pdfCompatible": false})).unwrap();
+    assert!(r["warnings"].to_string().contains("without PDF content"), "{r}");
+    // So are the notes on native options the file doesn't read.
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "pdfCompatible": false, "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: non-PDF-compatible .ai files don't read it"), "{r}");
+    // A PDF-compatible file keeps its name.
+    let e = s.execute("file.saveCopy", &json!({"format": "ai", "includeLinked": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("PDF-compatible .ai options: invalid type") && !e.contains("non-PDF"), "{e}");
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "version": 3})).unwrap();
+    assert!(r["warnings"].to_string().contains("`version` was not used: PDF-compatible .ai files don't read it"), "{r}");
+}
+
+/// The message of a refused command's error.
+fn refusal(s: &mut Session, cmd: &str, p: &Value) -> String {
+    match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) if c == cmd => msg,
+        other => panic!("{cmd} {p}: {:?}", other.map(|r| r["bytes"].clone())),
+    }
+}
+
+#[test]
+fn an_ai_save_refuses_an_artboard_the_document_does_not_have_as_an_export_does() {
+    let dir = Folder::new("ai-no-artboard");
+    let mut s = three_boards();
+    let path = dir.file("x.ai");
+    let missing = [
+        json!({"artboards": [5]}),
+        json!({"artboards": [0, 3]}),
+        json!({"artboard": 3}),
+        json!({"range": "4"}),
+        json!({"separateArtboards": true, "artboards": [5]}),
+    ];
+    let wrong_type = [json!({"artboard": "x"}), json!({"artboards": ["x"]}), json!({"range": 42})];
+    for pdf in [true, false] {
+        for pick in missing.iter().chain(&wrong_type) {
+            let mut p = json!({"format": "ai", "pdfCompatible": pdf});
+            p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+            let export = refusal(&mut s, "document.export", &p);
+            p["path"] = json!(path);
+            for cmd in ["file.saveCopy", "file.saveAs", "document.save"] {
+                assert_eq!(refusal(&mut s, cmd, &p), export, "{cmd} {p}");
+            }
+            // A template is not exported: its errors name the template where they name the format.
+            p["format"] = json!("ait");
+            let template = refusal(&mut s, "file.saveAsTemplate", &p);
+            if missing.contains(pick) {
+                assert_eq!(template, export, "{p}");
+            } else {
+                assert!(template.contains("invalid type"), "{p}: {template}");
+            }
+        }
+    }
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 0, "nothing is written");
+    // An artboard the document has, an empty `artboards` list, or `artboards` that a `range`
+    // overrides is saved with every artboard, as before.
+    for pick in [json!({"artboards": [1]}), json!({"artboards": []}), json!({"range": "1", "artboards": [5]})] {
+        let mut p = json!({"format": "ai"});
+        p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        let mut o = Session::new();
+        o.execute("document.open", &json!({"name": "x.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        assert_eq!(o.doc().unwrap().doc.artboards.len(), 3, "{p}");
+    }
 }
 
 #[test]
@@ -352,4 +436,123 @@ fn format_options_list_the_save_options() {
     s.execute("document.save", &json!({"path": path, "includeLinked": true})).unwrap();
     let v = s.execute("file.formatOptions", &json!({})).unwrap();
     assert_eq!(v["options"]["includeLinked"]["value"], true);
+}
+
+/// The anchors of the first object in the native file at `path`.
+fn saved_anchors(path: &str) -> Vec<vectorcraft_geom::Point> {
+    let d = vectorcraft_format::load(&std::fs::read(path).unwrap()).unwrap();
+    let NodeKind::Path { path, .. } = &d.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+    path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect()
+}
+
+#[test]
+fn precision_rounds_the_paths_of_that_save_only() {
+    let dir = Folder::new("precision");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 1000, "height": 1000})).unwrap();
+    // 1,000 anchors at coordinates with many decimal places (a fixed pseudo-random sequence).
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = || {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64 * 1000.0
+    };
+    let anchors: Vec<Value> = (0..1000).map(|_| json!({"x": next(), "y": next()})).collect();
+    s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let (exact, rounded) = (dir.file("exact.vectorcraft"), dir.file("rounded.vectorcraft"));
+    s.execute("document.save", &json!({"path": exact, "compress": false})).unwrap();
+    s.execute("document.save", &json!({"path": rounded, "compress": false, "precision": 3})).unwrap();
+    let (e, r) = (std::fs::metadata(&exact).unwrap().len(), std::fs::metadata(&rounded).unwrap().len());
+    assert!(r < e, "{r} bytes rounded, {e} exact");
+    let (want, got) = (saved_anchors(&exact), saved_anchors(&rounded));
+    assert_eq!(got.len(), 1000);
+    for (w, g) in want.iter().zip(&got) {
+        assert!((w.x - g.x).abs() <= 0.0005 && (w.y - g.y).abs() <= 0.0005, "{w:?} saved as {g:?}");
+        assert_eq!(((g.x * 1000.0).round() / 1000.0, (g.y * 1000.0).round() / 1000.0), (g.x, g.y));
+    }
+    // The document keeps its exact anchors, and Save doesn't remember the precision.
+    let v = s.execute("file.formatOptions", &json!({})).unwrap();
+    assert!(v["options"]["precision"]["value"].is_null(), "{}", v["options"]["precision"]);
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(saved_anchors(&rounded), want);
+    // A precision that isn't a whole number from 0 to 9 is refused, by the command that was given it.
+    for (wrong, got) in [(json!(10), "10"), (json!(2.5), "2.5"), (json!(-1), "-1"), (json!("4"), "\"4\""), (json!(true), "true")] {
+        for cmd in ["file.saveCopy", "document.save"] {
+            let e = s.execute(cmd, &json!({"precision": wrong})).unwrap_err().to_string();
+            assert!(e.contains(&format!("`{cmd}`")) && !e.contains("document.export"), "{cmd} {wrong}: {e}");
+            assert!(e.contains(&format!("`precision` must be a whole number between 0 and 9 (got {got})")), "{cmd} {wrong}: {e}");
+        }
+    }
+    // A type error in another native option names that command too.
+    let e = s.execute("document.save", &json!({"version": "4"})).unwrap_err().to_string();
+    assert!(e.contains("`document.save`") && !e.contains("document.export"), "{e}");
+}
+
+#[test]
+fn precision_is_not_remembered_for_new_documents() {
+    let dir = Folder::new("precision-preferences");
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("document.save", &json!({"path": dir.file("rounded.vectorcraft"), "precision": 3})).unwrap();
+    assert!(!s.prefs.native_save_options.contains_key("precision"));
+
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+    assert!(options["options"]["precision"]["value"].is_null(), "{}", options["options"]["precision"]);
+}
+
+#[test]
+fn a_ai_file_ignores_precision_as_save_does() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("path.create", &json!({"anchors": [{"x": 10.123456789, "y": 20.987654321}, {"x": 60.5, "y": 70.25}]})).unwrap();
+    let want: Vec<_> = {
+        let NodeKind::Path { path, .. } = &s.doc().unwrap().doc.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+        path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect()
+    };
+    for cmd in ["document.export", "file.saveCopy"] {
+        for precision in [json!(3), json!(10)] {
+            let r = s.execute(cmd, &json!({"format": "ai", "precision": precision})).unwrap();
+            let mut t = Session::new();
+            t.execute("document.open", &json!({"name": "x.ai", "dataBase64": r["dataBase64"]})).unwrap();
+            let NodeKind::Path { path, .. } = &t.doc().unwrap().doc.layers[0].children().unwrap()[0].kind else { panic!("not a path") };
+            let got: Vec<_> = path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)).collect();
+            assert_eq!(got, want, "{cmd} {precision}");
+        }
+    }
+}
+
+/// The anchors of every path in `n` and the art it holds.
+fn all_anchors(n: &vectorcraft_doc::Node, out: &mut Vec<vectorcraft_geom::Point>) {
+    if let NodeKind::Path { path, .. } = &n.kind {
+        out.extend(path.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p)));
+    }
+    for c in n.children().into_iter().flatten() {
+        all_anchors(c, out);
+    }
+}
+
+#[test]
+fn the_preview_and_pdf_of_a_save_at_a_precision_show_the_rounded_art() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let anchors = json!([{"x": 10.4, "y": 20.3}, {"x": 80.6, "y": 30.7}, {"x": 45.35, "y": 85.65}]);
+    s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap();
+    let file = bytes_of(&s.execute("file.saveCopy", &json!({"precision": 0, "pdfCompatible": true, "preview": true})).unwrap()["dataBase64"]);
+    // The embedded PDF, opened, has the path on whole points.
+    let pdf = vectorcraft_format::pdf_content(&file).unwrap();
+    let mut t = Session::new();
+    t.execute("document.open", &json!({"name": "x.pdf", "dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
+    let mut got = vec![];
+    for l in &t.doc().unwrap().doc.layers {
+        all_anchors(l, &mut got);
+    }
+    for (x, y) in [(10.0, 20.0), (81.0, 31.0), (45.0, 86.0)] {
+        assert!(got.iter().any(|p| (p.x - x).abs() < 1e-3 && (p.y - y).abs() < 1e-3), "({x}, {y}) not in {got:?}");
+    }
+    assert!(got.iter().all(|p| (p.x - p.x.round()).abs() < 1e-3 && (p.y - p.y.round()).abs() < 1e-3), "{got:?}");
+    // The preview is the one the saved document draws, not the exact art's.
+    let preview = vectorcraft_format::preview(&file);
+    assert!(preview.is_some());
+    assert_eq!(preview, crate::cmd::fileio::preview_png(&vectorcraft_format::load(&file).unwrap()).unwrap());
+    assert_ne!(preview, crate::cmd::fileio::preview_png(&s.doc().unwrap().doc).unwrap());
 }

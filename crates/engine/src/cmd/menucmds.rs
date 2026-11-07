@@ -15,8 +15,8 @@ use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
 use super::edit::{duplicate_in, selected_roots, selected_roots_to_transform};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selection,
-    has_selection_outside_isolation, switch_or,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, fileio, find_command, has_doc, has_selected_member,
+    has_selection, switch_or,
 };
 
 /// Session-level (not saved) state owned by the menu commands.
@@ -43,8 +43,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Lock"],
             None,
-            "{} lock objects in the same layer that are above and overlap the selection, deselecting every selected object left locked or hidden (the key object too) → {count}",
-            has_selection_outside_isolation,
+            "{} lock objects in the same layer that are above and overlap the selection, deselecting every selected object left locked or hidden (the key object too); in isolation mode, lock the selected objects and the objects above them inside the isolated object → {count}",
+            has_selected_member,
             |s, _| above(s, true)
         ),
         cmd!(
@@ -52,8 +52,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Layers",
             ["Object", "Lock"],
             None,
-            "{} lock every layer that holds no selected object → {count}",
-            has_selection_outside_isolation,
+            "{} lock every layer that holds no selected object; in isolation mode, change nothing and return a count of 0 → {count}",
+            has_selected_member,
             |s, _| other_layers(s, true)
         ),
         cmd!(
@@ -61,8 +61,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unselected Artwork",
             ["Object", "Lock"],
             Some("Cmd+Alt+Shift+2"),
-            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide → {count}",
-            has_selection,
+            "{} lock unselected artwork in one undo step, including unselected members of partly selected groups, clipping groups and compound paths, and guides while Lock Guides is on; hidden art and art on locked layers stay unlocked; a selected layer's art counts as selected; in isolation, only art inside the isolated object is affected; object.unlockAll unlocks locked art document-wide, or inside the isolated object in isolation mode → {count}",
+            has_selected_member,
             |s, _| unselected_art(s, true)
         ),
         cmd!(
@@ -70,8 +70,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "All Artwork Above",
             ["Object", "Hide"],
             None,
-            "{} hide objects in the same layer that are above and overlap the selection, deselecting every selected object left hidden or locked (the key object too) → {count}",
-            has_selection_outside_isolation,
+            "{} hide objects in the same layer that are above and overlap the selection, deselecting every selected object left hidden or locked (the key object too); in isolation mode, hide the selected objects and the objects above them inside the isolated object → {count}",
+            has_selected_member,
             |s, _| above(s, false)
         ),
         cmd!(
@@ -79,8 +79,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Layers",
             ["Object", "Hide"],
             None,
-            "{} hide every layer that holds no selected object → {count}",
-            has_selection_outside_isolation,
+            "{} hide every layer that holds no selected object; in isolation mode, change nothing and return a count of 0 → {count}",
+            has_selected_member,
             |s, _| other_layers(s, false)
         ),
         cmd!(
@@ -88,8 +88,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unselected Artwork",
             ["Object", "Hide"],
             Some("Cmd+Alt+Shift+3"),
-            "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; object.showAll shows them again; disabled in isolation mode → {count}",
-            has_selection_outside_isolation,
+            "{} hide, in one undo step, every object select.all takes that is not selected and holds no selected object; in a group that holds one it hides the other members one by one, and a clip group, compound path or other object that holds one stays as it is; the objects of a selected layer count as selected; while Lock Guides is on, guide paths count as selected and stay as they are; in isolation mode, only art inside the isolated object is affected; object.showAll shows them again → {count}",
+            has_selected_member,
             |s, _| unselected_art(s, false)
         ),
         cmd!(
@@ -97,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Each…",
             ["Object", "Transform"],
             Some("Cmd+Alt+Shift+D"),
-            "{scaleH?: % (100), scaleV?: % (100), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about its own reference point → {ids}",
+            "{scaleH?: % (100), scaleV?: % (100), relative?: bool (true: scaleH and scaleV are percentages of each object's size, as the dialog's Relative; false: Absolute, scaleH and scaleV are the width and height in pt each object becomes, measured on its own bounds, and a side left out keeps its size), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about the reference point of its own box, along its own axes → {ids}",
             has_selection,
             transform_each
         ),
@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded PNG image; each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -243,14 +243,21 @@ fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
 // ---------- Lock / Hide ----------
 
 fn above(s: &mut Session, lock: bool) -> Result<Value> {
-    let roots = selected_roots(s)?;
-    let d = &s.doc()?.doc;
+    let st = s.doc()?;
+    let d = &st.doc;
+    let isolation = super::ordinary_isolation(st);
+    // In isolation mode a path of the isolated compound path is an object of its own.
+    let roots = match isolation {
+        Some(root) => super::edit::selected_roots_inside(s, root, false)?,
+        None => selected_roots(s)?,
+    };
     let symbols = d.symbol_boxes();
-    // `selected` holds each selected object's visual bounds, by layer, with the index there of its
-    // ancestor directly inside the layer. Symbol instances are measured by their art.
+    // `selected` holds each selected object's visual bounds, by layer (the isolated object in
+    // isolation mode), with the index there of its ancestor directly inside it. Symbol instances
+    // are measured by their art.
     let mut selected: BTreeMap<NodeId, Vec<(usize, Rect)>> = BTreeMap::new();
     for id in &roots {
-        let Some(layer) = d.layer_of(*id) else { continue };
+        let Some(layer) = isolation.or_else(|| d.layer_of(*id)) else { continue };
         // The selected object's ancestor directly inside the layer.
         let anc = d.ancestry(*id).unwrap_or_default();
         let Some(pos) = anc.iter().position(|a| *a == layer) else { continue };
@@ -259,10 +266,14 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
         let Some((_, idx, _)) = d.position(top) else { continue };
         selected.entry(layer).or_default().push((idx, b));
     }
-    // The loop walks up each layer once. Each object that is not selected and overlaps a selected
-    // object below it is locked (Lock) or hidden (Hide).
+    // The loop walks up each layer once, or the isolated object in isolation mode. Each object that
+    // is not selected and overlaps a selected object below it is locked (Lock) or hidden (Hide). In
+    // isolation mode the selected objects are locked or hidden too.
     let roots: HashSet<NodeId> = roots.into_iter().collect();
     let mut hits: BTreeSet<NodeId> = BTreeSet::new();
+    if isolation.is_some() {
+        hits.extend(roots.iter().copied());
+    }
     for (layer, mut below) in selected {
         below.sort_by_key(|(idx, _)| *idx);
         let mut below = below.into_iter().peekable();
@@ -307,6 +318,11 @@ fn above(s: &mut Session, lock: bool) -> Result<Value> {
 
 fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
     let st = s.doc()?;
+    // In isolation mode the other layers lie outside the isolated group, layer or sublayer, so the
+    // document and its undo history stay as they are.
+    if super::ordinary_isolation(st).is_some() {
+        return Ok(json!({ "count": 0 }));
+    }
     let keep: Vec<NodeId> = st.selection.objects.iter().filter_map(|id| st.doc.ancestry(*id)).flatten().collect();
     let others: Vec<NodeId> = st.doc.layers.iter().map(|l| l.id).filter(|l| !keep.contains(l)).collect();
     let n = others.len();
@@ -331,7 +347,7 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
 }
 
 /// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
-/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// hold none of them. A selected layer and its objects count as selected. The walk goes into a plain group, but not a Shaper
 /// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
 /// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
 /// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
@@ -344,13 +360,31 @@ fn unselected(
     guides_locked: bool,
     lock: bool,
 ) -> Vec<NodeId> {
+    /// Pushes the visible guide paths in `n`, `n` included, locked ones too.
+    fn shown_guides(n: &vectorcraft_doc::Node, out: &mut Vec<NodeId>) {
+        if !n.visible {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            out.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            shown_guides(c, out);
+        }
+    }
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
-    roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
+    let layers = || selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer());
+    roots.extend(layers().map(|l| l.id));
+    roots.extend(layers().flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
     if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
+            }
+            // The walk skips locked objects, so the guide paths in them are looked for here.
+            for c in n.children().into_iter().flatten().filter(|c| c.locked) {
+                shown_guides(c, &mut kept);
             }
             true
         });
@@ -370,10 +404,19 @@ fn unselected(
 }
 
 fn unselected_art(s: &mut Session, lock: bool) -> Result<Value> {
-    let roots = selected_roots_to_transform(s)?;
+    // In isolation mode the isolated object itself does not count as a selected object.
+    let iso = super::ordinary_isolation(s.doc()?);
+    let roots = match iso {
+        Some(root) => super::edit::selected_roots_inside(s, root, true)?,
+        None => selected_roots_to_transform(s)?,
+    };
     let guides_locked = s.menu.guides_locked;
     let st = s.doc()?;
-    let ids = unselected(&st.doc, st.isolation, &st.selection.objects, &roots, guides_locked, lock);
+    let selection: Vec<NodeId> = match iso {
+        Some(root) => st.selection.objects.iter().copied().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect(),
+        None => st.selection.objects.to_vec(),
+    };
+    let ids = unselected(&st.doc, st.isolation, &selection, &roots, guides_locked, lock);
     // With nothing to lock (Lock) or hide (Hide), the document and its undo history stay as they are.
     if !ids.is_empty() {
         s.edit(if lock { "Lock" } else { "Hide" }, |d, _| {
@@ -411,6 +454,30 @@ fn about(o: Point, a: Affine) -> Affine {
     Affine::translate(o.to_vec2()) * a * Affine::translate(-o.to_vec2())
 }
 
+/// The largest width or height (pt) an Absolute Transform Each takes, so coordinates stay finite.
+const MAX_ABSOLUTE: f64 = 1.0e7;
+
+/// The box a symbol instance or any other object has of its own, rotated with it, as the Transform
+/// panel and the Control bar show it: Absolute Transform Each measures its targets on this, with
+/// `symbols` shared so many instances of one symbol measure its art once.
+fn own_box(doc: &vectorcraft_doc::Document, id: NodeId, symbols: &vectorcraft_doc::SymbolBoxes) -> Option<Rect> {
+    doc.oriented_bounds_with(&[id], false, symbols).map(|b| b.rect)
+}
+
+/// Whether Absolute scaling by `target` leaves a side of `current` as it is, to within a millionth
+/// of the size: a square turned 45° measures 100.00000000000001 in its own box, and the size it
+/// shows must not scale it.
+fn keeps_size(target: f64, current: f64) -> bool {
+    (scale_factor(target, current) - 1.0).abs() <= 1.0e-9
+}
+
+/// The factor that takes `current` to `target` (Absolute Transform Each). A side of 0 (a line)
+/// keeps its factor 1, since no factor gives it another size, and the factor is bounded as the
+/// moves are, so a hairline side can't throw coordinates past what a document can hold.
+fn scale_factor(target: f64, current: f64) -> f64 {
+    if current.abs() > 1.0e-9 { (target / current).clamp(-1.0e7, 1.0e7) } else { 1.0 }
+}
+
 fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
     transform_each_as(s, p, "Transform Each")
 }
@@ -427,9 +494,17 @@ pub(crate) fn transform_each_again(s: &mut Session, p: &Value) -> Result<Value> 
 fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let roots = selected_roots(s)?;
     check_numbers(p, &["scaleH", "scaleV", "moveH", "moveV", "rotate"], "object.transformEach")?;
+    // Relative (the default) scales each object by a percentage of its own size; Absolute
+    // (`relative: false`, the dialog's Absolute) takes each object to the width and height given,
+    // a side left out staying as it is.
+    let relative = switch_or(p, "relative", true, "object.transformEach")?;
     // Bounded so coordinates stay finite (and the document stays serializable).
-    let sh = f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0);
-    let sv = f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0);
+    let given = |key: &str| p.get(key).filter(|v| !v.is_null()).and_then(Value::as_f64).map(|v| v.clamp(-MAX_ABSOLUTE, MAX_ABSOLUTE));
+    let (sh, sv) = if relative {
+        (Some(f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0)), Some(f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0)))
+    } else {
+        (given("scaleH"), given("scaleV"))
+    };
     let mh = f64_or(p, "moveH", 0.0).clamp(-1.0e7, 1.0e7);
     let mv = f64_or(p, "moveV", 0.0).clamp(-1.0e7, 1.0e7);
     let rot = f64_or(p, "rotate", 0.0);
@@ -440,16 +515,26 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let copy = switch_or(p, "copy", false, "object.transformEach")?;
     check_switches(p, &["strokes", "corners", "objects", "patterns"], "object.transformEach")?;
     let objects = super::object::transforms_objects(p);
-    if sh == 0.0 || sv == 0.0 {
+    if sh == Some(0.0) || sv == Some(0.0) {
         return Err(bad("object.transformEach", "scale must be non-zero"));
     }
     let mut rng = Rng(whole_or(p, "seed", 0x9E37_79B9_7F4A_7C15, "object.transformEach")?.max(1));
-    let mut sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
+    let mut sc = if !relative || sh != Some(100.0) || sv != Some(100.0) { super::object::scaling(s, p) } else { Default::default() };
     sc.patterns = super::object::transform_patterns(s, p, &roots)?;
-    // With no object to transform, or without a copy when both scales are 100% and there is no
-    // move, rotation or reflection (with or without Random), the document and its undo history
-    // stay as they are.
-    if roots.is_empty() || (!copy && sh == 100.0 && sv == 100.0 && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
+    // With no object to transform, or without a copy when nothing would change (both scales 100%
+    // or, with Absolute, the size each object already has, and no move, rotation or reflection,
+    // with or without Random), the document and its undo history stay as they are.
+    let scales_change = if relative {
+        sh != Some(100.0) || sv != Some(100.0)
+    } else {
+        let doc = &s.doc()?.doc;
+        let symbols = doc.symbol_boxes();
+        roots.iter().any(|id| {
+            own_box(doc, *id, &symbols)
+                .is_some_and(|b| sh.is_some_and(|v| !keeps_size(v, b.width())) || sv.is_some_and(|v| !keeps_size(v, b.height())))
+        })
+    };
+    if roots.is_empty() || (!copy && !scales_change && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
         return Ok(ids_json(&roots));
     }
     let ids = s.edit(label, |d, sel| {
@@ -457,22 +542,39 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
         // Measure each object's geometric bounds first, with symbol instances measured by their art.
         let symbols = d.symbol_boxes();
         let boxes: Vec<Option<Rect>> = targets.iter().map(|id| d.node(*id).and_then(|n| n.geometric_bounds_with(&symbols))).collect();
-        for (id, b) in targets.iter().zip(boxes) {
+        let own: Vec<Option<Rect>> = targets.iter().map(|id| own_box(d, *id, &symbols)).collect();
+        for ((id, b), own) in targets.iter().zip(boxes).zip(own) {
             let Some(b) = b else { continue };
-            let (mut k_sh, mut k_sv, mut k_mh, mut k_mv, mut k_rot) = (sh, sv, mh, mv, rot);
+            let own = own.unwrap_or(b);
+            // Relative scales by a percentage of the object's size; Absolute takes it to the size
+            // given, measured on the object's own box, rotated with it, as the dialog shows it (so
+            // objects of different sizes come out alike, and a rotated shape keeps its size).
+            let (own_w, own_h) = (own.width(), own.height());
+            let (mut k_sh, mut k_sv) = (
+                sh.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_w) }),
+                sv.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_h) }),
+            );
+            let (mut k_mh, mut k_mv, mut k_rot) = (mh, mv, rot);
             if random {
-                k_sh = 100.0 + (sh - 100.0) * rng.next();
-                k_sv = 100.0 + (sv - 100.0) * rng.next();
-                k_mh = mh * (rng.next() * 2.0 - 1.0);
-                k_mv = mv * (rng.next() * 2.0 - 1.0);
-                k_rot = rot * (rng.next() * 2.0 - 1.0);
+                // Five draws whatever the scales are, so a seed gives the moves and the rotation
+                // the same values whether a side is scaled or not.
+                let [r_sh, r_sv, r_mh, r_mv, r_rot] = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+                k_sh = k_sh.map(|v| 1.0 + (v - 1.0) * r_sh);
+                k_sv = k_sv.map(|v| 1.0 + (v - 1.0) * r_sv);
+                k_mh = mh * (r_mh * 2.0 - 1.0);
+                k_mv = mv * (r_mv * 2.0 - 1.0);
+                k_rot = rot * (r_rot * 2.0 - 1.0);
             }
-            let o = vectorcraft_geom::reference_point(b, refi);
+            // The object's own box, turned with it, as the Transform panel and the dialog show it:
+            // the scales act along its axes, about that box's reference point, so a turned square
+            // keeps its shape and the size the dialog shows is the one it takes.
+            let frame = vectorcraft_doc::OrientedBox { angle: d.bbox_angle(&[*id]), rect: own };
+            let o = frame.reference_point(refi);
             // Reflect X / Reflect Y match Object › Transform › Transform Each and Effect › Distort › Transform:
             // Reflect X flips left-right (negate x), Reflect Y flips top-bottom (negate y).
             let refl = Affine::scale_non_uniform(if rx { -1.0 } else { 1.0 }, if ry { -1.0 } else { 1.0 });
-            let m = Affine::translate((k_mh, k_mv))
-                * about(o, Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh / 100.0, k_sv / 100.0));
+            let scale = Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh.unwrap_or(1.0), k_sv.unwrap_or(1.0));
+            let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
             }
@@ -513,15 +615,15 @@ pub(crate) fn unique_key(d: &vectorcraft_doc::Document, stem: &str) -> String {
     }
 }
 
-/// `doc` rendered over `region` with `opts` as a PNG in colour model `color`, with the note that an
-/// image in it couldn't be decoded ([`super::rasterfx::undecoded_warning`]).
-fn render_png(
+/// `doc` rendered over `region` with `opts` in colour model `color` (premultiplied RGBA), with the
+/// note that an image in it couldn't be decoded ([`super::rasterfx::undecoded_warning`]).
+fn render_pixels(
     doc: &vectorcraft_doc::Document,
     region: Rect,
     scale: f64,
     opts: &vectorcraft_render::RenderOptions,
     color: RasterColorModel,
-) -> Result<(Vec<u8>, u32, u32, Option<&'static str>)> {
+) -> Result<(vectorcraft_render::Rendered, Option<&'static str>)> {
     if region.width() * region.height() * scale * scale > MAX_PIXELS || region.width() * scale > 65535.0 || region.height() * scale > 65535.0 {
         return Err(EngineError::Other("image would be too large; lower the resolution".into()));
     }
@@ -530,13 +632,57 @@ fn render_png(
     let mut img = r.render_region_with(doc, region, scale, opts);
     let warning = super::rasterfx::undecoded_warning(failed);
     RasterEffectsSettings { color_model: color, ..Default::default() }.finish_pixels(&mut img.pixels);
+    Ok((img, warning))
+}
+
+/// [`render_pixels`] as a PNG, with its width and height.
+fn render_png(
+    doc: &vectorcraft_doc::Document,
+    region: Rect,
+    scale: f64,
+    opts: &vectorcraft_render::RenderOptions,
+    color: RasterColorModel,
+) -> Result<(Vec<u8>, u32, u32, Option<&'static str>)> {
+    let (img, warning) = render_pixels(doc, region, scale, opts, color)?;
     Ok((img.to_png().map_err(EngineError::Other)?, img.width, img.height, warning))
+}
+
+/// `doc` over `region` as a CMYK image of its ink amounts (as CMYK exports draw them), with the
+/// transparency of `img` (the same art in screen colours) as a greyscale PNG when it has any: a
+/// CMYK image keeps no alpha of its own.
+fn cmyk_raster(
+    doc: &vectorcraft_doc::Document,
+    region: Rect,
+    scale: f64,
+    opts: &vectorcraft_render::RenderOptions,
+    img: &vectorcraft_render::Rendered,
+) -> Result<(vectorcraft_doc::ImageBlob, Option<Vec<u8>>)> {
+    let inks = vectorcraft_render::Renderer::new().render_region_inks(doc, region, scale, opts);
+    let alpha: Vec<u8> = img.pixels.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
+    // Partly covered pixels carry that much ink: divided back out, as straight colour is, since
+    // the mask applies the coverage.
+    let straight = |v: u8, a: u8| if a == 0 { 0 } else { ((u32::from(v) * 255 + u32::from(a) / 2) / u32::from(a)).min(255) as u8 };
+    let data = inks.as_chunks::<4>().0.iter().zip(&alpha).flat_map(|(p, &a)| p.map(|v| straight(v, a))).collect();
+    let blob = vectorcraft_doc::cmyk::Inks::new(img.width, img.height, data)
+        .and_then(|i| vectorcraft_doc::ImageBlob::cmyk_tiff(&i))
+        .ok_or_else(|| EngineError::Other("the CMYK image couldn't be written".into()))?;
+    if alpha.iter().all(|&a| a == 255) {
+        return Ok((blob, None));
+    }
+    let mask = image::GrayImage::from_raw(img.width, img.height, alpha)
+        .ok_or_else(|| EngineError::Other("the image's transparency doesn't fit it".into()))?;
+    let mut png = Vec::new();
+    mask.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok((blob, Some(png)))
 }
 
 /// The image Object › Rasterize makes of some art, before it goes in a document
 /// ([`rasterize_art`]).
 pub(crate) struct Rasterized {
-    png: Vec<u8>,
+    /// A PNG, or a CMYK image of the art's inks ([`cmyk_raster`]).
+    blob: vectorcraft_doc::ImageBlob,
+    /// A CMYK image's transparency, a greyscale PNG: it becomes the image's opacity mask.
+    alpha: Option<Vec<u8>>,
     width: u32,
     height: u32,
     /// Image pixels → document.
@@ -551,11 +697,18 @@ impl Rasterized {
     /// The image as a new object of `d` (its pixels in `d.images`), in a clip group with the art's
     /// outline when it has one.
     pub(crate) fn into_node(self, d: &mut vectorcraft_doc::Document) -> Node {
-        let key = unique_key(d, "raster");
-        d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", self.png));
-        let id = d.alloc_id();
-        let image = ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default(), pixels: None };
-        let node = Node::new(id, NodeKind::Image(Box::new(image)));
+        let image = |d: &mut vectorcraft_doc::Document, blob: vectorcraft_doc::ImageBlob| {
+            let key = unique_key(d, "raster");
+            d.images.insert(key.clone(), blob);
+            let image =
+                ImageObject { key, width: self.width, height: self.height, xf: self.xf, link: None, placement: Default::default(), pixels: None };
+            Node::new(d.alloc_id(), NodeKind::Image(Box::new(image)))
+        };
+        let mut node = image(d, self.blob);
+        if let Some(png) = self.alpha {
+            let art = image(d, vectorcraft_doc::ImageBlob::new("image/png", png));
+            node.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true)));
+        }
         match self.clip {
             Some((path, rule)) => super::rasterfx::clip_group(d, path, rule, node),
             None => node,
@@ -565,8 +718,9 @@ impl Rasterized {
 
 /// Object › Rasterize's image of `nodes` (drawn also where hidden) with the params `p` of command
 /// `cmd`, each defaulting to `doc`'s raster effects settings: over the bounds of what the art draws
-/// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels.
-pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str) -> Result<Rasterized> {
+/// ([`vectorcraft_render::drawn_bounds`]) and the room around them, in whole pixels. With `inks`,
+/// a CMYK document's colour model makes a CMYK image ([`cmyk_raster`]); otherwise images are PNGs.
+pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p: &Value, cmd: &str, inks: bool) -> Result<Rasterized> {
     check_numbers(p, &["ppi"], cmd)?;
     let ppi = f64_or(p, "ppi", doc.raster_effects_ppi);
     if !(1.0..=2400.0).contains(&ppi) {
@@ -630,9 +784,15 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
         .flatten()
         .map(|(bp, rule)| (PathData::from_bezpath(&bp), rule));
     let tmp = isolated_doc(doc, nodes);
-    let (png, width, height, warning) = render_png(&tmp, region, scale, &raster.render_options(RasterFormat::Png), look.color_model)?;
+    let opts = raster.render_options(RasterFormat::Png);
+    let (img, warning) = render_pixels(&tmp, region, scale, &opts, look.color_model)?;
+    let (blob, alpha) = if inks && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && look.color_model == RasterColorModel::Document {
+        cmyk_raster(&tmp, region, scale, &opts, &img)?
+    } else {
+        (vectorcraft_doc::ImageBlob::new("image/png", img.to_png().map_err(EngineError::Other)?), None)
+    };
     let xf = Affine::translate(region.origin().to_vec2()) * Affine::scale(1.0 / scale);
-    Ok(Rasterized { png, width, height, xf, clip, warning })
+    Ok(Rasterized { blob, alpha, width: img.width, height: img.height, xf, clip, warning })
 }
 
 fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
@@ -640,7 +800,7 @@ fn rasterize(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let st = s.doc()?;
     let nodes: Vec<Node> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).collect();
-    let image = rasterize_art(&st.doc, nodes, p, C)?;
+    let image = rasterize_art(&st.doc, nodes, p, C, true)?;
     let (w, h, warning) = (image.width, image.height, image.warning);
     if roots.is_empty() {
         return Err(bad(C, "nothing selected"));

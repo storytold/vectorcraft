@@ -28,33 +28,37 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
     primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
 pub(crate) use color::pointer_phase;
 pub use color::{
     Live, SliderValue, WheelResponse, channel_slider, channel_slider_named, channel_slider_valued, color_field, color_mesh, color_slider,
-    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture,
+    color_slider_named, color_slider_stepped, color_slider_valued, harmony_wheel, hex_field, hex_field_named, region_texture, segment_color,
+    segmented_wheel, stepped_area,
 };
-pub use drag::{PanelDrag, SwatchRows, art_drop, doc_preview, drag_source};
+pub use drag::{
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+};
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
     panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{label_field, take_previous_label};
+pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_named, num_field_within, opt_field, opt_field_named, range_field,
-    range_field_named, range_field_stepped, size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named,
-    spin_field_named, spin_field_stops_named, spin_plain, spin_plain_named,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
+    opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
+    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
+    spin_plain_named, spin_range,
 };
 #[cfg(test)]
-use numeric::{decimal_point, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
+use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
     arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
@@ -115,6 +119,19 @@ pub(crate) mod accessibility_tests {
             nodes = out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
         }
         nodes
+    }
+
+    /// The widgets that `tabs` presses of Tab give the keyboard focus to, in order. `frame` runs
+    /// one frame of `ctx` with the events it is given.
+    pub(crate) fn tab_stops(ctx: &egui::Context, tabs: usize, mut frame: impl FnMut(Vec<egui::Event>)) -> Vec<egui::Id> {
+        let tab = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let mut stops = vec![];
+        for _ in 0..tabs {
+            frame(vec![tab.clone()]);
+            frame(vec![]);
+            stops.extend(ctx.memory(|m| m.focused()));
+        }
+        stops
     }
 
     /// The node of `tree` that screen readers name `label`.
@@ -425,9 +442,9 @@ mod step_to_multiple_tests {
 mod decimal_point_tests {
     use super::*;
 
-    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage; text
-    /// with a point keeps its commas and is refused as before, and so does a thousands comma
-    /// (#3837).
+    /// A decimal comma reads as a point, in a length, with arithmetic and in a percentage, next to
+    /// numbers written with a point too (#5684); a number with both separators is refused, and so
+    /// is a thousands comma (#3837).
     #[test]
     fn a_decimal_comma_reads_as_a_point() {
         let mm = |s: &str| Unit::Millimeters.parse(&decimal_point(s)).map(|pt| Unit::Millimeters.from_pt(pt));
@@ -444,7 +461,55 @@ mod decimal_point_tests {
             let got = mm(text).unwrap_or(f64::NAN);
             assert!((got - want).abs() < 1e-9, "{text} is a decimal: {got}");
         }
-        assert_eq!(share_of(&decimal_point("12,5%"), 200.0), Some(25.0));
+        // Each number reads its own separator: a comma typed after a value shown with a point
+        // (#5684). A number with both separators is refused.
+        for (text, want) in [("100,5-20", 80.5), ("100-0,5", 99.5), ("10,5*2", 21.0), ("100.5 mm-0,5", 100.0), ("0,5+100.25", 100.75)] {
+            let got = mm(text).unwrap_or(f64::NAN);
+            assert!((got - want).abs() < 1e-9, "{text}: {got}");
+        }
+        for both in ["1.234,5", "1,234.5", "1.5,5-2"] {
+            assert_eq!(mm(both), None, "{both}: a point and a comma in one number");
+        }
+        assert_eq!(share_of("12,5%", 200.0), Some(25.0));
+        assert_eq!(share_of("1,000%", 200.0), None, "1,000% reads as thousands: refused, not 1%");
+    }
+}
+
+#[cfg(test)]
+mod field_number_tests {
+    use super::*;
+
+    /// Kerning drops one pair of parentheses around its whole text, so its automatic value `(12)`
+    /// reads as 12. Parentheses inside the text are refused rather than dropped, which would read
+    /// `(10+5)*2` as `10+5*2`, and fields without the Kerning flag refuse parentheses too.
+    #[test]
+    fn only_kerning_drops_one_pair_of_parentheses_around_the_text() {
+        assert_eq!(field_number("(12)", "", true), Some(12.0));
+        assert_eq!(field_number(" (-25) ", "", true), Some(-25.0));
+        assert_eq!(field_number("(10+5)", "", true), Some(15.0));
+        assert_eq!(field_number("12", "", true), Some(12.0));
+        for text in ["(10+5)*2", "2*(10+5)", "(10)+(5)", "((12))", "(12", "12)"] {
+            assert_eq!(field_number(text, "", true), None, "{text}");
+        }
+        for text in ["(12)", "(10+5)*2"] {
+            assert_eq!(field_number(text, "", false), None, "{text} without the Kerning flag");
+        }
+        assert_eq!(field_number("45*2°", "°", false), Some(90.0));
+        assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
+    }
+
+    /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the
+    /// suffix, as it is in plain text, rather than read as a decimal comma (`(1,000)` as 1).
+    #[test]
+    fn a_thousands_comma_is_refused_inside_parentheses_and_before_a_suffix() {
+        for text in ["(1,000)", " (-1,000) ", "(12,500)"] {
+            assert_eq!(field_number(text, "", true), None, "{text}");
+        }
+        assert_eq!(field_number("1,000%", "%", false), None);
+        assert_eq!(field_number("1,000°", "°", false), None);
+        assert_eq!(field_number("(1,5)", "", true), Some(1.5));
+        assert_eq!(field_number("(0,125)", "", true), Some(0.125));
+        assert_eq!(field_number("12,5%", "%", false), Some(12.5));
     }
 }
 
@@ -495,6 +560,43 @@ mod gradient_chip_tests {
         let colors = gradient_chip_colors(&paint(GradientKind::Radial, 0.0), 20.0, 20.0, 4, 4);
         assert_eq!(colors[2 * 5 + 2], Color32::WHITE);
         assert_eq!(colors[0], Color32::BLACK);
+    }
+
+    /// At a position and display scale that fall between pixels, the gradient chip covers the same
+    /// pixel rows as a colour or None chip beside it (#3826). Filled rectangles are drawn on whole
+    /// pixels, so the toolbar's Gradient button sat up to half a pixel off its neighbors.
+    #[test]
+    fn gradient_chip_lines_up_with_a_solid_chip() {
+        let ctx = egui::Context::default();
+        ctx.set_pixels_per_point(1.5);
+        // Without anti-aliasing, a filled rectangle's mesh is exactly the rectangle it fills.
+        ctx.tessellation_options_mut(|o| o.feathering = false);
+        let chip = |x: f32| Rect::from_min_size(pos2(x, 40.3), vec2(11.0, 11.0));
+        let mut shapes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                paint_chip(ui, chip(10.2), &Paint::solid(Color::BLACK));
+                gradient_chip(ui, chip(23.2), &paint(GradientKind::Linear, 0.0));
+            });
+            out.textures_delta.clear();
+            assert_eq!(out.pixels_per_point, 1.5);
+            shapes = out.shapes;
+        }
+        let bounds = |shape: egui::epaint::ClippedShape| {
+            let mut r = Rect::NOTHING;
+            for p in ctx.tessellate(vec![shape], 1.5) {
+                if let egui::epaint::Primitive::Mesh(m) = p.primitive {
+                    m.vertices.iter().for_each(|v| r.extend_with(v.pos));
+                }
+            }
+            r
+        };
+        let n = shapes.len();
+        assert!(n >= 2, "{n} shapes");
+        let gradient = bounds(shapes.remove(n - 1));
+        let solid = bounds(shapes.remove(n - 2));
+        assert_eq!((gradient.top(), gradient.bottom()), (solid.top(), solid.bottom()), "gradient {gradient:?}, solid {solid:?}");
+        assert_eq!(gradient, egui::emath::GuiRounding::round_to_pixels(chip(23.2), 1.5));
     }
 }
 

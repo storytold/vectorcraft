@@ -3,6 +3,70 @@ use super::names::{localized, name};
 use super::traits::{FaceKeys, FontTraits};
 use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
+/// The most glyphs one [`outline_points`] lookup reads, composite components included.
+const MAX_OUTLINE_VISITS: usize = 65_536;
+
+/// Unhinted TrueType contour points in glyph order, including transformed composite components.
+/// A point cap, a depth bound and `visits`, the number of glyphs the whole lookup may still read,
+/// keep damaged fonts from making caret lookup unbounded. Callers start `visits` at
+/// [`MAX_OUTLINE_VISITS`].
+fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits: &mut usize) -> Option<Vec<(f64, f64)>> {
+    use skrifa::raw::TableProvider;
+    use skrifa::raw::tables::glyf::{Anchor, CompositeGlyphFlags, Glyph};
+
+    const MAX_DEPTH: usize = 16;
+    const MAX_POINTS: usize = 65_536;
+    if depth >= MAX_DEPTH {
+        return None;
+    }
+    *visits = visits.checked_sub(1)?;
+    let glyph = font.loca(None).ok()?.get(gid, &font.glyf().ok()?)?.into_glyph()?;
+    match glyph {
+        Glyph::Simple(simple) => {
+            if simple.num_points() > MAX_POINTS {
+                return None;
+            }
+            let points: Vec<_> = simple.points().map(|p| (f64::from(p.x), f64::from(p.y))).collect();
+            (points.len() == simple.num_points()).then_some(points)
+        }
+        Glyph::Composite(composite) => {
+            let mut points = Vec::new();
+            for component in composite.components() {
+                let child = outline_points(font, GlyphId::new(component.glyph.to_u32()), depth + 1, visits)?;
+                let t = component.transform;
+                let xx = f64::from(t.xx.to_f32());
+                let xy = f64::from(t.xy.to_f32());
+                let yx = f64::from(t.yx.to_f32());
+                let yy = f64::from(t.yy.to_f32());
+                let transformed: Vec<_> = child.into_iter().map(|(x, y)| (xx * x + xy * y, yx * x + yy * y)).collect();
+                let (dx, dy) = match component.anchor {
+                    Anchor::Offset { x, y } => {
+                        let (x, y) = (f64::from(x), f64::from(y));
+                        // Each axis of a scaled offset scales by the length of its basis vector, as
+                        // in skrifa's outline loader. UNSCALED_COMPONENT_OFFSET turns the scaling off.
+                        let offset_flags = CompositeGlyphFlags::SCALED_COMPONENT_OFFSET | CompositeGlyphFlags::UNSCALED_COMPONENT_OFFSET;
+                        if component.flags & offset_flags == CompositeGlyphFlags::SCALED_COMPONENT_OFFSET {
+                            (x * xx.hypot(xy), y * yx.hypot(yy))
+                        } else {
+                            (x, y)
+                        }
+                    }
+                    Anchor::Point { base, component } => {
+                        let (bx, by) = *points.get(usize::from(base))?;
+                        let (cx, cy) = *transformed.get(usize::from(component))?;
+                        (bx - cx, by - cy)
+                    }
+                };
+                if transformed.len() > MAX_POINTS.saturating_sub(points.len()) {
+                    return None;
+                }
+                points.extend(transformed.into_iter().map(|(x, y)| (x + dx, y + dy)));
+            }
+            Some(points)
+        }
+    }
+}
+
 /// The family used when a requested family is unknown (Illustrator's Myriad Pro analogue).
 pub const FALLBACK_FAMILY: &str = "Source Sans 3";
 
@@ -33,6 +97,9 @@ pub type Variation = ([u8; 4], f32);
 pub(super) const MAX_AXES: usize = 64;
 
 pub(super) const MAX_INSTANCES: usize = 512;
+
+/// The most shaping plans a face keeps ([`FontFace::shape_plan`]); past it the oldest is dropped.
+const MAX_PLANS: usize = 32;
 
 /// One axis of a variable font's design space, as its `fvar` table lists it: the tag (`wght`), its
 /// name in the font's name table (`Weight`; the tag when it has none) and its range and default,
@@ -120,6 +187,8 @@ pub struct FontFace {
     pub(super) location: Location,
     /// [`Self::variations`] for the shaper (advances, kerning, feature variations).
     pub(crate) instance: Option<harfrust::ShaperInstance>,
+    /// The shaping plans made for this face, newest last ([`Self::shape_plan`]).
+    pub(super) plans: std::sync::Mutex<Vec<Arc<harfrust::ShapePlan>>>,
     /// [`Self::ideographic_centre`], read once: layout asks for it per glyph.
     pub(super) ideographic_centre: std::sync::OnceLock<f64>,
     /// [`Self::icf_margins`], read once.
@@ -161,6 +230,45 @@ impl FontFace {
     }
     pub(crate) fn hb(&self) -> Option<harfrust::FontRef<'_>> {
         harfrust::FontRef::from_index(self.data(), self.index).ok()
+    }
+    /// The shaping plan for a buffer of `direction`, `script` and `language` shaped with
+    /// `features` by `shaper` (made from this face at [`Self::instance`]): the plan made earlier for
+    /// the same properties, else a new one, which the face keeps for later (at most [`MAX_PLANS`]).
+    /// A plan depends on these properties alone, so text shaped with it comes out as with a plan
+    /// made for it.
+    pub(crate) fn shape_plan(
+        &self,
+        shaper: &harfrust::Shaper<'_>,
+        direction: harfrust::Direction,
+        script: Option<harfrust::Script>,
+        language: Option<&harfrust::Language>,
+        features: &[harfrust::Feature],
+    ) -> Arc<harfrust::ShapePlan> {
+        #[cfg(any(test, feature = "test-fonts"))]
+        if !crate::test_fonts::keeps_shape_plans() {
+            return Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
+        }
+        let key = harfrust::ShapePlanKey::new(script, direction).language(language).instance(self.instance.as_ref()).features(features);
+        let kept = |plans: &[Arc<harfrust::ShapePlan>]| plans.iter().rev().find(|p| key.matches(p)).cloned();
+        if let Some(plan) = kept(&self.plans.lock().unwrap_or_else(|e| e.into_inner())) {
+            return plan;
+        }
+        // Made without the lock held: other threads keep shaping with this face meanwhile.
+        let plan = Arc::new(harfrust::ShapePlan::new(shaper, direction, script, language, features));
+        let mut plans = self.plans.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(made) = kept(&plans) {
+            return made;
+        }
+        if plans.len() >= MAX_PLANS {
+            plans.remove(0);
+        }
+        plans.push(plan.clone());
+        plan
+    }
+    /// Tests: how many shaping plans the face holds.
+    #[cfg(test)]
+    pub(crate) fn plans_kept(&self) -> usize {
+        self.plans.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {
@@ -239,6 +347,81 @@ impl FontFace {
             .map(|a| a as f64)
             .unwrap_or(self.upem * 0.5)
     }
+    /// The coordinates of the carets inside ligature glyph `gid`, in font units, in the order the
+    /// font lists them: the font's ligature caret list (`GDEF` `LigCaretList`,
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/gdef>), one between each two
+    /// characters the glyph stands for, each an x in horizontal text and a y (up from the baseline)
+    /// in vertical text. A coordinate with a variation index (format 3 in a variable font) takes its
+    /// delta from the `GDEF` item variation store at the face's location. Format 2 uses the
+    /// unhinted outline point at the font's default variation location. Device-table adjustments
+    /// for pixel sizes are not applied. `None` when the font lists no carets for the glyph, lists
+    /// a number other than `count`, or gives a coordinate that cannot be resolved.
+    fn ligature_caret_coordinates(&self, gid: u32, count: usize, vertical: bool) -> Option<Vec<f64>> {
+        use skrifa::raw::TableProvider;
+        use skrifa::raw::tables::gdef::CaretValue;
+        use skrifa::raw::tables::layout::DeviceOrVariationIndex;
+        use skrifa::raw::tables::variations::DeltaSetIndex;
+        let font = self.skrifa()?;
+        let gdef = font.gdef().ok()?;
+        let list = gdef.lig_caret_list()?.ok()?;
+        let index = list.coverage().ok()?.get(GlyphId::new(gid))?;
+        let glyph = list.lig_glyphs().get(usize::from(index)).ok()?;
+        if usize::from(glyph.caret_count()) != count {
+            return None;
+        }
+        let carets = glyph
+            .caret_values()
+            .iter()
+            .map(|c| match c.ok()? {
+                CaretValue::Format1(v) => Some(f64::from(v.coordinate())),
+                CaretValue::Format3(v) => {
+                    let coordinate = f64::from(v.coordinate());
+                    if v.device_offset().is_null() {
+                        return Some(coordinate);
+                    }
+                    match v.device().ok()? {
+                        DeviceOrVariationIndex::Device(_) => Some(coordinate),
+                        DeviceOrVariationIndex::VariationIndex(ix) => {
+                            let store = gdef.item_var_store()?.ok()?;
+                            let index = DeltaSetIndex { outer: ix.delta_set_outer_index(), inner: ix.delta_set_inner_index() };
+                            Some(coordinate + store.compute_delta(index, self.location.coords()).ok()?.to_f64())
+                        }
+                    }
+                }
+                CaretValue::Format2(v) => {
+                    // Raw glyf points have no variation deltas applied. Do not use one at a
+                    // non-default location, where it could put the caret in the wrong place.
+                    if self.location.coords().iter().any(|c| c.to_f32() != 0.0) {
+                        return None;
+                    }
+                    let mut visits = MAX_OUTLINE_VISITS;
+                    let point = outline_points(&font, GlyphId::new(gid), 0, &mut visits)?.get(usize::from(v.caret_value_point_index())).copied()?;
+                    Some(if vertical { point.1 } else { point.0 })
+                }
+            })
+            .collect::<Option<Vec<f64>>>()?;
+        (!carets.is_empty()).then_some(carets)
+    }
+    /// The caret positions inside ligature glyph `gid` set across, in font units from its left
+    /// edge, left to right: the x coordinates of the font's ligature caret list. `None` when the
+    /// font lists no carets for the glyph, lists a number other than `count`, or gives positions
+    /// that are not increasing inside the glyph's advance.
+    pub fn ligature_carets(&self, gid: u32, count: usize) -> Option<Vec<f64>> {
+        let carets = self.ligature_caret_coordinates(gid, count, false)?;
+        let advance = self.advance(gid);
+        let inside = carets.iter().all(|x| *x > 0.0 && *x < advance) && carets.windows(2).all(|w| w[0] < w[1]);
+        inside.then_some(carets)
+    }
+    /// The caret positions inside ligature glyph `gid` standing upright in vertical type, in font
+    /// units down from the top of its cell, top to bottom: the y coordinates of the font's ligature
+    /// caret list, for a cell `cell` long whose top is `top` above the baseline. `None` when the
+    /// font lists no carets for the glyph, lists a number other than `count`, or gives positions
+    /// that are not increasing inside the cell.
+    pub fn vertical_ligature_carets(&self, gid: u32, count: usize, top: f64, cell: f64) -> Option<Vec<f64>> {
+        let carets = self.ligature_caret_coordinates(gid, count, true)?;
+        let inside = carets.iter().all(|y| *y < top && *y > top - cell) && carets.windows(2).all(|w| w[0] < w[1]);
+        inside.then(|| carets.iter().rev().map(|y| top - y).collect())
+    }
     /// Glyph `gid` set upright in vertical type, from the font's vertical metrics: (its advance down
     /// the column, the height above the baseline of its vertical origin, the top of its cell), in
     /// font units. The origin is the `VORG` table's, else the glyph's top plus its top side bearing.
@@ -277,6 +460,26 @@ impl FontFace {
     /// <https://learn.microsoft.com/en-us/typography/opentype/spec/baselinetags>
     pub fn icf_margins(&self) -> IcfMargins {
         *self.icf_margins.get_or_init(|| self.icf_from_base().or_else(|| self.icf_from_glyphs()).unwrap_or_default())
+    }
+
+    /// The height of the face that a font size measures with `reference`, in ems: 1 for the em
+    /// box; the cap height or x height of its OS/2 table; the height of its ideographic character
+    /// face ([`Self::icf_margins`]), or across a `vertical` line its width. None for a face whose
+    /// font has no such value (an OS/2 table without the heights, no ICF), or one outside 0.1 to
+    /// 2 ems.
+    pub fn font_height(&self, reference: vectorcraft_doc::FontHeightReference, vertical: bool) -> Option<f64> {
+        use vectorcraft_doc::FontHeightReference as R;
+        let units = |v: Option<f32>| v.map(f64::from).map(|v| v / self.upem);
+        let h = match reference {
+            R::EmBox => Some(1.0),
+            R::CapHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).cap_height),
+            R::XHeight => units(self.skrifa()?.metrics(Size::unscaled(), self.location()).x_height),
+            R::IcfBox => {
+                let m = self.icf_margins();
+                (m != IcfMargins::default()).then_some(if vertical { 1.0 - m.left - m.right } else { 1.0 - m.top - m.bottom })
+            }
+        };
+        h.filter(|h| (0.1..=2.0).contains(h))
     }
 
     /// [`Self::icf_margins`] from the BASE table: the ICF's bottom edge `icfb` (top edge `icft`, else

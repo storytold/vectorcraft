@@ -1,7 +1,7 @@
 use super::writer::Writer;
 use super::{
-    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Color, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind,
-    TextObject, Write, latin, ps, stroke,
+    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Gradient, GradientKind, Paint, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    Write, latin, ps, stroke,
 };
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
@@ -63,9 +63,7 @@ pub(super) enum Ink {
     },
 }
 
-pub(super) fn unit(v: f32) -> f32 {
-    if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
-}
+pub(super) use crate::ai_ops::{average, unit};
 
 /// Can `a` be drawn through (a finite, non-flat map)?
 pub(super) fn invertible(a: Affine) -> bool {
@@ -80,10 +78,25 @@ pub(super) fn latin_string(name: &str) -> String {
     ps::bytes(&bytes)
 }
 
-/// Can type `t` be written as text: horizontal, without ruby (which a text object can't hold), its
+/// Can type `t` be written as text: 8-bit text can hold it ([`holds_as_text`]) and no character
+/// is rotated ([`rotated`])?
+pub(super) fn writable(t: &TextObject) -> bool {
+    holds_as_text(t) && !rotated(t)
+}
+
+/// Has type `t` visible characters with Character Rotation? A legacy `.ai` text object's character
+/// attributes have none that turns a character (§15), so such type is written as its outlines.
+pub(super) fn rotated(t: &TextObject) -> bool {
+    t.runs.iter().any(|r| {
+        let turn = r.style.rotation;
+        turn.is_finite() && turn.rem_euclid(360.0) != 0.0 && r.text.chars().any(|c| !c.is_whitespace())
+    })
+}
+
+/// Can 8-bit text hold type `t`: horizontal, without ruby (which a text object can't hold), its
 /// runs plain characters (no inline graphics) that 8-bit text can hold, filled and stroked with
 /// colours?
-pub(super) fn writable(t: &TextObject) -> bool {
+pub(super) fn holds_as_text(t: &TextObject) -> bool {
     let solid = |p: &Paint| matches!(p, Paint::Solid { .. } | Paint::None);
     !t.vertical
         && t.ruby.is_empty()
@@ -103,7 +116,6 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
             || s.strikethrough
             || s.small_caps.is_some()
             || s.position != CharPosition::Normal
-            || s.rotation != 0.0
             || !s.features.is_empty()
             || !s.font_axes.is_empty()
     };
@@ -174,11 +186,4 @@ pub(super) fn direct_fill(p: &Paint) -> bool {
 /// Can stroke `s` be written as the stroke of a path object (a plain line of a colour)?
 pub(super) fn direct_stroke(s: &StrokeLayer) -> bool {
     matches!(s.paint, Paint::Solid { .. }) && stroke::is_plain(s)
-}
-
-/// The average colour of a gradient's stops (in RGB).
-pub(super) fn average(g: &Gradient) -> Color {
-    let n = g.stops.len().max(1) as f32;
-    let sum = g.stops.iter().map(|s| s.color.to_rgb()).fold([0.0f32; 3], |a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]]);
-    Color::rgb(unit(sum[0] / n), unit(sum[1] / n), unit(sum[2] / n))
 }

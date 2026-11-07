@@ -193,6 +193,34 @@ fn a_linked_targa_file_places_updates_and_relinks() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// A BMP file named `.dib` placed linked shows its pixels, is listed as BMP and updates when it
+/// changes; relinked to a PNG named `.pns`, it is listed as PNG.
+#[test]
+fn linked_dib_and_pns_files_place_update_and_relink() {
+    let bmp = |w: u32, h: u32, rgb: [u8; 3]| {
+        let mut out = vec![];
+        let [r, g, b] = rgb;
+        image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Bmp).unwrap();
+        out
+    };
+    let dir = Folder::new("dib");
+    let pic = dir.file("art/scan.DIB");
+    write(&pic, &bmp(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "BMP");
+    write(&pic, &bmp(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let other = dir.file("other/red.pns");
+    write(&other, &png(300, 100, RED));
+    assert_eq!(s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap(), json!({"relinked": [id.0], "notFound": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.unwrap().path), (300, 100, other));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "PNG");
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");
@@ -253,6 +281,44 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert_eq!(r, json!({"relinked": [id.0], "notFound": []}), "nothing selected: every missing link");
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
+}
+
+/// A link stored as a classic Mac OS path (`Disk:Folder:file`, as older `.ai` files keep them) is
+/// named by its last component: the Links panel shows that name and its folder, Relink to Folder
+/// looks for that name, and the document's own folder is searched for it. The stored path is kept.
+#[test]
+fn a_classic_mac_path_is_found_by_its_file_name() {
+    const CLASSIC: &str = "Macintosh HD:Images:photo.png";
+    let dir = Folder::new("classic-mac");
+    let pic = dir.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    saved_image(&mut v)["link"] = json!({ "path": CLASSIC });
+    let doc_path = dir.file("poster.vectorcraft");
+    write(&doc_path, &serde_json::to_vec(&v).unwrap());
+    let r = open(&mut s, &doc_path);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(r["missingLinks"], json!([{"name": "photo.png", "path": CLASSIC, "ids": [id.0]}]));
+    let i = s.execute("links.info", &json!({"id": id.0})).unwrap();
+    assert_eq!(
+        (i["fileName"].as_str(), i["location"].as_str(), i["path"].as_str()),
+        (Some("photo.png"), Some("Macintosh HD:Images"), Some(CLASSIC)),
+        "{i}"
+    );
+    // Relink to Folder: the file of the link's name there.
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [], "notFound": ["photo.png"]}));
+    write(&dir.file("found/photo.png"), &png(600, 300, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    // The document's folder: the file of the link's name beside the document.
+    write(&dir.file("photo.png"), &png(600, 300, RED));
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
 /// A `w`×`h` PNG of noise cut to half its length: its header reads, its pixels don't.
@@ -436,6 +502,38 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
     }
 }
 
+/// Opening lays out each type object with the plans the objects before it left on the font's
+/// face: its bounds and baselines are those of a layout in a font database of its own, which holds
+/// no plans. The objects share a script and direction and differ in features and language. Only
+/// bundled Latin glyphs are set, which every font database holds.
+#[test]
+fn type_read_for_opening_has_the_layout_of_a_font_database_with_no_plans() {
+    let dir = Folder::new("read-for-open-plans");
+    let style = vectorcraft_doc::CharStyle { size: 100.0, ..Default::default() };
+    let manual = vectorcraft_doc::CharStyle { kerning: Some(0.0), ..style.clone() };
+    let turkish = vectorcraft_doc::CharStyle { language: Some("tr".into()), ..style.clone() };
+    let mut doc = Document::new(800.0, 600.0);
+    let layer = doc.layers[0].id;
+    for (text, style) in [("AVAV", &style), ("AVAV", &manual), ("office", &turkish), ("To Wa", &style), ("To Wa", &manual)] {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 120.0), text, style.clone());
+        let id = doc.alloc_id();
+        doc.insert(Some(layer), usize::MAX, vectorcraft_doc::Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    }
+    let doc_path = dir.file("type.vectorcraft");
+    let bytes = vectorcraft_format::save_file(&doc);
+    let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, false, false).unwrap();
+    let mut seen = 0;
+    file.document().walk(|node| {
+        if let NodeKind::Text(t) = &node.kind {
+            let fresh = vectorcraft_text::layout(&vectorcraft_text::FontDb::with_font_dirs(vec![]), t);
+            assert_eq!(t.cached_bounds, Some(fresh.bounds), "{:?}", t.plain_text());
+            assert_eq!(t.cached_baselines, fresh.baselines(), "{:?}", t.plain_text());
+            seen += 1;
+        }
+    });
+    assert_eq!(seen, 5);
+}
+
 #[test]
 fn links_from_older_files_load_and_keep_their_pixels() {
     let dir = Folder::new("legacy");
@@ -584,4 +682,45 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     s.execute("file.place", &json!({"path": alone, "link": false})).unwrap();
     let (_, im) = placed(&s);
     assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
+}
+
+/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
+/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
+/// and hash of the file found there. Not found, the link keeps no such details.
+#[test]
+fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("imported-relative");
+    std::fs::create_dir_all(dir.0.join("src")).unwrap();
+    let pic = dir.file("src/photo.png").replace('\\', "/");
+    let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n(/no/such/folder/src/photo.png)`\n\
+         %%IncludeFile:/no/such/folder/src/photo.png\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
+         %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n";
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    let link = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+        let [im] = &found[..] else { panic!("one image: {found:?}") };
+        (im.link.clone().unwrap(), s.doc().unwrap().doc.images[&im.key].is_proxy())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    let (l, proxy) = link(&s);
+    assert_eq!((l.path.as_str(), l.relative.as_deref()), ("/no/such/folder/src/photo.png", Some("src/photo.png")));
+    assert!(proxy && l.size.is_none() && l.modified.is_none() && l.hash.is_none(), "{l:?}");
+
+    let bytes = png(600, 300, RED);
+    write(&pic, &bytes);
+    let r = open(&mut s, &doc_path);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    let (l, proxy) = link(&s);
+    assert!(!proxy, "the file's pixels, not the preview");
+    assert_eq!(l.path.replace('\\', "/"), pic);
+    assert_eq!((l.size, l.hash.clone()), (Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&bytes))));
+    assert!(l.modified.is_some(), "{l:?}");
 }

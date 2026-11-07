@@ -52,6 +52,10 @@ pub struct OutObject {
     /// The object's effects, in order, replacing its own (not its fills' or strokes'). The host
     /// admits them before they reach the document ([`AdmitEffects`]).
     pub effects: Option<Vec<Effect>>,
+    /// Makes the object a guide (`true`, as View › Guides › Make Guides does) or a plain path.
+    pub guide: Option<bool>,
+    /// Locks or unlocks the object (as Object › Lock and Unlock do).
+    pub locked: Option<bool>,
 }
 
 /// One stroke of an [`OutObject`]. `None` fields keep the stroke's value (a new stroke's
@@ -195,7 +199,7 @@ fn unit(v: f32) -> f32 {
 }
 
 /// `c` with its components in range.
-fn clamp_color(c: Color) -> Color {
+pub(crate) fn clamp_color(c: Color) -> Color {
     match c {
         Color::Rgb { r, g, b } => Color::Rgb { r: unit(r), g: unit(g), b: unit(b) },
         Color::Cmyk { c, m, y, k } => Color::Cmyk { c: unit(c), m: unit(m), y: unit(y), k: unit(k) },
@@ -320,6 +324,11 @@ fn decode_object(v: &Value, at: &str, anchors: &mut usize) -> Result<OutObject> 
     if let Some(op) = opt(o, "opacity") {
         out.opacity = Some(unit(op.as_f64().ok_or_else(|| out_err(at, "`opacity` must be a number"))? as f32));
     }
+    let flag = |key: &str| -> Result<Option<bool>> {
+        opt(o, key).map(|v| v.as_bool().ok_or_else(|| out_err(at, format!("`{key}` must be true or false")))).transpose()
+    };
+    out.guide = flag("guide")?;
+    out.locked = flag("locked")?;
     Ok(out)
 }
 
@@ -573,12 +582,48 @@ fn write(doc: &mut Document, n: &mut Node, o: OutObject, at: &str, admit: AdmitE
     if let Some(effects) = o.effects {
         n.appearance.effects = admit(&effects, n).map_err(|why| out_err(&format!("{at}.effects"), why))?;
     }
+    if let Some(on) = o.guide {
+        set_guide(n, on);
+    }
+    if let Some(locked) = o.locked {
+        n.locked = locked;
+    }
     Ok(())
 }
 
+/// Makes path or compound path `n` a guide or a plain path, as Make Guides and Release Guides do: a
+/// compound path's members carry the flag.
+fn set_guide(n: &mut Node, on: bool) {
+    match &mut n.kind {
+        NodeKind::Path { guide, clipping: false, .. } => *guide = on,
+        NodeKind::Compound { children, .. } => {
+            for c in children.iter_mut() {
+                set_guide(Arc::make_mut(c), on);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whether `n` is a guide: a guide path, or a compound path of guide paths.
+fn is_guide(n: &Node) -> bool {
+    match &n.kind {
+        NodeKind::Path { guide, .. } => *guide,
+        NodeKind::Compound { children, .. } => !children.is_empty() && children.iter().all(|c| is_guide(c)),
+        _ => false,
+    }
+}
+
+/// Whether a filter's result `n` is selected after the run: locked objects and guides aren't, as
+/// Object › Lock and Make Guides leave them deselected.
+pub fn selectable(n: &Node) -> bool {
+    !n.locked && !is_guide(n)
+}
+
 /// The paths and compound paths a filter reads from the selection `selected`, in paint order:
-/// selected ones, and those inside selected groups and layers; hidden, locked, guide and clipping
-/// paths are left out (so are paths inside compound paths, blends and other live objects).
+/// selected ones, and those inside selected groups and layers; hidden, locked, guide (compound
+/// guides too) and clipping paths are left out (so are paths inside compound paths, blends and
+/// other live objects).
 pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
     fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, out: &mut Vec<NodeId>) {
         for n in list {
@@ -587,7 +632,7 @@ pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
             }
             let picked = inside || sel.contains(&n.id);
             match &n.kind {
-                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked => out.push(n.id),
+                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !is_guide(n) => out.push(n.id),
                 NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, out),
                 _ => {}
             }
