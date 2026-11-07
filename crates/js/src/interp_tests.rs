@@ -173,6 +173,7 @@ fn with_eval_and_new_function() {
     assert_eq!(num("eval('1; 2; if (false) {}')"), 2.0);
     assert_eq!(num("new Function('a', 'b', 'return a * b;')(6, 7)"), 42.0);
     assert_eq!(num("Function('return 3')()"), 3.0);
+    assert_eq!(num("var anonymous = 42; Function('return anonymous')()"), 42.0);
     let e = fail("new Function('a){}; (function(', 'return 1')");
     assert!(e.message.starts_with("SyntaxError"), "{}", e.message);
     let e = fail("new Function('}); (function() {')");

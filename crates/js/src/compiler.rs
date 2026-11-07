@@ -284,7 +284,7 @@ impl<'a> FnCompiler<'a> {
 
     /// Compiles a nested function and returns its index in the function table.
     fn function(&mut self, fid: FunctionId) -> CResult<u32> {
-        let code = compile_function(self.ast, fid, self.source, self.recursion)?;
+        let code = compile_function(self.ast, fid, self.source, self.recursion, true)?;
         self.functions.push(code);
         Ok(u32::try_from(self.functions.len() - 1).unwrap_or(u32::MAX))
     }
@@ -1208,8 +1208,9 @@ fn len_u32(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
 
-/// Compiles function `fid` of `ast`.
-pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, recursion: u32) -> CResult<Rc<Code>> {
+/// Compiles function `fid` of `ast`. With `bind_name`, a function expression's name is bound
+/// inside it.
+pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, recursion: u32, bind_name: bool) -> CResult<Rc<Code>> {
     let Some(f) = ast.function(fid) else { return internal("function out of range") };
     let mut c = FnCompiler::new(ast, source, CodeKind::Function, f.strict, recursion);
     c.at(f.span.start);
@@ -1221,7 +1222,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     c.emit(Op::Return);
     let name = f.name.as_ref().map(|n| key_of(&n.name));
     let meta = Meta {
-        self_name: if f.kind == FunctionKind::Expression { name } else { None },
+        self_name: if bind_name && f.kind == FunctionKind::Expression { name } else { None },
         params: f.params.iter().map(|p| key_of(&p.name)).collect(),
         span: (f.span.start, f.span.end),
     };
@@ -1239,11 +1240,12 @@ pub(crate) fn compile_program(program: &crate::Program, source: &Rc<Source>, kin
 }
 
 /// The function of a `Function` constructor's source, `(function anonymous(…) {…})`: the program
-/// must be that one parenthesized function expression and nothing else.
+/// must be that one parenthesized function expression and nothing else. The name `anonymous` is
+/// not bound inside the function (section 15.3.2.1).
 pub(crate) fn compile_constructed_function(program: &crate::Program, source: &Rc<Source>) -> CResult<Option<Rc<Code>>> {
     let [stmt] = program.body.as_slice() else { return Ok(None) };
     let Some(Stmt::Expr(e)) = program.ast.stmt(*stmt) else { return Ok(None) };
     let Some(Expr::Paren(inner)) = program.ast.expr(*e) else { return Ok(None) };
     let Some(Expr::Function(fid)) = program.ast.expr(*inner) else { return Ok(None) };
-    compile_function(&program.ast, *fid, source, 0).map(Some)
+    compile_function(&program.ast, *fid, source, 0, false).map(Some)
 }
