@@ -3426,6 +3426,31 @@ fn legacy_type_keeps_its_writing_direction() {
     let after = point_type("", "Hi").replace("TO\n", "1 TV\nTO\n");
     let after = legacy_texts(&format!("{after}{}", point_type("", "Next")));
     assert_eq!((after[0].vertical, after[1].vertical), (false, true));
+    // An overflow break (`(\r) TX`) keeps the direction in force where it was read: at the start of
+    // the story it sets the object's direction, and later it warns when that differs.
+    let leading = legacy_read(&point_type("1 TV\n(\\r) TX\n0 TV", "Body"));
+    let leading = (art_texts(&leading.doc), leading.warnings);
+    assert_eq!((leading.0[0].vertical, leading.0[0].plain_text().as_str()), (true, "\nBody"));
+    assert_eq!(leading.1, [DIRECTION_CHANGE_LEFT_OUT]);
+    let inside = legacy_read(&point_type("", "a").replace("TO\n", "1 TV\n(\\r) TX\n0 TV\n(b) Tx\nTO\n"));
+    let inside = (art_texts(&inside.doc), inside.warnings);
+    assert_eq!((inside.0[0].vertical, inside.0[0].plain_text().as_str()), (false, "a\nb"));
+    assert_eq!(inside.1, [DIRECTION_CHANGE_LEFT_OUT]);
+}
+
+/// An overflow break (`(\r) TX`) that type follows ends a paragraph as `(\r) Tx` does: an empty
+/// paragraph it ends keeps the attributes in force where the break was read.
+#[test]
+fn an_overflow_break_keeps_the_paragraph_attributes_it_was_read_with() {
+    use vectorcraft_doc::Justify::{Center, Right};
+    for op in ["Tx", "TX"] {
+        let leading = &legacy_texts(&point_type(&format!("1 Ta\n(\\r) {op}\n2 Ta"), "Body"))[0];
+        assert_eq!((leading.para_at(0).justify, leading.para_at(1).justify), (Center, Right), "{op}");
+        let empty = point_type("1 Ta", "a\\r").replace("TO\n", &format!("(\\r) {op}\n2 Ta\n(b) Tx\nTO\n"));
+        let empty = &legacy_texts(&empty)[0];
+        assert_eq!(empty.plain_text(), "a\n\nb", "{op}");
+        assert_eq!((empty.para_at(1).justify, empty.para_at(2).justify), (Center, Right), "{op}");
+    }
 }
 
 /// The glyph origins of a legacy-format text object.
