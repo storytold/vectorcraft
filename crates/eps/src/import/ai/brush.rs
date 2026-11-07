@@ -28,7 +28,10 @@
 //!   [`vectorcraft_brush::ArtBrush`]'s `overlap: false`).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
-//!   after a space for Art and Pattern), more fields, and last 15 numbers.
+//!   after a space for Art and Pattern), more fields, and last 15 numbers. Brushes whose first
+//!   number is 1, as older files write them, have one field fewer before the numbers and 8 numbers;
+//!   an Art brush in that form is read from its art's name alone (its numbers aren't known, so it
+//!   keeps the defaults and its paths their drawn look).
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14).
@@ -40,14 +43,16 @@
 //! - The art is a `%AI8_BeginBrushPattern` section: its name as a string, then the art (read by
 //!   [`super::read`]).
 //!
-//! What isn't read keeps its default: the Art brush's other options, the pattern brush's tiles
-//! (which slot is which tile isn't known) and the colorization of the other brushes, which is left
-//! at None so the art keeps its own colors.
+//! What isn't read keeps its default: the Art brush's other options, the Pattern brush's options
+//! (its scale aside) and the colorization of the other brushes, which is left at None so the art
+//! keeps its own colors. Which of a Pattern brush's corner slots is the outer corner isn't known,
+//! nor which of its last two is the start: [`pattern_brush`] reads those whose tiles don't depend
+//! on it.
 
 use std::collections::{HashMap, HashSet};
 
 use kurbo::Affine;
-use vectorcraft_brush::{ArtBrush, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+use vectorcraft_brush::{ArtBrush, Bristle, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, Scatter, Variation};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
@@ -308,11 +313,10 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 })
                 .collect();
             let n = fields.last().and_then(|f| numbers(f)).ok_or(BrushError::Values)?;
-            let n: &[f64; 15] = n.as_slice().try_into().map_err(|_| BrushError::Values)?;
-            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n;
             let art = || tiles.first().cloned().flatten().ok_or(BrushError::NoArt);
             match kind {
                 Tool::Scatter => {
+                    let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
                     let pct = |a: f64, b: f64| (a * 100.0, b * 100.0);
                     let values = [pct(*p2, *p3), pct(*p5, *p6), pct(*p8, *p9), (*p11, *p12)];
                     let codes = [*p4, *p7, *p10, *p13];
@@ -331,10 +335,16 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                     DraftKind::Scatter { brush, art: art()? }
                 }
                 Tool::Art => {
-                    let colorization = if *p2 == 1.0 { Colorization::Tints } else { Colorization::None };
-                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain: art_is_plain(n) }
+                    // The older form's 8 numbers aren't known: its brush keeps the defaults and its
+                    // paths their drawn look.
+                    let (colorization, plain) = match <&[f64; 15]>::try_from(n.as_slice()) {
+                        Ok(n15) => (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15)),
+                        Err(_) => (Colorization::None, false),
+                    };
+                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain }
                 }
                 _ => {
+                    let [_, _, p3, ..] = n.as_slice() else { return Err(BrushError::Values) };
                     let tiles: [Option<String>; 5] = tiles.try_into().map_err(|_| BrushError::Values)?;
                     DraftKind::Pattern { tiles, scale: p3 * 100.0 }
                 }
@@ -361,7 +371,7 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
 /// The brushes of `drafts`, their art from the sections `art` (by name), in the brush manager's
 /// `order` (brushes it doesn't list after those it does, in the order of their objects), each
 /// kept within its ranges → the brushes and how many were left out: those whose art isn't read,
-/// pattern brushes (which slot holds which tile isn't known), a second brush of the same name, and
+/// pattern brushes whose tiles aren't known ([`pattern_brush`]), a second brush of the same name, and
 /// brushes whose copies of art go past [`MAX_BRUSH_ART_NODES`].
 pub(super) fn finish_brushes(drafts: Vec<BrushDraft>, art: &HashMap<String, Node>, order: Option<&[(Tool, String)]>) -> (Vec<Brush>, usize) {
     finish_brushes_within(drafts, art, order, MAX_BRUSH_ART_NODES)
@@ -385,10 +395,18 @@ pub(super) fn kept(drafts: &[BrushDraft], art: &HashMap<String, Node>) -> Vec<bo
 }
 
 /// Which of `drafts` become brushes, with at most `budget` of [`art_weight`] copied into them: not
-/// a pattern brush, a brush whose art isn't read, a brush whose art would go past `budget`, or a
-/// brush named as one kept before it.
+/// a pattern brush whose tiles aren't known ([`pattern_tiles`]), a brush whose art isn't read, a
+/// brush whose art would go past `budget`, or a brush named as one kept before it.
 pub(super) fn kept_brushes(drafts: &[BrushDraft], art: &HashMap<String, Node>, budget: usize) -> Vec<bool> {
     let mut copied = 0usize;
+    let fit = |copied: &mut usize, weight: usize| {
+        let total = copied.saturating_add(weight);
+        let fits = total <= budget;
+        if fits {
+            *copied = total;
+        }
+        fits
+    };
     let mut weights: HashMap<&str, usize> = HashMap::new();
     let mut names: HashSet<&str> = HashSet::new();
     drafts
@@ -397,15 +415,20 @@ pub(super) fn kept_brushes(drafts: &[BrushDraft], art: &HashMap<String, Node>, b
             let fits = match &d.kind {
                 _ if names.contains(d.name.as_str()) => false,
                 DraftKind::Calligraphic(_) | DraftKind::Bristle(_) => true,
-                DraftKind::Pattern { .. } => false,
+                DraftKind::Pattern { tiles, .. } => {
+                    // The side tile once, and the corner tile at both kinds of corner.
+                    let copies = pattern_tiles(tiles).map(|(side, corner)| [Some(side), corner, corner]);
+                    let weight = copies.and_then(|names| {
+                        names.into_iter().flatten().try_fold(0usize, |sum, name| {
+                            let (key, a) = art.get_key_value(name)?;
+                            Some(sum.saturating_add(*weights.entry(key.as_str()).or_insert_with(|| art_weight(a))))
+                        })
+                    });
+                    weight.is_some_and(|weight| fit(&mut copied, weight))
+                }
                 DraftKind::Scatter { art: name, .. } | DraftKind::Art { art: name, .. } => art.get_key_value(name).is_some_and(|(key, a)| {
                     let weight = *weights.entry(key.as_str()).or_insert_with(|| art_weight(a));
-                    let total = copied.saturating_add(weight);
-                    let fits = total <= budget;
-                    if fits {
-                        copied = total;
-                    }
-                    fits
+                    fit(&mut copied, weight)
                 }),
             };
             if fits {
@@ -425,7 +448,7 @@ pub(super) fn finish_brushes_within(
     budget: usize,
 ) -> (Vec<Brush>, usize) {
     let kept = kept_brushes(&drafts, art, budget);
-    let copy = |name: &str| art.get(name).cloned();
+    let mut copy = |name: &str| art.get(name).cloned();
     let mut left_out = 0;
     let mut made: Vec<Option<(Tool, Brush)>> = vec![];
     for (d, kept) in drafts.into_iter().zip(kept) {
@@ -440,7 +463,7 @@ pub(super) fn finish_brushes_within(
                 a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
                 BrushKind::Art(ArtBrush { art: a, ..brush })
             }),
-            DraftKind::Pattern { .. } => None,
+            DraftKind::Pattern { tiles, scale } => pattern_brush(&tiles, scale, &mut copy).map(BrushKind::Pattern),
             DraftKind::Bristle(b) => Some(BrushKind::Bristle(b)),
         };
         match kind {
@@ -462,6 +485,37 @@ pub(super) fn finish_brushes_within(
     }
     out.extend(made.into_iter().flatten().map(|(_, b)| b));
     (out, left_out)
+}
+
+/// The side tile and the corner tile (at both kinds of corner) of a Pattern brush whose five art
+/// sections are `tiles`, when they don't depend on which slot is which ([`pattern_brush`]).
+fn pattern_tiles(tiles: &[Option<String>; 5]) -> Option<(&str, Option<&str>)> {
+    let [Some(side), outer, inner, None, None] = tiles else { return None };
+    (outer == inner).then_some((side.as_str(), outer.as_deref()))
+}
+
+/// A Pattern brush of the five art sections `tiles` names, in its order, at `scale` (%), the art
+/// copied by `copy`: `None` when its tiles aren't all known. The first slot is the side tile (the
+/// one a brush can't do without, and the only one every brush names). Which of the second and
+/// third is the outer corner isn't known, nor which of the last two is the start: a brush whose
+/// second and third slots name the same art (or both none) and whose last two name none is read,
+/// with that art at both kinds of corner, and others are left out. The rest of the brush's
+/// options keep their defaults, its colorization None.
+fn pattern_brush(tiles: &[Option<String>; 5], scale: f64, copy: &mut impl FnMut(&str) -> Option<Node>) -> Option<PatternBrush> {
+    let (side, corner) = pattern_tiles(tiles)?;
+    let side = copy(side)?;
+    let corner = match corner {
+        Some(name) => Some(copy(name)?),
+        None => None,
+    };
+    Some(PatternBrush {
+        side,
+        outer_corner: corner.clone(),
+        inner_corner: corner,
+        scale,
+        colorization: Colorization::None,
+        ..PatternBrush::default()
+    })
 }
 
 /// The note for brushes [`finish_brushes`] left out.
