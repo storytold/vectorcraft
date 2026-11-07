@@ -277,6 +277,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
             ("pl", "Polish"),
             ("cs", "Czech"),
             ("ru", "Russian"),
+            ("bg", "Bulgarian"),
             ("sr-Cyrl", "Serbian: Cyrillic"),
             ("sr-Latn", "Serbian: Latin"),
             ("hr", "Croatian"),
