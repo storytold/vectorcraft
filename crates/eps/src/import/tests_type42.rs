@@ -143,19 +143,23 @@ fn named_fonts_take_the_show_operators_spacing() {
 /// each of them: the type is set without ligatures and each character's tracking is its own.
 #[test]
 fn characters_a_ligature_would_join_keep_their_places() {
-    let r = read("/SourceSans3-Regular findfont 50 scalefont setfont 10 20 moveto (fit) [30 20 0] xshow");
+    // Each character at its own width in the bundled Source Sans 3, as a PDF converter writes them.
+    let (_, wf) = glyph('f');
+    let (_, wi) = glyph('i');
+    let (f, i) = (50.0 * wf, 50.0 * wi);
+    let r = read(&format!("/SourceSans3-Regular findfont 50 scalefont setfont 10 20 moveto (fit) [{f} {i} 0] xshow"));
     let t = texts(&r);
     assert_eq!(t[0].plain_text(), "fit");
     let o = origins(&t[0]);
     assert_eq!(o.len(), 3, "{o:?}");
-    assert!((o[1] - o[0] - 30.0).abs() < 0.05 && (o[2] - o[1] - 20.0).abs() < 0.05, "{o:?}");
+    assert!((o[1] - o[0] - f).abs() < 0.05 && (o[2] - o[1] - i).abs() < 0.05, "{o:?} {f} {i}");
 }
 
 /// A move that is finite in user space but not along the type's baseline (a font matrix
 /// squashed a thousandfold) is an `undefinedresult`, not a tracking that isn't a number.
 #[test]
 fn moves_too_large_for_the_baseline_are_refused() {
-    let r = read("/Helvetica findfont [0.001 0 0 50 0 0] makefont setfont 10 20 moveto (A\\001) [1e307 -1e307] xshow");
+    let r = read("0 0 10 10 rectfill /Helvetica findfont [0.001 0 0 50 0 0] makefont setfont 10 20 moveto (A\\001) [1e307 -1e307] xshow");
     assert!(texts(&r).iter().all(|t| t.runs.iter().all(|r| r.style.tracking.is_finite())), "{:?}", texts(&r));
     assert!(r.warnings.iter().any(|w| w.contains("undefinedresult")), "{:?}", r.warnings);
 }
