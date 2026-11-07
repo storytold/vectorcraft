@@ -1989,6 +1989,36 @@ fn find_and_replace_options() {
     assert!(s.execute("edit.findReplace", &json!({"find": ""})).is_err());
 }
 
+/// Whole Word looks past a change of style: `cat` coloured red inside `catfish`, or at the end of
+/// `bobcat`, is part of a word, not a word of its own (#5901). A real word next to a run's end
+/// still matches, and without Whole Word the part is replaced as before.
+#[test]
+fn find_whole_word_is_not_fooled_by_a_style_change_inside_a_word() {
+    let styled = |s: &mut Session, t: &str, a: usize, b: usize| {
+        let id = text(s, t);
+        s.execute("text.setRangeStyle", &json!({"id": id.0, "start": a, "end": b, "fill": "#ff0000"})).unwrap();
+        let NodeKind::Text(tt) = &node(s, id).kind else { panic!() };
+        assert!(tt.runs.len() >= 2, "{t}: two runs");
+        id
+    };
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let bob = styled(&mut s, "bobcat", 3, 6);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish), plain(&s, bob)), (Some(0), "catfish".to_string(), "bobcat".to_string()));
+    // A word that ends where its run does, at a space or the text's end, is still a word.
+    let mut s = session();
+    let spaced = styled(&mut s, "cat fish", 0, 3);
+    let tail = styled(&mut s, "a cat", 2, 5);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG", "wholeWord": true})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, spaced), plain(&s, tail)), (Some(2), "DOG fish".to_string(), "a DOG".to_string()));
+    // Without Whole Word, the part inside the word is found as before.
+    let mut s = session();
+    let fish = styled(&mut s, "catfish", 0, 3);
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "DOG"})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, fish)), (Some(1), "DOGfish".to_string()));
+}
+
 /// Find and Replace with no ids leaves the type on a locked artboard as it is.
 #[test]
 fn find_and_replace_leaves_type_on_a_locked_artboard() {
@@ -2015,6 +2045,32 @@ fn find_and_replace_that_changes_nothing_records_no_undo_step() {
     assert_eq!((history(&s), plain(&s, a)), (before, "cat cat".to_string()));
     assert_eq!(s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap(), json!({"count": 2}));
     assert_eq!((history(&s), plain(&s, a)), ((before.0 + 1, 0, true), "dog dog".to_string()));
+}
+
+/// Find and Replace with no ids leaves the type inside a locked or hidden group as it is, however
+/// deep, as it does for type locked or hidden itself or by its layer (#5900). Find Next skips it
+/// too. Unlocked and shown again, the group's type is found and replaced.
+#[test]
+fn find_and_replace_leaves_type_in_a_locked_or_hidden_group() {
+    for prop in ["locked", "hidden"] {
+        let mut s = session();
+        let free = text(&mut s, "Audit cat");
+        let inner = text(&mut s, "Audit cat");
+        sel(&mut s, &[inner]);
+        let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+        sel(&mut s, &[g]);
+        let outer = id_of(&s.execute("object.group", &json!({})).unwrap());
+        let props = |on: bool| if prop == "locked" { json!({"id": outer.0, "locked": on}) } else { json!({"id": outer.0, "visible": !on}) };
+        s.execute("object.setProps", &props(true)).unwrap();
+        assert!(node(&s, inner).visible && !node(&s, inner).locked, "{prop}: the type itself is shown and unlocked");
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, free), plain(&s, inner)), (Some(1), "Audit dog".to_string(), "Audit cat".to_string()), "{prop}");
+        s.execute("select.none", &json!({})).unwrap();
+        assert!(s.execute("edit.findNext", &json!({"find": "cat"})).unwrap()["id"].is_null(), "{prop}: Find Next skips it");
+        s.execute("object.setProps", &props(false)).unwrap();
+        let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog"})).unwrap();
+        assert_eq!((r["count"].as_u64(), plain(&s, inner)), (Some(1), "Audit dog".to_string()), "{prop}: once the group is {prop} no more");
+    }
 }
 
 #[test]
@@ -3404,6 +3460,39 @@ fn placeholder_and_insert_characters() {
     s.execute("type.insert", &json!({"text": "z"})).unwrap();
     assert_eq!(plain(&s, t), "A—©z");
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
+}
+
+/// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
+/// 128–159, the code point otherwise), `unicode` as a hex code point.
+#[test]
+fn insert_a_character_by_its_code() {
+    let mut s = session();
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    for p in [
+        json!({"code": 176}),
+        json!({"code": 177}),
+        json!({"code": 151}),
+        json!({"code": 215}),
+        json!({"code": 8364}),
+        json!({"unicode": "00B0"}),
+        json!({"unicode": "U+2014"}),
+    ] {
+        s.execute("type.insert", &p).unwrap();
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
+    for p in [
+        json!({"code": 129}),
+        json!({"code": 7}),
+        json!({"code": -1}),
+        json!({"code": 1_114_112}),
+        json!({"unicode": "D800"}),
+        json!({"unicode": "zz"}),
+        json!({}),
+    ] {
+        assert!(s.execute("type.insert", &p).is_err(), "{p}");
+    }
+    assert_eq!(plain(&s, t), "°±—×€°—");
 }
 
 #[test]

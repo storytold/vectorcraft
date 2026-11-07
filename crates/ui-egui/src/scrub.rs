@@ -168,10 +168,11 @@ pub(crate) fn field(ui: &Ui, field: Id, rect: Rect, text: &str, value: Option<f6
     }
     // On top of the label, which may sense clicks itself (selectable text). A link senses drags
     // too and keeps its clicks (and its pointing hand while hovered): a widget laid over it would
-    // take them.
+    // take them. The zone is not a tab stop of its own (`Sense::click_and_drag` would be): Tab
+    // moves from a field to the next field, not onto the label before it.
     let resp = match label.link {
         Some(link) => ui.interact(label.rect, link, Sense::drag()),
-        None => ui.interact(label.rect, field.with("scrub-label"), Sense::click_and_drag()),
+        None => ui.interact(label.rect, field.with("scrub-label"), Sense::CLICK | Sense::DRAG),
     };
     drag(ui, &resp, field, text, value, decimals, label.link.is_some()).map(|v| v.max(*bounds.start()).min(*bounds.end()))
 }

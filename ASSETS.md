@@ -1,5 +1,21 @@
 # Asset attribution
 
+## Indic hyphenation patterns
+
+| Asset | Author | Source | Licence | Notes |
+|---|---|---|---|---|
+| `crates/text/patterns/hyph-hi.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-hi.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-mr.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-mr.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-gu.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-gu.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-bn.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-bn.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-pa.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-pa.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-ta.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-ta.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-te.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-te.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-kn.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-kn.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-ml.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-ml.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-or.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-or.tex | MIT (selected option) | Unmodified; full license in file |
+| `crates/text/patterns/hyph-as.tex` | Santhosh Thottingal | https://github.com/hyphenation/tex-hyphen/blob/5684c0f51c0b81133db2efbe60a408b4155a3ff5/hyph-utf8/tex/generic/hyph-utf8/patterns/tex/hyph-as.tex | MIT (selected option) | Unmodified; full license in file |
+
 Every non-code asset in this repository (icons, images, fonts, example art, colour profiles, presets) is listed here with its author, source and licence. `cargo xtask assets` (part of `cargo xtask ci`) fails if an asset file is missing from this table.
 
 **Policy (mandatory):** VectorCraft contains **no Adobe iconography, images, artwork, presets, swatch/brush/symbol/pattern libraries or ICC profiles**. Every asset is either original work by VectorCraft contributors, or third-party material under an open licence (OSI open source, public domain / CC0, or Creative Commons that allows redistribution), and it is attributed below. Screenshots of Adobe software are never committed. The one exception is the ArtCraft name, wordmark and logos in `docs/brand/`: ArtCraft trademarks, not open source, usable only under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
