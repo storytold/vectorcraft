@@ -702,23 +702,17 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
 }
 
-/// Does the canvas hide the system pointer to show a painted tool glyph alone? Not when there is no
-/// cursor theme on Wayland ([`crate::Services::no_cursor_theme`]): winit sets no pointer then, and a
-/// hidden one would not come back over the panels (#2450). The system pointer stays beside the glyph.
-pub fn hide_system_pointer(no_cursor_theme: bool) -> bool {
-    !no_cursor_theme
-}
-
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with
 /// a cursor rect holding a transparent cursor, and macOS applies the rect only in the key window.
 /// Over a window behind another app or under a sheet, the system pointer shows (#2020).
 pub const HIDES_ONLY_WHEN_KEY: bool = cfg!(target_os = "macos");
 
-/// Does the window paint the glyphs over a hidden pointer, `focused` or not? Not where the system
-/// shows its pointer over a window without the focus ([`HIDES_ONLY_WHEN_KEY`]): the system pointer
-/// shows alone there.
-pub fn paint_glyphs(hides_only_when_key: bool, focused: bool) -> bool {
-    focused || !hides_only_when_key
+/// Does the window paint a glyph over a hidden pointer? Not where it cannot hide the system pointer
+/// (no cursor theme on Wayland, [`crate::Services::no_cursor_theme`]: winit sets no pointer then,
+/// and a hidden one would not come back over the panels, #2450), or where the system shows its pointer without the focus
+/// ([`HIDES_ONLY_WHEN_KEY`]): the system pointer shows alone there.
+pub fn paint_glyphs(hides_only_when_key: bool, focused: bool, no_cursor_theme: bool) -> bool {
+    !no_cursor_theme && (focused || !hides_only_when_key)
 }
 
 /// The cursor bitmaps handed to the OS, by (cursor, pixels per point): each glyph is rasterized

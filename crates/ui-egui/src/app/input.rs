@@ -123,6 +123,9 @@ impl VectorcraftApp {
         self.synthetic_modifiers = false;
         self.synthetic_injected = false;
         self.synthetic_frame = false;
+        // The `ui.pointer` requests made after this input, waiting or still on the channel, would
+        // run without it: `drain_control` answers the ones made before now with an error.
+        self.synthetic_dropped_before = crate::control::ControlRequest::next_seq();
     }
 
     /// Release the pointer buttons egui still holds down when the system reports that no mouse

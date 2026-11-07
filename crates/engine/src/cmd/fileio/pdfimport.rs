@@ -108,15 +108,12 @@ impl LoadOptions {
     /// The PDF import options: `pages` resolved against the file's page count. A PDF-compatible
     /// `.ai`, or a PDF saved with its editing data, asked for its crop box opens on its trim boxes,
     /// its editor's artboards, with the bleed round them (its crop box takes the bleed in).
-    fn import_options(&self, bytes: &[u8], editor_document: bool) -> Result<ImportOptions> {
+    fn import_options(&self, opened: &vectorcraft_pdf::Opened, editor_document: bool) -> Result<ImportOptions> {
         let pages = match &self.pages {
             None => None,
-            Some(range) => {
-                let count = vectorcraft_pdf::info(bytes, self.password.as_deref()).map_err(err)?.pages.len();
-                Some(parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?)
-            }
+            Some(range) => Some(parse_range(range, opened.page_count()).map_err(|e| err(format!("pages: {e}")))?),
         };
-        let is_ai = self.crop == CropTo::Crop && vectorcraft_pdf::has_illustrator_data(bytes, self.password.as_deref());
+        let is_ai = self.crop == CropTo::Crop && opened.has_illustrator_data();
         Ok(ImportOptions {
             pages,
             crop: if is_ai { CropTo::Trim } else { self.crop },
@@ -140,24 +137,33 @@ fn choice<T: Choice + Default>(cmd: &str, key: &str, id: Option<&str>) -> Result
         .ok_or_else(|| bad(cmd, format!("{key} must be one of {}", T::IDS.join(", "))))
 }
 
-/// Import the pages `o` pick → the document, import notes and what else the import tells.
+/// Import the pages `o` pick of `opened`, the PDF `bytes` already read
+/// ([`vectorcraft_pdf::open_pdf`]) → the document, import notes and what else the import tells.
 /// `editor_document`: a `.ai` file.
-pub(super) fn import(bytes: &[u8], o: &LoadOptions, editor_document: bool) -> Result<vectorcraft_pdf::ImportReport> {
-    vectorcraft_pdf::import_with_report(bytes, &o.import_options(bytes, editor_document)?).map_err(err)
+pub(super) fn import(
+    bytes: &[u8],
+    opened: &vectorcraft_pdf::Opened,
+    o: &LoadOptions,
+    editor_document: bool,
+) -> Result<vectorcraft_pdf::ImportReport> {
+    let options = o.import_options(opened, editor_document)?;
+    vectorcraft_pdf::import_opened(bytes, opened, &options).map_err(err)
 }
 
 /// Page `page` (0-based) of a PDF as a document of one artboard (its `o.crop` box) and one
 /// layer of what it shows, with the same text choice as Open, and the import notes.
 pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
-    let opts = ImportOptions {
-        pages: Some(vec![page]),
-        crop: o.crop,
-        password: o.password.clone(),
-        text_as: o.text_as,
-        layers: false,
-        ..Default::default()
-    };
-    vectorcraft_pdf::import_with_report(bytes, &opts).map(|r| (r.document, r.warnings)).map_err(err)
+    vectorcraft_pdf::import_with_report(bytes, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
+}
+
+/// [`page_document`] of `opened`, the PDF `bytes` already read.
+fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+    vectorcraft_pdf::import_opened(bytes, opened, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
+}
+
+/// The import options of [`page_document`].
+fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
+    ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, ..Default::default() }
 }
 
 const INFO: &str = "document.pdfInfo";
@@ -170,13 +176,15 @@ pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
     if bytes.starts_with(b"%!") || vectorcraft_pdf::is_postscript(&bytes) {
         return postscript_info(&bytes, p);
     }
-    let info = match vectorcraft_pdf::info(&bytes, o.password.as_deref()) {
-        Ok(i) => i,
+    // The file is read once, for its pages and the thumbnail.
+    let opened = match vectorcraft_pdf::open_pdf(&bytes, o.password.as_deref()) {
+        Ok(opened) => opened,
         Err(e @ (PdfError::NeedsPassword | PdfError::WrongPassword)) => {
             return Ok(json!({"pages": 0, "needsPassword": true, "wrongPassword": e == PdfError::WrongPassword, "pageInfo": []}));
         }
         Err(e) => return Err(err(e)),
     };
+    let info = opened.info();
     let r4 = |r: vectorcraft_geom::Rect| json!([r.x0, r.y0, r.x1, r.y1]);
     let pages: Vec<Value> = info
         .pages
@@ -188,7 +196,7 @@ pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
         .collect();
     let mut out = json!({"pages": pages.len(), "needsPassword": false, "pageInfo": pages});
     if let Some(page) = thumbnail_page(p, info.pages.len(), "PDF")? {
-        let (doc, _) = page_document(&bytes, page, &o)?;
+        let (doc, _) = opened_page_document(&bytes, &opened, page, &o)?;
         out["thumbnail"] = json!(thumbnail(&doc, p)?);
     }
     Ok(out)

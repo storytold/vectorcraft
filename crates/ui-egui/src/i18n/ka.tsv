@@ -191,6 +191,7 @@
 	Shape	ფიგურა
 	Convert to Shape	ფიგურად გარდაქმნა
 	Expand Shape	ფიგურის გაშლა
+	Expand Object	ობიექტის გაშლა
 	Pattern	პატერნი
 	Edit Pattern	პატერნის რედაქტირება
 	Tile Edge Color…	ფილის კიდის ფერი…
@@ -590,6 +591,8 @@
 	Update Changed Links	შეცვლილი ბმულების განახლება
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
+	Navigator Panel Options	ნავიგატორის პანელის პარამეტრები
+	Draw Dashed Lines as Solid Lines	ტირეებიანი ხაზების უწყვეტ ხაზებად დახატვა
 	Pattern Options	პატერნის პარამეტრები
 	Properties	თვისებები
 	Separations Preview	სეპარაციის წინასწარი ნახვა
@@ -834,6 +837,10 @@ lighting	Light	სინათლე
 	Home	საწყისი ეკრანი
 	Import Keyboard Shortcuts…	კლავიატურის მალსახმობების იმპორტირება…
 	Justify all lines	ყველა სტრიქონის ორმხრივი სწორება
+	Align Top	ზემოთ სწორება
+	Align Center	შუაში სწორება
+	Align Bottom	ქვემოთ სწორება
+	Justify Vertically	ვერტიკალური ორმხრივი სწორება
 	Justify with last line aligned left	ორმხრივი სწორება, ბოლო სტრიქონი მარცხნივ
 	Keyboard Shortcut Conflicts	კლავიატურის მალსახმობების კონფლიქტები
 	Keyboard Shortcut Set	კლავიატურის მალსახმობების ნაკრები
@@ -1187,6 +1194,9 @@ lighting	Light	სინათლე
 	Zoom Tool	მასშტაბის ხელსაწყო
 	Action {n}	მოქმედება {n}
 	Begin Recording	ჩაწერის დაწყება
+	Exclude from playback	შესრულებიდან გამორიცხვა
+	Include in playback	შესრულებაში ჩართვა
+	Include Action Steps	მოქმედების ნაბიჯების ჩართვა
 	Center on Artboard	სამუშაო დაფის ცენტრში მოთავსება
 	Default Actions	ნაგულისხმევი მოქმედებები
 	Duplicate and Offset 10 pt	დუბლირება და 10 pt-ით წანაცვლება
@@ -1319,7 +1329,9 @@ digits	Malayalam	მალაიალამური
 	Standard Vertical Roman Alignment	სტანდარტული ვერტიკალური ლათინური სწორება
 	Strikethrough	გადახაზული
 	Character:	სიმბოლო:
+	Paragraph:	აბზაცი:
 	Character options	სიმბოლოს პარამეტრები
+	Paragraph options	აბზაცის პარამეტრები
 	Subscript	ქვედა ინდექსი
 	Subscript (on the roadmap)	ქვედა ინდექსი (სამომავლო გეგმაშია)
 	Superscript	ზედა ინდექსი
@@ -1397,6 +1409,11 @@ digits	Malayalam	მალაიალამური
 	Save Transparency Flattener Preset…	გამჭვირვალობის გაბრტყელების პრესეტის შენახვა…
 	Basic Latin	საბაზო ლათინური
 	Currency & Symbols	ვალუტა და სიმბოლოები
+	Alternates for Current Selection	მიმდინარე მონიშვნის ალტერნატივები
+	Select a character with the Type tool to see its alternates.	ალტერნატივების სანახავად ტექსტის ხელსაწყოთი მონიშნეთ სიმბოლო.
+	The selected character's font is not available.	მონიშნული სიმბოლოს შრიფტი მიუწვდომელია.
+	No alternates for the selected character.	მონიშნულ სიმბოლოს ალტერნატივები არ აქვს.
+	Double-click to replace	ორჯერ დაწკაპეთ ჩასანაცვლებლად
 	Double-click to insert	ორჯერ დაწკაპეთ ჩასასმელად
 	Entire Font	მთელი შრიფტი
 	glyph {id}	გლიფი {id}
@@ -1649,6 +1666,9 @@ digits	Malayalam	მალაიალამური
 	More Paragraph options	აბზაცის სხვა პარამეტრები
 	No document open	დოკუმენტი გახსნილი არ არის
 	Quick Actions	სწრაფი მოქმედებები
+	Rearrange	გადალაგება
+	Select All Artboards	ყველა სამუშაო დაფის მონიშვნა
+	Switch Orientation	ორიენტაციის გადართვა
 	Rearrange All	ყველას გადალაგება
 	Rulers & Grids	სახაზავები და ბადეები
 	Select a text object	მონიშნეთ ტექსტური ობიექტი
@@ -2114,6 +2134,7 @@ digits	Malayalam	მალაიალამური
 	“{file}” is protected by a password.	„{file}“ დაცულია პაროლით.
 	Dim Images to:	გამოსახულებების ჩაბნელება:
 	Light Blue	ღია ლურჯი
+	Light Red	ღია წითელი
 	Layers Panel Options	შრეების პანელის პარამეტრები
 	Row Size:	სტრიქონის ზომა:
 	Show Layers Only	მხოლოდ შრეების ჩვენება
@@ -2201,6 +2222,12 @@ digits	Malayalam	მალაიალამური
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
 @plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msg	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
+@msg	(fonts not copied: {fonts})	(არ დაკოპირდა შრიფტები: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	ჩაშენებული პრესეტები მხოლოდ წასაკითხია: „ახალი…“ ქმნის რედაქტირებად ასლს.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} სამუშაო დაფაზე სცენაში {real} {unit}-ს შეესაბამება.
@@ -3023,6 +3050,7 @@ theme	Appearance	იერსახე
 	Character / Paragraph	სიმბოლო / აბზაცი
 	Copy Artboard	სამუშაო დაფის კოპირება
 	Cut Artboard	სამუშაო დაფის ამოჭრა
+	Rename Artboards	სამუშაო დაფების სახელის შეცვლა
 	Move Artboard Up/Down	სამუშაო დაფის აწევა/ჩამოწევა
 	Add Anchor (Pen)	საყრდენი წერტილის დამატება (კალამი)
 	Add Anchor Point	საყრდენი წერტილის დამატება
@@ -3749,6 +3777,8 @@ font-technology	Variable	ცვლადი
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	დამხმარე ხაზებიდან შექმნა: დამხმარე ხაზები {MAX_PIECES}-ზე მეტ ნაჭერს ქმნის
 @msg	Create from Selection: the selection has no area	მონიშნულიდან შექმნა: მონიშნულს ფართობი არ აქვს
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	მონაცემთა აღდგენას ასლების შესანახი ადგილი არ აქვს: მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	მონაცემთა აღდგენა ვერ ინახავს ასლებს აქ: {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	პლაგინების ჩატვირთვა ვერ ხერხდება აქედან: {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
@@ -4382,6 +4412,7 @@ font-technology	Variable	ცვლადი
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	მას აქვს {_1}, რასაც VectorCraft მისგან ჯერ ვერ კითხულობს
 @msg	its objects are nested too deeply	მისი ობიექტები ზედმეტად ღრმადაა ჩადგმული
 @msg	its section ending with `%{end}` doesn't end	მისი სექცია, რომელიც `%{end}`-ით მთავრდება, არ სრულდება
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	ფუნჯები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, ფუნჯების პანელში არ დაემატა ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	რამდენიმე შევსების ან კონტურის, ეფექტის ან ფუნჯის მქონე ობიექტები შემოვიდა დახატული სახით ({_1}): მათი იერსახე ჯერ არ რედაქტირდება
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	გრადიენტი „{name}“ ფაილში განსაზღვრული არ არის: მის ნაცვლად ერთგვაროვანი ფერია
 @msg	an image VectorCraft can't read was left out	გამოსახულება, რომელსაც VectorCraft ვერ კითხულობს, გამოტოვებულია
@@ -4755,6 +4786,10 @@ font-technology	Variable	ცვლადი
 	Even	თანაბრად
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
+@msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	არის ტექსტს ჩარჩოებში, რომლებიც მისი შრიფტის ერთი სტრიქონისთვის ზედმეტად დაბალი იყო, ჩარჩოები გაეზარდა ({_1}): სხვაგვარად ტექსტი არ გამოჩნდებოდა
 @msg	the art on them differs from the page's in {_1}% of it: they come from its editing data all the same	მათზე არსებული ნახატი გვერდისგან {_1}%-ით განსხვავდება: მიუხედავად ამისა, ისინი რედაქტირების მონაცემებიდან აიღება
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
@@ -5193,6 +5228,10 @@ imageTrace	Outline	კონტური
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	მონაცემთა ნაკრები {name}: არაფერი გამოყენებულა; არცერთი ობიექტი არ არის მიბმული ცვლადზე, რომელსაც მასში მნიშვნელობა აქვს
 @msg	no bound object reports a value (locked objects and embedded images report none)	არცერთი მიბმული ობიექტი არ აბრუნებს მნიშვნელობას (ჩაკეტილი ობიექტები და ჩაშენებული გამოსახულებები მნიშვნელობას არ აბრუნებს)
 @msg	the action has no steps	მოქმედებას ნაბიჯები არ აქვს
+@msg	the action has no included steps	მოქმედებას ჩართული ნაბიჯები არ აქვს
+@msg	no such action step	მოქმედების ასეთი ნაბიჯი არ არის
+@msg	included must be true or false	included უნდა იყოს true ან false
+@msg	others must be true or false	others უნდა იყოს true ან false
 	Convert to Straight Lines	სწორ ხაზებად გარდაქმნა
 	Corner Point Angle Threshold:	კუთხოვანი წერტილის კუთხის ზღვარი:
 	Decrease Font Size by Five Steps	შრიფტის შემცირება ხუთი საფეხურით
@@ -5285,6 +5324,10 @@ imageTrace	Outline	კონტური
 	Movie Clip	ანიმაციური კლიპი
 @msg	name is empty	სახელი ცარიელია
 @msg	an action is already recording	მოქმედება უკვე იწერება
+@msg	an action is already playing	მოქმედება უკვე სრულდება
+@msg	the action stopped playing: its document is no longer active	მოქმედება შეჩერდა: მისი დოკუმენტი აღარ არის აქტიური
+@msg	speed must be accelerated, step or pause	speed უნდა იყოს accelerated, step ან pause
+@msg	seconds must be a whole number from 1 to 60	seconds უნდა იყოს მთელი რიცხვი 1-დან 60-მდე
 @msg	no such function key	ასეთი ფუნქციური კლავიში არ არის
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
@@ -5491,6 +5534,8 @@ imageTrace	Outline	კონტური
 @msg	missing number `{key}`	აკლია რიცხვი `{key}`
 @msg	missing integer `{key}`	აკლია მთელი რიცხვი `{key}`
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
+@msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“
@@ -5536,6 +5581,7 @@ imageTrace	Outline	კონტური
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ფაილის ცვლადების ყველა კავშირი არ იქნა წაკითხული (გამოტოვებული კავშირები: {_1}): ეს ობიექტები არ არის დაკავშირებული თავიანთ ცვლადებთან
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	ფაილის ცვლადების ბიბლიოთეკა მხოლოდ ნაწილობრივ იქნა წაკითხული (გამოტოვებული ჩანაწერები: {_1}): პანელი „ცვლადები“ დანარჩენს აჩვენებს
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	ფაილის ცვლადების ბიბლიოთეკის წაკითხვა ვერ მოხერხდა: პანელი „ცვლადები“ მას არ აჩვენებს
 @msg	a variable of unknown kind can't be bound to objects	უცნობი სახის ცვლადის ობიექტებთან დაკავშირება შეუძლებელია
@@ -5672,6 +5718,11 @@ axis	Y Axis	Y ღერძი
 	Set Options	ნაკრების პარამეტრები
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
+	Playback Options…	შესრულების პარამეტრები…
+	Playback Options	შესრულების პარამეტრები
+	Accelerated	დაჩქარებული
+	Step by Step	ნაბიჯ-ნაბიჯ
+	Pause For	პაუზა
 	Rename Action	მოქმედების სახელის შეცვლა
 	New Action…	ახალი მოქმედება…
 	New Action	ახალი მოქმედება
@@ -6026,6 +6077,7 @@ anchor	Points:	წერტილები:
 	Character Color	სიმბოლოს ფერი
 	OpenType Features	OpenType შესაძლებლობები
 	Stylistic Sets	სტილისტური ნაკრებები
+	Set {n}	ნაკრები {n}
 @msg	features lists at most {max} tags	features შეიძლება შეიცავდეს არაუმეტეს {max} ტეგს
 @msg	unknown OpenType feature `{t}`	უცნობი OpenType შესაძლებლობა `{t}`
 @msg	{label} must be a number above 0 and at most {max}	{label} უნდა იყოს 0-ზე მეტი და არაუმეტეს {max}-ისა რიცხვი
@@ -6057,6 +6109,9 @@ anchor	Points:	წერტილები:
 	Find Nearest Swatch…	უახლოესი ფერის ნიმუშის პოვნა…
 	Find Nearest Swatch	უახლოესი ფერის ნიმუშის პოვნა
 	Apply Nearest Swatch	უახლოესი ფერის ნიმუშის გამოყენება
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	შევსების გამოყენება კონტურზე
+	Apply Stroke to Fill	კონტურის გამოყენება შევსებაზე
 	Select objects to find the swatches nearest their colors.	აირჩიეთ ობიექტები მათ ფერებთან უახლოესი ფერის ნიმუშების საპოვნელად.
 @msg	select objects or give `color`	აირჩიეთ ობიექტები ან მიუთითეთ `color`
 @msg	`color` is not a colour	`color` ფერი არ არის
@@ -6238,6 +6293,11 @@ breakText	Glyphs	გლიფები
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
 @msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	საქაღალდის პაკეტური ვექტორიზაცია
+@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	სიმბოლოს ტიპი:
 	Dynamic Symbol	დინამიკური სიმბოლო
@@ -6303,4 +6363,58 @@ font-script	Japanese	იაპონური
 	Bow	რკალი
 	Spike	პიკი
 	Skip Spaces	ჰარების გამოტოვება
+	Release Type on a Path…	ტექსტის ტრაექტორიიდან მოხსნა…
+	Release Type on a Path	ტექსტის ტრაექტორიიდან მოხსნა
+	Text and Path	ტექსტი და ტრაექტორია
+	Path Only	მხოლოდ ტრაექტორია
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	ნახატი ზედმეტად დიდია სურათად დასაკოპირებლად: სხვა აპები მის PNG-ს ვერ მიიღებენ
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	სამუშაო დაფებით არჩევა
+	Select by Artboards…	სამუშაო დაფებით არჩევა…
+	Selection Tools	მონიშვნის ხელსაწყოები
+	Search artboards	სამუშაო დაფების ძებნა
+	Fully Inside	მთლიანად შიგნით
+	Fully Outside	მთლიანად გარეთ
+	No artboards match.	შესაბამისი სამუშაო დაფა არ არის.
+	Chosen: {n} of {total}	არჩეულია: {n} / {total}
+
+# Contour add-on
+	Contour	მოხაზულობა
+	Contour Tool	მოხაზულობის ხელსაწყო
+	Sharp	მახვილი
+	Bake	გაშლა
+	Turn the Contour into plain paths	მოხაზულობას ჩვეულებრივ ტრაექტორიებად აქცევს
+	Set Corners…	კუთხეების დაყენება…
+	All Anchors	ყველა საყრდენი წერტილი
+	Odd-Numbered Anchors	კენტი საყრდენი წერტილები
+	Even-Numbered Anchors	ლუწი საყრდენი წერტილები
+	Minimum angle	მინიმალური კუთხე
+	Maximum angle	მაქსიმალური კუთხე
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	დაკავშირებულების არჩევა
+	Select Embedded	ჩაშენებულების არჩევა
+	Select Missing	დაკარგულების არჩევა
+	Select Modified	შეცვლილების არჩევა
+	Select by Link Status	კავშირის მდგომარეობით არჩევა
+	Select by Link Status…	კავშირის მდგომარეობით არჩევა…
+	Search images	გამოსახულებების ძებნა
+	No images match.	შესაბამისი გამოსახულება არ არის.
+@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}
+@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}
+
+# Compound Shapes add-on
+	Compound Shapes	შედგენილი ფიგურები
+	Shape Mode Buttons Make Compound Shapes	ფიგურის რეჟიმის ღილაკები ქმნის შედგენილ ფიგურებს
+
+# 3D Box add-on
+	3D Box	3D ყუთი
+	3D Box Tool	3D ყუთის ხელსაწყო

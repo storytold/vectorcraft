@@ -9,7 +9,7 @@ use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
@@ -120,7 +120,7 @@ impl<'a> Separator<'a> {
         for n in nodes {
             darken_overprints(n, discard_white);
             self.node(plate, Arc::make_mut(n));
-            keep_colorized_pixels(n, &mut colorized);
+            keep_colorized_pixels(n, &d.images, &mut colorized);
         }
         // A colorized image's pixels say where its color prints, on every plate: they are kept
         // under their own key, and only the color is separated.
@@ -153,13 +153,20 @@ fn colorized_key(key: &str) -> String {
 }
 
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
-/// `keys`.
-fn keep_colorized_pixels(n: &mut Arc<Node>, keys: &mut BTreeSet<String>) {
+/// `keys`. An image whose pixels in `images` don't take its colorize paint
+/// ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it shows.
+fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
     let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
     if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
+    if colorized(node)
+        && let NodeKind::Image(im) = &node.kind
+        && images.get(&im.key).is_some_and(|b| !b.takes_colorize())
+    {
+        node.extras_mut().colorize = None;
+    }
     if colorized(node)
         && let NodeKind::Image(im) = &mut node.kind
     {
@@ -168,7 +175,7 @@ fn keep_colorized_pixels(n: &mut Arc<Node>, keys: &mut BTreeSet<String>) {
     }
     if let Some(ch) = node.children_mut() {
         for c in ch.iter_mut() {
-            keep_colorized_pixels(c, keys);
+            keep_colorized_pixels(c, images, keys);
         }
     }
 }

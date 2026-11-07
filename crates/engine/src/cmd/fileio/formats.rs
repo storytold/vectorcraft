@@ -76,7 +76,12 @@ pub(super) const RANGE: FormatOption = FormatOption {
     description: "1-based artboards such as \"1-3, 5\", or \"all\" (wins over artboards and artboard)",
 };
 
-const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
+const SCALE: FormatOption = FormatOption {
+    name: "scale",
+    ty: "number",
+    default: "null",
+    description: "pixels per point (0.01–64); without ppi or scale, uses the document's raster effects resolution",
+};
 
 const WIDTH: FormatOption = FormatOption {
     name: "width",
@@ -112,8 +117,8 @@ const RECT: FormatOption = FormatOption {
 const PPI: FormatOption = FormatOption {
     name: "ppi",
     ty: "number",
-    default: "72",
-    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file except in GIF, WebP and Targa; wins over scale",
+    default: "null",
+    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file except in GIF, WebP and Targa; wins over scale; without either, uses the document's raster effects resolution",
 };
 
 const BACKGROUND: FormatOption = FormatOption {

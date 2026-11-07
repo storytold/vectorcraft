@@ -1,7 +1,7 @@
 use super::region::Region;
 use super::{
     Affine, BezPath, Breakpoint, Burasagari, EPS, FirstBaseline, FontDb, HyphenationOptions, Kinsoku, LeadingModel, SGlyph, hyphen_glyph,
-    hyphen_points_with, no_line_end, no_line_start, soft_line_start,
+    no_line_end, no_line_start, points_for, soft_line_start,
 };
 
 /// Vertical metrics of a line: (ascent, descent, leading, cap height, x height).
@@ -109,7 +109,8 @@ impl Pen<'_> {
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
             for _ in 0..=MAX_STEPS {
-                if baseline + est.desc > r.bottom() + 0.01 {
+                // A baseline a step no longer moves (past a gutter of 1e300, say) won't reach a line.
+                if baseline + est.desc > r.bottom() + 0.01 || baseline + step <= baseline || baseline.is_nan() {
                     break;
                 }
                 // A rectangle's lines are all as wide: none below has more room for the word
@@ -518,7 +519,8 @@ fn soft_kinsoku_lets_small_kana_and_the_prolonged_sound_mark_start_a_line() {
     }
 }
 
-/// Glyph indices inside `g[ws..we]` (a word) where a hyphenated break may go under `opts`.
+/// Glyph indices inside `g[ws..we]` (a word) where a hyphenated break may go under `opts`, in the
+/// language of the word's first letter.
 fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &HyphenationOptions) -> Vec<usize> {
     // Strip leading/trailing punctuation (quotes, commas).
     let (mut a, mut b) = (ws, we);
@@ -542,7 +544,7 @@ fn hyphen_breaks(text: &str, g: &[SGlyph], ws: usize, we: usize, opts: &Hyphenat
             starts.entry(g[k].byte).or_insert(k);
         }
     }
-    hyphen_points_with(word, opts).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
+    points_for(word, opts, g[a].hyphen_language).into_iter().filter_map(|ci| starts.get(offs.get(ci)?).copied()).collect()
 }
 
 /// Break candidates for the every-line composer: hyphenation points under `hyphenate` (the

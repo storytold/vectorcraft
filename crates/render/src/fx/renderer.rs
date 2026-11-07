@@ -691,17 +691,54 @@ impl Renderer {
         // The content itself (blurred / feathered / filtered), on its pixels: a filter layer's blur
         // works on a coarser grid tied to the canvas, so the blurred art shifted by up to a pixel
         // and looked blocky as the view moved by parts of a pixel (#755).
-        let blurs = rfx.iter().any(|fx| matches!(fx, RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius } if *radius > 0.0));
+        let blurs = rfx.iter().any(|fx| matches!(fx, RasterFx::Feather { radius } | RasterFx::GaussianBlur { radius, .. } if *radius > 0.0));
         if blurs || rfx.iter().any(|fx| matches!(fx, RasterFx::Pixel(_) | RasterFx::Rasterize(_))) {
             self.pixel_content(ctx, f, content, rfx, paint);
         } else {
             paint(self, ctx, f);
         }
-        // Above the content: inner glows, clipped to its outline.
+        // Above the content: inner glows, clipped to its outline. An image's glow follows its
+        // visible pixels, not its frame (#5308).
         let Some((g, rule)) = content.outline else { return };
+        let pixels = matches!(content.node.kind, NodeKind::Image(_));
         for fx in rfx {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
+            if pixels {
+                self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
+                    if let Some((m, o)) = comp {
+                        c.set_transform(Affine::IDENTITY);
+                        c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
+                    }
+                    c.set_transform(fr.view);
+                    c.set_fill_rule(fill_rule(rule));
+                    c.push_clip_layer(g);
+                    c.push_layer(None, None, None, None, Some(filter));
+                    if !*center {
+                        // Everything around the visible pixels, so the glow bleeds in from their edges.
+                        let pad = blur * 2.0 + 4.0 * fr.px;
+                        c.set_transform(fr.view);
+                        c.set_paint(peniko::Color::BLACK);
+                        c.fill_rect(&g.bounding_box().inflate(pad, pad));
+                        c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestOut)), None, None, None);
+                    }
+                    // The glow is cast by the pixels' alpha alone (the filter takes no color from them).
+                    paint(r, c, fr);
+                    if !*center {
+                        c.pop_layer();
+                    }
+                    c.pop_layer();
+                    // Only where the image shows, as much as it shows.
+                    c.push_layer(None, Some(peniko::BlendMode::new(peniko::Mix::Normal, peniko::Compose::DestIn)), None, None, None);
+                    paint(r, c, fr);
+                    c.pop_layer();
+                    c.pop_layer();
+                    if comp.is_some() {
+                        c.pop_layer();
+                    }
+                });
+                continue;
+            }
             self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.
