@@ -42,10 +42,10 @@ pub struct Prefs {
     /// its frame.
     pub align_glyph_bounds_area: bool,
     /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
-    /// canvas draws the pasteboard outside the artboards darker.
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
     pub fade_region_outside_artboard: bool,
-    /// Artboard Options › Update While Dragging: the pasteboard stays darker while the Artboard
-    /// tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
     pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,

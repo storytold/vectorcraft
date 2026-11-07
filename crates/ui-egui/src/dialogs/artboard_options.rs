@@ -138,10 +138,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// The preference and field of Fade Region Outside Artboard: while the Artboard tool is active,
-/// the canvas draws the pasteboard darker.
+/// the canvas draws everything outside the artboards darker.
 const FADE: &str = "fadeRegionOutsideArtboard";
-/// The preference and field of Update While Dragging: the pasteboard stays darker while the
-/// Artboard tool moves or resizes an artboard.
+/// The preference and field of Update While Dragging: the area outside the artboards stays darker
+/// while the Artboard tool moves or resizes an artboard.
 const UPDATE_WHILE_DRAGGING: &str = "artboardUpdateWhileDragging";
 
 /// `fields` with the Global checkboxes ([`global_fields`]) added.
@@ -158,18 +158,25 @@ fn global_fields(app: &VectorcraftApp) -> [(&'static str, bool); 2] {
     [(FADE, prefs.fade_region_outside_artboard), (UPDATE_WHILE_DRAGGING, prefs.artboard_update_while_dragging)]
 }
 
-/// OK sets the Global checkboxes' preferences that the form changed, in one `prefs.set`, and leaves
-/// the preferences alone when none changed. `prefs.set` refuses a value that is not true or false,
-/// and an error keeps the dialog open.
-fn set_globals(app: &mut VectorcraftApp, d: &Dialog) -> Result<(), String> {
+/// The Global checkboxes' preferences that the form changed. A value that is not true or false is
+/// an error, which keeps the dialog open before anything changes.
+fn global_changes(app: &VectorcraftApp, d: &Dialog) -> Result<serde_json::Map<String, Value>, String> {
     let mut values = serde_json::Map::new();
     for (key, now) in global_fields(app) {
-        if let Some(v) = d.fields.get(key)
-            && *v != json!(now)
-        {
-            values.insert(key.into(), v.clone());
+        match d.fields.get(key) {
+            Some(Value::Bool(on)) if *on != now => {
+                values.insert(key.into(), json!(on));
+            }
+            Some(Value::Bool(_)) | None => {}
+            Some(_) => return Err(format!("`{key}` must be true or false")),
         }
     }
+    Ok(values)
+}
+
+/// OK sets the Global checkboxes' preferences that the form changed ([`global_changes`]), in one
+/// `prefs.set`, and leaves the preferences alone when none changed.
+fn set_globals(app: &mut VectorcraftApp, values: serde_json::Map<String, Value>) -> Result<(), String> {
     if values.is_empty() {
         return Ok(());
     }
@@ -299,11 +306,14 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// one is among them), each resized about the reference
 /// point the form's last Width or Height change used (fields `__refx` and `__refy`, its column and
 /// row; the top-left corner when the form set none), all in one undo step. Fitting applies only
-/// to this artboard and never moves its artwork.
+/// to this artboard and never moves its artwork. The Global checkboxes' preferences are set only
+/// after the artboard command succeeds, so an error leaves them as they were.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    set_globals(app, d)?;
+    let globals = global_changes(app, d)?;
     if d.bool("new") {
-        return confirm_new(app, d);
+        let r = confirm_new(app, d)?;
+        set_globals(app, globals)?;
+        return Ok(r);
     }
     let mut p = Value::Object(d.fields.clone());
     for k in ["x", "y", "width", "height", PIXEL_ASPECT] {
@@ -343,7 +353,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         "moveArt": !d.bool("__fit") && crate::panels::artboards::move_art(app),
     });
     let p = crate::panels::artboards::set_props_params(common, entries).ok_or("no artboard")?;
-    run_and_close(app, "artboard.setProps", p)
+    let r = run_and_close(app, "artboard.setProps", p)?;
+    set_globals(app, globals)?;
+    Ok(r)
 }
 
 /// `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard): Artboard Options for a new

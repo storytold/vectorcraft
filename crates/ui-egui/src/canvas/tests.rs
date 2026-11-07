@@ -9112,41 +9112,95 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     assert_eq!(look(&mut app), (false, true));
 }
 
-/// One headless canvas frame → the fill of the pasteboard: the rect covering the canvas that is
-/// either the theme's pasteboard color or that color faded.
-fn pasteboard_fill(app: &mut VectorcraftApp, ctx: &egui::Context) -> Color32 {
-    let shapes = shapes(app, ctx);
-    let usual = Tokens::get(ctx).pasteboard;
-    let canvas = app.canvas_rect.unwrap();
-    shapes
-        .iter()
-        .find_map(|s| match s {
-            Shape::Rect(r) if r.rect.contains_rect(canvas) && (r.fill == usual || r.fill == faded(usual)) => Some(r.fill),
-            _ => None,
-        })
-        .expect("the pasteboard is drawn")
+/// One headless canvas frame → whether the fade outside the artboards is drawn.
+fn fades(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    fade_mesh(&shapes(app, ctx)).is_some()
 }
 
-/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the pasteboard
-/// draws darker; with another tool, or with the preference off, it draws as usual.
+/// The fade outside the artboards among `shapes`, with its position: the mesh in [`FADE_OUTSIDE`].
+fn fade_mesh(shapes: &[Shape]) -> Option<(usize, &egui::Mesh)> {
+    shapes.iter().enumerate().find_map(|(i, s)| match s {
+        Shape::Mesh(m) if !m.vertices.is_empty() && m.vertices.iter().all(|v| v.color == FADE_OUTSIDE) => Some((i, &**m)),
+        _ => None,
+    })
+}
+
+/// Does `mesh` cover the screen point `p`?
+fn mesh_covers(mesh: &egui::Mesh, p: Pos2) -> bool {
+    let cross = |a: Pos2, b: Pos2| (b - a).x * (p - a).y - (b - a).y * (p - a).x;
+    mesh.indices.chunks(3).any(|t| {
+        let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.vertices[i as usize].pos);
+        let (d0, d1, d2) = (cross(a, b), cross(b, c), cross(c, a));
+        (d0 >= 0.0 && d1 >= 0.0 && d2 >= 0.0) || (d0 <= 0.0 && d1 <= 0.0 && d2 <= 0.0)
+    })
+}
+
+/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the area
+/// outside the artboards draws darker; with another tool, or with the preference off, it draws as
+/// usual.
 #[test]
 fn the_artboard_tool_fades_the_pasteboard() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let ctx = egui::Context::default();
     frame(&mut app, &ctx, vec![]);
-    let usual = Tokens::get(&ctx).pasteboard;
-    let dark = faded(usual);
-    assert!(dark.r() < usual.r() && dark.g() < usual.g() && dark.b() < usual.b(), "{dark:?} is darker than {usual:?}");
+    assert_eq!(FADE_OUTSIDE.a(), 102, "black at 40%: each channel under it shows at 60%");
     assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
-    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the Selection tool");
+    assert!(!fades(&mut app, &ctx), "the Selection tool");
     app.select_tool("artboard");
-    assert_eq!(pasteboard_fill(&mut app, &ctx), dark, "the Artboard tool");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
     app.select_tool("rectangle");
-    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the Rectangle tool");
+    assert!(!fades(&mut app, &ctx), "the Rectangle tool");
     app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
     app.select_tool("artboard");
-    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the preference off");
+    assert!(!fades(&mut app, &ctx), "the preference off");
+}
+
+/// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
+/// the art, over a point of an object outside the artboard and not over a point of an object on it,
+/// in an upright view and in a rotated one.
+#[test]
+fn the_fade_darkens_art_on_the_pasteboard_and_not_on_the_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": -150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+    app.view_mut().unwrap().zoom = 0.5;
+    app.select_tool("artboard");
+    for rotation in [0.0, 30.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let s = shapes(&mut app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let image = s.iter().position(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)).expect("the art");
+        let (at, mesh) = fade_mesh(&s).expect("the fade");
+        assert!(at > image, "over the art, rotation {rotation}");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(-100.0, 150.0))), "the object outside, rotation {rotation}");
+        assert!(!mesh_covers(mesh, xf.to_screen(Point::new(200.0, 150.0))), "the object on the artboard, rotation {rotation}");
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(200.0, -40.0))), "the pasteboard, rotation {rotation}");
+    }
+}
+
+/// The parts outside the boards: none where boards cover the bounds, the bounds without boards, and
+/// otherwise rectangles that do not overlap a board or each other and add up to the uncovered area.
+#[test]
+fn outside_rects_cover_the_bounds_minus_the_boards() {
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(outside_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
+    assert_eq!(outside_rects(bounds, &[]), vec![bounds]);
+    let boards = [Rect::new(10.0, 10.0, 40.0, 40.0), Rect::new(30.0, 30.0, 60.0, 80.0), Rect::new(90.0, -20.0, 130.0, 50.0)];
+    let parts = outside_rects(bounds, &boards);
+    let area = |r: &Rect| r.width() * r.height();
+    let overlap = |a: &Rect, b: &Rect| (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0) * (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
+    for (i, p) in parts.iter().enumerate() {
+        assert!(boards.iter().all(|b| overlap(p, b) == 0.0), "{p:?} overlaps a board");
+        assert!(parts[i + 1..].iter().all(|q| overlap(p, q) == 0.0), "{p:?} overlaps another part");
+    }
+    // Inside the bounds the boards cover 900 + 1,500 less their 100 of overlap, and 500 of the third.
+    assert_eq!(parts.iter().map(area).sum::<f64>(), 10_000.0 - (900.0 + 1_500.0 - 100.0 + 500.0));
 }
 
 /// Artboard Options › Update While Dragging: on, the pasteboard stays darker while the Artboard tool
@@ -9160,7 +9214,6 @@ fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
         app.select_tool("artboard");
         let ctx = egui::Context::default();
         frame(&mut app, &ctx, vec![]);
-        let usual = Tokens::get(&ctx).pasteboard;
         let r = app.session.active().unwrap().doc.artboards[0].rect;
         let view = app.view_info();
         // A move from the artboard's middle, then a resize from its right edge.
@@ -9173,11 +9226,10 @@ fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
                 dispatch(&mut app, &PointerEvent::new(PointerKind::Drag, p.x, p.y), view);
             }
             assert!(app.session.tool_transforming(), "the artboard is being dragged");
-            let during = pasteboard_fill(&mut app, &ctx);
-            assert_eq!(during, if update { faded(usual) } else { usual }, "Update While Dragging {update}");
+            assert_eq!(fades(&mut app, &ctx), update, "Update While Dragging {update}");
             dispatch(&mut app, &PointerEvent::new(PointerKind::Up, to.x, to.y), view);
             assert!(!app.session.tool_transforming());
-            assert_eq!(pasteboard_fill(&mut app, &ctx), faded(usual), "darker again after the drag");
+            assert!(fades(&mut app, &ctx), "darker again after the drag");
         }
         let moved = app.session.active().unwrap().doc.artboards[0].rect;
         assert!(moved.x0 > r.x0 && moved.width() > r.width(), "moved, then resized: {moved:?} from {r:?}");

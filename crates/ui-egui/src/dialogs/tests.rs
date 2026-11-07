@@ -1777,6 +1777,28 @@ fn artboard_options_global_checkboxes_set_the_preferences() {
     assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 2);
 }
 
+/// When the artboard command refuses a value, OK leaves the Global checkboxes' preferences as they
+/// were, for the dialog of an existing artboard and of a new one alike.
+#[test]
+fn artboard_options_error_leaves_the_global_preferences_unchanged() {
+    let mut app = app();
+    let prefs = |app: &VectorcraftApp| (app.session.prefs.fade_region_outside_artboard, app.session.prefs.artboard_update_while_dragging);
+    for new in [false, true] {
+        if new {
+            app.run("ui.newArtboard", json!({})).unwrap();
+        } else {
+            crate::dialogs::artboard_options::open(&mut app).unwrap();
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("fadeRegionOutsideArtboard".into(), json!(false));
+        d.fields.insert("videoRulerPixelAspectRatio".into(), json!(20));
+        assert!(super::confirm(&mut app).is_err(), "new: {new}");
+        assert_eq!(prefs(&app), (true, true), "new: {new}");
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 1, "new: {new}");
+        cancel(&mut app);
+    }
+}
+
 /// Artboard Options shows Show Video Safe Areas and Video Ruler Pixel Aspect Ratio (one row of
 /// it), set as the artboard has them whether it opens from the Artboards panel or from a
 /// double-click with the Artboard tool. OK sets them in one undo step (a typed ratio is read as a

@@ -326,6 +326,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     fill_uncovered(app, ui.ctx(), &painter, &key, &doc, rect, &xf);
     reproject_frame(app, &painter, &xf, rect, (key.doc, v.rotation));
+    if fades_outside_artboards(app) {
+        fade_outside_artboards(&painter, &xf, &doc);
+    }
     if let Some(look) = grid_look.filter(|_| !grids_in_back) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
@@ -759,7 +762,7 @@ fn paint_paper(
     // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
-    painter.rect_filled(rect, 0.0, if fades_outside_artboards(app) { faded(t.pasteboard) } else { t.pasteboard });
+    painter.rect_filled(rect, 0.0, t.pasteboard);
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
@@ -827,9 +830,9 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
     }
 }
 
-/// Does the pasteboard draw darker? Artboard Options › Fade Region Outside Artboard darkens it while
-/// the Artboard tool is active, and with Update While Dragging off it draws as usual while the tool
-/// moves or resizes an artboard. Exports and prints never draw the pasteboard.
+/// Does the area outside the artboards draw darker? Artboard Options › Fade Region Outside Artboard
+/// darkens it while the Artboard tool is active, and with Update While Dragging off it draws as
+/// usual while the tool moves or resizes an artboard. Exports and prints never draw the fade.
 fn fades_outside_artboards(app: &VectorcraftApp) -> bool {
     let prefs = &app.session.prefs;
     app.session.tool_id() == "artboard"
@@ -837,10 +840,52 @@ fn fades_outside_artboards(app: &VectorcraftApp) -> bool {
         && (prefs.artboard_update_while_dragging || !app.session.tool_transforming())
 }
 
-/// The faded pasteboard: each channel of `c` at 60% of its value.
-fn faded(c: Color32) -> Color32 {
-    let dim = |v: u8| (f32::from(v) * 0.6).round() as u8;
-    Color32::from_rgba_premultiplied(dim(c.r()), dim(c.g()), dim(c.b()), c.a())
+/// The fade's color: black at 40% opacity, which shows each channel under it at 60% of its value.
+const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
+
+/// Fade Region Outside Artboard: over the pasteboard and the art on it, one mesh in [`FADE_OUTSIDE`]
+/// that covers the canvas outside the artboards of `doc`, drawn through the view. The mesh is not
+/// anti-aliased, so its rectangles meet without seams.
+fn fade_outside_artboards(painter: &egui::Painter, xf: &Xf, doc: &vectorcraft_doc::Document) {
+    let boards: Vec<Rect> = doc.artboards.iter().map(|a| a.rect).collect();
+    let mut mesh = egui::Mesh::default();
+    for (n, r) in (0u32..).zip(outside_rects(view_bounds(xf), &boards)) {
+        for p in xf.quad(r) {
+            mesh.colored_vertex(p, FADE_OUTSIDE);
+        }
+        let a = n * 4;
+        mesh.add_triangle(a, a + 1, a + 2);
+        mesh.add_triangle(a, a + 2, a + 3);
+    }
+    painter.add(Shape::mesh(mesh));
+}
+
+/// The parts of `bounds` that no rectangle of `boards` covers, as rectangles that do not overlap:
+/// for each band between consecutive top and bottom edges, the spans between the boards that
+/// cross it.
+fn outside_rects(bounds: Rect, boards: &[Rect]) -> Vec<Rect> {
+    let mut ys: Vec<f64> = boards.iter().flat_map(|b| [b.y0, b.y1]).filter(|y| *y > bounds.y0 && *y < bounds.y1).collect();
+    ys.extend([bounds.y0, bounds.y1]);
+    ys.sort_by(f64::total_cmp);
+    ys.dedup();
+    let mut out = vec![];
+    for band in ys.windows(2) {
+        let &[y0, y1] = band else { continue };
+        let mut spans: Vec<(f64, f64)> =
+            boards.iter().filter(|b| b.y0 <= y0 && b.y1 >= y1).map(|b| (b.x0.max(bounds.x0), b.x1.min(bounds.x1))).filter(|(a, b)| a < b).collect();
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut x = bounds.x0;
+        for (a, b) in spans {
+            if a > x {
+                out.push(Rect::new(x, y0, a, y1));
+            }
+            x = x.max(b);
+        }
+        if x < bounds.x1 {
+            out.push(Rect::new(x, y0, bounds.x1, y1));
+        }
+    }
+    out
 }
 
 /// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which
