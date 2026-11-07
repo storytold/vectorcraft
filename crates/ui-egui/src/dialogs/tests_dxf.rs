@@ -91,6 +91,10 @@ fn the_cnc_cam_preset_sets_the_fields_and_a_change_shows_custom() {
     set_field(d, "dxfPreset".into(), json!("cnc"));
     assert_eq!(d.str("unit"), "Millimeters");
     set_field(d, "unit".into(), json!("Inches"));
+    // Setting Custom while Custom is shown still puts back the defaults.
+    let mut reset = d.clone();
+    set_field(&mut reset, "dxfPreset".into(), json!("custom"));
+    assert_eq!(fields(&reset), "custom 2018 Millimeters 1.0 true appearance false false");
     confirm(&mut app).unwrap();
     let remembered = ["dxfPreset", "version", "unit"].map(|k| app.ui.dxf_options[k].as_str());
     assert_eq!(remembered, [Some("custom"), Some("2000"), Some("Inches")]);

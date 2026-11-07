@@ -78,21 +78,22 @@ fn show_matching_preset(d: &mut Dialog) {
     d.fields.insert(SHOWN_PRESET.into(), json!(preset.id()));
 }
 
-/// A preset picked since the fields were last matched sets its fields; Custom puts back the
-/// export's defaults.
-fn apply_picked_preset(d: &mut Dialog) {
-    if !d.str(PRESET).eq_ignore_ascii_case(&d.str(SHOWN_PRESET))
+/// A preset picked since the fields were last matched, or any preset when `force` is set, sets
+/// its fields; Custom puts back the export's defaults.
+fn apply_picked_preset(d: &mut Dialog, force: bool) {
+    if (force || !d.str(PRESET).eq_ignore_ascii_case(&d.str(SHOWN_PRESET)))
         && let Some(p) = DxfPreset::from_id(&d.str(PRESET))
     {
         d.fields.extend(preset_fields(p));
     }
 }
 
-/// `field` was set (`ui.dialog.set`): a preset sets its fields now, so fields set after it keep
-/// their values, and any other field shows the preset the fields then match, as drawing does.
+/// `field` was set (`ui.dialog.set`): a preset sets its fields now, even the one shown, so fields
+/// set after it keep their values, and any other field shows the preset the fields then match, as
+/// drawing does.
 pub(super) fn note_set(d: &mut Dialog, field: &str) {
     if field == PRESET {
-        apply_picked_preset(d);
+        apply_picked_preset(d, true);
     }
     show_matching_preset(d);
 }
@@ -120,7 +121,7 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let presets: Vec<(&str, &str)> = DxfPreset::ALL.iter().map(|p| (p.id(), p.label())).collect();
     choice(ui, d, PRESET, tl!("Preset:"), &presets);
-    apply_picked_preset(d);
+    apply_picked_preset(d, false);
     ui.add_space(4.0);
     let versions: Vec<(&str, &str)> = DxfVersion::ALL.iter().map(|v| (v.id(), v.label())).collect();
     choice(ui, d, "version", tl!("Version:"), &versions);
@@ -206,7 +207,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // A preset or field set since the dialog last drew (the control channel sets fields without
     // drawing) counts as drawn.
     let mut d = d.clone();
-    apply_picked_preset(&mut d);
+    apply_picked_preset(&mut d, false);
     show_matching_preset(&mut d);
     let d = &d;
     let params = super::form::params(d);
