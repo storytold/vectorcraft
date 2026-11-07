@@ -94,7 +94,8 @@ fn define_grid_takes_a_three_digit_color() {
         texts
     };
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    // The context keeps a key down until it is let go, and a dialog ignores a repeat of Enter.
+    let enter = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
     for (how, input) in [("pasted", egui::Event::Paste("0f0".into())), ("typed", egui::Event::Text("0f0".into()))] {
         app.run("ui.perspectiveGridDialog", json!({})).unwrap();
         set(&mut app, "leftColor", json!("#123456"));
@@ -107,7 +108,8 @@ fn define_grid_takes_a_three_digit_color() {
         frame(&mut app, vec![button(at, false)]);
         frame(&mut app, vec![]);
         frame(&mut app, vec![input]);
-        frame(&mut app, vec![enter.clone()]);
+        frame(&mut app, vec![enter(true)]);
+        frame(&mut app, vec![enter(false)]);
         assert_eq!(kind(&app), None, "{how}: Enter closes the dialog");
         assert_eq!(grid(&app).left_color.hex(), "#00ff00", "{how}: the grid takes the color");
     }

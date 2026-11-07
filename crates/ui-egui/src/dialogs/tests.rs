@@ -972,6 +972,8 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
         texts
     };
     let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    // The context keeps a key down until it is let go, and a dialog ignores a repeat of Enter.
+    let release = |key| egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() };
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     type Open = fn(&mut VectorcraftApp);
     type Applied = fn(&VectorcraftApp) -> String;
@@ -1018,6 +1020,7 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
             let shows = frame(&mut app, vec![egui::Event::Paste(paste.into())]);
             assert!(shows.iter().any(|(t, _)| t == hex), "{name}: the # field keeps {hex} after pasting {paste:?}");
             frame(&mut app, vec![key(egui::Key::Enter)]);
+            frame(&mut app, vec![release(egui::Key::Enter)]);
             assert!(app.ui.dialog.is_none(), "{name}: Enter closes the dialog after pasting {paste:?}");
             assert_eq!(applied(&app), before, "{name}: pasting {paste:?} changes no color");
         }
@@ -1044,6 +1047,7 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
             click_in(&mut app);
             frame(&mut app, vec![egui::Event::Paste(paste.into())]);
             frame(&mut app, vec![key(egui::Key::Enter)]);
+            frame(&mut app, vec![release(egui::Key::Enter)]);
             assert!(app.ui.dialog.is_none(), "{name}: Enter closes the dialog after pasting {paste:?}");
             assert_eq!(applied(&app), "#00ff00", "{name}: Enter applies {paste:?}");
             app.run("swatch.edit", json!({"name": "Sky", "color": "#3366cc"})).unwrap();
