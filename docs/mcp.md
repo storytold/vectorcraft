@@ -1694,6 +1694,13 @@ already walks Image Trace. Short agent entry points:
   `symbol.selectInstances {name}`, `symbol.delete {name | names, expandInstances?}` (`names` deletes several in one
   undo step). `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
   name they are given, as `symbol.options` trims `newName`; a blank one gives "New Symbol" or "<name> copy".
+- Reset Transformation (the Symbols panel menu, and Reset on the Control bar while symbol instances are selected):
+  `symbol.instance.resetTransform {ids?}` gives the selected symbol instances, in groups too, their symbol's own
+  scale again, without rotation, shear or reflection, as one undo step. VectorCraft's own rules: each instance keeps
+  the center of its bounding box in place; other objects, instances in perspective and instances already at their
+  symbol's scale are left as they are, and no undo step is added when nothing changes; an id that names no object, or
+  objects without a symbol instance, is an error. It returns `{ids}`, the instances it changed. The menu item and the
+  button are enabled only while a selected instance would change.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
