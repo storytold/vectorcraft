@@ -119,12 +119,77 @@ fn art_on_artboard_tolerates_roundoff_at_each_edge() {
     ] {
         assert_eq!(d.art_on_artboard(board, false), vec![a], "roundoff at {board:?}");
     }
-    // A real overhang remains outside.
-    for board in
-        [Rect::new(0.001, 0.0, 10.0, 10.0), Rect::new(0.0, 0.001, 10.0, 10.0), Rect::new(0.0, 0.0, 9.999, 10.0), Rect::new(0.0, 0.0, 10.0, 9.999)]
-    {
-        assert!(d.art_on_artboard(board, false).is_empty(), "overhang at {board:?}");
-    }
+    // A board that does not meet the artwork has no art.
+    assert!(d.art_on_artboard(Rect::new(40.0, 40.0, 50.0, 50.0), false).is_empty());
+}
+
+#[test]
+fn art_on_artboard_takes_artwork_larger_than_artboard_or_with_bleed() {
+    let mut d = Document::new(200.0, 200.0);
+    d.setup.bleed = [9.0; 4];
+    let layer = d.layers[0].id;
+    // An oversized background (250x250 centered on the 200x200 artboard, #4479).
+    let bg = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(bg, shapes::rectangle(Rect::new(-25.0, -25.0, 225.0, 225.0)), Appearance::default_art())).unwrap();
+    // A shape with 5pt bleed over the top-right corner.
+    let bleed = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(bleed, shapes::rectangle(Rect::new(150.0, -5.0, 205.0, 50.0)), Appearance::default_art())).unwrap();
+    // A shape completely outside the artboard.
+    let outside = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::path(outside, shapes::rectangle(Rect::new(300.0, 300.0, 400.0, 400.0)), Appearance::default_art()))
+        .unwrap();
+
+    let art = d.art_on_artboard(Rect::new(0.0, 0.0, 200.0, 200.0), false);
+    assert!(art.contains(&bg), "oversized background is on the artboard: {art:?}");
+    assert!(art.contains(&bleed), "bleed shape is on the artboard: {art:?}");
+    assert!(!art.contains(&outside), "outside shape is not on the artboard: {art:?}");
+}
+
+#[test]
+fn artboard_for_bounds_edge_cases_and_tie_breaks() {
+    let mut d = Document::new(100.0, 100.0);
+    // Artboard 0: (0, 0, 100, 100)
+    // Artboard 1: (200, 0, 300, 100)
+    d.artboards.push(Artboard {
+        id: 2,
+        name: "Artboard 2".into(),
+        rect: Rect::new(200.0, 0.0, 300.0, 100.0),
+        locked: false,
+        show_center_mark: false,
+        show_cross_hairs: false,
+        show_video_safe_areas: false,
+        video_ruler_pixel_aspect_ratio: 1.0,
+        color: None,
+    });
+
+    // 1. Artwork whose center is outside all boards, but overlaps Artboard 0 most:
+    // Bounds: (50, -100, 150, 50) -> Center: (100, -25) which is outside all artboards.
+    // Overlap with Board 0: 50x50 = 2500; Board 1: 0.
+    let b_center_outside = Rect::new(50.0, -100.0, 150.0, 50.0);
+    assert_eq!(d.artboard_for_bounds(b_center_outside), Some(0));
+
+    // 2. Equal overlap on two boards (defined tie-break: the lower index, board 0):
+    // Bounds: (50, -50, 250, 50) -> Center: (150, 0) outside all boards.
+    // Overlap with Board 0: (50..100) x (0..50) = 2500; Board 1: (200..250) x (0..50) = 2500.
+    let b_equal_overlap = Rect::new(50.0, -50.0, 250.0, 50.0);
+    assert_eq!(d.artboard_for_bounds(b_equal_overlap), Some(0), "equal overlap picks lower index");
+
+    // 3. No overlap at all: returns None.
+    let b_no_overlap = Rect::new(500.0, 500.0, 600.0, 600.0);
+    assert_eq!(d.artboard_for_bounds(b_no_overlap), None);
+
+    // 4. Rotated object bounds (bounds, not the inner geometry):
+    // A 40x40 square rotated 45 deg centered at (50, 50) has bounding box ~56.57x56.57.
+    let b_rotated_bounds = Rect::new(50.0 - 28.28, 50.0 - 28.28, 50.0 + 28.28, 50.0 + 28.28);
+    assert_eq!(d.artboard_for_bounds(b_rotated_bounds), Some(0));
+
+    // 5. Zero-size bounds (a point):
+    // On board 0:
+    let b_zero_on_board = Rect::new(50.0, 50.0, 50.0, 50.0);
+    assert_eq!(d.artboard_for_bounds(b_zero_on_board), Some(0));
+    // Outside all boards:
+    let b_zero_outside = Rect::new(150.0, 50.0, 150.0, 50.0);
+    assert_eq!(d.artboard_for_bounds(b_zero_outside), None);
 }
 
 /// The art on a locked artboard (each object of a layer whose bounds overlap it, a group as one
