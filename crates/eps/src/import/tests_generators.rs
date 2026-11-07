@@ -1166,6 +1166,19 @@ fn shadings_not_extended_paint_only_between_their_ends() {
     // Radial from the centre point to a circle of radius 30.
     let b = shade(3, "50 50 0 50 50 30", "");
     assert!((b.width() - 60.0).abs() < 0.5 && (b.height() - 60.0).abs() < 0.5 && (b.center().x - 50.0).abs() < 0.5, "{b:?}");
+    // Its circle is cut to a polygon whose sides lie within 0.01 pt of it, also for a large one.
+    let r = read(
+        "<< /ShadingType 3 /ColorSpace /DeviceRGB /Coords [50 50 0 50 50 45] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    let ring: Vec<Point> = path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect();
+    let centre = Point::new(50.0, 50.0);
+    for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        assert!((a.distance(centre) - 45.0).abs() < 1e-6, "{a:?}");
+        assert!(a.midpoint(*b).distance(centre) > 45.0 - 0.01, "{a:?} {b:?}");
+    }
     let b = shade(3, "50 50 0 50 50 30", "/Extend [true true]");
     assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
 }
