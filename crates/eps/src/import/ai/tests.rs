@@ -5883,8 +5883,14 @@ pub(super) fn envelope_content() -> String {
 /// side, mapped as VectorCraft maps them, as a red path in art space.
 pub(super) fn drawn_content(kind: &vectorcraft_doc::live::EnvelopeKind) -> String {
     let rect = Rect::new(40.0, 20.0, 160.0, 80.0);
-    let map = vectorcraft_doc::live::envelope_mapper(kind, rect);
-    let corners = [Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(160.0, 80.0), Point::new(40.0, 80.0)];
+    drawn_box(kind, rect, rect)
+}
+
+/// What envelope `kind`, mapping from box `src`, draws of a red rectangle `rect`, as in
+/// [`drawn_content`].
+fn drawn_box(kind: &vectorcraft_doc::live::EnvelopeKind, src: Rect, rect: Rect) -> String {
+    let map = vectorcraft_doc::live::envelope_mapper(kind, src);
+    let corners = [Point::new(rect.x0, rect.y0), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)];
     let mut s = RED.to_string();
     for (k, a) in corners.iter().enumerate() {
         let b = corners[(k + 1) % 4];
@@ -6090,6 +6096,7 @@ fn an_envelope_reads_its_options_and_fidelity() {
                 distort_appearance: false,
                 distort_linear_gradients: false,
                 distort_pattern_fills: false,
+                bounds_margin: [0.0; 4],
             },
         ),
         (
@@ -6101,6 +6108,7 @@ fn an_envelope_reads_its_options_and_fidelity() {
                 distort_appearance: true,
                 distort_linear_gradients: true,
                 distort_pattern_fills: true,
+                bounds_margin: [0.0; 4],
             },
         ),
         (
@@ -6112,6 +6120,7 @@ fn an_envelope_reads_its_options_and_fidelity() {
                 distort_appearance: false,
                 distort_linear_gradients: false,
                 distort_pattern_fills: true,
+                bounds_margin: [0.0; 4],
             },
         ),
     ] {
@@ -6121,6 +6130,125 @@ fn an_envelope_reads_its_options_and_fidelity() {
         assert_eq!(a.len(), 1, "{word}: {a:#?}");
         let (_, _, got_fidelity, _, got) = live_envelope(&a[0]);
         assert_eq!((got_fidelity, got), (f64::from(fidelity), options), "{word}");
+    }
+}
+
+/// The red rectangle 40 20 160 80 with a red stroke 10 pt wide, its art 130 × 70 with the stroke.
+fn stroked_content() -> String {
+    format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n{}b\n", rect_path(40.0, 20.0, 160.0, 80.0))
+}
+
+/// A one-patch mesh over the stroked art of [`stroked_content`], and that patch as a flat grid.
+fn stroked_shape() -> (String, Vec<Point>) {
+    let at = |(i, j): (usize, usize)| (35.0 + i as f64 * 130.0, 15.0 + j as f64 * 70.0);
+    let third = |p: (usize, usize), q: (usize, usize)| {
+        let ((x, y), (u, v)) = (at(p), at(q));
+        (x + (u - x) / 3.0, y + (v - y) / 3.0)
+    };
+    (mesh_text(1, 1, &at, &third, None), vec![Point::new(35.0, 15.0), Point::new(165.0, 15.0), Point::new(35.0, 85.0), Point::new(165.0, 85.0)])
+}
+
+/// An envelope whose file saves the size of its art with the stroke maps from that box, in a
+/// synthetic mesh and top object. Their drawn art is the box mapped onto the shape, and the
+/// geometric box would leave the stroke 5 pt past it.
+#[test]
+fn an_envelope_saved_with_its_stroke_maps_from_the_stroked_box() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
+    let (mesh, points) = stroked_shape();
+    let keys = format!("{ENVELOPE_KEYS}70 /Real (AIDeformArtHeightKey) ,\n130 /Real (AIDeformArtWidthKey) ,\n");
+    let outer = Rect::new(35.0, 15.0, 165.0, 85.0);
+    let flat = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+    let drawn = drawn_box(&flat, outer, outer);
+    for kind in [2, 3] {
+        let r = read_ok(&layer(&envelope_of(&mesh, &keys, &stroked_content(), kind, &drawn)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        assert!(r.warnings.is_empty(), "kind {kind}: {:?}", r.warnings);
+        let (.., options) = live_envelope(&a[0]);
+        assert_eq!(options.bounds_margin, [5.0_f32 / 60.0, 5.0 / 60.0, 5.0 / 120.0, 5.0 / 120.0]);
+        let src = EnvelopeMap::of(&a[0]).unwrap().src();
+        assert!(
+            (src.x0 - 35.0).abs() < 1e-3 && (src.y0 - 15.0).abs() < 1e-3 && (src.x1 - 165.0).abs() < 1e-3 && (src.y1 - 85.0).abs() < 1e-3,
+            "{src:?}"
+        );
+    }
+}
+
+/// With Distort Appearance off the stroke is drawn after the distortion: the envelope maps from the
+/// geometric box whatever size its file saves.
+#[test]
+fn an_envelope_without_distort_appearance_maps_from_the_geometric_box() {
+    use vectorcraft_doc::live::EnvelopeMap;
+    let keys = "65536 /Int (AIDeformOptionsKey) ,\n50 /Int (AIDeformFidelityKey) ,\n0 /Bool (AIDeformEditModeKey) ,\n70 /Real (AIDeformArtHeightKey) ,\n130 /Real (AIDeformArtWidthKey) ,\n";
+    let outer = Rect::new(35.0, 15.0, 165.0, 85.0);
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(35.0, 15.0), Point::new(165.0, 15.0), Point::new(35.0, 85.0), Point::new(165.0, 85.0)],
+        handles: vec![],
+    };
+    let drawn = drawn_box(&flat, outer, outer);
+    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), keys, &stroked_content(), 2, &drawn)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(!live_envelope(&a[0]).4.distort_appearance);
+    assert_eq!(live_envelope(&a[0]).4.bounds_margin, [0.0; 4]);
+    let src = EnvelopeMap::of(&a[0]).unwrap().src();
+    assert!((src.width() - 120.0).abs() < 1e-6 && (src.height() - 60.0).abs() < 1e-6, "{src:?}");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+}
+
+/// An envelope maps from the geometric box when its file saves that box's size, saves no size,
+/// saves a size that isn't a number or saves a size far from both boxes; contents without a stroke
+/// have one box, and contents with no height have no margins.
+#[test]
+fn an_envelope_not_saved_with_its_stroke_maps_from_the_geometric_box() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
+    let (mesh, points) = stroked_shape();
+    let inner = Rect::new(40.0, 20.0, 160.0, 80.0);
+    let flat = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+    // The stroked art mapped from the geometric box: it reaches past the mesh by the stroke's share.
+    let drawn = drawn_box(&flat, inner, Rect::new(35.0, 15.0, 165.0, 85.0));
+    let sizes = [
+        "60 /Real (AIDeformArtHeightKey) ,\n120 /Real (AIDeformArtWidthKey) ,\n",
+        "",
+        "(tall) /UnicodeString (AIDeformArtHeightKey) ,\n(wide) /UnicodeString (AIDeformArtWidthKey) ,\n",
+        "70 /Real (AIDeformArtHeightKey) ,\n",
+        "1000 /Real (AIDeformArtHeightKey) ,\n1000 /Real (AIDeformArtWidthKey) ,\n",
+        "71 /Real (AIDeformArtHeightKey) ,\n131 /Real (AIDeformArtWidthKey) ,\n",
+    ];
+    for size in sizes {
+        let keys = format!("{ENVELOPE_KEYS}{size}");
+        let r = read_ok(&layer(&envelope_of(&mesh, &keys, &stroked_content(), 2, &drawn)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{size}: {a:#?}");
+        let (.., options) = live_envelope(&a[0]);
+        assert_eq!(options.bounds_margin, [0.0; 4], "{size}");
+        let src = EnvelopeMap::of(&a[0]).unwrap().src();
+        assert!((src.width() - 120.0).abs() < 1e-6 && (src.height() - 60.0).abs() < 1e-6, "{size}: {src:?}");
+    }
+    let keys = format!("{ENVELOPE_KEYS}60 /Real (AIDeformArtHeightKey) ,\n120 /Real (AIDeformArtWidthKey) ,\n");
+    let plain = drawn_content(&EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    });
+    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &envelope_content(), 2, &plain)));
+    let a = art(&r.doc);
+    assert_eq!(live_envelope(&a[0]).4.bounds_margin, [0.0; 4]);
+    // A stroke so thin that the saved geometric size also lies close to the stroked box.
+    let thin = format!("{RED}0 1 1 0 1 0 0 XA\n0.2 w\n{}b\n", rect_path(40.0, 20.0, 160.0, 80.0));
+    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &thin, 2, &plain)));
+    assert_eq!(live_envelope(&art(&r.doc)[0]).4.bounds_margin, [0.0; 4]);
+    // A stroked straight line: 120 × 0 without its stroke, and 120 × 10 as saved.
+    let keys = format!("{ENVELOPE_KEYS}10 /Real (AIDeformArtHeightKey) ,\n120 /Real (AIDeformArtWidthKey) ,\n");
+    let line = format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n40 20 m\n160 20 L\nS\n");
+    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &line, 2, &plain)));
+    for n in art(&r.doc) {
+        if let NodeKind::Envelope { options, .. } = &n.kind {
+            assert_eq!(options.bounds_margin, [0.0; 4]);
+        }
     }
 }
 

@@ -300,7 +300,7 @@ impl Node {
                 self.projected(Some(xf.transform_rect_bbox(art)))
             }
             NodeKind::Blend { children, spec } => vectorcraft_geom::union_opt(union(children), spec.spine.as_ref().and_then(|s| s.bounds())),
-            NodeKind::Envelope { content, kind, frame, .. } => crate::live::envelope_bounds(content, kind, **frame),
+            NodeKind::Envelope { content, kind, frame, options, .. } => crate::live::envelope_bounds(content, kind, **frame, *options),
             NodeKind::Mesh(m) => m.bounds(),
             // Each copy is measured where the repeat draws it: `RepeatSpec::transforms` lays the
             // copies out by the source's bounds measured without the document.

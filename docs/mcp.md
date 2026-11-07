@@ -6132,6 +6132,13 @@ them with `image-rendering: pixelated` and PDF export writes them without `/Inte
 of a clip group, after Expand too. New envelopes start with Distort Appearance on, as in the reference app; envelopes saved before these
 options existed keep their old look (appearance applied after the distortion).
 
+An envelope opened from a `.ai` can have margins, written to native files as `boundsMargin` and reported by
+`object.envelope.info` when they are not zero: `[top, bottom, left, right]`, as shares of the content's height and
+width. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
+is off, the content maps from its geometric bounds. Leaving Edit Contents measures the margins again when the content's
+strokes reach differently than when Edit Contents began, and always for an envelope whose file opened in Edit Contents.
+New envelopes have no margins, and no command sets them.
+
 `object.envelope.release` gives back the content and the envelope's shape (a grey gradient mesh for warp and mesh
 envelopes, the path for a top-object envelope); the content keeps the envelope's opacity, blend mode and opacity mask
 (a group around it carries them when there are several objects). `object.envelope.expand`, and `object.expand` with
