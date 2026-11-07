@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::channel;
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::clipboard::{AI, BITMAP, EMF, EPS, Flavour, ImageRead, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture};
+use vectorcraft_engine::cmd::clipboard::{
+    AI, BITMAP, EMF, EPS, Flavour, ImageRead, PASTE_ORDER, PDF, SVG, TEXT, looks_like_svg, names_a_picture, pastes_as_table,
+};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
@@ -115,6 +117,19 @@ impl Publishing {
 /// Does a flavour of type `mime` load with `clipboard.importImage` ([`import_command`])?
 pub(crate) fn imports_as_image(mime: &str) -> bool {
     ![TEXT, SVG, PDF, AI, EPS, EMF].contains(&mime)
+}
+
+/// When Paste would take the vector picture `f` (a PDF, an EPS or an EMF) and the clipboard's text
+/// is cells copied from a spreadsheet ([`pastes_as_table`]), that text: a desktop spreadsheet puts
+/// a picture of the cells beside it. `read` reads the clipboard.
+pub(crate) fn spreadsheet_text(f: &Flavour, mut read: impl FnMut(&[&'static str]) -> Option<ClipboardRead>) -> Option<Flavour> {
+    if ![PDF, EPS, EMF].contains(&f.mime) {
+        return None;
+    }
+    match read(&[TEXT])? {
+        ClipboardRead::Now(text) if text.mime == TEXT && pastes_as_table(&String::from_utf8_lossy(&text.data)) => Some(text),
+        _ => None,
+    }
 }
 
 /// The command (and its params) that loads `f` into the internal clipboard, centred on `center`.
@@ -394,6 +409,13 @@ impl VectorcraftApp {
                     Some(ClipboardRead::Now(f)) => f,
                     Some(ClipboardRead::Later(make)) => return Ok(Some(make)),
                     None => return Ok(None),
+                };
+                // Cells copied from a desktop spreadsheet: their text pastes as a table, ahead of
+                // the picture of the cells offered with it (#5942). Other vector art keeps its
+                // place ahead of the text beside it.
+                let f = match spreadsheet_text(&f, |mimes| read(mimes)) {
+                    Some(text) => text,
+                    None => f,
                 };
                 // Text that only names a picture (its address, or its image markup) goes with a
                 // browser's copied picture: the picture.

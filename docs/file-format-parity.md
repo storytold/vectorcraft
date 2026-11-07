@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Paste: a spreadsheet's cells paste as a table ahead of the EMF, PDF or EPS picture beside them, follow-up to #5942; previously: EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -198,7 +198,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 | CSS | export (CSS Properties) | — | yes | |
 | OBJ / USDA / glTF | 3D export | — | no | needs 3D (gap G3) |
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
-| Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296) |
+| Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296), also when a desktop spreadsheet offers an EMF, PDF or EPS picture of the cells beside the text (not yet tried with a real spreadsheet copy) |
 
 ## PDF editable imports
 
@@ -212,6 +212,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | Paste: when the clipboard's text is a spreadsheet's cells (tab-separated, as `clipboard.importText` pastes as a table), it goes ahead of the EMF, PDF or EPS picture a desktop spreadsheet offers beside it; other vector pictures still win over the text beside them (follow-up to #5942). Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: `Q` restores the painting state but not the transparency (`Xy`), which the writer only sets when the next object's differs from the last one written. A Screen glow followed by a clipping group set back to Normal no longer leaves the type after the group in Screen: two users' Illustrator 26.5 and 30 EPS posters (used locally, not committed) now show their gold heading and crescent, and both open from their layers (2.5% and 2.7% from the page before, under the limit after). Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: a blend whose spine was never edited, written with its keys and no spine part, comes in as a live blend along the straight lines between its keys' centres (in its record's order) instead of as its drawn steps. Checked on six users' Illustrator EPS files (used locally, not committed): every blend in four of them now comes in live, their renders unchanged; two still have blends the reader can't match to their drawn steps. Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: the art styles are found before the art is read, so objects in symbols defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes it) come in as themselves with their style instead of their drawn look. Checked on two users' EPS files (used locally, not committed): one's Symbols panel gains live Feather and Round Corners, its drawn-look count drops from 5 to 2, and both render unchanged; own-fixture test in `import::ai::tests`; scores and hours unchanged |

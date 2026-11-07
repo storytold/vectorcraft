@@ -22,7 +22,9 @@ use vectorcraft_color::Swatch;
 use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, NodeKind, PatternDef, Selection, Symbol, TextStyleDef};
 use vectorcraft_geom::{PathData, Rect};
 
-pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
+pub use flavours::{
+    AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture, pastes_as_table,
+};
 pub use flavours::{ImageRead, read_image};
 pub(crate) use resources::SwatchChoices;
 pub use resources::{ArtResources, SymbolOptions, art_resources};

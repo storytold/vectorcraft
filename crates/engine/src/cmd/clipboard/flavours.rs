@@ -35,8 +35,20 @@ pub const EPS: &str = "application/postscript";
 /// system clipboard carries it, and Paste asks for [`PDF`] to get it.
 pub const AI: &str = "application/x-ai";
 /// What Paste reads from other apps, best first: vector art before text, text before bitmaps
-/// (word processors offer a picture of copied text too).
+/// (word processors offer a picture of copied text too). Cells copied from a spreadsheet are the
+/// exception: their text ([`pastes_as_table`]) goes ahead of the PDF, EPS or EMF picture of them.
 pub const PASTE_ORDER: [&str; 6] = [SVG, PDF, EPS, EMF, TEXT, BITMAP];
+/// Would `clipboard.importText` paste `text` as a table: cells copied from a spreadsheet, whose
+/// plain text is tab-separated values? A desktop spreadsheet also offers a picture of the cells
+/// (an EMF or a bitmap on Windows, a PDF on macOS), which Paste would otherwise take first.
+pub fn pastes_as_table(text: &str) -> bool {
+    if text.len() > MAX_TEXT || !text.contains('\t') {
+        return false;
+    }
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    super::table::parse(text.trim_end_matches('\n')).is_some()
+}
+
 /// Is `text` only an address (a web page's, an image's, a file's)? A browser's Copy Image puts the
 /// image's address as text next to the picture: then the picture is what Paste takes (#597). An
 /// address alone pastes as text, and nothing is fetched.
