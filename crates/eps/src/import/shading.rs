@@ -338,6 +338,8 @@ impl Interp<'_> {
             Some(Obj::File { stream, .. }) => self.peek_all(&stream)?,
             _ => return ps_err("typecheck", "DataSource"),
         };
+        // Copying the samples is work too: a shading evaluates its function once for each stop.
+        self.spend((bytes.len() / 256) as u64)?;
         let (encode, decode) = (nums("Encode"), nums("Decode"));
         let max = ((1u64 << bps) - 1) as f64;
         let sample = |index: usize, j: usize| -> f64 {
@@ -380,12 +382,15 @@ impl Interp<'_> {
             } else if combos.saturating_mul(2) <= MAX_TAPS {
                 vec![(at(0), 1.0 - t), (at(1), t)]
             } else {
-                // Too many inputs between samples to interpolate them all: the nearest.
-                vec![(p.round() as usize, 1.0)]
+                // Too many inputs between samples to interpolate them all: the nearest (a
+                // fractional `Size` can put it past the last sample).
+                vec![((p.round() as usize).min(last), 1.0)]
             };
             combos = combos.saturating_mul(w.len());
             taps.push(w);
         }
+        // Each combination of taps reads one sample of every output.
+        self.spend(combos.saturating_mul(outs) as u64)?;
         let mut out = vec![0.0; outs];
         let mut digits = vec![0usize; m];
         loop {
