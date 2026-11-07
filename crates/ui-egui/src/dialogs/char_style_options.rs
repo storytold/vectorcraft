@@ -189,6 +189,18 @@ fn bare(tag: &str) -> &str {
     tag.split_once('=').map_or(tag, |(name, _)| name)
 }
 
+/// Is the feature a tag of a style's list sets on? A `tag=N` of a valued feature is off for 0,
+/// which a `-` prefix check misses; every other tag is on unless it starts with `-`.
+fn tag_on(tag: &str) -> bool {
+    let name = bare(tag);
+    let valued = name == "swsh" || vectorcraft_text::EXTRA_FEATURES.contains(&name);
+    if valued && vectorcraft_text::OtFeatures::known_tag(tag) {
+        vectorcraft_text::OtFeatures::from_tags([tag]).feature_value(name).is_some()
+    } else {
+        !tag.starts_with('-')
+    }
+}
+
 /// The OpenType Features fields for a style's `features`: each control is unset unless the list
 /// names one of its tags, on or off. Figure is also unset when the list turns one of its tags on
 /// or off against every Figure menu entry, for example `pnum` alone.
@@ -199,9 +211,9 @@ fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
     let mut fields = Map::new();
     for (field, tag) in OT_SWITCHES {
         let last = tags.iter().rev().find(|t| bare(t) == *tag);
-        fields.insert((*field).into(), last.map_or(Value::Null, |t| json!(!t.starts_with('-'))));
+        fields.insert((*field).into(), last.map_or(Value::Null, |t| json!(tag_on(t))));
     }
-    let last_on = |tag: &str| tags.iter().rev().find(|t| bare(t) == tag).map(|t| !t.starts_with('-'));
+    let last_on = |tag: &str| tags.iter().rev().find(|t| bare(t) == tag).map(|t| tag_on(t));
     let figure = names(&FIGURE_TAGS)
         .then(|| FIGURE_VALUES.get(crate::panels::opentype::figure(&f)))
         .flatten()
@@ -212,7 +224,7 @@ fn opentype_fields(features: Option<&Value>) -> Map<String, Value> {
     fields.insert("ot_position".into(), position.map_or(Value::Null, |v| json!(v)));
     let sets: Vec<String> = vectorcraft_text::EXTRA_FEATURES[..20]
         .iter()
-        .filter_map(|set| tags.iter().rev().find(|t| bare(t) == *set).map(|t| if t.starts_with('-') { format!("-{set}") } else { set.to_string() }))
+        .filter_map(|set| tags.iter().rev().find(|t| bare(t) == *set).map(|t| if tag_on(t) { set.to_string() } else { format!("-{set}") }))
         .collect();
     fields.insert("ot_sets".into(), if sets.is_empty() { Value::Null } else { json!(sets) });
     fields
@@ -488,11 +500,11 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
     if !unchanged("ot_sets") {
         let sets = &vectorcraft_text::EXTRA_FEATURES[..20];
         // A set still on keeps the value its tag gives (`ss01=2`).
-        let before: Vec<String> = tags.iter().filter(|t| sets.contains(&bare(t)) && !t.starts_with('-')).cloned().collect();
+        let before: Vec<String> = tags.iter().filter(|t| sets.contains(&bare(t))).cloned().collect();
         tags.retain(|t| !sets.contains(&bare(t)));
         let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
         tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
-            let kept = before.iter().rev().find(|b| !t.starts_with('-') && bare(b) == bare(t));
+            let kept = before.iter().rev().find(|b| bare(b) == bare(t)).filter(|b| !t.starts_with('-') && tag_on(b));
             kept.map_or_else(|| t.to_string(), Clone::clone)
         }));
     }
@@ -1335,6 +1347,16 @@ mod tests {
         let mut d = dialog_for(json!({"features": ["dlig"]}));
         d.fields.insert("ot_dlig".into(), Value::Null);
         assert_eq!(edited_attrs(&d).unwrap(), Map::new());
+    }
+
+    #[test]
+    fn a_stored_zero_value_reads_as_off_and_turning_it_on_saves_it() {
+        let mut d = dialog_for(json!({"features": ["ss01=0", "salt=0", "ss02=2"]}));
+        assert_eq!(d.fields["ot_salt"], json!(false));
+        assert_eq!(d.fields["ot_sets"], json!(["-ss01", "ss02"]));
+        d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
+        d.fields.insert("ot_salt".into(), json!(true));
+        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["salt", "ss01", "ss02=2"]));
     }
 
     #[test]
