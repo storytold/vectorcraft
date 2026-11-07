@@ -631,3 +631,18 @@ fn set_spot_refuses_a_param_of_the_wrong_type() {
     s.execute("swatch.setSpot", &json!({"name": "Ink", "spot": null})).unwrap();
     assert!(s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "a null `spot` is the default, true");
 }
+
+#[test]
+fn gamut_check_refuses_colors_that_are_not_a_list() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#0000ff"));
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    refused(&mut s, "color.gamutCheck", json!({"colors": "#00ff00"}), "bad color \"#00ff00\"");
+    refused(&mut s, "color.gamutCheck", json!({"colors": 5}), "bad color 5");
+    refused(&mut s, "color.gamutCheck", json!({"colors": {"c": 100, "m": 0, "y": 0, "k": 0}}), "bad color");
+    // A null list checks the document, as an omitted one does.
+    let r = s.execute("color.gamutCheck", &json!({"colors": null})).unwrap();
+    assert_eq!(r, s.execute("color.gamutCheck", &json!({})).unwrap());
+    assert!(r["outOfGamut"].as_array().unwrap().iter().any(|v| v["hex"] == "#0000ff"), "{r}");
+}

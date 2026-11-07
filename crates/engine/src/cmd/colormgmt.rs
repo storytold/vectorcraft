@@ -683,7 +683,11 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn gamut_check(s: &mut Session, p: &Value) -> Result<Value> {
     let mut cols: Vec<Color> = vec![];
-    if let Some(a) = p.get("colors").and_then(Value::as_array) {
+    let colors = p.get("colors").filter(|v| !v.is_null());
+    if let Some(v) = colors.filter(|v| !v.is_array()) {
+        return Err(bad("color.gamutCheck", format!("bad color {v}")));
+    }
+    if let Some(a) = colors.and_then(Value::as_array) {
         for v in a {
             cols.push(color_value(v).ok_or_else(|| bad("color.gamutCheck", format!("bad color {v}")))?);
         }
