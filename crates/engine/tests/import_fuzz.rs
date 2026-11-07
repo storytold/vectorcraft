@@ -3690,7 +3690,34 @@ proptest! {
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+        // A symbol library: the same symbols and list, no layers.
+        let library = mutate_text(&symbol_library_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&library)].concat();
+        survive("mutated .ai symbol library", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = vectorcraft_testkit::ai::eps(library.as_bytes(), vectorcraft_testkit::ai::page_ps());
+        survive("mutated symbol library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
+}
+
+/// [`symbols_text`] without its layer: a symbol library.
+fn symbol_library_text() -> String {
+    let full = symbols_text();
+    match (full.find("%AI5_BeginLayer"), full.find("%AI5_EndLayer--\n")) {
+        (Some(a), Some(b)) if a < b => format!("{}{}", &full[..a], &full[b + "%AI5_EndLayer--\n".len()..]),
+        _ => full,
+    }
+}
+
+/// The library [`ai_symbols_never_panic`] damages, as it is, opens with its symbols.
+#[test]
+fn the_symbol_library_fuzz_data_opens_with_its_symbols() {
+    let text = symbol_library_text();
+    assert!(!text.contains("%AI5_BeginLayer"));
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+    let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0);
+    assert!(!layered, "{warnings:?}");
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["S2", "S1"], "{warnings:?}");
 }
 
 /// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
@@ -3783,6 +3810,9 @@ fn ai_symbol_limits_never_panic() {
             ai::layer("L", &inst("(S1)", "1 0 0 -1 20 50"))
         ),
         format!("{}{}", def("S1", &inst("(S2)", "1 0 0 -1 0 0")), def("S2", &inst("(S1)", "1 0 0 -1 0 0"))),
+        // Symbol libraries without layers: definitions nested too deep and a long chain.
+        nested,
+        chain,
     ];
     for body in cases {
         let data = ai::editing_data(200.0, 100.0, &body).replacen("%%EndComments", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%EndComments", 1);
