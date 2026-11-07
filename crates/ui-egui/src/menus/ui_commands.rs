@@ -874,6 +874,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open Artboard Options for a new artboard, filled in as artboard.new {} would make it (Artboard N, the last artboard's size, 20 pt to its right): dialog `artboardOptions` with new: true, fields name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.new with the fields and makes the new artboard the active one; Cancel adds nothing",
     ),
     (
+        "artboard.selectAll",
+        "Select All Artboards",
+        "",
+        "{} the Artboard tool, chosen first when another tool is in use, selects every artboard, and the active artboard stays active; the art's selection stays as it is, and no undo step is recorded → {selected: [index…]} (the active artboard first)",
+    ),
+    (
         "ui.layersPanelOptions",
         "Panel Options…",
         "",
@@ -1044,7 +1050,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|artboard.rename|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, renameArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -1186,6 +1192,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Continue in Background",
         "",
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
+    ),
+    (
+        "file.cancelOpen",
+        "Cancel Opening",
+        "",
+        "{} stop opening every file being read in the background (its progress window's Cancel): the files don't open → {cancelled: n}",
+    ),
+    (
+        "file.openInBackground",
+        "Continue in Background",
+        "",
+        "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
     ),
     (
         "ui.dxfOptionsDialog",

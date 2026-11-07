@@ -133,7 +133,8 @@ impl<'a> Lexer<'a> {
         self.src.get(self.pos).copied()
     }
 
-    fn rest(&self) -> &'a [u8] {
+    /// The data from where the next token is looked for.
+    pub fn rest(&self) -> &'a [u8] {
         self.src.get(self.pos..).unwrap_or_default()
     }
 

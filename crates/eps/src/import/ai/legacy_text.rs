@@ -2,7 +2,8 @@
 //! text paths (`a b c d tx ty startPt Tp`, an area's frame, one for each linked area, or the path
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
-//! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`), the paint style, and the characters (`Tx`, `Tj`,
+//! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`, and §15.3.4's writing direction `TV`,
+//! Roman character rotation `Tv` and Kumi blocks `Ty TY`), the paint style, and the characters (`Tx`, `Tj`,
 //! overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
 //! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
@@ -51,6 +52,9 @@ const LINKED_AREAS_LEFT_OUT: &str = "linked type areas past VectorCraft's limits
 /// The warning when type set in a mask rendering mode can't be a clipping path: type in linked
 /// areas (several frames), in wraparound text or in a compound path doesn't clip.
 const MASK_NOT_CLIPPED: &str = "type used as a mask in linked areas, wraparound text or a compound path doesn't clip";
+/// The warning when `TV` changes after a text object's first character: the object keeps the
+/// direction of that character.
+const DIRECTION_CHANGE_LEFT_OUT: &str = "type that changes writing direction inside a text object opens in the direction of its first character";
 
 /// A text path (`Tp` … `TP`).
 #[derive(Debug, Default)]
@@ -101,6 +105,10 @@ pub(super) struct LegacyText {
     /// Characters were set in a mask rendering mode (`Tr` 4 to 7): the text object is a clipping
     /// path (§5.7).
     clips: bool,
+    /// `TV` at its first character: VectorCraft keeps one writing direction for each text object.
+    vertical: bool,
+    /// A later character was set in the other direction.
+    direction_changed: bool,
     /// The state when it began (lock, visibility), and whether it began on a `%_` line.
     gs: GState,
     hidden: bool,
@@ -176,6 +184,10 @@ pub(super) struct TypeState {
     tabs_version: u64,
     /// `Tr`.
     render: i64,
+    /// `TV`: vertical writing.
+    vertical: bool,
+    /// `TY`: a Kumi block recorded for later use, which horizontal type keeps as its mark.
+    kumi_recorded: bool,
     /// The encoding strings are in, by code (`TE`); None where it says nothing.
     encoding: Vec<Option<char>>,
     /// Re-encoded fonts' original names (`%AI3_BeginEncoding: _new old`, or `TZ`'s).
@@ -197,6 +209,8 @@ impl Default for TypeState {
             para: ParaStyle::default(),
             tabs_version: 0,
             render: 0,
+            vertical: false,
+            kumi_recorded: false,
             encoding: vec![None; 256],
             fonts: vec![],
             font_encodings: vec![],
@@ -546,6 +560,31 @@ impl Reader<'_> {
                 h.before_last = letters(tail, 1.0, 15.0);
                 h.hyphen_limit = if limit { letters(max, 0.0, 25.0) } else { 0 };
             }
+            // `direction TV` (§15.3.4): 0 horizontal, 1 vertical.
+            "TV" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.vertical = on;
+                }
+            }
+            // `rotation Tv`: in vertical writing, 0 rotates Roman characters 90 degrees clockwise and
+            // 1 keeps them upright.
+            "Tv" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.style.standard_vertical_roman = on;
+                }
+            }
+            // `kumi Ty`: 1 begins a Kumi block and 0 ends it.
+            "Ty" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.style.tate_chu_yoko = on;
+                }
+            }
+            // `kumi TY`: as `Ty`, for a block that does not appear in the set text.
+            "TY" => {
+                if let Some(on) = n0.and_then(flag) {
+                    st.kumi_recorded = on;
+                }
+            }
             // A tab definition (§22.6): `numDots numTabs Xb` begins it, each
             // `leader decimal tabType tabPosition Xe` describes one tab stop, and `XB` ends it. The
             // stops it describes replace the paragraph's tab stops, sorted by position, one stop at
@@ -603,8 +642,13 @@ impl Reader<'_> {
         }
         let decoded: String = decoded.chars().take(room).collect();
         st.chars += decoded.chars().count();
+        if t.runs.is_empty() {
+            t.vertical = st.vertical;
+        }
+        t.direction_changed |= st.vertical != t.vertical;
         let gs = &self.gs;
         let mut style = st.style.clone();
+        style.tate_chu_yoko |= st.kumi_recorded && !t.vertical;
         // Characters in modes 4 to 7 make the whole text object the mask, not each run (§5.7); 7
         // paints nothing, nor does 3 (invisible).
         t.clips |= (4..=7).contains(&st.render);
@@ -669,6 +713,9 @@ impl Reader<'_> {
         if t.kind == 1 && (t.past_limit || all_areas > placed.len()) {
             self.warn(LINKED_AREAS_LEFT_OUT);
         }
+        if t.direction_changed {
+            self.warn(DIRECTION_CHANGE_LEFT_OUT);
+        }
         let mut paras = std::mem::take(&mut t.paras);
         if paras.is_empty() {
             paras.push(ParaRun { style: self.type_state.para.clone(), count: 1, tabs_version: 0 });
@@ -682,6 +729,7 @@ impl Reader<'_> {
         for (m, kind) in placed {
             let mut obj = TextObject::point(kurbo::Point::ZERO, "", last_style.clone());
             obj.kind = kind;
+            obj.vertical = t.vertical;
             obj.xf = to_doc * m * FLIP;
             match story.take() {
                 Some((runs, paras)) => {
