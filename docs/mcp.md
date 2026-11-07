@@ -5144,7 +5144,11 @@ turn it with the object while its path geometry is still baked, so after a rotat
 stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
 (the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
 point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
-square to the page. `object.resetBoundingBox` squares the box again without moving the art.
+square to the page. `object.resetBoundingBox` squares the box again without moving the art. It also squares every
+object inside the selected ones: the children of groups, compound paths, clip groups, blends, envelopes, repeats and
+intertwines, and the art of linked opacity masks (an unlinked mask's art keeps its angle). Ungroup, Release Clipping
+Mask, Release Compound Path, Blend Expand, Release Envelope, Release Repeat, Release Intertwine and Release Opacity Mask
+then bring back boxes square to the page.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
