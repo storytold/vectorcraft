@@ -407,7 +407,7 @@ fn an_alt_drag_in_perspective_on_a_grid_from_an_older_file_attaches_the_copies()
 /// first one kept, and the drag leaves what one `perspective.move` with copy leaves, as one undo
 /// step.
 #[test]
-fn alt_drag_in_perspective_of_30000_objects_finishes_within_20_s() {
+fn alt_drag_in_perspective_of_30000_objects_takes_few_tree_walks() {
     // The squares are 6 pt wide and 10 pt apart, in rows of 150, between the left vanishing point
     // of the two-point grid and its origin.
     let on_the_left = |d: &mut Document, k: usize| {
