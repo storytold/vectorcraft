@@ -171,6 +171,7 @@ impl VectorcraftApp {
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
+            held_tool: Vec::new(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),

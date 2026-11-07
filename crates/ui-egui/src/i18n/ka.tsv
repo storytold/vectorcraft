@@ -5523,6 +5523,7 @@ imageTrace	Outline	კონტური
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	შენახვის პანელში სახელი იყო „{typed}“; VectorCraft-მა ფაილის ტიპის გაფართოება დაამატა. ფაილის ჩანაცვლება მის შიგთავსს გადააწერს.
 	Thread Text	ტექსტის დაკავშირება
 	Trackpad Gesture to Rotate View	ხედის შემობრუნება ტრეკპადის ჟესტით
+	Hold a Tool Shortcut to Use the Tool Temporarily	ხელსაწყოს დროებით გამოყენება მისი მალსახმობის დაჭერით
 	Typing	აკრეფა
 	Uniformly Scaled	თანაბრად მასშტაბირებული
 	Unlock Variables	ცვლადების განბლოკვა

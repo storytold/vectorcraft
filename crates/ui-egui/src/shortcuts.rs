@@ -11,10 +11,12 @@ use vectorcraft_tools::{Mods, SurroundingUnit, ToolKey};
 
 use crate::VectorcraftApp;
 
+mod held_tool;
 mod paste;
 mod presentation;
 mod typing;
 
+pub(crate) use held_tool::{HeldTool, note_tool_use};
 use paste::unclip_chords;
 pub(crate) use paste::{PasteChord, paste_command};
 pub(crate) use presentation::presentation_step;
@@ -186,7 +188,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     ctx.input(|i| crate::shortcut_editor::note_backtick_text(&i.events));
     note_key_surfaces(app, ctx);
-    if !(ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT) {
+    let focused = ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
+    // A held tool shortcut that is let go returns to the tool active before it.
+    held_tool::follow(app, ctx, focused);
+    if !focused {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
@@ -317,6 +322,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
                 }
             }
+            held_tool::note_enter_dialog(app, k);
         }
     }
     if typing {
@@ -480,26 +486,26 @@ fn remember_escape_pair(ctx: &egui::Context, key: Key, escape_pair: Option<bool>
 fn single_key_shortcuts(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Single-key tool shortcuts (no Cmd/Ctrl/Alt). With a layout without Latin letters (Persian,
     // Arabic, Russian, Greek…) the key's position stands in for what it types (#793).
-    // A text's key is the press that typed it ([`typing_presses`]).
-    let events: Vec<(String, Modifiers, Option<Key>)> = ctx.input(|i| {
+    // A text's key is the press that typed it ([`typing_presses`]), and the text repeats with it.
+    let events: Vec<(String, Modifiers, Option<Key>, bool)> = ctx.input(|i| {
         let typed_by = typing_presses(&i.events);
         i.events
             .iter()
             .zip(typed_by)
             .filter_map(|(e, by)| match e {
                 egui::Event::Text(t) => {
-                    let (physical, key) = match by.and_then(|k| i.events.get(k)) {
-                        Some(egui::Event::Key { key, physical_key, .. }) => (*physical_key, Some(*key)),
-                        _ => (None, None),
+                    let (physical, key, repeat) = match by.and_then(|k| i.events.get(k)) {
+                        Some(egui::Event::Key { key, physical_key, repeat, .. }) => (*physical_key, Some(*key), *repeat),
+                        _ => (None, None, false),
                     };
-                    Some((latin(t, physical), i.modifiers, key))
+                    Some((latin(t, physical), i.modifiers, key, repeat))
                 }
                 _ => None,
             })
             .collect()
     });
     let keymap = crate::shortcut_editor::current();
-    for (text, m, pressed) in events {
+    for (text, m, pressed, repeat) in events {
         if m.command || m.alt || m.ctrl {
             continue;
         }
@@ -521,7 +527,7 @@ fn single_key_shortcuts(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // tools.
         let Some(hit) = hits.iter().find(|c| !c.id.starts_with("tool:")).or(hits.first()) else { continue };
         match hit.id.strip_prefix("tool:") {
-            Some(tool) => app.select_tool(tool),
+            Some(tool) => held_tool::choose(app, ctx, tool, pressed, repeat),
             None if let Some((id, p)) = menu_target(hit) => crate::menus::invoke(app, &id, p),
             None if hit.params.is_null() => {
                 let _ = app.run(&hit.id, json!({}));
