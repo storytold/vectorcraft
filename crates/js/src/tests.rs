@@ -663,7 +663,7 @@ fn sources_over_the_length_limit_are_refused() {
 // ---- robustness ----
 
 /// Fragments of the language, put together at random so the parser reaches its deeper states.
-const FRAGMENTS: &[&str] = &[
+pub(crate) const FRAGMENTS: &[&str] = &[
     "var ",
     "function ",
     "f",

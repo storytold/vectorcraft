@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-js"
-description = "JavaScript for scripts: an ECMAScript 5.1 lexer and parser to a syntax tree with source positions"
+description = "JavaScript for scripts: an ECMAScript 5.1 parser, and an interpreter with a garbage-collected heap and execution limits"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -18,16 +18,34 @@
 //! `SyntaxError` ("nesting too deep") instead of exhausting the stack, binary operators, `if` …
 //! `else if` chains, labels and prefix operators are read with loops, and the syntax tree is
 //! dropped without recursion.
+//!
+//! A [`Realm`] runs scripts. It compiles the syntax tree to bytecode, checks the bytecode with a
+//! verifier, and runs it on an interpreter that keeps JavaScript calls on its own frame stack, so
+//! deep recursion in a script does not use the native stack. Objects and environments live in an
+//! arena with a mark-and-sweep collector; strings built by repeated `+` are flattened and dropped
+//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and a minimal
+//! set of built-ins: `Object` and `Object.prototype`'s basic methods, `Function` with
+//! `Function.prototype.call` and `apply`, `eval`, and the error constructors. Every run is bounded
+//! by [`Limits`]: instructions run (fuel), heap bytes, frames, nested host calls, and an
+//! [`Interrupt`] flag another thread can set. A run that reaches a limit ends with
+//! [`RunErrorKind::Limit`], which a script's `try` cannot catch.
 #![forbid(unsafe_code)]
 
 pub mod ast;
+mod builtins;
+mod bytecode;
 mod chars;
+mod compiler;
 mod error;
+mod heap;
+mod interp;
 mod lexer;
 mod number;
 mod parser;
+mod realm;
 mod regexp;
 mod token;
+mod value;
 
 pub use ast::{
     AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
@@ -36,6 +54,7 @@ pub use ast::{
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
+pub use realm::{Interrupt, JsValue, LimitKind, Limits, Realm, RunError, RunErrorKind};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
 
 /// How a script is read.
@@ -145,5 +164,7 @@ impl LineTable {
     }
 }
 
+#[cfg(test)]
+mod interp_tests;
 #[cfg(test)]
 mod tests;
