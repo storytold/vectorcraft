@@ -238,7 +238,7 @@ impl FreeSwatchNames {
         self.taken.insert(name.clone());
         name
     }
-    /// Count `name` as taken (a swatch or colour group added another way).
+    /// Count `name` as taken (a swatch or color group added another way).
     pub fn insert(&mut self, name: &str) {
         self.taken.insert(name.to_string());
     }

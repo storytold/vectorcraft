@@ -271,11 +271,12 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// each). A tint (a linked colour that differs from its swatch's) brings its swatch, and with
 /// `tints` its own colour too. Links to missing swatches count as unlinked.
 fn artwork_colors(d: &Document, ids: &[NodeId], tints: bool, swatches: &mut Vec<String>, colors: &mut Vec<Color>) {
+    let by_name = swatches_by_name(d);
     let mut seen_swatches: HashSet<String> = swatches.iter().cloned().collect();
     let mut seen_colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
     for n in ids.iter().filter_map(|id| d.node(*id)) {
         node_colors(n, &mut |c, link| {
-            let sw = link.and_then(|l| d.swatch(l)).filter(|w| w.paint.color().is_some());
+            let sw = link.and_then(|l| by_name.get(l).copied()).filter(|w| w.paint.color().is_some());
             if let Some(w) = sw
                 && !seen_swatches.contains(&w.name)
             {
@@ -289,6 +290,16 @@ fn artwork_colors(d: &Document, ids: &[NodeId], tints: bool, swatches: &mut Vec<
             }
         });
     }
+}
+
+/// Every swatch by name, as [`Document::swatch`] finds it: the first swatch of each name, and the
+/// built-in Registration swatch when no swatch has its name.
+fn swatches_by_name(d: &Document) -> HashMap<&str, &Swatch> {
+    let mut by_name = HashMap::new();
+    for w in d.swatches_iter().chain([vectorcraft_color::swatch::registration()]) {
+        by_name.entry(w.name.as_str()).or_insert(w);
+    }
+    by_name
 }
 
 /// A color's model and the bits of its components, with -0.0 read as 0.0: two keys are equal
@@ -887,10 +898,11 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
+    let by_name = swatches_by_name(d);
     // Links with their tints, so a tint swatch is used where its tint of its base is.
     let (mut links, mut colors, mut gradients, mut patterns, mut gradient_links) = (vec![], vec![], vec![], vec![], vec![]);
     let mut color = |c: &Color, link: Option<&String>, tint: f32| match link {
-        Some(l) if d.swatch(l).is_some() => links.push((l.clone(), tint)),
+        Some(l) if by_name.contains_key(l.as_str()) => links.push((l.clone(), tint)),
         _ => colors.push(*c),
     };
     let mut paint = |p: &Paint| match p {

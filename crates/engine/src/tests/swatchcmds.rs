@@ -248,11 +248,40 @@ fn new_swatches_from_colors_are_numbered_after_names_already_taken() {
     let mut s = session();
     run(&mut s, "swatch.new", json!({"name": "R=255 G=0 B=0 2", "color": "#0000ff"}));
     run(&mut s, "swatch.newGroup", json!({"name": "Mine"}));
+    let before = doc(&s).clone();
     let undo = undo_len(&s);
-    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000", "#ff0000", "#00ff00", "#00ff00"]}));
-    let want = ["R=255 G=0 B=0", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0", "R=0 G=255 B=0 2"];
+    // Near-equal colors with the same name, and a Lab color and its twin with a -0.0 component.
+    let colors = json!([
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#00ff00",
+        "#00ff00",
+        [0.2, 0.4, 0.6],
+        [0.2, 0.4, 0.6001],
+        {"l": 50, "a": 0.0, "b": 0},
+        {"l": 50, "a": -0.0, "b": 0}
+    ]);
+    let r = run(&mut s, "swatch.new", json!({ "colors": colors }));
+    let want = [
+        "R=255 G=0 B=0",
+        "R=255 G=0 B=0 3",
+        "R=255 G=0 B=0 4",
+        "R=0 G=255 B=0",
+        "R=0 G=255 B=0 2",
+        "R=51 G=102 B=153",
+        "R=51 G=102 B=153 2",
+        "L=50 a=0 b=0",
+        "L=50 a=0 b=0 2",
+    ];
     assert_eq!(r, json!({"name": want[0], "names": want}));
+    assert_eq!(names(&s, None)[names(&s, None).len() - want.len()..], want);
+    assert!(matches!(doc(&s).swatch("L=50 a=0 b=0 2").unwrap().paint.color(), Some(Color::Lab { a, .. }) if a.is_sign_negative()));
     assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000", "#ff0000"]}));
+    assert_eq!(r["names"], json!(["R=255 G=0 B=0", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4"]));
     let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000"], "group": "Mine"}));
     assert_eq!(r["names"], json!(["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]));
     assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]);
@@ -271,14 +300,82 @@ fn new_color_group_numbers_its_colors_after_the_group_and_its_moved_swatches() {
     assert_eq!(r, json!({"name": "R=255 G=0 B=0", "swatches": want, "linked": 0}));
 }
 
+/// New Color Group from artwork lists each color once in paint order: a repeat and a twin with a
+/// -0.0 component are the same color, near-equal colors with the same name are numbered after the
+/// names already taken, and a paint linked to Registration brings no color. One undo step.
+#[test]
+fn new_color_group_from_artwork_lists_each_color_once_with_free_names() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=0 G=102 B=153", "color": "#00ff00"}));
+    let colors = [
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::rgb(0.0, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6001),
+        Color::rgb(-0.0, 0.4, 0.6),
+        Color::rgb(0.2, 0.4, 0.6),
+        Color::lab(50.0, 0.0, 0.0),
+        Color::lab(50.0, -0.0, 0.0),
+        Color::lab(50.0, 0.0001, 0.0),
+    ];
+    let mut ids: Vec<u64> = vec![];
+    for c in colors {
+        let id = rect_filled(&mut s, json!({"color": "#000000"}));
+        set_fill(&mut s, id, Paint::solid(c));
+        ids.push(id.0);
+    }
+    let registration = rect_filled(&mut s, json!({"color": "#000000"}));
+    let reg_paint = Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint: 1.0 };
+    set_fill(&mut s, registration, reg_paint);
+    ids.push(registration.0);
+    run(&mut s, "select.set", json!({ "ids": ids }));
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "R=51 G=102 B=153 2", "fromArtwork": true}));
+    let want = ["R=51 G=102 B=153", "R=0 G=102 B=153 2", "R=51 G=102 B=153 3", "L=50 a=0 b=0", "L=50 a=0 b=0 2"];
+    assert_eq!(r, json!({"name": "R=51 G=102 B=153 2", "swatches": want, "linked": 8}));
+    assert_eq!(names(&s, Some("R=51 G=102 B=153 2")), want);
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
+}
+
 #[test]
 fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     let mut s = session();
     run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"]}));
-    let colors = ["#0000ff", "#ff0000", "#ff0000", "#ff0000", "#ff0000", "#00ff00"];
+    let before = doc(&s).clone();
+    let undo = undo_len(&s);
+    // Near-equal colors with the same name, and a Lab color and its twin with a -0.0 component.
+    let colors = json!([
+        "#0000ff",
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#ff0000",
+        "#00ff00",
+        [0.2, 0.4, 0.6],
+        [0.2, 0.4, 0.6001],
+        {"l": 50, "a": 0.0, "b": 0},
+        {"l": 50, "a": -0.0, "b": 0}
+    ]);
     let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": colors, "rename": "R=255 G=0 B=0 2"}));
-    let want = ["R=255 G=0 B=0", "R=0 G=255 B=0", "R=0 G=0 B=255", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0 2"];
+    let want = [
+        "R=255 G=0 B=0",
+        "R=0 G=255 B=0",
+        "R=0 G=0 B=255",
+        "R=255 G=0 B=0 3",
+        "R=255 G=0 B=0 4",
+        "R=0 G=255 B=0 2",
+        "R=51 G=102 B=153",
+        "R=51 G=102 B=153 2",
+        "L=50 a=0 b=0",
+        "L=50 a=0 b=0 2",
+    ];
     assert_eq!(r, json!({"name": "R=255 G=0 B=0 2", "swatches": want, "relinked": 0}));
+    assert_eq!(names(&s, Some("R=255 G=0 B=0 2")), want);
+    assert_eq!(undo_len(&s), undo + 1);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(*doc(&s), before);
 }
 
 #[test]
