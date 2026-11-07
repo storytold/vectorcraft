@@ -384,3 +384,46 @@ fn a_strokes_own_transform_leaves_room_for_a_fill_above_it() {
     assert_eq!(stroked_leaves(&art).len(), 2, "{cost:?}");
     assert!(Budget::EFFECTS.fits(cost), "{cost:?}");
 }
+
+/// A 100 pt square at the origin painted with `fill` and a 1 pt white stroke, with the Transform
+/// effect `params`.
+fn filled_and_stroked(fill: Paint, params: Value) -> Node {
+    let mut n = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill, Paint::solid(Color::WHITE), 1.0));
+    n.appearance.effects.push(transform(params));
+    n
+}
+
+#[test]
+fn copies_with_a_fill_and_a_stroke_are_drawn_one_above_another() {
+    // Black fill, white stroke, each copy scaled and turned (#5920): each copy is an object of its
+    // own above the one before, so its fill covers the strokes of the copies below.
+    let params = json!({"scaleH": 97, "scaleV": 97, "rotate": 10, "copies": 25});
+    let n = filled_and_stroked(Paint::solid(Color::BLACK), params.clone());
+    assert!(has_transform_art(&n));
+    let art = reshape(None, &n, None).unwrap();
+    let paths = leaves(&art);
+    assert_eq!(paths.len(), 26, "the original and 25 copies");
+    for p in &paths {
+        assert!(matches!(p.kind, NodeKind::Path { .. }), "one shape each, not one path of every copy");
+        assert!(!p.appearance.fill_paint().is_none() && p.appearance.stroke().is_some());
+    }
+    // The original is at the bottom, the smallest copy on top.
+    assert_eq!(paths[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 100.0, 100.0));
+    let top = paths[25].geometric_bounds().unwrap();
+    assert!(top.width() < 100.0 && top.height() < 100.0, "{top:?}");
+    // Drawn as Expand Appearance makes it.
+    assert_eq!(leaves(&expand_outlined(None, &n, None).unwrap()).len(), 26);
+
+    // One opaque stroke, or one nonzero fill, paints the copies alike as one path: no art.
+    assert!(!has_transform_art(&filled_and_stroked(Paint::None, params.clone())));
+    let mut fill_only = filled_and_stroked(Paint::solid(Color::BLACK), params.clone());
+    fill_only.appearance.items.retain(AppearanceItem::is_fill);
+    assert!(!has_transform_art(&fill_only));
+    // A partly transparent fill paints where copies overlap twice.
+    if let Some(AppearanceItem::Fill(f)) = fill_only.appearance.items.first_mut() {
+        f.opacity = 0.5;
+    }
+    assert!(has_transform_art(&fill_only));
+    // No copies: nothing to stack.
+    assert!(!has_transform_art(&filled_and_stroked(Paint::solid(Color::BLACK), json!({"rotate": 10}))));
+}
