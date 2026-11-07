@@ -9,10 +9,7 @@ use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
-use super::{
-    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or,
-    unique_name,
-};
+use super::{CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, cmd, color_value, has_doc, index, ok, str_param, switch_or};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -197,10 +194,11 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
     let requested = name_param(p, "name").filter(|_| paints.len() == 1);
     let names = s.edit("New Swatch", |d, _| {
         let mut names = vec![];
+        let mut free = d.free_swatch_names();
         for paint in paints {
             let name = match &requested {
-                Some(n) => d.free_swatch_name(n),
-                None => d.new_swatch_name(&paint),
+                Some(n) => free.take(n),
+                None => free.take_new(&paint),
             };
             // A tint swatch's kind is its base's.
             let tint = matches!(paint, Paint::Solid { swatch: Some(_), .. });
@@ -417,8 +415,11 @@ fn swatch_new_group(s: &mut Session, p: &Value) -> Result<Value> {
         }
         // The global swatches made from the art's colours, which its unlinked paints link to.
         let mut links: Vec<(Color, String)> = vec![];
+        let mut free = d.free_swatch_names();
+        free.insert(&name);
+        group.swatches.iter().for_each(|sw| free.insert(&sw.name));
         for (c, global) in new {
-            let nm = unique_name(&color_name(c), |n| n == name || d.swatch_name_taken(n) || group.swatches.iter().any(|sw| sw.name == n));
+            let nm = free.take(&color_name(c));
             if global {
                 links.push((c, nm.clone()));
             }
@@ -1096,8 +1097,11 @@ pub(super) fn rewrite_group(d: &mut Document, group: &str, colors: &[Color], ren
             }
         }
     }
+    let mut free = d.free_swatch_names();
+    free.insert(&name);
+    swatches.iter().for_each(|w| free.insert(&w.name));
     for c in colors.iter().skip(swatches.len()) {
-        let nm = unique_name(&color_name(*c), |n| n == name || d.swatch_name_taken(n) || swatches.iter().any(|w| w.name == n));
+        let nm = free.take(&color_name(*c));
         swatches.push(Swatch { name: nm, paint: Paint::solid(*c), global: false, spot: false });
     }
     let g = &mut d.swatch_groups[gi];

@@ -244,6 +244,44 @@ fn unused_matches_links_tints_colors_gradients_and_patterns_exactly() {
 }
 
 #[test]
+fn new_swatches_from_colors_are_numbered_after_names_already_taken() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=255 G=0 B=0 2", "color": "#0000ff"}));
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine"}));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000", "#ff0000", "#00ff00", "#00ff00"]}));
+    let want = ["R=255 G=0 B=0", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0", "R=0 G=255 B=0 2"];
+    assert_eq!(r, json!({"name": want[0], "names": want}));
+    assert_eq!(undo_len(&s), undo + 1);
+    let r = run(&mut s, "swatch.new", json!({"colors": ["#ff0000", "#ff0000"], "group": "Mine"}));
+    assert_eq!(r["names"], json!(["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]));
+    assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0 5", "R=255 G=0 B=0 6"]);
+}
+
+#[test]
+fn new_color_group_numbers_its_colors_after_the_group_and_its_moved_swatches() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "R=255 G=0 B=0 2", "color": "#0000ff"}));
+    let r = run(
+        &mut s,
+        "swatch.newGroup",
+        json!({"name": "R=255 G=0 B=0", "swatches": ["R=255 G=0 B=0 2"], "colors": ["#ff0000", "#ff0000", "#00ff00", "#ff0000"]}),
+    );
+    let want = ["R=255 G=0 B=0 2", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0", "R=255 G=0 B=0 5"];
+    assert_eq!(r, json!({"name": "R=255 G=0 B=0", "swatches": want, "linked": 0}));
+}
+
+#[test]
+fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"]}));
+    let colors = ["#0000ff", "#ff0000", "#ff0000", "#ff0000", "#ff0000", "#00ff00"];
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": colors, "rename": "R=255 G=0 B=0 2"}));
+    let want = ["R=255 G=0 B=0", "R=0 G=255 B=0", "R=0 G=0 B=255", "R=255 G=0 B=0 3", "R=255 G=0 B=0 4", "R=0 G=255 B=0 2"];
+    assert_eq!(r, json!({"name": "R=255 G=0 B=0 2", "swatches": want, "relinked": 0}));
+}
+
+#[test]
 fn unused_leaves_out_linked_colours_gradients_and_patterns_in_use() {
     let mut s = session();
     let all = run(&mut s, "swatch.unused", json!({}));
