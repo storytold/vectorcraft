@@ -4503,6 +4503,166 @@ fn non_native_art_that_is_not_a_pdf_is_left_out_with_a_note() {
     assert!(s.warnings.iter().any(|w| w.starts_with(read::NON_NATIVE_ART_UNREAD)), "{:?}", s.warnings);
 }
 
+/// The same data in a symbol's definition: its `%_` line with a `(` opens no string, so the
+/// definition ends at its own end marker and the symbol after it comes in.
+#[test]
+fn non_native_art_in_a_symbol_ends_at_the_definitions_end() {
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n";
+    let defs = symbols(&(symbol("Pdf", &format!("{foreign}{}", dot()), 5) + &symbol("Dot", &dot(), 5)));
+    let s = read_ok(&(defs + &layer(&instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    let names: Vec<&str> = s.doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Dot"), "{names:?}");
+    let a = art(&s.doc);
+    assert_eq!(a.len(), 1);
+    assert!(matches!(&a[0].kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Dot"), "{:?}", a[0].kind);
+}
+
+/// Comment lines between a dictionary's name and its `:`, or an entry's key and its `,`, don't hide
+/// the data from the scan of a symbol's definition.
+#[test]
+fn non_native_art_with_comments_in_a_symbol_ends_at_the_definitions_end() {
+    let foreign = "/ForeignObject\n%note\n:\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data\n%note\n,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n";
+    let defs = symbols(&(symbol("Pdf", &format!("{foreign}{}", dot()), 5) + &symbol("Dot", &dot(), 5)));
+    let s = read_ok(&(defs + &layer(&instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+    let names: Vec<&str> = s.doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"Dot"), "{names:?}");
+}
+
+/// A string keys an entry as a name does: `(Data) ,` doesn't hide the data from the scan of a
+/// symbol's definition either.
+#[test]
+fn non_native_art_keyed_by_a_string_in_a_symbol_ends_at_the_definitions_end() {
+    for key in ["(Data)", "<44617461>"] {
+        let foreign = format!(
+            "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n{key} ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n"
+        );
+        let defs = symbols(&(symbol("Pdf", &format!("{foreign}{}", dot()), 5) + &symbol("Dot", &dot(), 5)));
+        let s = read_ok(&(defs + &layer(&instance("Dot", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]))));
+        let names: Vec<&str> = s.doc.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"Dot"), "{key}: {names:?}");
+    }
+}
+
+/// A `/Binary` dictionary's data in a skipped alternate: its `%_` line with a `(` opens no string,
+/// so the block ends at its own end marker.
+#[test]
+fn binary_data_in_a_skipped_alternate_ends_at_the_blocks_end() {
+    let binary = "%_/Document :\n%_/Binary : /ASCII85Decode ,\n%_(]<[%\n%;;;~>\n%_; (Profile) ,\n%_;\n";
+    let body = format!(
+        "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n{binary}frobnicate\n%AI17_End_Versioned_Content\n{}",
+        layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))
+    );
+    let s = read_ok(&body);
+    assert_eq!(art(&s.doc).len(), 1);
+    assert!(!s.warnings.iter().any(|w| w == read::VERSIONED_UNENDED), "{:?}", s.warnings);
+}
+
+/// A text document's data, the free type's undo copy included: its `%_` line with a `(` opens no
+/// string, even after a line that reads as another section's end marker, so the section ends at
+/// its own end marker and the art after it comes in.
+#[test]
+fn text_document_data_ends_at_the_sections_end() {
+    for ty in ["AI11TextDocument", "AI11UndoFreeTextDocument"] {
+        let document =
+            format!("%AI11_BeginTextDocument\n/{ty} : /ASCII85Decode ,\n%,u@!!/MSk8\n%AI3_EndPattern\n%_(]<[%\n%;;;~>\n%_;\n%AI11_EndTextDocument\n");
+        let s = read_ok(&format!("{document}{}", layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"))));
+        assert_eq!(art(&s.doc).len(), 1, "{ty}");
+    }
+}
+
+/// Data without its `~>` isn't skipped: the section still ends at its own end marker, with no `~>`
+/// after it, with one in a later section, and with later data that holds a `(` on a `%_` line.
+#[test]
+fn data_without_its_end_does_not_hide_the_sections_end() {
+    let unended = "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%AI11_EndTextDocument\n";
+    let ended = "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%_(]<[%\n%;;;~>\n%_;\n%AI11_EndTextDocument\n";
+    let art_layer = layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"));
+    for body in [format!("{unended}{art_layer}"), format!("{unended}{art_layer}{ended}"), format!("{unended}{ended}{art_layer}")] {
+        let s = read_ok(&body);
+        assert_eq!(art(&s.doc).len(), 1, "{body}");
+    }
+}
+
+/// Data without its `~>` is skipped up to the section's end marker: its `%_` line with a `(` opens
+/// no string, so the section ends there and the art after it comes in. A `%` right after the key
+/// starts no marker, so it doesn't end the data.
+#[test]
+fn data_without_its_end_holding_a_string_ends_at_the_sections_end() {
+    let art_layer = layer(&(rect_path(0.0, 0.0, 1.0, 1.0) + "f\n"));
+    for document in [
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%_(]<[%\n%AI11_EndTextDocument\n",
+        "%AI11_BeginTextDocument\r\n/AI11TextDocument : /ASCII85Decode ,\r\n%_(]<[%\r\n%AI11_EndTextDocument\r\n",
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,%AI11_EndTextDocument\n%_(]<[%\n%AI11_EndTextDocument\n",
+    ] {
+        let s = read_ok(&format!("{document}{art_layer}"));
+        assert_eq!(art(&s.doc).len(), 1, "{document}");
+    }
+}
+
+/// Data without its `~>` stops at the start of a section of the same kind nested after it too, so
+/// the outer section still ends at its own end marker and not at the nested one's.
+#[test]
+fn data_without_its_end_stops_at_a_nested_sections_start() {
+    let square = rect_path(0.0, 0.0, 1.0, 1.0) + "f\n";
+    let body = format!(
+        "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n/Binary : /ASCII85Decode ,\n%_(]<[%\n\
+         %AI17_Begin_Content_if_version_gt:23 1\nfrobnicate\n%AI17_End_Versioned_Content\n{square}%AI17_End_Versioned_Content\n{}",
+        layer(&square)
+    );
+    let s = read_ok(&body);
+    assert_eq!(art(&s.doc).len(), 1);
+    assert!(!s.warnings.iter().any(|w| w == read::VERSIONED_UNENDED), "{:?}", s.warnings);
+}
+
+/// Versioned content that doesn't end is scanned again for the swatches' names: data with its `~>`
+/// is still skipped, though data with none comes after it, and the dictionary open where the
+/// content starts still counts.
+#[test]
+fn swatch_names_are_found_past_data_in_versioned_content_that_does_not_end() {
+    let entries = "1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
+    let alternate = "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n";
+    let sea = format!("0 1 1 0 (Sea) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let unended = "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%,u@!!/MSk8\n%AI11_EndTextDocument\n";
+    for art_text in [format!("{alternate}/ForeignObject :\n{entries}{sea}{unended}"), format!("/ForeignObject :\n{alternate}{entries}{sea}{unended}")]
+    {
+        let body = format!("{}{}", DOTS.replace("(Dots)", "(Sea\\n1)"), layer(&art_text));
+        let d = read(stream(&body).as_bytes()).unwrap().doc;
+        let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Sea 2"], "{art_text}");
+    }
+}
+
+/// A search for where data stops that found nothing outside a section doesn't stop a later
+/// section's data at that section's end, so the named color after it still takes its name first.
+/// The `/Binary` holds a group, where the reader doesn't take what follows its key as data.
+#[test]
+fn swatch_names_are_found_past_data_in_a_section_after_a_search_outside_sections_found_nothing() {
+    let sea = format!("0 1 1 0 (Sea) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let before = "/Binary :\nu\n/ASCII85Decode ,\nU\n;\n";
+    for section in [
+        "%AI17_Begin_Content_if_version_gt:24 4\n%AI17_Alternate_Content\n/Binary : /ASCII85Decode ,\n%_(]<[%\n%AI17_End_Versioned_Content\n",
+        "%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n%_(]<[%\n%AI11_EndTextDocument\n",
+    ] {
+        let art_text = format!("{before}{section}{sea}");
+        let body = format!("{}{}", DOTS.replace("(Dots)", "(Sea\\n1)"), layer(&art_text));
+        let d = read(stream(&body).as_bytes()).unwrap().doc;
+        let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Sea 2"], "{art_text}");
+    }
+}
+
+/// The names the swatches take are found past the same data: a named color after it still takes
+/// its name first, and the pattern named after it is numbered.
+#[test]
+fn swatch_names_are_found_past_non_native_art_data() {
+    let foreign = "/ForeignObject :\n1 /Version ,\n2 0 0 2 10 20  /RTransform ,\n10 20  /Origin ,\n1 2 5 8  /Bounds ,\n/Data ,\n%,u@!!/MSk8%41#ocdN=10d&\n%_O%*mGn(RduU.]4`[u[.f\n%_;(]<[%\n%1H@<P2`V<S,pbuU7L]\\~>\n;\n0 0 Xd\n6 () XW\n0 Ae\n";
+    let sea = format!("0 1 1 0 (Sea) 0 x\n{}f\n", rect_path(0.0, 0.0, 5.0, 5.0));
+    let body = format!("{}{}", DOTS.replace("(Dots)", "(Sea\\n1)"), layer(&format!("{foreign}{sea}")));
+    let d = read(stream(&body).as_bytes()).unwrap().doc;
+    let names: Vec<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["Sea 2"]);
+}
+
 /// A PDF with one page of `size` points holding `content`.
 fn tiny_pdf(size: f64, content: &str) -> Vec<u8> {
     let objects = [
