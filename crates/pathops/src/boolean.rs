@@ -5,7 +5,8 @@
 //! [`tidy_segments`] then re-joins pieces that came from the same smooth curve by refitting, so
 //! results have roughly as few anchors as the inputs.
 
-use std::collections::BTreeSet;
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 use kurbo::{BezPath, CubicBez, PathSeg, Point, Shape as _};
 use linesweeper::topology::{ContourIdx, Contours, Topology, WindingNumber};
@@ -351,19 +352,28 @@ impl Arrangement {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.contours(pred))).map_err(|_| PathOpsError::Degenerate)
     }
 
-    /// All distinct non-empty coverage masks that occur next to some edge, sorted.
-    pub(crate) fn distinct_masks(&self) -> Vec<Vec<bool>> {
-        let mut set = BTreeSet::new();
+    /// All distinct non-empty coverages that occur next to some edge, each as the inputs it covers
+    /// (ascending, as [`Self::covered`] gives them), in the order of their masks ([`Self::mask`])
+    /// sorted.
+    pub(crate) fn distinct_masks(&self) -> Vec<Vec<usize>> {
+        let mut set: HashSet<Vec<usize>> = HashSet::new();
+        let mut cover = Vec::new();
         for s in self.top.segment_indices() {
             let h = s.first_half();
             for w in [self.top.winding_clockwise(h), self.top.winding_counter_clockwise(h)] {
-                let m = self.mask(w);
-                if m.iter().any(|&b| b) {
-                    set.insert(m);
+                cover.clear();
+                cover.extend(self.covered(w));
+                if !cover.is_empty() && !set.contains(cover.as_slice()) {
+                    set.insert(cover.clone());
                 }
             }
         }
-        set.into_iter().collect()
+        let mut masks: Vec<Vec<usize>> = set.into_iter().collect();
+        // Masks sort by the first input only one of them covers: the one without it comes first.
+        // That input is the smaller of the first two entries that differ, or the next entry of the
+        // longer list where the shorter one ends.
+        masks.sort_unstable_by(|a, b| a.iter().map(Reverse).cmp(b.iter().map(Reverse)));
+        masks
     }
 
     /// Vertices where three or more edges meet (true intersections / touch points).
