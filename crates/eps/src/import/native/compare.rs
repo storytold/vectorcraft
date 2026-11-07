@@ -491,10 +491,12 @@ impl PageView {
         }
         // The page doesn't print what isn't printed.
         let drawn = if self.in_cmyk.is_none() && blends_in_cmyk(self.cmyk, b) {
-            // Drawn both ways, the closer to the page decides.
+            // Drawn both ways on every page (not only those wanted, which may not show the
+            // difference), the closer to the pages decides; the drawings of all of them are kept.
+            let every: Vec<usize> = (0..n).collect();
             let both = [false, true].map(|cmyk| {
                 let printed = as_printed(b, cmyk);
-                let drawn = self.draw(printed.as_ref().unwrap_or(b), &missing);
+                let drawn = self.draw(printed.as_ref().unwrap_or(b), &every);
                 let off: f64 = drawn.iter().filter_map(|(i, d)| Some(compared(&self.pages.get(*i)?.drawn, d, &[], &[]).any)).sum();
                 (off, cmyk, drawn)
             });
@@ -1185,5 +1187,33 @@ mod tests {
             assert_eq!(compare(&frame, &mut view, &layers, false), Ok(vec![]), "cmyk: {cmyk}");
             assert_eq!(view.in_cmyk, Some(cmyk));
         }
+    }
+
+    /// The blending space is chosen from every page, also when the first pages drawn are only
+    /// some of them: here the first page has no transparency, and the second is blended in CMYK.
+    #[test]
+    fn the_blending_space_is_chosen_from_every_page() {
+        use vectorcraft_doc::ColorMode;
+        let (a, b) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(200.0, 0.0, 300.0, 100.0));
+        let mut page = Document::new_with_mode(300.0, 100.0, ColorMode::Cmyk);
+        let layer = page.layers[0].id;
+        filled(&mut page, layer, a, 0.6);
+        filled(&mut page, layer, b, 0.6);
+        let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(1.0, 0.0, 1.0, 0.0));
+        let mut n = Node::path(
+            page.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(Rect::new(220.0, 20.0, 280.0, 80.0)),
+            vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0),
+        );
+        n.blend = vectorcraft_color::BlendMode::Screen;
+        page.insert(Some(layer), usize::MAX, n).unwrap();
+        let mut layers = page.clone();
+        layers.color_mode = ColorMode::Rgb;
+        let frame = frame_of(&page, &[a, b]);
+        let mut view = PageView::new(&frame);
+        view.layered(&layers, &[0]);
+        assert_eq!(view.in_cmyk, Some(true));
+        // Both pages were drawn, and kept.
+        assert!(view.drawn.last().is_some_and(|d| d.pages.iter().all(Option::is_some)));
     }
 }
