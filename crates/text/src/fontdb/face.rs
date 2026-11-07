@@ -199,6 +199,11 @@ pub struct FontFace {
     pub(super) colour_layers: bool,
     /// Has an `SVG ` table: OpenType SVG glyphs ([`FontDb::glyph_colour`]).
     pub(super) svg_glyphs: bool,
+    /// What the `GSUB` table substitutes ([`Self::substitutions`]), read the first time it is asked
+    /// for.
+    pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
+    /// [`Self::unencoded_glyphs`], read once.
+    pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance

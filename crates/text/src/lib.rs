@@ -13,6 +13,7 @@
 mod bitmap;
 mod colr;
 mod composer;
+mod context_alternates;
 pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
@@ -32,12 +33,15 @@ pub mod test_fonts;
 pub mod thread;
 
 pub use bitmap::GlyphImage;
+pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
-pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
+pub use features::{
+    EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
+};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, PlatformFontFiles, StylisticSet, WantedFont,
-    WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined,
-    style_weight, system_font_dirs, user_font_dirs,
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, PlatformFontFiles, StylisticSet, Substitution,
+    SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files,
+    set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use std::sync::Arc;

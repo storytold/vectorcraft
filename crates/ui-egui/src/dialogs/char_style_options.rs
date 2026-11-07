@@ -183,9 +183,10 @@ pub(crate) fn swatch_choices(doc: &vectorcraft_doc::Document) -> Value {
     Value::Array(choices.collect())
 }
 
-/// A feature tag without its `-` or `+`.
+/// A feature tag without its `-` or `+` prefix and its `=N` value.
 fn bare(tag: &str) -> &str {
-    tag.trim_start_matches(['-', '+'])
+    let tag = tag.trim_start_matches(['-', '+']);
+    tag.split_once('=').map_or(tag, |(name, _)| name)
 }
 
 /// The OpenType Features fields for a style's `features`: each control is unset unless the list
@@ -486,9 +487,14 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
     }
     if !unchanged("ot_sets") {
         let sets = &vectorcraft_text::EXTRA_FEATURES[..20];
+        // A set still on keeps the value its tag gives (`ss01=2`).
+        let before: Vec<String> = tags.iter().filter(|t| sets.contains(&bare(t)) && !t.starts_with('-')).cloned().collect();
         tags.retain(|t| !sets.contains(&bare(t)));
         let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
-        tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(str::to_string));
+        tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
+            let kept = before.iter().rev().find(|b| !t.starts_with('-') && bare(b) == bare(t));
+            kept.map_or_else(|| t.to_string(), Clone::clone)
+        }));
     }
     if !tags.is_empty() {
         attrs.insert("features".into(), json!(tags));

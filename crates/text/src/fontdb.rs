@@ -24,6 +24,7 @@ mod db;
 mod dirs;
 mod face;
 mod glyph_pen;
+mod gsub;
 mod lookup;
 mod names;
 mod scan;
@@ -32,6 +33,7 @@ mod traits;
 mod wanted;
 
 pub use alternates::GlyphAlternate;
+pub(crate) use alternates::listed;
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
@@ -49,6 +51,7 @@ use face::Instances;
 pub(crate) use face::MAX_LIVE_INSTANCES;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
+pub use gsub::{Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
