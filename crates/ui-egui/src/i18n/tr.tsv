@@ -3743,7 +3743,7 @@ axis	Both	Her İkisi
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
 @msg	select some type first	önce bir tür seçin
-@msg	kerning must be a number, "auto", or "optical"	Karakter aralığı sayı, “auto” veya “optical” olmalıdır
+@msg	kerning must be a number, "auto", or "optical"	kerning bir sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok
 @msg	the selection has no gradient stroke	seçimin degrade konturu yok
 @msg	the selection has no pattern fill	seçimin desen dolgusu yok
@@ -3938,9 +3938,9 @@ axis	Both	Her İkisi
 @msg	too many changed shortcuts	değiştirilen kısayol sayısı çok fazla
 @msg	bad stream length	Kötü akış uzunluğu
 @msg	bad trailer	kötü römork
-@msg	balance must be between 0 and 100	bakiye 0 ile 100 arasında olmalıdır
+@msg	balance must be between 0 and 100	balance 0 ile 100 arasında olmalıdır
 @msg	batch step {_1} (`{id}`) failed: {e}	toplu adım {_1} (`{id}`) başarısız oldu: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	parlaklık koyu|ortaKoyu|ortaAçık|açık olmalıdır
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness dark|mediumDark|mediumLight|light olmalıdır
 @msg	can't encode the document: {0}	belge kodlanamıyor: {0}
 @msg	can't parse shortcut `{c}`	`{c}` kısayolu ayrıştırılamıyor
 @msg	can't parse shortcut `{s}` for `{k}`	`{k}` için `{s}` kısayolu ayrıştırılamıyor
@@ -3965,7 +3965,7 @@ axis	Both	Her İkisi
 @msg	compound paths can only contain paths	bileşik yollar yalnızca yollar içerebilir
 @msg	compressed (RLE) bitmaps can't be read yet	sıkıştırılmış (RLE) bitmapler henüz okunamıyor
 @msg	damaged	hasarlı
-@msg	decimals must be {_1}–{_2} (got {_3})	ondalık sayılar {_1}–{_2} olmalıdır ({_3}'yi aldı)
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals {_1}–{_2} olmalıdır ({_3}'yi aldı)
 @msg	divide into 1 to {MAX_PIECES} slices	1 ila {MAX_PIECES} dilimlerine bölün
 @msg	effect {k} is `{_1}`, not `{id}`	{k} efekti `{_1}`, `{id}` değil
 @msg	empty brush stroke	boş fırça darbesi
@@ -3996,7 +3996,7 @@ axis	Both	Her İkisi
 @msg	its Windows metafile preview was opened instead, which may simplify the art	bunun yerine Windows meta dosyası önizlemesi açıldı, bu da işi basitleştirebilir
 @msg	its preview was placed instead, at screen resolution	bunun yerine önizlemesi ekran çözünürlüğüne yerleştirildi
 @msg	join needs open paths	katılmak için açık yollara ihtiyaç var
-@msg	lang must be one of {_1}	dil {_1}'den biri olmalıdır
+@msg	lang must be one of {_1}	lang şunlardan biri olmalıdır: {_1}
 @msg	layers can't be wrap objects	katmanlar sarma nesneleri olamaz
 @msg	line {line}: value for `{var}` must be true or false	satır {line}: `{var}` değeri true veya false olmalıdır
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	satır {line}: `{var}` değeri {MAX_GRAPH_CSV} bayttan uzun
@@ -4150,9 +4150,9 @@ axis	Both	Her İkisi
 @msg	replace: the object to replace was changed or deleted	değiştir: değiştirilecek nesne değiştirildi veya silindi
 @msg	pattern missing	desen eksik
 @msg	patterns nested too deeply are filled with mid-grey	çok derin iç içe geçmiş desenler orta gri renkle dolu
-@msg	percent must be above 0 and at most 6400, not {p}	yüzde {p} değil, 0'ın üzerinde ve en fazla 6400 olmalıdır
+@msg	percent must be above 0 and at most 6400, not {p}	percent 0'ın üzerinde ve en fazla 6400 olmalıdır, {p} değil
 @msg	pick a colour, gradient or pattern to save as a swatch	renk örneği olarak kaydetmek için bir renk, degrade veya desen seçin
-@msg	plane must be left, right or ground	düzlem solda, sağda veya yerde olmalıdır
+@msg	plane must be left, right or ground	plane left, right veya ground olmalıdır
 @msg	plug-in ABI: {0}	eklenti ABI: {0}
 @msg	plug-in exceeded its {0}	eklenti {0} sınırını aştı
 @msg	plug-in failed: {0}	eklenti başarısız oldu: {0}
@@ -4171,8 +4171,8 @@ axis	Both	Her İkisi
 @msg	result would exceed the canvas (coordinates out of range)	sonuç tuvali aşacaktır (koordinatlar aralık dışındadır)
 @msg	objects can't be nested more than 32 deep	nesneler 32'den fazla derinliğe yerleştirilemez
 @msg	the SVG's elements are nested more than {0} deep	SVG'nin öğeleri {0} derinliğinden daha fazla yuvalanmıştır
-@msg	scale must be a number from {_1} to {_2}, not {_3}	ölçek {_3} değil, {_1} ile {_2} arasında bir sayı olmalıdır
-@msg	scale must be a number from {_1} to {_2}, not {s}	ölçek {s} değil, {_1} ile {_2} arasında bir sayı olmalıdır
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {_3} değil
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {s} değil
 @msg	select (or target) objects whose appearance isn't basic	Görünümü temel olmayan nesneleri seçin (veya hedefleyin)
 @msg	select a Live Paint group	bir Canlı Boyama grubu seçin
 @msg	select a blend	bir karışım seç
@@ -4386,12 +4386,12 @@ axis	Both	Her İkisi
 @msg	The graphics were lost and couldn't be restarted.	Grafikler kayboldu ve yeniden başlatılamadı.
 @msg	Your unsaved changes are kept in this browser: reload the page to get them back.	Kaydedilmemiş değişiklikleriniz bu tarayıcıda tutuluyor: onları geri almak için sayfayı yeniden yükleyin.
 @msg	Reload the page to go on (changes not saved yet may be lost).	Devam etmek için sayfayı yeniden yükleyin (henüz kaydedilmemiş değişiklikler kaybolabilir).
-@msg	tool (a tool id) is required	araç (araç kimliği) gerekli
+@msg	tool (a tool id) is required	tool (bir araç kimliği) gerekli
 @msg	{tool} isn't in a toolbar group of several tools	{tool} çeşitli araçlardan oluşan bir araç çubuğu grubunda değil
-@msg	onto must name a panel floating in another group	üzerine başka bir grupta yüzen bir panel adı verilmelidir
-@msg	below and above must name a panel floating in another group	alt ve üst, başka bir grupta yüzen bir panele ad vermelidir
-@msg	give only one of onto, below and above	üstüne, altına ve üstüne yalnızca birini verin
-@msg	column must be true or a number from 1	sütun doğru veya 1'den bir sayı olmalıdır
+@msg	onto must name a panel floating in another group	onto başka bir grupta yüzen bir paneli adlandırmalıdır
+@msg	below and above must name a panel floating in another group	below ve above başka bir grupta yüzen bir paneli adlandırmalıdır
+@msg	give only one of onto, below and above	onto, below ve above değerlerinden yalnızca birini verin
+@msg	column must be true or a number from 1	column true veya 1'den başlayan bir sayı olmalıdır
 @msg	x and y must both be numbers	x ve y'nin her ikisi de sayı olmalıdır
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" bir renk değildir: #rrggbb olarak yazın
 @msg	this isn't a flat-colour logo ({_1}% of its solid areas match a few flat colours), so Flat Logo mode would turn its gradients into patches: use Color mode instead	bu düz renkli bir logo değildir (düz alanların %{_1}'si birkaç düz renkle eşleşir), dolayısıyla Düz Logo modu degradelerini yamalara dönüştürür: bunun yerine Renk modunu kullanın
@@ -4621,19 +4621,19 @@ effect	Soft	Yumuşak
 	Resize panels	Panelleri yeniden boyutlandır
 	Resize panel window	Panel penceresini yeniden boyutlandır
 @msg	Invalid panel layout; restored the default dock	Geçersiz panel düzeni; varsayılan dock'u geri yükledim
-@msg	action is required	eylem gerekli
-@msg	anchor must name a registered panel	çapa kayıtlı bir panele isim vermelidir
-@msg	before must name a panel	önce bir panele isim vermeliyim
+@msg	action is required	action gerekli
+@msg	anchor must name a registered panel	anchor kayıtlı bir paneli adlandırmalıdır
+@msg	before must name a panel	before bir paneli adlandırmalıdır
 @msg	docking action contains an unknown panel or an excessive split path	yerleştirme eylemi bilinmeyen bir panel veya aşırı bölünmüş yol içeriyor
-@msg	group must be true or false	grup doğru veya yanlış olmalıdır
-@msg	move requires a destination panel	taşıma bir hedef paneli gerektirir
-@msg	move requires an existing destination panel	taşıma mevcut bir hedef paneli gerektirir
-@msg	onto must name a floating panel	üzerine kayan bir panel adı verilmelidir
+@msg	group must be true or false	group true veya false olmalıdır
+@msg	move requires a destination panel	move bir hedef paneli gerektirir
+@msg	move requires an existing destination panel	move mevcut bir hedef paneli gerektirir
+@msg	onto must name a floating panel	onto yüzen bir paneli adlandırmalıdır
 @msg	panel group is empty	panel grubu boş
-@msg	panel must name a registered panel	panel kayıtlı bir panele isim vermelidir
+@msg	panel must name a registered panel	panel kayıtlı bir paneli adlandırmalıdır
 @msg	saved panel layout is invalid; reset the workspace first	kayıtlı panel düzeni geçersiz; önce çalışma alanını sıfırlayın
-@msg	zone must be a string	bölge bir dize olmalıdır
-@msg	zone must be tab, center, left, right, top or bottom	bölge sekme, orta, sol, sağ, üst veya alt olmalıdır
+@msg	zone must be a string	zone bir dize olmalıdır
+@msg	zone must be tab, center, left, right, top or bottom	zone tab, center, left, right, top veya bottom olmalıdır
 @msg	{key} must be a finite coordinate	{key} sonlu bir koordinat olmalıdır
 @msg	x and y must be provided together	x ve y birlikte sağlanmalıdır
 @msg	invalid restored panel group	geçersiz geri yüklenen panel grubu
@@ -5186,7 +5186,7 @@ theme	Appearance	Görünüm
 	Screen Mode Controls	Ekran Modu Kontrolleri
 	Drawer menu	Çekmece menüsü
 	Toolbar: Show Controls	Araç Çubuğu: Kontrolleri Göster
-@msg	control must be fillStroke, coloring, drawMode or screenMode	kontrol fillStroke, colouring, DrawMode veya screenMode olmalıdır
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control fillStroke, coloring, drawMode veya screenMode olmalıdır
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	bilinmeyen kontrol `{name}`: fillStroke, colouring,drawMode veya screenMode
 @msg	give a fraction `t` from 0 to 1	0'dan 1'e kadar bir `t` kesri verin
 @msg	give the path `id`	`id` yolunu ver
@@ -5245,7 +5245,7 @@ theme	Appearance	Görünüm
 @msg	Unknown dimension style	Bilinmeyen boyut stili
 @msg	Unknown unit	Bilinmeyen birim
 	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Açık profillerin dairesel uçlarını kapatın. Kısmi süpürmeler kesik taraflarını açık tutar.
-@msg	span must be "object" or "selection", got {v}	yayılma "nesne" veya "seçim" olmalıdır, {v} var
+@msg	span must be "object" or "selection", got {v}	span "object" veya "selection" olmalıdır, {v} değil
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" bir renk örneği değil, bir `gradient` yerleştirir
 @msg	span: "selection" places a gradient: give `gradient`	span: "selection" bir degrade yerleştirir: `gradient` verin
 @msg	span: "selection" places a linear or radial gradient, not a freeform one	span: "selection" serbest biçimli bir degrade değil, doğrusal veya radyal bir degrade yerleştirir
@@ -5267,8 +5267,8 @@ theme	Appearance	Görünüm
 @msg	the action has no steps	eylemin hiçbir adımı yok
 @msg	the action has no included steps	eylemin dahil edilmiş adımı yok
 @msg	no such action step	öyle bir eylem adımı yok
-@msg	included must be true or false	"included" true veya false olmalıdır
-@msg	others must be true or false	"others" true veya false olmalıdır
+@msg	included must be true or false	included true veya false olmalıdır
+@msg	others must be true or false	others true veya false olmalıdır
 	Accent Color	Vurgu Rengi
 	Amber	kehribar
 	Coral	Mercan
@@ -5437,7 +5437,7 @@ theme	Appearance	Görünüm
 @msg	a spine keeps at least two points	bir omurga en az iki nokta barındırır
 @msg	cancelled; nothing was changed	iptal edildi; hiçbir şey değiştirilmedi
 @msg	handle must be in or out	handle in veya out olmalıdır
-@msg	index must be ≥ 0	dizin ≥ 0 olmalıdır
+@msg	index must be ≥ 0	index ≥ 0 olmalıdır
 @msg	library panel `{given}` isn't open	`{given}` kütüphane paneli açık değil
 @msg	mask art ends outside a mask dictionary	maske çizimi bir maske sözlüğünün dışında bitiyor
 @msg	missing number `{key}`	`{key}` sayısı eksik

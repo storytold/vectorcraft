@@ -4734,10 +4734,10 @@ effect	Soft	Меко
 @msg	anchor must name a registered panel	опорната точка трябва да указва регистриран панел
 @msg	before must name a panel	параметърът „преди“ трябва да указва панел
 @msg	docking action contains an unknown panel or an excessive split path	действието по закачане съдържа непознат панел или прекомерен път на разделяне
-@msg	group must be true or false	групата трябва да е истина или лъжа
+@msg	group must be true or false	group трябва да е true или false
 @msg	panel is not in a dock group	панелът не е в група на дока
 @msg	only a dock group above or below others collapses, not one beside another	свива се само група на дока над или под други, не и такава до друга
-@msg	icon must be true or false	icon трябва да е истина или лъжа
+@msg	icon must be true or false	icon трябва да е true или false
 @msg	icon only docks a panel in the icon column, with no anchor	icon закачва панел само в колоната с икони, без anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column закачва набор като колона на дока, без anchor или icon
 @msg	move requires a destination panel	преместването изисква целеви панел
