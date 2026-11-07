@@ -133,8 +133,9 @@ impl Session {
         if self.tool.id() == id {
             return Ok(());
         }
-        // Sampling type keeps its highlighted characters as the target. Capture before the
-        // Type tool deactivates (which commits typing and clears its editing state).
+        // Sampling type keeps its highlighted characters as the target, and a whole story that
+        // Select All selected. Capture before the Type tool deactivates (which commits typing and
+        // clears its editing state).
         let is_type = |id: &str| matches!(id, "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath");
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())

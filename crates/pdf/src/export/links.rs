@@ -47,8 +47,10 @@ impl Exporter<'_> {
         {
             return;
         }
-        let bounds = n.visual_bounds_with(&self.symbols).filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()));
-        if let (Some(uri), Some(b)) = (n.url().filter(|u| opens(u)), bounds) {
+        // Only a link and a clipping group read the box.
+        let uri = n.url().filter(|u| opens(u));
+        let bounds = (uri.is_some() || n.clips()).then(|| self.measure_for_links(n)).flatten();
+        if let (Some(uri), Some(b)) = (uri, bounds) {
             let shown = b.intersect(within);
             if shown.width() > 0.0 && shown.height() > 0.0 {
                 let rect = to_page.transform_rect_bbox(shown);
@@ -73,6 +75,13 @@ impl Exporter<'_> {
         for child in n.children().into_iter().flatten() {
             self.link_node(child, within, to_page, links, more);
         }
+    }
+
+    /// The visual box of `n`, when all its coordinates are finite.
+    fn measure_for_links(&self, n: &Node) -> Option<Rect> {
+        #[cfg(test)]
+        super::MEASURES.with(|m| m.set(m.get() + 1));
+        n.visual_bounds_with(&self.symbols).filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()))
     }
 }
 

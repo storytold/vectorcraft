@@ -1621,6 +1621,9 @@ fn frame_output(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Shape>, e
             s => out.push(s),
         }
     }
+    // With no kept marks the frame draws the selection's marks as separate shapes, which callers
+    // read. `selection_marks::tests` compares them with the kept mesh.
+    app.canvas.selection_marks = Default::default();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let out = ctx.run_ui(raw, |ui| show(app, ui));
     let mut v = vec![];

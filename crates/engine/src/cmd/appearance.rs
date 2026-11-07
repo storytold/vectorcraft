@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's solid fill and stroke for this instance only, as the Eyedropper Options allow, and a sampled gradient or pattern, a source that is not a path, compound path or type, or options that pick up neither color, are refused → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art); with an object of a dynamic symbol instance selected by Direct Selection and no ids, reverse, append or defaultsOnly, that object takes the source's solid fill and stroke for this instance only, as the Eyedropper Options allow, and a sampled gradient or pattern, a source that is not a path, compound path or type, or options that pick up neither color, are refused → {ids}",
             has_doc,
             copy_from
         ),
@@ -1139,14 +1139,17 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     if !reverse && !defaults_only {
         s.eyedropper_sample = Some(node);
     }
-    let range = range.filter(|(id, _, _)| targets.contains(id));
     // The highlighted characters' type objects and ranges: after Select All in threaded text, all
-    // the text of every frame of the story.
+    // the text of every frame of the story, except a frame the attributes come from, in place of
+    // the object selection.
     let story = super::textedit::editing_story(s);
     let ranges: Vec<(NodeId, Option<(usize, usize)>)> = match range {
-        Some((id, _, _)) if story.contains(&id) => story.iter().map(|f| (*f, None)).collect(),
-        Some((id, start, end)) => vec![(id, Some((start, end)))],
-        None => vec![],
+        Some((id, _, _)) if story.contains(&id) => {
+            targets.clear();
+            story.iter().copied().filter(|f| Some(*f) != source).map(|f| (f, None)).collect()
+        }
+        Some((id, start, end)) if targets.contains(&id) => vec![(id, Some((start, end)))],
+        _ => vec![],
     };
     // Character styles cannot represent object transparency. Refuse before even changing
     // paint defaults; applying it to the object would also alter the unselected characters.
@@ -1164,7 +1167,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     if !reverse {
         picked.to_defaults(s, &attrs.appearance);
     }
-    if targets.is_empty() || attrs.is_empty() {
+    if (targets.is_empty() && ranges.is_empty()) || attrs.is_empty() {
         return Ok(json!({ "ids": [] }));
     }
     if !ranges.is_empty() {

@@ -1036,6 +1036,11 @@ fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
         None => st.selection.objects.clone(),
     };
     let from_art = ids.iter().filter_map(|id| st.doc.node(*id)).find_map(|n| {
+        // Only a gradient needs the object measured for its placement.
+        let paint = n.proxy_paint_only(stroke, None)?;
+        if !matches!(paint, Paint::Gradient(_)) {
+            return Some(paint.clone());
+        }
         let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
         // Type's characters paint in its own space: a gradient there takes its placement in the
         // document, so that it keeps the direction it shows.

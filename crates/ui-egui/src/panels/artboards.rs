@@ -100,10 +100,12 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     super::transform::reference_locator(ui, refi);
     let link = super::transform::proportional(app, ui);
     let rp = vectorcraft_geom::reference_point(r, refi);
+    // The W/H link sits between W and H, but is made after H so Tab goes from W straight to H and
+    // finds the link after it, as in the object Control bar.
+    let mut link_room = None;
     for (k, lbl, v) in [("x", "X:", rp.x - origin.x), ("y", "Y:", rp.y - origin.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
-        // The W/H link sits between W and H.
         if k == "height" {
-            super::transform::constrain_link(app, ui);
+            link_room = Some(super::transform::constrain_link_room(ui));
         }
         widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
         let set = if matches!(k, "width" | "height") {
@@ -120,6 +122,10 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             };
             super::transform::set_artboard(app, i, refi, xywh, link);
         }
+    }
+    if let Some(room) = link_room {
+        let id = ui.scope_id().with("cb-ab-constrain-link");
+        super::transform::constrain_link_at(app, ui, ui.interact(room, id, egui::Sense::click()));
     }
     true
 }
