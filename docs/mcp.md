@@ -1775,7 +1775,9 @@ already walks Image Trace. Short agent entry points:
   what that kind of corner draws when the brush has no `outer_corner` or `inner_corner` art for it: `none` draws no
   corner tile, and `autoCentered`, `autoBetween`, `autoSliced` and `autoOverlap` make one from the side tile. Without
   a source, the corner draws the other kind of corner's art. `brush.options {params: {outer_corner: null}}` removes
-  the art. Pattern Brush Options also accepts `side_tile`, `outer_corner_tile`, `inner_corner_tile`,
+  the art. Outer and inner corner art are both drawn as the corner that joins a side tile on its right to one below
+  it. The brush turns each corner tile so that those two arms meet the sides at the corner: 90° from one corner to
+  the next on a rectangle, and halfway between the two sides at other angles. Pattern Brush Options also accepts `side_tile`, `outer_corner_tile`, `inner_corner_tile`,
   `start_tile` and `end_tile` in `params`. Each takes `none`, `original` or the name of a pattern
   swatch in the active document, and `{"pattern": "<name>"}` names a swatch even when its name is one of those
   words. Corner tiles also take `autoCentered`, `autoBetween`, `autoSliced` and `autoOverlap`. A swatch choice copies its whole art and tile frame into the brush. `original`
