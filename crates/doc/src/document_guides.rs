@@ -6,9 +6,15 @@ impl Document {
     /// Union of the geometric bounds of `ids` (their visual bounds when `visual`), with symbol
     /// instances measured by their art ([`Node::geometric_bounds_with`]).
     pub fn bounds_of(&self, ids: &[NodeId], visual: bool) -> Option<Rect> {
-        let symbols = self.symbol_boxes();
+        self.bounds_of_with(ids, visual, &self.symbol_boxes())
+    }
+
+    /// [`bounds_of`](Document::bounds_of) measuring symbol instances from `symbols`, a cache shared
+    /// across calls: measuring many instances one by one otherwise measures their art again for
+    /// each.
+    pub fn bounds_of_with(&self, ids: &[NodeId], visual: bool, symbols: &crate::SymbolBoxes) -> Option<Rect> {
         ids.iter().filter_map(|id| self.node(*id)).fold(None, |acc, n| {
-            vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds_with(&symbols) } else { n.geometric_bounds_with(&symbols) })
+            vectorcraft_geom::union_opt(acc, if visual { n.visual_bounds_with(symbols) } else { n.geometric_bounds_with(symbols) })
         })
     }
 
@@ -79,31 +85,77 @@ impl Document {
     /// by its clipping path where that paints). Guides (paths made into guides too) aren't artwork
     /// (Delete Empty Artboards).
     pub fn artboard_has_art(&self, rect: Rect) -> bool {
+        self.art_meets(&self.symbol_boxes(), rect, true)
+    }
+
+    /// Is there a rect in `rects` (artboards) with no artwork on it, by [`Document::artboard_has_art`]?
+    /// The symbols are measured once for all of them. A first pass rules art out by a quick box
+    /// (paths and compound paths: their control points grown by the farthest their strokes reach),
+    /// so a rect away from every path is found without measuring along any; only when every rect
+    /// may hold art is each one measured.
+    pub fn any_artboard_without_art(&self, rects: impl IntoIterator<Item = Rect>) -> bool {
+        let rects: Vec<Rect> = rects.into_iter().collect();
+        let symbols = self.symbol_boxes();
+        rects.iter().any(|r| !self.art_meets(&symbols, *r, false)) || rects.iter().any(|r| !self.art_meets(&symbols, *r, true))
+    }
+
+    /// [`Document::artboard_has_art`] of `rect` when `exact`. Otherwise whether art may lie on it:
+    /// paths and compound paths count when their quick box meets it, so a false answer is exact and
+    /// a true one may not be.
+    fn art_meets(&self, symbols: &SymbolBoxes, rect: Rect, exact: bool) -> bool {
         // As in `art_on_artboard`: a millionth of a point covers rounding at the edges.
         let rect = rect.inflate(1e-6, 1e-6);
         fn meets(b: Option<Rect>, r: Rect) -> bool {
             b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1)
         }
-        fn has(c: &Node, s: &SymbolBoxes, rect: Rect) -> bool {
+        /// A box that holds the visual bounds of a path, or of a compound path of paths, found
+        /// without measuring along its shape: its control points' box grown by the farthest its
+        /// strokes reach ([`crate::Appearance::outset`], as in [`Node::reach_bounds`]), with a
+        /// margin for rounding. None for other objects, and when the reach is not finite.
+        fn quick_box(c: &Node) -> Option<Rect> {
+            let b = match &c.kind {
+                NodeKind::Path { path, .. } => path.control_bounds()?,
+                NodeKind::Compound { children, .. } => children.iter().try_fold(None, |acc, m| {
+                    let NodeKind::Path { path, .. } = &m.kind else { return None };
+                    Some(vectorcraft_geom::union_opt(acc, path.control_bounds()))
+                })??,
+                _ => return None,
+            };
+            let o = c.appearance.outset();
+            let o = o * (1.0 + 1e-9) + 1e-6;
+            o.is_finite().then(|| b.inflate(o, o))
+        }
+        /// Does `c`'s visual box meet `rect`? Without `exact`, a quick box that meets it answers yes.
+        fn art_box_meets(c: &Node, s: &SymbolBoxes, rect: Rect, exact: bool) -> bool {
+            match quick_box(c).map(|b| meets(Some(b), rect)) {
+                Some(false) => false,
+                Some(true) if !exact => true,
+                _ => meets(c.visual_bounds_with(s), rect),
+            }
+        }
+        fn has(c: &Node, s: &SymbolBoxes, rect: Rect, exact: bool) -> bool {
             match &c.kind {
                 NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                     let Some((clip, rest)) = children.split_first() else { return false };
                     let paint = clip.clip_paint();
-                    if (paint.fill.is_some() || paint.stroke.is_some()) && meets(clip.visual_bounds_with(s), rect) {
+                    if (paint.fill.is_some() || paint.stroke.is_some()) && art_box_meets(clip, s, rect, exact) {
                         return true;
+                    }
+                    if !exact {
+                        // The part of `rect` inside the clip's box lies inside `rect`.
+                        return rest.iter().any(|m| has(m, s, rect, false));
                     }
                     // The members show only inside the clip's box.
                     let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
                     let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
-                    rest.iter().any(|m| has(m, s, inside))
+                    rest.iter().any(|m| has(m, s, inside, true))
                 }
-                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect)),
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect, exact)),
                 NodeKind::Path { guide: true, .. } => false,
-                _ => meets(c.visual_bounds_with(s), rect),
+                _ => art_box_meets(c, s, rect, exact),
             }
         }
-        let symbols = self.symbol_boxes();
-        self.layers.iter().any(|l| has(l, &symbols, rect))
+        self.layers.iter().any(|l| has(l, symbols, rect, exact))
     }
 
     /// The art that moves, scales or is cut with artboard `index`: [`Document::art_on_artboard`]

@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
 
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
 /// What a plug-in error looks like to the user. A run the caller cancelled changed nothing.
 fn err(e: vectorcraft_plugins::Error) -> EngineError {
@@ -185,7 +185,7 @@ impl FilterRun {
             if let Some(data) = out.document_data {
                 d.set_plugin_data(&m.id, data);
             }
-            sel.set(ids.iter().copied());
+            sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
             Ok(ids)
         })?;
         Ok(json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
@@ -288,12 +288,13 @@ fn load_given(c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
 /// `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
+    let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
     let (plugin, bytes) = load_given(C, p)?;
-    if !p.get("replace").and_then(Value::as_bool).unwrap_or(true) && registry::get(plugin.id()).is_some() {
+    if !replace && registry::get(plugin.id()).is_some() {
         return Err(bad(C, format!("a plug-in with id {:?} is already installed", plugin.id())));
     }
     // A heavy plug-in is installed once the user agrees: whoever installs it asks them first.
-    if plugin.manifest().budget == Budget::Heavy && !p.get("allowHeavy").and_then(Value::as_bool).unwrap_or(false) {
+    if plugin.manifest().budget == Budget::Heavy && !allow_heavy {
         let (minutes, times) = vectorcraft_plugins::heavy_terms();
         return Err(bad(
             C,
@@ -432,7 +433,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
         ),

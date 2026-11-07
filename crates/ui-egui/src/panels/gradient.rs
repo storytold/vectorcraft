@@ -41,6 +41,8 @@ use crate::{VectorcraftApp, icons};
 
 /// Dragging a stop this far below the ramp removes it.
 const REMOVE_DISTANCE: f32 = 28.0;
+/// The Delete Stop button beside the ramp, points square.
+const DELETE_STOP_SIZE: f32 = 22.0;
 /// The Angle field's preset menu, degrees.
 const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0];
 /// The Aspect Ratio field's preset menu, percent.
@@ -280,7 +282,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if hidden {
         if !freeform {
             ui.add_space(6.0);
-            ramp(app, ui, &g.gradient, is_grad);
+            ramp_row(app, ui, &g.gradient, is_grad);
         }
         return;
     }
@@ -358,7 +360,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.add_space(6.0);
-    ramp(app, ui, &g.gradient, is_grad);
+    ramp_row(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
     stop_fields(app, ui, &g.gradient, is_grad);
     // Dither applies to gradient fills only: off and dimmed behind the Stroke proxy.
@@ -569,7 +571,7 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
 }
 
 /// The selected stop's colour (click: its popover; the eyedropper samples one from the art),
-/// opacity and location (a selected diamond's midpoint instead), and Delete Stop.
+/// opacity and location (a selected diamond's midpoint instead).
 fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let stops = &g.stops;
     let sel = app.session.selected_stop().filter(|i| *i < stops.len() && is_grad);
@@ -623,14 +625,29 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
                 }
             }
         });
-        let can_del = sel.is_some() && stops.len() > MIN_STOPS;
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Stop"), false, can_del, 22.0).clicked()
-            && let Some(i) = sel
-            && let Some(v) = remove_stop(stops, i)
-        {
-            let next = i.min(v.len() - 1);
-            set_stops(app, &v, Some(next), Live::Released);
-        }
+    });
+}
+
+/// The ramp with Delete Stop at its right end, level with the ramp so it shows whenever the ramp
+/// does: it deletes the selected stop, never below two.
+fn ramp_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let w = (ui.available_width() - DELETE_STOP_SIZE).max(DELETE_STOP_SIZE * 2.0);
+        ramp(app, ui, g, is_grad, w);
+        ui.vertical(|ui| {
+            // Level with the ramp (the bar starts 10 points down and is 18 tall).
+            ui.add_space(8.0);
+            let sel = app.session.selected_stop().filter(|i| *i < g.stops.len() && is_grad);
+            let can_del = sel.is_some() && g.stops.len() > MIN_STOPS;
+            if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Stop"), false, can_del, DELETE_STOP_SIZE).clicked()
+                && let Some(i) = sel
+                && let Some(v) = remove_stop(&g.stops, i)
+            {
+                let next = i.min(v.len().saturating_sub(1));
+                set_stops(app, &v, Some(next), Live::Released);
+            }
+        });
     });
 }
 
@@ -709,10 +726,9 @@ fn dropped_swatch(app: &VectorcraftApp, ui: &Ui, g: &Gradient, area_resp: &egui:
     Some(drop_color(g, g.stops.iter().position(|s| marker(s.offset).contains(p)), x_to_offset(p.x, bar.left(), bar.width()), c, link))
 }
 
-/// The gradient slider: ramp, stops below, midpoint diamonds above.
-fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+/// The gradient slider, `w` points wide: ramp, stops below, midpoint diamonds above.
+fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool, w: f32) {
     let t = Tokens::get(ui.ctx());
-    let w = ui.available_width();
     let (area, area_resp) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
     let bar = Rect::from_min_size(area.min + vec2(8.0, 10.0), vec2(w - 16.0, 18.0));
     paint_ramp(ui, g, bar);

@@ -197,11 +197,14 @@ impl Tool for TypeTool {
         };
         let text = t.plain_text();
         let len = text.len();
+        let story = self.story_selected(cx);
+        let selected = (self.caret, self.anchor);
         self.caret = self.caret.min(len);
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if let Some(out) = self.step_attribute(key, mods, a, b, t.vertical) {
+        if let Some(out) = self.step_attribute(cx, key, mods, a, b, t.vertical) {
+            self.keep_story_offsets(story, selected);
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -233,7 +236,7 @@ impl Tool for TypeTool {
             }
             ToolKey::Enter => self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None),
             ToolKey::Tab => self.replace(cx, "\t", None),
-            ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
+            ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
                 self.replace(cx, "", None)
@@ -313,7 +316,10 @@ impl Tool for TypeTool {
                 let to = if mods.cmd { len } else { vectorcraft_text::line_end_of(&lay, self.caret) };
                 self.move_to(to, mods.shift)
             }
-            _ => vec![],
+            _ => {
+                self.keep_story_offsets(story, selected);
+                vec![]
+            }
         }
     }
     fn ime_preedit(&mut self, cx: &ToolContext, text: &str, active_chars: Option<Range<usize>>) -> Vec<Action> {
@@ -506,14 +512,14 @@ impl Tool for TypeTool {
             self.caret = t.map_or(0, |t| edit::runs_len(&t.runs));
         }
     }
-    /// `{editing, start, end, caret, anchor, typing, composing}` — the Character panel styles
-    /// `start..end`.
+    /// `{editing, start, end, caret, anchor, typing, composing, story?}` — the Character panel styles
+    /// `start..end`; `story` lists the frames of a threaded story whose whole text Select All selected.
     fn options(&self) -> Value {
         match self.editing {
             Some(id) => {
                 // Offsets may exceed the text after Select All; callers clamp to the text length.
                 let (a, b) = self.sel();
-                json!({
+                let mut o = json!({
                     "editing": id.0,
                     "start": a,
                     "end": b,
@@ -522,7 +528,12 @@ impl Tool for TypeTool {
                     "typing": self.typing.is_some(),
                     "composing": self.preedit.is_some(),
                     "prevTool": self.prev_tool,
-                })
+                });
+                // After Select All in threaded text, the frames whose whole text is selected too.
+                if !self.story.is_empty() {
+                    o["story"] = json!(self.story.iter().map(|f| f.0).collect::<Vec<_>>());
+                }
+                o
             }
             None => json!({"editing": null, "prevTool": self.prev_tool}),
         }
@@ -541,6 +552,12 @@ impl Tool for TypeTool {
                 {
                     self.start_editing(NodeId(id), b);
                     self.anchor = a;
+                    // The frames of a threaded story whose whole text Select All selected.
+                    let story: Vec<NodeId> =
+                        v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                    if story.len() >= 2 && story.contains(&NodeId(id)) {
+                        self.story = story;
+                    }
                 }
             }
             "prevTool" | "previousTool" => {
@@ -551,7 +568,23 @@ impl Tool for TypeTool {
                 self.preedit = None;
                 self.typing_ended = true;
             }
+            // `{story: [id…], editing?: id}`: the frames of the threaded story being edited, in
+            // thread order. The tool edits frame `editing` of them (default: the first), and the
+            // whole story's text is selected.
             "selectAll" if self.editing.is_some() => {
+                let story: Vec<NodeId> =
+                    v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                if story.len() >= 2
+                    && let Some(first) = story.first().copied()
+                {
+                    let target = v.get("editing").and_then(Value::as_u64).map(NodeId).filter(|t| story.contains(t)).unwrap_or(first);
+                    if self.editing != Some(target) {
+                        self.start_editing(target, 0);
+                    }
+                    self.story = story;
+                } else {
+                    self.story.clear();
+                }
                 self.anchor = 0;
                 self.caret = usize::MAX / 4;
             }
@@ -560,6 +593,7 @@ impl Tool for TypeTool {
                 if let (Some(a), Some(b)) = (g("start"), g("end")) {
                     self.anchor = a;
                     self.caret = b;
+                    self.story.clear();
                 }
             }
             "copy" => {
@@ -571,6 +605,7 @@ impl Tool for TypeTool {
                 self.typing = None;
                 self.preedit = None;
                 self.editing = None;
+                self.story.clear();
                 self.prev_tool = None;
             }
             _ => {}
@@ -648,6 +683,17 @@ impl Tool for TypeTool {
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
+            }
+        }
+        // The whole story is selected: the other frames' text is highlighted too, also when the
+        // edited frame holds no text.
+        if self.preedit.is_none() {
+            for f in self.story_others(cx) {
+                let Some(other) = Self::text(cx, f) else { continue };
+                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), other);
+                for q in vectorcraft_text::selection_quads(&lay, 0, edit::runs_len(&other.runs)) {
+                    o.push(Overlay::Highlight { quad: q.map(|p| other.xf * p), color: [60, 120, 255, 90] });
+                }
             }
         }
         if let Some(id) = self.editing.filter(|id| shown && ported(cx.doc, *id).is_some()) {

@@ -5,7 +5,7 @@
 use serde_json::json;
 use vectorcraft_doc::Unit;
 
-use super::tests_appearance::{app_with_rect, frame_events, run};
+use super::tests_appearance::{app_with_rect, click, frame_events, run, text_rect};
 use super::*;
 
 /// Every text drawn in the second headless frame of `f` (windows size themselves in the first).
@@ -170,4 +170,88 @@ fn new_document_cards_follow_the_chosen_units() {
     let t = dialog_texts(&mut app);
     assert!(shows(&t, "288 × 432 px") && !shows(&t, "101.6 × 152.4 mm"), "Postcard in px: {t:?}");
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["preset"], json!("Postcard"));
+}
+
+/// Choosing units in Preset Details changes the chosen document, not every recent one: each card
+/// keeps the units its document was made in, so switching between inches and millimetres leaves the
+/// other templates as they were; choosing another card brings its units back.
+#[test]
+fn recent_cards_keep_their_own_units() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    // 8.5 × 11 in, then 210 × 297 mm, which Recent lists first and the dialog opens on.
+    run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
+    run(&mut app, "file.new", json!({"width": "210 mm", "height": "297 mm", "units": "Millimeters"}));
+    app.run("file.newDialog", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["units"], json!("Millimeters"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Points"));
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "595.276 × 841.89 pt"), "the chosen entry in points: {t:?}");
+    assert!(shows(&t, "8.5 × 11 in"), "the other entry keeps its inches: {t:?}");
+    assert!(!shows(&t, "612 × 792 pt"), "the inches entry isn't turned into points: {t:?}");
+    // Clicking the inches card makes it the chosen one, in its own units.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], &mut draw); // the window sizes itself here
+    let inches = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "8.5 × 11 in").center();
+    click(&ctx, &mut app, inches, &mut draw);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["units"], json!("Inches"));
+    assert_eq!((d.fields["width"].clone(), d.fields["height"].clone()), (json!(612.0), json!(792.0)));
+}
+
+/// A saved preset keeps the units it was saved in too, whichever units the dialog is showing.
+#[test]
+fn saved_cards_keep_their_own_units() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    run(&mut app, "file.newPresets.save", json!({"name": "A4 mm", "width": "210 mm", "height": "297 mm", "units": "Millimeters"}));
+    app.run("file.newDialog", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("category".into(), json!("Saved"));
+    d.fields.insert("units".into(), json!("Points"));
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "210 × 297 mm") && !shows(&t, "595.276 × 841.89 pt"), "the saved preset keeps millimetres: {t:?}");
+}
+
+/// Clicking the card that is already chosen leaves it chosen, in the units the dialog is showing:
+/// the entry's own units still say which card it is.
+#[test]
+fn clicking_the_chosen_recent_card_keeps_it_chosen() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
+    app.run("file.newDialog", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Points"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], &mut draw); // the window sizes itself here
+    let card = text_rect(&frame_events(&ctx, &mut app, vec![], &mut draw), "612 × 792 pt").center();
+    click(&ctx, &mut app, card, &mut draw);
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "612 × 792 pt") && !shows(&t, "8.5 × 11 in"), "the card stays chosen in points: {t:?}");
+}
+
+/// Recent keeps one entry per size and units, so two entries can be one size in two units: the
+/// chosen card is the entry the fields were filled from, not every card of that size.
+#[test]
+fn recent_entries_of_one_size_in_two_units_stay_apart() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    // Both are 612 × 792 pt; Recent lists the points one first, which the dialog opens on.
+    run(&mut app, "file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"}));
+    run(&mut app, "file.new", json!({"width": "612 pt", "height": "792 pt", "units": "Points"}));
+    app.run("file.newDialog", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("units".into(), json!("Inches"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut draw = |app: &mut VectorcraftApp, ui: &mut Ui| crate::dialogs::show(app, ui.ctx());
+    frame_events(&ctx, &mut app, vec![], &mut draw); // the window sizes itself here
+    let texts = frame_events(&ctx, &mut app, vec![], &mut draw);
+    let mut cards: Vec<egui::Rect> = texts.iter().filter(|(t, _)| t == "8.5 × 11 in").map(|(_, r)| *r).collect();
+    cards.sort_by(|a, b| a.center().x.total_cmp(&b.center().x));
+    assert_eq!(cards.len(), 2, "both cards read in inches: {texts:?}");
+    // The right-hand card is the inches entry: choosing it leaves the points entry in points.
+    click(&ctx, &mut app, cards[1].center(), &mut draw);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["units"], json!("Inches"));
+    let t = dialog_texts(&mut app);
+    assert!(shows(&t, "612 × 792 pt"), "the points entry keeps its points: {t:?}");
 }

@@ -122,11 +122,13 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     // A file carrying its VectorCraft document (a saved .ai, or a PDF saved with Preserve Editing)
     // opens as that document, every artboard and layer: there are no pages to pick. Placing still
     // asks, since a place takes one page.
-    if place.is_none() && vectorcraft_pdf::editing_with(bytes, None).is_some() {
+    // The file is read once for both checks.
+    let opened = vectorcraft_pdf::open_pdf(bytes, None);
+    if place.is_none() && opened.as_ref().is_ok_and(|o| o.editing().is_some()) {
         return false;
     }
-    let (pages, locked) = match vectorcraft_pdf::info(bytes, None) {
-        Ok(i) if i.pages.len() > 1 => (i.pages.len(), false),
+    let (pages, locked) = match opened.map(|o| o.page_count()) {
+        Ok(count) if count > 1 => (count, false),
         Err(PdfError::NeedsPassword) => (0, true),
         _ => return false,
     };

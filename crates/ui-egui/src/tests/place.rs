@@ -488,6 +488,29 @@ fn the_control_bar_shows_the_image_file_link_colour_mode_and_ppi() {
     assert!(text.contains("Embedded"), "{text}");
 }
 
+/// The Control bar's label is read from the first selected object each frame, so it follows an
+/// edit, Undo, a switch to another document and back, and a selection change.
+#[test]
+fn the_control_bar_label_follows_edits_undo_documents_and_selection() {
+    let mut app = app();
+    let path = temp_file("label.png", &png(30, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let text = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, crate::chrome::control_bar);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("links.embed", json!({})).unwrap();
+    let embedded = text(&mut app);
+    assert!(embedded.contains("Embedded") && !embedded.contains("Linked File"), "{embedded}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    assert!(!text(&mut app).contains("Linked File"), "the new document has nothing selected");
+    app.session.set_active(0);
+    assert!(text(&mut app).contains("Linked File"));
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap();
+    let rect = text(&mut app);
+    assert!(!rect.contains("Linked File") && !rect.contains("Embedded"), "{rect}");
+}
+
 /// Click the Control bar's `label`.
 fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     use crate::tests_removeanchors::{at, click_control, control_frame};
@@ -687,6 +710,57 @@ fn tool_key(app: &mut VectorcraftApp, key: vectorcraft_tools::ToolKey) {
 /// #734: Crop Image shows a crop box on the image instead of cropping to the artboard at once (an
 /// image inside the artboard had nothing to cut); Apply crops to the box in one undo step, Cancel
 /// leaves the image whole, and both go back to the Selection tool.
+/// Holding Escape with the place cursor loaded discards one file for the press. The repeats discard
+/// no more and run no command bound to Escape.
+#[test]
+fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let paths: Vec<String> = ["held-a.png", "held-b.png", "held-c.png"].iter().map(|name| temp_file(name, &png(10, 10, 72.0))).collect();
+    app.run("file.place", json!({"paths": paths})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.tool_options()["count"], 3);
+    let selected = app.session.active().unwrap().selection.objects.clone();
+    assert!(!selected.is_empty());
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![], &[], false);
+    for repeat in 0..4 {
+        frame(&mut app, &ctx, vec![key(true)], &[], false);
+        assert_eq!(app.session.tool_options()["count"], 2, "repeat {repeat}: one file is discarded");
+        assert_eq!(app.session.active().unwrap().selection.objects, selected, "repeat {repeat}: no command ran");
+    }
+    frame(&mut app, &ctx, vec![key(false)], &[], false);
+    frame(&mut app, &ctx, vec![key(true)], &[], false);
+    assert_eq!(app.session.tool_options()["count"], 1, "a new press discards the next file");
+}
+
+/// A command bound to Shift+Escape keeps repeating with the place cursor loaded, and no file is
+/// discarded.
+#[test]
+fn holding_a_chord_bound_to_a_command_repeats_it_with_the_place_cursor_loaded() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    app.run("shortcuts.set", json!({"id": "view.zoomIn", "shortcut": "Shift+Escape", "force": true})).unwrap();
+    let paths: Vec<String> = ["chord-a.png", "chord-b.png"].iter().map(|name| temp_file(name, &png(10, 10, 72.0))).collect();
+    app.run("file.place", json!({"paths": paths})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    let modifiers = egui::Modifiers::SHIFT;
+    let press = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&mut app, &ctx, vec![], &[], false);
+    let mut zoom = app.view().unwrap().zoom;
+    for repeat in 0..3 {
+        frame(&mut app, &ctx, vec![press.clone()], &[], true);
+        assert!(app.view().unwrap().zoom > zoom, "repeat {repeat}: the command runs");
+        assert_eq!(app.session.tool_options()["count"], 2, "repeat {repeat}: no file is discarded");
+        zoom = app.view().unwrap().zoom;
+    }
+}
+
 #[test]
 fn crop_image_shows_a_box_that_apply_crops_to() {
     use vectorcraft_tools::ToolKey;
@@ -758,7 +832,6 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
 /// for) or until `done` → whether it was.
 fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64, done: &dyn Fn(&VectorcraftApp) -> bool) -> bool {
     let end = *time + secs;
-    let real_end = std::time::Instant::now() + std::time::Duration::from_secs(20);
     loop {
         let wait = frame_at(app, ctx, *time);
         if done(app) {
@@ -769,10 +842,10 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
             *time = end;
             return false;
         }
-        // The look runs on a worker thread, in real time: the clock waits for it, else a busy
-        // machine's slow look outlasts the simulated seconds and the test fails at random.
-        if app.session.link_scan.is_some() && std::time::Instant::now() < real_end {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        // The look runs on a worker thread, in real time: the clock waits for it to finish, else a
+        // busy machine's slow look outlasts the simulated seconds and the test fails at random.
+        if app.session.link_scan.is_some() {
+            app.session.wait_link_scan();
             continue;
         }
         *time = next;
@@ -786,6 +859,9 @@ fn idle(app: &mut VectorcraftApp, ctx: &egui::Context, time: &mut f64, secs: f64
 #[test]
 fn a_file_placed_while_idle_follows_its_changes() {
     let mut app = app();
+    // Every frame renders on this thread, however long it takes: a frame finished by the render
+    // worker during the idle frames asks for a repaint.
+    app.canvas.worker_started = true;
     app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
     let ctx = egui::Context::default();
     let mut time = 0.0;
@@ -799,9 +875,54 @@ fn a_file_placed_while_idle_follows_its_changes() {
     app.run("file.place", json!({"path": path})).unwrap();
     let id = app.session.active().unwrap().selection.objects[0];
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
-    std::thread::sleep(std::time::Duration::from_millis(30));
+    let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
     let changed = png(60, 30, 72.0);
     std::fs::write(&path, &changed).unwrap();
+    // The rewritten file is dated 2 s later, however fast it was written.
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(later).unwrap();
+    let hash = vectorcraft_doc::links::hash_bytes(&changed);
+    let updated = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        matches!(&st.doc.node(id).unwrap().kind, NodeKind::Image(im) if im.link.as_ref().and_then(|l| l.hash.as_deref()) == Some(hash.as_str()))
+    };
+    assert!(idle(&mut app, &ctx, &mut time, 10.0, &updated), "the changed file was never read again");
+}
+
+/// A look whose worker ended without stamps is cleared: the app stops asking for a frame every
+/// 100 ms, and the next look, on schedule, reads a changed file again.
+#[test]
+fn a_look_whose_worker_stopped_does_not_stop_later_looks() {
+    let mut app = app();
+    // Every frame renders on this thread: a frame finished by the render worker asks for a repaint.
+    app.canvas.worker_started = true;
+    app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let path = temp_file("stopped-watch.png", &png(40, 30, 72.0));
+    app.run("file.place", json!({"path": path})).unwrap();
+    let id = app.session.active().unwrap().selection.objects[0];
+    let ctx = egui::Context::default();
+    let mut time = 0.0;
+    idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
+    // A look that is due starts in this frame and is applied in the next one, at the same time.
+    time += 3.0;
+    frame_at(&mut app, &ctx, time);
+    app.session.wait_link_scan();
+    frame_at(&mut app, &ctx, time);
+    assert!(app.session.link_scan.is_none());
+    let scan = vectorcraft_engine::link_watch::LinkScan::default();
+    scan.2.store(true, std::sync::atomic::Ordering::SeqCst);
+    app.session.link_scan = Some(scan);
+    // Half a second later, before the next look is due.
+    time += 0.5;
+    let wait = frame_at(&mut app, &ctx, time);
+    assert!(app.session.link_scan.is_none(), "the look ended");
+    assert!(wait > std::time::Duration::from_millis(100), "{wait:?}: {:?}", ctx.repaint_causes());
+    let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
+    let changed = png(60, 30, 72.0);
+    std::fs::write(&path, &changed).unwrap();
+    // The rewritten file is dated 2 s later, however fast it was written.
+    let later = std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2));
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_times(later).unwrap();
     let hash = vectorcraft_doc::links::hash_bytes(&changed);
     let updated = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();

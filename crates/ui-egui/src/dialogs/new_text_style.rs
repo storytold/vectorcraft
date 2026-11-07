@@ -80,6 +80,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
         super::char_style_options::reset_button(ui, d);
+        if let Err(why) = super::char_style_options::edited_attrs(d) {
+            super::char_style_options::attrs_error(ui, &why);
+        }
         return false;
     }
     grid(ui, |ui| {

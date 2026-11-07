@@ -24,6 +24,7 @@ pub use paint::{decode_failures, image_decodes, reduced_size};
 mod pattern;
 pub mod placed_document;
 pub mod proof;
+mod stroke;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -52,6 +53,9 @@ pub use vello_cpu;
 pub struct Renderer {
     /// Glyph geometry per text object, keyed by `Arc` identity like `geom` (see [`Self::text_geom_of`]).
     texts: FrameCache<usize, (Arc<Node>, Arc<TextGeom>)>,
+    /// The latest cached glyph geometry for each text object id. A move changes the node's Arc
+    /// but not its glyphs in text space, so the old geometry can still be used after comparison.
+    text_ids: PtrMap<NodeId, usize>,
     /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
     /// again when fonts are added or rescanned.
     text_fonts: u64,
@@ -60,6 +64,9 @@ pub struct Renderer {
     /// Worker threads for the multithreaded rasterizer (0 = single-threaded).
     pub threads: u16,
     geom: PtrMap<usize, GeomEntry>,
+    /// The paths of long paths and compound paths, by object id (see [`Self::kept_path`]): after
+    /// an edit, `geom` makes the new object's path and bounds from the path kept for its id.
+    kept: PtrMap<NodeId, kept_paths::KeptPath>,
     /// The symbols (name and art) of the document last drawn, which `geom`'s bounds measured
     /// symbol instances by (see [`Self::check_symbols`]). The art is held weakly: the reference
     /// keeps the art's allocation, so no other art can get its address, and does not keep the
@@ -71,6 +78,9 @@ pub struct Renderer {
     /// Expanded stroke outlines keyed by ([`Self::stroke_owner`], stroke layer address, width bits,
     /// tolerance level): panning re-renders reuse them instead of re-expanding every stroke.
     strokes: PtrMap<StrokeKey, StrokeEntry>,
+    /// The key in `strokes` of the latest outline of each stroke of an object, under its
+    /// [`frame::MovedKey`]: a moved copy of the object draws that outline moved ([`Self::moved_outline`]).
+    moved_strokes: PtrMap<frame::MovedKey, StrokeKey>,
     /// Expanded character stroke outlines, with the glyph geometry kept in `texts` they belong to,
     /// keyed by ([`Self::stroke_owner`] of that geometry, run, width bits, tolerance level): type
     /// that doesn't change draws them again instead of expanding its strokes in every frame. Within
@@ -162,7 +172,11 @@ pub struct Renderer {
     clip_paints: FrameCache<usize, ClipPaintEntry>,
     /// Gradients along or across strokes (see [`Self::fill_path_gradient`]), keyed by
     /// ([`Self::stroke_owner`], stroke layer address, tolerance level).
-    stroke_slices: PtrMap<(usize, usize, i32), SliceEntry>,
+    stroke_slices: PtrMap<frame::SliceKey, SliceEntry>,
+    /// The key in `stroke_slices` of the latest slices of each stroke of an object, under its
+    /// [`frame::MovedSliceKey`]: a moved copy of the object draws those slices moved
+    /// ([`Self::moved_slices`]).
+    moved_slices: PtrMap<frame::MovedSliceKey, frame::SliceKey>,
     /// What the image keys colour adjustments give their recoloured images name: the image
     /// recoloured and the adjustment, with its hash (see [`Self::adjusted_image`]).
     adjusts: HashMap<String, (String, u64, vectorcraft_effects::ColorMap)>,
@@ -203,6 +217,7 @@ mod bounds;
 mod clock;
 mod frame;
 mod geometry;
+mod kept_paths;
 mod node_checks;
 mod options;
 mod renderer;
