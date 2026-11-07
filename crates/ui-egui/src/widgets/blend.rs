@@ -1,7 +1,7 @@
 use super::color::{Live, pointer_phase};
 use super::dropdowns::combo;
 use super::labels::dim_label;
-use super::numeric::{range_field, slider};
+use super::numeric::slider;
 use super::{BlendMode, Rect, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, icons, id_with, vec2};
 
 /// Whether the blend-mode list draws a separator above `BlendMode::ALL[i]`: where a
@@ -65,14 +65,18 @@ pub fn opacity_blend(
             }
         });
         dim_label(ui, "Opacity:");
-        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.spacing_mut().item_spacing.x = -1.0;
+        // The field and its arrow are one box in two parts: square where they meet.
         ui.add_enabled_ui(enabled, |ui| {
-            if let Some(o) = range_field(ui, (id, "opacity"), opacity.map(|o| o as f64 * 100.0), 0.0..=100.0, "%", 0, 50.0) {
+            let corners = super::group_start(&t);
+            if let Some(o) =
+                super::numeric::range_field_with(ui, (id, "opacity"), opacity.map(|o| o as f64 * 100.0), 0.0..=100.0, "%", 0, 50.0, corners)
+            {
                 edit = Some(TransparencyEdit::Opacity(o, Live::Released));
             }
         });
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if enabled { Sense::click() } else { Sense::hover() });
-        ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, super::FIELD_HEIGHT), if enabled { Sense::click() } else { Sense::hover() });
+        ui.painter().rect_stroke(r, super::group_end(&t), Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if enabled { t.icon } else { t.text_disabled });
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled && ui.is_enabled(), tl!("Opacity")));
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
