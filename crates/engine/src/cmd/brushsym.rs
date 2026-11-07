@@ -24,8 +24,8 @@ use super::{
 };
 use crate::EngineError;
 
-/// The transform Reset Transformation gives a symbol instance.
-pub use symbols::reset_transformation;
+/// Whether Reset Transformation changes a symbol instance.
+pub use symbols::reset_transformation_changes;
 
 mod brushes;
 mod dynamic;
