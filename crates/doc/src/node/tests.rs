@@ -443,6 +443,20 @@ fn visual_bounds_include_stroke() {
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
 }
 
+/// A group's box from its members' boxes grows by the group's own strokes, leaves out members
+/// without a box, and is `None` when none has one.
+#[test]
+fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
+    let mut g = Node::group(NodeId(1), vec![]);
+    g.appearance = Appearance::default_art().into();
+    let (a, b) = (Rect::new(0.0, 0.0, 10.0, 10.0), Rect::new(20.0, 5.0, 30.0, 8.0));
+    let o = g.appearance.outset();
+    assert!(o > 0.0);
+    assert_eq!(g.visual_of_members([Some(a), None, Some(b)].into_iter()), Some(Rect::new(0.0, 0.0, 30.0, 10.0).inflate(o, o)));
+    assert_eq!(g.visual_of_members([None, None].into_iter()), None);
+    assert_eq!(g.visual_of_members([].into_iter()), None);
+}
+
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
 /// weight centred, the whole weight outside, nothing inside; scaled with the type.
 #[test]

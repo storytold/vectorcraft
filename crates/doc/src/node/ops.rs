@@ -332,6 +332,14 @@ impl Node {
         self.visual(Some(symbols))
     }
 
+    /// The visual box of a group or layer without a clipping path, from the visual boxes of its
+    /// [`Node::editing_children`]: for a walk that measures the members as well.
+    pub fn visual_of_members(&self, members: impl Iterator<Item = Option<Rect>>) -> Option<Rect> {
+        // The container's own strokes paint around its members.
+        let o = self.appearance.outset();
+        members.fold(None, vectorcraft_geom::union_opt).map(|b| b.inflate(o, o))
+    }
+
     /// The box of [`Node::visual_bounds`], or of [`Node::visual_bounds_with`] when `symbols` is
     /// given.
     pub(crate) fn visual(&self, symbols: Option<&SymbolBoxes>) -> Option<Rect> {
@@ -346,11 +354,7 @@ impl Node {
                 }
             }
             NodeKind::Intertwine { children } => children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))),
-            NodeKind::Layer { .. } | NodeKind::Group { .. } => {
-                // The container's own strokes paint around its members.
-                let o = self.appearance.outset();
-                self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols))).map(|b| b.inflate(o, o))
-            }
+            NodeKind::Layer { .. } | NodeKind::Group { .. } => self.visual_of_members(self.editing_children().iter().map(|c| c.visual(symbols))),
             NodeKind::Blend { children, spec } => {
                 let b = children.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.visual(symbols)));
                 let o = crate::live::max_outset(children, symbols);
