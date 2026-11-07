@@ -1,7 +1,9 @@
 //! The Swatches panel: new, delete and duplicate swatches, colour groups and sorting.
 
+use std::collections::{HashMap, HashSet};
+
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup, tint_percent};
+use vectorcraft_color::{Color, Gradient, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_colors};
 use vectorcraft_doc::{Document, NodeId};
@@ -271,36 +273,80 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
 /// each). A tint (a linked colour that differs from its swatch's) brings its swatch, and with
 /// `tints` its own colour too. Links to missing swatches count as unlinked.
 fn artwork_colors(d: &Document, ids: &[NodeId], tints: bool, swatches: &mut Vec<String>, colors: &mut Vec<Color>) {
+    let mut seen_swatches: HashSet<String> = swatches.iter().cloned().collect();
+    let mut seen_colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
     for n in ids.iter().filter_map(|id| d.node(*id)) {
         node_colors(n, &mut |c, link| {
             let sw = link.and_then(|l| d.swatch(l)).filter(|w| w.paint.color().is_some());
             if let Some(w) = sw
-                && !swatches.contains(&w.name)
+                && !seen_swatches.contains(&w.name)
             {
+                seen_swatches.insert(w.name.clone());
                 swatches.push(w.name.clone());
             }
             let own = sw.is_none_or(|w| tints && w.paint.color() != Some(*c));
-            if own && !colors.contains(c) {
+            // A color with a NaN component equals no color, so it is never already listed.
+            if own && color_key(c).is_none_or(|k| seen_colors.insert(k)) {
                 colors.push(*c);
             }
         });
     }
 }
 
-/// Link the solid paints in the subtrees of `ids` whose colour is one of `links`' to that swatch,
-/// unless they already link to an existing swatch. Returns the number of paints linked.
+/// A color's model and the bits of its components, with -0.0 read as 0.0: two keys are equal
+/// exactly when the colors are equal (`==`). `None` for a color with a NaN component, which
+/// equals no color.
+type ColorKey = (u8, [u32; 4]);
+
+fn color_key(c: &Color) -> Option<ColorKey> {
+    let (model, v) = match *c {
+        Color::Rgb { r, g, b } => (0, [r, g, b, 0.0]),
+        Color::Cmyk { c, m, y, k } => (1, [c, m, y, k]),
+        Color::Gray { k } => (2, [k, 0.0, 0.0, 0.0]),
+        Color::Lab { l, a, b } => (3, [l, a, b, 0.0]),
+    };
+    Some((model, [float_key(v[0])?, float_key(v[1])?, float_key(v[2])?, float_key(v[3])?]))
+}
+
+/// The bits of `v`, with -0.0 read as 0.0, so keys are equal exactly when the values are; `None`
+/// for NaN.
+fn float_key(v: f32) -> Option<u32> {
+    if v.is_nan() {
+        None
+    } else if v == 0.0 {
+        Some(0)
+    } else {
+        Some(v.to_bits())
+    }
+}
+
+/// The keys of a gradient's stop colors, equal for equal gradients; `None` when a stop's color
+/// equals no color, so the gradient equals no gradient.
+fn gradient_key(g: &Gradient) -> Option<Vec<ColorKey>> {
+    g.stops.iter().map(|s| color_key(&s.color)).collect()
+}
+
+/// Link the solid paints in the subtrees of `ids` whose color is one of `links`' to that swatch
+/// (the first one listed for the color), unless they already link to an existing swatch. Returns
+/// the number of paints linked.
 fn link_colors(d: &mut Document, ids: &[NodeId], links: &[(Color, String)]) -> usize {
     if links.is_empty() {
         return 0;
     }
-    let live: Vec<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
+    let live: HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
+    let mut by_color: HashMap<ColorKey, &String> = HashMap::new();
+    for (c, n) in links {
+        if let Some(k) = color_key(c) {
+            by_color.entry(k).or_insert(n);
+        }
+    }
     d.map_solid_paints_in(ids, &mut |c, link, _| {
         if link.as_ref().is_some_and(|l| live.contains(l)) {
             return false;
         }
-        match links.iter().find(|(lc, _)| lc == c) {
-            Some((_, n)) => {
-                *link = Some(n.clone());
+        match color_key(c).and_then(|k| by_color.get(&k)) {
+            Some(n) => {
+                *link = Some((*n).clone());
                 true
             }
             None => false,
@@ -798,10 +844,12 @@ fn swatch_add_used(s: &mut Session, p: &Value) -> Result<Value> {
         let (mut linked_to, mut colors) = (vec![], vec![]);
         artwork_colors(d, &ids, false, &mut linked_to, &mut colors);
         // Colours a solid swatch already has are skipped.
-        colors.retain(|c| !d.swatches_iter().any(|w| w.paint.color() == Some(*c)));
+        let have: HashSet<ColorKey> = d.swatches_iter().filter_map(|w| w.paint.color()).filter_map(|c| color_key(&c)).collect();
+        colors.retain(|c| color_key(c).is_none_or(|k| !have.contains(&k)));
+        let mut free = d.free_swatch_names();
         let mut links = vec![];
         for c in colors {
-            let name = d.free_swatch_name(&color_name(c));
+            let name = free.take(&color_name(c));
             d.swatches.push(Swatch { name: name.clone(), paint: Paint::solid(c), global, spot: false });
             links.push((c, name));
         }
@@ -838,16 +886,31 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
             }
         }
     }
+    let gradient_links: HashSet<&String> = gradient_links.iter().collect();
+    let link_names: HashSet<&str> = links.iter().map(|(l, _)| l.as_str()).collect();
+    let link_tints: HashSet<(&str, u32)> = links.iter().filter_map(|(l, t)| Some((l.as_str(), float_key(*t)?))).collect();
+    let colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
+    let patterns: HashSet<&String> = patterns.iter().collect();
+    // Gradients by their stops' colors, each listed once.
+    let mut by_stops: HashMap<Vec<ColorKey>, Vec<&Gradient>> = HashMap::new();
+    for g in &gradients {
+        if let Some(k) = gradient_key(g) {
+            let list = by_stops.entry(k).or_default();
+            if !list.contains(&g) {
+                list.push(g);
+            }
+        }
+    }
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
-            || links.iter().any(|(l, t)| match w.tint_of() {
-                Some((base, tint)) => l == base && *t == tint,
-                None => *l == w.name,
-            })
+            || match w.tint_of() {
+                Some((base, tint)) => float_key(tint).is_some_and(|t| link_tints.contains(&(base, t))),
+                None => link_names.contains(w.name.as_str()),
+            }
             || match &w.paint {
                 Paint::None => true,
-                Paint::Solid { color, .. } => colors.contains(color),
-                Paint::Gradient(g) => gradients.contains(&g.gradient),
+                Paint::Solid { color, .. } => color_key(color).is_some_and(|k| colors.contains(&k)),
+                Paint::Gradient(g) => gradient_key(&g.gradient).and_then(|k| by_stops.get(&k)).is_some_and(|list| list.contains(&&g.gradient)),
                 Paint::Pattern { pattern, .. } => patterns.contains(pattern),
             }
     };
