@@ -1267,9 +1267,14 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Deletion splits an ordinary contour into sibling objects. Existing multi-subpath paths and
 /// explicit compound members keep their compound semantics, even when a member has one contour.
+/// Separate objects retain the gradient placement of the original path.
 pub(super) fn replace_deleted_pieces(d: &mut Document, beside: &mut Beside, id: NodeId, subpaths: Vec<SubPath>) -> Result<Vec<NodeId>> {
     let single = d.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.len() == 1);
     if single && compound_or_self(d, id) == id {
+        // Pin only actual splits: each new object's smaller bounds would otherwise refit its gradients.
+        if subpaths.len() > 1 {
+            d.node_mut(id).ok_or(EngineError::NoNode(id))?.pin_gradients();
+        }
         super::draw2::replace_with_pieces(d, beside, id, subpaths.into_iter().map(PathData::single).collect())
     } else {
         path_mut(d, id)?.subpaths = subpaths;

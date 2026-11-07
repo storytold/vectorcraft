@@ -1,9 +1,10 @@
 //! Original synthetic geometry for the deletion half of #3380; no external fixtures.
 
 use serde_json::json;
+use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, NodeId, NodeKind};
 use vectorcraft_engine::Session;
-use vectorcraft_geom::{Affine, Anchor, PathData, SubPath};
+use vectorcraft_geom::{Affine, Anchor, PathData, Rect, SubPath};
 use vectorcraft_testkit::{invariants::check_session, raster::render_artboard};
 
 /// Create the same rectangle for the edited path and its stacking-order neighbors.
@@ -156,4 +157,87 @@ fn deletion_preserves_intentional_multi_subpaths_and_compound_members() {
             check_session(&s).unwrap();
         }
     }
+}
+
+/// Splitting keeps the original gradient fit on every piece and leaves placed vectors unchanged.
+#[test]
+fn deletion_split_preserves_gradient_placement() {
+    for command in ["edit.clear", "path.deleteAnchors", "edit.cut"] {
+        for kind in [GradientKind::Linear, GradientKind::Radial] {
+            for placed in [false, true] {
+                let mut s = session();
+                let id = rectangle(&mut s);
+                let mut fill = GradientPaint::new(Gradient { kind, ..Default::default() });
+                fill.angle = 45.0;
+                let mut stroke = GradientPaint::new(Gradient { kind, ..Default::default() });
+                stroke.angle = 90.0;
+                if placed {
+                    fill.geom = Some(GradientGeom::fit(kind, Rect::new(20.0, 10.0, 160.0, 150.0), 35.0));
+                    stroke.geom = Some(GradientGeom::fit(kind, Rect::new(10.0, 20.0, 150.0, 160.0), -25.0));
+                }
+                {
+                    let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+                    n.transform(Affine::translate((10.0, 5.0)) * Affine::rotate(0.15), false);
+                    n.appearance = Appearance::basic(Paint::Gradient(Box::new(fill.clone())), Paint::Gradient(Box::new(stroke.clone())), 8.0).into();
+                }
+                s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 1], [0, 3]]})).unwrap();
+                let st = s.doc().unwrap();
+                let before = st.doc.clone();
+                let before_selection = st.selection.clone();
+                let history = st.history.undo.len();
+                let original = before.node(id).unwrap();
+                let bounds = original.geometric_bounds().unwrap();
+                let fill_geom = fill.resolve(bounds);
+                let stroke_geom = stroke.resolve(bounds.inflate(4.0, 4.0));
+                // The old single-node remainder keeps the original full bounds. Its rendering is
+                // an independent reference for the two new objects, including unplaced gradients.
+                let mut expected = (*before).clone();
+                let a = &original.path_data().unwrap().subpaths[0].anchors;
+                if let NodeKind::Path { path, live, .. } = &mut expected.node_mut(id).unwrap().kind {
+                    *path = PathData::new(vec![SubPath::new(vec![a[2], a[3]], false), SubPath::new(vec![a[0], a[1]], false)]);
+                    *live = None;
+                }
+                let expected_image = render_artboard(&expected);
+                assert!(expected_image.ink() > 0);
+                s.execute(command, &json!({})).unwrap();
+                let st = s.doc().unwrap();
+                assert_eq!(st.selection.objects.len(), 2);
+                assert_eq!(st.history.undo.len(), history + 1);
+                assert!(render_artboard(&st.doc) == expected_image, "{command}, {kind:?}, placed: {placed}: gradient colors moved");
+                for piece in &st.selection.objects {
+                    let n = st.doc.node(*piece).unwrap();
+                    for (paint, expected_geom) in [(n.appearance.fill_paint(), fill_geom), (n.appearance.stroke_paint(), stroke_geom)] {
+                        let Paint::Gradient(g) = paint else { panic!("gradient was replaced") };
+                        assert_eq!(g.geom, Some(expected_geom), "{command}, {kind:?}, placed: {placed}");
+                    }
+                }
+                let after = st.doc.clone();
+                let after_selection = st.selection.clone();
+                s.execute("edit.undo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, before);
+                assert_eq!(s.doc().unwrap().selection, before_selection);
+                s.execute("edit.redo", &json!({})).unwrap();
+                assert_eq!(s.doc().unwrap().doc, after);
+                assert_eq!(s.doc().unwrap().selection, after_selection);
+                assert!(render_artboard(&s.doc().unwrap().doc) == expected_image);
+                check_session(&s).unwrap();
+            }
+        }
+    }
+}
+
+/// A connected remainder keeps automatic fitting; pinning is needed only for separate objects.
+#[test]
+fn deleting_one_segment_keeps_unplaced_gradients() {
+    let mut s = session();
+    let id = rectangle(&mut s);
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(Default::default())));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().appearance = Appearance::basic(paint.clone(), paint, 8.0).into();
+    let appearance = s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 1]]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.selection.objects, [id]);
+    assert_eq!(st.doc.node(id).unwrap().appearance, appearance);
+    assert_eq!(st.doc.node(id).unwrap().path_data().unwrap().subpaths.len(), 1);
 }
