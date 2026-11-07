@@ -375,6 +375,18 @@ fn for_in_names_take_fuel_and_heap_under_later_limits() {
 }
 
 #[test]
+fn shrinking_an_array_takes_fuel_for_each_property() {
+    let mut realm = small(Limits::default());
+    assert_eq!(realm.run("var a = []; for (var i = 0; i < 100000; i++) a[i] = i; a.length"), Ok(JsValue::Number(100_000.0)));
+    realm.set_limits(Limits { fuel: 1000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "a.length = 0;"), LimitKind::Fuel);
+    realm.set_limits(Limits::default());
+    // The run stopped before anything was removed.
+    assert_eq!(realm.run("a.length + a[99999]"), Ok(JsValue::Number(199_999.0)));
+    assert_eq!(realm.run("a.length = 1; a.length + a[0] + (99999 in a ? 1 : 0)"), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
 fn declarations_check_the_heap_before_they_are_bound() {
     // Each script declares more than fits in the heap. The run ends with the heap limit before
     // the bindings are made, so the estimate never goes past the limit.

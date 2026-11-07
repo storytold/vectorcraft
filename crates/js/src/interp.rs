@@ -1061,12 +1061,19 @@ impl Interp {
         if f64::from(new) != n {
             return Err(self.throw(ErrorType::Range, "invalid array length"));
         }
-        let o = self.object_mut(id)?;
-        let Class::Array { length, length_writable } = &mut o.class else { return internal("not an array") };
-        if !*length_writable {
+        let o = self.object(id)?;
+        let Class::Array { length: old, length_writable } = o.class else { return internal("not an array") };
+        if !length_writable {
             return self.reject(throw, &key("length"), "it is read-only");
         }
-        let old = *length;
+        if new < old {
+            // Shrinking visits every property: each takes fuel before anything is removed.
+            for _ in 0..o.props.len() {
+                self.use_fuel()?;
+            }
+        }
+        let o = self.object_mut(id)?;
+        let Class::Array { length, .. } = &mut o.class else { return internal("not an array") };
         *length = new;
         if new < old {
             let doomed: Vec<Key> = o.props.keys().into_iter().filter(|k| array_index(k).is_some_and(|i| i >= new)).collect();
