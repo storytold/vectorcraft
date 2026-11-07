@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes, or whose measured art it replaces, becomes a plain group of its art. Hidden fills, strokes and effects are dropped. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -828,12 +828,17 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     let failed = vectorcraft_render::decode_failures();
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let ids = s.edit("Expand Appearance", |d, _| {
+        let before = d.clone();
+        let mut ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut out = vec![];
         let threaded = super::threads::frames(d);
         for id in &roots {
             expand_node(d, *id, &brushes, &mut out);
         }
+        // A dimension whose source was replaced stays plain: its link no longer fits that art.
+        ended.retain(|e| e.source_kept(&before, d));
+        super::dimension::restore_unchanged(d, ended);
         // Outlined frames of threaded text leave their threads with the text they show; type that
         // stays type under a new id takes its frame's place.
         super::threads::leave_threads(d, &threaded);

@@ -36,8 +36,14 @@ changes); moved together with its art, it keeps its distance.
 
 Native `.vectorcraft` files keep the recipes and links. SVG, PDF and bitmap output contain
 ordinary paths and text, so exported dimensions look the same. Ungrouping a dimension leaves its
-paths and text as ordinary art. Pasted dimensions keep their geometry and drop their links, so
-they never bind to unrelated art in another document.
+paths and text as ordinary art. Object › Expand, Object › Expand Appearance, Type › Create Outlines
+and Object › Path › Outline Stroke turn a dimension whose art they change into a plain group of that
+art, also when they reach only a part of it: moving or scaling the group does not redraw it, it does
+not follow the art it measured, and undoing the command gives the live dimension back. A dimension
+selected with the art it measures also becomes a plain group when Object › Expand, Object › Expand
+Appearance or Object › Path › Outline Stroke replaces only that art. Pasted
+dimensions keep their geometry and drop their links, so they never bind to unrelated art in another
+document.
 
 ## Commands
 
