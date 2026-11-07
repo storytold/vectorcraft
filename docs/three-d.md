@@ -70,6 +70,24 @@ The rest is our reading:
   grid stays flat.
 - A stroke whose outline takes more than 2,048 points is left out, and the fill's solid still draws.
 
+## Groups
+
+Extrude & Bevel, Inflate and Rotate also apply to a group or layer. The public documentation says that applied to
+several objects one by one each turns about its own axis, while applied to a group or layer all its objects turn
+about a shared axis ([Create 3D objects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/create-3d-objects.html),
+said there of Revolve). So the effect on a group builds a solid from every visible path, compound path and type in
+it, at any depth of its groups, each from its own fills and strokes as above ([Fills and strokes](#fills-and-strokes)),
+and they turn, twist and taper together about the center of their bounds together; with Perspective one eye sees
+them all. The members stay editable: moving or editing one reshapes the solids. Our reading:
+
+- Each member's own geometry effects shape it first; the group's geometry effects before the 3D effect reshape the
+  members, and those after it bend the result as a whole. The members' other effects, and the group's own fills and
+  strokes, are not drawn. A member's opacity applies to its solids; its blending mode does not.
+- When every solid is opaque, all members' faces are drawn in one back-to-front order; otherwise each solid is drawn
+  on its own, the backmost member's first.
+- Hidden members and guides are left out. A group holding an image, a symbol instance, a clipping group or another
+  live object is refused with a message saying what to release or expand; so is one with more than 4,096 shapes.
+
 ## Rotate
 
 The flat art turned in 3D about the centre of its bounds. Every fill and stroke is turned with its own paint (a
@@ -176,7 +194,9 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   drawn in pieces about as long as a wall slice is wide (fewer near the limit of 32,768 facets). The piece drawn
   on top can still lie a few points behind another nearby piece.
 - Extrude & Bevel and Rotate retain planar shading. Colored Inflate uses smooth vector lighting; white-light Inflate keeps its original polygon shading; bounded cell triangulation leaves a cell flat when it contains a complete hole or an unusually complex/degenerate contour. Its geometric silhouette is still a polygon approximation.
-- Paths and compound paths only: convert type, images and groups to outlines first. One 3D effect per object.
+- Paths, compound paths, type and groups or layers of them (see [Groups](#groups)); images, symbol instances,
+  clipping groups and other live objects have to be converted first. Revolve on a group is not built yet. One 3D
+  effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
   counted on its own), Rotate (which only turns the outline) 65,536.
@@ -189,5 +209,6 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |
 | 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
 | 2026-10-17 | Smooth colored Inflate lighting and surface batching; legacy white-light appearance and the 0.05 seam minimum preserved; shared light Color and multiple lights remain vector output. |

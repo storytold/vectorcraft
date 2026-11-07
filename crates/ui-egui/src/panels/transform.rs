@@ -484,13 +484,29 @@ pub fn link_width(ui: &Ui) -> f32 {
 pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
 
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
-/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+/// `constrainProportions` preference, which the size fields pass on as `proportional`. It is drawn
+/// after the fields it sits between, so Tab reaches the fields first and the link after them.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, resp) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    constrain_link_at(app, ui, resp);
+}
+
+/// [`constrain_link`]'s toggle, made over `at`: the Control bar keeps the link's place between W
+/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it. With
+/// the keyboard on it, Space or Enter toggles it, as a dialog's button takes them.
+pub fn constrain_link_at(app: &mut VectorcraftApp, ui: &mut Ui, at: egui::Response) {
     let on = app.session.prefs.constrain_proportions;
     let tip = tl!("Constrain Width and Height Proportions");
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tip, on, CONSTRAIN_LINK_SIZE).clicked() {
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
         set_pref(app, "constrainProportions", !on);
     }
+}
+
+/// The room the Control bar keeps for [`constrain_link_at`] between its W and H fields.
+pub fn constrain_link_room(ui: &mut Ui) -> egui::Rect {
+    ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::hover()).0
 }
 
 /// The `copy` param of a command that a field of the Transform panel, the Properties panel's

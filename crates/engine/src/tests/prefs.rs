@@ -173,6 +173,98 @@ fn reset_category_and_all() {
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
 }
 
+/// `prefs.set` refuses a recovery or plug-ins folder that is missing or is a file. Nothing changes,
+/// other values in the same call included, and the document gets no undo step.
+#[test]
+fn set_refuses_a_missing_folder_or_a_file_as_a_recovery_or_plugins_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-refused");
+    let file = folder.file("not-a-folder.txt");
+    std::fs::write(&file, b"x").unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let before = s.prefs.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        for path in [file.clone(), folder.file("missing")] {
+            let e = s.execute("prefs.set", &json!({"key": key, "value": path})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            let e = s.execute("prefs.set", &json!({"values": {key: path, "keyboardIncrement": 7, "unitsGeneral": "millimeters"}})).unwrap_err();
+            assert_eq!(e.to_string(), format!("{path} is not a folder"), "{key}");
+            assert_eq!(s.prefs, before, "{key}: no preference changes");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{key}: no undo step");
+        }
+    }
+}
+
+/// `prefs.set` refuses a recovery folder that no folder can be created in or that can't be listed,
+/// and a plug-ins folder that can't be listed.
+#[cfg(unix)]
+#[test]
+fn set_refuses_a_recovery_or_plugins_folder_it_cannot_use() {
+    use std::os::unix::fs::PermissionsExt;
+    /// Gives a folder mode 0o755 again when dropped, also when an assertion fails, so the test
+    /// folder can be removed.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    let folder = crate::tests_links::Folder::new("prefs-set-unusable");
+    let mut s = Session::new();
+    let before = s.prefs.clone();
+    let locked = folder.0.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    let unlock_locked = Unlock(locked.clone());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // An account that may write anyway (root) has nothing to refuse.
+    if std::fs::create_dir(locked.join("probe")).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": locked.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+    }
+    drop(unlock_locked);
+    let unlisted = folder.0.join("unlisted");
+    std::fs::create_dir(&unlisted).unwrap();
+    let unlock_unlisted = Unlock(unlisted.clone());
+    std::fs::set_permissions(&unlisted, std::fs::Permissions::from_mode(0o333)).unwrap();
+    // An account that may list anyway (root) has nothing to refuse.
+    if std::fs::read_dir(&unlisted).is_err() {
+        let e = s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Data Recovery can't keep copies in "), "{e}");
+        let e = s.execute("prefs.set", &json!({"key": "pluginsFolder", "value": unlisted.to_string_lossy()})).unwrap_err();
+        assert!(e.to_string().starts_with("Plug-ins can't be loaded from "), "{e}");
+    }
+    drop(unlock_unlisted);
+    assert_eq!(s.prefs, before);
+}
+
+/// `prefs.set` saves a folder that passes as given and leaves nothing behind in it. An empty value
+/// and a folder the preference already holds are not checked, nor is a held folder when the call
+/// leaves it out, so they work while the folder is unavailable.
+#[test]
+fn set_takes_a_usable_empty_or_already_held_recovery_folder() {
+    let folder = crate::tests_links::Folder::new("prefs-set-usable");
+    let mut s = Session::new();
+    let typed = format!(" {} ", folder.0.display());
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": typed})).unwrap();
+    assert_eq!(s.prefs.recovery_folder, typed);
+    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 0, "the write check leaves nothing behind");
+
+    let gone = folder.0.join("gone");
+    std::fs::create_dir(&gone).unwrap();
+    let gone = gone.to_string_lossy().into_owned();
+    s.execute("prefs.set", &json!({"key": "recoveryFolder", "value": gone})).unwrap();
+    std::fs::remove_dir(&gone).unwrap();
+    s.execute("prefs.set", &json!({"values": {"recoveryFolder": gone, "keyboardIncrement": 7}})).unwrap();
+    s.execute("prefs.set", &json!({"key": "keyboardIncrement", "value": 3})).unwrap();
+    assert_eq!((s.prefs.recovery_folder.as_str(), s.prefs.keyboard_increment), (gone.as_str(), 3.0));
+
+    for key in ["recoveryFolder", "pluginsFolder"] {
+        s.execute("prefs.set", &json!({"key": key, "value": ""})).unwrap();
+        assert_eq!(s.prefs.to_json()[key], json!(""), "{key}");
+    }
+}
+
 #[test]
 fn list_describes_every_pref() {
     let mut s = Session::new();

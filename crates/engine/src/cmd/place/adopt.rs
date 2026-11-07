@@ -1,6 +1,6 @@
-//! Resources placed art brings along: the images, symbols, pattern swatches and colour swatches it
-//! uses (also through symbol and pattern art and through tint swatches) join the document. A name
-//! the document already uses for something different gets a free variant (`Star 2`,
+//! Resources placed art brings along: the images, symbols, pattern swatches, colour swatches and
+//! brushes it uses (also through symbol, pattern and brush art and through tint swatches) join the
+//! document. A name the document already uses for something different gets a free variant (`Star 2`,
 //! `pdf-image-1 2`…) and the art's references follow; a colour linked to a swatch the document
 //! defines differently keeps its colour, unlinked. Text styles are left as they are: the art carries
 //! its own formatting.
@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use vectorcraft_brush::{Brush, BrushKind};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeKind};
 
@@ -31,6 +32,7 @@ enum Ref<'a> {
     Image(&'a mut String),
     Symbol(&'a mut String),
     Pattern(&'a mut String),
+    Brush(&'a mut String),
     /// A colour's (or gradient's) swatch link; renaming it to `None` unlinks it.
     Swatch(&'a mut Option<String>),
 }
@@ -56,7 +58,12 @@ fn refs(n: &mut Node, f: &mut impl FnMut(Ref)) {
         for it in &mut n.appearance.items {
             match it {
                 AppearanceItem::Fill(fl) => paint_refs(&mut fl.paint, f),
-                AppearanceItem::Stroke(st) => paint_refs(&mut st.paint, f),
+                AppearanceItem::Stroke(st) => {
+                    paint_refs(&mut st.paint, f);
+                    if let Some(brush) = &mut st.brush {
+                        f(Ref::Brush(brush));
+                    }
+                }
             }
         }
         match &mut n.kind {
@@ -80,6 +87,7 @@ struct Used {
     images: Vec<String>,
     symbols: Vec<String>,
     patterns: Vec<String>,
+    brushes: Vec<String>,
     swatches: Vec<String>,
 }
 
@@ -89,6 +97,7 @@ impl Used {
             Ref::Image(k) => (&mut self.images, &*k),
             Ref::Symbol(k) => (&mut self.symbols, &*k),
             Ref::Pattern(k) => (&mut self.patterns, &*k),
+            Ref::Brush(k) => (&mut self.brushes, &*k),
             Ref::Swatch(Some(k)) => (&mut self.swatches, &*k),
             Ref::Swatch(None) => return,
         };
@@ -116,7 +125,9 @@ fn names<T: PartialEq>(
         let entry = match existing(name) {
             None => (Some(name.clone()), true),
             Some(e) if e == d => (Some(name.clone()), false),
-            Some(_) => (Some(unique_name(name, |c| taken(c) || out.values().any(|(n, _)| n.as_deref() == Some(c)))), true),
+            Some(_) => {
+                (Some(unique_name(name, |c| taken(c) || used.iter().any(|u| u == c) || out.values().any(|(n, _)| n.as_deref() == Some(c)))), true)
+            }
         };
         out.insert(name.clone(), entry);
     }
@@ -128,6 +139,18 @@ fn copies(m: &Renames) -> Vec<(&str, &str)> {
     m.iter().filter(|(_, (_, copy))| *copy).filter_map(|(old, (new, _))| Some((old.as_str(), new.as_deref()?))).collect()
 }
 
+/// The art a brush holds.
+fn brush_art(b: &mut Brush) -> Vec<&mut Node> {
+    match &mut b.kind {
+        BrushKind::Scatter(s) => vec![&mut s.art],
+        BrushKind::Art(a) => vec![&mut a.art],
+        BrushKind::Pattern(p) => {
+            [Some(&mut p.side), p.outer_corner.as_mut(), p.inner_corner.as_mut(), p.start.as_mut(), p.end.as_mut()].into_iter().flatten().collect()
+        }
+        BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => vec![],
+    }
+}
+
 /// Bring the resources `nodes` (art from `src`) use into `dst`, renaming on conflict, and point
 /// `nodes` at the names they got.
 pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
@@ -135,9 +158,10 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
     for n in nodes.iter_mut() {
         refs(n, &mut |r| used.note(r));
     }
-    // Symbol and pattern art and tint swatches can use more resources (the lists grow while they
-    // are walked).
-    let (mut si, mut pi, mut wi) = (0, 0, 0);
+    let src_brushes = vectorcraft_brush::library(src);
+    // Symbol, pattern and brush art and tint swatches can use more resources (the lists grow while
+    // they are walked).
+    let (mut si, mut pi, mut wi, mut bi) = (0, 0, 0, 0);
     loop {
         let mut art: Vec<Node> = vec![];
         if let Some(name) = used.symbols.get(si) {
@@ -150,6 +174,11 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             wi += 1;
             if let Some(mut paint) = src.swatch(name).map(|w| w.paint.clone()) {
                 paint_refs(&mut paint, &mut |r| used.note(r));
+            }
+        } else if let Some(name) = used.brushes.get(bi) {
+            bi += 1;
+            if let Some(mut b) = src_brushes.iter().find(|b| b.name == *name).cloned() {
+                art.extend(brush_art(&mut b).into_iter().map(|a| a.clone()));
             }
         } else {
             break;
@@ -182,12 +211,38 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             Some((n.clone(), entry))
         })
         .collect();
+    // A brush whose art uses a resource that moves to another name isn't the document's brush of
+    // that name, whatever it looks like.
+    let moved = |map: &Renames, k: &str| map.get(k).is_some_and(|(new, _)| new.as_deref() != Some(k));
+    let moves_art = |b: &Brush| {
+        let (mut b, mut any) = (b.clone(), false);
+        for a in brush_art(&mut b) {
+            refs(a, &mut |r| {
+                any |= match r {
+                    Ref::Image(k) => moved(&images, k),
+                    Ref::Symbol(k) => moved(&symbols, k),
+                    Ref::Pattern(k) => moved(&patterns, k),
+                    Ref::Swatch(link) => link.as_deref().is_some_and(|k| moved(&swatches, k)),
+                    Ref::Brush(_) => false,
+                }
+            });
+        }
+        any
+    };
+    let mut dst_brushes = vectorcraft_brush::library(dst);
+    let brushes = names(
+        &used.brushes,
+        |n| src_brushes.iter().find(|b| b.name == n).map(|b| (b, moves_art(b))),
+        |n| dst_brushes.iter().find(|b| b.name == n).map(|b| (b, false)),
+        |c| dst_brushes.iter().any(|b| b.name == c),
+    );
 
     let mut rename = |r: Ref| {
         let (map, k) = match r {
             Ref::Image(k) => (&images, k),
             Ref::Symbol(k) => (&symbols, k),
             Ref::Pattern(k) => (&patterns, k),
+            Ref::Brush(k) => (&brushes, k),
             Ref::Swatch(link) => {
                 if let Some((new, _)) = link.as_deref().and_then(|k| swatches.get(k)) {
                     *link = new.clone();
@@ -222,6 +277,19 @@ pub(crate) fn adopt(dst: &mut Document, src: &Document, nodes: &mut [Node]) {
             }
             dst.patterns.push(def);
         }
+    }
+    let new_brushes = copies(&brushes);
+    if !new_brushes.is_empty() {
+        for (old, new) in new_brushes {
+            if let Some(mut def) = src_brushes.iter().find(|b| b.name == old).cloned() {
+                def.name = new.to_string();
+                for a in brush_art(&mut def) {
+                    refs(a, &mut rename);
+                }
+                dst_brushes.push(def);
+            }
+        }
+        vectorcraft_brush::store(dst, &dst_brushes);
     }
     for (old, _) in copies(&swatches) {
         if let Some(mut w) = src.swatch(old).cloned() {
