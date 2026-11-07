@@ -439,6 +439,9 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
     true
 }
 
+/// The geometry of the line of `paragraph` from glyph `index`, placed at `position`: where it
+/// ends with its trailing spaces trimmed, its hyphen, its room and margins, the glyphs that hang or
+/// stay out of justification, and whether it is the paragraph's last line.
 fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData<'_, '_>, position: LinePosition, index: usize) -> LineGeometry {
     let para = paragraph.para;
     let sg = &paragraph.sg;
