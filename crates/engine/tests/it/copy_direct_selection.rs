@@ -772,16 +772,20 @@ fn cut_middle_segment_of_open_path_splits_into_two_open_paths_with_single_undo_s
     // Source path should now be split into two surviving open runs.
     let src_node = s.doc().unwrap().doc.node(id).unwrap();
     let src_path = src_node.path_data().unwrap();
-    assert_eq!(src_path.subpaths.len(), 2, "two open paths/subpaths remain after cutting middle segment");
+    assert_eq!(src_path.subpaths.len(), 1);
     assert!(!src_path.subpaths[0].closed);
     assert_eq!(src_path.subpaths[0].anchors.len(), 2);
     assert_eq!(src_path.subpaths[0].anchors[0].p.x, 10.0);
     assert_eq!(src_path.subpaths[0].anchors[1].p.x, 50.0);
 
-    assert!(!src_path.subpaths[1].closed);
-    assert_eq!(src_path.subpaths[1].anchors.len(), 2);
-    assert_eq!(src_path.subpaths[1].anchors[0].p.x, 90.0);
-    assert_eq!(src_path.subpaths[1].anchors[1].p.x, 130.0);
+    let pieces = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(pieces.len(), 2, "two independent path objects remain after cutting the middle segment");
+    assert_eq!(pieces[0], id);
+    let second = &s.doc().unwrap().doc.node(pieces[1]).unwrap().path_data().unwrap().subpaths[0];
+    assert!(!second.closed);
+    assert_eq!(second.anchors.len(), 2);
+    assert_eq!(second.anchors[0].p.x, 90.0);
+    assert_eq!(second.anchors[1].p.x, 130.0);
 
     // Clipboard holds the cut middle segment:
     assert_eq!(s.clipboard.nodes.len(), 1);
@@ -800,7 +804,9 @@ fn cut_middle_segment_of_open_path_splits_into_two_open_paths_with_single_undo_s
     // Redo re-applies the split:
     run(&mut s, "edit.redo", json!({}));
     let redone_path = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap();
-    assert_eq!(redone_path.subpaths.len(), 2);
+    assert_eq!(redone_path.subpaths.len(), 1);
+    assert_eq!(s.doc().unwrap().selection.objects, pieces);
+    assert!(s.doc().unwrap().doc.node(pieces[1]).is_some());
 
     check_session(&s).unwrap();
 }

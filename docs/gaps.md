@@ -1,5 +1,7 @@
 # Gaps
 
+> **Last updated:** 2026-11-07 · **Change:** #3380 deletion only: disconnected survivors of an ordinary single-contour path become selected sibling objects; existing multi-subpath paths and compound members stay intact. Segment endpoint highlighting remains open. Scores and estimates unchanged.
+
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
@@ -37,6 +39,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-05 | minor | G15: long open strokes with an undashed width profile are outlined near the view while keeping profile positions on the full path; a 200,000-segment outline took 59.95 ms before and 8.44 ms after in local median runs. Closed and dashed profile strokes remain whole; estimate unchanged. |
 | 2026-11-05 | minor | G15: Direct Selection reuses one document hit result when choosing the cursor over a path; a 200,000-anchor path's segment cursor took 58.15 ms before and 29.33 ms after in local median runs. Cursor behavior is unchanged; estimate unchanged. |

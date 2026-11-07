@@ -14,6 +14,7 @@ mod beyond_canvas;
 mod clear_commands;
 mod compound_attributes;
 mod copy_direct_selection;
+mod delete_path_pieces;
 mod dimensions;
 mod eyedropper_sources;
 mod find_replace_paras;

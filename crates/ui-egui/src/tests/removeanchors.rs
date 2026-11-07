@@ -279,15 +279,23 @@ fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
         anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
         anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
         let st = app.session.doc().unwrap();
-        let path = st.doc.node(id).unwrap().path_data().unwrap();
-        let points: Vec<Vec<_>> = path.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| a.p).collect()).collect();
+        let pieces = st.selection.objects.clone();
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[0], id);
+        let points: Vec<Vec<_>> = pieces
+            .iter()
+            .map(|piece| {
+                let path = st.doc.node(*piece).unwrap().path_data().unwrap();
+                assert_eq!(path.subpaths.len(), 1);
+                assert!(!path.subpaths[0].closed);
+                path.subpaths[0].anchors.iter().map(|a| a.p).collect()
+            })
+            .collect();
         assert_eq!(
             points,
             vec![vec![Point::new(50.0, 100.0), Point::new(100.0, 80.0)], vec![Point::new(200.0, 120.0), Point::new(250.0, 100.0)]],
             "{key:?} must not join the gap"
         );
-        assert!(path.subpaths.iter().all(|sp| !sp.closed));
-        assert_eq!(st.selection.objects, vec![id]);
         assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
         assert_eq!(st.history.undo.len(), undo + 1);
         let after = st.doc.clone();
@@ -296,8 +304,9 @@ fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
         assert_eq!(app.session.doc().unwrap().selection, selection);
         app.run("edit.redo", json!({})).unwrap();
         assert_eq!(app.session.doc().unwrap().doc, after);
+        assert_eq!(app.session.doc().unwrap().selection.objects, pieces);
         anchor_delete_frame(&mut app, &ctx, vec![press(true)]);
         anchor_delete_frame(&mut app, &ctx, vec![press(false)]);
-        assert!(app.session.doc().unwrap().doc.node(id).is_none(), "the next {key:?} clears the whole remainder");
+        assert!(pieces.iter().all(|piece| app.session.doc().unwrap().doc.node(*piece).is_none()), "the next {key:?} clears every piece");
     }
 }

@@ -3358,16 +3358,19 @@ fn open_anchor_delete_splits_runs_without_new_connections() {
             assert!(s.doc().unwrap().doc.node(id).is_none(), "only isolated points remain: {removed:?}");
             assert!(s.doc().unwrap().selection.objects.is_empty());
         } else {
-            let result = path(&s, id);
-            assert_eq!(result.subpaths.len(), expected.len(), "deleted anchors: {removed:?}");
-            for (sp, indices) in result.subpaths.iter().zip(&expected) {
+            let pieces = &s.doc().unwrap().selection.objects;
+            assert_eq!(pieces.len(), expected.len(), "deleted anchors: {removed:?}");
+            assert_eq!(pieces[0], id);
+            for (piece, indices) in pieces.iter().zip(&expected) {
+                let result = path(&s, *piece);
+                assert_eq!(result.subpaths.len(), 1);
+                let sp = &result.subpaths[0];
                 assert!(!sp.closed);
                 assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), indices.iter().map(|&i| original.anchors[i].p).collect::<Vec<_>>());
                 for (segment, pair) in indices.windows(2).enumerate() {
                     assert_eq!(sp.segment(segment), original.segment(pair[0]));
                 }
             }
-            assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
         }
         assert_eq!(undo_steps(&s), undo + 1);
         assert!(s.doc().unwrap().selection.anchors.is_empty() && s.doc().unwrap().selection.segments.is_empty());
@@ -3503,13 +3506,17 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         let st = s.doc().unwrap();
         assert!(st.doc.node(whole).is_none());
         assert_eq!(st.doc.node(untouched), before.node(untouched));
-        let result = path(&s, id);
-        assert_eq!(result.subpaths.len(), 2);
-        for (sp, segment) in result.subpaths.iter().zip([0, 3]) {
+        let pieces = st.selection.objects.clone();
+        assert_eq!(pieces.len(), 2);
+        assert_eq!(pieces[0], id);
+        for (piece, segment) in pieces.iter().zip([0, 3]) {
+            let result = path(&s, *piece);
+            assert_eq!(result.subpaths.len(), 1);
+            let sp = &result.subpaths[0];
             assert_eq!(sp.segment_count(), 1);
             assert_eq!(sp.segment(0), original.subpaths[0].segment(segment));
         }
-        assert_eq!(st.selection.objects, vec![id]);
+        assert_eq!(st.selection.objects, pieces);
         assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
         assert_eq!(undo_steps(&s), undo + 1);
         let after = st.doc.clone();
@@ -3518,7 +3525,7 @@ fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
         assert_eq!(s.doc().unwrap().selection, selection);
         s.execute("edit.redo", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc, after);
-        assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+        assert_eq!(s.doc().unwrap().selection.objects, pieces);
     }
 }
 

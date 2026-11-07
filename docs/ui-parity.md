@@ -1,5 +1,7 @@
 # UI and interaction parity
 
+> **Last updated:** 2026-11-07 · **Change:** #3380 deletion only: disconnected survivors of an ordinary single-contour path become selected sibling objects; existing multi-subpath paths and compound members stay intact. Segment endpoint highlighting remains open. Scores and estimates unchanged.
+
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
@@ -39,6 +41,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-10-30 | minor | Home screen: welcome, New / Open and Community are centred and the large Discord button uses the theme accent, part of #4684; scores and estimates unchanged (estimated) |
 | 2026-11-06 | minor | Snap to Grid: a straight segment dragged with Direct Selection lands its anchors on the grid, not the pressed point (#3835); scores and estimates unchanged |
 | 2026-11-06 | minor | Drop Shadow: a swatch beside Color follows the hex and a double-click opens the Color Picker over the dialog, whose OK fills Color (#5364); scores and estimates unchanged |
@@ -167,6 +170,7 @@ tools, never checked side by side) isn't captured row by row.
 
 | Behaviour | Status | Notes |
 |---|---|---|
+| Deleting segments or anchors that disconnect an ordinary path creates independent selected objects | done | #3380, deletion only: first piece retains its ID, styles and transforms carry over in sibling order, and one Undo restores the original. Existing multi-subpath paths and compound members stay intact. `delete_path_pieces` covers transformed/styled rectangles, cubic handles and Undo/Redo. Endpoint highlighting remains open. |
 | Click/Shift-click anchors; marquee toggles with Shift | done | #483 |
 | Align selected anchors to their bounds or the artboard; repeating an alignment that moves nothing keeps Undo, Redo and saved state | done | #1180 follow-up; engine regressions include rounding-only moves and unchanged handles; #1641 (fixes #1636): Align and Distribute act on the anchors selected with Direct Selection, the points of one path aligning to each other and Distribute spacing them |
 | Align selected anchors to a key anchor | missing | #1636 |
