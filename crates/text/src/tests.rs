@@ -664,12 +664,56 @@ fn a_leading_tab_takes_its_width_in_the_line_and_the_justification() {
     }
 }
 
+/// Right-aligned area type with tabs: the text before the last tab sits at its stops, measured from
+/// the frame's left edge, and the text after the last tab against the right edge, as Illustrator's
+/// own layout in a user's `.ai` (used locally, not committed) sets a price list: "Name<tab>950
+/// Ft<tab>1 750 Ft" with a right stop at 269.29 and a left one at 272.13 puts the name at 0, the
+/// first price ending at 269.29 and the second ending on the edge.
+#[test]
+fn right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge() {
+    use vectorcraft_doc::{TabAlign, TabStop};
+    let stop = |position: f64, align: TabAlign| TabStop { position, align, leader: String::new(), align_on: '.' };
+    let frame = Rect::new(0.0, 0.0, 336.0, 100.0);
+    let mut t = area("Name\t950 Ft\t1 750 Ft", style(13.0), frame, Justify::Right);
+    t.para.tabs = vec![stop(269.29, TabAlign::Right), stop(272.13, TabAlign::Left)];
+    let lay = layout(db(), &t);
+    let glyph = |byte: usize| lay.glyphs.iter().find(|g| g.byte == byte).unwrap();
+    let end = |byte: usize| glyph(byte).origin.x + glyph(byte).advance;
+    assert!(glyph(0).origin.x.abs() < 1e-6, "the name starts at the left edge: {}", glyph(0).origin.x);
+    assert!((end(10) - 269.29).abs() < 1e-6, "the first price ends on its right stop: {}", end(10));
+    let last = t.plain_text().len() - 1;
+    assert!((end(last) - 336.0).abs() < 1e-6, "the last price ends on the edge: {}", end(last));
+    // One tab: the text after it is against the edge, whatever its stop.
+    let mut one = area("Cseles Spritz\t2 350 Ft", style(13.0), frame, Justify::Right);
+    one.para.tabs = t.para.tabs.clone();
+    let lay = layout(db(), &one);
+    let first = lay.glyphs.first().unwrap();
+    let last = lay.glyphs.last().unwrap();
+    assert!(
+        first.origin.x.abs() < 1e-6 && (last.origin.x + last.advance - 336.0).abs() < 1e-6,
+        "{} {}",
+        first.origin.x,
+        last.origin.x + last.advance
+    );
+    // A tab ending the line (a heading "Sör<tab>" in the user's file): the text before it at the
+    // left edge, the tab to the right edge.
+    let lay = layout(db(), &area("Heading\t\nNext", style(13.0), frame, Justify::Right));
+    assert!(lay.glyphs.first().unwrap().origin.x.abs() < 1e-6, "{}", lay.glyphs.first().unwrap().origin.x);
+    let tab = lay.glyphs.iter().find(|g| g.byte == 7).unwrap();
+    assert!((tab.origin.x + tab.advance - 336.0).abs() < 1e-6, "the tab ends at {}", tab.origin.x + tab.advance);
+    // Without a tab, the line is right aligned as a whole.
+    let lay = layout(db(), &area("Name", style(13.0), frame, Justify::Right));
+    assert!(lay.glyphs.first().unwrap().origin.x > 200.0);
+}
+
 #[test]
 fn a_centred_or_right_aligned_line_sets_its_tabs_as_if_it_started_at_the_left() {
     use vectorcraft_doc::{TabAlign, TabStop};
     // "A<tab>B" with a stop at 100 pt is 100 pt plus B wide whatever the alignment: the whole line
     // moves, the gap between A and B stays 100 pt, and a right aligned line ends on the edge (#2457).
-    for justify in [Justify::Center, Justify::Right, Justify::JustifyCenter, Justify::JustifyRight] {
+    // (Right aligned area type sets the text after its last tab against the edge instead: see
+    // `right_aligned_area_type_sets_the_text_after_its_last_tab_against_the_edge`.)
+    for justify in [Justify::Center, Justify::JustifyCenter, Justify::JustifyRight] {
         let mut t = area("A\tB", style(12.0), Rect::new(0.0, 0.0, 200.0, 100.0), justify);
         t.para.tabs = vec![TabStop { position: 100.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
         let lay = layout(db(), &t);

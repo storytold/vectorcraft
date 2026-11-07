@@ -383,6 +383,9 @@ struct LineJustification {
     start_x: f64,
     after: Vec<Option<usize>>,
     kashidas: Vec<(usize, f64)>,
+    /// Right-aligned area type: the line's last tab, which takes the text after it to the right
+    /// edge (the text before it sits at its stops, from the left edge).
+    last_tab: Option<usize>,
 }
 
 fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut paragraph: ParagraphData<'_, '_>) -> bool {
@@ -667,7 +670,14 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
         }
     }
     let position = &line.position;
-    let start_x = if justify {
+    // Right-aligned area type with a tab: the text before the last tab sits at its stops, from the
+    // left edge, and the text after it against the right edge, as Illustrator's own layout in a
+    // user's `.ai` sets a price list. Centred and justified lines are aligned as a whole.
+    let last_tab = (para.justify == Justify::Right && !justify && !paragraph.rtl && paragraph.regions.is_some())
+        // A tab ending the line counts: its text sits at the left edge, the tab up to the right one.
+        .then(|| (line.index..line.position.end).rev().find(|&j| sg.get(j).is_some_and(|g| g.ch == '\t' && g.len > 0)))
+        .flatten();
+    let start_x = if justify || last_tab.is_some() {
         line.ax0 - line.opt_l
     } else if paragraph.regions.is_none() {
         match align {
@@ -682,7 +692,35 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, fit, start_x, after, kashidas }
+    LineJustification { per_space, per_gap, per_cjk, fit, start_x, after, kashidas, last_tab }
+}
+
+/// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
+/// ([`tab_advance`], measured from `tab_origin` less `tab_shift`), or, for the last tab of
+/// right-aligned area type ([`LineJustification::last_tab`]), up to where the rest of the line
+/// ends on the right edge. The tab after a list marker keeps the width `prepend_marker` gave it
+/// (`advance`).
+fn tab_glyph<'p>(
+    paragraph: &'p ParagraphData<'_, '_>,
+    line: &LineGeometry,
+    justification: &LineJustification,
+    glyph_index: usize,
+    x: f64,
+    (tab_origin, tab_shift): (f64, f64),
+    advance: f64,
+) -> (f64, &'p str) {
+    let sg = &paragraph.sg;
+    if !sg.get(glyph_index).is_some_and(|g| g.len > 0) {
+        return (advance, "");
+    }
+    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, sg.get(glyph_index + 1..line.trimmed).unwrap_or_default());
+    if justification.last_tab != Some(glyph_index) {
+        return (advance, leader);
+    }
+    // The width of what follows up to the line's end (nothing, when the tab ends the line).
+    let after = sg.get(glyph_index + 1..line.trimmed).unwrap_or_default();
+    let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim };
+    ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
 }
 
 fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, justification: &LineJustification) {
@@ -724,10 +762,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         let mut scale = 1.0;
         let mut leader = "";
         if glyph.ch == '\t' {
-            // The tab after a list marker keeps the width `prepend_marker` gave it.
-            if glyph.len > 0 {
-                (advance, leader) = tab_advance(&para.tabs, tab_origin, x - tab_shift, &sg[glyph_index + 1..trimmed.max(glyph_index + 1)]);
-            }
+            (advance, leader) = tab_glyph(paragraph, line, justification, glyph_index, x, (tab_origin, tab_shift), advance);
         } else if glyph_index < body {
             let flex = flow_line_flex(glyph_index, &paragraph.flex, &line.held, &line.hung);
             if is_word_space(glyph) {
