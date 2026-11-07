@@ -139,7 +139,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{selectedArtboards?: [n…], art?: bool} (as edit.copy) (selected ruler guides go too; the Artboard tool chosen, or selectedArtboards given: artboard.cut)",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -148,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{selectedArtboards?: [n…] (the artboards the Artboard tool had selected, which the journal records for a replay; it runs artboard.copy with any tool chosen), art?: bool (default: the Artboard tool's moveArt option; the journal records it beside selectedArtboards)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -701,10 +701,27 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     Ok((direct, roots))
 }
 
-fn copy(s: &mut Session, _: &Value) -> Result<Value> {
+/// Copy or Cut takes artboards: the Artboard tool is chosen, or the journal recorded the artboards
+/// it took then.
+fn takes_artboards(s: &Session, p: &Value) -> bool {
+    s.tool_id() == "artboard" || p.get("selectedArtboards").is_some()
+}
+
+/// Copy or Cut of artboards: `selectedArtboards` and `art` of `p`, or their defaults from the
+/// Artboard tool, which the journal entry records.
+fn copy_artboards(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
+    let given: serde_json::Map<String, Value> =
+        ["selectedArtboards", "art"].into_iter().filter_map(|key| p.get(key).map(|v| (key.to_string(), v.clone()))).collect();
+    let given = Value::Object(given);
+    super::panelcmds::boards_and_art_noted(s, &given, if cut { "edit.cut" } else { "edit.copy" })?;
+    super::panelcmds::artboard_copy(s, &given, cut)
+}
+
+fn copy(s: &mut Session, p: &Value) -> Result<Value> {
+    switch_or(p, "art", false, "edit.copy")?;
     // The Artboard tool copies its artboard (and the art on it).
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), false);
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, false);
     }
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
@@ -743,8 +760,9 @@ fn copy(s: &mut Session, _: &Value) -> Result<Value> {
 }
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
-    if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), true);
+    switch_or(p, "art", false, "edit.cut")?;
+    if takes_artboards(s, p) {
+        return copy_artboards(s, p, true);
     }
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {
