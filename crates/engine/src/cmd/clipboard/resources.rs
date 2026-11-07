@@ -701,19 +701,24 @@ impl<'c> Def<'c> {
         }
     }
 
-    /// Does it use one of `defs`, including itself?
-    fn uses_any(&self, defs: &[Def<'_>]) -> bool {
-        let mut found = false;
-        let mut f = |r: Ref<'_>| {
+    /// Call `f` with each resource it refers to by name.
+    fn each_use(&self, f: &mut dyn FnMut(Res, &str)) {
+        let mut g = |r: Ref<'_>| {
             if let Ref::Name(res, n) = r {
-                found |= defs.iter().any(|o| o.key() == (res, n));
+                f(res, n);
             }
         };
         match self {
-            Def::Style(_, s) => attrs_refs(&s.attrs, &mut f),
-            Def::Symbol(s, _) => node_refs(&s.art, &mut f),
-            Def::Pattern(p) => p.art.iter().for_each(|a| node_refs(a, &mut f)),
+            Def::Style(_, s) => attrs_refs(&s.attrs, &mut g),
+            Def::Symbol(s, _) => node_refs(&s.art, &mut g),
+            Def::Pattern(p) => p.art.iter().for_each(|a| node_refs(a, &mut g)),
         }
+    }
+
+    /// Does it use one of `defs`, including itself?
+    fn uses_any(&self, defs: &[Def<'_>]) -> bool {
+        let mut found = false;
+        self.each_use(&mut |res, n| found |= defs.iter().any(|o| o.key() == (res, n)));
         found
     }
 
@@ -768,9 +773,77 @@ fn use_order(mut left: Vec<Def<'_>>) -> (Vec<Def<'_>>, Vec<Def<'_>>) {
     (order, left)
 }
 
-/// The names in `d` that `looped` (definitions that use each other, [`use_order`]) all have at
-/// once, each the same once relinked by `r` with those names: each one's name or a numbered copy
-/// of it, at most 256 combinations tried. `None` when no combination fits.
+/// `rest` ([`use_order`]'s definitions that use each other in a loop or use one that does) split
+/// into its loops and the definitions outside a loop, each group after the groups it uses:
+/// (positions in `rest`, in their order; true for a loop, definitions that use each other or one
+/// that uses itself).
+fn loop_groups(rest: &[Def<'_>]) -> Vec<(Vec<usize>, bool)> {
+    let mut at: BTreeMap<(Res, &str), Vec<usize>> = BTreeMap::new();
+    for (i, def) in rest.iter().enumerate() {
+        at.entry(def.key()).or_default().push(i);
+    }
+    let uses: Vec<Vec<usize>> = rest
+        .iter()
+        .map(|def| {
+            let mut to = vec![];
+            def.each_use(&mut |res, n| to.extend(at.get(&(res, n)).into_iter().flatten()));
+            to.sort_unstable();
+            to.dedup();
+            to
+        })
+        .collect();
+    // Tarjan's strongly connected components: each one comes out after those it reaches.
+    const NONE: usize = usize::MAX;
+    let (mut index, mut low, mut on) = (vec![NONE; rest.len()], vec![0; rest.len()], vec![false; rest.len()]);
+    let (mut stack, mut next, mut groups) = (vec![], 0, vec![]);
+    for root in 0..rest.len() {
+        if index[root] != NONE {
+            continue;
+        }
+        let mut calls: Vec<(usize, usize)> = vec![(root, 0)];
+        (index[root], low[root], on[root]) = (next, next, true);
+        next += 1;
+        stack.push(root);
+        while let Some(&(v, k)) = calls.last() {
+            if let Some(&w) = uses[v].get(k) {
+                if let Some(top) = calls.last_mut() {
+                    top.1 += 1;
+                }
+                if index[w] == NONE {
+                    (index[w], low[w], on[w]) = (next, next, true);
+                    next += 1;
+                    stack.push(w);
+                    calls.push((w, 0));
+                } else if on[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+                continue;
+            }
+            calls.pop();
+            if let Some(&(u, _)) = calls.last() {
+                low[u] = low[u].min(low[v]);
+            }
+            if low[v] == index[v] {
+                let mut group = vec![];
+                while let Some(w) = stack.pop() {
+                    on[w] = false;
+                    group.push(w);
+                    if w == v {
+                        break;
+                    }
+                }
+                group.sort_unstable();
+                let looped = group.len() > 1 || uses[v].contains(&v);
+                groups.push((group, looped));
+            }
+        }
+    }
+    groups
+}
+
+/// The names in `d` that `looped` (a loop of definitions that use each other, [`loop_groups`])
+/// all have at once, each the same once relinked by `r` with those names: each one's name or a
+/// numbered copy of it, at most 256 combinations tried. `None` when no combination fits.
 fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<&'d str>> {
     let names: Vec<Vec<&str>> = looped.iter().map(|def| def.names_in(d)).collect();
     let count = names.iter().try_fold(1usize, |n, l| n.checked_mul(l.len()).filter(|n| *n <= 256))?;
@@ -896,7 +969,8 @@ impl Clipboard {
     /// [`Self::import_into`] for the resources `used` names. The character and paragraph styles
     /// come before the symbols and patterns, whose art may set type in them; with `in_use_order`,
     /// each style, symbol and pattern comes after the styles, symbols and patterns it uses
-    /// ([`use_order`]), so that it is compared and relinked with their names here.
+    /// ([`use_order`]), so that it is compared and relinked with their names here, and each loop
+    /// of definitions that use each other is matched on its own ([`loop_groups`]).
     fn import_used(&self, d: &mut Document, used: &Used, choices: &SwatchChoices, same_doc: bool, in_use_order: bool) -> Imported {
         let mut out = Imported::default();
         self.import_images(d, used, same_doc, &mut out);
@@ -910,24 +984,30 @@ impl Clipboard {
         }
         defs.extend(self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).map(|s| Def::Symbol(s, self.symbol_options.get(&s.name))));
         defs.extend(self.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).map(Def::Pattern));
-        let mut looped = vec![];
-        if in_use_order {
-            (defs, looped) = use_order(defs);
-        }
-        let first_looped = defs.len();
+        // Groups to place in order; true for a loop of definitions that use each other.
+        let groups: Vec<(Vec<Def<'_>>, bool)> = if in_use_order {
+            let (order, rest) = use_order(defs);
+            let loops = loop_groups(&rest).into_iter().map(|(at, looped)| (at.into_iter().filter_map(|i| rest.get(i).copied()).collect(), looped));
+            std::iter::once((order, false)).chain(loops).collect()
+        } else {
+            vec![(defs, false)]
+        };
         // Styles (their colors relinked first), symbols and patterns (compared once relinked,
         // symbols with their options too). The symbols and patterns added are relinked at the end,
         // when every new name and graphic style id is known; with `in_use_order`, so are the
         // styles added, which a loop of uses may place before a pattern they paint with.
         let (mut added_symbols, mut added_patterns, mut added_styles) = (HashSet::new(), HashSet::new(), vec![]);
-        for (i, def) in defs.into_iter().chain(looped.iter().copied()).enumerate() {
-            // Definitions in a loop of uses that the document has all at once are known under
-            // those names before they are compared.
-            if i == first_looped
-                && let Some(names) = names_of_loop(d, &looped, &out.relink)
+        // Each definition, with the loop it starts.
+        let steps =
+            groups.iter().flat_map(|(group, looped)| group.iter().enumerate().map(move |(i, def)| (*def, (*looped && i == 0).then_some(group))));
+        for (def, starts) in steps {
+            // A loop of uses that the document has all at once is known under those names before
+            // its definitions are compared.
+            if let Some(group) = starts
+                && let Some(names) = names_of_loop(d, group, &out.relink)
             {
                 let names: Vec<String> = names.into_iter().map(str::to_string).collect();
-                for (def, name) in looped.iter().zip(names) {
+                for (def, name) in group.iter().zip(names) {
                     let (res, own) = def.key();
                     if own != name {
                         out.relink.renames.entry(res).or_default().insert(own.to_string(), name);

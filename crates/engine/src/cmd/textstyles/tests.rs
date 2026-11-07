@@ -987,6 +987,52 @@ fn self_referencing_pattern_is_not_added_again() {
     assert_eq!(dst.doc().unwrap().doc, before);
 }
 
+/// Patterns whose tiles each paint with themselves are matched one loop at a time: nine of them,
+/// each in the document under its name with other art and as the copy an earlier load added,
+/// are found under those copies, and a second load adds nothing.
+#[test]
+fn separate_self_referencing_patterns_are_not_added_again() {
+    let (mut src, id) = session_with_text("Patterned");
+    let mut tiles = vec![];
+    for k in 0..9 {
+        let name = format!("Dots{k}");
+        let square = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].clone();
+        src.execute("object.pattern.make", &json!({"name": name, "edit": false, "ids": [square]})).unwrap();
+        let tile = src.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap()["id"].clone();
+        src.execute("paint.setFill", &json!({"swatch": name, "ids": [tile]})).unwrap();
+        tiles.push((name.clone(), src.doc().unwrap().doc.node(NodeId(tile.as_u64().unwrap())).unwrap().clone()));
+        src.execute("paint.setFill", &json!({"swatch": name, "ids": [id]})).unwrap();
+        src.execute("charStyle.new", &json!({"name": format!("Patterned{k}"), "id": id})).unwrap();
+    }
+    let mut source = (*src.doc().unwrap().doc).clone();
+    for (name, art) in tiles {
+        source.patterns.iter_mut().find(|p| p.name == name).unwrap().art = vec![std::sync::Arc::new(art)];
+    }
+    let (mut dst, _) = session_with_text("X");
+    for k in 0..9 {
+        let different = dst.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
+        dst.execute("object.pattern.make", &json!({"name": format!("Dots{k}"), "edit": false, "ids": [different]})).unwrap();
+    }
+    let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
+    super::super::clipboard::resources::import_text_styles(&source, target);
+    for k in 0..9 {
+        assert!(dst.doc().unwrap().doc.pattern(&format!("Dots{k} 2")).is_some(), "{k}");
+    }
+    let before = dst.doc().unwrap().doc.clone();
+    let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
+    let again = super::super::clipboard::resources::import_text_styles(&source, target);
+    assert!(again.iter().all(|s| !s.added));
+    assert_eq!(dst.doc().unwrap().doc.patterns.len(), before.patterns.len());
+    assert_eq!(dst.doc().unwrap().doc, before);
+    // With one loop's pattern gone from the document, the others are still found.
+    let target = std::sync::Arc::make_mut(&mut dst.doc_mut().unwrap().doc);
+    target.patterns.retain(|p| !p.name.starts_with("Dots8"));
+    let left = target.patterns.len();
+    let third = super::super::clipboard::resources::import_text_styles(&source, target);
+    assert_eq!(dst.doc().unwrap().doc.patterns.len(), left + 1);
+    assert!(third.iter().filter(|s| s.name != "Patterned8" && !s.name.starts_with("Patterned8 ")).all(|s| !s.added));
+}
+
 /// #1001: attributes their JSON leaves out at the defaults (Auto leading and kerning, no
 /// mojikumi) are still attributes a style can set, and a style captured with one applies to
 /// text at the default, is duplicated and comes back out of a library.
