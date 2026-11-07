@@ -716,7 +716,8 @@ impl<'a> Reader<'a> {
     /// the art), read by a reader of its own as a pattern's is, in a space with y down. Art it can't
     /// read whole isn't kept: the brushes that use it aren't read. Kept art's colors are kept with
     /// it, and count as the page's once a brush that is kept uses the art
-    /// ([`Reader::count_brush_art_colors`]).
+    /// ([`Reader::count_brush_art_colors`]): each name's first definition in the art, at most
+    /// [`brush::MAX_BRUSH_ART_COLORS`] names.
     fn define_brush_art(&mut self, section: &[u8]) {
         if self.brush_art_sections >= brush::MAX_BRUSH_ART || self.subreader_depth >= MAX_SUBREADERS {
             return;
@@ -763,7 +764,8 @@ impl<'a> Reader<'a> {
         };
         let Some(node) = node else { return };
         self.brush_art.insert(name.clone(), node);
-        let colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };
+        let mut colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };
+        colors.keep_first(brush::MAX_BRUSH_ART_COLORS);
         self.brush_art_colors.insert(name, colors);
     }
 
