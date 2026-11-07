@@ -9,9 +9,9 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::{
-    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
-    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index, ok,
-    point_param, str_param, switch_or,
+    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, clock_date, cmd, date_param,
+    f64_or, f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param,
+    index, ok, point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -115,6 +115,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{} remove every undo and redo step of the active document (the History panel menu's Clear History): the document stays as it is, and clearing is not an undo step → {cleared: the number of steps removed}",
             can_clear_history,
             clear_history
+        ),
+        cmd!(
+            "edit.newDocumentFromState",
+            "New Document from State",
+            [],
+            None,
+            "{index?: a row of the History panel (0: the oldest state kept; default: the current state), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches)} make a new document holding the art as it was at that state, and make it the active document (the History panel's New Document from State button). The new document is named with the next Untitled-N, has nothing selected and no steps to undo or redo, is marked unsaved and links to the same files. It is out of symbol, opacity-mask and pattern editing, with the art drawn in a pattern's tile stored in the pattern as object.pattern.done stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step, as edit.undo keeps it; `index` names the row as it was listed before that. An index that names no state is an error and changes nothing → {index: the new document's, title}",
+            has_doc,
+            new_document_from_state
         ),
         cmd!(
             "edit.undoGroup.begin",
@@ -604,6 +613,53 @@ fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
     st.history.redo.clear();
     st.revision += 1;
     Ok(json!({ "cleared": cleared }))
+}
+
+/// History panel › New Document from State: a new document with the art of a state, and without
+/// the editing state that state may hold (opacity-mask or symbol editing, Puppet Warp pins, new art).
+/// Its links point at the files the source finds, which may be in the source's folder away from
+/// the links' paths. Later artboards in the two documents take their ids separately. A later save of the new document
+/// over the file its art was read from asks first, as a save of the source does.
+fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.newDocumentFromState";
+    let created = date_param(p, "created", C)?;
+    let st = s.doc()?;
+    // The row as the panel lists it now: keeping an edit in progress below changes the rows.
+    let chosen = match p.get("index") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let state = v.as_u64().and_then(|row| st.history.state(&st.doc, index(row)));
+            Some(state.ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
+        }
+    };
+    settle_interaction(s)?;
+    let st = s.doc()?;
+    let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
+    let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
+    if let Some(path) = st.path.as_deref() {
+        // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
+        let roots = crate::file_access::current().or_else(|| opened_by.clone());
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+    }
+    doc.drop_edit_modes();
+    if doc.pattern_edit.is_some() {
+        super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
+    }
+    doc.puppet = None;
+    doc.new_art.set(Arc::default());
+    let retired = vectorcraft_doc::RetiredArtboardId::default();
+    retired.raise(doc.retired_artboard_id.get());
+    doc.retired_artboard_id = retired;
+    doc.title = s.next_untitled();
+    doc.metadata.created = clock_date(s, "created", created);
+    doc.metadata.modified = None;
+    let i = s.add_document(doc, None);
+    let st = s.doc_mut()?;
+    st.imported_from = imported_from;
+    st.import_losses = import_losses;
+    st.opened_by = st.opened_by.take().or(opened_by);
+    st.mark_unsaved();
+    Ok(json!({ "index": i, "title": st.title() }))
 }
 
 /// `selection` for an undo (redo) step, sharing that of `like`, the step beside it, when the same.

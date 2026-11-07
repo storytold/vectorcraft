@@ -1399,6 +1399,7 @@ font-technology	Variable	Променливи
 	Step Backward	Стъпка назад
 	Step Forward	Стъпка напред
 	Clear History	Изчистване на историята
+	New Document from State	Нов документ от състоянието
 	Set History Limit…	Задаване на ограничение на историята…
 	History States	Състояния на историята
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4239,6 +4240,7 @@ axis	Both	И двете
 @msg	nothing to save: the document has no visible art	няма нищо за запазване: документът няма видима графика
 @msg	nothing to undo	няма какво да се отмени
 @msg	no history to clear	няма история за изчистване
+@msg	no history state {v}	няма състояние в историята {v}
 @msg	nothing to warp	няма нищо за извиване
 @msg	nothing to wrap	няма нищо за обвиване
 @msg	object {0} cannot have children	обектът {0} не може да има дъщерни елементи

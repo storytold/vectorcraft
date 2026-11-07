@@ -745,6 +745,7 @@
 	Clear Events	घटनाओं को साफ़ करें
 	Clear Guides	गाइड्स हटाएँ
 	Clear History	हिस्ट्री साफ़ करें
+	New Document from State	स्थिति से नया दस्तावेज़
 	Clear Overrides	साफ़ ओवरराइड्स
 	Clear Recent Files	हाल की फ़ाइलें साफ़ करें
 	Clear Selection	सिलेक्शन साफ़ करें
@@ -6600,6 +6601,7 @@
 @msg	no guide selected	कोई गाइड सिलेक्टेड नहीं
 @msg	no guide selected (or give an index)	कोई गाइड नहीं चुना गया (या एक सूचकांक देना)
 @msg	no history to clear	स्पष्ट करने के लिए कोई इतिहास नहीं
+@msg	no history state {v}	कोई हिस्ट्री स्थिति {v} नहीं
 @msg	no images in the folder	फ़ोल्डर में कोई इमेज नहीं
 @msg	no interaction in progress	प्रगति में कोई बातचीत नहीं
 @msg	no item at index {_1}	इंडेक्स में कोई आइटम नहीं {_1}

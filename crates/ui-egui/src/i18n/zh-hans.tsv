@@ -1394,6 +1394,7 @@ file-filter	Templates	模板
 	Step Backward	后退一步
 	Step Forward	前进一步
 	Clear History	清除历史记录
+	New Document from State	从状态新建文档
 	Set History Limit…	设置历史记录上限…
 	History States	历史记录步数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -3900,6 +3901,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to redo	没有可重做的操作
 @msg	nothing to undo	没有可撤销的操作
 @msg	no history to clear	没有可清除的历史记录
+@msg	no history state {v}	没有历史记录状态 {v}
 @msg	Expand Appearance: the selection has a basic appearance	扩展外观：所选对象只有基本外观
 @msg	select (or target) objects whose appearance isn't basic	请选择 (或定位) 外观不是基本外观的对象
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 处没有效果

@@ -1610,6 +1610,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Korak unazad
 	Step Forward	Korak naprijed
 	Clear History	Očisti historiju
+	New Document from State	Novi dokument iz stanja
 	Set History Limit…	Postavi ograničenje historije…
 	Open a document to see its history.	Otvorite dokument da vidite njegovu historiju.
 	Apply Data Set	Primijeni skup podataka
@@ -4635,6 +4636,7 @@ imageTrace	Outline	Obris
 @msg	nothing to save: the document has no visible art	nema ničeg za čuvanje: dokument nema vidljiv crtež
 @msg	nothing to undo	nema ničeg za poništavanje
 @msg	no history to clear	nema historije za brisanje
+@msg	no history state {v}	nema stanja historije {v}
 @msg	nothing to warp	nema ničeg za iskrivljenje
 @msg	nothing to wrap	nema ničeg za omotavanje
 @msg	object {0} cannot have children	objekat {0} ne može imati djecu
