@@ -114,6 +114,7 @@ mod services;
 pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{

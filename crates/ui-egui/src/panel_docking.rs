@@ -1147,6 +1147,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
         .input_blocked(modal)
+        .monitors(app.services.dock_monitors.clone())
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
     {
