@@ -67,7 +67,7 @@ pub(crate) struct Interp<'a> {
     pub glyph_width: Option<[f64; 2]>,
     /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
     /// `type42`), the most recent last.
-    pub type42: Vec<(Shared<Obj>, Rc<Vec<u8>>)>,
+    pub type42: Vec<(Shared<Obj>, Rc<super::type42::Font>)>,
     pub g: GState,
     pub saved: Vec<GState>,
     pub out: Out,

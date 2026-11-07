@@ -7,6 +7,9 @@
 
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
+use std::cell::OnceCell;
+use std::collections::HashMap;
+
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 use vectorcraft_geom::BezPath;
 
@@ -31,6 +34,53 @@ pub(super) fn font_data(sfnts: &[Obj]) -> Option<Vec<u8>> {
     Some(data)
 }
 
+/// The TrueType font a Type 42 font carries, with the character each glyph stands for (read
+/// when first asked).
+pub(super) struct Font {
+    pub data: Vec<u8>,
+    chars: OnceCell<HashMap<u32, char>>,
+}
+
+impl Font {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data, chars: OnceCell::new() }
+    }
+
+    /// The character glyph `gid` stands for: the one the font's character map maps to it
+    /// (the lowest, when it maps several), else the one its `post` table's glyph name says
+    /// (`uni20AC`, a single character). `None` for a glyph neither names, and for one a symbol
+    /// font maps only from its private-use codes (U+F000–U+F0FF), which aren't characters.
+    pub fn char_of(&self, gid: u32) -> Option<char> {
+        let chars = self.chars.get_or_init(|| {
+            let mut m = HashMap::new();
+            if let Ok(font) = FontRef::new(&self.data) {
+                for (c, g) in font.charmap().mappings() {
+                    // Not a symbol font's private-use codes, controls or the soft hyphen, which
+                    // doesn't show (a hyphen glyph mapped from it is the hyphen's).
+                    let Some(c) = char::from_u32(c).filter(|c| !('\u{F000}'..='\u{F0FF}').contains(c) && !c.is_control() && *c != '\u{AD}') else {
+                        continue;
+                    };
+                    m.entry(g.to_u32()).and_modify(|e: &mut char| *e = (*e).min(c)).or_insert(c);
+                }
+            }
+            m
+        });
+        if let Some(c) = chars.get(&gid) {
+            return Some(*c);
+        }
+        let font = FontRef::new(&self.data).ok()?;
+        let name = font.glyph_names().get(GlyphId::new(gid))?;
+        let c = super::text::glyph_char(name.as_str());
+        (c != '\u{2022}' || name.as_str() == "bullet").then_some(c)
+    }
+
+    /// The glyph the font's character map gives `c`.
+    pub fn gid_of(&self, c: char) -> Option<u32> {
+        let font = FontRef::new(&self.data).ok()?;
+        font.charmap().map(c).map(|g| g.to_u32()).filter(|g| *g != 0)
+    }
+}
+
 /// Glyph `gid` of TrueType font `data`: its outline and advance width, in ems (y up), or `None`
 /// when the font can't be read.
 pub(super) fn glyph(data: &[u8], gid: u32) -> Option<(BezPath, f64)> {
@@ -49,6 +99,14 @@ pub(super) fn glyph(data: &[u8], gid: u32) -> Option<(BezPath, f64)> {
     }
     let advance = font.glyph_metrics(Size::unscaled(), LocationRef::default()).advance_width(id).map_or(0.0, f64::from) / upem;
     Some((pen.0, if advance.is_finite() { advance } else { 0.0 }))
+}
+
+/// The advance width of glyph `gid` of TrueType font `data`, in ems (0 when it can't be read).
+pub(super) fn advance(data: &[u8], gid: u32) -> f64 {
+    let Ok(font) = FontRef::new(data) else { return 0.0 };
+    let upem = f64::from(font.metrics(Size::unscaled(), LocationRef::default()).units_per_em);
+    let w = font.glyph_metrics(Size::unscaled(), LocationRef::default()).advance_width(GlyphId::new(gid)).map_or(0.0, f64::from) / upem;
+    if w.is_finite() { w } else { 0.0 }
 }
 
 /// A pen drawing an outline scaled from font units to ems.
