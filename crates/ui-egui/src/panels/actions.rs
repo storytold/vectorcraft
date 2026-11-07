@@ -515,7 +515,7 @@ fn active_doc(app: &VectorcraftApp) -> Option<u64> {
 /// frame does not shorten it. A step that fails ends the playback and shows its error. When a step
 /// is due and the active document is not the one that was active after the last step (another
 /// document was made active, or that one was closed), the playback ends with a status and the rest
-/// do not run. → the seconds until the window should draw again while playback goes on (none while
+/// do not run, except that a stop is held whichever document is active. → the seconds until the window should draw again while playback goes on (none while
 /// Step by Step waits for a UI pass, which asks for the next frame itself)
 pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     let doc = active_doc(app);
@@ -537,13 +537,13 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
             return Some(due - now);
         }
     }
+    if playing.steps.front().is_some_and(is_stop) {
+        hold_at_stop(app);
+        return None;
+    }
     if playing.doc != doc {
         app.ui.action_playing = None;
         app.status("the action stopped playing: its document is no longer active");
-        return None;
-    }
-    if playing.steps.front().is_some_and(is_stop) {
-        hold_at_stop(app);
         return None;
     }
     let Some(step) = playing.steps.pop_front() else {
@@ -3913,6 +3913,21 @@ mod tests {
             assert_eq!(x(&app), 7.0, "{speed}: the paced playback goes on to the end");
             assert!(app.ui.action_playing.is_none(), "{speed}");
         }
+    }
+
+    #[test]
+    fn a_paced_playback_holds_at_a_stop_when_another_document_became_active() {
+        let (mut app, _) = app_with_a_stop(false);
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "pause", "seconds": 1})).unwrap();
+        play(&mut app, 0, 0).unwrap();
+        assert_eq!(tick_playback(&mut app, 0.0), Some(1.0));
+        app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+        app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 5, "height": 5})).unwrap();
+        assert_eq!(tick_playback(&mut app, 1.0), None);
+        assert!(waiting_at_stop(&app), "the stop holds the playback, as it does at Accelerated");
+        assert_ne!(app.ui.status, "the action stopped playing: its document is no longer active");
+        let r = app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
+        assert_eq!(r["pending"], json!(1), "Continue runs the next step in the document active now");
     }
 
     #[test]
