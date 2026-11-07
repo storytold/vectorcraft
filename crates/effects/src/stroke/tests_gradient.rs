@@ -237,3 +237,52 @@ fn slices_cover_an_arrowhead_on_a_long_straight_leg() {
         }
     }
 }
+
+/// Does the last slice holding `p` (the one filled last there) lay its gradient piece on a part of
+/// the path running across the page (left or right), for a gradient in `mode`? Along, the piece
+/// runs the way the path does; across, square to it.
+fn painted_by_level_part(slices: &[Slice], p: Point, mode: StrokeGradientMode) -> Option<bool> {
+    slices.iter().rev().find(|s| s.shape.contains(p)).map(|s| {
+        let d = s.to - s.from;
+        (d.x.abs() > d.y.abs()) == (mode == StrokeGradientMode::Along)
+    })
+}
+
+/// #5960: where a variable-width stroke crosses itself, the later pass paints over the earlier one
+/// only where the two overlap. Its slices reach as far as the stroke is wide there, not as far as
+/// it is wide anywhere, so a narrow later pass leaves the wide earlier one its own colour beside it.
+#[test]
+fn a_narrow_pass_over_a_wide_one_paints_only_where_they_overlap() {
+    // Right along y = 50, round, then down through the first leg at x = 50, near the narrow end.
+    let crossing = poly(&[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (50.0, 100.0), (50.0, 0.0)], false);
+    for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+        let mut st = stroke(10.0, mode);
+        st.profile = Some(WidthProfile::taper_end());
+        let sl = slices(&crossing, &st);
+        // In the first leg (about 4 pt either side of it there) but 4 pt beside the second leg,
+        // which is less than 1 pt either side of itself there.
+        let level = painted_by_level_part(&sl, Point::new(54.0, 52.0), mode);
+        assert_eq!(level, Some(true), "{mode:?}: painted by the second leg");
+        // Where the two overlap, the second leg is on top.
+        let level = painted_by_level_part(&sl, Point::new(50.5, 52.0), mode);
+        assert_eq!(level, Some(false), "{mode:?}: painted by the first leg");
+        assert_covered(&crossing, &st);
+    }
+}
+
+/// #5960: a narrow pass running close beside a wide one doesn't paint the wide one's edge.
+#[test]
+fn a_narrow_pass_beside_a_wide_one_leaves_its_edge_alone() {
+    // Right along y = 0, then back along y = 7: the way back is the narrow end of a taper.
+    let hairpin = poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 7.0), (0.0, 7.0)], false);
+    let total = 207.0;
+    let mut st = stroke(10.0, StrokeGradientMode::Along);
+    st.profile = Some(WidthProfile::taper_end());
+    let sl = slices(&hairpin, &st);
+    // Half way along the first leg, 3 pt off it (it is about 3.8 pt wide there either side); the
+    // way back is about 1.2 pt wide either side there, so it reaches no nearer than 5.8.
+    let p = Point::new(50.0, 3.0);
+    let t = param(&sl, p).expect("in a slice");
+    assert!((t - 50.0 / total).abs() < 1e-6, "painted with {t}, not the first leg's {}", 50.0 / total);
+    assert_covered(&hairpin, &st);
+}
