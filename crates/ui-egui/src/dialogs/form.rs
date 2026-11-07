@@ -177,7 +177,7 @@ pub(super) fn colour_swatch_id(key: &str) -> egui::Id {
 /// The colour swatch beside the colour field `key`, showing `colour`: a double-click asks for the
 /// Color Picker over this dialog, whose OK fills the field ([`super::color_picker::over_effect`]).
 /// Returns whether the picker was asked for.
-fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
+pub(super) fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), egui::Sense::hover());
     let resp = ui.interact(rect, colour_swatch_id(key), egui::Sense::click());
