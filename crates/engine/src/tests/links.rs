@@ -502,6 +502,38 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
     }
 }
 
+/// Opening lays out each type object with the plans the objects before it left on the font's
+/// face: its bounds and baselines are those of a layout in a font database of its own, which holds
+/// no plans. The objects share a script and direction and differ in features and language. Only
+/// bundled Latin glyphs are set, which every font database holds.
+#[test]
+fn type_read_for_opening_has_the_layout_of_a_font_database_with_no_plans() {
+    let dir = Folder::new("read-for-open-plans");
+    let style = vectorcraft_doc::CharStyle { size: 100.0, ..Default::default() };
+    let manual = vectorcraft_doc::CharStyle { kerning: Some(0.0), ..style.clone() };
+    let turkish = vectorcraft_doc::CharStyle { language: Some("tr".into()), ..style.clone() };
+    let mut doc = Document::new(800.0, 600.0);
+    let layer = doc.layers[0].id;
+    for (text, style) in [("AVAV", &style), ("AVAV", &manual), ("office", &turkish), ("To Wa", &style), ("To Wa", &manual)] {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 120.0), text, style.clone());
+        let id = doc.alloc_id();
+        doc.insert(Some(layer), usize::MAX, vectorcraft_doc::Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    }
+    let doc_path = dir.file("type.vectorcraft");
+    let bytes = vectorcraft_format::save_file(&doc);
+    let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, false, false).unwrap();
+    let mut seen = 0;
+    file.document().walk(|node| {
+        if let NodeKind::Text(t) = &node.kind {
+            let fresh = vectorcraft_text::layout(&vectorcraft_text::FontDb::with_font_dirs(vec![]), t);
+            assert_eq!(t.cached_bounds, Some(fresh.bounds), "{:?}", t.plain_text());
+            assert_eq!(t.cached_baselines, fresh.baselines(), "{:?}", t.plain_text());
+            seen += 1;
+        }
+    });
+    assert_eq!(seen, 5);
+}
+
 #[test]
 fn links_from_older_files_load_and_keep_their_pixels() {
     let dir = Folder::new("legacy");

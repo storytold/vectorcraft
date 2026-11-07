@@ -1086,7 +1086,10 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 if let Some(post) = text.get(range.end..context.end) {
                     buf.set_post_context(post);
                 }
-                let gb = shaper.shape(buf, ShapeOptions::new().features(&feats));
+                // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
+                let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
+                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), &feats);
+                let gb = shaper.shape(buf, ShapeOptions::new().features(&feats).plan(Some(&plan)));
                 gb.glyph_infos()
                     .iter()
                     .zip(gb.glyph_positions())
