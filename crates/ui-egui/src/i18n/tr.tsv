@@ -866,6 +866,7 @@ font-technology	Variable	Değişken
 	Duplicate Artboard	Çalışma Yüzeyini Çoğalt
 	Copy Artboard	Çalışma Yüzeyini Kopyala
 	Cut Artboard	Çalışma Yüzeyini Kes
+	Rename Artboards	Çalışma Yüzeylerini Yeniden Adlandır
 	Duplicate Artboards	Çalışma Yüzeylerini Çoğalt
 	Duplicate Brush	Yinelenen Fırça
 	Duplicate Character Style	Yinelenen Karakter Stili
@@ -2382,6 +2383,9 @@ digits	Malayalam	Malayalam
 	Real World:	Gerçek Dünya:
 	Real-time Drawing and Editing	Gerçek Zamanlı Çizim ve Düzenleme
 	Rearrange All Artboards	Tüm Çalışma Yüzeylerini Yeniden Düzenleme
+	Rearrange	Yeniden Düzenle
+	Select All Artboards	Tüm Çalışma Yüzeylerini Seç
+	Switch Orientation	Yönü Değiştir
 	Rearrange All	Tümünü Yeniden Düzenle
 	Layout Order:	Yerleşim Sırası:
 	Change to Left-to-Right Layout	Soldan Sağa Düzene Geç
@@ -4414,6 +4418,7 @@ axis	Both	Her İkisi
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	çerçevelerdeki alan türü, daha uzun çerçevelerde gösterdiği yazı tipinin bir satırı için çok kısa ({_1}): bunların türü aksi halde gösterilmez

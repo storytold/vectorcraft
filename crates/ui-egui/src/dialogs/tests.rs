@@ -706,12 +706,14 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
         out.textures_delta.clear();
     };
     let enter = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let release = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() };
     let bounds = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
     // Object › Transform › Rotate…: type 90 over the angle, press Enter.
     crate::menus::invoke(&mut app, "object.rotate", json!({}));
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("90".into())]);
     frame(&mut app, vec![enter()]);
+    frame(&mut app, vec![release()]);
     assert!(app.ui.dialog.is_none());
     let b = bounds(&app);
     assert!((b.width() - 20.0).abs() < 1e-6 && (b.height() - 40.0).abs() < 1e-6, "{b:?}");
@@ -721,6 +723,7 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("15".into())]);
     frame(&mut app, vec![enter()]);
+    frame(&mut app, vec![release()]);
     assert!(app.ui.dialog.is_none());
     let after = bounds(&app);
     assert!((after.x0 - before.x0 - 15.0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} → {after:?}");
@@ -732,6 +735,7 @@ fn a_dialog_opens_with_its_first_field_focused_so_typing_and_enter_apply() {
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("50".into())]);
     frame(&mut app, vec![enter()]);
+    frame(&mut app, vec![release()]);
     assert!(app.ui.dialog.is_none());
     let after = own(&app);
     assert!((after.width() - before.width() / 2.0).abs() < 1e-6 && (after.height() - before.height()).abs() < 1e-6, "{before:?} → {after:?}");
@@ -768,6 +772,7 @@ fn shift_enter_in_a_dialog_field_applies_it_and_confirms_the_dialog() {
     };
     let shift_enter =
         || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT };
+    let release = || egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: false, repeat: false, modifiers: egui::Modifiers::SHIFT };
     let bounds = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
     // Move…: type 15 over its first field and press Shift+Enter.
     let before = bounds(&app);
@@ -776,6 +781,7 @@ fn shift_enter_in_a_dialog_field_applies_it_and_confirms_the_dialog() {
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("15".into())]);
     frame(&mut app, vec![shift_enter()]);
+    frame(&mut app, vec![release()]);
     assert!(app.ui.dialog.is_none(), "Shift+Enter confirms the Move dialog");
     let after = bounds(&app);
     assert!((after.x0 - before.x0 - 15.0).abs() < 1e-6 && (after.y0 - before.y0).abs() < 1e-6, "{before:?} → {after:?}");
@@ -2386,8 +2392,8 @@ fn the_flattener_and_3d_sliders_step_with_the_arrow_keys() {
 /// The Blob Brush Tool Options' tip preview is the Angle slider for screen readers, with the Angle
 /// as its value. A click in it points the Angle at the pointer and gives it the focus, its arrow
 /// keys then step the Angle by one degree (ten with Shift) within -180° to 180°, Shift+Tab leaves
-/// it for the Roundness field and Tab comes back to it, and a drag still sets the Angle and gives
-/// it the focus.
+/// it for the Roundness field and Tab comes back to it (one press: the Roundness field's label is
+/// not a tab stop of its own), and a drag still sets the Angle and gives it the focus.
 #[test]
 fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp, End, Home, Tab};
@@ -2428,8 +2434,8 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     f.key(&mut app, Tab, M::SHIFT);
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -179.0, "the Roundness field has the focus");
-    // Tab goes from the Roundness field to the scrub area on its label, then to the preview.
-    f.key(&mut app, Tab, M::NONE);
+    // Tab goes from the Roundness field straight to the preview: a field's scrub label is not a
+    // tab stop of its own.
     f.key(&mut app, Tab, M::NONE);
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -178.0, "Tab comes back to the preview");

@@ -663,6 +663,98 @@ fn placed_art_brings_its_symbols_and_swatches_renaming_on_conflict() {
 }
 
 #[test]
+fn placed_art_brings_its_brushes_renaming_on_conflict() {
+    // The file: a path with its own brush, and one with a brush the defaults hold.
+    let mut src = session();
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 20, "roundness": 30, "size": 8}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib"})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 50, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Charcoal"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let brushes = |n: &Node| {
+        let mut names = vec![];
+        n.walk(&mut |c| names.extend(c.appearance.stroke().and_then(|st| st.brush.clone())));
+        names
+    };
+    // A document with a different "Nib".
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let before = s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 2", "Charcoal"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(2.0), "its own stays");
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.list", &json!({})).unwrap()["brushes"].as_array().unwrap().len(), before + 1, "the same Charcoal is shared");
+    // A document without it gets it as it is.
+    let mut fresh = session();
+    let r = place(&mut fresh, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&fresh, &r["ids"][0])), ["Nib", "Charcoal"]);
+    assert_eq!(fresh.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(8.0));
+    // The name a conflict would take is not one the art already uses.
+    src.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib 2", "params": {"angle": 40, "roundness": 50, "size": 5}})).unwrap();
+    src.execute("shape.rectangle", &json!({"x": 90, "y": 10, "width": 20, "height": 20})).unwrap();
+    src.execute("brush.apply", &json!({"name": "Nib 2"})).unwrap();
+    let bytes = serialize(&mut src, "vectorcraft");
+    let mut s = session();
+    s.execute("brush.new", &json!({"type": "calligraphic", "name": "Nib", "params": {"angle": 90, "roundness": 100, "size": 2}})).unwrap();
+    let r = place(&mut s, "art.vectorcraft", &bytes, json!({"crop": "bounding"}));
+    assert_eq!(brushes(&node(&s, &r["ids"][0])), ["Nib 3", "Charcoal", "Nib 2"]);
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 3"})).unwrap()["size"], json!(8.0));
+    assert_eq!(s.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(5.0));
+}
+
+/// A placed brush whose art uses an image the document holds under the same key, with other pixels,
+/// isn't the document's brush of that name, though the two brushes read the same.
+#[test]
+fn a_placed_brush_whose_art_uses_a_renamed_image_is_copied() {
+    let file = |pixel: u8| {
+        let mut png = vec![];
+        image::GrayImage::from_pixel(2, 1, image::Luma([pixel])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        s.edit("Brush", |d, _| {
+            d.images.insert("k".into(), vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+            let im = vectorcraft_doc::ImageObject {
+                key: "k".into(),
+                width: 2,
+                height: 1,
+                xf: Default::default(),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let art = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+            let brush = vectorcraft_brush::Scatter { art, ..Default::default() };
+            vectorcraft_brush::store(d, &[vectorcraft_brush::Brush { name: "Speck".into(), kind: vectorcraft_brush::BrushKind::Scatter(brush) }]);
+            Ok(())
+        })
+        .unwrap();
+        s.execute("brush.apply", &json!({"name": "Speck"})).unwrap();
+        serialize(&mut s, "vectorcraft")
+    };
+    let mut s = session();
+    let first = place(&mut s, "one.vectorcraft", &file(0), json!({"crop": "bounding"}));
+    let second = place(&mut s, "two.vectorcraft", &file(255), json!({"crop": "bounding"}));
+    let brush_of = |r: &Value| {
+        let mut name = None;
+        node(&s, &r["ids"][0]).walk(&mut |c| name = name.take().or_else(|| c.appearance.stroke().and_then(|st| st.brush.clone())));
+        name
+    };
+    assert_eq!(brush_of(&first).as_deref(), Some("Speck"));
+    assert_eq!(brush_of(&second).as_deref(), Some("Speck 2"));
+    let doc = &s.doc().unwrap().doc;
+    let key = |name: &str| {
+        let Some(vectorcraft_brush::Brush { kind: vectorcraft_brush::BrushKind::Scatter(b), .. }) = vectorcraft_brush::find(doc, name) else {
+            panic!("{name}")
+        };
+        let NodeKind::Image(im) = &b.art.kind else { panic!("{name}: {:?}", b.art.kind_label()) };
+        im.key.clone()
+    };
+    assert_eq!((key("Speck"), key("Speck 2")), ("k".to_string(), "k 2".to_string()));
+}
+
+#[test]
 fn info_reports_size_resolution_colour_mode_and_link() {
     let mut s = session();
     let mut gray = vec![];

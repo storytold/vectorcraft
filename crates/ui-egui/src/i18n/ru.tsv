@@ -885,6 +885,7 @@ font-technology	Variable	Вариативные
 	Duplicate Artboard	Дублировать монтажную область
 	Copy Artboard	Копировать монтажную область
 	Cut Artboard	Вырезать монтажную область
+	Rename Artboards	Переименовать монтажные области
 	Duplicate Artboards	Дублировать монтажные области
 	Duplicate Brush	Дублировать кисть
 	Duplicate Character Style	Дублировать стиль символа
@@ -2600,6 +2601,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
 	Rearrange All Artboards	Переставить все монтажные области
+	Rearrange	Переставить
+	Select All Artboards	Выделить все монтажные области
+	Switch Orientation	Переключить ориентацию
 	Rearrange All	Переставить все
 	Layout Order:	Порядок макета:
 	Change to Left-to-Right Layout	Переключить на макет слева направо
@@ -4717,6 +4721,7 @@ axis	Both	Оба
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, меняющий направление письма внутри текстового объекта, открывается в направлении своего первого символа
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	текст в области в рамках, слишком низких для строки шрифта, которым он отображается, получил более высокие рамки ({_1}): иначе он не был бы виден
