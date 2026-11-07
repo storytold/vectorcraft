@@ -499,18 +499,16 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
 }
 
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
-/// in thread order; `None` when its selection is in one type object.
+/// in the order of the edited frame's thread as the document holds it now; `None` when its
+/// selection is in one type object.
 pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     let o = app.session.tool_options();
     let st = app.session.active()?;
-    let ids: Vec<NodeId> = o
-        .get("story")?
-        .as_array()?
-        .iter()
-        .filter_map(Value::as_u64)
-        .map(NodeId)
-        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
-        .collect();
+    let id = NodeId(o.get("editing")?.as_u64()?);
+    if o.get("story")?.as_array()?.is_empty() {
+        return None;
+    }
+    let ids = st.doc.story_of(id);
     (ids.len() >= 2).then_some(ids)
 }
 
