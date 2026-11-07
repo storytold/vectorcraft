@@ -115,7 +115,7 @@ impl Writer<'_> {
         if cut.is_some() {
             self.line("q");
         }
-        self.set_xy(xy.object());
+        self.set_object_xy(xy.object());
         // The object places the image's own pixel grid (its width × height) wherever the file's is.
         let fit =
             Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(samples.width), f64::from(im.height.max(1)) / f64::from(samples.height));

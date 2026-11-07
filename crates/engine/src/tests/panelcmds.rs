@@ -241,6 +241,150 @@ fn artboard_reorder_past_u32_goes_last() {
     assert_eq!(s.doc().unwrap().doc.artboards.last().map(|a| a.name.as_str()), Some("Second"));
 }
 
+/// `artboard.rename`: one artboard takes the name trimmed, several take it numbered in artboard
+/// order in one undo step, and a locked artboard is renamed too.
+#[test]
+fn artboard_rename_numbers_several_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
+    let names = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.rename", &json!({"index": 0, "name": " Cover "})).unwrap()["renamed"], json!([0]));
+    assert_eq!(names(&s)[0], "Cover");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    // Listed out of order and twice: artboard order, once each.
+    assert_eq!(s.execute("artboard.rename", &json!({"indices": [2, 1, 2], "name": "Page"})).unwrap()["renamed"], json!([1, 2]));
+    assert_eq!(names(&s)[1..], ["Page-1", "Page-2"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_ne!(names(&s)[1], "Page-1", "one undo restores both");
+    assert_ne!(names(&s)[2], "Page-2");
+}
+
+/// `artboard.rename` with nothing to change records no undo step, and without `index` or `indices`
+/// acts on the artboards the Artboard tool has selected.
+#[test]
+fn artboard_rename_records_nothing_when_nothing_changes() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.rename", &json!({"indices": [0, 1], "name": "Page"})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.rename", &json!({"indices": [0, 1], "name": "Page"})).unwrap()["renamed"], json!([]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    assert_eq!(s.execute("artboard.rename", &json!({"name": "Back"})).unwrap()["renamed"], json!([1]));
+    assert_eq!(s.doc().unwrap().doc.artboards[1].name, "Back");
+}
+
+/// `artboard.rename` refuses an empty or missing name, a name that is not a string and an unknown
+/// artboard, and leaves the document and its undo history as they were.
+#[test]
+fn artboard_rename_refuses_bad_params() {
+    let mut s = session();
+    let steps = s.doc().unwrap().history.undo.len();
+    for p in [
+        json!({"index": 0, "name": "  "}),
+        json!({"index": 0}),
+        json!({"index": 0, "name": 7}),
+        json!({"index": 9, "name": "A"}),
+        json!({"indices": [], "name": "A"}),
+        json!({"indices": [0, 9], "name": "A"}),
+        json!({"index": "0", "name": "A"}),
+    ] {
+        assert!(s.execute("artboard.rename", &p).is_err(), "{p}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Artboard 1");
+}
+
+/// `artboard.switchOrientation` swaps width and height of each artboard named in one undo step,
+/// each top-left corner staying put; a square one and a locked one stay as they are.
+#[test]
+fn artboard_switch_orientation_swaps_each_in_one_undo_step() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 10, "width": 300, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 20, "width": 50, "height": 50})).unwrap();
+    s.execute("artboard.new", &json!({"x": 3000, "y": 30, "width": 40, "height": 60})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 3, "locked": true})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("artboard.switchOrientation", &json!({"indices": [0, 1, 2, 3]})).unwrap();
+    assert_eq!(r["switched"], json!([0, 1]));
+    let rects: Vec<_> = s.doc().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.rect.y0, a.rect.width(), a.rect.height())).collect();
+    assert_eq!(rects, [(0.0, 0.0, 600.0, 800.0), (1000.0, 10.0, 100.0, 300.0), (2000.0, 20.0, 50.0, 50.0), (3000.0, 30.0, 40.0, 60.0)]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards[1].rect.width(), 300.0);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect.width(), 800.0, "one undo restores both");
+}
+
+/// `artboard.switchOrientation`: a square artboard records no undo step, every artboard locked is an
+/// error, and bad params change nothing.
+#[test]
+fn artboard_switch_orientation_refuses_and_records_nothing() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 50, "height": 50})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("artboard.switchOrientation", &json!({"index": 1})).unwrap()["switched"], json!([]));
+    assert_eq!(s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap_err().to_string(), "the artboard is locked");
+    for p in [json!({"index": 9}), json!({"indices": []}), json!({"index": "1"}), json!({"index": 1, "scaleArt": "yes"})] {
+        assert!(s.execute("artboard.switchOrientation", &p).is_err(), "{p}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// `artboard.switchOrientation` takes the art along with `scaleArt`, and by default follows the
+/// Artboard tool's Scale Artwork with Artboard option.
+#[test]
+fn artboard_switch_orientation_scales_art_with_the_tools_option() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let width = |s: &Session| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap().width();
+    let was = width(&s);
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_eq!(width(&s), was, "the art stays by default");
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_ne!(width(&s), was, "the tool's option scales the art");
+}
+
+/// `artboard.fitToArt` records no undo step when every artboard already fits its art.
+#[test]
+fn artboard_fit_to_art_records_nothing_when_it_already_fits() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.fitToArt", &json!({"index": 0})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    let was = s.doc().unwrap().doc.artboards[0].rect;
+    s.execute("artboard.fitToArt", &json!({"index": 0})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    assert_eq!(s.doc().unwrap().doc.artboards[0].rect, was);
+}
+
+/// `edit.paste {artboardsAt}` centers the copied artboards on the point as they lay. A value that is
+/// not a point is an error.
+#[test]
+fn paste_centers_copied_artboards_on_artboards_at() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("artboard.copy", &json!({"indices": [0, 1]})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!("here"), json!([1]), json!(["1", "2"]), json!([1, 2, 3]), json!(null)] {
+        assert!(s.execute("edit.paste", &json!({"artboardsAt": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    let r = s.execute("edit.paste", &json!({"artboardsAt": [5000.0, 7000.0]})).unwrap();
+    assert_eq!(r["artboards"], json!([2, 3]));
+    let d = &s.doc().unwrap().doc;
+    let together = d.artboards[2].rect.union(d.artboards[3].rect).center();
+    assert_eq!((together.x, together.y), (5000.0, 7000.0));
+    assert_eq!(d.artboards[3].rect.x0 - d.artboards[2].rect.x0, 1000.0, "as they lay");
+}
+
 /// The artboards' left edges and names.
 fn boards(s: &Session) -> Vec<(f64, String)> {
     s.doc().unwrap().doc.artboards.iter().map(|a| (a.rect.x0, a.name.clone())).collect()
