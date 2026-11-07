@@ -21,7 +21,9 @@
 //!   page).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
-//!   after a space for Art and Pattern), more fields, and last 15 numbers.
+//!   after a space for Art and Pattern), more fields, and last 15 numbers. Brushes whose first
+//!   number is 1, as older files write them, have one field fewer before the numbers and 8 numbers;
+//!   an Art brush is read from its art's name alone, so either form reads.
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14).
@@ -247,10 +249,10 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 })
                 .collect();
             let n = fields.last().and_then(|f| numbers(f)).ok_or(BrushError::Values)?;
-            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
             let art = || tiles.first().cloned().flatten().ok_or(BrushError::NoArt);
             match kind {
                 Tool::Scatter => {
+                    let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
                     let pct = |a: f64, b: f64| (a * 100.0, b * 100.0);
                     let values = [pct(*p2, *p3), pct(*p5, *p6), pct(*p8, *p9), (*p11, *p12)];
                     let codes = [*p4, *p7, *p10, *p13];
@@ -270,6 +272,7 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 }
                 Tool::Art => DraftKind::Art { brush: ArtBrush { colorization: Colorization::None, ..ArtBrush::default() }, art: art()? },
                 _ => {
+                    let [_, _, p3, ..] = n.as_slice() else { return Err(BrushError::Values) };
                     let tiles: [Option<String>; 5] = tiles.try_into().map_err(|_| BrushError::Values)?;
                     DraftKind::Pattern { tiles, scale: p3 * 100.0 }
                 }
