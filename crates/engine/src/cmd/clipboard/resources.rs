@@ -858,7 +858,8 @@ fn names_of_loop<'d>(d: &'d Document, looped: &[Def<'_>], r: &Relink) -> Option<
     let names: Vec<Vec<&str>> = looped.iter().map(|def| def.names_in(d)).collect();
     if names.is_empty() || names.iter().any(Vec::is_empty) {
         return None;
-    }    // The definitions compared once the name at each position is picked.
+    }
+    // The definitions compared once the name at each position is picked.
     let mut compare_at: Vec<Vec<usize>> = vec![vec![]; looped.len()];
     for (i, uses) in uses_of(looped).iter().enumerate() {
         compare_at[uses.iter().copied().fold(i, usize::max)].push(i);
@@ -1025,21 +1026,30 @@ impl Clipboard {
         // when every new name and graphic style id is known; with `in_use_order`, so are the
         // styles added, which a loop of uses may place before a pattern they paint with.
         let (mut added_symbols, mut added_patterns, mut added_styles) = (HashSet::new(), HashSet::new(), vec![]);
-        // Each definition, with the loop it starts.
-        let steps =
-            groups.iter().flat_map(|(group, looped)| group.iter().enumerate().map(move |(i, def)| (*def, (*looped && i == 0).then_some(group))));
-        for (def, starts) in steps {
+        // Each definition, whether it is in a loop, and the loop it starts.
+        let steps = groups
+            .iter()
+            .flat_map(|(group, looped)| group.iter().enumerate().map(move |(i, def)| (*def, *looped, (*looped && i == 0).then_some(group))));
+        // In a loop the document does not have all at once, every definition uses one that is
+        // added under a free name, so each one is added too.
+        let mut fresh = false;
+        for (def, looped, starts) in steps {
+            fresh &= looped;
             // A loop of uses that the document has all at once is known under those names before
             // its definitions are compared.
-            if let Some(group) = starts
-                && let Some(names) = names_of_loop(d, group, &out.relink)
-            {
-                let names: Vec<String> = names.into_iter().map(str::to_string).collect();
-                for (def, name) in group.iter().zip(names) {
-                    let (res, own) = def.key();
-                    if own != name {
-                        out.relink.renames.entry(res).or_default().insert(own.to_string(), name);
+            if let Some(group) = starts {
+                match names_of_loop(d, group, &out.relink) {
+                    Some(names) => {
+                        let names: Vec<String> = names.into_iter().map(str::to_string).collect();
+                        for (def, name) in group.iter().zip(names) {
+                            let (res, own) = def.key();
+                            if own != name {
+                                out.relink.renames.entry(res).or_default().insert(own.to_string(), name);
+                            }
+                        }
+                        fresh = false;
                     }
+                    None => fresh = true,
                 }
             }
             match def {
@@ -1047,7 +1057,7 @@ impl Clipboard {
                     let mut s = def.clone();
                     out.relink.attrs(&mut s.attrs);
                     let theirs = if r == Res::CharStyle { &mut d.char_styles } else { &mut d.para_styles };
-                    let p = place(theirs, &s, same_doc, PartialEq::eq);
+                    let p = place(theirs, &s, same_doc, |a, b| !fresh && a == b);
                     if in_use_order && let Some(name) = p.new_name(&def.name) {
                         added_styles.push((r, name, def));
                     }
@@ -1065,7 +1075,8 @@ impl Clipboard {
                     };
                     let r = &out.relink;
                     let p = place(&mut d.symbols, def, same_doc, |a, b| {
-                        options.is_none_or(|o| theirs.get(&a.name) == Some(o))
+                        !fresh
+                            && options.is_none_or(|o| theirs.get(&a.name) == Some(o))
                             && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
                     });
                     if let Some(name) = p.new_name(&def.name) {
@@ -1079,7 +1090,7 @@ impl Clipboard {
                 Def::Pattern(def) => {
                     // Tile options alike, and the art once relinked.
                     let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
-                    let same = |n: &str| d.pattern(n).is_some_and(|x| bare(x) == bare(def) && same_art(&out.relink, &x.art, &def.art));
+                    let same = |n: &str| !fresh && d.pattern(n).is_some_and(|x| bare(x) == bare(def) && same_art(&out.relink, &x.art, &def.art));
                     let p = existing(&def.name, d.patterns.iter().map(|p| p.name.as_str()), same_doc, same).unwrap_or_else(|| {
                         // Its swatch comes along under the same name.
                         let name = unique_name(&def.name, |n| d.pattern(n).is_some() || d.swatch_name_taken(n));

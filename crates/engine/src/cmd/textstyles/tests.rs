@@ -943,6 +943,42 @@ fn a_style_and_the_pattern_that_uses_it_load_together() {
     assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), (doc, undo));
 }
 
+/// A style and the pattern it paints with, whose type is set in that style, are both added when
+/// the document has a style of that name and attributes but another pattern of that name: the
+/// copy of the style paints with the copy of the pattern, and a second load adds nothing.
+#[test]
+fn a_style_in_a_loop_is_not_matched_to_a_style_that_paints_with_another_pattern() {
+    let (mut src, id) = session_with_text("Tile");
+    src.execute("charStyle.new", &json!({"name": "Accent", "attrs": {"kerning": 40}})).unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": id})).unwrap();
+    src.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [id]})).unwrap();
+    let other = src.execute("text.create", &json!({"x": 10, "y": 90, "text": "B"})).unwrap()["id"].as_u64().unwrap();
+    src.execute("charStyle.apply", &json!({"name": "Accent", "id": other})).unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [other]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Painted", "id": other})).unwrap();
+    let mut source = (*src.doc().unwrap().doc).clone();
+    let painted = source.char_styles.iter().find(|s| s.name == "Painted").unwrap().attrs.clone();
+    source.char_styles.retain(|s| s.name != "Painted");
+    source.char_styles.iter_mut().find(|s| s.name == "Accent").unwrap().attrs = painted.clone();
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save(&source, false));
+    let (mut s, _) = session_with_text("X");
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 30, "height": 30})).unwrap()["id"].clone();
+    s.execute("object.pattern.make", &json!({"name": "Dots", "edit": false, "ids": [square]})).unwrap();
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.char_styles.push(TextStyleDef { name: "Accent".into(), attrs: painted });
+    let load = json!({"dataBase64": data, "name": "Other.vectorcraft"});
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r["added"], json!(["Accent 2"]), "{r}");
+    let d = s.doc().unwrap().doc.clone();
+    let fill = |name: &str| super::style_attrs(&d, false, name).unwrap()["fill"].to_string();
+    assert!(fill("Accent").contains("\"Dots\"") && fill("Accent 2").contains("\"Dots 2\""), "{} {}", fill("Accent"), fill("Accent 2"));
+    let NodeKind::Text(text) = &d.pattern("Dots 2").unwrap().art[0].kind else { panic!("pattern art should be type") };
+    assert_eq!(text.runs[0].style.style_name.as_deref(), Some("Accent 2"));
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r["added"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc, d);
+}
+
 /// A style name from a saved document stays the name used by type in imported pattern art.
 #[test]
 fn loaded_style_keeps_the_name_used_by_pattern_type() {
