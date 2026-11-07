@@ -173,7 +173,15 @@ fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: us
 
 /// The import options of [`page_document`].
 fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
-    ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, embedded_fonts: o.embedded_fonts, ..Default::default() }
+    ImportOptions {
+        pages: Some(vec![page]),
+        crop: o.crop,
+        password: o.password.clone(),
+        text_as: o.text_as,
+        layers: false,
+        embedded_fonts: o.embedded_fonts,
+        ..Default::default()
+    }
 }
 
 const INFO: &str = "document.pdfInfo";
