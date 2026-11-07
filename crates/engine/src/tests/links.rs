@@ -452,6 +452,63 @@ fn low_res_proxy_eps_export_uses_full_resolution_from_the_linked_file() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "canvas still shows the preview");
 }
 
+/// An SVG linking two missing files: once one of them is found, export reads its pixels into its
+/// own images only, and the other file's image keeps its placeholder.
+#[test]
+fn export_reads_a_found_svg_link_into_its_own_images_only() {
+    let dir = Folder::new("svg-missing-keys");
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><image href="a.png" width="20" height="20"/><image href="b.png" x="20" width="20" height="20"/></svg>"#;
+    let svg_path = dir.file("art.svg");
+    write(&svg_path, svg.as_bytes());
+    let mut s = session();
+    open(&mut s, &svg_path);
+    let mut found = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+    let [a, b] = &found[..] else { panic!("two images: {found:?}") };
+    assert!(a.link.as_ref().unwrap().path.ends_with("a.png") && b.link.as_ref().unwrap().path.ends_with("b.png"));
+    let placeholder = s.doc().unwrap().doc.images[&b.key].bytes.clone();
+
+    let bytes = png(20, 20, RED);
+    write(&dir.file("a.png"), &bytes);
+    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, None);
+    assert_eq!(warnings.len(), 1, "b.png is still missing: {warnings:?}");
+    assert_eq!(*full.images[&a.key].bytes, bytes, "a.png's pixels");
+    assert_eq!(full.images[&b.key].bytes, placeholder, "b.png keeps its placeholder");
+}
+
+/// An SVG linking two files with the same pixels, saved with previews only: once one file is gone
+/// and the other has changed, export reads the changed file into its own images only.
+#[test]
+fn export_reads_a_changed_svg_link_into_its_own_images_only() {
+    let dir = Folder::new("svg-same-pixels");
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><image href="a.png" width="20" height="20"/><image href="b.png" x="20" width="20" height="20"/></svg>"#;
+    let svg_path = dir.file("art.svg");
+    write(&svg_path, svg.as_bytes());
+    write(&dir.file("a.png"), &png(600, 300, RED));
+    write(&dir.file("b.png"), &png(600, 300, RED));
+    let mut s = session();
+    open(&mut s, &svg_path);
+    let doc_path = dir.file("art.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(dir.file("a.png")).unwrap();
+    let blue = png(600, 300, BLUE);
+    write(&dir.file("b.png"), &blue);
+
+    open(&mut s, &doc_path);
+    let mut found = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+    let [a, b] = &found[..] else { panic!("two images: {found:?}") };
+    assert!(a.link.as_ref().unwrap().path.ends_with("a.png") && b.link.as_ref().unwrap().path.ends_with("b.png"));
+    assert_ne!(a.key, b.key, "two files, two keys");
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.images[&a.key].is_proxy() && doc.images[&b.key].is_proxy(), "previews");
+    let preview = doc.images[&a.key].bytes.clone();
+    let (full, warnings) = cmd::links::full_linked_images(doc, None);
+    assert_eq!(warnings.len(), 1, "a.png is missing: {warnings:?}");
+    assert_eq!(*full.images[&b.key].bytes, blue, "b.png's new pixels");
+    assert_eq!(full.images[&a.key].bytes, preview, "a.png keeps its preview");
+}
+
 /// The half of opening that the desktop app runs on a thread of its own (`read_for_open`) reads
 /// the linked files and lays out the type. The half left for the UI thread (`open_read`) reads no
 /// file: with a linked file moved away in between, it opens the document that `document.open` opens.
