@@ -500,6 +500,11 @@ impl<'s> Parser<'s> {
             let mut decls = self.parse_var_decls(true)?;
             if decls.len() == 1 && self.at_keyword(Keyword::In) {
                 let decl = decls.pop().ok_or_else(|| self.unexpected())?;
+                // The variable of a for-in loop takes an initializer only outside strict mode
+                // code (ECMA-262 2017 Annex B.3.6).
+                if self.ctx.strict && decl.init.is_some() {
+                    return Err(self.error_at_token(&self.tok, "a for-in variable cannot have an initializer in strict mode code"));
+                }
                 return self.parse_for_in(ForInTarget::Var(decl), start);
             }
             Some(ForInit::Var(decls))

@@ -466,6 +466,10 @@ fn strict_mode_early_errors() {
     }
     assert!(strict_err("function f(a, a) {}").message.contains("duplicate parameter"));
     ok("function f(a, a) {}");
+    let e = strict_err("for (var x = 1 in o) {}");
+    assert!(e.message.contains("initializer"), "{}", e.message);
+    assert_eq!((e.line, e.column), (2, 16));
+    ok("'use strict'; for (var x in o) {}");
 }
 
 #[test]
