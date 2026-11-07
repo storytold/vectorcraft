@@ -285,8 +285,9 @@ fn names_from_source_count_toward_the_heap_when_they_are_bound() {
     // Without a collection in between, the estimate grows by at least each new name's code units:
     // a global variable (an object property), a binding made by direct eval, and a parameter of a
     // function made by the Function constructor.
-    let mut realm = small(Limits::default());
-    let name = "n".repeat(100_000);
+    // Each case runs in a new realm, so the charges for the code itself do not add up to a
+    // collection.
+    let name = "n".repeat(50_000);
     let cases = [
         format!("var {name} = 1;"),
         format!("(function () {{ eval('var {name}2 = 1; {name}2'); }})();"),
@@ -294,12 +295,13 @@ fn names_from_source_count_toward_the_heap_when_they_are_bound() {
     ];
     let mut short = Vec::new();
     for (i, src) in cases.iter().enumerate() {
+        let mut realm = small(Limits::default());
         let collections = realm.interp().heap.collections;
         let before = realm.interp().heap.bytes;
         realm.run(src).unwrap();
         assert_eq!(realm.interp().heap.collections, collections, "a collection ran in case {i}");
         let grown = realm.interp().heap.bytes - before;
-        if grown < crate::heap::string_bytes(100_000) {
+        if grown < crate::heap::string_bytes(50_000) {
             short.push((i, grown));
         }
     }
@@ -314,6 +316,40 @@ fn strings_from_host_functions_count_toward_the_heap() {
     assert_eq!(realm.run("var a = []; for (var i = 0; i < 4; i++) a[i] = big(50000); a[3].length"), Ok(JsValue::Number(50000.0)));
     assert_eq!(limit(&mut with_big(limits.clone()), "var a = []; for (var i = 0; ; i++) a[i] = big(100000);"), LimitKind::Heap);
     assert_eq!(limit(&mut with_big(limits), "big(1000000).length"), LimitKind::Heap);
+}
+
+#[test]
+fn functions_kept_across_runs_count_their_code_toward_the_heap() {
+    // Each run keeps a function whose source holds a 64 Ki-unit comment, and drops the string the
+    // source was made from. The kept code fills the heap after a few runs.
+    let limits = Limits { heap_bytes: 1 << 20, ..Limits::default() };
+    let mut realm = small(limits);
+    assert_eq!(realm.run("var keep = []; keep.length"), Ok(JsValue::Number(0.0)));
+    let step = "var s = 'x'; for (var i = 0; i < 16; i++) s += s; keep[keep.length] = Function('/*' + s + '*/'); s = null; keep.length";
+    let mut ended = None;
+    for run in 1..=20 {
+        match realm.run(step) {
+            Ok(v) => assert_eq!(v, JsValue::Number(f64::from(run))),
+            Err(RunError { kind: RunErrorKind::Limit(k), .. }) => {
+                ended = Some((run, k));
+                break;
+            }
+            Err(e) => panic!("run {run}: {e:?}"),
+        }
+    }
+    let Some((run, kind)) = ended else { panic!("20 kept functions fit in a 1 MiB heap") };
+    assert_eq!(kind, LimitKind::Heap);
+    assert!(run > 2, "the heap filled on run {run}");
+}
+
+#[test]
+fn function_source_text_counts_toward_the_heap() {
+    let limits = Limits { heap_bytes: 1 << 20, ..Limits::default() };
+    let comment = "x".repeat(300_000);
+    let src = format!("var f = function () {{ /*{comment}*/ }}; f.toString().length");
+    assert_eq!(limit(&mut small(limits.clone()), &src), LimitKind::Heap);
+    let mut realm = small(limits);
+    assert_eq!(realm.run("(function f(a) { return a; }).toString()"), Ok(JsValue::String("function f(a) { return a; }".into())));
 }
 
 #[test]

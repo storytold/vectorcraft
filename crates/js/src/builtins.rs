@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::bytecode::{CodeKind, Source};
 use crate::compiler::{CompileFail, compile_constructed_function};
-use crate::heap::{Class, Func, HIDDEN, NativeFn, NativeKind, ObjId, Object, Prop, key};
+use crate::heap::{Class, Func, HIDDEN, NativeFn, NativeKind, ObjId, Object, Prop, key, string_bytes};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::{Str, Value};
 
@@ -255,6 +255,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
         Err(CompileFail::Syntax(e)) => return Err(interp.throw(ErrorType::Syntax, &e.message)),
         Err(CompileFail::Internal(m)) => return Err(Abrupt::Internal(m)),
     };
+    interp.charge_code(&code, 0)?;
     let env = interp.global_env;
     interp.make_closure(code, env).map(Value::Object)
 }
@@ -269,7 +270,11 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
     let text = match func {
         Some(Func::Closure { code, .. }) => {
             let (start, end) = (code.span.0 as usize, code.span.1 as usize);
-            String::from_utf16_lossy(code.source.text.get(start..end).unwrap_or_default())
+            let units = code.source.text.get(start..end).unwrap_or_default();
+            let bytes = string_bytes(units.len());
+            interp.reserve_heap(bytes)?;
+            interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+            return Ok(Value::String(Str::from_units(units.to_vec())));
         }
         Some(Func::Native { name, .. }) => format!("function {name}() {{ [native code] }}"),
         Some(Func::Host { name, .. }) => format!("function {name}() {{ [native code] }}"),

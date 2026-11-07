@@ -155,6 +155,11 @@ impl LineTable {
         (u32::try_from(line).unwrap_or(u32::MAX), offset.saturating_sub(start) + 1)
     }
 
+    /// The estimated bytes the table holds.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        32 + 4 * self.starts.len()
+    }
+
     pub(crate) fn line_count(&self) -> u32 {
         if self.empty {
             return 0;

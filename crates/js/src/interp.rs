@@ -24,7 +24,7 @@ use crate::bytecode::{Code, CodeKind, Op, Source};
 use crate::compiler::{CompileFail, compile_program};
 use crate::heap::{
     ArgMap, Binding, CONFIGURABLE, Class, ENUMERABLE, ENV_BYTES, Env, EnvId, ForIn, Func, HIDDEN, Heap, Key, NativeKind, OBJECT_BYTES, OPEN, ObjId,
-    Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, key, string_bytes,
+    Object, PROP_BYTES, Prop, PropMap, ROPE_BYTES, Roots, WRITABLE, code_bytes, key, string_bytes,
 };
 use crate::value::{Str, Value, array_index, index_key, number_to_str, string_to_number, to_int32, to_uint32};
 use crate::{LimitKind, Limits, Options};
@@ -400,7 +400,7 @@ impl Interp {
 
     /// Ends the run with the heap limit when `bytes` more would not fit in it after a
     /// collection. Everything the caller still needs must be reachable from the roots.
-    fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
+    pub(crate) fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
         if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
             return Ok(());
         }
@@ -409,6 +409,16 @@ impl Interp {
         if self.heap.bytes.saturating_add(bytes) > self.limits.heap_bytes {
             return Err(Abrupt::Limit(LimitKind::Heap));
         }
+        Ok(())
+    }
+
+    /// Charges code compiled at run time to the heap, reserving its estimated size and `extra`
+    /// more first. The code is not reachable from the roots yet, so a collection here leaves it
+    /// out of the live total and the charge adds it.
+    pub(crate) fn charge_code(&mut self, code: &Code, extra: usize) -> JsResult<()> {
+        let bytes = code_bytes(code);
+        self.reserve_heap(bytes.saturating_add(extra))?;
+        self.heap.bytes = self.heap.bytes.saturating_add(bytes);
         Ok(())
     }
 
@@ -1769,7 +1779,7 @@ impl Interp {
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         let units = s.flat();
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
-        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
         let (caller_env, caller_var_env, this) = (frame.env, frame.var_env, frame.this.clone());
         let (env, var_env) = if code.strict {
@@ -1789,7 +1799,7 @@ impl Interp {
         if self.reentry >= self.limits.reentry {
             return Err(Abrupt::Limit(LimitKind::Reentry));
         }
-        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let (env, global) = (self.global_env, self.global);
         let (env, var_env) = if code.strict && is_eval {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) });

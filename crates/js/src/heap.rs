@@ -10,7 +10,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::bytecode::Code;
+use crate::bytecode::{Code, Handler, Op};
 use crate::value::{Str, Value};
 
 /// A property name: its UTF-16 code units.
@@ -289,6 +289,8 @@ pub(crate) const OBJECT_BYTES: usize = 96;
 pub(crate) const ENV_BYTES: usize = 64;
 /// The estimated bytes of a rope node.
 pub(crate) const ROPE_BYTES: usize = 48;
+/// The estimated bytes of a piece of code without its instructions, tables and strings.
+const CODE_BYTES: usize = 384;
 
 pub(crate) fn string_bytes(len: usize) -> usize {
     32 + 2 * len
@@ -455,9 +457,56 @@ fn mark_value(v: &Value, work: &mut Vec<u32>, strings: &mut StringSizes) {
     }
 }
 
+/// The estimated bytes of `code` with the functions nested in it and its source text, for
+/// charging code made at run time to the heap before anything refers to it.
+pub(crate) fn code_bytes(code: &Code) -> usize {
+    let mut sizes = StringSizes::default();
+    mark_code(code, &mut sizes);
+    sizes.bytes
+}
+
+/// Adds the estimated size of `code` and the functions nested in it, counting each piece of code,
+/// each source text and each string once however many closures share them.
 fn mark_code(code: &Code, strings: &mut StringSizes) {
-    for s in &code.strings {
-        strings.add(s);
+    let mut stack = vec![code];
+    while let Some(code) = stack.pop() {
+        if !strings.seen.insert(code as *const Code as usize) {
+            continue;
+        }
+        if strings.seen.insert(Rc::as_ptr(&code.source) as usize) {
+            strings.bytes += code.source.lines.heap_bytes();
+            // The text can share its buffer with the string eval was given.
+            if strings.seen.insert(Rc::as_ptr(&code.source.text) as *const () as usize) {
+                strings.bytes += string_bytes(code.source.text.len());
+            }
+        }
+        let handles = code.strings.len()
+            + 2 * code.regexps.len()
+            + code.names.len()
+            + code.functions.len()
+            + code.params.len()
+            + code.vars.len()
+            + 2 * code.fun_decls.len();
+        let tables = code.finally_tables.iter().map(|t| 24 + 4 * t.len()).sum::<usize>();
+        strings.bytes += CODE_BYTES
+            + size_of::<Op>() * code.ops.len()
+            + 4 * code.positions.len()
+            + 8 * code.numbers.len()
+            + size_of::<Handler>() * code.handlers.len()
+            + 16 * handles
+            + tables;
+        for s in &code.strings {
+            strings.add(s);
+        }
+        for (pattern, flags) in &code.regexps {
+            strings.add(pattern);
+            strings.add(flags);
+        }
+        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        for k in keys.chain(&code.self_name) {
+            strings.add_key(k);
+        }
+        stack.extend(code.functions.iter().map(|f| &**f));
     }
 }
 
