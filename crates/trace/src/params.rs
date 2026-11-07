@@ -91,6 +91,11 @@ pub struct TraceParams {
     /// The colour Ignore Color leaves out (`#rrggbb`): the palette colours within about 30 levels
     /// of it. `None` is white. (Flat Logo mode leaves out white only.)
     pub ignore_color: Option<String>,
+    /// Keep Colors: the colors to trace (`#rrggbb`). Only the palette colors within about 30
+    /// levels of one of them (as Ignore Color matches a color) are traced, a gradient by its middle
+    /// color, and their paths are the ones the trace of every color has. Empty traces every color.
+    /// (Flat Logo mode does not use it: it traces the colors named in `logo_colors`.)
+    pub keep_colors: Vec<String>,
     /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
     /// to true circles.
     pub snap_curves_to_lines: bool,
@@ -133,6 +138,7 @@ impl Default for TraceParams {
             method: Method::Abutting,
             ignore_white: false,
             ignore_color: None,
+            keep_colors: Vec::new(),
             snap_curves_to_lines: false,
             shapes: false,
             auto_grouping: false,
