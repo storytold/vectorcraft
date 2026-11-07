@@ -13,6 +13,7 @@ mod artboard_click;
 mod beyond_canvas;
 mod clear_commands;
 mod compound_attributes;
+mod copy_direct_selection;
 mod dimensions;
 mod eyedropper_sources;
 mod find_replace_paras;

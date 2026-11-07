@@ -99,13 +99,15 @@ impl Document {
     }
 
     /// Leave opacity-mask editing and symbol editing: drop the temporary editing layer, a working
-    /// copy of art the mask or the symbol already holds (the engine syncs it after every edit).
+    /// copy of art the mask or the symbol already holds (the engine syncs it after every edit). The
+    /// layer is removed wherever it is, also as a sublayer of another layer; an id that names
+    /// anything other than a layer is left alone.
     pub fn drop_edit_modes(&mut self) {
-        if let Some(me) = self.mask_edit.take() {
-            self.layers.retain(|l| l.id != me.layer);
-        }
-        if let Some(se) = self.symbol_edit.take() {
-            self.layers.retain(|l| l.id != se.layer);
+        let layers = [self.mask_edit.take().map(|me| me.layer), self.symbol_edit.take().map(|se| se.layer)];
+        for id in layers.into_iter().flatten() {
+            if self.node(id).is_some_and(Node::is_layer) {
+                let _ = self.remove(id);
+            }
         }
     }
 

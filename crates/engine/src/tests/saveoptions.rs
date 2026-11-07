@@ -244,6 +244,59 @@ fn ai_option_errors_name_a_file_saved_without_pdf_content() {
     assert!(r["warnings"].to_string().contains("`version` was not used: PDF-compatible .ai files don't read it"), "{r}");
 }
 
+/// The message of a refused command's error.
+fn refusal(s: &mut Session, cmd: &str, p: &Value) -> String {
+    match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) if c == cmd => msg,
+        other => panic!("{cmd} {p}: {:?}", other.map(|r| r["bytes"].clone())),
+    }
+}
+
+#[test]
+fn an_ai_save_refuses_an_artboard_the_document_does_not_have_as_an_export_does() {
+    let dir = Folder::new("ai-no-artboard");
+    let mut s = three_boards();
+    let path = dir.file("x.ai");
+    let missing = [
+        json!({"artboards": [5]}),
+        json!({"artboards": [0, 3]}),
+        json!({"artboard": 3}),
+        json!({"range": "4"}),
+        json!({"separateArtboards": true, "artboards": [5]}),
+    ];
+    let wrong_type = [json!({"artboard": "x"}), json!({"artboards": ["x"]}), json!({"range": 42})];
+    for pdf in [true, false] {
+        for pick in missing.iter().chain(&wrong_type) {
+            let mut p = json!({"format": "ai", "pdfCompatible": pdf});
+            p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+            let export = refusal(&mut s, "document.export", &p);
+            p["path"] = json!(path);
+            for cmd in ["file.saveCopy", "file.saveAs", "document.save"] {
+                assert_eq!(refusal(&mut s, cmd, &p), export, "{cmd} {p}");
+            }
+            // A template is not exported: its errors name the template where they name the format.
+            p["format"] = json!("ait");
+            let template = refusal(&mut s, "file.saveAsTemplate", &p);
+            if missing.contains(pick) {
+                assert_eq!(template, export, "{p}");
+            } else {
+                assert!(template.contains("invalid type"), "{p}: {template}");
+            }
+        }
+    }
+    assert_eq!(std::fs::read_dir(&dir.0).unwrap().count(), 0, "nothing is written");
+    // An artboard the document has, an empty `artboards` list, or `artboards` that a `range`
+    // overrides is saved with every artboard, as before.
+    for pick in [json!({"artboards": [1]}), json!({"artboards": []}), json!({"range": "1", "artboards": [5]})] {
+        let mut p = json!({"format": "ai"});
+        p.as_object_mut().unwrap().extend(pick.as_object().unwrap().clone());
+        let r = s.execute("file.saveCopy", &p).unwrap();
+        let mut o = Session::new();
+        o.execute("document.open", &json!({"name": "x.ai", "dataBase64": r["dataBase64"]})).unwrap();
+        assert_eq!(o.doc().unwrap().doc.artboards.len(), 3, "{p}");
+    }
+}
+
 #[test]
 fn a_remembered_artboard_the_document_no_longer_has_is_dropped() {
     let dir = Folder::new("remembered-artboards");

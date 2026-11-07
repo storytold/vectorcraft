@@ -37,8 +37,8 @@ pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, IcfMargins, MAX_FILE_FACES, PlatformFontFiles, WantedFont, WantedFonts,
-    app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined,
+    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, MAX_FILE_FACES, PlatformFontFiles, StylisticSet, WantedFont,
+    WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined,
     style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
@@ -813,6 +813,12 @@ fn caret_horizontal_filtered(layout: &TextLayout, byte: usize, right: bool, vali
 /// character (numbers and punctuation don't count)?
 pub fn paragraph_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>) -> bool {
     layout::is_rtl(layout::para_bidi(text, direction).as_ref())
+}
+
+/// Is the character at byte `at` of paragraph `text` set right to left: its bidi level is odd, with
+/// the paragraph's `direction` (None: from its first strong character)?
+pub fn char_is_rtl(text: &str, direction: Option<vectorcraft_doc::ParaDirection>, at: usize) -> bool {
+    layout::para_bidi(text, direction).is_some_and(|info| info.levels.get(at).is_some_and(|level| level.is_rtl()))
 }
 
 /// Text stored in visual order (as PDF content draws it, each glyph where it is drawn), back in

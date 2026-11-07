@@ -239,6 +239,19 @@ fn typed_list_starts_are_found_at_a_paragraphs_start() {
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
 }
 
+/// In a threaded frame whose first paragraph continues from the frame before, the text at the
+/// frame's start is not the start of a paragraph, so typing a list's start there starts nothing.
+/// The paragraphs after it still start lists.
+#[test]
+fn typed_list_starts_skip_a_continued_paragraph() {
+    let dot = ParaList::bulleted(Bullet::Dot);
+    let mut t = TextObject::point(Point::ZERO, "* Pears\n# ", CharStyle::default());
+    assert_eq!(t.typed_list_at(2), Some((0, dot)));
+    t.first_para_continues = true;
+    assert_eq!(t.typed_list_at(2), None, "a continued paragraph starts no list");
+    assert_eq!(t.typed_list_at(10), Some((8, dot)));
+}
+
 #[test]
 fn character_controls_reject_collapsed_and_nonfinite_transforms() {
     let mut t = TextObject::point(Point::ZERO, "Text", CharStyle::default());

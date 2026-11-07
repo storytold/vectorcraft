@@ -40,8 +40,25 @@ pub(crate) const FLIP: Affine = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
 /// Most patterns read (others can't fill art).
 pub(super) const MAX_PATTERNS: usize = 4096;
 
+/// Most symbol definitions read (instances of others come in as the page draws them).
+pub(super) const MAX_SYMBOLS: usize = 4096;
+
+/// Most names a symbol list orders.
+pub(super) const MAX_LISTED: usize = 4 * MAX_SYMBOLS;
+
 /// Most characters of a path's note read (the version 7 specification allows 254, §5.3.1).
 pub(super) const MAX_NOTE: usize = 1024;
+
+/// Most object tags (`XT`) kept in one object's data. SVG import keeps the same number of `data-*`
+/// attributes per element.
+pub(super) const MAX_TAGS: usize = 64;
+
+/// The longest identifier or string an object tag (`XT`) may have, in bytes: SVG import keeps
+/// another application's attribute values up to the same length.
+pub(super) const MAX_TAG_TEXT: usize = 64 * 1024;
+
+/// The object tag that holds the object's URL (version 7 specification §7).
+pub(super) const URL_TAG: &str = "AdobeURL";
 
 #[derive(Clone, Debug)]
 pub(crate) struct GState {
@@ -216,6 +233,22 @@ pub(super) struct PatternHead {
     pub(super) tile: Option<Rect>,
 }
 
+/// What a reader of a symbol's definition has read of the symbol besides its art.
+#[derive(Debug, Default)]
+pub(super) struct SymbolHead {
+    /// `AI13PatternRegistrationType` in the dictionary after the art.
+    pub(super) registration: Option<f64>,
+    /// Art the reader left out (type, a placed file, non-native art, an image it can't read or
+    /// place, a gradient it can't read): the symbol isn't kept, and its instances come in as the
+    /// page draws them, within the box of the rest.
+    pub(super) left_out: bool,
+    /// A gradient instance the reader can't make a paint of (a gradient the file doesn't define,
+    /// or one it can't place) is the next path's fill or stroke: the art is left out when that
+    /// path paints it.
+    pub(super) missing_fill: bool,
+    pub(super) missing_stroke: bool,
+}
+
 /// An image's operands, from `XN` and before `XI`.
 #[derive(Debug, Default)]
 pub(super) struct Raster {
@@ -258,6 +291,11 @@ pub(super) const MAX_PLACED_FOLDER: usize = 4096;
 pub(super) const LINKED_PREVIEWS: &str =
     "linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel";
 
+/// What the open result says of linked images the data keeps no pixels of (`XF`): they show a
+/// placeholder.
+pub const LINKED_PLACEHOLDERS: &str =
+    "linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel";
+
 /// Operators that change nothing the reader keeps.
 pub(super) const IGNORED: &[&str] = &[
     "Ae",
@@ -265,12 +303,10 @@ pub(super) const IGNORED: &[&str] = &[
     "As",
     "Xd",
     "Xr",
-    "XG",
     // `/DeviceGray XC` after a linked image's file name (`XG`): its colour space.
     "XC",
     "Xh",
     "XH",
-    "XF",
     "Bc",
     "XP",
     "Np",
@@ -278,10 +314,9 @@ pub(super) const IGNORED: &[&str] = &[
     "i",
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
-    "TZ",
     "Xs",
     "Xt",
-    // A brushed path's width at each anchor (`(…) Xt n XD`), on its hidden source path.
+    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
     "XD",
     "Xi",
     "XI",
@@ -301,6 +336,8 @@ pub(super) const IGNORED: &[&str] = &[
 ];
 
 /// Sections skipped whole, by their markers without the `AI<version>_` prefix: begin → end.
+/// Patterns, symbols and the symbol list are read before this list is looked at; their markers
+/// stay here for sections of the same kind nested in them to be skipped.
 pub(super) const SKIPPED: &[(&str, &str)] = &[
     ("BeginPattern", "EndPattern"),
     ("BeginBrushPattern", "EndBrushPattern"),

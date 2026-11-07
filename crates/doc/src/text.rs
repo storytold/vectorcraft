@@ -17,7 +17,7 @@ mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
-pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, ScriptMetrics};
+pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, ScriptMetrics};
 pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, LeadingModel, Mojikumi, ParaDirection,

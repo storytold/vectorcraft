@@ -20,7 +20,12 @@ use std::sync::Arc;
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::{Color, Paint, Swatch};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeKind, PatternDef, Symbol, TextStyleDef};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeKind, PatternDef, Symbol, SymbolExportType, SymbolNineSlice, SymbolRegistration,
+    TextStyleDef,
+};
+
+use super::super::brushsym::{set_natural_size, stored_natural_size};
 
 use super::super::patterncmds::add_pattern;
 use super::super::{Result, bad, unique_name};
@@ -635,6 +640,38 @@ fn shows_definitions(b: &Brush) -> bool {
     found
 }
 
+/// A symbol's Symbol Options, which its document keeps by symbol name: copied with the symbol and
+/// given to it under the name pasting adds it as.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SymbolOptions {
+    /// Natural size `(w, h)` (`None`: the document records none).
+    pub size: Option<(f64, f64)>,
+    pub registration: SymbolRegistration,
+    pub export_type: SymbolExportType,
+    /// 9-slice guides (`None`: 9-slice scaling off).
+    pub nine_slice: Option<SymbolNineSlice>,
+}
+
+impl SymbolOptions {
+    /// The options `d` keeps for symbol `name`.
+    fn of(d: &Document, name: &str) -> Self {
+        Self {
+            size: stored_natural_size(d, name),
+            registration: d.symbol_registration(name),
+            export_type: d.symbol_export_type(name),
+            nine_slice: d.symbol_nine_slice(name),
+        }
+    }
+
+    /// Make them the options of `d`'s symbol `name`.
+    fn give(&self, d: &mut Document, name: &str) {
+        set_natural_size(d, name, self.size);
+        d.set_symbol_registration(name, self.registration);
+        d.set_symbol_export_type(name, self.export_type);
+        d.set_symbol_nine_slice(name, self.nine_slice);
+    }
+}
+
 /// What pasting did to the document's resources (part of the paste result).
 #[derive(Debug, Default)]
 pub(crate) struct Imported {
@@ -678,6 +715,12 @@ impl Clipboard {
         Self {
             images: src.images.iter().filter(|(k, _)| used.has(Res::Image, k)).map(|(k, b)| (k.clone(), b.clone())).collect(),
             symbols: src.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)).cloned().collect(),
+            symbol_options: src
+                .symbols
+                .iter()
+                .filter(|s| used.has(Res::Symbol, &s.name))
+                .map(|s| (s.name.clone(), SymbolOptions::of(src, &s.name)))
+                .collect(),
             patterns: src.patterns.iter().filter(|p| used.has(Res::Pattern, &p.name)).cloned().collect(),
             swatches: src.swatches_iter().filter(|w| used.carries(w)).cloned().collect(),
             graphic_styles: src.graphic_styles.iter().filter(|g| g.id != 0 && used.styles.contains(&g.id)).cloned().collect(),
@@ -732,13 +775,27 @@ impl Clipboard {
                 out.placed(r, &def.name, &p);
             }
         }
-        // Symbols and patterns, compared once relinked. Those added are relinked at the end, when
-        // every new name and graphic style id is known.
+        // Symbols and patterns, compared once relinked (symbols with their options too). Those
+        // added are relinked at the end, when every new name and graphic style id is known.
         let mut added_symbols = HashSet::new();
         for def in self.symbols.iter().filter(|s| used.has(Res::Symbol, &s.name)) {
+            let options = self.symbol_options.get(&def.name);
+            let theirs: HashMap<String, SymbolOptions> = match options {
+                Some(_) => {
+                    d.symbols.iter().filter(|s| copy_of(&def.name, &s.name)).map(|s| (s.name.clone(), SymbolOptions::of(d, &s.name))).collect()
+                }
+                None => HashMap::new(),
+            };
             let r = &out.relink;
-            let p = place(&mut d.symbols, def, same_doc, |a, b| same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art)));
-            added_symbols.extend(p.new_name(&def.name));
+            let p = place(&mut d.symbols, def, same_doc, |a, b| {
+                options.is_none_or(|o| theirs.get(&a.name) == Some(o)) && same_art(r, std::slice::from_ref(&a.art), std::slice::from_ref(&b.art))
+            });
+            if let Some(name) = p.new_name(&def.name) {
+                if let Some(o) = options {
+                    o.give(d, &name);
+                }
+                added_symbols.insert(name);
+            }
             out.placed(Res::Symbol, &def.name, &p);
         }
         let mut added_patterns = HashSet::new();

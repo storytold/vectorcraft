@@ -2,7 +2,7 @@
 //! another everywhere or in the selection, and selecting the text that uses a font. Also the fonts
 //! available (the bundled and installed ones) and rescanning the installed fonts.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -64,18 +64,19 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Text objects in scope: the selection's (and their descendants') or the whole document's.
-fn scope(s: &Session, selection_only: bool) -> Result<Vec<NodeId>> {
+fn scope(s: &Session, selection_only: bool, selected: Option<&[NodeId]>) -> Result<Vec<NodeId>> {
     let st = s.doc()?;
     let mut v = vec![];
+    let mut seen = HashSet::new();
     let mut add = |n: &vectorcraft_doc::Node| {
         n.walk(&mut |c| {
-            if matches!(c.kind, NodeKind::Text(_)) && !v.contains(&c.id) {
+            if matches!(c.kind, NodeKind::Text(_)) && seen.insert(c.id) {
                 v.push(c.id);
             }
         })
     };
     if selection_only {
-        for id in &st.selection.objects {
+        for id in selected.unwrap_or(&st.selection.objects) {
             if let Some(n) = st.doc.node(*id) {
                 add(n);
             }
@@ -97,7 +98,7 @@ fn being_edited(d: &Document, name: &str) -> bool {
 /// descendants, and of the instances in those symbols' art that are not hidden or locked, nor in a
 /// hidden or locked group of the art. Returned as (all of them, those shown by instances the
 /// Selection tool can reach: not hidden or locked, as `Document::editable` says).
-fn selected_symbols(s: &Session) -> Result<(BTreeSet<String>, BTreeSet<String>)> {
+fn selected_symbols(s: &Session, selected: Option<&[NodeId]>) -> Result<(BTreeSet<String>, BTreeSet<String>)> {
     fn open_instances(n: &Node, out: &mut BTreeSet<String>) {
         if !n.visible || n.locked {
             return;
@@ -123,7 +124,7 @@ fn selected_symbols(s: &Session) -> Result<(BTreeSet<String>, BTreeSet<String>)>
     let st = s.doc()?;
     let (mut all, mut open) = (BTreeSet::new(), BTreeSet::new());
     let editable = st.doc.editable();
-    for id in &st.selection.objects {
+    for id in selected.unwrap_or(&st.selection.objects) {
         if let Some(n) = st.doc.node(*id) {
             n.walk(&mut |c| {
                 if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
@@ -507,12 +508,66 @@ fn text(d: &Document, id: NodeId) -> Option<&vectorcraft_doc::TextObject> {
 }
 
 fn fonts(s: &mut Session, p: &Value) -> Result<Value> {
-    let selection_only = bool_or(p, "selectionOnly", false);
-    let ids = scope(s, selection_only)?;
+    if bool_or(p, "selectionOnly", false) {
+        let selected = s.doc()?.selection.objects.clone();
+        font_inventory(s, Some(&selected))
+    } else {
+        font_inventory(s, None)
+    }
+}
+
+impl Session {
+    /// List the fonts in the document, or in the given objects and their symbols.
+    pub fn font_inventory(&self, selected: Option<&[NodeId]>) -> Result<Value> {
+        font_inventory(self, selected)
+    }
+
+    /// List text currently unavailable to a Replace Font request in its original selection.
+    pub fn skipped_font_ids(&self, params: &Value, selected: Option<&[NodeId]>) -> Result<Vec<NodeId>> {
+        let (family, style) = font_param(params, "from", "text.replaceFont")?;
+        let selection_only = bool_or(params, "selectionOnly", false);
+        let selected_symbols = selection_only.then(|| selected_symbols(self, selected)).transpose()?;
+        let d = &self.doc()?.doc;
+        let other: Vec<NodeId> = {
+            let editable = d.editable();
+            scope(self, selection_only, selected)?.into_iter().filter(|id| !editable(*id)).collect()
+        };
+        let uses = |t: &TextObject| {
+            t.runs.iter().any(|r| {
+                r.style.font_family.eq_ignore_ascii_case(&family) && style.as_ref().is_none_or(|name| r.style.font_style.eq_ignore_ascii_case(name))
+            })
+        };
+        let mut ids = other.into_iter().filter(|id| text(d, *id).is_some_and(uses)).collect::<Vec<_>>();
+        fn visit(n: &Node, open: bool, closed: bool, uses: &impl Fn(&TextObject) -> bool, ids: &mut Vec<NodeId>) {
+            let open = open && n.visible && !n.locked;
+            if let NodeKind::Text(t) = &n.kind
+                && (!open || closed)
+                && uses(t)
+            {
+                ids.push(n.id);
+            }
+            for child in n.children().map(Vec::as_slice).unwrap_or_default() {
+                visit(child, open, closed, uses, ids);
+            }
+        }
+        for symbol in d
+            .symbols
+            .iter()
+            .filter(|symbol| !being_edited(d, &symbol.name) && selected_symbols.as_ref().is_none_or(|(all, _)| all.contains(&symbol.name)))
+        {
+            let closed = selected_symbols.as_ref().is_some_and(|(_, open)| !open.contains(&symbol.name));
+            visit(&symbol.art, true, closed, &uses, &mut ids);
+        }
+        Ok(ids)
+    }
+}
+
+fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
+    let ids = scope(s, selected.is_some(), selected)?;
     let d = &s.doc()?.doc;
     let db = vectorcraft_text::FontDb::global();
     // The type in the art of the symbols in scope too: all of them, or those the selection shows.
-    let symbols = if selection_only { Some(selected_symbols(s)?.0) } else { None };
+    let symbols = if selected.is_some() { Some(selected_symbols(s, selected)?.0) } else { None };
     let mut texts: Vec<&TextObject> = ids.iter().filter_map(|id| text(d, *id)).collect();
     texts.extend(symbol_texts(d, symbols.as_ref()).into_iter().map(|(t, _)| t));
     let mut found: BTreeMap<UsedFont, (usize, usize, String)> = BTreeMap::new();
@@ -561,6 +616,21 @@ fn font_param(p: &Value, k: &str, c: &str) -> Result<(String, Option<String>)> {
     Ok((family.to_string(), v.get("style").and_then(Value::as_str).map(str::to_string)))
 }
 
+fn skipped_font_texts(
+    d: &Document,
+    other: &[NodeId],
+    symbols: &[(&TextObject, bool)],
+    closed: &BTreeSet<String>,
+    uses: &impl Fn(&TextObject) -> bool,
+) -> usize {
+    let mut skipped = other.iter().filter(|id| text(d, **id).is_some_and(uses)).count();
+    skipped += symbols.iter().filter(|(t, open)| !open && uses(t)).count();
+    if !closed.is_empty() {
+        skipped += symbol_texts(d, Some(closed)).into_iter().filter(|(t, _)| uses(t)).count();
+    }
+    skipped
+}
+
 fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.replaceFont";
     let (ff, fs) = font_param(p, "from", C)?;
@@ -592,7 +662,7 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     // With selectionOnly: the symbols the selection shows; those shown only by hidden or locked
     // instances keep their type, counted in `skipped`.
     let (symbols, closed) = if selection_only {
-        let (all, open) = selected_symbols(s)?;
+        let (all, open) = selected_symbols(s, None)?;
         let closed: BTreeSet<String> = all.difference(&open).cloned().collect();
         (Some(open), closed)
     } else {
@@ -604,13 +674,9 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let (ids, skipped, in_symbols) = {
         let d = &s.doc()?.doc;
         let editable = d.editable();
-        let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, selection_only)?.into_iter().partition(|id| editable(*id));
-        let mut skipped = other.into_iter().filter(|id| text(d, *id).is_some_and(uses)).count();
+        let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, selection_only, None)?.into_iter().partition(|id| editable(*id));
         let texts = symbol_texts(d, symbols.as_ref());
-        skipped += texts.iter().filter(|(t, open)| !open && uses(t)).count();
-        if !closed.is_empty() {
-            skipped += symbol_texts(d, Some(&closed)).into_iter().filter(|(t, _)| uses(t)).count();
-        }
+        let skipped = skipped_font_texts(d, &other, &texts, &closed, &uses);
         // The text that changes: when none does, the document and its undo history stay as they are.
         let ids: Vec<NodeId> = ids.into_iter().filter(|id| text(d, *id).is_some_and(changes)).collect();
         let in_symbols = texts.iter().any(|(t, open)| *open && changes(t));
@@ -671,7 +737,7 @@ const REPLACE_SKIPPED: &str = "some text is hidden or locked, so its font wasn't
 fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let family = str_param(p, "family").ok_or_else(|| bad("select.font", "missing `family`"))?.to_string();
     let style = str_param(p, "style").map(str::to_string);
-    let ids = scope(s, false)?;
+    let ids = scope(s, false, None)?;
     let d = &s.doc()?.doc;
     // Only text the Selection tool can reach: not hidden or locked, in a hidden or locked group
     // or layer, or on a locked artboard.

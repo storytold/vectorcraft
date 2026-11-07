@@ -176,8 +176,7 @@ mod win {
     use clipboard_win::{formats, options::NoClear, raw};
 
     use super::{
-        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, text_of,
-        windows_formats,
+        BITMAP, ClipboardRead, Cursor, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, dib_image, png_flavour, windows_formats,
     };
 
     /// The device-independent bitmaps, the one that carries alpha first. Each is there whenever the
@@ -211,8 +210,6 @@ mod win {
     pub struct Clipboard {
         /// The clipboard's sequence number right after our last write.
         seq: Option<NonZeroU32>,
-        /// The text of our last write.
-        text: Option<String>,
     }
 
     impl SystemClipboard for Clipboard {
@@ -243,18 +240,17 @@ mod win {
                 }
             }
             self.seq = raw::seq_num();
-            self.text = text_of(flavours);
             result
         }
 
         fn holds_ours(&mut self) -> bool {
-            if self.seq.is_some() && raw::seq_num() == self.seq {
-                return true;
-            }
-            // A clipboard manager may have copied our data again as its own.
-            let Some(ours) = self.text.as_deref() else { return false };
-            let Ok(_open) = clipboard_win::Clipboard::new_attempts(10) else { return false };
-            read_one(TEXT).and_then(ClipboardRead::flavour).is_some_and(|f| f.data == ours.as_bytes())
+            // The same text copied later by another app is a different clipboard entry. A
+            // clipboard manager that republishes our data is also a new entry.
+            self.seq.is_some() && raw::seq_num() == self.seq
+        }
+
+        fn change_count(&mut self) -> Option<u64> {
+            raw::seq_num().map(|n| u64::from(n.get()))
         }
 
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
@@ -982,10 +978,17 @@ mod tests {
 
     use super::*;
 
-    fn dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("vectorcraft-clipboard-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn dir(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new().prefix(&format!("vectorcraft-clipboard-{name}-")).tempdir().unwrap()
+    }
+
+    #[test]
+    fn test_directory_is_removed_when_its_handle_is_dropped() {
+        let dir = dir("cleanup");
+        let path = dir.path().to_path_buf();
+        assert!(path.exists());
+        drop(dir);
+        assert!(!path.exists());
     }
 
     fn png(w: u32, h: u32) -> Vec<u8> {
@@ -997,12 +1000,12 @@ mod tests {
     #[test]
     fn the_first_copied_file_that_is_art_pastes() {
         let d = dir("art");
-        let (notes, red, art) = (d.join("notes.txt"), d.join("red image.png"), d.join("art.svg"));
+        let (notes, red, art) = (d.path().join("notes.txt"), d.path().join("red image.png"), d.path().join("art.svg"));
         std::fs::write(&notes, "not art").unwrap();
         std::fs::write(&red, png(3, 2)).unwrap();
         std::fs::write(&art, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
         // Missing files, folders and text are skipped.
-        let f = copied_file(vec![d.join("gone.png"), d.clone(), notes.clone(), red.clone(), art.clone()], &PASTE_ORDER).unwrap();
+        let f = copied_file(vec![d.path().join("gone.png"), d.path().to_path_buf(), notes.clone(), red.clone(), art.clone()], &PASTE_ORDER).unwrap();
         assert_eq!((f.mime, f.data), (PNG, png(3, 2)));
         assert_eq!(copied_file(vec![art.clone(), red.clone()], &PASTE_ORDER).map(|f| f.mime), Some(SVG));
         // Only what Paste asks for.
@@ -1036,7 +1039,8 @@ mod tests {
     /// An .eps file copied in a file manager pastes as EPS.
     #[test]
     fn a_copied_eps_file_pastes() {
-        let eps = dir("eps").join("equation.eps");
+        let d = dir("eps");
+        let eps = d.path().join("equation.eps");
         std::fs::write(&eps, "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 10 10\n0 0 10 10 rectfill\n").unwrap();
         assert_eq!(copied_file(vec![eps.clone()], &PASTE_ORDER).map(|f| f.mime), Some(EPS));
         assert!(copied_file(vec![eps], &[BITMAP, TEXT]).is_none());
@@ -1044,7 +1048,8 @@ mod tests {
 
     #[test]
     fn a_crlf_left_by_the_uri_list_is_ignored() {
-        let red = dir("crlf").join("red.png");
+        let d = dir("crlf");
+        let red = d.path().join("red.png");
         std::fs::write(&red, png(2, 2)).unwrap();
         let with_cr = PathBuf::from(format!("{}\r", red.display()));
         assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));

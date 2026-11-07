@@ -136,6 +136,13 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         members.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, painted_reach(symbols, c)))
     };
     match &n.kind {
+        // A group's or layer's 3D effect: the art of its members' solids.
+        NodeKind::Layer { .. } | NodeKind::Group { clip: false, .. }
+            if effects::has_solid(n)
+                && let Some(art) = effects::solid_art(n) =>
+        {
+            drawn_bounds(symbols, &art)
+        }
         _ if effects::has_container_appearance(n) => {
             let art = effects::evaluate_container(Some(symbols.document()), n);
             let art = art.as_ref().unwrap_or(n);
@@ -237,6 +244,23 @@ fn outset(symbols: &SymbolBoxes, fx: &[Effect], b: Rect) -> f64 {
 /// measured by their art from `symbols`.
 pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     cull_bounds_in(symbols, n, true)
+}
+
+/// [`cull_bounds`] of path or compound path `n` made from `visual`, its visual bounds as
+/// [`Node::visual_bounds_with`] measures them, when [`cull_bounds`] measures `n` by those (it has
+/// no crop marks, Vector Halftone, container appearance or effects); else `None`.
+pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnOnce() -> Option<Rect>) -> Option<Option<Rect>> {
+    let plain = matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
+        && !effects::has_crop_marks(n)
+        && !effects::addons::halftone::has_halftone(n)
+        && !effects::has_container_appearance(n)
+        && !has_fx(n)
+        && !has_object_fx(n);
+    plain.then(|| {
+        let b = visual()?;
+        let a = live_content_reach(symbols, n);
+        Some(b.inflate(a, a))
+    })
 }
 
 /// [`cull_bounds`] of `n`. With `after_reshape` true, the effects in the art of a symbol instance

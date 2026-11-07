@@ -335,13 +335,11 @@ mod tests {
     #[test]
     fn a_kept_preferences_copy_is_owner_only() {
         use std::os::unix::fs::PermissionsExt as _;
-        let dir = std::env::temp_dir().join(format!("vc-prefs-copy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let temp = tempfile::Builder::new().prefix("vc-prefs-copy-").tempdir().unwrap();
+        let dir = temp.path();
         super::keep_prefs_copy(&dir.join("ui.json"), b"{}", "ui.unreadable");
         let mode = std::fs::metadata(dir.join("ui.unreadable.json")).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
