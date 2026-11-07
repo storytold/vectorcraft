@@ -955,6 +955,27 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Preferences form rows associate each input with its visible label for accessibility tools.
+#[test]
+fn preference_inputs_expose_their_visible_labels() {
+    use egui_kittest::kittest::Queryable;
+    let mut app = app();
+    open(&mut app, Some("General"));
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Keyboard Increment:");
+}
+
 /// Under automation roots, OK refuses a typed folder outside them before it looks at the folder.
 #[test]
 fn ok_refuses_a_typed_folder_outside_the_automation_roots_before_looking_at_it() {
