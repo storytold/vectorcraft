@@ -317,13 +317,13 @@ fn start_data_reads_more_than_4_mb() {
 /// Decoding a string through a CMap with many mappings counts against the operation budget.
 #[test]
 fn decoding_through_a_large_cmap_runs_out_of_the_budget() {
-    let font = String::from_utf8(cid_font(true)).unwrap();
+    // A CIDFont the file doesn't carry: its glyphs cost nothing, so the decoding is what counts.
     super::tests::runs_out_of_budget(&format!(
-        "{font}/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Big-H def\n\
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Big-H def\n\
          2 begincodespacerange <00> <7f> <8000> <ffff> endcodespacerange\n\
-         16000 begincidrange 0 1 15999 {{ /i exch def 2 string dup 0 i 256 idiv 128 add put dup 0 get pop dup 1 i 256 mod put dup 1 }} for endcidrange\n\
+         16000 begincidrange 0 1 15999 {{ /i exch def 2 string dup 0 i 256 idiv 128 add put dup 1 i 256 mod put dup 1 }} for endcidrange\n\
          endcmap CMapName currentdict /CMap defineresource pop end end\n\
-         /Big /Big-H [/TestCID] composefont 50 scalefont setfont /s 1000 string def {{ s stringwidth pop pop }} loop"
+         /Big /Big-H [/NotInFile] composefont 50 scalefont setfont /s 1000 string def {{ s stringwidth pop pop }} loop"
     ));
 }
 
