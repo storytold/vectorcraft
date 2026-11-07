@@ -5564,6 +5564,7 @@ imageTrace	Outline	კონტური
 @plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
 	Clear History	ისტორიის გასუფთავება
+	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
 	Artboard {n} of {total}	სამუშაო დაფა {n} / {total}
 	File {n} of {total}	ფაილი {n} / {total}
@@ -5582,6 +5583,7 @@ imageTrace	Outline	კონტური
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის და არა ფაილის {pw} × {ph} pt გვერდს
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის: ეს ფაილის {pw} × {ph} pt გვერდია მასშტაბით {scale}
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
+@msg	no history state {v}	ისტორიის მდგომარეობა {v} არ არსებობს
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ფაილის ცვლადების ყველა კავშირი არ იქნა წაკითხული (გამოტოვებული კავშირები: {_1}): ეს ობიექტები არ არის დაკავშირებული თავიანთ ცვლადებთან

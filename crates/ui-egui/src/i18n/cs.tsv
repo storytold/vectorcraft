@@ -1636,6 +1636,7 @@ digits	Malayalam	Malajálamské
 	Step Backward	Krok zpět
 	Step Forward	Krok vpřed
 	Clear History	Vymazat historii
+	New Document from State	Nový dokument ze stavu
 	Set History Limit…	Nastavit limit historie…
 	Open a document to see its history.	Otevřete dokument, abyste viděli jeho historii.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4684,6 +4685,7 @@ imageTrace	Outline	Obrys
 @msg	nothing to save: the document has no visible art	není co uložit: dokument nemá žádnou viditelnou kresbu
 @msg	nothing to undo	není co vrátit
 @msg	no history to clear	není žádná historie k vymazání
+@msg	no history state {v}	žádný stav historie {v}
 @msg	nothing to warp	není co pokřivit
 @msg	nothing to wrap	není co obtékat
 @msg	object {0} cannot have children	objekt {0} nemůže mít potomky

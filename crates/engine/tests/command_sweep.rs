@@ -911,7 +911,15 @@ fn every_command_undoes_exactly() {
         let mut s = Fixture::Multi.session();
         let before = doc_json(&s.doc().unwrap().doc);
         let depth = s.doc().unwrap().history.undo.len();
+        let source = s.active_index().unwrap();
         let Ok(Ok(_)) = catch_quiet(|| s.execute(c.id, &json!({}))) else { continue };
+        // A command that makes a new document and makes it active leaves the source document as it is.
+        if s.active_index() != Some(source) {
+            if s.documents().get(source).map(|d| doc_json(&d.doc)).as_ref() != Some(&before) {
+                failures.push(format!("{}: changed the source document while making another active", c.id));
+            }
+            continue;
+        }
         if s.doc().unwrap().history.undo.len() > depth {
             let _ = no_panic(s.execute("edit.undo", &json!({})));
             let after = doc_json(&s.doc().unwrap().doc);

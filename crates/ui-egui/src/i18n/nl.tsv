@@ -1560,6 +1560,7 @@ digits	Malayalam	Malayalam
 	Step Backward	Stap terug
 	Step Forward	Stap vooruit
 	Clear History	Historie wissen
+	New Document from State	Nieuw document uit status
 	Set History Limit…	Historielimiet instellen…
 	Open a document to see its history.	Open een document om de historie te zien.
 	Abutting	Aaneengesloten
@@ -4351,6 +4352,7 @@ imageTrace	Outline	Contour
 @msg	nothing to save: the document has no visible art	niets om op te slaan: het document heeft geen zichtbare illustratie
 @msg	nothing to undo	niets om ongedaan te maken
 @msg	no history to clear	geen historie om te wissen
+@msg	no history state {v}	geen historiestatus {v}
 @msg	nothing to warp	niets om te buigen
 @msg	nothing to wrap	niets om te laten omlopen
 @msg	object {0} cannot have children	object {0} kan geen onderliggende objecten hebben

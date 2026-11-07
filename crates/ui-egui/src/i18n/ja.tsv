@@ -1774,6 +1774,7 @@ digits	Malayalam	マラヤーラム数字
 	Step Backward	一段階戻る
 	Step Forward	一段階進む
 	Clear History	ヒストリーを消去
+	New Document from State	状態から新規ドキュメント
 	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4168,6 +4169,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	no history to clear	消去するヒストリーがありません
+@msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません

@@ -1409,6 +1409,7 @@ font-technology	Variable	Variabla
 	Step Backward	Stega bakåt
 	Step Forward	Stega framåt
 	Clear History	Rensa historik
+	New Document from State	Nytt dokument från tillstånd
 	Set History Limit…	Ange historikgräns…
 	History States	Historiktillstånd
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4283,6 +4284,7 @@ axis	Both	Båda
 @msg	nothing to save: the document has no visible art	inget att spara: dokumentet har ingen synlig grafik
 @msg	nothing to undo	inget att ångra
 @msg	no history to clear	ingen historik att rensa
+@msg	no history state {v}	inget historiktillstånd {v}
 @msg	nothing to warp	inget att böja
 @msg	nothing to wrap	inget att radbryta
 @msg	object {0} cannot have children	objekt {0} kan inte ha underordnade objekt

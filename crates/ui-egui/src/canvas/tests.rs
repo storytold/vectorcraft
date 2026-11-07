@@ -6159,6 +6159,32 @@ fn clear_history_waits_while_the_ime_composes() {
     assert!(crate::menus::enabled(&app, "edit.clearHistory"));
 }
 
+/// New Document from State waits while an IME composes, as Undo does: no document is made and the
+/// composition goes on.
+#[test]
+fn new_document_from_state_waits_while_the_ime_composes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    typing_frame(&mut app, &ctx, vec![]);
+    app.select_tool("type");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = xf.to_screen(Point::new(100.0, 100.0));
+    let click =
+        |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+    typing_frame(&mut app, &ctx, vec![click(at, false)]);
+    typing_frame(&mut app, &ctx, vec![preedit("が", 1)]);
+    assert!(app.session.tool_composing());
+    assert!(!crate::menus::enabled(&app, "edit.newDocumentFromState"));
+    crate::menus::invoke(&mut app, "edit.newDocumentFromState", json!({}));
+    assert!(app.session.tool_composing(), "the composition goes on");
+    assert_eq!(app.session.documents().len(), 1);
+    typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("雅".into()))]);
+    assert!(crate::menus::enabled(&app, "edit.newDocumentFromState"));
+}
+
 #[test]
 fn clicking_away_mid_composition_keeps_the_text_and_interrupts_the_ime() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

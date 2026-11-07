@@ -1371,6 +1371,7 @@ font-technology	Variable	Μεταβλητές
 	Step Backward	Ένα βήμα πίσω
 	Step Forward	Ένα βήμα εμπρός
 	Clear History	Εκκαθάριση ιστορικού
+	New Document from State	Νέο έγγραφο από κατάσταση
 	Set History Limit…	Ορισμός ορίου ιστορικού…
 	History States	Καταστάσεις ιστορικού
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4333,6 +4334,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	nothing to save: the document has no visible art	δεν υπάρχει τίποτα για αποθήκευση: το έγγραφο δεν έχει ορατό σχέδιο
 @msg	nothing to undo	δεν υπάρχει τίποτα για αναίρεση
 @msg	no history to clear	δεν υπάρχει ιστορικό για εκκαθάριση
+@msg	no history state {v}	δεν υπάρχει κατάσταση ιστορικού {v}
 @msg	nothing to warp	δεν υπάρχει τίποτα για στρέβλωση
 @msg	nothing to wrap	δεν υπάρχει τίποτα για αναδίπλωση
 @msg	object {0} cannot have children	το αντικείμενο {0} δεν μπορεί να έχει θυγατρικά στοιχεία
