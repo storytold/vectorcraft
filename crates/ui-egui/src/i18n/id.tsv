@@ -5695,6 +5695,19 @@ axis	Y Axis	Sumbu Y
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
 	Playback Options…	Opsi pemutaran…
+	Insert Stop…	Sisipkan henti…
+	Insert Stop	Sisipkan henti
+	Record Stop	Rekam henti
+	Allow Continue	Izinkan lanjutkan
+	Continue	Lanjutkan
+	Continue Action	Lanjutkan tindakan
+	Delete Action Step	Hapus langkah tindakan
+	Press Play Current Selection in the Actions panel to go on.	Untuk melanjutkan, tekan Putar seleksi saat ini di panel Tindakan.
+	Stop: {message}	Henti: {message}
+@msg	no action is waiting at a stop	tidak ada tindakan yang menunggu di titik henti
+@msg	message must be text	message harus berupa teks
+@msg	allowContinue must be true or false	allowContinue harus true atau false
+@msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
 	Playback Options	Opsi pemutaran
 	Accelerated	Dipercepat
 	Step by Step	Langkah demi langkah

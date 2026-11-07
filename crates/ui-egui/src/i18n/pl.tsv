@@ -5649,6 +5649,19 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Playback Options…	Opcje odtwarzania…
+	Insert Stop…	Wstaw zatrzymanie…
+	Insert Stop	Wstaw zatrzymanie
+	Record Stop	Nagraj zatrzymanie
+	Allow Continue	Zezwalaj na kontynuację
+	Continue	Kontynuuj
+	Continue Action	Kontynuuj operację
+	Delete Action Step	Usuń krok operacji
+	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
+	Stop: {message}	Zatrzymanie: {message}
+@msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
+@msg	message must be text	message musi być tekstem
+@msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
+@msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
 	Playback Options	Opcje odtwarzania
 	Accelerated	Przyspieszone
 	Step by Step	Krok po kroku

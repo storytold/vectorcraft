@@ -5393,6 +5393,19 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Insert Stop…	Chèn điểm dừng…
+	Insert Stop	Chèn điểm dừng
+	Record Stop	Ghi điểm dừng
+	Allow Continue	Cho phép tiếp tục
+	Continue	Tiếp tục
+	Continue Action	Tiếp tục hành động
+	Delete Action Step	Xóa bước hành động
+	Press Play Current Selection in the Actions panel to go on.	Để tiếp tục, nhấn Phát vùng chọn hiện tại trong bảng Hành động.
+	Stop: {message}	Điểm dừng: {message}
+@msg	no action is waiting at a stop	không có hành động nào đang chờ ở điểm dừng
+@msg	message must be text	message phải là văn bản
+@msg	allowContinue must be true or false	allowContinue phải là true hoặc false
+@msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
 	Playback Options	Tùy chọn phát lại
 	Accelerated	Tăng tốc
 	Step by Step	Từng bước

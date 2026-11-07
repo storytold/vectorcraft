@@ -1844,11 +1844,13 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1 or 2, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
-  a command id and its params as `command.batch` takes them. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with excluded steps use version 2, so older builds refuse them
-  instead of playing the excluded steps; files without exclusions use version 1. A file with another `format` or a `version` other than
-  1 or 2, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  `{"format": "vcactions", "version": 1, 2 or 3, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
+  `{message, allowContinue}`. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with stops use version 3, and files with excluded steps and no stops
+  use version 2, so older builds refuse them
+  instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
+  1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web).
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
@@ -1891,7 +1893,29 @@ already walks Image Trace. Short agent entry points:
   action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
   then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. A
   `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
-  here and in Batch….
+  here and in Batch…. An action with an included stop plays up to the stop at any speed and then waits, with its
+  message box open, until `ui.action.continue` or `ui.action.stop`. At Accelerated the steps between two stops are one
+  undoable batch each. The result is then `{results, pending, atStop?}`, with `atStop: true` when the action already
+  waits. Batch… refuses an action with an included stop, and a stop that is excluded does not hold playback.
+- Actions: `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}` inserts a stop. With `set` and
+  `action`, the stop goes into that action, after step `step`, else after its last step, and the command returns
+  `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
+  returns `{recording: true}`. `message` is the text playback shows (default: none), and `allowContinue` (default:
+  false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
+  VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
+  selected ones. An index past the last set, action or step, a param of another type, params that are not an
+  object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
+- Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
+  closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
+  the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
+  error. The panel's Play Current Selection runs this while an action waits. In the message box, Continue (shown with
+  Allow Continue) runs this, and Stop closes the box while the action keeps waiting for the manual task.
+- Actions: `ui.action.deleteStep {set, action, step}` deletes one step, a stop or a command, of the action at `action`
+  in set `set` (0 is the top set, action or step), and returns `{set, action, step}`. The steps after it keep whether
+  they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one
+  open on a later step of the action follows it up. A missing or invalid index is an error, and then nothing changes.
+  Undo does not restore a deleted step. The panel's Delete Selection runs this for the selected step.
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
@@ -1901,14 +1925,16 @@ already walks Image Trace. Short agent entry points:
   this. Batch… (`action.batch`) plays every step at once whatever the setting.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
   for it, else in a new action after the last action of its set, and returns `{stopped}`. It also ends an action
-  playing at Step by Step or Pause For: the steps already played stay, and the rest do not play. With nothing
+  playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
+  stay, and the rest do not play. With nothing
   recording or playing it changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the
   sets with these ids are deleted wherever they are now and `sets` is not read; when one of them no longer exists, the
   command returns an error and deletes no set. A recording into a deleted set stops and keeps no steps; a recording into another set
-  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) asks before it runs
+  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) deletes a selected
+  step (`ui.action.deleteStep`), else a selected action. Otherwise it asks before it runs
   this for the selected sets, and Shift-click on a set's name selects the sets from the current one to it. Undo does
   not restore a deleted set.
   `ui.actionSet.duplicate {set?: index, action?: index}` copies the action at `action` in set `set` to right after it
