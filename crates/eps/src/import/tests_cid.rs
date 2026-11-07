@@ -318,13 +318,13 @@ fn start_data_reads_more_than_4_mb() {
 #[test]
 fn decoding_through_a_large_cmap_runs_out_of_the_budget() {
     // A CIDFont the file doesn't carry: its glyphs cost nothing, so the decoding is what counts.
-    super::tests::runs_out_of_budget(&format!(
+    super::tests::runs_out_of_budget(
         "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Big-H def\n\
          2 begincodespacerange <00> <7f> <8000> <ffff> endcodespacerange\n\
-         16000 begincidrange 0 1 15999 {{ /i exch def 2 string dup 0 i 256 idiv 128 add put dup 1 i 256 mod put dup 1 }} for endcidrange\n\
+         16000 begincidrange 0 1 15999 { /i exch def 2 string dup 0 i 256 idiv 128 add put dup 1 i 256 mod put dup 1 } for endcidrange\n\
          endcmap CMapName currentdict /CMap defineresource pop end end\n\
-         /Big /Big-H [/NotInFile] composefont 50 scalefont setfont /s 1000 string def {{ s stringwidth pop pop }} loop"
-    ));
+         /Big /Big-H [/NotInFile] composefont 50 scalefont setfont /s 1000 string def { s stringwidth pop pop } loop",
+    );
 }
 
 /// A CID-keyed font's glyphs are grouped under the font's name: a CID stands for no character.
