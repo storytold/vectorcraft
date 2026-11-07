@@ -196,7 +196,7 @@ impl Interp<'_> {
     }
 
     /// Up to `n` bytes of file `f`.
-    fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+    pub(in super::super) fn read(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         self.materialize(f)?;
         Ok(match &mut *f.borrow_mut() {
             Stream::Current => {
@@ -236,7 +236,7 @@ impl Interp<'_> {
     }
 
     /// Up to `n` bytes read as hexadecimal digits from `f` (other characters skipped).
-    fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
+    pub(in super::super) fn read_hex(&mut self, f: &Rc<RefCell<Stream>>, n: usize) -> Res<Vec<u8>> {
         let mut out = Vec::with_capacity(n);
         let mut high: Option<u8> = None;
         while out.len() < n {
@@ -248,6 +248,31 @@ impl Interp<'_> {
             }
         }
         Ok(out)
+    }
+
+    /// Skip the whitespace and the `>` that end hexadecimal data in `f`, if a `>` is next: the
+    /// rest is left unread.
+    pub(in super::super) fn skip_hex_end(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        self.materialize(f)?;
+        let blank = |b: &u8| b.is_ascii_whitespace() || *b == 0;
+        match &mut *f.borrow_mut() {
+            Stream::Current => {
+                let rest = self.lex.data();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    self.lex.advance(n + 1);
+                }
+            }
+            Stream::Buf { data, pos, .. } => {
+                let rest = data.get(*pos..).unwrap_or_default();
+                let n = rest.iter().take_while(|b| blank(b)).count();
+                if rest.get(n) == Some(&b'>') {
+                    *pos += n + 1;
+                }
+            }
+            Stream::Pending { .. } => {}
+        }
+        Ok(())
     }
 
     /// Read bytes `got` into string `s` and push the part of `s` they fill.
@@ -472,16 +497,18 @@ impl Interp<'_> {
         Ok(out)
     }
 
-    /// `file eexec`: an encrypted font program follows in `file`. It is skipped there, up to the
-    /// `cleartomark` that ends it (type is drawn in the app's fonts, by name): the font
-    /// dictionary it would complete is defined as it is.
+    /// `file eexec`: an encrypted font program follows in `file`. It isn't run: it is skipped
+    /// there, up to the `cleartomark` that ends it, and the font dictionary it would complete is
+    /// defined as it is, with the glyphs the Type 1 font parser reads from it (see `type1`).
     fn eexec(&mut self) -> Res {
         let src = self.pop()?;
+        let mut font = None;
         if let Some(Obj::Dict(d)) = self.stack.last().cloned() {
             let name = d.borrow().get(&Key::name("FontName")).cloned();
             if let Some(k) = name.and_then(|n| n.key()) {
                 self.pop()?;
-                self.fonts.borrow_mut().insert(k, Obj::Dict(d));
+                self.fonts.borrow_mut().insert(k, Obj::Dict(d.clone()));
+                font = Some(d);
             }
         }
         // `currentfile eexec`: the program's own file or the file being run. A string operand
@@ -492,15 +519,26 @@ impl Interp<'_> {
         };
         self.materialize(&f)?;
         let missing = || PsError::Ps("ioerror", "eexec".into());
-        match &mut *f.borrow_mut() {
+        // The encrypted part, for the font's glyphs (a font's, of a size that can be read).
+        let keep = |part: &[u8]| (font.is_some() && part.len() <= super::super::type1::MAX_PROGRAM).then(|| part.to_vec());
+        let encrypted = match &mut *f.borrow_mut() {
             Stream::Buf { data, pos, .. } => {
-                let at = find(data.get(*pos..).unwrap_or_default(), b"cleartomark").ok_or_else(missing)?;
+                let rest = data.get(*pos..).unwrap_or_default();
+                let at = find(rest, b"cleartomark").ok_or_else(missing)?;
+                let part = keep(rest.get(..at).unwrap_or_default());
                 *pos += at;
+                part
             }
             _ => {
-                let at = find(self.lex.data(), b"cleartomark").ok_or_else(missing)?;
+                let rest = self.lex.data();
+                let at = find(rest, b"cleartomark").ok_or_else(missing)?;
+                let part = keep(rest.get(..at).unwrap_or_default());
                 self.lex.advance(at);
+                part
             }
+        };
+        if let (Some(d), Some(part)) = (font, encrypted) {
+            self.attach_type1(&d, &part)?;
         }
         self.push(Obj::Mark)
     }
