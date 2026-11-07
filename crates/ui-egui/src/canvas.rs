@@ -28,6 +28,7 @@ mod outline;
 mod overlays;
 mod panes;
 mod raster;
+mod selection_marks;
 mod task_bar;
 mod tool_overlays;
 mod view;
@@ -65,6 +66,7 @@ pub use panes::Panes;
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned};
+pub use selection_marks::SelectionMarks;
 use task_bar::task_bar;
 pub(crate) use task_bar::{has_colors, task_bar_rect};
 pub use tool_overlays::HiddenChars;
@@ -193,6 +195,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // that does not draw the overlay drops them, for example with the option off, with the edges
     // hidden, on the Home screen or with no document open.
     let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
+    // The selection's kept marks. Likewise, a frame that does not draw them drops them.
+    let selection_marks = std::mem::take(&mut app.canvas.selection_marks);
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
@@ -336,7 +340,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         original_path_overlay(app, &painter, &xf);
 
-        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, hover_still), revolve_edit, view_info);
+        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
@@ -894,7 +898,7 @@ fn selection_visuals(
     app: &mut VectorcraftApp,
     painter: &egui::Painter,
     xf: &Xf,
-    (hidden_chars, hover_still): (HiddenChars, bool),
+    (hidden_chars, mut marks, hover_still): (HiddenChars, SelectionMarks, bool),
     revolve_edit: bool,
     view_info: vectorcraft_engine::ViewInfo,
 ) -> Vec<Overlay> {
@@ -910,7 +914,8 @@ fn selection_visuals(
         if hover_still {
             hover_highlight(app, painter, xf);
         }
-        selection_overlay(app, painter, xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })));
+        selection_overlay(app, painter, xf, overlays.iter().any(|o| matches!(o, Overlay::CurvePoint { .. })), &mut marks);
+        app.canvas.selection_marks = marks;
         draw_inside_overlay(app, painter, xf);
         mirror_axis_overlay(app, painter, xf);
         grid_repeat_overlay(app, painter, xf);

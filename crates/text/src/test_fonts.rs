@@ -1,6 +1,8 @@
 //! Fonts built in code for tests, so no font file is committed: a small variable font (#296).
 //! Compiled for this crate's tests and, with the `test-fonts` feature, for other crates' tests.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use skrifa::instance::{LocationRef, Size};
 use skrifa::raw::TableProvider;
 use skrifa::raw::tables::glyf::Glyph;
@@ -9,6 +11,20 @@ use write_fonts::FontBuilder;
 use write_fonts::tables::fvar::{AxisInstanceArrays, Fvar, InstanceRecord, VariationAxisRecord};
 use write_fonts::tables::gvar::{GlyphDelta, GlyphDeltas, GlyphVariations, Gvar, Tent};
 use write_fonts::types::{F2Dot14, Fixed, NameId, Tag};
+
+/// Whether faces use and keep shaping plans ([`keep_shape_plans`]).
+static KEEP_SHAPE_PLANS: AtomicBool = AtomicBool::new(true);
+
+/// Sets whether font faces use and keep shaping plans, for the whole process. When `keep` is false,
+/// every shaped segment makes a plan of its own, so a test can compare what kept plans produce with
+/// what its own plan produces. Plans a face already holds stay and are used again when it is true.
+pub fn keep_shape_plans(keep: bool) {
+    KEEP_SHAPE_PLANS.store(keep, Ordering::SeqCst);
+}
+
+pub(crate) fn keeps_shape_plans() -> bool {
+    KEEP_SHAPE_PLANS.load(Ordering::SeqCst)
+}
 
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";

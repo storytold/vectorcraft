@@ -56,6 +56,7 @@ use compare::{
 };
 pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
+pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;
 #[cfg(test)]
 use slots::join_pieces;
