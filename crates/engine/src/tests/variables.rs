@@ -2060,14 +2060,17 @@ fn a_variable_library_defines_text_variables_and_data_sets() {
     assert_eq!(from_file["names"], json!(["Row 1", "Row 2"]));
     let bom = [b"\xEF\xBB\xBF".as_slice(), xml.as_bytes()].concat();
     let from_base64 = s.execute("variable.loadLibrary", &json!({"dataBase64": vectorcraft_format::base64_encode(&bom)})).unwrap();
-    assert_eq!((from_base64["deleted"].clone(), from_base64["deletedDataSets"].clone()), (json!(["Name", "Note"]), json!(["Row 1", "Row 2"])));
+    // The library declares the document's text variables: they stay, and only the data sets go.
+    assert_eq!((from_base64["deleted"].clone(), from_base64["deletedDataSets"].clone()), (json!([]), json!(["Row 1", "Row 2"])));
     assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 2);
 }
 
 /// Load Variable Library replaces the document's variables and data sets: every variable goes with
-/// its bindings and values, a text variable of the same name included, and every data set goes,
-/// the active one included. The highlight of a variable that went highlights nothing. Undo brings
-/// back the variables, bindings, data sets and active data set as they were.
+/// its bindings and values, a variable of another kind with a library variable's name included,
+/// and every data set goes, the active one included. A text variable the library also declares
+/// stays bound (#4136), and the library's data sets then change its text. The highlight of a
+/// variable that went highlights nothing. Undo brings back the variables, bindings, data sets and
+/// active data set as they were.
 #[test]
 fn a_variable_library_replaces_every_variable_and_data_set() {
     let mut s = session();
@@ -2085,17 +2088,22 @@ fn a_variable_library_replaces_every_variable_and_data_set() {
 
     let xml = library(&[("Name", "textcontent"), ("Title", "textcontent")], &[("A", &[("Name", &["New"]), ("Title", &["Heading"])])]);
     let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
-    assert_eq!(loaded["deleted"], json!(["Name", "Title", "Kept"]));
+    assert_eq!(loaded["deleted"], json!(["Title", "Kept"]));
     assert_eq!((loaded["deletedDataSets"].clone(), loaded["names"].clone()), (json!(["A", "Other"]), json!(["A"])));
     let listed = s.execute("variable.list", &json!({})).unwrap();
-    assert_eq!(listed["variables"], json!([{"name": "Name", "kind": "text", "bindings": 0}, {"name": "Title", "kind": "text", "bindings": 0}]));
+    assert_eq!(listed["variables"], json!([{"name": "Name", "kind": "text", "bindings": 1}, {"name": "Title", "kind": "text", "bindings": 0}]));
     let sets = s.execute("dataset.list", &json!({})).unwrap();
     assert_eq!(sets["datasets"].as_array().map(Vec::len), Some(1));
     assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "New"}, "Title": {"text": "Heading"}}));
     assert_eq!(sets["active"], Value::Null);
-    assert!(s.doc().unwrap().doc.variables.bindings.is_empty(), "the bindings went with the variables");
+    let bindings = &s.doc().unwrap().doc.variables.bindings;
+    assert_eq!(bindings.len(), 1, "the bindings went with the variables, but for Name's");
+    assert_eq!(bindings.get(&t).map(|v| v.len()), Some(1));
     assert!(s.doc().unwrap().variables_highlight.is_none(), "the highlighted variable went");
     assert_eq!(plain(&s, t), "Stays", "loading applies nothing");
+    s.execute("dataset.select", &json!({"name": "A"})).unwrap();
+    assert_eq!(plain(&s, t), "New", "the library's data set changes the text bound to Name");
+    s.execute("edit.undo", &json!({})).unwrap();
 
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc.variables, before, "one undo step brings everything back");
@@ -2133,11 +2141,17 @@ fn an_import_or_library_load_that_changes_nothing_records_no_undo_step() {
     let before = super::history(&s);
     let r = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
     assert_eq!((super::history(&s), r["names"].clone()), (before, json!(["A", "B"])));
-    // Binding the variable makes the next load a change: it deletes the binding.
+    // A bound variable the library declares keeps its binding: loading it again changes nothing.
     s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
     super::select_with_a_step_to_redo(&mut s, &[t]);
-    let undo = super::history(&s).0;
+    let before = super::history(&s);
     s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(super::history(&s), before);
+    assert_eq!(s.execute("variable.list", &json!({})).unwrap()["variables"][0]["bindings"], json!(1));
+    // A library of other variables is a change: it deletes Name with its binding.
+    let other = library(&[("Note", "textcontent")], &[("A", &[("Note", &["Hi"])])]);
+    let undo = super::history(&s).0;
+    s.execute("variable.loadLibrary", &json!({"xml": other})).unwrap();
     assert_eq!(super::history(&s), (undo + 1, 0, true));
 
     // While the variables are locked, a library without text variables still loads its data sets,
@@ -2492,9 +2506,10 @@ fn a_saved_variable_library_near_the_size_cap_loads_back() {
 
 /// While the variables are locked, a library that would delete or define a variable is refused, as
 /// Delete Variable and New Variable are, and the document keeps its variables and data sets. That
-/// covers a library whose only variable is a text variable the document already has, and one
-/// without text variables loaded into a document with variables. A library without text variables
-/// loads into a document without variables, replacing its data sets.
+/// covers a library without text variables loaded into a document with variables, and one that
+/// adds a text variable to the document's. A library of the document's own text variables, and
+/// one without text variables loaded into a document without variables, delete and define none:
+/// they load, replacing the data sets.
 #[test]
 fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
     let mut s = session();
@@ -2502,11 +2517,14 @@ fn locked_variables_refuse_a_library_that_deletes_or_defines_variables() {
     s.execute("dataset.new", &json!({"name": "A", "values": {"Name": "Old"}})).unwrap();
     s.execute("variable.lock", &json!({"locked": true})).unwrap();
     let before = s.doc().unwrap().doc.variables.clone();
-    for vars in [&[("Name", "textcontent")][..], &[("Shown", "other")][..]] {
+    for vars in [&[("Shown", "other")][..], &[("Name", "textcontent"), ("Note", "textcontent")][..]] {
         let e = s.execute("variable.loadLibrary", &json!({"xml": library(vars, &[("B", &[])])})).unwrap_err();
         assert!(matches!(&e, EngineError::Disabled(cmd, why) if cmd == "variable.loadLibrary" && why == "variables are locked"), "{e}");
         assert_eq!(s.doc().unwrap().doc.variables, before);
     }
+    // A library of the document's own text variable deletes and defines none: it loads its data sets.
+    let r = s.execute("variable.loadLibrary", &json!({"xml": library(&[("Name", "textcontent")], &[("B", &[])])})).unwrap();
+    assert_eq!((r["deleted"].clone(), r["deletedDataSets"].clone()), (json!([]), json!(["A"])));
 
     let mut s = session();
     s.execute("dataset.new", &json!({"name": "A"})).unwrap();

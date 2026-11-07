@@ -191,6 +191,18 @@ fn target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
     p
 }
 
+/// [`target`] for applying a style: after Select All in threaded text, all the text of every
+/// frame of the story.
+fn apply_target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
+    match super::character::text_story(app) {
+        Some(story) if text_editing(app).is_some() => {
+            p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>());
+            p
+        }
+        _ => target(app, kind, p),
+    }
+}
+
 /// Open New Character Style (`Kind::Para`: New Paragraph Style) to name a style made from the
 /// selected text: `ui.newCharStyle` and `ui.newParaStyle`.
 pub(crate) fn open_new(app: &mut VectorcraftApp, kind: Kind) -> Result<Value, String> {
@@ -277,7 +289,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
         sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
         // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel.
         if has_text && !(m.shift || m.command) {
-            let p = target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
+            let p = apply_target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
             app.run(&format!("{}.apply", kind.prefix()), p).ok();
         }
     }
@@ -364,7 +376,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, tl!("Clear Overrides"), sel.is_some() && has_text, false)
         && let Some(n) = &sel
     {
-        app.run(&format!("{p}.apply"), target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
+        app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
     }
     if menu_item(ui, &crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]), sel.is_some() && has_text, false)
         && let Some(n) = &sel

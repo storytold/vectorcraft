@@ -111,7 +111,9 @@ fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
 
 /// The effects of the only object.
 fn effects(d: &Document) -> Vec<Effect> {
-    let a = art(d);
+    // Not the clip group a filter's region may put it in (SVG 1.1 §15.5), nor its clipping path.
+    let a: Vec<&Node> =
+        art(d).into_iter().filter(|n| !matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Path { clipping: true, .. })).collect();
     assert_eq!(a.len(), 1, "{a:?}");
     a[0].appearance.effects.clone()
 }
@@ -239,7 +241,7 @@ fn a_figma_blurred_shape_filter_becomes_gaussian_blur() {
     assert!(w.is_empty(), "{w:?}");
     let fx = effects(&d);
     assert_eq!(fx.len(), 1);
-    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0})));
+    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0, "linear": true})));
 }
 
 #[test]
@@ -274,12 +276,104 @@ fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
     assert!(w.is_empty(), "{w:?}");
     let fx = effects(&d);
     assert_eq!(fx.len(), 1);
-    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0})));
+    assert_eq!((fx[0].id.as_str(), &fx[0].params), ("blur.gaussian", &json!({"radius": 6.0, "linear": true})));
     // In a scaled group, the radius scales too.
     let (d, _) = open(
         r##"<defs><filter id="b"><feGaussianBlur stdDeviation="3"/></filter></defs><g transform="scale(2)"><rect width="30" height="20" filter="url(#b)"/></g>"##,
     );
     assert_eq!(effects(&d)[0].params["radius"], json!(12.0));
+}
+
+/// `color-interpolation-filters` (SVG 1.1 §15.7.6, initially linearRGB:
+/// https://www.w3.org/TR/SVG11/painting.html#ColorInterpolationFiltersProperty) picks whether the
+/// blur mixes colours in linear light; sRGB, on the primitive or the filter, keeps them as they
+/// are (#5877).
+#[test]
+fn a_gaussian_blur_keeps_its_colour_space() {
+    let blur = |filter: &str, primitive: &str| {
+        let (d, w) = open(&format!(
+            r##"<defs><filter id="b"{filter}><feGaussianBlur stdDeviation="10"{primitive}/></filter></defs><rect width="100" height="200" filter="url(#b)"/>"##
+        ));
+        assert!(w.is_empty(), "{w:?}");
+        effects(&d)[0].params.clone()
+    };
+    let linear = json!({"radius": 20.0, "linear": true});
+    let srgb = json!({"radius": 20.0});
+    assert_eq!(blur("", r#" color-interpolation-filters="linearRGB""#), linear);
+    assert_eq!(blur("", ""), linear, "linearRGB is the initial value");
+    assert_eq!(blur("", r#" color-interpolation-filters="sRGB""#), srgb);
+    assert_eq!(blur(r#" color-interpolation-filters="sRGB""#, ""), srgb, "inherited from the filter");
+    // Export writes the space back on the blur, so it survives a round trip.
+    let (d, _) =
+        open(r##"<defs><filter id="b"><feGaussianBlur stdDeviation="10"/></filter></defs><rect width="100" height="200" filter="url(#b)"/>"##);
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains(r#"color-interpolation-filters="linearRGB"/>"#), "{svg}");
+    assert_eq!(effects(&import(&svg).unwrap())[0].params, linear);
+    // Drawn, black beside white meets as resvg (which blurs in either space) draws it.
+    for space in ["linearRGB", "sRGB"] {
+        let source = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10" color-interpolation-filters="{space}"/></filter></defs><g filter="url(#f)"><rect width="100" height="200"/><rect x="100" width="100" height="200" fill="white"/></g></svg>"##
+        );
+        let (ours, theirs) = (render_artboard(&import(&source).unwrap()), resvg_render(&source, 200, 200));
+        for x in [95, 99, 100, 105] {
+            let at = 4 * (100 * 200 + x) as usize;
+            assert!(ours.rgba[at].abs_diff(theirs.rgba[at]) <= 6, "{space} at {x}: {} vs {}", ours.rgba[at], theirs.rgba[at]);
+        }
+    }
+}
+
+/// The colour of pixel (`x`, `y`) of `svg` imported and drawn on white.
+fn drawn_at(svg: &str, x: u32, y: u32) -> [u8; 4] {
+    let img = render_artboard(&import(svg).unwrap());
+    let at = 4 * (y * img.width + x) as usize;
+    [img.rgba[at], img.rgba[at + 1], img.rgba[at + 2], img.rgba[at + 3]]
+}
+
+/// SVG 1.1 §15.5 (https://www.w3.org/TR/SVG11/filters.html#FilterEffectsRegion): a filter's
+/// result is cut at its region, so a blurred square shows only inside it (#5876). A region that
+/// holds the whole blur adds no clip.
+#[test]
+fn a_blur_is_cut_at_its_filter_region() {
+    let doc = |width: u32| {
+        format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="{width}" height="200"><feGaussianBlur stdDeviation="5"/></filter></defs><rect width="200" height="200" fill="red" filter="url(#f)"/></svg>"##
+        )
+    };
+    let red = |p: [u8; 4]| p[0] > 240 && p[1] < 30 && p[2] < 30;
+    assert!(red(drawn_at(&doc(50), 25, 100)));
+    assert_eq!(drawn_at(&doc(50), 100, 100), [255, 255, 255, 255], "outside the region");
+    assert!(red(drawn_at(&doc(200), 100, 100)));
+    // With room for the blur all round, the object is as before: no clip group.
+    let roomy = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200"><feGaussianBlur stdDeviation="2"/></filter></defs><rect x="50" y="50" width="100" height="100" fill="red" filter="url(#f)"/></svg>"##;
+    let d = import(roomy).unwrap();
+    assert_eq!(art(&d).len(), 1);
+    // Our own export sizes the region to the blur: it comes back unclipped.
+    let back = import(&export(&d, &ExportOptions::default())).unwrap();
+    assert_eq!(art(&back).len(), 1);
+}
+
+/// SVG 1.1 §14.4 (https://www.w3.org/TR/SVG11/masking.html#MaskElement): a mask's art counts
+/// only inside the mask's region, in user space or the object's bounding box (#5875).
+#[test]
+fn a_mask_counts_only_inside_its_region() {
+    let doc = |region: &str| {
+        format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><defs><mask id="m" {region}><rect width="200" height="200" fill="white"/></mask></defs><rect width="200" height="200" fill="red" mask="url(#m)"/></svg>"##
+        )
+    };
+    let red = [255, 0, 0, 255];
+    for region in
+        [r#"maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="200""#, r#"maskUnits="objectBoundingBox" x="0" y="0" width="0.25" height="1""#]
+    {
+        assert_eq!(drawn_at(&doc(region), 25, 100), red, "{region}");
+        assert_eq!(drawn_at(&doc(region), 100, 100), [255, 255, 255, 255], "{region}");
+    }
+    let wide = doc(r#"maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200""#);
+    assert_eq!(drawn_at(&wide, 100, 100), red);
+    // The default region (-10% to 120% of the object) holds the art: the mask art is as before.
+    let d = import(&doc("")).unwrap();
+    let mask = art(&d)[0].extras().mask.clone().unwrap();
+    assert!(matches!(mask.art.kind, NodeKind::Path { .. }), "{:?}", mask.art.kind);
 }
 
 /// The one drop shadow of the only object: (dx, dy, blur, colour, opacity %).

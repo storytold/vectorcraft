@@ -77,12 +77,19 @@ fn button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, n: usize, min: usi
 }
 
 /// A Shape Mode button clicked: Alt makes a compound shape of the selection in `mode`; with
-/// members of compound shapes selected they take `mode`; otherwise operation `op` runs.
+/// members of compound shapes selected they take `mode`; otherwise operation `op` runs. With the
+/// Compound Shapes add-on's setting on, a click on the selection (not on members) makes the
+/// compound shape and Alt gives the permanent result.
 fn shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, mode: ShapeMode, members: bool) {
-    if ui.input(|i| i.modifiers.alt) {
+    let alt = ui.input(|i| i.modifiers.alt);
+    if members {
+        if alt {
+            crate::menus::invoke(app, "object.compoundShape.make", json!({"mode": mode.name()}));
+        } else {
+            crate::menus::invoke(app, "object.compoundShape.setMode", json!({"mode": mode.name()}));
+        }
+    } else if alt != app.ui.shape_modes_compound {
         crate::menus::invoke(app, "object.compoundShape.make", json!({"mode": mode.name()}));
-    } else if members {
-        crate::menus::invoke(app, "object.compoundShape.setMode", json!({"mode": mode.name()}));
     } else {
         run(app, op);
     }
@@ -587,5 +594,69 @@ mod tests {
         click_button(&mut app, "Unite");
         assert_eq!(app.last_pathfinder, None);
         assert!(!crate::menus::enabled(&app, "pathfinder.repeat"));
+    }
+
+    /// How many compound shapes the active document holds.
+    fn compound_shapes(app: &VectorcraftApp) -> usize {
+        let mut n = 0;
+        app.session.active().unwrap().doc.walk(|node| n += usize::from(node.is_compound_shape()));
+        n
+    }
+
+    /// Off (the default) a Shape Mode click is the permanent Pathfinder result and Alt-click makes a
+    /// compound shape; with the Compound Shapes add-on's setting on it is the other way round.
+    #[test]
+    fn the_compound_shapes_setting_swaps_click_and_alt_on_the_shape_modes() {
+        // Off: unchanged.
+        let mut app = two_squares();
+        assert!(!app.ui.shape_modes_compound);
+        click_button(&mut app, "Unite");
+        assert_eq!((objects(&app).len(), compound_shapes(&app)), (1, 0), "a click is permanent");
+        let mut app = two_squares();
+        click_button_with_modifiers(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!(compound_shapes(&app), 1, "Alt makes a compound shape");
+
+        // On: a click makes the compound shape, Alt the permanent result.
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        assert!(app.ui.shape_modes_compound);
+        assert_eq!(crate::menus::checked(&app, "window.pathfinder.compoundShapes", &serde_json::Value::Null), Some(true));
+        click_button(&mut app, "Unite");
+        assert_eq!(compound_shapes(&app), 1, "a click makes a compound shape");
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click_button_with_modifiers(&mut app, "Unite", egui::Modifiers::ALT);
+        assert_eq!((objects(&app).len(), compound_shapes(&app)), (1, 0), "Alt is permanent");
+
+        // Toggled off again, and the check mark follows.
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        assert!(!app.ui.shape_modes_compound);
+        assert_eq!(crate::menus::checked(&app, "window.pathfinder.compoundShapes", &serde_json::Value::Null), Some(false));
+    }
+
+    /// Members of a compound shape that are selected take the clicked mode whatever the setting says.
+    #[test]
+    fn selected_members_take_the_mode_with_the_setting_on() {
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        click_button(&mut app, "Unite");
+        let shape = app.session.active().unwrap().selection.objects[0];
+        let front = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().last().unwrap().id;
+        app.run("select.set", json!({"ids": [front.0]})).unwrap();
+        click_button(&mut app, "Minus Front");
+        assert_eq!(compound_shapes(&app), 1, "no second compound shape");
+        assert_eq!(vectorcraft_engine::cmd::selected_member_modes(&app.session), [ShapeMode::Subtract]);
+    }
+
+    /// The setting is kept with the preferences; preferences saved before it read as off.
+    #[test]
+    fn the_compound_shapes_setting_is_saved_and_older_preferences_read_as_off() {
+        let mut app = two_squares();
+        app.run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        let mut saved = serde_json::to_value(&app.ui).unwrap();
+        assert_eq!(saved["shape_modes_compound"], json!(true));
+        assert!(serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap().shape_modes_compound);
+        saved.as_object_mut().unwrap().remove("shape_modes_compound");
+        assert!(!serde_json::from_value::<crate::state::UiState>(saved).unwrap().shape_modes_compound);
     }
 }

@@ -151,18 +151,51 @@ impl Renderer {
         let fonts = vectorcraft_text::FontDb::global().generation();
         if fonts != self.text_fonts {
             self.texts.clear();
+            self.text_ids.clear();
             self.char_strokes.clear();
             self.text_fonts = fonts;
         }
         let key = Arc::as_ptr(a) as usize;
-        if let Some((node, g)) = self.texts.get(&key, self.stamp)
-            && Arc::ptr_eq(node, a)
-        {
+        if let Some((_, g)) = self.texts.get_if(&key, self.stamp, |(node, _)| Arc::ptr_eq(node, a)) {
             return (g.clone(), true);
         }
+        if let Some(&previous) = self.text_ids.get(&a.id)
+            && let Some(g) = self
+                .texts
+                .get_if(&previous, self.stamp, |(node, _)| {
+                    let NodeKind::Text(old) = &node.kind else { return false };
+                    // Shrink Text to Fit searches document-point sizes, so a scale change can
+                    // alter layout. Translation leaves the glyphs in text space unchanged.
+                    if old.xf.as_coeffs()[..4] != t.xf.as_coeffs()[..4] {
+                        return false;
+                    }
+                    let mut comparable = (**old).clone();
+                    comparable.xf = t.xf;
+                    comparable == *t
+                })
+                .map(|(_, g)| g.clone())
+        {
+            // Kept under this node from here on: the next frames find it without comparing.
+            self.texts.remove(&previous);
+            let kept = self.keep_text(a, g.clone());
+            return (g, kept);
+        }
         let g = Arc::new(text_geom(t));
-        let kept = self.texts.insert(key, (a.clone(), g.clone()), g.bytes(), self.stamp);
+        let kept = self.keep_text(a, g.clone());
         (g, kept)
+    }
+
+    /// Keep glyph geometry `g` of text node `a`, as the latest of its id. Whether it was kept.
+    fn keep_text(&mut self, a: &Arc<Node>, g: Arc<TextGeom>) -> bool {
+        let key = Arc::as_ptr(a) as usize;
+        let bytes = g.bytes();
+        let kept = self.texts.insert(key, (a.clone(), g), bytes, self.stamp);
+        if kept {
+            self.text_ids.insert(a.id, key);
+        } else {
+            self.text_ids.remove(&a.id);
+        }
+        kept
     }
 
     /// Draw type `n` (`t`, laid out in `g`). The outlines of its character strokes are cached
@@ -304,13 +337,14 @@ impl Renderer {
     /// decoded once and kept with the images' pixels.
     fn draw_glyph_image(&mut self, ctx: &mut RenderContext, f: &Frame, image: &vectorcraft_text::GlyphImage, xf: Affine) {
         let Some((key, pm)) = blob_pixmap(&image.blob, true) else { return };
-        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
-        let (key, pm) = match f.plates {
-            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true),
-            None => (key, pm),
-        };
+        // Shrunk before it is inked, as images are (`draw_image_in`).
         let unit = f.view * xf * Affine::scale_non_uniform(image.width as f64, image.height as f64);
-        let pm = image_mip(&key, pm, unit);
+        let (key, pm) = image_mip(key, pm, unit);
+        let (key, pm) = ink::ink_image(&key, &pm, f.ink, Some(&image.blob), true);
+        let pm = match f.plates {
+            Some(lut) => proof::plate_image(lut, &key, &pm, Some(&image.blob), true).1,
+            None => pm,
+        };
         let sx = image.width as f64 / pm.width().max(1) as f64;
         let sy = image.height as f64 / pm.height().max(1) as f64;
         let quality = if f.opts.smooth_images { peniko::ImageQuality::Medium } else { peniko::ImageQuality::Low };

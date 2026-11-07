@@ -131,8 +131,9 @@ impl Session {
         if self.tool.id() == id {
             return Ok(());
         }
-        // Sampling type keeps its highlighted characters as the target. Capture before the
-        // Type tool deactivates (which commits typing and clears its editing state).
+        // Sampling type keeps its highlighted characters as the target, and a whole story that
+        // Select All selected. Capture before the Type tool deactivates (which commits typing and
+        // clears its editing state).
         let is_type = |id: &str| matches!(id, "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath");
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
@@ -154,6 +155,8 @@ impl Session {
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Cmd alone lends Direct Selection the Selection tool, whose bounding box transforms the
+    /// object (#3901; <https://community.adobe.com/t5/illustrator-discussions/handles-disappar-on-shape-with-direct-selection-tool/m-p/14848662>).
     /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
@@ -161,8 +164,8 @@ impl Session {
         if matches!(id, "hand" | "zoom" | "rotateView") {
             return None;
         }
-        if id == "directSelection" && mods.cmd && mods.alt {
-            return Some("groupSelection");
+        if id == "directSelection" && mods.cmd {
+            return Some(if mods.alt { "groupSelection" } else { "selection" });
         }
         if id == "perspectiveSelection" && mods.cmd && mods.alt {
             return None;
@@ -171,6 +174,16 @@ impl Session {
             return None;
         }
         Some(self.last_selection_tool.unwrap_or(if edits_anchors(id) { "directSelection" } else { "selection" }))
+    }
+
+    /// The selection tool a press with `mods` would borrow from the active tool
+    /// ([`Self::lend_selection_tool`]), as [`Self::cursor`] shows it: the canvas also shows what
+    /// that tool shows (Direct Selection with Cmd held shows the bounding box).
+    pub fn lent_tool_id(&self, mods: &Mods) -> Option<&'static str> {
+        if !mods.cmd || self.lender.is_some() {
+            return None;
+        }
+        self.lent_tool(self.tool.id(), mods)
     }
 
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
@@ -867,9 +880,22 @@ impl Session {
 
     /// End the Type tool's text editing before a command saves the art of an editing layer (pattern
     /// editing's Done, Stop Editing Opacity Mask): point type its click placed that is still empty is
-    /// discarded first, so it is not saved into the pattern tile or the mask.
+    /// discarded first, so it is not saved into the pattern tile or the mask. A selection tool that a
+    /// Cmd press lent is given back first, so the Type tool behind it ends its edit too; a drag of the
+    /// lent tool is kept as its own step, as its release would keep it.
     pub(crate) fn end_text_edit(&mut self) {
-        if self.in_tool_actions || !self.tool.wants_text() {
+        if self.in_tool_actions {
+            return;
+        }
+        if self.lender.is_some() {
+            if let Err(e) = self.apply_actions(vec![Action::Commit]) {
+                log::warn!("keeping the lent tool's drag before ending the text edit: {e}");
+            }
+            if let Err(e) = self.give_back_tool(self.last_view) {
+                log::warn!("giving back the lent tool before ending the text edit: {e}");
+            }
+        }
+        if !self.tool.wants_text() {
             return;
         }
         let acts = self.with_tool_cx(self.last_view, |t, cx| t.deactivate(cx));

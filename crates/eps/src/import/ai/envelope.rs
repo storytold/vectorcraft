@@ -14,7 +14,9 @@
 //! then its `/ArtDictionary`: Envelope Options as a bit word (`AIDeformOptionsKey`), Fidelity
 //! (`AIDeformFidelityKey`), Edit Contents (`AIDeformEditModeKey`), a warp's style (`DeformStyle`,
 //! numbered as Effect › Warp lists them), bend and distortions (`DeformValue`, `DeformHoriz`,
-//! `DeformVert`, fractions) and orientation (`Rotate`), the contents (`X=` … `X+`, then
+//! `DeformVert`, fractions) and orientation (`Rotate`), the size of the contents, read as the size
+//! of the box they map from with Distort Appearance on when it matches their bounds with strokes
+//! (`AIDeformArtWidthKey`, `AIDeformArtHeightKey`), the contents (`X=` … `X+`, then
 //! `(AIDeformArtKey)`) and the kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object). Then the
 //! distorted art on plain lines, and the plugin's `XP`. While the contents are edited, the group
 //! holds the contents and the dictionary the mesh. A top object's outline is the edge of its
@@ -24,8 +26,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use kurbo::{BezPath, Point, Rect, Vec2};
-use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity};
+use kurbo::{Affine, BezPath, Point, Rect, Vec2};
+use vectorcraft_doc::live::{
+    EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
+    envelope_stroke_margin,
+};
 use vectorcraft_doc::{Document, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
 
@@ -42,6 +47,9 @@ pub(super) const MAX_PENDING: usize = 64;
 pub(super) const MAX_CHECKED: usize = 256;
 /// The most rows or columns of a mesh read (Make with Mesh's own limit).
 const MAX_GRID: u32 = 50;
+/// How far, in points over width and height together, a saved size may lie from the contents'
+/// bounds with their strokes and still count as that box.
+const SAVED_SIZE_SLACK: f64 = 0.5;
 /// The bits of the options word that are read: Distort Appearance, Distort Pattern Fills, Distort
 /// Linear Gradients, Anti-Alias (set: off) and Preserve Shape Using (set: Clipping Mask).
 const KNOWN_BITS: i64 = 0b111 | 1 << 16 | 1 << 17;
@@ -88,8 +96,27 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
         distort_appearance: bit(0),
         distort_pattern_fills: bit(1),
         distort_linear_gradients: bit(2),
+        bounds_margin: [0.0; 4],
     };
     Some((options, fidelity))
+}
+
+/// The margins of `content` when the size the file saves for it (`AIDeformArtWidthKey`,
+/// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
+/// nearer them than its geometric bounds. None without that size, or for contents with no width or
+/// no height.
+fn saved_margin(o: &Obj, content: &[Arc<Node>]) -> Option<[f32; 4]> {
+    let saved = |key: &str| match o.nums(key).as_slice() {
+        [v] if v.is_finite() => Some(*v),
+        _ => None,
+    };
+    let (w, h) = (saved("AIDeformArtWidthKey")?, saved("AIDeformArtHeightKey")?);
+    let (stroked, plain) = envelope_content_boxes(content, Affine::IDENTITY)?;
+    let off = |r: Rect| (r.width() - w).abs() + (r.height() - h).abs();
+    if off(stroked) > SAVED_SIZE_SLACK || off(stroked) >= off(plain) {
+        return None;
+    }
+    envelope_stroke_margin(stroked, plain)
 }
 
 /// A warp: its style, bend, distortions and orientation.
@@ -232,7 +259,7 @@ fn unwrapped(mut nodes: Vec<Node>) -> Vec<Arc<Node>> {
 /// in its `AIDeformArtKey` block (`inner`); `None` where they don't make one.
 pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<NodeKind> {
     let editing = switch(o, "AIDeformEditModeKey")?;
-    let (options, fidelity) = options(o)?;
+    let (mut options, fidelity) = options(o)?;
     let before = before?;
     // While the contents are edited, they are the group before the dictionary and the mesh is in it.
     let (content, shape): (Vec<Arc<Node>>, Option<&GradientMesh>) = if editing {
@@ -248,6 +275,9 @@ pub(super) fn live(o: &Obj, before: Option<Node>, inner: Vec<Node>) -> Option<No
     };
     if content.is_empty() {
         return None;
+    }
+    if options.distort_appearance {
+        options.bounds_margin = saved_margin(o, &content).unwrap_or_default();
     }
     let kind = match whole(o, "AIDeformStyle")?? {
         1 => warp(o)?,

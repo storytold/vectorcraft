@@ -668,7 +668,7 @@ impl Rules<'_> {
                 RasterFx::InnerGlow { opacity, blur, color, center: false, .. } if !text => {
                     shadows.push(format!("inset 0 0 {} {}", self.len(blur), color_css(&color, opacity)))
                 }
-                RasterFx::GaussianBlur { radius } => filter = Some(format!("blur({})", self.len(radius / 2.0))),
+                RasterFx::GaussianBlur { radius, .. } => filter = Some(format!("blur({})", self.len(radius / 2.0))),
                 RasterFx::InnerGlow { .. } | RasterFx::Feather { .. } => art.unsupported("inner glows or feathering"),
                 RasterFx::Pixel(_) | RasterFx::Rasterize(_) => art.unsupported("pixel effects"),
             }

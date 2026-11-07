@@ -3,6 +3,7 @@ use kurbo::{Affine, Shape};
 use vectorcraft_doc::{CharStyle, Justify, TextKind, TextRun};
 use vectorcraft_geom::PathData;
 
+mod alternates;
 mod axes;
 mod bidi;
 mod bitmaps;
@@ -19,6 +20,7 @@ mod ligature_carets;
 mod path_joins;
 mod ruby;
 mod scripts;
+mod shape_plans;
 mod snap;
 mod svg_glyphs;
 mod sysfonts;

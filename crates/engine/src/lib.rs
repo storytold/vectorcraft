@@ -157,6 +157,10 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
+    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
+    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
+    /// history step takes the colors the batch finally left.
+    pub(crate) batch_paint_docs: Vec<u64>,
     /// While [`Session::place_read`] runs `file.place`: the file read for it, which the command
     /// places instead of reading the file; `None` otherwise.
     pub(crate) place_hand_off: Option<cmd::place::PlaceRead>,
