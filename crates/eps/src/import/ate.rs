@@ -359,6 +359,8 @@ struct Para {
     /// the Tabs panel's buttons), sorted. A stop that can't be read is left out, and so are those
     /// past the first [`MAX_TABS`]. Leaders aren't read.
     tabs: Vec<TabStop>,
+    /// The paragraph has more than [`MAX_TABS`] stops: those past them were left out.
+    tabs_truncated: bool,
 }
 
 /// Most tab stops read for one paragraph.
@@ -605,7 +607,7 @@ impl Texts {
         let mut budget = MAX_STORY_TABS;
         let mut tabs_left_out = false;
         for (_, p) in &mut paras {
-            tabs_left_out |= spend_tabs(&mut p.tabs, &mut budget);
+            tabs_left_out |= p.tabs_truncated | spend_tabs(&mut p.tabs, &mut budget);
         }
         Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical, tabs_left_out: tabs_left_out.into() })
     }
@@ -651,6 +653,7 @@ impl Texts {
                     },
                 }
             },
+            tabs_truncated: pick("30").and_then(|t| t.get("0")).map(Val::list).is_some_and(|list| list.len() > MAX_TABS),
             tabs: {
                 let list = pick("30").and_then(|t| t.get("0")).map(Val::list).unwrap_or_default();
                 let mut tabs: Vec<TabStop> = list
@@ -1278,6 +1281,15 @@ mod tests {
             tabs(b"/30 << /0 [ << /0 10 /1 1 >> << /0 20 /1 3 >> << /0 30 >> ] >>", 0.5),
             [(5.0, TabAlign::Center), (10.0, TabAlign::Decimal), (15.0, TabAlign::Left)]
         );
+        // Past MAX_TABS stops, the rest are left out, and the paragraph says so (the story's warning).
+        let many = |n: usize| {
+            let stops: String = (0..n).map(|i| format!("<< /0 {i} >> ")).collect();
+            texts.para(Some(&read(format!("/5 << /30 << /0 [ {stops}] >> >>").as_bytes()).unwrap()))
+        };
+        let p = many(MAX_TABS + 6);
+        assert!(p.tabs_truncated && p.tabs.len() == MAX_TABS);
+        let p = many(MAX_TABS);
+        assert!(!p.tabs_truncated && p.tabs.len() == MAX_TABS);
         // Unreadable: a position out of range or not a number, an unknown alignment.
         assert_eq!(
             tabs(b"/30 << /0 [ << /0 -1 >> << /0 1e9 >> << /0 /nil >> << /0 5 /1 7 >> << /0 6 /1 /x >> << /0 7 /1 2 >> ] >>", 1.0),
