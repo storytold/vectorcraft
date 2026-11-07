@@ -502,7 +502,7 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
     let before = boards.clone();
     let names: Vec<String> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
     ui.add_enabled_ui(d.str("select") != "full", |ui| {
-        tiles(ui, "efs-artboards", names.len(), list, |ui, i, r| {
+        tiles(ui, "efs-artboards", names.len(), list, None, |ui, i, r| {
             match artboard_thumb(app, ui.ctx(), i) {
                 Some(tex) => {
                     let sz = tex.size_vec2();
@@ -517,6 +517,7 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
             let name = names.get(i).cloned().unwrap_or_default();
             (format!("{}  {name}", i + 1), name, boards.get(i).copied().unwrap_or(false))
         })
+        .toggled
         .into_iter()
         .for_each(|i| {
             if let Some(b) = boards.get_mut(i) {
@@ -531,18 +532,30 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
     }
 }
 
+/// What a click on the [`tiles`] did.
+#[derive(Default)]
+struct Tiles {
+    /// The thumbnails whose checkbox (or picture) was clicked.
+    toggled: Vec<usize>,
+    /// The thumbnail whose name was double-clicked (only the Assets tab renames).
+    rename: Option<usize>,
+    /// The name field of the thumbnail being renamed.
+    field: Option<egui::Response>,
+}
+
 /// `count` thumbnails in a grid (or, with `list`, a list) that scrolls: `paint` draws thumbnail `i`
-/// into its rect and gives its caption, its checkbox's name and whether it is checked → the
-/// thumbnails whose checkbox (or picture) was clicked.
+/// into its rect and gives its caption, its checkbox's name and whether it is checked. With
+/// `edit`, thumbnail `.0`'s name is a text field (id `.1`) holding `.2`.
 fn tiles(
     ui: &mut egui::Ui,
     id: &str,
     count: usize,
     list: bool,
+    mut edit: Option<(usize, egui::Id, &mut String)>,
     mut paint: impl FnMut(&mut egui::Ui, usize, egui::Rect) -> (String, String, bool),
-) -> Vec<usize> {
+) -> Tiles {
     let t = Tokens::get(ui.ctx());
-    let mut toggled = vec![];
+    let mut out = Tiles::default();
     let side = if list { 40.0 } else { 84.0 };
     let width = ui.available_width();
     let columns = if list { 1 } else { ((width + 10.0) / (side + 10.0)).floor().max(1.0) as usize };
@@ -558,21 +571,40 @@ fn tiles(
                     let stroke = if checked { egui::Stroke::new(2.0, t.accent) } else { egui::Stroke::new(1.0, t.divider) };
                     ui.painter().rect_stroke(pic, 2.0, stroke, egui::StrokeKind::Inside);
                     let label_at = if list { egui::pos2(pic.right() + 8.0, pic.center().y) } else { egui::pos2(pic.left(), pic.bottom() + 9.0) };
-                    let galley =
-                        ui.painter().layout(caption, egui::FontId::proportional(11.0), t.text, if list { cell.x - side - 12.0 } else { side });
-                    ui.painter().galley(egui::pos2(label_at.x, label_at.y - galley.size().y / 2.0), galley, t.text);
+                    let name_rect = egui::Rect::from_min_max(egui::pos2(label_at.x - 2.0, label_at.y - 9.0), egui::pos2(r.right(), label_at.y + 9.0));
+                    match edit.as_mut() {
+                        Some((at, field, buf)) if *at == i => {
+                            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
+                            out.field = Some(child.add(
+                                egui::TextEdit::singleline(*buf).id(*field).desired_width(name_rect.width()).font(egui::FontId::proportional(11.0)),
+                            ));
+                        }
+                        _ => {
+                            let galley = ui.painter().layout(
+                                caption,
+                                egui::FontId::proportional(11.0),
+                                t.text,
+                                if list { cell.x - side - 12.0 } else { side },
+                            );
+                            ui.painter().galley(egui::pos2(label_at.x, label_at.y - galley.size().y / 2.0), galley, t.text);
+                        }
+                    }
+                    // As Illustrator's: a double-click on the name renames the item.
+                    if resp.double_clicked() && resp.interact_pointer_pos().is_some_and(|p| name_rect.contains(p)) {
+                        out.rename = Some(i);
+                    }
                     // The checkbox sits on the thumbnail's lower left corner, as Illustrator's.
                     let bx = egui::Rect::from_min_size(egui::pos2(pic.left() + 4.0, pic.bottom() - 18.0), egui::vec2(14.0, 14.0));
                     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bx));
                     if widgets::check_box(&mut child, &name, checked, true) || resp.clicked() {
-                        toggled.push(i);
+                        out.toggled.push(i);
                     }
                 }
             });
             ui.add_space(6.0);
         }
     });
-    toggled
+    out
 }
 
 /// The checked assets that are still in the document, in panel order.
@@ -581,20 +613,47 @@ fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
     app.session.active().map(|st| st.doc.assets.iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
 }
 
-/// The Assets tab: each asset's thumbnail with its checkbox and name, in a grid or a list.
-fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
-    let Some(st) = app.session.active() else { return };
+/// The asset being renamed on the Assets tab and its name as typed (egui temp data).
+fn rename_id() -> egui::Id {
+    egui::Id::unique("efs-asset-rename")
+}
+
+/// Whether an asset's name is being typed on the Assets tab: Escape then cancels the name, not
+/// the dialog.
+pub(crate) fn renaming(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).is_some()
+}
+
+/// The Assets tab: each asset's thumbnail with its checkbox and name, in a grid or a list; a
+/// double-click on a name renames the asset (`assets.rename`, the file names it exports under).
+fn assets(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
+    let renamed = asset_tiles(app, ui, d, list);
+    if let Some((id, name)) = renamed
+        && let Err(e) = app.run("assets.rename", json!({ "asset": id, "name": name }))
+    {
+        app.status(e);
+    }
+}
+
+/// [`assets`]' thumbnails → the asset renamed (and its new name).
+fn asset_tiles(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) -> Option<(u64, String)> {
+    let st = app.session.active()?;
     if st.doc.assets.is_empty() {
         ui.add_space(24.0);
         widgets::dim_label(ui, tl!("No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel."));
-        return;
+        return None;
     }
+    let field = rename_id().with("field");
+    let editing: Option<(u64, String)> = ui.data(|m| m.get_temp(rename_id()));
+    let at = editing.as_ref().and_then(|(id, _)| st.doc.assets.iter().position(|a| a.id == *id));
+    let mut buf = editing.as_ref().map(|(_, b)| b.clone()).unwrap_or_default();
     let mut on = checked_assets(app, d);
     let before = on.clone();
     // Asked for until its row is in view: the dialog's first frame only measures it.
     let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| st.doc.assets.iter().any(|a| a.id == *id));
     let mut in_view = scroll_to.is_none();
-    let clicked = tiles(ui, "efs-assets", st.doc.assets.len(), list, |ui, i, r| {
+    let edit = at.map(|i| (i, field, &mut buf));
+    let tiles = tiles(ui, "efs-assets", st.doc.assets.len(), list, edit, |ui, i, r| {
         let Some(a) = st.doc.assets.get(i) else { return (String::new(), String::new(), false) };
         crate::panels::asset_export::paint_thumb(ui, st, a, r);
         if scroll_to == Some(a.id) {
@@ -606,7 +665,7 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
         }
         (a.name.clone(), a.name.clone(), on.contains(&a.id))
     });
-    for i in clicked {
+    for i in tiles.toggled {
         if let Some(a) = st.doc.assets.get(i) {
             if on.contains(&a.id) {
                 on.retain(|id| *id != a.id);
@@ -621,6 +680,35 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     if on != before {
         d.fields.insert("assets".into(), json!(on));
     }
+    let mut renamed = None;
+    match (at, editing, tiles.field) {
+        (Some(i), Some((id, _)), Some(te)) => {
+            let name = st.doc.assets.get(i).map(|a| a.name.clone()).unwrap_or_default();
+            if te.lost_focus() {
+                ui.data_mut(|m| m.remove::<(u64, String)>(rename_id()));
+                // Enter (or a click elsewhere) commits the name, and doesn't export too.
+                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    widgets::reject_dialog_commit(ui.ctx());
+                }
+                let typed = buf.trim();
+                if ui.input(|i| !i.key_pressed(egui::Key::Escape)) && !typed.is_empty() && typed != name {
+                    renamed = Some((id, typed.to_string()));
+                }
+            } else {
+                te.request_focus();
+                ui.data_mut(|m| m.insert_temp(rename_id(), (id, buf)));
+            }
+        }
+        // The asset is gone: nothing to rename.
+        (None, Some(_), _) => ui.data_mut(|m| m.remove::<(u64, String)>(rename_id())),
+        _ => {}
+    }
+    if let Some(i) = tiles.rename
+        && let Some(a) = st.doc.assets.get(i)
+    {
+        ui.data_mut(|m| m.insert_temp(rename_id(), (a.id, a.name.clone())));
+    }
+    renamed
 }
 
 /// Export to: the folder (typed or picked), Open Location after Export, and Create Sub-folders,

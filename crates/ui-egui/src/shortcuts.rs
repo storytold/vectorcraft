@@ -208,9 +208,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if crate::shortcut_editor::is_recording(app) {
             return;
         }
-        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
-        // leaves the dialog open.
-        let popup = app.ui.dialog.as_ref().is_some_and(|d| egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d));
+        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it), or
+        // cancels an asset name being typed in Export for Screens, and leaves the dialog open.
+        let popup =
+            app.ui.dialog.as_ref().is_some_and(|d| {
+                egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d) || crate::dialogs::typing_asset_name(ctx)
+            });
         if !popup && pressed_anew(ctx, Key::Escape) {
             crate::dialogs::cancel(app);
             app.ui.palette_open = false;

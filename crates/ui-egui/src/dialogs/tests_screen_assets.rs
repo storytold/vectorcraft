@@ -181,3 +181,93 @@ fn the_assets_tab_scrolls_to_the_new_asset() {
     assert!(shown, "{name} is clipped out of the list");
     assert_eq!(field(&app, "__scrollTo"), Value::Null, "scrolled once");
 }
+
+/// The texts a frame drew and where.
+type Texts = Vec<(String, egui::Rect)>;
+
+/// One frame of the dialog layer (keys first, as the app runs them) at `time` → its texts and
+/// where they are.
+fn frame_at(ctx: &egui::Context, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) -> Texts {
+    let input = egui::RawInput { time: Some(time), events, ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| {
+        crate::shortcuts::handle(app, ui.ctx());
+        super::show(app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+fn press(at: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+fn key(key: egui::Key) -> egui::Event {
+    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }
+}
+
+/// As Illustrator's: a double-click on an asset's name on the Assets tab opens it for typing;
+/// Enter renames the asset (the name its files export under) and doesn't export, Escape keeps the
+/// name and the dialog.
+#[test]
+fn double_clicking_an_asset_name_on_the_assets_tab_renames_it() {
+    let (mut app, _, _) = app(false);
+    app.run("file.exportSelection", json!({"multiple": true})).unwrap();
+    // Were Enter to export, it would write here rather than to the user's folder.
+    let dir = std::env::temp_dir().join(format!("vc-efs-rename-{}", std::process::id()));
+    set(&mut app, "folder", json!(dir.to_string_lossy().replace('\\', "/")));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut t = 0.0;
+    // Frames 0.05 s apart; a double-click is two clicks in a row.
+    let mut step = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        t += 0.05;
+        frame_at(&ctx, app, t, events)
+    };
+    let double_click = |app: &mut VectorcraftApp, step: &mut dyn FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> Texts, at| {
+        for _ in 0..10 {
+            step(app, vec![egui::Event::PointerMoved(at)]);
+        }
+        step(app, vec![press(at, true), press(at, false)]);
+        step(app, vec![press(at, true), press(at, false)]);
+    };
+    let texts = step(&mut app, vec![]);
+    let texts = if texts.iter().any(|(s, _)| s == "Asset 2") { texts } else { step(&mut app, vec![]) };
+    let name = texts.iter().find(|(s, _)| s == "Asset 2").expect("Asset 2 is drawn").1.center();
+    let checked = field(&app, "assets");
+    double_click(&mut app, &mut step, name);
+    assert!(export_for_screens::renaming(&ctx), "the double-click opens the name");
+    assert_eq!(field(&app, "assets"), checked, "and leaves the checkboxes as they were");
+    step(&mut app, vec![]);
+    step(
+        &mut app,
+        vec![
+            egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND },
+            egui::Event::Text("Logo".into()),
+        ],
+    );
+    step(&mut app, vec![key(egui::Key::Enter)]);
+    let names: Vec<Value> = assets(&mut app).iter().map(|a| a["name"].clone()).collect();
+    assert_eq!(names, [json!("Asset 1"), json!("Logo")]);
+    assert!(!export_for_screens::renaming(&ctx));
+    assert_eq!(kind(&app), Some(export_for_screens::KIND), "Enter renamed and didn't export");
+    // Escape gives up the typed name and leaves the dialog open.
+    let texts = step(&mut app, vec![]);
+    let name = texts.iter().find(|(s, _)| s == "Logo").expect("Logo is drawn").1.center();
+    double_click(&mut app, &mut step, name);
+    step(&mut app, vec![]);
+    step(&mut app, vec![egui::Event::Text("Mark".into())]);
+    step(&mut app, vec![key(egui::Key::Escape)]);
+    assert_eq!(assets(&mut app)[1]["name"], "Logo");
+    assert!(!export_for_screens::renaming(&ctx));
+    assert_eq!(kind(&app), Some(export_for_screens::KIND), "Escape cancelled the name, not the dialog");
+    assert!(!dir.exists(), "nothing was exported");
+}
