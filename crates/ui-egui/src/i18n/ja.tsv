@@ -4915,6 +4915,8 @@ effect	Horizontal	水平
 effect	Vertical	垂直
 	Edge	エッジ
 	System Title Bar	システムのタイトルバー
+	VectorCraft Title Bar on Every Desktop	すべてのデスクトップで VectorCraft のタイトルバー
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	環境変数 VECTORCRAFT_TITLEBAR が設定されている間は、この変数でタイトルバーが決まります。
 	Value Axis	数値軸
 	On Left Side	左側
 	On Right Side	右側

@@ -4042,6 +4042,8 @@ mark-style	Japanese	Japán
 	Symbols	Szimbólumok
 	System Layout	Rendszerszintű elrendezés
 	System Title Bar	Rendszer címsora
+	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat

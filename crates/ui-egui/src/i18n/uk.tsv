@@ -4855,6 +4855,8 @@ axis	Both	Обидві
 	Bottom Right	Знизу праворуч
 	Edge	Край
 	System Title Bar	Системний рядок заголовка
+	VectorCraft Title Bar on Every Desktop	Рядок заголовка VectorCraft на будь-якій стільниці
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Поки змінну середовища VECTORCRAFT_TITLEBAR задано, рядок заголовка вибирає вона.
 	Value Axis	Вісь значень
 	On Left Side	Ліворуч
 	On Right Side	Праворуч

@@ -4981,6 +4981,8 @@ axis	Both	兩者
 effect	Soft	柔和
 	Edge	邊緣
 	System Title Bar	系統標題列
+	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 標題列
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	設定了環境變數 VECTORCRAFT_TITLEBAR 時，由它選擇標題列。
 	Value Axis	數值軸
 	On Left Side	左側
 	On Right Side	右側

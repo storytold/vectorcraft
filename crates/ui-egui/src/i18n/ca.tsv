@@ -4235,6 +4235,8 @@ digits	Malayalam	Malaiàlam
 	Syntax newer than ES3	Sintaxi més nova que ES3
 	System Layout	Disposició del sistema
 	System Title Bar	Barra de títol del sistema
+	VectorCraft Title Bar on Every Desktop	Barra de títol de VectorCraft a tots els escriptoris
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mentre està definida, la variable d’entorn VECTORCRAFT_TITLEBAR determina la barra de títol.
 	Tab	Tabulació
 	Tab Stops	Aturades de tabulació
 	Table	Taula
