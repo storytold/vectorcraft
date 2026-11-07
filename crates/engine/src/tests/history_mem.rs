@@ -76,6 +76,30 @@ fn within_the_budget_the_step_limit_still_counts() {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
+fn the_default_budget_is_a_quarter_of_installed_memory() {
+    assert_eq!(history_budget_for(Some(16 << 30)), 4 << 30);
+    assert_eq!(history_budget_for(Some(64 << 30)), 16 << 30, "no fixed ceiling");
+    // On Linux `physical_memory` returns a cgroup memory limit lower than the installed memory in
+    // its place (the `cgroup_limit_*` tests in vectorcraft-render), so a 2 GiB limit on a 64 GiB
+    // machine gives the budget of 2 GiB installed.
+    assert_eq!(history_budget_for(Some(2 << 30)), 512 << 20, "2 GiB, or a 2 GiB cgroup limit");
+    assert_eq!(history_budget_for(Some(128 << 20)), 64 << 20, "at least 64 MiB");
+    assert_eq!(history_budget_for(Some(1)), 64 << 20, "at least 64 MiB");
+    assert_eq!(history_budget_for(Some(0)), 1 << 30, "a reading of 0 is the 1 GiB fallback");
+    assert_eq!(history_budget_for(None), 1 << 30, "no reading is the 1 GiB fallback");
+}
+
+#[test]
+#[cfg(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd"))]
+fn the_default_budget_follows_the_installed_memory_read() {
+    // Where the memory can't be read (a sandbox that hides it), the budget is the 1 GiB fallback.
+    let memory = vectorcraft_render::physical_memory();
+    assert_eq!(default_history_budget(), history_budget_for(memory), "{memory:?}");
+    assert_eq!(History::default().byte_budget, default_history_budget());
+}
+
+#[test]
 fn undo_steps_keep_no_lookup_tables() {
     let mut s = session_with_rects(200);
     for _ in 0..5 {
