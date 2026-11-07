@@ -248,9 +248,11 @@ fn cidfonts_with_their_own_matrix_move_an_em_a_character() {
 /// it undoes the program's own changes.
 #[test]
 fn restore_undoes_the_matrices_start_data_sets() {
-    let font = String::from_utf8(cid_font(true))
-        .unwrap()
-        .replacen("4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 2 dict dup begin /lenIV -1 def end def currentdict end", "fd0", 1);
+    let font = String::from_utf8(cid_font(true)).unwrap().replacen(
+        "4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 2 dict dup begin /lenIV -1 def end def currentdict end",
+        "fd0",
+        1,
+    );
     check(&format!(
         "/fd0 4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 2 dict dup begin /lenIV -1 def end def currentdict end def\n\
          /sv save def\n{font}\nsv restore fd0 /FontMatrix get 0 get 0.001 sub abs 1e-9 lt"
@@ -272,9 +274,7 @@ fn notdef_mappings_added_later_are_read() {
 /// A CMap built of many small blocks pays for copying its mappings at each block.
 #[test]
 fn many_small_cmap_blocks_run_out_of_the_budget() {
-    super::tests::runs_out_of_budget(
-        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap { 1 begincidchar <41> 1 endcidchar } loop",
-    );
+    super::tests::runs_out_of_budget("/CIDInit /ProcSet findresource begin 12 dict begin begincmap { 1 begincidchar <41> 1 endcidchar } loop");
 }
 
 /// A CIDFont's subroutines are decrypted once, not again for every glyph: measuring a glyph of
@@ -283,7 +283,12 @@ fn many_small_cmap_blocks_run_out_of_the_budget() {
 fn cidfont_subroutines_are_read_once() {
     let font = String::from_utf8(cid_font(true)).unwrap();
     let at = font.find("/Subrs [<").unwrap() + "/Subrs [".len();
-    let font = format!("{}{} 0 1 9998 {{ pop 1000 string }} for{}", &font[..at], &font[at..font[at..].find(']').unwrap() + at], &font[font[at..].find(']').unwrap() + at..]);
+    let font = format!(
+        "{}{} 0 1 9998 {{ pop 1000 string }} for{}",
+        &font[..at],
+        &font[at..font[at..].find(']').unwrap() + at],
+        &font[font[at..].find(']').unwrap() + at..]
+    );
     super::tests::runs_out_of_budget(&format!("{font}{CMAP} /TestFont 50 selectfont {{ (B) stringwidth pop pop }} loop"));
 }
 
@@ -303,7 +308,8 @@ fn start_data_reads_more_than_4_mb() {
     font.extend(data);
     font.push(b'\n');
     let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
-    let r = import(&[head, font, CMAP.as_bytes().to_vec(), b"/TestFont 50 selectfont 10 20 moveto (AB) show\nshowpage\n%%EOF\n".to_vec()].concat()).unwrap();
+    let r = import(&[head, font, CMAP.as_bytes().to_vec(), b"/TestFont 50 selectfont 10 20 moveto (AB) show\nshowpage\n%%EOF\n".to_vec()].concat())
+        .unwrap();
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
     assert_eq!(paths(&r).len(), 2);
 }

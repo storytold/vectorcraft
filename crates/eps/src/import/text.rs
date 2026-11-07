@@ -491,10 +491,19 @@ impl Interp<'_> {
         .map(|c| c.filter(|c| !c.is_control()))
         .collect();
         let text: String = chars.iter().flatten().collect();
-        let (mut t, layout, _) = self.set_text(&text, at)?;
+        let (mut t, mut layout, _) = self.set_text(&text, at)?;
         let size = t.runs.first().map_or(1.0, |r| r.style.size);
-        // Each character's advance in the layout (text space).
         let starts: Vec<usize> = text.char_indices().map(|(b, _)| b).collect();
+        // The file places each character's glyph: where the layout joins characters in a
+        // ligature, the type is set without ligatures, so each character has its own advance.
+        if starts.iter().any(|b| !layout.glyphs.iter().any(|g| g.byte == *b)) {
+            for run in &mut t.runs {
+                run.style.features.push("-liga".into());
+            }
+            layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            t.cached_bounds = Some(layout.bounds);
+        }
+        // Each character's advance in the layout (text space).
         let mut natural = vec![0.0; starts.len()];
         for g in &layout.glyphs {
             if let Some(n) = starts.binary_search(&g.byte).ok().and_then(|k| natural.get_mut(k)) {
@@ -515,6 +524,9 @@ impl Interp<'_> {
             k += usize::from(c.is_some());
             let d = spacing.advance(i, i64::from(code), em(own));
             let e = inv * Point::new(d.x, d.y) - inv * Point::ZERO;
+            if ![d.x, d.y, e.x * size, e.y * size].iter().all(|v| v.is_finite()) {
+                return ps_err("undefinedresult", "a show");
+            }
             moves.push((d, e.x * size, e.y * size));
         }
         let total: Vec2 = moves.iter().map(|m| m.0).sum();
@@ -605,10 +617,11 @@ impl Interp<'_> {
     /// Glyph outline `outline` (glyph space) under font matrix `fm` at user point `at`: filled, or
     /// added to the current path (`charpath`).
     fn type42_paint(&mut self, mut outline: vectorcraft_geom::BezPath, at: Point, fm: Affine, paint: Draw) -> Res {
+        // Measuring a glyph reads its outline too, so `stringwidth` in a loop pays for it.
+        self.spend((outline.elements().len() as u64).saturating_add(16))?;
         if paint == Draw::No {
             return Ok(());
         }
-        self.spend((outline.elements().len() as u64).saturating_add(16))?;
         outline.apply_affine(self.xf() * Affine::translate(at.to_vec2()) * fm);
         if paint == Draw::Fill {
             return self.fill_path(outline, vectorcraft_geom::FillRule::NonZero);
@@ -699,6 +712,8 @@ impl Spacing {
 /// (over the descendant's own) and whether it is set vertically (`WMode` 1).
 struct Mapped {
     font: DictRef,
+    /// The byte that picked the descendant (the font number).
+    pick: u8,
     code: u8,
     cid: Option<(u32, Option<u32>)>,
     outer: Affine,
@@ -755,12 +770,12 @@ impl Interp<'_> {
         if map != Some(2.0) {
             return Ok(None);
         }
-        let (Some(encoding), Some(fonts)) = (
-            f.get(&Key::name("Encoding")).and_then(|e| e.items().map(|i| i.to_vec())),
-            f.get(&Key::name("FDepVector")).and_then(|e| e.items().map(|i| i.to_vec())),
-        ) else {
+        let (Some(encoding), Some(fonts)) =
+            (f.get(&Key::name("Encoding")).and_then(|e| e.items().cloned()), f.get(&Key::name("FDepVector")).and_then(|e| e.items().cloned()))
+        else {
             return Ok(None);
         };
+        let (encoding, fonts) = (encoding.borrow(), fonts.borrow());
         let outer = font_matrix(&f, 1.0);
         let mut out = Vec::with_capacity(s.len() / 2);
         for &[pick, code] in s.as_chunks::<2>().0 {
@@ -769,7 +784,7 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), code, cid: None, outer, vertical: false });
+                out.push(Mapped { font: d.clone(), pick, code, cid: None, outer, vertical: false });
             }
         }
         Ok(Some(out))
@@ -793,7 +808,9 @@ impl Interp<'_> {
         Ok(chars
             .into_iter()
             .filter_map(|c| match fonts.get(c.font) {
-                Some(Obj::Dict(d)) => Some(Mapped { font: d.clone(), code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical }),
+                Some(Obj::Dict(d)) => {
+                    Some(Mapped { font: d.clone(), pick: 0, code: (c.cid & 0xff) as u8, cid: Some((c.cid, c.notdef)), outer, vertical })
+                }
                 _ => None,
             })
             .collect())
@@ -806,7 +823,9 @@ impl Interp<'_> {
         for (i, g) in glyphs.iter().enumerate() {
             let at = self.user_point()?;
             let w = self.composite_glyph(g, at, Draw::Fill)?;
-            let d = spacing.advance(i, i64::from(g.code), w);
+            // `widthshow` and `awidthshow` match a composite font's character by its font number
+            // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
+            let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
             // A CID stands for no character (its code is only the CID's low byte).
             let c = if g.cid.is_some() { '\u{2022}' } else { code_char(&g.font.borrow(), g.code) };
@@ -924,6 +943,9 @@ impl Interp<'_> {
                 Plain { ch, gid, width: super::type42::advance(&data.data, gid) }
             })
             .collect();
+        drop(f);
+        // Reading the font's character map (once) visits each of its mappings.
+        self.spend(data.take_char_map_work())?;
         Ok(Some((data, glyphs)))
     }
 
@@ -940,18 +962,26 @@ impl Interp<'_> {
             let Some(Obj::Array { items: sfnts, .. }) = f.get(&Key::name("sfnts")).cloned() else { return Ok(None) };
             sfnts
         };
-        if let Some((_, d)) = self.type42.iter().find(|(k, _)| k.same(&sfnts)) {
-            return Ok(Some(d.clone()));
+        // The least recently used font goes first: a hit moves to the end.
+        if let Some(i) = self.type42.iter().position(|(k, _)| k.same(&sfnts)) {
+            let hit = self.type42.remove(i);
+            let data = hit.1.clone();
+            self.type42.push(hit);
+            return Ok(data);
         }
-        let Some(data) = super::type42::font_data(&sfnts.borrow()) else { return Ok(None) };
-        self.alloc(data.len())?;
-        self.spend((data.len() / 4096) as u64)?;
-        let data = Rc::new(super::type42::Font::new(data));
+        // Fonts whose data can't be read are kept too, so they are copied only once.
+        let data = super::type42::font_data(&sfnts.borrow()).map(|d| Rc::new(super::type42::Font::new(d)));
+        if let Some(d) = &data {
+            if self.type42_counted.insert(sfnts.clone()) {
+                self.alloc(d.data.len())?;
+            }
+            self.spend((d.data.len() / 4096) as u64)?;
+        }
         if self.type42.len() >= MAX_TYPE42 {
             self.type42.remove(0);
         }
         self.type42.push((sfnts, data.clone()));
-        Ok(Some(data))
+        Ok(data)
     }
 }
 

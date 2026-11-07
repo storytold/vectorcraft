@@ -69,8 +69,11 @@ pub(crate) struct Interp<'a> {
     /// The width a Type 3 glyph procedure gave (`setcachedevice`, `setcharwidth`).
     pub glyph_width: Option<[f64; 2]>,
     /// The TrueType data of the Type 42 fonts drawn so far, by their `sfnts` array (see
-    /// `type42`), the most recent last.
-    pub type42: Vec<(Shared<Obj>, Rc<super::type42::Font>)>,
+    /// `type42`; `None` when it can't be read), the most recently used last.
+    pub type42: Type42Cache,
+    /// The `sfnts` arrays whose TrueType data has been counted against [`MAX_MEMORY`]: a font
+    /// read again after it left `type42` doesn't count again.
+    pub type42_counted: HashSet<Shared<Obj>>,
     /// The mappings of the CMaps shown with so far, by their range arrays (see `cid`), the most
     /// recent last.
     pub cmaps: super::cid::CMaps,
@@ -98,6 +101,9 @@ pub(crate) struct Fault {
     pub op: Option<&'static str>,
     pub procs: Vec<Rc<str>>,
 }
+
+/// The TrueType data of Type 42 fonts by their `sfnts` array (see [`Interp::type42`]).
+pub(crate) type Type42Cache = Vec<(Shared<Obj>, Option<Rc<super::type42::Font>>)>;
 
 /// Most procedure names a [`Fault`] keeps.
 const FAULT_PROCS: usize = 3;
@@ -212,6 +218,7 @@ impl<'a> Interp<'a> {
             cmaps: vec![],
             cid_subrs: vec![],
             cmap_font: 0,
+            type42_counted: HashSet::new(),
             g,
             saved: vec![],
             out,
