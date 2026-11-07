@@ -7041,6 +7041,22 @@ fn a_blend_comes_in_as_a_live_blend() {
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
 }
 
+/// A blend in an opacity mask's art is written on `%_` lines, its record's hex digits on `%_%`
+/// lines: it comes in live there too.
+#[test]
+fn a_blend_in_an_opacity_mask_comes_in_live() {
+    let body = blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &blend_record(&['A', 'B']));
+    let mask_art: String = body.lines().map(|l| if l.starts_with("%_") { format!("{l}\n") } else { format!("%_{l}\n") }).collect();
+    assert!(mask_art.contains("\n%_%44434241"), "{mask_art}");
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_u\n{mask_art}%_U\n%_X+\n%_(Art) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let s = read_ok(&layer(&format!("{RED}0 0 m\n0 80 L\n80 80 L\n80 0 L\nf\n{mask}")));
+    let m = art(&s.doc)[0].extras().mask.clone().expect("a mask");
+    let blend = m.art.children().and_then(|c| c.first()).cloned().unwrap_or(m.art.clone());
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {:?}", blend.kind, s.warnings) };
+    assert_eq!((children.len(), spec.spacing), (2, vectorcraft_doc::live::BlendSpacing::Steps(3)));
+    assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
 /// A blend whose spine was never edited has no spine written, only its keys: its spine is the
 /// straight line between the keys' centres, in the record's order (here the left key, named `B`,
 /// first), and the blend comes in live.
