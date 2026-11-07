@@ -23,13 +23,13 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. |
-| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have. |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed. With `hash`, a module whose SHA-256 differs is refused. |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when `plugin.install` needs `grant`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so is a heavy filter (nobody was asked). |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so are a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -47,7 +47,8 @@ heading and buttons in view. Exporters are formats of **File › Export › Expo
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. **File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
-background ([below](#heavy-filters)).
+background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
+([below](#permissions)).
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -100,6 +101,48 @@ much there is only once the run has ended.
   it runs at once; the instruction budget alone bounds it there.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
+
+### Permissions
+
+A manifest may list what the plug-in may do in `permissions`. `doc.read`, `doc.write` and `state` follow the
+capability model proposed for PhotoCraft plug-ins
+([storytold/photocraft#662](https://github.com/storytold/photocraft/issues/662)); the other names are VectorCraft's own:
+
+| Permission | Kinds | What it allows |
+|---|---|---|
+| `doc.read` | all | Read the objects it is given. |
+| `doc.write` | filter | Change, add and delete objects in the document. |
+| `state` | filter | Keep data of its own with the document (`documentData`). |
+| `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
+| `export.write` | exporter | Write the document as a file in its own format. |
+
+- A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
+  `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`; an exporter `doc.read` and
+  `export.write`. Such a plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is
+  empty may do none of these, and also installs without a prompt.
+- An effect or an exporter that lists permissions lists both of its implied ones. A filter may list any of its three.
+  An unknown name, a name listed twice, a name that doesn't apply to the kind, more than 16 names, or one of the names
+  kept for a later plug-in API (`progress`, `ui.panel`, `ui.tool`) is refused when the module is installed, and the
+  error names it.
+- **Installing asks first.** Install Plug-in… and File › Open show the plug-in's name, id, version, the SHA-256 of
+  the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
+  SHA-256 shown; Cancel installs nothing. The
+  names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
+  `plugin.install` refuses the module, naming the permissions it needs, unless `grant` lists them all, which an agent
+  passes once the user agreed (`plugin.inspect`'s `needsApproval` tells it beforehand), with `hash` set to the
+  `plugin.inspect` entry's `hash` so that the module installed is the one the user saw.
+- The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
+  `Plug-ins` folder. Installing a module with the same id that lists no new permission needs no new approval; one that
+  lists more asks again. `plugin.remove` forgets the grant. When a `Plug-ins` folder is in use, only the grants kept
+  in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
+  a stored plug-in whose permissions are not granted is skipped. The Additional Plug-ins Folder and `plugin.reload`
+  install only plug-ins whose permissions were granted, and report the others.
+- The host enforces the grant on a filter run: without `doc.read` the filter is given no objects; without `state` its
+  `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
+  document is refused. A refused output leaves the document as it was.
+- `api` is the plug-in API level the manifest is written for: `1` (the default) is the only level this host
+  implements, and a higher one is refused.
+- Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
 modules, bad manifests, out-of-range pointers, negative return codes and invalid output all become errors, and the
@@ -159,6 +202,8 @@ pointers are offsets into the module's memory.
   the kind when the plug-in is installed.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
+- `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
+  ([permissions](#permissions)); without it, what its kind implies.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
   `document.export` then writes the exporter's format only when asked for by its format id.

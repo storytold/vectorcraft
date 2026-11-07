@@ -14,11 +14,14 @@
 //! * **Plug-ins**: the module of each plug-in `plugin.install` installs, as a `.wasm` file named
 //!   after its id (as Illustrator keeps plug-ins in its Plug-ins folder); `plugin.remove` deletes it.
 //!   Attaching the folder installs them again. The Additional Plug-ins Folder preference is not
-//!   copied: it is loaded from where it is.
+//!   copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
+//!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
+//!   permissions it doesn't grant is skipped with a log record, and stays in the folder.
 //!
 //! The files are untrusted input like any other: sizes and counts are capped, a file that does not
 //! parse is skipped with a log record, and every write is atomic.
 
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -41,6 +44,10 @@ const PROFILE_EXT: &str = "icc";
 pub const MAX_PLUGIN_STORE: u64 = 512 << 20;
 /// The extension of a stored plug-in.
 const PLUGIN_EXT: &str = "wasm";
+/// The file in the plug-in store that holds the permissions the user granted.
+const GRANTS_FILE: &str = "grants.json";
+/// The largest grants file read.
+const MAX_GRANTS_FILE: u64 = 1 << 20;
 
 /// The file name (without extension) a stored item called `name` gets: its name made safe for any
 /// file system, then a hash of the name, so that names that differ only in characters a file name
@@ -217,8 +224,10 @@ impl Session {
     }
 
     /// Keep the plug-ins this session installs in `dir`, and install the ones already there (a
-    /// module that doesn't load is skipped with a log record).
+    /// module that doesn't load, and one that lists permissions the grants there don't grant it,
+    /// is skipped with a log record).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
+        let grants = stored_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
         for path in list_files(&dir, PLUGIN_EXT) {
@@ -231,6 +240,18 @@ impl Session {
                 vectorcraft_plugins::Plugin::load(&bytes, limits.clone()).map_err(|e| e.to_string())
             });
             match loaded {
+                // Only this store's grants count: one given elsewhere in the process doesn't let a
+                // module stored here load.
+                Ok(plugin) if plugin.manifest().asks_permissions() => {
+                    let m = plugin.manifest();
+                    match grants.get(&m.id).filter(|g| g.covers(&m.permissions())) {
+                        Some(g) => {
+                            vectorcraft_plugins::registry::grant(g.clone());
+                            vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
+                        }
+                        None => log::warn!("skipping the stored plug-in {}: the user hasn't granted the permissions it lists", path.display()),
+                    }
+                }
                 Ok(plugin) => {
                     vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
                 }
@@ -240,6 +261,26 @@ impl Session {
         self.plugin_dir = Some(dir);
     }
 
+    /// Whether `plugin` installs without asking the user: it lists no permissions, or its id was
+    /// granted every one it lists, in the grants of the attached plug-in store when there is one,
+    /// else in this process's ([`vectorcraft_plugins::registry::approved`]).
+    pub(crate) fn plugin_approved(&self, plugin: &vectorcraft_plugins::Plugin) -> bool {
+        self.plugin_approver()(plugin)
+    }
+
+    /// [`Session::plugin_approved`] for many plug-ins: reads the store's grants once, when it is
+    /// made, and checks each plug-in against them.
+    pub(crate) fn plugin_approver(&self) -> impl Fn(&vectorcraft_plugins::Plugin) -> bool + use<> {
+        let grants = self.plugin_dir.as_deref().map(stored_grants);
+        move |plugin| {
+            let m = plugin.manifest();
+            match &grants {
+                Some(grants) if m.asks_permissions() => grants.get(&m.id).is_some_and(|g| g.covers(&m.permissions())),
+                _ => vectorcraft_plugins::registry::approved(plugin),
+            }
+        }
+    }
+
     /// Write the module `bytes` of the plug-in `id` to the store.
     pub(crate) fn store_plugin(&self, id: &str, bytes: &[u8]) {
         if let Some(dir) = &self.plugin_dir {
@@ -247,10 +288,48 @@ impl Session {
         }
     }
 
+    /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
+    /// other grants as they are; with none left, remove the file.
+    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) {
+        let Some(dir) = &self.plugin_dir else { return };
+        let mut grants = stored_grants(dir);
+        let changed = match grant {
+            Some(g) => grants.insert(id.to_string(), g.clone()).as_ref() != Some(&g),
+            None => grants.remove(id).is_some(),
+        };
+        if !changed {
+            return;
+        }
+        if grants.is_empty() {
+            take(dir, GRANTS_FILE);
+        } else if let Ok(bytes) = serde_json::to_vec_pretty(&grants.into_values().collect::<Vec<_>>()) {
+            put(dir, GRANTS_FILE, &bytes);
+        }
+    }
+
     /// Remove the plug-in `id` from the store.
     pub(crate) fn unstore_plugin(&self, id: &str) {
         if let Some(dir) = &self.plugin_dir {
             take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)));
+        }
+    }
+}
+
+/// The grants kept in the plug-in store `dir`, by plug-in id: none when there is no grants file,
+/// and none, with a log record, when it is too large or doesn't parse. Grants for an invalid id are
+/// left out.
+fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+    let path = dir.join(GRANTS_FILE);
+    if !path.is_file() {
+        return BTreeMap::new();
+    }
+    let grants = read_capped(&path, MAX_GRANTS_FILE)
+        .and_then(|bytes| serde_json::from_slice::<Vec<vectorcraft_plugins::permissions::Grant>>(&bytes).map_err(|e| e.to_string()));
+    match grants {
+        Ok(grants) => grants.into_iter().filter(|g| vectorcraft_plugins::manifest::valid_id(&g.id)).map(|g| (g.id.clone(), g)).collect(),
+        Err(e) => {
+            log::warn!("skipping the stored plug-in grants {}: {e}", path.display());
+            BTreeMap::new()
         }
     }
 }

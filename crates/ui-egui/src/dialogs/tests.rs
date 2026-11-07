@@ -592,6 +592,8 @@ impl PluginIntField {
             kind: vectorcraft_plugins::Kind::Filter,
             description: String::new(),
             author: String::new(),
+            api: 1,
+            permissions: None,
             params: vec![("seed".into(), vectorcraft_plugins::ParamSpec::Int { min, max, default: 0 }.into())],
             extensions: Vec::new(),
             budget: Default::default(),

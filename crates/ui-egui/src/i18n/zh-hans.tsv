@@ -5626,6 +5626,28 @@ axis	Y Axis	Y 轴
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：请在用户同意后使用 `allowHeavy: true` 安装
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
+	ID: {id}	ID：{id}
+	Version: {version}	版本：{version}
+	File SHA-256: {hash}	文件 SHA-256：{hash}
+	Read the objects it is given	读取交给它的对象
+	Change, add and delete objects in the document	更改、添加和删除文档中的对象
+	Keep data of its own with the document	在文档中保存自己的数据
+	Change how the objects its effect is applied to are drawn	更改应用了其效果的对象的绘制方式
+	Write the document as a file in its own format	将文档写为其自有格式的文件
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
+@msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 类型的增效工具需要权限 `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 个 `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	权限 `{shown}` 不适用于 `{_1}` 类型的增效工具
+@msg	permission `{shown}` is listed twice	权限 `{shown}` 列出了两次
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
+@msg	unknown permission `{shown}`	未知权限 `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”需要权限 {asked}：请在用户同意后使用列出这些权限的 `grant` 安装
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”未获授予其输出所需的 `{p}`：未作任何更改
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模块的 SHA-256 与 `hash` 给出的不符：未安装任何内容
 # Actions panel: action sets (#3712).
 	New Set…	新建组…
 	New Set	新建组

@@ -5687,6 +5687,16 @@ axis	Y Axis	Sumbu Y
 	The plug-in is computing…	Plug-in sedang menghitung…
 	Inspect Plug-in	Periksa plug-in
 	Cancel Plug-in Run	Batalkan jalannya plug-in
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instal “{name}”, yang meminta izin berikut?
+	ID: {id}	ID: {id}
+	Version: {version}	Versi: {version}
+	File SHA-256: {hash}	SHA-256 file: {hash}
+	Read the objects it is given	Membaca objek yang diberikan kepadanya
+	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
+	Keep data of its own with the document	Menyimpan datanya sendiri bersama dokumen
+	Change how the objects its effect is applied to are drawn	Mengubah cara objek yang diberi efeknya digambar
+	Write the document as a file in its own format	Menulis dokumen sebagai file dalam formatnya sendiri
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
 	New Set	Set baru

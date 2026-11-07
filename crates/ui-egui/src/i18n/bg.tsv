@@ -5672,6 +5672,16 @@ axis	Y Axis	Y ос
 	The plug-in is computing…	Приставката изчислява…
 	Inspect Plug-in	Проверка на приставка
 	Cancel Plug-in Run	Отказ от изпълнението на приставката
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	File SHA-256: {hash}	SHA-256 на файла: {hash}
+	Read the objects it is given	Четене на обектите, които получава
+	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
+	Keep data of its own with the document	Съхраняване на собствени данни в документа
+	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
+	Write the document as a file in its own format	Записване на документа като файл в собствен формат
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор

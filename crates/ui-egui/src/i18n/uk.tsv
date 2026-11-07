@@ -5384,6 +5384,28 @@ axis	Y Axis	Вісь Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): встановіть його з `allowHeavy: true`, коли користувач погодиться
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
+	ID: {id}	ID: {id}
+	Version: {version}	Версія: {version}
+	File SHA-256: {hash}	SHA-256 файлу: {hash}
+	Read the objects it is given	Читати передані йому об’єкти
+	Change, add and delete objects in the document	Змінювати, додавати й видаляти об’єкти в документі
+	Keep data of its own with the document	Зберігати власні дані в документі
+	Change how the objects its effect is applied to are drawn	Змінювати те, як малюються об’єкти, до яких застосовано його ефект
+	Write the document as a file in its own format	Записувати документ у файл власного формату
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
+@msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	щонайбільше {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	дозвіл `{shown}` не стосується модуля виду `{_1}`
+@msg	permission `{shown}` is listed twice	дозвіл `{shown}` указано двічі
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
+@msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
 # Actions panel: action sets (#3712).
 	New Set…	Новий набір…
 	New Set	Новий набір

@@ -5173,6 +5173,28 @@
 @id	pathfinder.add	मिलाएँ
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” अधिक संसाधन माँगता है (हर रन में {minutes} मिनट और सामान्य से {times} गुना निर्देश): उपयोगकर्ता की सहमति मिलने पर इसे `allowHeavy: true` से इंस्टॉल करें
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" एक रंग नहीं है: इसे #rrggbb के रूप में लिखें
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
+	ID: {id}	ID: {id}
+	Version: {version}	संस्करण: {version}
+	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
+	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना
+	Change, add and delete objects in the document	डॉक्यूमेंट में ऑब्जेक्ट्स बदलना, जोड़ना और हटाना
+	Keep data of its own with the document	अपना डेटा डॉक्यूमेंट के साथ रखना
+	Change how the objects its effect is applied to are drawn	जिन ऑब्जेक्ट्स पर उसका इफ़ेक्ट लगा है, उनके बनाए जाने का तरीका बदलना
+	Write the document as a file in its own format	डॉक्यूमेंट को अपने फ़ॉर्मेट की फ़ाइल के रूप में लिखना
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
+@msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
+@msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए
+@msg	at most {MAX_PERMISSIONS} `permissions`	अधिकतम {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	अनुमति `{shown}` `{_1}` प्रकार के प्लग-इन पर लागू नहीं होती
+@msg	permission `{shown}` is listed twice	अनुमति `{shown}` दो बार सूचीबद्ध है
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
+@msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
 @msg	“{name}” is not a file	"{name}" एक फ़ाइल नहीं है
 @msg	({note}) ({more})	({note}) ({more})
 @msg	(fonts not copied: {fonts})	(फ़ॉन्ट कॉपी नहीं हुए: {fonts})

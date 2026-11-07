@@ -5469,6 +5469,28 @@ axis	Y Axis	Y 軸
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。ユーザーが同意したら `allowHeavy: true` を指定してインストールしてください
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
+	ID: {id}	ID: {id}
+	Version: {version}	バージョン: {version}
+	File SHA-256: {hash}	ファイルの SHA-256: {hash}
+	Read the objects it is given	渡されたオブジェクトの読み取り
+	Change, add and delete objects in the document	ドキュメント内のオブジェクトの変更、追加、削除
+	Keep data of its own with the document	独自のデータをドキュメントと一緒に保存
+	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
+	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
+@msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
+@msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
+@msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
+@msg	unknown permission `{shown}`	不明な権限 `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
 # Actions panel: action sets (#3712).
 	New Set…	新規セット…
 	New Set	新規セット

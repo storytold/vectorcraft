@@ -5696,6 +5696,28 @@ axis	Y Axis	Y osa
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živi efekat radi dok se dokument iscrtava, pa ne može biti `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	izvoznik uvijek dobija budžet izvoza: izostavite `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” traži veliki budžet (svako pokretanje do {minutes} minuta i {times} puta više uobičajenih instrukcija): instalirajte ga s `allowHeavy: true` kada korisnik pristane
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instalirati „{name}”, koji traži ove dozvole?
+	ID: {id}	ID: {id}
+	Version: {version}	Verzija: {version}
+	File SHA-256: {hash}	SHA-256 datoteke: {hash}
+	Read the objects it is given	Čitati objekte koje dobije
+	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
+	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
+	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
+	Write the document as a file in its own format	Zapisati dokument kao datoteku u vlastitom formatu
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; ovaj domaćin podržava nivoe API-ja dodataka od 1 do {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` mora biti lista naziva dozvola
+@msg	`grant` names an unknown permission `{shown}`	`grant` navodi nepoznatu dozvolu `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	dodatku vrste `{_1}` potrebna je dozvola `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	najviše {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	dozvola `{shown}` ne odnosi se na dodatak vrste `{_1}`
+@msg	permission `{shown}` is listed twice	dozvola `{shown}` navedena je dvaput
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	dozvola `{shown}` rezervisana je za kasniji API dodataka; ovaj domaćin je ne dodjeljuje
+@msg	unknown permission `{shown}`	nepoznata dozvola `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” traži dozvole {asked}: instalirajte ga s `grant` koji ih navodi kada korisnik pristane
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nije dobio `{p}`, što je potrebno njegovom izlazu: ništa nije promijenjeno
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nema SHA-256 naveden u `hash`: ništa nije instalirano
 	New Set…	Novi skup…
 	New Set	Novi skup
 	Set Options…	Opcije skupa…

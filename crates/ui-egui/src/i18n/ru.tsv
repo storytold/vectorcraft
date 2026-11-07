@@ -5399,6 +5399,28 @@ axis	Y Axis	Ось Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): установите его с `allowHeavy: true`, когда пользователь согласится
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	File SHA-256: {hash}	SHA-256 файла: {hash}
+	Read the objects it is given	Читать переданные ему объекты
+	Change, add and delete objects in the document	Изменять, добавлять и удалять объекты в документе
+	Keep data of its own with the document	Хранить свои данные в документе
+	Change how the objects its effect is applied to are drawn	Изменять то, как рисуются объекты, к которым применён его эффект
+	Write the document as a file in its own format	Записывать документ в файл собственного формата
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
+@msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	не более {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	разрешение `{shown}` не относится к модулю вида `{_1}`
+@msg	permission `{shown}` is listed twice	разрешение `{shown}` указано дважды
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
+@msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	у модуля не тот SHA-256, что указан в `hash`: ничего не установлено
 # Actions panel: action sets (#3712).
 	New Set…	Новый набор…
 	New Set	Новый набор

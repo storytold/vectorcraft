@@ -5745,6 +5745,28 @@ axis	Y Axis	Y ekseni
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
+	ID: {id}	Kimlik: {id}
+	Version: {version}	Sürüm: {version}
+	File SHA-256: {hash}	Dosya SHA-256: {hash}
+	Read the objects it is given	Kendisine verilen nesneleri okuma
+	Change, add and delete objects in the document	Belgedeki nesneleri değiştirme, ekleme ve silme
+	Keep data of its own with the document	Kendi verilerini belgeyle birlikte saklama
+	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
+	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
+@msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
+@msg	at most {MAX_PERMISSIONS} `permissions`	en fazla {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` izni `{_1}` türündeki bir eklentiye uygulanmaz
+@msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
+@msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).
 	New Set…	Yeni Set…
 	New Set	Yeni Set

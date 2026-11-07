@@ -5798,6 +5798,28 @@ digits	Malayalam	Malaiàlam
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
+	ID: {id}	ID: {id}
+	Version: {version}	Versió: {version}
+	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
+	Read the objects it is given	Llegir els objectes que rep
+	Change, add and delete objects in the document	Canviar, afegir i suprimir objectes del document
+	Keep data of its own with the document	Desar dades pròpies amb el document
+	Change how the objects its effect is applied to are drawn	Canviar com es dibuixen els objectes als quals s’aplica el seu efecte
+	Write the document as a file in its own format	Escriure el document com un fitxer en un format propi
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
+@msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	com a màxim {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permís `{shown}` no s’aplica a un complement del tipus `{_1}`
+@msg	permission `{shown}` is listed twice	el permís `{shown}` apareix dues vegades
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
+@msg	unknown permission `{shown}`	permís desconegut `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos
 axis	Horizontal	Horitzontal

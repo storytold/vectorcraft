@@ -5915,7 +5915,14 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
-`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean. `prefs.set` returns an error and
+A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
+installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
+the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
+an error naming the permissions needed. The grant is kept with the module's hash; a module
+with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
+filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean, a `grant` that is not a list of
+permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
 

@@ -5788,6 +5788,28 @@ axis	Y Axis	osa Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živý efekt běží během vykreslování dokumentu, takže nemůže být `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	exportní zásuvný modul dostává vždy rozpočet exportu: klíč `budget` vynechte
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}“ žádá o velký výpočetní rozpočet (každé spuštění až {minutes} minut a {times}krát víc instrukcí než obvykle): nainstalujte ho s `allowHeavy: true`, jakmile uživatel souhlasí
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
+	ID: {id}	ID: {id}
+	Version: {version}	Verze: {version}
+	File SHA-256: {hash}	SHA-256 souboru: {hash}
+	Read the objects it is given	Číst objekty, které dostane
+	Change, add and delete objects in the document	Měnit, přidávat a mazat objekty v dokumentu
+	Keep data of its own with the document	Ukládat vlastní data s dokumentem
+	Change how the objects its effect is applied to are drawn	Měnit, jak se kreslí objekty, na které je použit jeho efekt
+	Write the document as a file in its own format	Zapsat dokument jako soubor ve vlastním formátu
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
+@msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	zásuvný modul druhu `{_1}` potřebuje oprávnění `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	nejvýše {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	oprávnění `{shown}` se nevztahuje na zásuvný modul druhu `{_1}`
+@msg	permission `{shown}` is listed twice	oprávnění `{shown}` je uvedeno dvakrát
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
+@msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ žádá o oprávnění {asked}: nainstalujte ho s `grant`, který je uvádí, jakmile uživatel souhlasí
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ nedostal `{p}`, které jeho výstup potřebuje: nic se nezměnilo
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
 # Actions panel: action sets (#3712).
 	New Set…	Nová sada…
 	New Set	Nová sada
