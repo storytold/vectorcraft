@@ -4956,6 +4956,33 @@ fn warped_type_that_draws_apart_from_its_look_comes_in_as_the_look() {
     }
 }
 
+/// Warped type that a text variable binds stays type with the effect live and keeps its binding,
+/// though its live warp draws apart from its look.
+#[test]
+fn warped_type_bound_to_a_text_variable_stays_bound_type() {
+    use vectorcraft_testkit::ai::{XmlValue, named, variable_library_data, xml_element, xml_node};
+    let attributes =
+        [("trait", XmlValue::Str("textcontent")), ("varName", XmlValue::Unicode("v_text")), ("docRef", XmlValue::Raw("/XMLUIDREF : (type_x5F_1) ;"))];
+    let declared = [xml_node(1, "variable", XmlValue::Str(""), &attributes, &[])];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let drawing = "0 1 1 0 1 0 0 Xa\n54 56 m\n100 56 L\n100 80 L\n54 80 L\nf";
+    let own: String = text_object(0).lines().map(|l| format!("%_{l}\n")).collect();
+    let art = format!("u\n{drawing}\nU\n9 () XW\n{own}{}1 (Warped) XW\n", named("type_x5F_1"));
+    let doc = text_document(&[("TILT\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let file = native_with_text(&(library + &warped_style(40.0, WarpOn::Object) + &layer("Art", true, &art)), &doc);
+    let (d, notes) = crate::ai_alone(&private(&file)).unwrap();
+    assert_eq!(warped_texts(&d), [("TILT".to_string(), true)], "{notes:?}");
+    assert!(!notes.iter().any(|w| w.starts_with(crate::import::ai::WARPED_TYPE_DRAWN)), "{notes:?}");
+    let mut text = None;
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            text = Some(n.id);
+        }
+    });
+    assert_eq!(d.variables.objects_of("v_text"), [text.unwrap()], "{notes:?}");
+}
+
 /// `operators` as the page's content: a red fill of the same paths.
 fn page_of(operators: &str) -> String {
     let mut page = String::from("1 0 0 setrgbcolor\n");

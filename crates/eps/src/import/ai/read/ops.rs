@@ -771,7 +771,8 @@ impl<'a> Reader<'a> {
             // draws type of its own.
             if slot_of(object.name.as_deref()).is_some() && crate::import::ai::envelope::warps(&appearance) && self.warped_type.len() < MAX_NODES {
                 let mut saved = look.clone();
-                // Inside a copy on `%_` lines everything is, so nothing tells the look's own copies apart.
+                // When the object itself is on `%_` lines, every child of its look is too, so the
+                // look's own copies can't be told apart from the rest.
                 if !hidden {
                     strip(&mut saved, &self.hidden_ids);
                 }

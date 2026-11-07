@@ -426,6 +426,14 @@ impl WarpedType {
     }
 }
 
+#[cfg(test)]
+impl WarpedType {
+    /// The text objects of `looks` (slot and saved look) with no check left.
+    pub(crate) fn unchecked(looks: Vec<(NodeId, Node)>) -> Self {
+        Self { looks: looks.into_iter().map(|(slot, look)| WarpedLook { slot, look, left_out: None }).collect(), ..Default::default() }
+    }
+}
+
 /// Add to `out` the ids of `n` and what is in it, unless hidden.
 fn collect_shown(n: &Node, out: &mut BTreeSet<NodeId>) {
     if n.visible {
