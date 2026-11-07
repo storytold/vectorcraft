@@ -1983,6 +1983,11 @@ fn soft_return_in_justified_text_spreads_like_a_wrapped_line() {
         let (l0, l1) = (&lay.lines[0], &lay.lines[1]);
         assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}: {l0:?}");
         assert!(l1.x1 - l1.x0 < 200.0, "{justify:?}: the last line isn't justified: {l1:?}");
+        // A soft return ending the paragraph: the empty line after it is the last one, so the line
+        // it ends is justified too.
+        let lay = layout(db(), &area("A line of a few words\u{2028}", style(12.0), frame, justify));
+        let l0 = lay.lines.first().unwrap();
+        assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}, trailing soft return: {l0:?}");
     }
     // Aligned type stays aligned.
     let lay = layout(db(), &area(text, style(12.0), frame, Justify::Left));
