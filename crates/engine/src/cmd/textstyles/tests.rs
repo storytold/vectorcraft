@@ -945,7 +945,8 @@ fn a_style_and_the_pattern_that_uses_it_load_together() {
 
 /// A style and the pattern it paints with, whose type is set in that style, are both added when
 /// the document has a style of that name and attributes but another pattern of that name: the
-/// copy of the style paints with the copy of the pattern, and a second load adds nothing.
+/// copy of the style paints with the copy of the pattern, and a second load adds nothing. A loop the
+/// document has is used under the names it has together.
 #[test]
 fn a_style_in_a_loop_is_not_matched_to_a_style_that_paints_with_another_pattern() {
     let (mut src, id) = session_with_text("Tile");
@@ -976,6 +977,20 @@ fn a_style_in_a_loop_is_not_matched_to_a_style_that_paints_with_another_pattern(
     assert_eq!(text.runs[0].style.style_name.as_deref(), Some("Accent 2"));
     let r = s.execute("charStyle.load", &load).unwrap();
     assert_eq!(r["added"], json!([]), "{r}");
+    assert_eq!(s.doc().unwrap().doc, d);
+    // With the loop's style renamed "Accent 3" and an "Accent 2" listed before it that also paints
+    // with "Dots 2", the loop is still found as "Accent 3" and "Dots 2", the names it has together.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    let at = doc.char_styles.iter().position(|c| c.name == "Accent 2").unwrap();
+    doc.char_styles[at].name = "Accent 3".into();
+    let copy = TextStyleDef { name: "Accent 2".into(), attrs: doc.char_styles[at].attrs.clone() };
+    doc.char_styles.insert(at, copy);
+    let tile = doc.patterns.iter_mut().find(|p| p.name == "Dots 2").unwrap();
+    let NodeKind::Text(text) = &mut std::sync::Arc::make_mut(&mut tile.art[0]).kind else { panic!("pattern art should be type") };
+    text.runs[0].style.style_name = Some("Accent 3".into());
+    let d = s.doc().unwrap().doc.clone();
+    let r = s.execute("charStyle.load", &load).unwrap();
+    assert_eq!(r, json!({"added": [], "existing": ["Accent 3"], "skipped": []}));
     assert_eq!(s.doc().unwrap().doc, d);
 }
 

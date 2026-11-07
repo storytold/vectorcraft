@@ -1044,23 +1044,37 @@ impl Clipboard {
         // In a loop the document does not have all at once, every definition uses one that is
         // added under a free name, so each one is added too.
         let mut fresh = false;
+        // The names in the document of the loop being placed, when it has them all at once.
+        let mut matched: BTreeMap<(Res, String), String> = BTreeMap::new();
         for (def, looped, starts) in steps {
             fresh &= looped;
+            if !looped {
+                matched.clear();
+            }
             // A loop of uses that the document has all at once is known under those names before
             // its definitions are compared.
             if let Some(group) = starts {
+                matched.clear();
                 match names_of_loop(d, group, &out.relink) {
                     Some(names) => {
                         for (def, name) in group.iter().zip(names) {
                             let (res, own) = def.key();
                             if own != name {
-                                out.relink.renames.entry(res).or_default().insert(own.to_string(), name);
+                                out.relink.renames.entry(res).or_default().insert(own.to_string(), name.clone());
                             }
+                            matched.insert((res, own.to_string()), name);
                         }
                         fresh = false;
                     }
                     None => fresh = true,
                 }
+            }
+            // A definition of such a loop is the document's under the name found for it.
+            let (res, own) = def.key();
+            if let Some(name) = matched.get(&(res, own.to_string())) {
+                let p = if name == own { Placed::Existing } else { Placed::Reused(name.clone()) };
+                out.placed(res, own, &p);
+                continue;
             }
             match def {
                 Def::Style(r, def) => {
