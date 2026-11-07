@@ -738,6 +738,19 @@ fn rect_index_reads_a_diagonal_hatch_only_near_the_point() {
     assert_eq!(index.at(Point::new(-5.0, 0.0), 0.1).count(), 0);
 }
 
+#[test]
+fn rect_index_counts_each_entry_it_reads() {
+    // Ten collinear lines filed under each of the 10 cells along them: a lookup 300 pt either side
+    // reads every line from each of the cells it spans, more than once per line.
+    let line = PathSeg::Line(kurbo::Line::new((0.0, 0.0), (1000.0, 0.0)));
+    let items: Vec<_> = (0..10).map(|k| (line.bounding_box(), (line, k))).collect();
+    let index = RectIndex::with_footprint(items, |r, (s, _), cell| segment_footprint(r, s, cell));
+    let started = work_done();
+    assert_eq!(index.at(Point::new(500.0, 0.0), 300.0).count(), 10);
+    let work = work_done() - started;
+    assert!(work >= 50, "{work} reads");
+}
+
 /// The grid's memory stays linear in the item count: pieces of one segment falling in the same
 /// cell file it once, and coincident segments (each along every cell of a one-column grid) go
 /// to the scanned list once the grid holds its budget of references, and are still all found.
