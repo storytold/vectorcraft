@@ -7791,6 +7791,12 @@ fn an_older_art_brush_comes_in_with_its_art() {
     const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
     assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
+    assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
+    // A count of numbers neither form has isn't read.
+    for bad in ["1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0", "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0"] {
+        assert_eq!(brush::parse_tool_object(brush::Tool::Art, "Ribbon", bad), Err(brush::BrushError::Values), "{bad}");
+    }
     assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
     let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
     let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
