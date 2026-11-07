@@ -6913,6 +6913,18 @@ fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
     assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
 }
 
+/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+#[test]
+fn warped_type_is_held_to_the_first_artboard() {
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+                  %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+                  %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
+                  %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
+    assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
+    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+}
+
 /// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
 #[test]
 fn type_with_a_hidden_warp_stays_type() {

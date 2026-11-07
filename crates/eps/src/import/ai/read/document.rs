@@ -1032,6 +1032,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        // Before the artboards are taken below: the page is the first artboard's.
+        let page = self.page_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1143,7 +1145,6 @@ impl<'a> Reader<'a> {
                 vectorcraft_doc::swatches::map_node_solid_paints(&mut w.look, &mut follow);
             }
         }
-        let page = self.page_in_doc();
         let mut warnings = self.warnings;
         if let Some((lib, unread)) = brushes {
             vectorcraft_brush::store(&mut doc, &lib);
