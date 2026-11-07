@@ -6338,6 +6338,7 @@ name = "vectorcraft-js"
 version = "0.21.0"
 dependencies = [
  "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]
