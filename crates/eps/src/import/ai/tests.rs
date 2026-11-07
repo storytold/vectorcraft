@@ -7240,19 +7240,25 @@ pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> S
 /// [`blend_file`] with the left key in RGB `from`, the right one in `to`, and the steps drawn
 /// between their colors.
 fn blend_file_colored(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3]) -> String {
+    blend_file_apart(spine, ids, record, from, to, 100.0, 3)
+}
+
+/// [`blend_file_colored`] with the right key `apart` points right of the left one and `between`
+/// steps drawn between them.
+fn blend_file_apart(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3], apart: f64, between: usize) -> String {
     let mut art = String::from("%_0 Ae\n%_u\n");
     art += &square(0.0, 40.0, 20.0, from, true);
     art += &blend_part("K", ids[0]);
-    art += &square(100.0, 40.0, 20.0, to, true);
+    art += &square(apart, 40.0, 20.0, to, true);
     art += &blend_part("K", ids[1]);
     art += spine;
     art += "%_N\n";
     art += &blend_part("S", None);
     art += "%_U\n%_9 () XW\nu\n";
-    for i in 0..5 {
-        let t = i as f64 / 4.0;
+    for i in 0..between + 2 {
+        let t = i as f64 / (between + 1) as f64;
         let rgb = [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * t);
-        art += &square(t * 100.0, 40.0, 20.0, rgb, false);
+        art += &square(t * apart, 40.0, 20.0, rgb, false);
     }
     art += "U\n9 () XW\n0 Ae\n";
     art += record;
@@ -7328,7 +7334,7 @@ fn a_blends_spine_written_backwards_keeps_its_keys_order() {
 
 /// A blend's spacing comes from its record: Specified Distance with its distance (25 pt from one
 /// step's edge to the corresponding edge of the next lays three out between keys 100 pt apart),
-/// Smooth Color (keys 5/255 apart in blue take three steps), and Specified Steps with the steps
+/// Smooth Color (keys 3/255 apart in blue take three steps), and Specified Steps with the steps
 /// counted from the drawn ones, whatever its record's word 4 holds. The distance counts along the
 /// spine between the keys, also where the spine runs on past the last key.
 #[test]
@@ -7336,7 +7342,7 @@ fn a_blend_keeps_its_spacing() {
     use vectorcraft_doc::live::BlendSpacing;
     let straight = "%_10 50 m\n%_110 50 L\n";
     let longer = "%_10 50 m\n%_110 50 L\n%_1010 50 L\n";
-    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 5.0 / 255.0], [0.0, 0.0, 1.0]);
+    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 3.0 / 255.0], [0.0, 0.0, 1.0]);
     for (spine, record, (from, to), spacing) in [
         (straight, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
         (longer, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
@@ -7349,6 +7355,23 @@ fn a_blend_keeps_its_spacing() {
         assert_eq!(spec.spacing, spacing);
         assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5, "{spacing:?}");
         assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{spacing:?}: {warnings:?}");
+    }
+}
+
+/// Smooth Color blends of two 20 pt squares 200 pt apart come in live with the steps drawn
+/// between them: 254 from red to blue, and 9 between two red squares.
+#[test]
+fn a_smooth_color_blend_comes_in_with_its_drawn_steps() {
+    use vectorcraft_doc::live::BlendSpacing;
+    let (red, blue) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    for (to, between) in [(blue, 254), (red, 9)] {
+        let record = blend_record_spaced(&['A', 'B'], 0, 4.0, between as u32);
+        let body = blend_file_apart("%_10 50 m\n%_210 50 L\n", [Some("A"), Some("B")], &record, red, to, 200.0, between);
+        let (blend, warnings) = read_blend(&body);
+        let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend for {between} steps: {:?} {warnings:?}", blend.kind) };
+        assert_eq!(spec.spacing, BlendSpacing::SmoothColor);
+        assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), between + 2);
+        assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{between}: {warnings:?}");
     }
 }
 

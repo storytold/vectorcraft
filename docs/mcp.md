@@ -6464,7 +6464,19 @@ shows, and so do the click-to-size dialogs (`perspective.draw` with `at`: the cl
 
 `object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
 what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target: "defaults"`),
-else Smooth Color and Align to Page. `starts` gives, per object, the anchor of its first subpath the blend starts
+else Smooth Color and Align to Page. Smooth Color counts the steps between each pair of keys on its own, from the
+keys' colors and visible bounds rather than along the spine. The counts below are VectorCraft's own values. The
+colors compared are each key's solid fill and stroke, the fills and strokes of two text objects' runs at the same fraction of their characters, and
+those of two groups' members paired in order. When they differ, the count is 255 times the largest change of one
+channel as a fraction of its range, a half step rounding down, from 1 to 254. An RGB channel's range is 256 values,
+so pure red to pure blue makes 254 steps. CMYK and gray count by their percentages, two tints of the same swatch by
+their tints, and colors in different spaces (or Lab) by their RGB values over 255. The count is then at most eight
+per point of the largest of the keys' widths and heights and the distance between their centers along either axis,
+and when a key has no bounds it is the color count alone. When the colors match, a solid paint meets no paint, or a
+key holds a gradient or a pattern, the count is the largest distance between the keys' corresponding visible
+bounding-box edges divided by their mean width (left and right edges) or height (top and bottom), rounded, less one,
+from 1 to 1000. Keys with no width or no height are measured by their other side, keys with neither in points, and
+keys without bounds make 1 step. `starts` gives, per object, the anchor of its first subpath the blend starts
 from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). With the
 Blend tool, `press_key` Escape drops the object clicked first and stops the next click adding to the blend
 just made; the document and the selection stay as they are. A blend
