@@ -216,3 +216,7 @@ sync_github_name = true
 
 [people.slafebre]
 real_name = "Sven Lafebre"
+
+[people.kylekanouse]
+real_name = "Kyle Kanouse"
+sync_github_name = true
