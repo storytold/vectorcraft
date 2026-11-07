@@ -1,6 +1,6 @@
 # File format parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (`.ai` and EPS type from the text document keeps auto leading, hyphenation options and the file's last lines; EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (`.ai` and EPS type from the text document keeps its tab stops; it keeps auto leading, hyphenation options and the file's last lines; EPS and `.ai` editing data: a transparency set inside a clipping group stays after its `Q`; SVG import: filter and mask regions clip, #5876, #5875; SVG import: Gaussian blurs keep `color-interpolation-filters`, #5877; PDF and `.ai` export: objects' URLs as links, #5785; SVG import: `color-interpolation="linearRGB"` gradients, #5878; `.ai` import: paths with a Calligraphic brush open brushed, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
 Every format Illustrator opens, places, saves or exports, against VectorCraft's format table (`FORMATS`,
 `OPEN_EXTS`, `PLACE_EXTS` in `crates/engine/src/cmd/fileio/formats.rs`). Illustrator's list comes from its public
@@ -51,7 +51,7 @@ private editing data. VectorCraft:
   editing data of a `.ai`, EPS or PDF; other art opens in a group.
   Type from the text document keeps auto leading as auto, each line taking the paragraph's share
   (Auto Leading) of the largest type on it ([Line and character spacing](https://helpx.adobe.com/illustrator/using/line-character-spacing.html)),
-  and the paragraph's hyphenation options. Area type of one
+  and the paragraph's hyphenation options and tab stops. Area type of one
   frame whose last lines the file sets but which don't fit here (the fallback font, or a descent
   past the frame's bottom) gets a frame taller from its bottom, with a warning.
   RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
@@ -217,6 +217,7 @@ the app's own editing copy of a file (an EPS after its `%%EOF`, a `.ai`'s `AIPri
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | EPS and `.ai` type from the text document keeps its paragraphs' tab stops (positions and alignments; leaders aren't read), at most 1,024 a paragraph and 2^20 a story, past which the default stops apply with a warning. A user's `.ai` (used locally, not committed) whose price lists came in on the default stops now lays them out as its page has them (its type 0.8% from its page, from 1.5%; what differs is hyphenation in Hungarian and type in a font that isn't installed). Scores and estimates unchanged. |
 | 2026-11-07 | minor | EPS and `.ai` type from the text document: auto leading stays auto at the paragraph's share (it was the first two lines' distance for every line, so 10 pt lines under a 15 pt heading came in 18 pt apart), the paragraph's hyphenation options are read, and area type whose last lines the file sets in too short a frame for them here gets a taller frame. A user's `.ai` (used locally, not committed) whose type differed from its page by 6.6%, so that it opened from its PDF part, now opens from its layers (4.9%; type with tab stops in right-aligned paragraphs still differs, a separate issue) (#6137). Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: `Q` restores the painting state but not the transparency (`Xy`), which the writer only sets when the next object's differs from the last one written. A Screen glow followed by a clipping group set back to Normal no longer leaves the type after the group in Screen: two users' Illustrator 26.5 and 30 EPS posters (used locally, not committed) now show their gold heading and crescent, and both open from their layers (2.5% and 2.7% from the page before, under the limit after). Scores and estimates unchanged. |
 | 2026-11-06 | minor | EPS and `.ai` editing data: a blend whose spine was never edited, written with its keys and no spine part, comes in as a live blend along the straight lines between its keys' centres (in its record's order) instead of as its drawn steps. Checked on six users' Illustrator EPS files (used locally, not committed): every blend in four of them now comes in live, their renders unchanged; two still have blends the reader can't match to their drawn steps. Scores and estimates unchanged. |

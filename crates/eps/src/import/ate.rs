@@ -25,7 +25,8 @@ use std::collections::BTreeMap;
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    CharStyle, HyphenationOptions, JustificationOptions, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TextKind, TextObject, TextRun,
+    CharStyle, HyphenationOptions, JustificationOptions, Justify, Node, NodeId, NodeKind, ParaDirection, ParaStyle, TabAlign, TabStop, TextKind,
+    TextObject, TextRun,
 };
 use vectorcraft_geom::{Affine, PathData, Point, Rect};
 
@@ -353,7 +354,22 @@ struct Para {
     /// After First, Before Last, Hyphen Limit, Hyphenation Zone (pt) and Hyphenate Capitalized
     /// Words. A value that can't be read, or is out of its range, keeps the default.
     hyphenation: HyphenationOptions,
+    /// Key 30, its list (key 0): the tab stops, each its position from the frame's left edge (key
+    /// 0) and alignment (key 1: 0 left, the default, 1 center, 2 right, 3 decimal, in the order of
+    /// the Tabs panel's buttons), sorted. A stop that can't be read is left out, and so are those
+    /// past the first [`MAX_TABS`]. Leaders aren't read.
+    tabs: Vec<TabStop>,
 }
+
+/// Most tab stops read for one paragraph.
+const MAX_TABS: usize = 1024;
+/// Largest tab stop position read (in the text document's units), as `text.tabs.set` takes it.
+const MAX_TAB_POSITION: f64 = 100_000.0;
+/// Most tab stops a story's paragraphs take in all: a paragraph style's stops are copied into
+/// every paragraph that has them. The paragraphs past it take the default stops, with a warning.
+const MAX_STORY_TABS: usize = 1 << 20;
+/// The warning when [`MAX_STORY_TABS`] leaves tab stops out.
+pub(crate) const TABS_LEFT_OUT: &str = "tab stops past VectorCraft's limits were left out";
 
 /// The text of one story, in the units of the text document.
 #[derive(Debug)]
@@ -375,6 +391,20 @@ pub(super) struct Story {
     /// Vertical type (Type › Type Orientation › Vertical): its lines are columns, from right to
     /// left. Its layout's lines run down from the anchor, each column further left.
     vertical: bool,
+    /// Tab stops past [`MAX_STORY_TABS`] were left out of its paragraphs.
+    tabs_left_out: std::cell::Cell<bool>,
+}
+
+/// Spend `budget` on the tab stops `tabs`: when there aren't enough left, they're left out (the
+/// default stops apply). Whether they were.
+fn spend_tabs(tabs: &mut Vec<TabStop>, budget: &mut usize) -> bool {
+    if tabs.len() <= *budget {
+        *budget -= tabs.len();
+        false
+    } else {
+        tabs.clear();
+        true
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -572,7 +602,12 @@ impl Texts {
         if runs.is_empty() {
             runs.push((text.chars().count(), self.style(None)));
         }
-        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical })
+        let mut budget = MAX_STORY_TABS;
+        let mut tabs_left_out = false;
+        for (_, p) in &mut paras {
+            tabs_left_out |= spend_tabs(&mut p.tabs, &mut budget);
+        }
+        Some(Story { text, anchor, lines, frames, paras, runs, path_spacing, vertical, tabs_left_out: tabs_left_out.into() })
     }
 
     /// A paragraph's attributes (`run`: its attributes, key 5, and the paragraph style it is based
@@ -615,6 +650,27 @@ impl Texts {
                         _ => d.capitalized,
                     },
                 }
+            },
+            tabs: {
+                let list = pick("30").and_then(|t| t.get("0")).map(Val::list).unwrap_or_default();
+                let mut tabs: Vec<TabStop> = list
+                    .iter()
+                    .take(MAX_TABS)
+                    .filter_map(|t| {
+                        let position = t.get("0").and_then(Val::num).filter(|p| (0.0..=MAX_TAB_POSITION).contains(p))?;
+                        let align = match t.get("1").map(Val::num) {
+                            None | Some(Some(0.0)) => TabAlign::Left,
+                            Some(Some(1.0)) => TabAlign::Center,
+                            Some(Some(2.0)) => TabAlign::Right,
+                            Some(Some(3.0)) => TabAlign::Decimal,
+                            _ => return None,
+                        };
+                        Some(TabStop { position, align, leader: String::new(), align_on: '.' })
+                    })
+                    .collect();
+                tabs.sort_by(|a, b| a.position.total_cmp(&b.position));
+                tabs.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
+                tabs
             },
         }
     }
@@ -966,6 +1022,12 @@ impl Story {
             && vectorcraft_text::fit_source_lines(vectorcraft_text::FontDb::global(), t, self.lines.len())
     }
 
+    /// Were tab stops past [`MAX_STORY_TABS`] left out of its paragraphs (so far: making its text
+    /// object counts them again)?
+    pub(super) fn tabs_left_out(&self) -> bool {
+        self.tabs_left_out.get()
+    }
+
     /// Area type (`node`, the story's first frame as [`Self::node`] makes it with `template` and
     /// `to_doc`) whose first line the file lays out higher or lower than it is laid out here, as its
     /// page draws it: its first baseline is fixed where the file has it. The font's ascent below the
@@ -1011,9 +1073,13 @@ impl Story {
         let mut runs = self.paras.iter();
         let mut current = runs.next();
         let mut left = current.map_or(usize::MAX, |r| r.0);
+        let mut budget = MAX_STORY_TABS;
         for p in text.split('\n') {
-            let para = current.map(|r| r.1.clone()).unwrap_or_default();
-            out.push(para_style(&para, scale));
+            let mut style = current.map_or_else(|| para_style(&Para::default(), scale), |r| para_style(&r.1, scale));
+            if spend_tabs(&mut style.tabs, &mut budget) {
+                self.tabs_left_out.set(true);
+            }
+            out.push(style);
             // Each paragraph and its ending `\r` count.
             let mut used = p.chars().count() + 1;
             while used > 0 {
@@ -1054,6 +1120,7 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
         space_after: p.space_after * scale,
         hyphenate: p.hyphenate,
         hyphenation: HyphenationOptions { zone: p.hyphenation.zone * scale, ..p.hyphenation.clone() },
+        tabs: p.tabs.iter().map(|t| TabStop { position: t.position * scale, ..t.clone() }).collect(),
         // A right-to-left paragraph lays its text out from the right whatever letters it has
         // (" 120.5 mm " reads "mm 120.5"); without the key, from its first strong letter.
         direction: p.rtl.then_some(ParaDirection::RightToLeft),
@@ -1179,6 +1246,64 @@ mod tests {
         let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
         assert_eq!(own(b""), d);
         assert_eq!(own(b"/10 0 /11 99 /12 2.5 /13 -1 /14 -3 /15 1"), d);
+    }
+
+    /// Key 30 holds the paragraph's tab stops: their positions (key 0), sorted, and alignments (key
+    /// 1: 0 left, 1 center, 2 right, 3 decimal), scaled as sizes are. A stop that can't be read is
+    /// left out. A user's price list keeps a right stop at 269.29 and a left one at 272.13.
+    #[test]
+    fn a_paragraph_keeps_its_tab_stops() {
+        let texts = Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: Val::Dict(BTreeMap::new()),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let tabs = |own: &[u8], scale: f64| {
+            para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale)
+                .tabs
+                .iter()
+                .map(|t| (t.position, t.align))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(tabs(b"", 1.0), []);
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 272.12598 /1 0 >> << /0 269.29135 /1 2 >> ] >>", 1.0),
+            [(269.29135, TabAlign::Right), (272.12598, TabAlign::Left)]
+        );
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 10 /1 1 >> << /0 20 /1 3 >> << /0 30 >> ] >>", 0.5),
+            [(5.0, TabAlign::Center), (10.0, TabAlign::Decimal), (15.0, TabAlign::Left)]
+        );
+        // Unreadable: a position out of range or not a number, an unknown alignment.
+        assert_eq!(
+            tabs(b"/30 << /0 [ << /0 -1 >> << /0 1e9 >> << /0 /nil >> << /0 5 /1 7 >> << /0 6 /1 /x >> << /0 7 /1 2 >> ] >>", 1.0),
+            [(7.0, TabAlign::Right)]
+        );
+    }
+
+    /// A story's paragraphs take at most [`MAX_STORY_TABS`] tab stops in all (a paragraph style's
+    /// are copied into each paragraph): those past it take the default stops, and the story says so.
+    #[test]
+    fn a_story_s_tab_stops_are_bounded() {
+        let mut budget = 3;
+        let mut tabs = vec![TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }; 2];
+        assert!(!spend_tabs(&mut tabs, &mut budget) && tabs.len() == 2 && budget == 1);
+        assert!(spend_tabs(&mut tabs, &mut budget) && tabs.is_empty() && budget == 1);
+        // Paragraphs of a style with MAX_TABS stops each, more than the story takes.
+        let stop = TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' };
+        let para = Para { tabs: vec![stop; MAX_TABS], ..Para::default() };
+        let count = MAX_STORY_TABS / MAX_TABS + 2;
+        let s = story(&"a\r".repeat(count), &[0.0], &para);
+        assert!(!s.tabs_left_out());
+        let styles = s.paragraph_styles(&format!("{}a", "a\n".repeat(count - 1)), 1.0);
+        assert_eq!(styles.len(), count);
+        assert!(s.tabs_left_out());
+        assert_eq!(styles.iter().map(|p| p.tabs.len()).sum::<usize>(), MAX_STORY_TABS);
+        assert!(styles.last().is_some_and(|p| p.tabs.is_empty()));
     }
 
     /// Where point type lies runs along its baseline: a label turned a quarter (as a vertical
@@ -1418,6 +1543,7 @@ mod tests {
             )],
             path_spacing: 0.0,
             vertical: false,
+            tabs_left_out: false.into(),
         }
     }
 
