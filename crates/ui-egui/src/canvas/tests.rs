@@ -1602,13 +1602,18 @@ fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
 }
 
 /// Two headless canvas frames → the vertices of the second one's tessellated mesh, which the
-/// GPU takes in one buffer.
+/// GPU takes in one buffer, without the art's raster: the render worker's frame can land in
+/// either frame of a comparison.
 fn frame_vertices(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
     frame(app, ctx, vec![]);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(app, ui));
     out.textures_delta.clear();
-    let mesh = |p: &egui::ClippedPrimitive| if let egui::epaint::Primitive::Mesh(m) = &p.primitive { m.vertices.len() } else { 0 };
+    let art = app.canvas.texture.as_ref().map(|t| t.id());
+    let mesh = |p: &egui::ClippedPrimitive| match &p.primitive {
+        egui::epaint::Primitive::Mesh(m) if Some(m.texture_id) != art => m.vertices.len(),
+        _ => 0,
+    };
     ctx.tessellate(out.shapes, out.pixels_per_point).iter().map(mesh).sum()
 }
 
