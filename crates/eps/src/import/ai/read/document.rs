@@ -926,17 +926,36 @@ impl<'a> Reader<'a> {
 
     /// Count the colors of the brush art that the brushes `lib` use after the colors read so far,
     /// in the order the art was read: its spot colors make swatches, and its colors count toward
-    /// the color mode. Art that no brush of `lib` uses brings none of its colors.
+    /// the color mode. Art that no brush of `lib` uses brings none of its colors. The art brings
+    /// at most [`brush::MAX_BRUSH_ART_COLORS`] different color names in all, each name's color
+    /// operators before its gradient stops, as [`Self::file_swatches`] takes them; its colors past
+    /// them still count toward the color mode.
     fn count_brush_art_colors(&mut self, lib: &[vectorcraft_brush::Brush]) {
         let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
         let mut names: Vec<(NodeId, String)> = self.brush_art.iter().filter(|(_, a)| used.contains(&a.id)).map(|(n, a)| (a.id, n.clone())).collect();
         names.sort();
+        // The names brought so far: every section's color operators', then every section's stops'.
+        let mut brought = std::collections::HashSet::new();
+        let mut stops = vec![];
         for (_, name) in names {
             let Some(colors) = self.brush_art_colors.remove(&name) else { continue };
-            self.spots.extend(colors.spots);
-            self.stop_spots.extend(colors.stop_spots);
+            for n in colors.spots {
+                if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                    continue;
+                }
+                brought.insert(n.name.clone());
+                self.spots.push(n);
+            }
+            stops.push(colors.stop_spots);
             self.cmyk_colors += colors.cmyk;
             self.rgb_colors += colors.rgb;
+        }
+        for n in stops.into_iter().flatten() {
+            if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                continue;
+            }
+            brought.insert(n.name.clone());
+            self.stop_spots.push(n);
         }
     }
 

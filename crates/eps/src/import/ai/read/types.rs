@@ -261,6 +261,17 @@ pub(super) struct BrushArtColors {
     pub(super) rgb: usize,
 }
 
+impl BrushArtColors {
+    /// Keep each name's first definition only, its color operators' before its gradient stops',
+    /// and at most `limit` names in all. The process-color counts stay as they are.
+    pub(super) fn keep_first(&mut self, limit: usize) {
+        let mut seen = std::collections::HashSet::new();
+        let mut keep = |n: &Named| seen.len() < limit && seen.insert(n.name.clone());
+        self.spots.retain(|n| keep(n));
+        self.stop_spots.retain(|n| keep(n));
+    }
+}
+
 /// An image's operands, from `XN` and before `XI`.
 #[derive(Debug, Default)]
 pub(super) struct Raster {

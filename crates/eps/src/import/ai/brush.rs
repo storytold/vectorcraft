@@ -60,6 +60,9 @@ const TOOLS: [(&str, Tool); 5] = [
 pub(super) const MAX_BRUSHES: usize = 4096;
 /// Most brush art sections read from one file (a pattern brush has up to five).
 pub(super) const MAX_BRUSH_ART: usize = 5 * MAX_BRUSHES;
+/// Most named colors kept from one brush art section, and brought in from the art of one file's
+/// brushes, each name once per section: the rest are left out.
+pub(super) const MAX_BRUSH_ART_COLORS: usize = 20_000;
 /// Most [`art_weight`] copied into the brushes of one file, each brush counting its own copy.
 const MAX_BRUSH_ART_NODES: usize = 250_000;
 
