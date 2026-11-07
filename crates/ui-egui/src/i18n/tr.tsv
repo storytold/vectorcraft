@@ -5931,8 +5931,8 @@ anchor	Points:	Noktalar:
 	Hue/Saturation	Ton/Doygunluk
 	Temperature/Tint	Sıcaklık/Renk Tonu
 @msg	`{id}` is not a colour adjustment	`{id}` bir renk ayarı değil
-@msg	missing `effect`	"isim" eksik
-@msg	`params` must be an object	"gradyan" bir nesne olmalıdır
+@msg	missing `effect`	`effect` eksik
+@msg	`params` must be an object	`params` bir nesne olmalıdır
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Yol Hassasiyet Araçları
 	Anchor Eraser Brush	Bağlantı Noktası Silgi Fırçası
