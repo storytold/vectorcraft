@@ -1,3 +1,4 @@
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
 use crate::panels::library_panel;
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -39,6 +40,30 @@ fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     app
+}
+
+/// The Tracing Presets arrow at the right end of the Image Trace button.
+fn tracing_presets_arrow(window: &PopupWindow) -> Pos2 {
+    let label = window.text("Image Trace").expect("the Image Trace button");
+    Pos2::new(TRACE_BUTTON_W - 4.0, label.center().y)
+}
+
+/// The Image Trace button's list of presets grows with saved presets: with enough of them it stops
+/// inside a short window and the wheel reaches the last one. With only the built-in presets it does
+/// not scroll.
+#[test]
+fn a_long_tracing_preset_list_scrolls_inside_a_short_window() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
+    let built_in = app.session.execute("imageTrace.presets", &json!({})).unwrap();
+    let name = |p: &Value| p["name"].as_str().unwrap().to_string();
+    let built_in = built_in["presets"].as_array().unwrap();
+    let (first, last) = (name(&built_in[0]), name(&built_in[built_in.len() - 1]));
+    assert_short_list_does_not_scroll(&mut app, draw, tracing_presets_arrow, &first, &last);
+    for n in 0..30 {
+        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
+    }
+    assert_last_row_scrolls_into_view(&mut app, 200.0, draw, tracing_presets_arrow, &first, "Saved 29");
 }
 
 #[test]
