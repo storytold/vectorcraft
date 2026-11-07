@@ -408,8 +408,10 @@ impl Interp<'_> {
     /// their own end without decompressing (`ASCIIHexDecode`, `ASCII85Decode`, `SubFileDecode`)
     /// read the file up to it, the way the image reading all its data would leave it; the
     /// filters over them, which would only decode what those pass, aren't run. When the first
-    /// filter decompresses, it is run alone, and a failure (data too large to hold) leaves the
-    /// data where it was, as before.
+    /// filter decompresses, it is run alone; when it can't hold what it decompresses, it measures
+    /// its data instead. Unfiltered data is read past by its `n` bytes. A failure that read
+    /// nothing leaves the data where it was; one after a filter read its data leaves the file
+    /// past it, with nothing more to read.
     fn skip_data(&mut self, src: &Source, n: usize) {
         // A procedure (`{ currentfile buf readhexstring pop }`) reads the data itself: it is
         // called, and what it gives dropped, until it has given the image's `n` bytes or ends.
@@ -425,14 +427,39 @@ impl Interp<'_> {
             return;
         }
         let Source::File(f) = src else { return };
-        let (chain, from) = match &*f.borrow() {
+        let (chain, from) = match &mut *f.borrow_mut() {
             Stream::Pending { chain, from } => (chain.clone(), from.clone()),
-            _ => return,
+            // The data unfiltered: its `n` bytes are read past, as reading them would.
+            Stream::Current => {
+                let k = n.min(self.lex.data().len());
+                self.lex.advance(k);
+                return;
+            }
+            Stream::Buf { data, pos, .. } => {
+                *pos = pos.saturating_add(n).min(data.len());
+                return;
+            }
         };
         let delimited = chain.iter().take_while(|c| matches!(&*c.name, "ASCIIHexDecode" | "ASCII85Decode" | "SubFileDecode")).count();
         let head = chain.get(..delimited.max(1)).unwrap_or_default().to_vec();
         *f.borrow_mut() = Stream::Pending { chain: head, from: from.clone() };
+        // How much of the file the filters are over is left.
+        let left = |me: &mut Self| match &from {
+            None => Some(me.lex.data().len()),
+            Some(r) => match &*r.borrow() {
+                Stream::Buf { data, pos, .. } => Some(data.len().saturating_sub(*pos)),
+                Stream::Current => Some(me.lex.data().len()),
+                Stream::Pending { .. } => None,
+            },
+        };
+        let before = left(self);
         if self.materialize(f).is_err() {
+            // A filter that read its data before a later one failed has the file past that data,
+            // where reading the image would leave it: the file is empty from there.
+            if left(self) != before {
+                *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+                return;
+            }
             // Decompressed data too large to hold: the first filter only measures it instead,
             // and the file is read past it. Data that can't be decoded at all leaves the file as
             // it was; the import goes on without the image either way.
@@ -828,6 +855,10 @@ impl Interp<'_> {
         let planes = match streamed {
             Some(rows) => vec![rows],
             None => {
+                // More samples than the reader holds: a reduced image is left out (its data
+                // skipped), while one within the pixel cap whose samples are still too much data
+                // (16-bit CMYK, say) stops the read with the limit, as before (#3568: such a plane
+                // is refused).
                 let Some(plane) = row.checked_mul(s.h).filter(|p| *p <= MAX_DATA) else {
                     if step > 1 {
                         return Ok(self.leave_out(&s));

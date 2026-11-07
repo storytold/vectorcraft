@@ -631,3 +631,31 @@ fn the_data_of_an_image_too_large_to_hold_is_skipped() {
         assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{text}");
     }
 }
+
+/// When an image too large to read is left out, the data of its mask (`InterleaveType` 3) is
+/// skipped too: unfiltered from the program's own file by its byte count, and through a filter
+/// shared with later reads, which then find the file past the data (here the second filter fails
+/// on what the first decoded) rather than decoding the program after it.
+#[test]
+fn the_mask_data_of_an_image_left_out_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    let masked = |source: &str| {
+        format!(
+            "<< /ImageType 3 /InterleaveType 3 /DataDict << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 \
+             /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] /DataSource (x) >> \
+             /MaskDict << /ImageType 1 /Width 10 /Height 10 /BitsPerComponent 1 /Decode [0 1] /ImageMatrix [1 0 0 1 0 0] \
+             /DataSource {source} >> >> /DeviceRGB setcolorspace image"
+        )
+    };
+    for program in [
+        // 10 rows of 2 bytes, not PostScript.
+        format!("{}\n{}\n{after}", masked("currentfile"), "@".repeat(20)),
+        format!("/F currentfile /ASCIIHexDecode filter /ASCII85Decode filter def {}\n7676>\nF read {{ pop }} if {after}", masked("F")),
+    ] {
+        let r = read(&program);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{program}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{program}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
+}
