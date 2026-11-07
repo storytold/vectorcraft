@@ -743,22 +743,35 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(json!({"overrides": app.ui.shortcut_overrides.len()}))
 }
 
+/// The string `p` gives for `key`, or `None` when `p` leaves it out or gives null. Any other
+/// value, such as `5`, is an error: "`{key}` must be a string".
+fn text_param(p: &Value, key: &str) -> Result<Option<String>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v.clone())),
+        Some(_) => Err(format!("`{key}` must be a string")),
+    }
+}
+
 /// `shortcuts.*` UI commands. `None` = not ours.
 pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
-    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let s = |k: &str| text_param(p, k);
     let r = match id {
         "edit.keyboardShortcuts" => {
             open(app);
             Ok(Value::Null)
         }
         "shortcuts.set" => {
-            let key = s("id").unwrap_or_default();
+            let (key, shortcut, force) = match (s("id"), s("shortcut"), crate::menus::opt_bool(p, "force")) {
+                (Ok(key), Ok(shortcut), Ok(force)) => (key.unwrap_or_default(), shortcut, force.unwrap_or(false)),
+                (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return Some(Err(e)),
+            };
             let mut ov = app.ui.shortcut_overrides.clone();
             let r = if p.get("shortcut").is_some_and(Value::is_null) {
                 reset_one(&mut ov, &key);
                 Ok(vec![])
             } else {
-                assign(&mut ov, &key, s("shortcut").as_deref(), p.get("force").and_then(Value::as_bool).unwrap_or(false))
+                assign(&mut ov, &key, shortcut.as_deref(), force)
             };
             r.map(|removed| {
                 app.ui.shortcut_overrides = ov;
@@ -768,7 +781,10 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             })
         }
         "shortcuts.list" => {
-            let q = s("query").unwrap_or_default().to_lowercase();
+            let q = match s("query") {
+                Ok(q) => q.unwrap_or_default().to_lowercase(),
+                Err(e) => return Some(Err(e)),
+            };
             let km = keymap_with(&app.ui.shortcut_overrides);
             let ov = km.overrides();
             Ok(Value::Array(
@@ -789,23 +805,28 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             sync(&app.ui);
             Ok(Value::Null)
         }
-        "shortcuts.preset" => match s("name").as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p))) {
-            Some((n, p)) => {
+        "shortcuts.preset" => match s("name").map(|n| n.as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p)))) {
+            Ok(Some((n, p))) => {
                 app.ui.shortcut_overrides = p;
                 app.ui.shortcut_set = n;
                 sync(&app.ui);
                 Ok(Value::Null)
             }
-            None => Err(format!("unknown preset (one of {})", PRESETS.join(", "))),
+            Ok(None) => Err(format!("unknown preset (one of {})", PRESETS.join(", "))),
+            Err(e) => Err(e),
         },
         "shortcuts.export" => {
+            let path = match s("path") {
+                Ok(path) => path,
+                Err(e) => return Some(Err(e)),
+            };
             let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
             let pick = crate::FilePick {
                 filters: vec![crate::FilePick::filter("Shortcut sets", &["json"])],
                 ..crate::FilePick::named("VectorCraft Shortcuts.json")
             };
-            let path = s("path").or_else(|| crate::picks::save(app, &pick));
+            let path = path.or_else(|| crate::picks::save(app, &pick));
             match path {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
@@ -848,11 +869,15 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
+                let path = match s("path") {
+                    Ok(path) => path,
+                    Err(e) => return Some(Err(e)),
+                };
                 let pick = crate::FilePick {
                     filters: vec![crate::FilePick::filter("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)],
                     ..Default::default()
                 };
-                let path = s("path").or_else(|| crate::picks::open(app, &pick));
+                let path = path.or_else(|| crate::picks::open(app, &pick));
                 // A `.kys` file is read by Import Shortcut Set, up to its reader's cap.
                 if let Some(path) = path.as_deref().filter(|p| crate::dialogs::shortcut_import::is_kys(p)) {
                     return Some(crate::dialogs::shortcut_import::command(app, &json!({ "path": path })));
@@ -1826,5 +1851,29 @@ mod tests {
         let mut ov = Overrides::new();
         assign(&mut ov, "object.isolate", Some("Cmd+Alt+Shift+F11"), false).unwrap();
         assert_eq!(effective_in(&ov, "object.isolate").as_deref(), Some("Cmd+Alt+Shift+F11"));
+    }
+
+    /// `shortcuts.set`, `shortcuts.list` and `shortcuts.preset` reject a supplied param of the wrong
+    /// type with an error naming it, and change nothing; an omitted or null param keeps its default.
+    #[test]
+    fn shortcut_commands_reject_a_param_of_the_wrong_type() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let set = app.ui.shortcut_set.clone();
+        for (id, p, err) in [
+            ("shortcuts.set", json!({"id": 5, "shortcut": "Cmd+Alt+Shift+F11"}), "`id` must be a string"),
+            ("shortcuts.set", json!({"id": "object.isolate", "shortcut": 7}), "`shortcut` must be a string"),
+            ("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": "yes"}), "`force` must be true or false"),
+            ("shortcuts.list", json!({"query": 5}), "`query` must be a string"),
+            ("shortcuts.preset", json!({"name": true}), "`name` must be a string"),
+        ] {
+            assert_eq!(app.run(id, p.clone()), Err(err.to_string()), "{id} {p}");
+            assert!(app.ui.shortcut_overrides.is_empty(), "{id} {p}");
+            assert_eq!(app.ui.shortcut_set, set, "{id} {p}");
+        }
+        let all = app.run("shortcuts.list", json!({})).unwrap();
+        assert_eq!(app.run("shortcuts.list", json!({"query": null})), Ok(all));
+        let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
+        assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
+        assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
     }
 }
