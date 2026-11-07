@@ -783,6 +783,12 @@ fn path_spacing(f: &Val, effect: PathEffect) -> f64 {
         let Some(at) = g.get("21") else { continue };
         let list = |k: &str| at.get(k).and_then(Val::nums).unwrap_or_default();
         let (xs, ys, matrices, ends) = (list("1"), list("2"), list("3"), list("4"));
+        if effect == PathEffect::StairStep {
+            let (s, t) = stair_step_fit(&xs, &ys, &ends);
+            sum += s;
+            turns += t;
+            continue;
+        }
         let glyphs: Vec<(Point, f64, kurbo::Vec2, kurbo::Vec2)> = xs
             .iter()
             .zip(&ys)
@@ -826,6 +832,45 @@ fn path_spacing(f: &Val, effect: PathEffect) -> f64 {
     }
     let spacing = sum / turns;
     if turns > 1e-6 && spacing.is_finite() { spacing.clamp(-1000.0, 1000.0) } else { 0.0 }
+}
+
+/// [`path_spacing`]'s sums for one line of Stair Step type, from its glyphs' origins `xs`, `ys` and
+/// where they end along the line, `ends`. Stair Step's glyphs stay upright, so their matrices don't
+/// show how the path turns; each origin lies on the path (all of them moved the same way by an
+/// alignment), and a glyph's step is the path's length from its origin to the next. The path is taken
+/// to be round through three origins in a row, which gives how far it turns over that step `t`; the
+/// text engine makes the step `s` with `s + t × spacing = a`, `a` the glyph's advance.
+fn stair_step_fit(xs: &[f64], ys: &[f64], ends: &[f64]) -> (f64, f64) {
+    let origins: Vec<Point> = xs.iter().zip(ys).map(|(x, y)| Point::new(*x, *y)).collect();
+    let (mut sum, mut turns) = (0.0, 0.0);
+    for i in 0..origins.len().saturating_sub(1) {
+        let (Some(p), Some(q)) = (origins.get(i), origins.get(i + 1)) else { continue };
+        // The third origin: the one before, else the one after.
+        let triple = match i.checked_sub(1).and_then(|h| origins.get(h)) {
+            Some(o) => (*o, *p, *q, *o),
+            None => match origins.get(i + 2) {
+                Some(r) => (*p, *q, *r, *r),
+                None => continue,
+            },
+        };
+        let (a, b, c, third) = triple;
+        // The inscribed angle at the third origin is half the arc's angle from `p` to `q`.
+        let (to_p, to_q) = ((*p - third).hypot(), (*q - third).hypot());
+        let sine = (b - a).cross(c - a) / (to_p * to_q);
+        if !(sine.is_finite() && sine.abs() < 1.0) {
+            continue;
+        }
+        let turn = 2.0 * sine.asin();
+        let half = turn.abs() * 0.5;
+        let chord = (*q - *p).hypot();
+        let length = if half > 1e-9 { chord * half / half.sin() } else { chord };
+        let advance = ends.get(i + 1).zip(ends.get(i)).map_or(f64::NAN, |(e1, e0)| e1 - e0);
+        if turn.abs() <= 1.0 && length.is_finite() && advance.is_finite() {
+            sum += (advance - length) * turn;
+            turns += turn * turn;
+        }
+    }
+    (sum, turns)
 }
 
 impl Story {
@@ -1745,6 +1790,29 @@ mod tests {
         assert!(glyphs.first().is_some_and(|(_, m)| m[0] < 0.0) && glyphs.last().is_some_and(|(_, m)| m[0] > 0.0));
         let spacing = path_spacing(&line_layout(&advances, &glyphs, ""), PathEffect::Ribbon3d);
         assert!((spacing - 10.0).abs() < 1e-6, "{spacing}");
+    }
+
+    /// Stair Step's glyphs stay upright, each origin on the path, its step the path's length to the
+    /// next. On a circle of radius 100 with spacing 10, each step is 100/110 of the glyph's advance;
+    /// moved 20 down by an alignment, the origins give the same spacing.
+    #[test]
+    fn the_spacing_of_stair_step_type_follows_the_origins_of_its_glyphs() {
+        let advances = [20.0, 30.0, 10.0, 25.0, 20.0];
+        for rise in [0.0, 20.0] {
+            let mut s = 0.0;
+            let mut glyphs = vec![];
+            for a in advances {
+                let angle = std::f64::consts::PI + s / 100.0;
+                // `line_layout` takes centres: half an advance along the level baseline.
+                glyphs.push((Point::new(100.0 * angle.cos() + a * 0.5, 100.0 * angle.sin() + rise), [1.0, 0.0, 0.0, 1.0]));
+                s += a * 100.0 / 110.0;
+            }
+            let spacing = path_spacing(&line_layout(&advances, &glyphs, ""), PathEffect::StairStep);
+            assert!((spacing - 10.0).abs() < 1e-6, "{rise}: {spacing}");
+        }
+        // Two glyphs say nothing of how the path turns.
+        let two = line_layout(&advances[..2], &[(Point::new(0.0, 0.0), [1.0, 0.0, 0.0, 1.0]), (Point::new(30.0, 5.0), [1.0, 0.0, 0.0, 1.0])], "");
+        assert_eq!(path_spacing(&two, PathEffect::StairStep), 0.0);
     }
 
     /// With Ascender (baselines 20 towards the feet), glyphs facing left lie outside the path and
