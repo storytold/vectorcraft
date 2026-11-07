@@ -11,6 +11,7 @@
 
 mod flavours;
 pub(crate) mod resources;
+mod table;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
