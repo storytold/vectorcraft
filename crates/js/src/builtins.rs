@@ -215,13 +215,32 @@ fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: b
 /// `Function(p1, …, body)` and `new Function(…)` (section 15.3.2.1): the source is read as
 /// `(function anonymous(p1,…\n) {\nbody\n})` and must be exactly that one function.
 fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    const HEAD: &str = "(function anonymous(";
+    const MID: &str = "\n) {\n";
+    const TAIL: &str = "\n})";
     let mut parts = Vec::with_capacity(args.len());
     for a in args {
-        parts.push(interp.to_str(a)?.to_rust_string());
+        parts.push(interp.to_str(a)?);
     }
-    let body = parts.pop().unwrap_or_default();
-    let text = format!("(function anonymous({}\n) {{\n{body}\n}})", parts.join(","));
-    let units = interp.encode_source(&text).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    let body = parts.pop().unwrap_or_else(|| Str::from(""));
+    // The length is checked against the source limit before any argument is flattened or copied.
+    let total = parts
+        .iter()
+        .map(Str::len)
+        .chain([parts.len().saturating_sub(1), HEAD.len() + MID.len() + TAIL.len(), body.len()])
+        .fold(0usize, usize::saturating_add);
+    interp.check_source_units(total).map_err(|e| interp.compile_error_to_abrupt(e))?;
+    let mut units = Vec::with_capacity(total);
+    units.extend(HEAD.encode_utf16());
+    for (i, p) in parts.iter().enumerate() {
+        if i > 0 {
+            units.push(u16::from(b','));
+        }
+        units.extend_from_slice(&p.flat());
+    }
+    units.extend(MID.encode_utf16());
+    units.extend_from_slice(&body.flat());
+    units.extend(TAIL.encode_utf16());
     interp.source_units = interp.source_units.saturating_add(units.len());
     let remaining = interp.options.max_source_units.saturating_sub(interp.source_units.saturating_sub(units.len()));
     let options = crate::Options { strict: false, max_source_units: remaining, ..interp.options.clone() };

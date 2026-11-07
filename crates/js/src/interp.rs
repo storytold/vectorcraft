@@ -941,9 +941,10 @@ impl Interp {
         {
             *length = i + 1;
         }
+        let name_len = k.len();
         o.props.insert(k, prop);
         if new {
-            self.heap.bytes += PROP_BYTES;
+            self.heap.bytes += PROP_BYTES + string_bytes(name_len);
         }
         Ok(())
     }
@@ -1277,9 +1278,10 @@ impl Interp {
     fn env_insert(&mut self, env: EnvId, name: Key, b: Binding) -> JsResult<()> {
         let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env) else { return internal("not a declarative environment") };
         let new = !bindings.contains(&name);
+        let name_len = name.len();
         bindings.insert(name, b);
         if new {
-            self.heap.bytes += PROP_BYTES;
+            self.heap.bytes += PROP_BYTES + string_bytes(name_len);
         }
         Ok(())
     }
@@ -1318,9 +1320,10 @@ impl Interp {
         let v = self.pop()?;
         let outer = self.frame()?.env;
         let mut bindings = PropMap::default();
+        let name_bytes = string_bytes(name.len());
         bindings.insert(name, Binding { value: v, mutable: true, deletable: false });
         let env = self.heap.alloc_env(Env::Decl { bindings, outer: Some(outer) });
-        self.heap.bytes += PROP_BYTES;
+        self.heap.bytes += name_bytes;
         let frame = self.frame_mut()?;
         frame.env = env;
         frame.env_depth += 1;
@@ -1457,7 +1460,12 @@ impl Interp {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
                         Ok(v) => Ok(Prepared::Done(self.from_js_value(v)?)),
-                        Err(message) => Err(self.throw(ErrorType::Error, &message)),
+                        Err(message) => {
+                            let bytes = string_bytes(message.encode_utf16().count());
+                            self.reserve_heap(bytes)?;
+                            self.heap.bytes += bytes;
+                            Err(self.throw(ErrorType::Error, &message))
+                        }
                     };
                 }
             }
@@ -1583,9 +1591,9 @@ impl Interp {
         for (i, p) in code.params.iter().enumerate() {
             bindings.insert(p.clone(), Binding { value: args.get(i).cloned().unwrap_or(Value::Undefined), mutable: true, deletable: false });
         }
-        let count = bindings.len();
+        let name_bytes = bindings.iter().map(|(k, _)| string_bytes(k.len())).sum::<usize>();
         let env = self.heap.alloc_env(Env::Decl { bindings, outer: Some(outer) });
-        self.heap.bytes += PROP_BYTES * count;
+        self.heap.bytes += name_bytes;
         for (name, fi) in &code.fun_decls {
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, env)?;

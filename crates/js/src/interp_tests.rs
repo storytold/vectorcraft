@@ -264,7 +264,46 @@ fn with_big(limits: Limits) -> Realm {
         [JsValue::Number(n)] => Ok(JsValue::String("x".repeat(*n as usize))),
         _ => Err("big takes a length".into()),
     });
+    realm.define_function("fail", |args| match args {
+        [JsValue::Number(n)] => Err("x".repeat(*n as usize)),
+        _ => Err("fail takes a length".into()),
+    });
     realm
+}
+
+#[test]
+fn error_messages_from_host_functions_count_toward_the_heap() {
+    let limits = Limits { heap_bytes: 1 << 20, fuel: 100_000, ..Limits::default() };
+    let mut realm = with_big(limits.clone());
+    assert_eq!(realm.run("try { fail(1000); } catch (e) { e.message.length }"), Ok(JsValue::Number(1000.0)));
+    assert_eq!(limit(&mut with_big(limits.clone()), "try { fail(1000000); } catch (e) {}"), LimitKind::Heap);
+    assert_eq!(limit(&mut with_big(limits), "var a = []; for (var i = 0; ; i++) try { fail(100000); } catch (e) { a[i] = e; }"), LimitKind::Heap);
+}
+
+#[test]
+fn names_from_source_count_toward_the_heap_when_they_are_bound() {
+    // Without a collection in between, the estimate grows by at least each new name's code units:
+    // a global variable (an object property), a binding made by direct eval, and a parameter of a
+    // function made by the Function constructor.
+    let mut realm = small(Limits::default());
+    let name = "n".repeat(100_000);
+    let cases = [
+        format!("var {name} = 1;"),
+        format!("(function () {{ eval('var {name}2 = 1; {name}2'); }})();"),
+        format!("Function('{name}3', 'return {name}3')(1);"),
+    ];
+    let mut short = Vec::new();
+    for (i, src) in cases.iter().enumerate() {
+        let collections = realm.interp().heap.collections;
+        let before = realm.interp().heap.bytes;
+        realm.run(src).unwrap();
+        assert_eq!(realm.interp().heap.collections, collections, "a collection ran in case {i}");
+        let grown = realm.interp().heap.bytes - before;
+        if grown < crate::heap::string_bytes(100_000) {
+            short.push((i, grown));
+        }
+    }
+    assert!(short.is_empty(), "cases that grew by less than the name: {short:?}");
 }
 
 #[test]
@@ -405,6 +444,22 @@ fn eval_and_function_source_counts_against_the_source_limit() {
     assert!(e.message.contains(crate::TOO_LONG), "the sources of one run count together: {e:?}");
     let e = realm.run("Function('return 1;' + '                                                                                                                                                                                                       ')").unwrap_err();
     assert!(e.message.contains(crate::TOO_LONG), "{e:?}");
+}
+
+#[test]
+fn the_function_constructor_checks_the_source_limit_before_reading_its_arguments() {
+    // A rope argument that is too long is refused before it is flattened.
+    let mut realm = Realm::with_options(Options { max_source_units: 1000, ..Options::default() }, Limits::default());
+    let e = realm.run("var s = 'return 1;'; for (var i = 0; i < 12; i++) s += s; Function('a', s)").unwrap_err();
+    assert!(e.message.contains(crate::TOO_LONG), "{e:?}");
+    let interp = realm.interp();
+    match interp.find_property(interp.global, &crate::heap::key("s")) {
+        Ok(Some(crate::heap::Prop::Data { value: crate::value::Value::String(s), .. })) => assert!(s.is_rope(), "the argument was flattened"),
+        other => panic!("{other:?}"),
+    }
+    // The source is read as code units, so a lone surrogate in an argument is kept.
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Function('return \"\\ud800\"')() === '\\ud800'"), Ok(JsValue::Bool(true)));
 }
 
 #[test]
