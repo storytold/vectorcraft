@@ -5581,11 +5581,13 @@ fn art_styles_write_the_same_bytes_again() {
     near_lines(&rgb_without_cmyk(&shown(&again)), &rgb_without_cmyk(&shown(&first.program)));
 }
 
-/// `program` with the CMYK equivalents of RGB colors blanked out: the first four numbers of an RGB
-/// color's `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. A
-/// save of the reopened file computes them again from the RGB values read back at four decimals,
-/// and on some platforms the CMYK conversion moves them by more than [`near_lines`] allows. The RGB
-/// values stay compared.
+/// `program` with the CMYK equivalents of plain RGB colors blanked out: the first four numbers of
+/// `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. Named and
+/// spot RGB colors (`... (name) tint Xk`, `Xx` and spot stops) are not blanked; the document this
+/// is used on has none. The Generic CMYK separation of a color at the edge of the press gamut can
+/// land on one of two results that differ by up to 0.01 when the RGB changes in its last float
+/// bits, as it does between the first save and the save of the reopened file, and the platform's
+/// float math decides which. The RGB values stay compared.
 fn rgb_without_cmyk(program: &str) -> String {
     let blank = |line: &str| {
         let (prefix, rest) = line.strip_prefix("%_").map_or(("", line), |r| ("%_", r));
