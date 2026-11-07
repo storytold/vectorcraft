@@ -35,6 +35,7 @@
 
 mod ai;
 mod ate;
+mod cid;
 mod data;
 mod graphics;
 mod interp;
@@ -44,9 +45,14 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_cid;
+#[cfg(test)]
+mod tests_composite;
 #[cfg(test)]
 mod tests_fontnames;
 #[cfg(test)]
@@ -57,6 +63,8 @@ mod tests_illustrator;
 mod tests_images;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_type42;
 
 use std::collections::HashSet;
 use std::sync::Arc;

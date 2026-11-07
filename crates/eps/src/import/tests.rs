@@ -983,8 +983,8 @@ fn intervals_share_their_arrays_and_strings() {
 fn resourceforall_enumerates_matching_names() {
     // #234.
     blue("(*) { pop } 128 string /Category resourceforall 0 0 1 setrgbcolor");
-    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /ProcSet resourceforall n");
-    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /ProcSet defineresource pop } forall";
+    let count = |template: &str| format!("/n 0 def ({template}) {{ pop /n n 1 add def }} 128 string /Form resourceforall n");
+    let define = "[/Foo /Fop /Bar /F*x] { 1 dict /Form defineresource pop } forall";
     check(&format!("{define} {} 4 eq", count("*")));
     check(&format!("{define} {} 2 eq", count("Fo?")));
     check(&format!("{define} {} 3 eq", count("F*")));
@@ -992,10 +992,10 @@ fn resourceforall_enumerates_matching_names() {
     check(&format!("{define} {} 0 eq", count("Q*")));
     check(&format!("{define} {} 1 eq", count("*a*")));
     // Each name is copied into the scratch string; exit stops.
-    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /ProcSet resourceforall last (Bar) eq"));
-    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /ProcSet resourceforall n 1 eq"));
+    check(&format!("{define} /last () def (B*) {{ dup length string copy /last exch def }} 8 string /Form resourceforall last (Bar) eq"));
+    check(&format!("{define} /n 0 def (*) {{ pop /n n 1 add def exit }} 8 string /Form resourceforall n 1 eq"));
     // A scratch string too small for the names, as the prolog probes it.
-    check(&format!("{define} {{ (*) {{ pop }} 2 string /ProcSet resourceforall }} stopped"));
+    check(&format!("{define} {{ (*) {{ pop }} 2 string /Form resourceforall }} stopped"));
     check("/n 0 def (Gen*) { pop /n n 1 add def } 16 string /Category resourceforall n 1 eq");
 }
 
@@ -1125,7 +1125,7 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 /// budget. Running to the end of the budget can take over 20 s on a slow CI runner
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
-fn runs_out_of_budget(body: &str) {
+pub(super) fn runs_out_of_budget(body: &str) {
     let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
