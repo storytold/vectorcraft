@@ -799,6 +799,7 @@ font-technology	Variable	Biến thiên
 	Customize…	Tùy chỉnh…
 	Cut	Cắt
 	Cut Artboard	Cắt bảng vẽ
+	Rename Artboards	Đổi tên các bảng vẽ
 	Cut Path	Cắt đường dẫn
 	Cut Path at Selected Anchor Points	Cắt đường dẫn tại các điểm neo đã chọn
 	Cyan	Xanh lơ
@@ -2894,6 +2895,9 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Rearrange	Sắp xếp lại
+	Select All Artboards	Chọn tất cả các bảng vẽ
+	Switch Orientation	Chuyển hướng
 	Rearrange All	Sắp xếp lại tất cả
 	Rearrange All Artboards	Sắp xếp lại tất cả bảng vẽ
 	Rearrange All Artboards…	Sắp xếp lại tất cả bảng vẽ…

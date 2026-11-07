@@ -844,6 +844,7 @@ font-technology	Variable	Μεταβλητές
 	Duplicate Artboard	Δημιουργία αντιγράφου πίνακα σχεδίασης
 	Copy Artboard	Αντιγραφή πίνακα σχεδίασης
 	Cut Artboard	Αποκοπή πίνακα σχεδίασης
+	Rename Artboards	Μετονομασία πινάκων σχεδίασης
 	Duplicate Artboards	Δημιουργία αντιγράφων πινάκων σχεδίασης
 	Duplicate Brush	Δημιουργία αντιγράφου πινέλου
 	Duplicate Character Style	Δημιουργία αντιγράφου στυλ χαρακτήρων
@@ -3160,6 +3161,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
+	Rearrange	Αναδιάταξη
+	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
+	Switch Orientation	Αλλαγή προσανατολισμού
 	Rearrange All	Αναδιάταξη όλων
 	Layout Order:	Σειρά διάταξης:
 	Change to Left-to-Right Layout	Αλλαγή σε διάταξη από αριστερά προς τα δεξιά

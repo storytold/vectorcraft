@@ -866,6 +866,7 @@ font-technology	Variable	Değişken
 	Duplicate Artboard	Çalışma Yüzeyini Çoğalt
 	Copy Artboard	Çalışma Yüzeyini Kopyala
 	Cut Artboard	Çalışma Yüzeyini Kes
+	Rename Artboards	Çalışma Yüzeylerini Yeniden Adlandır
 	Duplicate Artboards	Çalışma Yüzeylerini Çoğalt
 	Duplicate Brush	Yinelenen Fırça
 	Duplicate Character Style	Yinelenen Karakter Stili
@@ -2382,6 +2383,9 @@ digits	Malayalam	Malayalam
 	Real World:	Gerçek Dünya:
 	Real-time Drawing and Editing	Gerçek Zamanlı Çizim ve Düzenleme
 	Rearrange All Artboards	Tüm Çalışma Yüzeylerini Yeniden Düzenleme
+	Rearrange	Yeniden Düzenle
+	Select All Artboards	Tüm Çalışma Yüzeylerini Seç
+	Switch Orientation	Yönü Değiştir
 	Rearrange All	Tümünü Yeniden Düzenle
 	Layout Order:	Yerleşim Sırası:
 	Change to Left-to-Right Layout	Soldan Sağa Düzene Geç

@@ -270,7 +270,9 @@ impl Interp<'_> {
         let name = self.pop()?.text().ok_or(PsError::Ps("typecheck", "filter".into()))?;
         let sub = if &*name == "SubFileDecode" {
             let eod = self.pop_str()?.to_vec();
-            let count = self.pop_count()?;
+            // The count bounds what the filter reads, not what it allocates: a stream of several
+            // megabytes read through `currentfile N () /SubFileDecode filter` gives its length.
+            let count = usize::try_from(self.pop_int()?).map_err(|_| PsError::Ps("rangecheck", "a count".into()))?;
             (count, eod)
         } else {
             (0, vec![])
@@ -399,6 +401,30 @@ impl Interp<'_> {
         Ok(())
     }
 
+    /// Skip the data an image left out (too large to read) would read from the program's own
+    /// file, so the program doesn't go on to read that data as PostScript. The filters that find
+    /// their own end without decompressing (`ASCIIHexDecode`, `ASCII85Decode`, `SubFileDecode`)
+    /// read the file up to it, the way the image reading all its data would leave it; the
+    /// filters over them, which would only decode what those pass, aren't run. When the first
+    /// filter decompresses, it is run alone, and a failure (data too large to hold) leaves the
+    /// data where it was, as before.
+    fn skip_data(&mut self, src: &Source) {
+        let Source::File(f) = src else { return };
+        let (chain, from) = match &*f.borrow() {
+            Stream::Pending { chain, from } => (chain.clone(), from.clone()),
+            _ => return,
+        };
+        let delimited = chain.iter().take_while(|c| matches!(&*c.name, "ASCIIHexDecode" | "ASCII85Decode" | "SubFileDecode")).count();
+        let head = chain.get(..delimited.max(1)).unwrap_or_default().to_vec();
+        *f.borrow_mut() = Stream::Pending { chain: head, from: from.clone() };
+        // A failure leaves the file as it was; the import goes on without the image either way.
+        if self.materialize(f).is_err() {
+            *f.borrow_mut() = Stream::Pending { chain, from };
+            return;
+        }
+        *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
+    }
+
     /// The bytes a data procedure gives, called until it gives an empty string or `n` bytes.
     fn gather(&mut self, p: &Obj, n: usize) -> Res<Vec<u8>> {
         Ok(self.read_sources(&[Source::Proc(p.clone())], n, n)?.pop().unwrap_or_default())
@@ -518,6 +544,9 @@ impl Interp<'_> {
         let n = image.space.n();
         if image.w.saturating_mul(image.h) > MAX_PIXELS || stencil.w.saturating_mul(stencil.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in image.sources.iter().chain(&stencil.sources) {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
         if interleave != 3.0 {
@@ -624,6 +653,9 @@ impl Interp<'_> {
         }
         if s.w.saturating_mul(s.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in &s.sources {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
         self.alloc(s.w * s.h * 4)?;

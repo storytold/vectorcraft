@@ -866,6 +866,7 @@ font-technology	Variable	Variabel
 	Duplicate Artboard	Zeichenfläche duplizieren
 	Copy Artboard	Zeichenfläche kopieren
 	Cut Artboard	Zeichenfläche ausschneiden
+	Rename Artboards	Zeichenflächen umbenennen
 	Duplicate Artboards	Zeichenflächen duplizieren
 	Duplicate Brush	Pinsel duplizieren
 	Duplicate Character Style	Zeichenformat duplizieren
@@ -2529,6 +2530,9 @@ digits	Malayalam	Malayalam
 	Real World:	Reale Welt:
 	Real-time Drawing and Editing	Zeichnen und Bearbeiten in Echtzeit
 	Rearrange All Artboards	Alle Zeichenflächen neu anordnen
+	Rearrange	Neu anordnen
+	Select All Artboards	Alle Zeichenflächen auswählen
+	Switch Orientation	Ausrichtung wechseln
 	Rearrange All	Alle neu anordnen
 	Layout Order:	Layoutreihenfolge:
 	Change to Left-to-Right Layout	In Layout von links nach rechts ändern
