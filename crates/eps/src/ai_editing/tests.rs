@@ -5549,7 +5549,8 @@ fn effects_in_a_styled_objects_mask_are_warned_about() {
 }
 
 /// On a large canvas no art style is written (the reader scales the styles of a large canvas):
-/// objects with effects are their drawn look, with a warning.
+/// objects with effects are written as their vector art with their geometry effects applied, with a
+/// warning.
 #[test]
 fn a_large_canvas_writes_no_art_styles() {
     let mut doc = Document::new(20000.0, 100.0);
@@ -5577,7 +5578,23 @@ fn art_styles_write_the_same_bytes_again() {
     assert_eq!(private_data(&doc, &opts()).unwrap().0, private_data(&doc, &opts()).unwrap().0);
     // What is read back is written as it was.
     let again = export_ai_editing(&read_back(&doc), &opts()).unwrap().program;
-    near_lines(&shown(&again), &shown(&first.program));
+    near_lines(&rgb_without_cmyk(&shown(&again)), &rgb_without_cmyk(&shown(&first.program)));
+}
+
+/// `program` with the CMYK equivalents of RGB colors blanked out: the first four numbers of an RGB
+/// color's `c m y k r g b Xa` (or `XA`) and of an RGB gradient stop's `c m y k r g b 2 ... Bs`. A
+/// save of the reopened file computes them again from the RGB values read back at four decimals,
+/// and on some platforms the CMYK conversion moves them by more than [`near_lines`] allows. The RGB
+/// values stay compared.
+fn rgb_without_cmyk(program: &str) -> String {
+    let blank = |line: &str| {
+        let (prefix, rest) = line.strip_prefix("%_").map_or(("", line), |r| ("%_", r));
+        let t: Vec<&str> = rest.split(' ').collect();
+        let color = t.len() == 8 && matches!(t[7], "Xa" | "XA");
+        let stop = t.len() > 8 && t[7] == "2" && t.last() == Some(&"Bs");
+        if color || stop { format!("{prefix}_ _ _ _ {}", t[4..].join(" ")) } else { line.to_string() }
+    };
+    program.lines().map(blank).collect::<Vec<_>>().join("\n")
 }
 
 /// `n` on the first layer of `doc`.
