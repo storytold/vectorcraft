@@ -373,6 +373,39 @@ fn eval_and_function_source_counts_against_the_source_limit() {
 }
 
 #[test]
+fn a_script_longer_than_the_source_limit_is_a_syntax_error() {
+    let mut realm = Realm::with_options(Options { max_source_units: 10, ..Options::default() }, Limits::default());
+    let e = realm.run("1 + 2 + 3 + 4").unwrap_err();
+    assert_eq!((&e.kind, e.message.contains(crate::TOO_LONG)), (&RunErrorKind::Syntax, true), "{e:?}");
+    // Ten UTF-16 code units in 18 bytes of UTF-8 fit.
+    assert_eq!(realm.run("'\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}'"), Ok(JsValue::String("\u{e9}".repeat(8))));
+    let mut realm = Realm::with_options(Options { max_source_units: 40, ..Options::default() }, Limits::default());
+    let e = realm.run("Function('return 1;')").unwrap_err();
+    assert_eq!((&e.kind, e.message.contains(crate::TOO_LONG)), (&RunErrorKind::Thrown, true), "{e:?}");
+}
+
+#[test]
+fn bind_last_thrown_binds_undefined_after_a_run_that_did_not_throw() {
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("throw 'first'").map_err(|e| e.kind), Err(RunErrorKind::Thrown));
+    realm.bind_last_thrown("caught");
+    assert_eq!(realm.run("caught"), Ok(JsValue::String("first".into())));
+    assert_eq!(realm.run("1 + 1"), Ok(JsValue::Number(2.0)));
+    realm.bind_last_thrown("caught");
+    assert_eq!(realm.run("caught"), Ok(JsValue::Undefined));
+    let _ = realm.run("throw 'second'");
+    assert_eq!(realm.run("var").map_err(|e| e.kind), Err(RunErrorKind::Syntax));
+    realm.bind_last_thrown("caught");
+    assert_eq!(realm.run("caught"), Ok(JsValue::Undefined), "a run that does not parse throws nothing");
+    realm.set_limits(Limits { fuel: 100, ..Limits::default() });
+    let _ = realm.run("throw 'third'");
+    assert_eq!(limit(&mut realm, "for (;;) {}"), LimitKind::Fuel);
+    realm.bind_last_thrown("caught");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("caught"), Ok(JsValue::Undefined), "a run that reached a limit threw nothing");
+}
+
+#[test]
 fn wasm_builds_have_smaller_default_limits() {
     let limits = Limits::default();
     #[cfg(target_arch = "wasm32")]

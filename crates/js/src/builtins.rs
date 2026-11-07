@@ -221,7 +221,7 @@ fn function_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsRe
     }
     let body = parts.pop().unwrap_or_default();
     let text = format!("(function anonymous({}\n) {{\n{body}\n}})", parts.join(","));
-    let units: Vec<u16> = text.encode_utf16().collect();
+    let units = interp.encode_source(&text).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.source_units = interp.source_units.saturating_add(units.len());
     let remaining = interp.options.max_source_units.saturating_sub(interp.source_units.saturating_sub(units.len()));
     let options = crate::Options { strict: false, max_source_units: remaining, ..interp.options.clone() };
@@ -264,6 +264,7 @@ fn function_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
 fn eval(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let x = arg(args, 0);
     let Value::String(s) = &x else { return Ok(x) };
+    interp.check_source_units(s.len()).map_err(|e| interp.compile_error_to_abrupt(e))?;
     let units = s.flat();
     let code = interp.compile_source(&units, false, CodeKind::Eval).map_err(|e| interp.compile_error_to_abrupt(e))?;
     interp.run_global(code, true)

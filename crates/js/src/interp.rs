@@ -1608,6 +1608,24 @@ impl Interp {
 
     // ---- eval and scripts ----
 
+    /// The options for source parsed next in this run: [`Options::max_source_units`] is what
+    /// the run may still parse.
+    fn remaining_source_options(&self) -> Options {
+        Options { max_source_units: self.options.max_source_units.saturating_sub(self.source_units), ..self.options.clone() }
+    }
+
+    /// Checks that `units` more code units of source fit in what this run may still parse,
+    /// before the source is flattened or encoded.
+    pub(crate) fn check_source_units(&self, units: usize) -> Result<(), CompileError> {
+        crate::check_length(units, &self.remaining_source_options()).map_err(CompileError::Syntax)
+    }
+
+    /// Encodes `text` as UTF-16 for parsing, after checking that it fits in what this run may
+    /// still parse.
+    pub(crate) fn encode_source(&self, text: &str) -> Result<Vec<u16>, CompileError> {
+        crate::to_utf16(text, &self.remaining_source_options()).map_err(CompileError::Syntax)
+    }
+
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
@@ -1637,6 +1655,7 @@ impl Interp {
             return self.push(x);
         };
         let strict = self.strict();
+        self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         let units = s.flat();
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         let frame = self.frame()?;

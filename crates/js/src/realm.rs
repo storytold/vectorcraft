@@ -173,8 +173,8 @@ impl Realm {
         interp.fuel = interp.limits.fuel;
         interp.source_units = 0;
         interp.throw_site = None;
-        let units: Vec<u16> = source.encode_utf16().collect();
-        let code = match interp.compile_source(&units, false, CodeKind::Global) {
+        interp.last_thrown = Value::Undefined;
+        let code = match interp.encode_source(source).and_then(|units| interp.compile_source(&units, false, CodeKind::Global)) {
             Ok(code) => code,
             Err(CompileError::Syntax(e)) => return Err(e.into()),
             Err(CompileError::Internal(m)) => return Err(RunError { kind: RunErrorKind::Internal, message: m, line: 0, column: 0 }),
