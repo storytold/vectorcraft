@@ -142,6 +142,9 @@ pub(crate) enum Op {
     ForInNext(u32),
     /// Pops the value of an expression statement into the completion value.
     SetCompletion,
+    /// Pushes the completion value, which a `finally` block in script and eval code keeps and
+    /// sets back with `SetCompletion` when it ends normally.
+    GetCompletion,
 }
 
 /// What code is: a function body, a script, or eval code.
@@ -237,7 +240,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::GetVar(_) | Op::TypeofVar(_) | Op::DeleteVar(_) | Op::IncVar { .. } | Op::RefVar(_) => e(0, 1),
         Op::GetRef(_) => e(1, 1),
         Op::PutRef(_) => e(2, 1),
-        Op::NewObject | Op::NewArray | Op::Closure(_) | Op::RegExp(_) => e(0, 1),
+        Op::NewObject | Op::NewArray | Op::Closure(_) | Op::RegExp(_) | Op::GetCompletion => e(0, 1),
         Op::Pop | Op::PushWith | Op::PushCatch(_) | Op::SetCompletion => e(1, 0),
         Op::PopUnder(n) => e(n.checked_add(1).ok_or("operand too large")?, 1),
         Op::Dup => e(1, 2),

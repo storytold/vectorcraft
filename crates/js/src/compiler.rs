@@ -708,7 +708,16 @@ impl<'a> FnCompiler<'a> {
         self.emit(Op::Undefined);
         self.push_number(0.0);
         self.bind(fin_entry);
+        // In script and eval code the finally block keeps the completion value of the try or
+        // catch block when it ends normally (ECMA-262 5.1 section 12.14).
+        let keeps_completion = self.kind != CodeKind::Function;
+        if keeps_completion {
+            self.emit(Op::GetCompletion);
+        }
         self.stmts(fin)?;
+        if keeps_completion {
+            self.emit(Op::SetCompletion);
+        }
         let dispatch: Vec<Label> = exits.iter().map(|_| self.new_label()).collect();
         let table = u32::try_from(self.finally_tables.len()).unwrap_or(u32::MAX);
         self.finally_tables.push(dispatch.clone());

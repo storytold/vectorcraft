@@ -163,6 +163,21 @@ fn control_flow_with_labels_switch_and_finally() {
 }
 
 #[test]
+fn a_finally_block_keeps_the_completion_value_unless_it_ends_abruptly() {
+    // Section 12.14: a finally block that ends normally leaves the try or catch block's value.
+    let cases = [
+        ("try { 1; } finally { 2; }", 1.0),
+        ("try { throw 0; } catch (e) { 1; } finally { 2; }", 1.0),
+        ("eval('try { 1; } finally { 2; }')", 1.0),
+        ("try { try { 1; } finally { 2; } } finally { 3; }", 1.0),
+        ("do { try { 1; } finally { 2; break; } } while (false)", 2.0),
+        ("do { try { 1; } finally { 2; continue; } } while (false)", 2.0),
+    ];
+    let wrong: Vec<(&str, f64, f64)> = cases.iter().map(|&(src, want)| (src, want, num(src))).filter(|&(_, want, got)| want != got).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[test]
 fn with_eval_and_new_function() {
     assert_eq!(num("var o = {a: 2}; with (o) { a = 3; } o.a"), 3.0);
     truth("var o = {f: function() { return this; }}; with (o) { f() === o }");
@@ -241,6 +256,25 @@ fn limit(realm: &mut Realm, src: &str) -> LimitKind {
         Err(RunError { kind: RunErrorKind::Limit(k), .. }) => k,
         other => panic!("{src}: {other:?}"),
     }
+}
+
+fn with_big(limits: Limits) -> Realm {
+    let mut realm = small(limits);
+    realm.define_function("big", |args| match args {
+        [JsValue::Number(n)] => Ok(JsValue::String("x".repeat(*n as usize))),
+        _ => Err("big takes a length".into()),
+    });
+    realm
+}
+
+#[test]
+fn strings_from_host_functions_count_toward_the_heap() {
+    let limits = Limits { heap_bytes: 1 << 20, fuel: 100_000, ..Limits::default() };
+    let mut realm = with_big(limits.clone());
+    assert_eq!(realm.run("big(1000).length"), Ok(JsValue::Number(1000.0)));
+    assert_eq!(realm.run("var a = []; for (var i = 0; i < 4; i++) a[i] = big(50000); a[3].length"), Ok(JsValue::Number(50000.0)));
+    assert_eq!(limit(&mut with_big(limits.clone()), "var a = []; for (var i = 0; ; i++) a[i] = big(100000);"), LimitKind::Heap);
+    assert_eq!(limit(&mut with_big(limits), "big(1000000).length"), LimitKind::Heap);
 }
 
 #[test]

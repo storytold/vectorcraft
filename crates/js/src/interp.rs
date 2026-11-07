@@ -586,6 +586,10 @@ impl Interp {
                 self.frame_mut()?.completion = v;
                 Ok(())
             }
+            Op::GetCompletion => {
+                let v = self.frame()?.completion.clone();
+                self.push(v)
+            }
             Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
         }
     }
@@ -1452,7 +1456,7 @@ impl Interp {
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
-                        Ok(v) => Ok(Prepared::Done(self.from_js_value(v))),
+                        Ok(v) => Ok(Prepared::Done(self.from_js_value(v)?)),
                         Err(message) => Err(self.throw(ErrorType::Error, &message)),
                     };
                 }
@@ -2087,16 +2091,24 @@ impl Interp {
         }
     }
 
+    /// A host value as a JavaScript value. A string is charged to the heap, and one that does not
+    /// fit in it ends the run with the heap limit. Everything the caller still needs must be
+    /// reachable from the roots.
     #[allow(clippy::wrong_self_convention)]
-    pub(crate) fn from_js_value(&mut self, v: crate::JsValue) -> Value {
-        match v {
+    pub(crate) fn from_js_value(&mut self, v: crate::JsValue) -> JsResult<Value> {
+        Ok(match v {
             crate::JsValue::Undefined => Value::Undefined,
             crate::JsValue::Null => Value::Null,
             crate::JsValue::Bool(b) => Value::Bool(b),
             crate::JsValue::Number(n) => Value::Number(n),
-            crate::JsValue::String(s) => Value::str(&s),
+            crate::JsValue::String(s) => {
+                let bytes = string_bytes(s.encode_utf16().count());
+                self.reserve_heap(bytes)?;
+                self.heap.bytes += bytes;
+                Value::str(&s)
+            }
             crate::JsValue::Object(_) => Value::Object(self.new_object()),
-        }
+        })
     }
 
     /// A description of a thrown value that runs no JavaScript: `Name: message` for an error,
