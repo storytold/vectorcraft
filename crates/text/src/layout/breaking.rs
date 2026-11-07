@@ -109,7 +109,8 @@ impl Pen<'_> {
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
             for _ in 0..=MAX_STEPS {
-                if baseline + est.desc > r.bottom() + 0.01 {
+                // A baseline a step no longer moves (past a gutter of 1e300, say) won't reach a line.
+                if baseline + est.desc > r.bottom() + 0.01 || baseline + step <= baseline || baseline.is_nan() {
                     break;
                 }
                 // A rectangle's lines are all as wide: none below has more room for the word
