@@ -297,7 +297,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = wait {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(secs));
     }
-    // A frame with copied pixels renders whole once the view has stopped for STILL_SECS.
+    // A frame with copied pixels renders whole once it has been shown for STILL_SECS with the view unmoved.
     let same_frame = app.canvas.key.as_ref() == Some(&key);
     let settle = app.canvas.reused.filter(|_| same_frame).is_some_and(|at| {
         let waited = ui.input(|i| i.time) - at;

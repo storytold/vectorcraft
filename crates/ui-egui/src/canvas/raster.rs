@@ -202,13 +202,13 @@ fn composed_frame(
 /// whole, and so does a pan when a part it exposes draws art in a way that depends on the frame's
 /// size ([`vectorcraft_render::FrameStats::view_sized`]). A copied frame can differ from the same
 /// frame rendered whole (by at most one level in the tests), so the canvas renders a frame whole
-/// once the view has stopped ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job`
-/// allows keeping it, it is at most [`MAX_KEPT_BYTES`], it draws no raster from before its object
-/// moved, and it draws nothing in a way that depends on its size. A frame that renders whole once
-/// the view has stopped is kept too, so the first step of the next pan copies from it. A kept frame
-/// holds its pixels only when it is the worker's first or nothing but the position of the view
-/// differs from the frame before it. A frame after a zoom or an edit holds none, so it costs no
-/// copy, and the first pan step after it renders whole.
+/// once it has been shown for [`super::STILL_SECS`] with the view unmoved
+/// ([`crate::CanvasCache::reused`]). `kept` becomes this frame when `job` allows keeping it, it is
+/// at most [`MAX_KEPT_BYTES`], it draws no raster from before its object moved, and it draws nothing
+/// in a way that depends on its size. That whole frame is kept too, so the first step of the next
+/// pan copies from it. A kept frame holds its pixels only when the worker kept no frame before it or
+/// nothing but the position of the view differs from that frame. A frame after a zoom or an edit
+/// holds none, so it costs no copy, and the first pan step after it renders whole.
 pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option<KeptFrame>, job: &crate::render_worker::Job) -> WorkerFrame {
     let holds_pixels = kept.as_ref().is_none_or(|k| only_position_differs(k, job));
     let copied = kept.as_ref().and_then(|k| {
