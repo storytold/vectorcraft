@@ -1454,6 +1454,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             }
         }
     });
+    if waiting_at_stop(app) {
+        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
+    }
     for change in inclusion_changes {
         let params = match change {
             InclusionChange::Set(si) => {
@@ -1480,9 +1483,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     app.ui.action_set = current;
     app.ui.action_sets_selected = sets_selected;
     widgets::divider(ui);
-    if waiting_at_stop(app) {
-        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
-    }
     // Bottom bar: stop, record, play, new set, new action, delete.
     ui.horizontal(|ui| {
         let recording = app.ui.recording.is_some();
