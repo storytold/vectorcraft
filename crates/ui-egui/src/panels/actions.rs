@@ -871,8 +871,8 @@ const SELECTED_STEP: &str = "actions-selected-step";
 /// the text playback shows (default: none), and `allowContinue` offers Continue in the message box
 /// (default: false). An index past the last set, action or step, a param of another type, params
 /// that are not an object, or no action and no recording is an error, and then nothing changes.
-/// Record Stop's OK runs this, and the new stop is the selected step. → {set, action, step}, or
-/// {recording: true}
+/// Record Stop's OK runs this. A stop in an action becomes the selected step, and its action and set
+/// become the selected ones. → {set, action, step}, or {recording: true}
 pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if !p.is_object() {
         return Err("`params` must be an object".into());
@@ -895,7 +895,10 @@ pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     };
     action.insert_step(after, step);
     let id = action.id;
+    app.ui.action_set = Some(set);
+    app.ui.action_sets_selected = vec![set];
     if let Some(ctx) = app.ui_ctx.clone() {
+        set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((set, at)));
         set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, Some((id, after)));
         let mut expanded: BTreeSet<u64> = pstate(&ctx, "actions-expanded");
         expanded.insert(id);
@@ -3788,6 +3791,36 @@ mod tests {
         let action = &app.ui.action_sets[0].actions[0];
         assert!(action.steps.iter().all(|(c, _)| c == "object.move"), "the new stop was selected, and it goes");
         assert_eq!(action.steps.len(), 3);
+    }
+
+    #[test]
+    fn a_stop_inserted_into_another_action_selects_it_and_delete_selection_deletes_the_stop() {
+        use super::super::tests_appearance::click;
+        let (mut app, _) = app_with_three_moves();
+        let step = ("object.move".to_string(), json!({"dx": 8, "dy": 0}));
+        app.ui.action_sets[0].actions.push(Action::new("Same Set", vec![step.clone()]));
+        app.ui.action_sets.push(ActionSet::new("More", vec![Action::new("Other Set", vec![step])]));
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        for (set, at) in [(0, 1), (1, 0)] {
+            app.ui.action_set = Some(0);
+            app.ui.action_sets_selected = vec![0];
+            set_pstate::<Option<(usize, usize)>>(&ctx, "actions-selected", Some((0, 0)));
+            app.run(INSERT_STOP, json!({"set": set, "action": at, "message": "Paint it"})).unwrap();
+            assert_eq!(app.ui.action_set, Some(set));
+            assert_eq!(app.ui.action_sets_selected, vec![set]);
+            let selected = pstate::<Option<(usize, usize)>>(&ctx, "actions-selected");
+            assert_eq!(selected, Some((set, at)), "the stop's action is the selected one");
+            assert_eq!(selected_step(&app, &ctx, selected), Some(1), "the new stop is the selected step");
+            let delete = trash(&ctx, &mut app);
+            click(&ctx, &mut app, delete, show);
+            let action = &app.ui.action_sets[set].actions[at];
+            assert!(action.steps.iter().all(|(c, _)| c == "object.move"), "the stop goes");
+            assert_eq!(action.steps.len(), 1, "the command stays");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "the action selected before keeps its steps");
+        }
+        assert_eq!(app.ui.action_sets[0].actions.len(), 2);
+        assert_eq!(app.ui.action_sets[1].actions.len(), 1);
     }
 
     #[test]

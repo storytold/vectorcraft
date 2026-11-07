@@ -1897,7 +1897,8 @@ already walks Image Trace. Short agent entry points:
   `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
   returns `{recording: true}`. `message` is the text playback shows (default: none), and `allowContinue` (default:
   false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
-  VectorCraft's own rule. An index past the last set, action or step, a param of another type, params that are not an
+  VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
+  selected ones. An index past the last set, action or step, a param of another type, params that are not an
   object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
