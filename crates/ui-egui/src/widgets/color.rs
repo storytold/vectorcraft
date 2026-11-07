@@ -1,6 +1,6 @@
 use super::labels::{label_field, name_field, take_previous_label};
 use super::numeric::{STEP_DECIMALS, field_text, round_to, step_to_multiple};
-use super::text::{after_shift_enter, select_all, shift_enter_keeps_focus};
+use super::text::{after_shift_enter, select_all, select_all_on_focus, shift_enter_keeps_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -432,48 +432,153 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
     let label = take_previous_label(ui);
     ui.label(egui::RichText::new("#").size(15.0).color(t.text));
     let id = id_with(ui.scope_id(), id);
+    hex_text(ui, id, hex, |ui, buf, editing| {
+        let resp = egui::Frame::NONE
+            .fill(t.input)
+            .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+            .corner_radius(5)
+            .inner_margin(egui::Margin::symmetric(6, 4))
+            .show(ui, |ui| {
+                // As tall as the other fields (26 points with the margin), whatever the font's line
+                // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
+                ui.spacing_mut().interact_size.y = 18.0;
+                ui.set_height(18.0);
+                ui.add(
+                    egui::TextEdit::singleline(buf)
+                        .id(id)
+                        .frame(egui::Frame::NONE)
+                        .align(egui::Align2::LEFT_CENTER)
+                        .desired_width(62.0)
+                        .char_limit(HEX_FIELD_CHARS)
+                        .font(egui::FontId::proportional(12.5))
+                        .text_color(t.text_strong),
+                )
+            })
+            .inner;
+        name_field(label_field(resp, label), name)
+    })
+}
+
+/// The most characters a hex field's text box holds: six digits and a `#`.
+pub(crate) const HEX_FIELD_CHARS: usize = 7;
+
+/// What happens to a paste into a hex field.
+#[derive(Debug, PartialEq, Eq)]
+enum HexPaste {
+    /// Hex digits that leave at most six digits with the text that stays: the text box inserts them.
+    Insert,
+    /// A full color code: its digits replace the field's, wherever the caret is.
+    Replace(String),
+    /// Anything else: the field stays as it was.
+    Ignore,
+}
+
+/// What a paste of `text` does to a hex field in which `kept` characters stay, not counting a typed `#`
+/// that stays. `whole` says the paste goes over all of the field's text. A code has three or six digits
+/// with or without `#`, and spaces and line breaks around it are ignored. Bare digits that do not go over
+/// the whole text are inserted when the result has at most six digits, except that three digits are
+/// inserted only when exactly three digits stay. Any other code replaces the field's text, and any other
+/// paste is ignored.
+fn hex_paste(text: &str, kept: usize, whole: bool) -> HexPaste {
+    let code = text.trim();
+    let digits = code.strip_prefix('#').unwrap_or(code);
+    if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        HexPaste::Ignore
+    } else if digits == text && !whole && kept + digits.len() <= 6 && (digits.len() != 3 || kept == 3) {
+        HexPaste::Insert
+    } else if matches!(digits.len(), 3 | 6) {
+        HexPaste::Replace(digits.to_string())
+    } else {
+        HexPaste::Ignore
+    }
+}
+
+/// Takes this frame's pastes into hex field `id` from the events before its text box reads them, and
+/// applies each one that replaces `buf`, with the caret after the new digits. Returns whether one did.
+fn take_hex_paste(ui: &Ui, id: egui::Id, buf: &mut String) -> bool {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return false;
+    }
+    let mut state = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
+    let (start, mut selected) = state.cursor.char_range().map_or((0, 0), |r| {
+        let r = r.as_sorted_char_range();
+        (r.start.0, r.end.0 - r.start.0)
+    });
+    let mut replaced = false;
+    ui.input_mut(|i| {
+        i.events.retain(|e| {
+            let egui::Event::Paste(text) = e else { return true };
+            let len = buf.chars().count();
+            let hash = buf.starts_with('#') && start > 0;
+            match hex_paste(text, len.saturating_sub(selected + usize::from(hash)), selected > 0 && selected >= len) {
+                HexPaste::Insert => return true,
+                HexPaste::Replace(digits) => {
+                    *buf = digits;
+                    selected = 0;
+                    replaced = true;
+                }
+                HexPaste::Ignore => {}
+            }
+            false
+        });
+    });
+    if replaced {
+        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(buf.len()))));
+        state.store(ui.ctx(), id);
+    }
+    replaced
+}
+
+/// `digits` with a three-digit code written out as six by doubling each digit. Other text is unchanged.
+fn full_hex(digits: &str) -> String {
+    if digits.len() == 3 && digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        digits.chars().flat_map(|c| [c, c]).collect()
+    } else {
+        digits.to_string()
+    }
+}
+
+/// The text and commit rules of a hex field `id` showing `hex`; `draw` draws its text box with the
+/// text and whether the field has the focus. A click or keyboard focus selects the digits, a pasted
+/// code replaces them ([`hex_paste`]), and Enter, Shift+Enter (which keeps the focus outside dialogs),
+/// a press elsewhere and focus loss commit them. Returns the digits, without `#` and with a three-digit
+/// code written out as six, on commit when they were typed into the field and differ from `hex`.
+pub(crate) fn hex_text(ui: &mut Ui, id: egui::Id, hex: &str, draw: impl FnOnce(&mut Ui, &mut String, bool) -> Response) -> Option<String> {
     let editing = ui.memory(|m| m.has_focus(id));
+    // A press outside the field ends its editing in this frame, so the text typed is committed
+    // before the press acts, as in the numeric fields.
+    if editing
+        && let Some(at) = ui.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+        && ui.ctx().read_response(id).is_some_and(|r| !r.rect.contains(at))
+    {
+        ui.memory_mut(|m| m.surrender_focus(id));
+    }
     // Until the user types into it, the field shows `hex` as it is now, also while it has the
     // focus. Tab can give it the focus in the frame another field commits an edit, before the edit
     // changes `hex`; the text from before that edit is not committed when the focus moves on
-    // (#1692).
+    // (#1692). A field drawn before this one can take the focus on a press, so `editing` is already
+    // false in the frame the field reports `lost_focus`: the text typed is still taken then. Escape
+    // drops it.
     let edited_id = id.with("edited");
-    let edited = editing && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
+    let had_focus = ui.memory(|m| m.had_focus_last_frame(id)) && !ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let edited = (editing || had_focus) && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
     let mut buf: String = if edited { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
     if after_shift_enter(ui, id) {
         select_all(ui, id, &buf);
     }
     let kept = shift_enter_keeps_focus(ui, id);
-    let resp = egui::Frame::NONE
-        .fill(t.input)
-        .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-        .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(6, 4))
-        .show(ui, |ui| {
-            // As tall as the other fields (26 points with the margin), whatever the font's line
-            // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
-            ui.spacing_mut().interact_size.y = 18.0;
-            ui.set_height(18.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut buf)
-                    .id(id)
-                    .frame(egui::Frame::NONE)
-                    .align(egui::Align2::LEFT_CENTER)
-                    .desired_width(62.0)
-                    .char_limit(7)
-                    .font(egui::FontId::proportional(12.5))
-                    .text_color(t.text_strong),
-            )
-        })
-        .inner;
-    let resp = name_field(label_field(resp, label), name);
-    let commit = (resp.lost_focus() || kept) && buf != hex;
+    let pasted = take_hex_paste(ui, id, &mut buf);
+    let resp = draw(ui, &mut buf, editing);
+    select_all_on_focus(ui, &resp, &buf);
+    let digits = full_hex(buf.strip_prefix('#').unwrap_or(&buf));
+    let commit = (resp.lost_focus() || kept) && !digits.eq_ignore_ascii_case(hex);
+    let committed = commit.then_some(digits);
     let focused = ui.memory(|m| m.has_focus(id));
     ui.data_mut(|d| {
-        d.insert_temp(id, buf.clone());
-        d.insert_temp(edited_id, (edited || resp.changed()) && focused && !kept);
+        d.insert_temp(edited_id, (edited || pasted || resp.changed()) && focused && !kept);
+        d.insert_temp(id, buf);
     });
-    commit.then_some(buf)
+    committed
 }
 
 /// Position of hue `h` (degrees) and saturation `s` on a wheel of radius `r` around `c`.
