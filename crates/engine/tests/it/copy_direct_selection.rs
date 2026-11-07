@@ -751,6 +751,7 @@ fn cut_anchor_of_closed_path_opens_it_with_single_undo_step() {
     check_session(&s).unwrap();
 }
 
+/// Cutting an interior connection copies that segment and leaves two selected sibling objects.
 #[test]
 fn cut_middle_segment_of_open_path_splits_into_two_open_paths_with_single_undo_step() {
     let mut s = Session::new();

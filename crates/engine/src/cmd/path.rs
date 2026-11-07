@@ -1189,6 +1189,8 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
+/// Delete direct-selected anchors or segments and whole selected objects in one edit.
+/// Leave surviving pieces selected, splitting ordinary contours into independent sibling objects.
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
     let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;

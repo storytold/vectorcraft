@@ -6,16 +6,19 @@ use vectorcraft_engine::Session;
 use vectorcraft_geom::{Affine, Anchor, PathData, SubPath};
 use vectorcraft_testkit::{invariants::check_session, raster::render_artboard};
 
+/// Create the same rectangle for the edited path and its stacking-order neighbors.
 fn rectangle(s: &mut Session) -> NodeId {
     NodeId(s.execute("shape.rectangle", &json!({"x": 30, "y": 30, "width": 80, "height": 60})).unwrap()["id"].as_u64().unwrap())
 }
 
+/// Start a small document suitable for exact geometry and rendered-history assertions.
 fn session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
     s
 }
 
+/// Clear, explicit anchor deletion and Cut preserve styled survivors, sibling order and history.
 #[test]
 fn deleting_opposite_rectangle_segments_makes_independent_styled_objects_and_undoes_once() {
     for command in ["edit.clear", "path.deleteAnchors", "edit.cut"] {
@@ -79,6 +82,7 @@ fn deleting_opposite_rectangle_segments_makes_independent_styled_objects_and_und
     }
 }
 
+/// Removing separated anchors retains each cubic run and retracts only its unused endpoint handles.
 #[test]
 fn deleting_separated_anchors_splits_an_open_path_and_keeps_cubic_handles() {
     let mut s = session();
@@ -112,6 +116,7 @@ fn deleting_separated_anchors_splits_an_open_path_and_keeps_cubic_handles() {
     check_session(&s).unwrap();
 }
 
+/// Existing multi-subpath paths and explicit compound members retain their object structure.
 #[test]
 fn deletion_preserves_intentional_multi_subpaths_and_compound_members() {
     for command in ["edit.clear", "edit.cut"] {

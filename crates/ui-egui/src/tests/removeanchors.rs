@@ -242,6 +242,7 @@ fn anchor_delete_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Ve
     out.textures_delta.clear();
 }
 
+/// Real canvas picking and both deletion keys split an ordinary path, then clear every survivor.
 #[test]
 fn open_anchor_delete_and_backspace_cut_the_clicked_anchor_then_clear() {
     for key in [egui::Key::Delete, egui::Key::Backspace] {

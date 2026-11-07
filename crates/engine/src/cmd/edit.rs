@@ -762,6 +762,8 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if !direct { clear(s, &json!({ "ids": roots, "guides": true })) } else { cut_direct_selection(s, &roots) }
 }
 
+/// Remove the geometry copied by a direct-selection Cut, including selected guides in one edit.
+/// Select every surviving piece while retaining intentional compound-path structure.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();

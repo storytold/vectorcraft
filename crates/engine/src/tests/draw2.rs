@@ -3331,6 +3331,7 @@ fn a_filled_pencil_path_keeps_no_stroke() {
     assert!(!s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_paint().is_none());
 }
 
+/// Interior and endpoint deletions preserve each surviving run without adding connecting segments.
 #[test]
 fn open_anchor_delete_splits_runs_without_new_connections() {
     let cases = [
@@ -3469,6 +3470,7 @@ fn open_anchor_delete_does_not_change_explicit_remove_anchors() {
     }
 }
 
+/// Baked transforms and mixed whole/partial selection survive splitting and atomic Undo/Redo.
 #[test]
 fn open_anchor_delete_after_transform_keeps_mixed_selection_atomic() {
     use vectorcraft_geom::Affine;
