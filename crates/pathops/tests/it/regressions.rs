@@ -184,3 +184,21 @@ fn self_crossing_quad_fills_both_loops() {
     let got = area(&poly(&[p0, p1, p2, p3].map(|p| (p.x, p.y))), NZ);
     assert!(close(got, want, 1e-9), "area {got}, want {want}");
 }
+
+/// #5478: an operand that crosses itself (`b`), meeting another along its crossings: the sweep
+/// gave each operation a wrong area (union 5.5, intersection 1.5, difference 3, xor 4), so
+/// union + intersection was 7 where |a| + |b| is 5.5. The exact areas, under both fill rules.
+#[test]
+fn a_self_crossing_operand_gets_the_exact_areas() {
+    let a = poly(&[(3.0, 1.0), (3.0, 3.0), (0.0, 1.0)]);
+    let b = poly(&[(3.0, 0.0), (0.0, 2.0), (3.0, 2.0), (0.0, 0.0), (0.0, 1.0)]);
+    for rule in [NZ, FillRule::EvenOdd] {
+        assert!(close(area(&a, rule), 3.0, 1e-9) && close(area(&b, rule), 2.5, 1e-9), "{rule:?}");
+        for (op, want) in [(BoolOp::Union, 4.375), (BoolOp::Intersect, 1.125), (BoolOp::Difference, 1.875), (BoolOp::Xor, 3.25)] {
+            let got = area(&boolean(&a, rule, &b, rule, op), NZ);
+            assert!(close(got, want, 1e-6), "{op:?} {rule:?}: {got}, want {want}");
+            let tried = try_boolean(&a, rule, &b, rule, op, DEFAULT_PRECISION).unwrap();
+            assert!(close(area(&tried, NZ), want, 1e-6), "try_boolean {op:?} {rule:?}");
+        }
+    }
+}

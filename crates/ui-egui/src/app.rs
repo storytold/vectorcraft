@@ -81,6 +81,7 @@ impl VectorcraftApp {
                 print_tiling: None,
                 live_paint_gaps: None,
                 hidden_chars: Default::default(),
+                selection_marks: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
@@ -551,6 +552,7 @@ impl VectorcraftApp {
         export_progress::show(self, &ctx);
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
+        opening::show(self, &ctx);
         palette::show(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);

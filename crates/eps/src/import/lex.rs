@@ -276,7 +276,7 @@ pub(crate) fn hex_decode(body: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// A number token (`12`, `-3.5`, `.5`, `1e-3`, `16#ff`), or `None`.
-fn number(w: &str) -> Option<Obj> {
+pub(crate) fn number(w: &str) -> Option<Obj> {
     let first = w.bytes().next()?;
     if !(first.is_ascii_digit() || matches!(first, b'+' | b'-' | b'.')) {
         return None;

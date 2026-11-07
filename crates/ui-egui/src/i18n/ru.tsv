@@ -885,6 +885,7 @@ font-technology	Variable	Вариативные
 	Duplicate Artboard	Дублировать монтажную область
 	Copy Artboard	Копировать монтажную область
 	Cut Artboard	Вырезать монтажную область
+	Rename Artboards	Переименовать монтажные области
 	Duplicate Artboards	Дублировать монтажные области
 	Duplicate Brush	Дублировать кисть
 	Duplicate Character Style	Дублировать стиль символа
@@ -2600,6 +2601,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
 	Rearrange All Artboards	Переставить все монтажные области
+	Rearrange	Переставить
+	Select All Artboards	Выделить все монтажные области
+	Switch Orientation	Переключить ориентацию
 	Rearrange All	Переставить все
 	Layout Order:	Порядок макета:
 	Change to Left-to-Right Layout	Переключить на макет слева направо
