@@ -204,7 +204,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   path's own Calligraphic brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). A PDF-compatible `.ai` carries an editing copy of the art in the form
   VectorCraft's reader reads (layers, groups, paths, colors, gradients, patterns, images, transparency, opacity masks,
   clipping, type as text and symbols), with live effects kept only on paths, compound paths and groups that
-  qualify (at most a fill and a stroke, a non-zero fill rule, no large canvas) and whose appearance and effects the art-style writer supports, other objects' effects other than geometry effects left out, and live objects written as their art
+  qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports, other objects' effects other than geometry effects left out, and live objects written as their art
   ([file-format-parity.md](file-format-parity.md)). Save As
   `.ai` › Version: Legacy (version 7) writes the PostScript form from the published version 7 specification,
   keeping layers (names, order, visibility, lock), groups, compound paths, clipping groups, gradients and
