@@ -657,8 +657,12 @@ impl Interp<'_> {
             return ps_err("rangecheck", "DataSource");
         }
         let plane = row.checked_mul(s.h).filter(|p| *p <= MAX_DATA).ok_or(PsError::Limit("decoded data is too large"))?;
+        // The planes and the strings a procedure gives to fill them live only while the image is
+        // decoded: they stop counting once it is (the pixels made from them still count).
+        let before = self.allocated();
         self.alloc(plane.saturating_mul(sources.len()))?;
         let mut planes = self.read_sources(sources, row * s.h, if multi { row } else { row * s.h })?;
+        let transient = self.allocated().saturating_sub(before);
         for p in &mut planes {
             p.resize(row * s.h, 0);
         }
@@ -734,6 +738,8 @@ impl Interp<'_> {
                 rgba.extend([rgb[0], rgb[1], rgb[2], if masked { 0 } else { 255 }]);
             }
         }
+        drop(planes);
+        self.unalloc(transient);
         Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix }))
     }
 

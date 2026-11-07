@@ -1381,6 +1381,20 @@ fn the_planes_of_multi_source_images_are_charged() {
     assert!(r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
 }
 
+/// The planes an image is decoded from, and the strings a procedure gives to fill them, stop
+/// counting against the memory budget once the image is decoded: they are freed then. A procedure
+/// that hands back one large buffer for every image (1 MiB here, for a one-pixel image) charged the
+/// whole buffer each time, and a file of many images came in as its preview.
+#[test]
+fn an_images_transient_data_is_not_charged_after_it() {
+    let body = "/buf 1048576 string def\n1100 { 1 1 8 [1 0 0 1 0 0] { buf } image } repeat\n";
+    let r = import(&eps(body)).unwrap();
+    assert!(!r.warnings.iter().any(|w| w.contains("too much memory")), "{:?}", r.warnings);
+    let mut images = 0;
+    r.document.walk(|n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
+    assert_eq!(images, 1100);
+}
+
 /// #3568: a single sample plane over the data limit is refused.
 #[test]
 fn an_oversized_image_plane_is_refused() {

@@ -341,6 +341,17 @@ impl<'a> Interp<'a> {
         Ok(())
     }
 
+    /// The bytes counted against [`MAX_MEMORY`] so far.
+    pub(crate) fn allocated(&self) -> usize {
+        self.allocated
+    }
+
+    /// Stop counting `bytes` the program no longer holds: buffers that lived only while one
+    /// operator ran, freed when it returned.
+    pub(crate) fn unalloc(&mut self, bytes: usize) {
+        self.allocated = self.allocated.saturating_sub(bytes);
+    }
+
     fn tick(&mut self) -> Res {
         self.spend(1)
     }
