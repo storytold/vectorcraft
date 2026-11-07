@@ -39,6 +39,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-30 | minor | Home screen: welcome, New / Open and Community are centred and the large Discord button uses the theme accent, part of #4684; scores and estimates unchanged (estimated) |
 | 2026-11-06 | minor | Snap to Grid: a straight segment dragged with Direct Selection lands its anchors on the grid, not the pressed point (#3835); scores and estimates unchanged |
 | 2026-11-06 | minor | Drop Shadow: a swatch beside Color follows the hex and a double-click opens the Color Picker over the dialog, whose OK fills Color (#5364); scores and estimates unchanged |
 | 2026-11-06 | minor | Drop Shadow, Outer Glow and Inner Glow: spinner arrows beside Opacity, the offsets, Blur and Darkness (#5367, #5368); scores and estimates unchanged |
@@ -433,6 +434,8 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 | Selection Tools add-on (VectorCraft addition): Select Linked, Select Embedded, Select Missing and Select Modified in Object › Plug-ins › Selection Tools and the Links panel menu (off when no image has that status; Shift adds to the selection) select the images and placed documents with that link status, leaving out hidden, locked, template-layer and outside-isolation ones, which the status bar counts (e.g. "Selected 9 missing images; 3 more are hidden or locked"); Select by Link Status… lists them with name, status and format, searches by name, filters by status, picks with checkboxes and All / None, and selects with Zoom to Selection on by default | done | #5526; `addon.select.byLinkStatus`, `crates/engine/src/cmd/addons/select.rs`, `crates/ui-egui/src/addons/select/link_status.rs` and their tests; not a feature of the reference app |
 
 ## Look and feel
+
+- [x] Home screen (part of #4684, shared UI with PhotoCraft): the welcome, New / Open buttons and Community block are centred, and the large Discord button takes the theme's accent instead of Discord's colour; the layout and wording of the preset cards and Recent Files are unchanged. Still open from #4684: shortcut hints on the buttons, PhotoCraft's PRO and STUDIO themes, the Preferences layout (search box, theme swatches, Apply) and the title bar.
 
 - [x] Recolor Artwork › Assign: double-click a row's new color to pick it in the Color Picker, in the model it was picked in (part of #4028); a Lab new color is kept but can't be typed yet (the picker's Lab fields work in RGB); Lab entry, swatch libraries and the row menu remain.
 
