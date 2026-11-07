@@ -33,7 +33,7 @@ unicode-segmentation = "1.13"
 vello_cpu = { workspace = true }
 # Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
 # Apache-2.0, already in the build through subsetter.
-write-fonts = { version = "0.48", optional = true }
+write-fonts = { version = "0.55", optional = true }
 
 [features]
 default = ["bundled-fonts"]
@@ -47,7 +47,7 @@ bundled-fonts = []
 test-fonts = ["dep:write-fonts"]
 
 [dev-dependencies]
-write-fonts = "0.48"
+write-fonts = "0.55"
 
 # Fonts registered with Windows outside its font folders ("install as shortcut", installers);
 # MIT OR Apache-2.0, a safe wrapper of the registry API from the windows-rs project.
