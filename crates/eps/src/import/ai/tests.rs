@@ -1809,22 +1809,52 @@ fn a_compound_path_holding_its_drawn_look_paints_its_paths_apart() {
 fn clipping_paths_beside_a_compound_paths_look_keep_their_fills() {
     let (a, b) = (rect_path(0.0, 0.0, 20.0, 20.0), rect_path(5.0, 5.0, 25.0, 25.0));
     let look = format!("0 Ae\nu\n{RED}{}f\n0 0 0 0 0 0 1 Xa\n{}f\nU\n9 () XW\n", rect_path(0.0, 0.0, 30.0, 30.0), rect_path(10.0, 10.0, 15.0, 15.0));
-    let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)).lines().map(|l| format!("%_{l}\n")).collect();
+    let mask_art: String =
+        format!("0 0 0 0 (Global white) 1 0 Xk\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0)).lines().map(|l| format!("%_{l}\n")).collect();
     let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n%_; (AI9_Mask) ,\n%_;\n");
     let children = |second: &str, after_first: &str| {
         let body = format!("0 Ae\n*u\n{RED}{a}h\nW\nf\n{after_first}{second}{b}h\nW\nf\n{look}*U\n");
-        let a = art(&read_ok(&layer(&body)).doc);
+        let doc = read_ok(&layer(&body)).doc;
+        // Every object, opacity masks' art included, has an id of its own.
+        fn ids(n: &Node, seen: &mut std::collections::HashSet<vectorcraft_doc::NodeId>) {
+            assert!(seen.insert(n.id), "{:?} appears twice", n.id);
+            if let Some(m) = &n.extras().mask {
+                ids(&m.art, seen);
+            }
+            for c in n.children().into_iter().flatten() {
+                ids(c, seen);
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        doc.layers.iter().for_each(|l| ids(l, &mut seen));
+        let a = art(&doc);
         let NodeKind::Group { children, clip: true } = &a[0].kind else { panic!("{a:#?}") };
-        children.iter().map(|c| (c.kind.clone(), fill(c).color(), c.extras().mask.is_some())).collect::<Vec<_>>()
+        // An opacity mask: the swatch its art's fill is linked to.
+        let mask = |c: &Node| {
+            c.extras().mask.as_ref().map(|m| {
+                let mut swatch = None;
+                m.art.walk(&mut |p| {
+                    if let Paint::Solid { swatch: Some(s), .. } = fill(p) {
+                        swatch = Some(s);
+                    }
+                });
+                swatch
+            })
+        };
+        children.iter().map(|c| (c.kind.clone(), fill(c).color(), mask(c))).collect::<Vec<_>>()
     };
     let (red, blue) = (Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0)));
-    let paths = |c: &[(NodeKind, Option<Color>, bool)]| {
+    // A child's kind, fill color and, with an opacity mask, the swatch its art is linked to.
+    type Child = (NodeKind, Option<Color>, Option<Option<String>>);
+    let paths = |c: &[Child]| {
         assert!(matches!(c[0].0, NodeKind::Compound { .. }) && c.len() == 4, "{c:?}");
-        c[..3].iter().map(|(k, c, m)| (matches!(k, NodeKind::Path { clipping: false, .. }), *c, *m)).collect::<Vec<_>>()
+        c[..3].iter().map(|(k, c, m)| (matches!(k, NodeKind::Path { clipping: false, .. }), *c, m.clone())).collect::<Vec<_>>()
     };
-    assert_eq!(paths(&children("", "")), [(false, None, false), (true, red, false), (true, red, false)]);
-    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", "")), [(false, None, false), (true, red, false), (true, blue, false)]);
-    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", &mask)), [(false, None, false), (true, red, true), (true, blue, false)]);
+    assert_eq!(paths(&children("", "")), [(false, None, None), (true, red, None), (true, red, None)]);
+    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", "")), [(false, None, None), (true, red, None), (true, blue, None)]);
+    // The fill's copy of the mask stays linked to the mask art's global swatch.
+    let linked = Some(Some("Global white".to_string()));
+    assert_eq!(paths(&children("0 0 0 0 0 0 1 Xa\n", &mask)), [(false, None, None), (true, red, linked), (true, blue, None)]);
 }
 
 #[test]
