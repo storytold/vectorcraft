@@ -62,6 +62,10 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
+    /// The selection the lent tool's gesture left as it gave `lender` back: while it is still the
+    /// selection, the anchors in it are ones picked, not the Pen's last anchor, and Copy and Cut take
+    /// them with the Pen or Curvature tool back too (#6123).
+    pub(crate) lent_selection: Option<vectorcraft_doc::Selection>,
     /// The selection tool chosen last (Selection, Direct Selection or Group Selection): the one Cmd
     /// lends the other tools. None until one is chosen.
     pub(crate) last_selection_tool: Option<&'static str>,

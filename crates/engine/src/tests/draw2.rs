@@ -2673,6 +2673,44 @@ fn pen_with_cmd_borrows_direct_selection_and_goes_on_drawing() {
     assert_eq!(s.tool_id(), "rectangle");
 }
 
+/// #6123: anchors that Cmd (Ctrl) held with the Pen selects with the Direct Selection it lends are
+/// what Copy and Cut take, as with Direct Selection chosen; the last anchor the Pen leaves selected
+/// while drawing is not, Copy taking the whole path (#2122).
+#[test]
+fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
+    let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
+    let v = view();
+    let mut s = session();
+    s.select_tool("pen", v).unwrap();
+    for x in [100.0, 200.0, 300.0, 400.0] {
+        gesture(&mut s, &[(x, 300.0)], none);
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    let pasted = |s: &mut Session| {
+        let ids = s.execute("edit.paste", &json!({})).unwrap()["ids"].clone();
+        let ids: Vec<NodeId> = ids.as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect();
+        ids.iter().map(|i| path(s, *i).subpaths[0].anchors.len()).collect::<Vec<_>>()
+    };
+    // A Cmd marquee around the middle two anchors: Copy takes them and the segment between.
+    gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+    assert_eq!(s.tool_id(), "pen");
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 1), (0, 2)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [2]);
+    // Cut takes the segment between them out of the path, as with Direct Selection chosen.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.cut", &json!({})).unwrap();
+    let left = path(&s, id).subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>();
+    assert_eq!((s.clipboard.nodes.len(), left), (1, vec![2, 2]));
+    // Drawing on: the last anchor the Pen leaves selected doesn't make Copy take that anchor.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    gesture(&mut s, &[(500.0, 300.0)], none);
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 4)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [5]);
+}
+
 /// #4980: Cmd/Ctrl held with the Pen drags as Direct Selection: an anchor of the path being drawn
 /// moves on its own and the Pen goes on drawing that path from it; another path's straight segment
 /// moves both its ends and a curved one bends; each drag is one undo step and the pointer is the

@@ -42,6 +42,7 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -162,6 +163,7 @@ impl Session {
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
+        self.lent_selection = None;
         self.tool_resets = self.tool_resets.wrapping_add(1);
         self.tool_set_since_reset = false;
     }

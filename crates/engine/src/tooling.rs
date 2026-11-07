@@ -232,6 +232,7 @@ impl Session {
         let r = self.apply_actions(acts);
         self.keep_tool_settings();
         self.tool = lender;
+        self.lent_selection = self.active().map(|d| d.selection.clone());
         self.after_command(None);
         r.map(drop)
     }
