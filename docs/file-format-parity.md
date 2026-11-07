@@ -91,8 +91,9 @@ private editing data. VectorCraft:
   Round Corners, Scribble, Convert to Shape, Offset Path, Outline Object or Outline Stroke, and groups with Pathfinder ›
   Add. Groups keep them when their members are paths, compound paths or such groups, without effects of their own; when the
   group's effects change its members' outlines, a member's strokes are plain lines, and its fills are not pattern
-  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects are
-  written as their drawn look with a warning. Graphic styles and links to them are left out with a warning. No art style is written on a large
+  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects with
+  live effects are written as their vector art with their geometry effects applied, and their other effects, such as
+  Drop Shadow, the glows and Feather, are left out with a warning. Graphic styles and links to them are left out with a warning. No art style is written on a large
   canvas.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
