@@ -91,10 +91,12 @@ private editing data. VectorCraft:
   and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
   move, turn or scale their pattern, and effects other than geometry effects are left out.
   The editing copy also holds the document's variables, data sets, the data set shown and the variables' lock as
-  the variable library the reader reads, with the objects bound to visibility variables and the linked images
-  bound to image variables. Bindings to layers, to type and to graphs, graph values, values that don't fit their variable,
-  linked files that aren't absolute paths, drive and network paths with white space at either end and values of
-  variables whose names have a colon are left out, with a
+  the variable library the reader reads, with the objects bound to visibility variables, the type bound to text
+  variables and the linked images bound to image variables. Bindings to layers, to type written as outlines and to
+  graphs, graph values, values that don't fit their variable, linked files that aren't absolute paths, the path `/`
+  alone and paths from the root whose first part starts like a drive (`/C:`), drive and network paths with white
+  space at either end, values of variables whose names have a colon, and a data set shown that isn't one of the data
+  sets written are left out, with a
   warning, as are variables and data sets whose names are empty, repeated, longer than 255 characters or start or
   end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to objects whose XML ids are
   longer than 255 characters, values past 200,000 text lines and values in all, and names and values past

@@ -28,7 +28,7 @@ pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SW
 #[cfg(test)]
 pub(super) use texts::TYPE_ATTRIBUTES;
 #[cfg(test)]
-pub(super) use variables::{BINDINGS, LIMITS, VALUES};
+pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
@@ -165,6 +165,8 @@ pub(super) struct Writer<'a> {
     hidden: u32,
     /// The image just written was written as a placed file.
     placed: bool,
+    /// The type just written was written as type, not as its outlines.
+    typed: bool,
     /// The objects bound to variables so far, in the order they are written: each one's id, its XML
     /// id and the variables it is bound to ([`Self::bound_variables`]).
     bound: Vec<(vectorcraft_doc::NodeId, String, Vec<String>)>,
@@ -190,6 +192,7 @@ impl<'a> Writer<'a> {
             payloads: vec![],
             hidden: 0,
             placed: false,
+            typed: false,
             bound: vec![],
             texts: texts::TextDoc::default(),
             cms: vectorcraft_color::cms::active(),
@@ -507,7 +510,8 @@ impl<'a> Writer<'a> {
     fn dictionary(&mut self, n: &Node) {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
         let placed = std::mem::take(&mut self.placed);
-        let bound = self.bound_variables(n, placed);
+        let typed = std::mem::take(&mut self.typed);
+        let bound = self.bound_variables(n, placed, typed);
         let mut mask = n.extras().mask.as_deref();
         // Masks nested too deep are left out (an empty mask would hide the object).
         if mask.is_some() && self.nest >= MAX_NEST {
@@ -951,6 +955,7 @@ impl<'a> Writer<'a> {
             None
         };
         let Some(((story, frame), lost)) = placed else { return self.outlined_text(n, xy) };
+        self.typed = true;
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
         }

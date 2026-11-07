@@ -4135,11 +4135,12 @@ fn type_with_an_opacity_mask_is_written_as_its_outlines() {
 
 // ---------- variables ----------
 
-/// A 200 × 100 document with variables: a text variable `name`, a visibility variable `show`
-/// bound to an unnamed square and to a rectangle `Badge`, an image variable `picture` bound to a
-/// linked image, a graph variable `chart` and a variable of unknown kind `other`; the data sets
-/// `First` (two lines of text, hidden, a linked file in a folder with a space and a `%`) and
-/// `Second` (empty text, shown, a linked file on a drive), `Second` shown; the variables locked.
+/// A 200 × 100 document with variables: a text variable `name` bound to point type, a visibility
+/// variable `show` bound to an unnamed square and to a rectangle `Badge`, an image variable
+/// `picture` bound to a linked image, a graph variable `chart` and a variable of unknown kind
+/// `other`; the data sets `First` (two lines of text, hidden, a linked file in a folder with a space
+/// and a `%`) and `Second` (empty text, shown, a linked file on a drive), `Second` shown; the
+/// variables locked.
 fn variables_doc() -> Document {
     use vectorcraft_doc::{DataSet, DataValue, Variable, VariableKind};
     let mut doc = Document::new(200.0, 100.0);
@@ -4155,8 +4156,10 @@ fn variables_doc() -> Document {
         Affine::new([10.0, 0.0, 0.0, 10.0, 100.0, 10.0]),
         Some(vectorcraft_doc::LinkInfo::new("/tmp/a b/one.png")),
     );
-    let ids = [square.id, badge.id, pic.id];
-    for n in [square, badge, pic] {
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Ann", style(18.0, Color::BLACK));
+    let t = text_node(&mut doc, t);
+    let ids = [square.id, badge.id, pic.id, t.id];
+    for n in [square, badge, pic, t] {
         doc.insert(Some(layer), usize::MAX, n).unwrap();
     }
     let vars = &mut doc.variables;
@@ -4172,6 +4175,7 @@ fn variables_doc() -> Document {
     vars.bind(ids[0], "show");
     vars.bind(ids[1], "show");
     vars.bind(ids[2], "picture");
+    vars.bind(ids[3], "name");
     let row = |name: &str, text: &str, show: bool, file: &str| DataSet {
         name: name.into(),
         values: [
@@ -4196,6 +4200,7 @@ fn bound_objects(doc: &Document) -> Vec<String> {
             let kind = match &n.kind {
                 NodeKind::Image(im) => format!("image {:?}", im.link.as_ref().map(|l| l.path.clone())),
                 NodeKind::Path { .. } => "path".to_string(),
+                NodeKind::Text(t) => format!("type {:?}", t.runs.iter().map(|r| r.text.as_str()).collect::<String>()),
                 _ => "other".to_string(),
             };
             out.push(format!("{} → {kind} {:?}", v.name, n.name));
@@ -4204,18 +4209,28 @@ fn bound_objects(doc: &Document) -> Vec<String> {
     out
 }
 
+/// The warnings the reader gives about the variable library of `doc`'s editing data.
+fn library_notes(doc: &Document) -> Vec<String> {
+    let (_, warnings) = crate::ai_alone(&private_data(doc, &opts()).unwrap().0.data).unwrap();
+    warnings.into_iter().filter(|w| w.contains("variable")).collect()
+}
+
 #[test]
 fn variables_data_sets_and_bindings_are_read_back() {
     let doc = variables_doc();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let back = read_back(&doc);
     assert_eq!(back.variables.variables, doc.variables.variables);
     assert_eq!(back.variables.datasets, doc.variables.datasets);
     assert_eq!(back.variables.active_dataset.as_deref(), Some("Second"));
     assert!(back.variables.locked);
     assert_eq!(bound_objects(&back), bound_objects(&doc));
-    assert_eq!(bound_objects(&back), ["show → path None", "show → path Some(\"Badge\")", "picture → image Some(\"/tmp/a b/one.png\") None"]);
-    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
-    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+    assert_eq!(
+        bound_objects(&back),
+        ["name → type \"Ann\" None", "show → path None", "show → path Some(\"Badge\")", "picture → image Some(\"/tmp/a b/one.png\") None"]
+    );
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
     // The document read back is written the same way again.
     let library = |p: String| p[p.find("%_/XMLNode :").unwrap()..p.find("(#document)").unwrap()].to_string();
     assert_eq!(library(program_shown(&back)), library(program_shown(&doc)));
@@ -4236,9 +4251,38 @@ fn variables_and_data_sets_past_the_readers_caps_are_left_out() {
     let back = read_back(&doc);
     assert_eq!(back.variables.variables[..], doc.variables.variables[..256]);
     assert_eq!(back.variables.datasets[..], doc.variables.datasets[..1_000]);
-    assert_eq!(bound_objects(&back).len(), 3);
-    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
-    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+    assert_eq!(bound_objects(&back).len(), 4);
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
+}
+
+/// Bindings that fill the reader's byte budget: the bindings past it are left out, and every
+/// variable and every binding written reads back.
+#[test]
+fn bindings_that_fill_the_readers_budget_keep_every_variable() {
+    use vectorcraft_doc::{Variable, VariableKind};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut ids = vec![];
+    for i in 0..170 {
+        let mut n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(1.0, 1.0, 2.0, 2.0)), Appearance::basic(solid(GOLD), Paint::None, 0.0));
+        n.name = Some(format!("o{i:0>249}"));
+        ids.push(n.id);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    for v in 0..120 {
+        let name = format!("v{v:0>254}");
+        doc.variables.variables.push(Variable { name: name.clone(), kind: VariableKind::Visibility });
+        for id in &ids {
+            doc.variables.bind(*id, &name);
+        }
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    assert_eq!(back.variables.variables, doc.variables.variables);
+    let bound: usize = back.variables.bindings.values().map(|names| names.len()).sum();
+    assert!(bound > 0 && bound < 120 * 170, "{bound}");
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
 }
 
 #[test]
@@ -4252,12 +4296,11 @@ fn long_xml_ids_and_text_of_many_lines_are_left_out() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::LIMITS), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert_eq!(bound_objects(&back), ["show → path None", "picture → image Some(\"/tmp/a b/one.png\") None"]);
+    assert_eq!(bound_objects(&back), ["name → type \"Ann\" None", "show → path None", "picture → image Some(\"/tmp/a b/one.png\") None"]);
     assert_eq!(back.variables.datasets[0].values.get("name"), None);
     assert_eq!(back.variables.datasets[1].values.get("name"), Some(&DataValue::Text(String::new())));
     // Nothing is written that the reader leaves out.
-    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
-    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
 }
 
 #[test]
@@ -4267,7 +4310,28 @@ fn a_layer_bound_to_a_visibility_variable_is_reported_left_out() {
     let layer = doc.layers[0].id;
     doc.variables.bind(layer, "show");
     assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.iter().any(|w| w == writer::BINDINGS));
-    assert_eq!(bound_objects(&read_back(&doc)).len(), 3);
+    assert_eq!(bound_objects(&read_back(&doc)).len(), 4);
+}
+
+#[test]
+fn a_binding_to_an_object_no_longer_in_the_document_is_not_reported() {
+    let mut doc = variables_doc();
+    let gone = doc.alloc_id();
+    doc.variables.bind(gone, "show");
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    assert_eq!(bound_objects(&read_back(&doc)), bound_objects(&variables_doc()));
+}
+
+#[test]
+fn a_data_set_shown_that_is_not_written_is_reported_left_out() {
+    for active in [" Second", "Nope"] {
+        let mut doc = variables_doc();
+        doc.variables.active_dataset = Some(active.into());
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::ACTIVE], "{active:?}");
+        assert_eq!(read_back(&doc).variables.active_dataset, None, "{active:?}");
+    }
 }
 
 #[test]
@@ -4294,8 +4358,7 @@ fn names_the_reader_does_not_read_as_they_are_are_left_out() {
     let mut datasets = expected.variables.datasets.clone();
     datasets.push(DataSet { name: "show".into(), values: Default::default() });
     assert_eq!(back.variables.datasets, datasets);
-    let (_, warnings) = crate::ai_alone(&private_data(&doc, &opts()).unwrap().0.data).unwrap();
-    assert!(!warnings.iter().any(|w| w.contains("variable")), "{warnings:?}");
+    assert_eq!(library_notes(&doc), Vec::<String>::new());
 }
 
 #[test]
@@ -4321,9 +4384,9 @@ fn bindings_and_values_the_reader_cant_take_are_left_out() {
     use vectorcraft_doc::{DataValue, VariableKind};
     let mut doc = variables_doc();
     let layer = doc.layers[0].id;
-    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() };
-    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Ann", style);
-    let t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    // Type of only white space is written as its outlines.
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "   ", style(18.0, Color::BLACK));
+    let t = text_node(&mut doc, t);
     let text_id = t.id;
     doc.insert(Some(layer), usize::MAX, t).unwrap();
     doc.variables.bind(text_id, "name");
@@ -4331,15 +4394,17 @@ fn bindings_and_values_the_reader_cant_take_are_left_out() {
     let first = &mut doc.variables.datasets[0].values;
     first.insert("chart".into(), DataValue::Graph("a,b\n1,2".into()));
     first.insert("a:b".into(), DataValue::Text("lost".into()));
+    first.insert("picture".into(), DataValue::Image("/a:b/pic.png".into()));
     let second = &mut doc.variables.datasets[1].values;
     second.insert("picture".into(), DataValue::Image("relative/pic.png".into()));
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.iter().any(|w| w == writer::BINDINGS), "{:?}", out.warnings);
     assert!(out.warnings.iter().any(|w| w == writer::VALUES), "{:?}", out.warnings);
     let back = read_back(&doc);
-    assert!(back.variables.objects_of("name").is_empty());
+    assert_eq!(back.variables.objects_of("name").len(), 1);
     assert_eq!(back.variables.datasets[0].values.get("chart"), None);
     assert_eq!(back.variables.datasets[0].values.get("a:b"), None);
+    assert_eq!(back.variables.datasets[0].values.get("picture"), None);
     assert_eq!(back.variables.datasets[1].values.get("picture"), None);
-    assert_eq!(bound_objects(&back).len(), 3);
+    assert_eq!(bound_objects(&back).len(), 4);
 }

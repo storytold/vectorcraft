@@ -39,10 +39,12 @@
 //!   (`dataSetName`), each holding an element named after each variable it gives a value: a `p`
 //!   element for each line of a text value, a `/Bool` text whether the objects show, a linked file's
 //!   `file://` URL or path. An object bound to a variable without a name gets an XML id and an empty
-//!   `AIArtName`. Bindings to layers, to type, to graphs and to linked images written as other objects, and
-//!   graph values, values that don't fit their variable, linked files that aren't absolute paths,
-//!   drive and network paths with white space at either end, and values of variables whose names
-//!   have a colon, are left out, as is what the reader leaves out
+//!   `AIArtName`. Bindings to layers, to type written as outlines, to graphs and to linked images
+//!   written as other objects, and graph values, values that don't fit their variable, linked files
+//!   that aren't absolute paths, paths from the root that the reader reads as other paths (`/`
+//!   alone, `/C:…`), drive and network paths with white space at either end, values of variables
+//!   whose names have a colon, and a data set shown that isn't written, are left out, as is what
+//!   the reader leaves out
 //!   (variables and data sets whose names are empty, repeated, longer than 255 characters or start
 //!   or end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to XML ids longer than
 //!   255 characters, names and values past 8,388,608 bytes in all), and values past 200,000 text

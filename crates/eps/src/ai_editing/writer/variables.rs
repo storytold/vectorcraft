@@ -9,9 +9,10 @@ use vectorcraft_doc::{DataValue, Node, NodeId, NodeKind, VariableKind};
 use super::Writer;
 use crate::ps;
 
-pub(in crate::ai_editing) const BINDINGS: &str =
-    "variable bindings to layers, to type, to graphs, and to linked images written as other objects are left out of the editing data for other apps";
-pub(in crate::ai_editing) const VALUES: &str = "data set values of graphs, values that don't fit their variable, linked files that aren't absolute paths, and values of variables whose names have a colon are left out of the editing data for other apps";
+pub(in crate::ai_editing) const BINDINGS: &str = "variable bindings to layers, to type written as outlines, to graphs, and to linked images written as other objects are left out of the editing data for other apps";
+pub(in crate::ai_editing) const VALUES: &str = "data set values of graphs, values that don't fit their variable, linked files that aren't absolute paths or that would read back as other paths, and values of variables whose names have a colon are left out of the editing data for other apps";
+pub(in crate::ai_editing) const ACTIVE: &str =
+    "the data set shown is left out of the editing data for other apps when it isn't one of the data sets written";
 
 pub(in crate::ai_editing) const LIMITS: &str = "variables and data sets whose names are empty, repeated, longer than 255 characters or start or end with white space, variables past 256, data sets past 1,000, bindings past 100,000, bindings to objects whose XML ids are longer than 255 characters, values past 200,000 text lines and values in all, and names and values past 8,388,608 bytes in all are left out of the editing data for other apps";
 
@@ -129,11 +130,17 @@ fn text(v: Value) -> String {
 /// A linked file's path as a data set holds it: a path from the root (`/…`) as a `file://` URL
 /// (`file:///` and the path, with `%`, `#`, `?`, white space, control characters and bytes outside ASCII
 /// escaped as `%XX`), another absolute path (a drive's, or a network path) as it is. `None` for a
-/// path that isn't absolute, and for one written as it is with white space at either end.
+/// path that isn't absolute, for the root alone (`/`), for a path from the root whose first part
+/// starts like a drive (`/C:…`, which the reader reads as the drive's path), and for one written as
+/// it is with white space at either end.
 fn file_value(path: &str) -> Option<String> {
     // A drive's path from its root (`C:\…`, `C:/…`); `C:name` is relative to the drive's folder.
     let drive = matches!(path.as_bytes(), [l, b':', b'\\' | b'/', ..] if l.is_ascii_alphabetic());
     if path.starts_with('/') && !path.starts_with("//") {
+        let rest = &path.as_bytes()[1..];
+        if rest.is_empty() || matches!(rest, [l, b':', ..] if l.is_ascii_alphabetic()) {
+            return None;
+        }
         let mut url = String::from("file:///");
         for &b in path.as_bytes() {
             if matches!(b, b'%' | b'#' | b'?') || !(0x21..=0x7e).contains(&b) {
@@ -156,12 +163,13 @@ fn readable_name(name: &str) -> bool {
 }
 
 impl Writer<'_> {
-    /// The variables `n` is bound to that its XML id is written for: visibility variables, and
-    /// image variables when `n` was written as a placed file ([`Self::placed`]). Only objects of the
+    /// The variables `n` is bound to that its XML id is written for: visibility variables, image
+    /// variables when `n` was written as a placed file (`placed`, see [`Self::placed`]), and text
+    /// variables when `n` was written as type (`typed`, see [`Self::typed`]). Only objects of the
     /// document's own tree are bound, not copies of them (symbol art, live objects' art, opacity
     /// masks' art, pattern tiles).
     /// The bindings left out are reported by [`Self::variable_library`].
-    pub(super) fn bound_variables(&self, n: &Node, placed: bool) -> Vec<String> {
+    pub(super) fn bound_variables(&self, n: &Node, placed: bool, typed: bool) -> Vec<String> {
         let doc = self.doc;
         let Some(names) = doc.variables.bindings.get(&n.id) else { return vec![] };
         if self.nest > 0 || self.hidden > 0 || !doc.node(n.id).is_some_and(|d| std::ptr::eq(d, n)) {
@@ -170,6 +178,7 @@ impl Writer<'_> {
         let fits = |name: &&String| match doc.variables.variable(name).map(|v| v.kind) {
             Some(VariableKind::Visibility) => true,
             Some(VariableKind::Image) => placed && matches!(n.kind, NodeKind::Image(_)),
+            Some(VariableKind::Text) => typed && matches!(n.kind, NodeKind::Text(_)),
             _ => false,
         };
         names.iter().filter(fits).cloned().collect()
@@ -183,15 +192,15 @@ impl Writer<'_> {
         if vars.variables.is_empty() && vars.datasets.is_empty() && !vars.locked {
             return String::new();
         }
-        // Bindings not written: to layers, to type, to graphs, and to objects not written as
-        // themselves.
+        // Bindings not written: to layers, to type written as outlines, to graphs, and to objects
+        // not written as themselves. Bindings to objects no longer in the document have nothing to
+        // write.
         let pairs: HashSet<(NodeId, &str)> = self.bound.iter().flat_map(|(n, _, names)| names.iter().map(|name| (*n, name.as_str()))).collect();
         let written = |id: &NodeId, name: &String| pairs.contains(&(*id, name.as_str()));
         let kind = |name: &str| vars.variable(name).map(|v| v.kind);
-        let missing = vars
-            .bindings
-            .iter()
-            .any(|(id, names)| names.iter().any(|name| kind(name).is_some_and(|k| k != VariableKind::Unknown) && !written(id, name)));
+        let missing = vars.bindings.iter().any(|(id, names)| {
+            doc.node(*id).is_some() && names.iter().any(|name| kind(name).is_some_and(|k| k != VariableKind::Unknown) && !written(id, name))
+        });
         if missing {
             self.warn(BINDINGS);
         }
@@ -302,8 +311,13 @@ impl Writer<'_> {
             self.warn(LIMITS);
         }
         let mut attributes = vec![];
+        // The data set shown, when a data set of that exact name is written.
         if let Some(active) = &vars.active_dataset {
-            attributes.push(("i:activeDataSet", Value::Unicode(active)));
+            if row_names.contains(&active.as_str()) {
+                attributes.push(("i:activeDataSet", Value::Unicode(active)));
+            } else {
+                self.warn(ACTIVE);
+            }
         }
         attributes.push(("xmlns", Value::Str("&ns_custom;")));
         attributes.push(("xmlns:v", Value::Str("&ns_vars;")));
@@ -336,6 +350,15 @@ mod tests {
         assert_eq!(file_value("C:pic.png"), None);
         assert_eq!(file_value("C:\\Art\\pic.png "), None);
         assert_eq!(file_value("/tmp/pic.png ").as_deref(), Some("file:////tmp/pic.png%20"));
+    }
+
+    #[test]
+    fn paths_the_reader_reads_as_other_paths_are_left_out() {
+        assert_eq!(file_value("/"), None);
+        assert_eq!(file_value("/a:b/x.png"), None);
+        assert_eq!(file_value("/C:/x.png"), None);
+        assert_eq!(file_value("/1:b/x.png").as_deref(), Some("file:////1:b/x.png"));
+        assert_eq!(file_value("/ab:c/x.png").as_deref(), Some("file:////ab:c/x.png"));
     }
 
     #[test]
