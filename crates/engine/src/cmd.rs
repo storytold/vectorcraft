@@ -575,6 +575,20 @@ pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
     }
 }
 
+/// The object `p` gives as `key`, for a command that acts on the selection (or makes something new)
+/// without it: `None` when `p` leaves it out or gives null. Any other value that isn't an object id
+/// (`"abc"`, `"5"`, `true`, `{}`, `-1`, `2.5`) is an error under `cmd` that names `key`, never the
+/// selection. The id is not looked up in the document.
+pub(crate) fn object_param(p: &Value, key: &str, cmd: &str) -> Result<Option<NodeId>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(r)) if key == "id" && r.starts_with('$') => {
+            Err(bad(cmd, format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
+        }
+        Some(v) => v.as_u64().map(|id| Some(NodeId(id))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
+
 /// Objects a command targets: its `ids`, else its `id` as `ids` of one ([`named_ids`]), else the
 /// selection. An `ids` or `id` that isn't an object id is an error, never the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {

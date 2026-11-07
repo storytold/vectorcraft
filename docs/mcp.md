@@ -380,10 +380,14 @@ explicit `ids`, which stand in for the selection, so they work with nothing sele
 `ids?|id?` (or `id?, ids?: … (instead of id)`), `id` is `ids` of one object: `{"id": 7}` does what `{"ids": [7]}`
 does, with or without a selection, and an `id` or `ids` that is malformed (not a non-negative integer) or names no
 object is refused under the command's name, never replaced by the selection (`effect.apply {"id": "warp.arc"}`
-without `effect` names the effect). Other commands that act on `id` or else the selection, such as `css.export`,
-refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) instead of using the selection; an omitted
-or null `id` means the selection. A command that leaves out an object selected inside a selected group also
-leaves it out when `ids` list it together with a group that holds it.
+without `effect` names the effect). Other commands that act on `id` or else the selection, the highlighted layer row
+or a new object (`css.export`, `object.isolate`, `layer.locate`, `layer.releaseToLayers`, `graphicStyle.new`,
+`graphicStyle.redefine`, `charStyle.new`, `charStyle.apply`, `charStyle.redefine` and their `paraStyle.*`
+counterparts, `image.info`, `links.info`, `links.goTo`, `links.unembed`, `shaper.release`, `shaper.expand`,
+`transparency.editOpacityMask`, `transparency.viewOpacityMask`, `symbol.edit`, the `object.blend.spine.*` commands
+and `path.curvature`) refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) with an error and
+change nothing; an omitted or null `id` keeps the default. A command that leaves out an object selected inside a
+selected group also leaves it out when `ids` list it together with a group that holds it.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).

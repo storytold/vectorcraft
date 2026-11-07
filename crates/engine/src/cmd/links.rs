@@ -32,7 +32,7 @@ use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, No
 use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, id_param, ids_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -1298,7 +1298,9 @@ fn selected_images(st: &crate::DocState, keep: impl Fn(&ImageObject) -> bool) ->
 
 /// `id`, else the first selected image.
 fn image_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
-    let id = id_param(p, "id").or_else(|| selected_images(st, |_| true).first().copied()).ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
+    let id = object_param(p, "id", cmd)?
+        .or_else(|| selected_images(st, |_| true).first().copied())
+        .ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
     match image_of(&st.doc, id) {
         Some(_) => Ok(id),
         None if st.doc.node(id).is_none() => Err(crate::EngineError::NoNode(id)),
@@ -1327,7 +1329,7 @@ fn placement_of(d: &Document, id: NodeId) -> Option<PlacementOptions> {
 /// `id`, else the first selected image or placed document.
 fn linked_param(st: &crate::DocState, p: &Value, cmd: &str) -> Result<NodeId> {
     let first = || st.selection.objects.iter().copied().find(|id| placement_of(&st.doc, *id).is_some());
-    let id = id_param(p, "id").or_else(first).ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
+    let id = object_param(p, "id", cmd)?.or_else(first).ok_or_else(|| bad(cmd, "select an image, or pass id"))?;
     match placement_of(&st.doc, id) {
         Some(_) => Ok(id),
         None if st.doc.node(id).is_none() => Err(crate::EngineError::NoNode(id)),
