@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind};
+use vectorcraft_engine::cmd::prefscmds::{GPU_PREFERENCES, PREF_CATEGORIES, PREF_GROUPS, PREF_SPECS, PrefKind, folder_check};
 
 use crate::state::Dialog;
 use crate::theme::{self, Accent, Brightness, Scheme, Tokens};
@@ -40,7 +40,6 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
-    check_typed_folders(app, &values)?;
     app.run("prefs.set", json!({ "values": values }))?;
     if touch_ws.is_some() {
         crate::workspaces::sync_touch_workspace(app, app.touch_screen);
@@ -413,20 +412,6 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
     }
 }
 
-/// A check of a folder path: `Err` says why the folder can't be the preference's value.
-type FolderCheck = fn(&str) -> Result<(), String>;
-
-/// The check a folder preference with a Choose… button gives a folder before it becomes the
-/// preference's value: Data Recovery keeps its copies in its folder, and the Additional Plug-ins
-/// Folder is read for plug-ins. `None` for any other preference.
-fn folder_check(key: &str) -> Option<FolderCheck> {
-    match key {
-        "recoveryFolder" => Some(writable_folder),
-        "pluginsFolder" => Some(plugins_folder),
-        _ => None,
-    }
-}
-
 /// Choose… beside the folder preference `key`: the folder picked becomes the field's value when it
 /// passes the preference's [`folder_check`]. Otherwise the status bar says why and the field keeps
 /// its value, as it does when the picker is canceled. The answer fills the field even when the
@@ -442,55 +427,6 @@ fn choose_folder(app: &mut VectorcraftApp, d: &mut Dialog, key: &'static str) {
     if let Err(e) = r {
         app.status(e);
     }
-}
-
-/// OK's check of the folder preferences with a Choose… button: a folder typed into one of their
-/// fields gets the same [`folder_check`] as a picked one. An empty field (the default folder) and
-/// a folder the preference already holds are not checked. The web has no folders to check.
-fn check_typed_folders(app: &VectorcraftApp, fields: &Map<String, Value>) -> Result<(), String> {
-    if cfg!(target_arch = "wasm32") {
-        return Ok(());
-    }
-    let saved = app.session.prefs.to_json();
-    for (key, v) in fields {
-        let (Some(check), Some(path)) = (folder_check(key), v.as_str()) else { continue };
-        let path = path.trim();
-        if path.is_empty() || saved[key.as_str()].as_str().is_some_and(|s| s.trim() == path) {
-            continue;
-        }
-        check(path)?;
-    }
-    Ok(())
-}
-
-/// `Ok` when `path` is a folder whose contents can be listed, as the plug-ins in it are found by
-/// listing it. A folder outside the automation roots in force is refused before it is looked at.
-fn plugins_folder(path: &str) -> Result<(), String> {
-    vectorcraft_engine::file_access::check_read(path)?;
-    let dir = std::path::Path::new(path);
-    if !dir.is_dir() {
-        return Err(format!("{path} is not a folder"));
-    }
-    std::fs::read_dir(dir).map(drop).map_err(|e| format!("Plug-ins can't be loaded from {path}: {e}"))
-}
-
-/// `Ok` when `path` is a folder that can be listed and that a folder can be created in, as the
-/// recovery store lists its folders there and makes its own: the folder is listed, and an empty
-/// folder is made there and removed. A folder that can't be removed again is an error too. A
-/// folder outside the automation roots in force is refused before it is looked at.
-fn writable_folder(path: &str) -> Result<(), String> {
-    vectorcraft_engine::file_access::check_write(path)?;
-    vectorcraft_engine::file_access::check_read(path)?;
-    let dir = std::path::Path::new(path);
-    if !dir.is_dir() {
-        return Err(format!("{path} is not a folder"));
-    }
-    let refused = |e: std::io::Error| format!("Data Recovery can't keep copies in {path}: {e}");
-    std::fs::read_dir(dir).map_err(refused)?;
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |t| t.as_nanos());
-    let check = dir.join(format!(".vectorcraft-write-check-{}-{nanos}", std::process::id()));
-    std::fs::create_dir(&check).map_err(refused)?;
-    std::fs::remove_dir(&check).map_err(refused)
 }
 
 /// Is one of the dialog's Units (General, Stroke, Type, East Asian Type) Picas?

@@ -174,10 +174,21 @@ fn strips(bp: &BezPath, rule: FillRule, st: &StrokeLayer, tol: f64, margin: f64,
                 }
                 let steps = if max_dt < 1.0 { (1.0 / max_dt).ceil() as usize } else { 1 };
                 let profile = st.profile.iter().flat_map(|p| p.points.iter().map(|q| q.0));
-                let at: Vec<f64> =
-                    marks.iter().copied().chain(profile).chain((1..steps).map(|i| i as f64 / steps as f64)).map(|t| t * total).collect();
+                let heads = if closed { (0.0, 0.0) } else { heads };
+                // Where an arrowhead's reach ends gets a rib of its own, so the ribs that reach
+                // across a head run all the way there instead of narrowing towards the next corner
+                // from the head's tip, which leaves the corners of its base outside (#5964).
+                let head_ends = [heads.0, total - heads.1].into_iter().filter(|&s| s > 0.0 && s < total);
+                let at: Vec<f64> = marks
+                    .iter()
+                    .copied()
+                    .chain(profile)
+                    .chain((1..steps).map(|i| i as f64 / steps as f64))
+                    .map(|t| t * total)
+                    .chain(head_ends)
+                    .collect();
                 let (pts, _) = split_at(&pts, &corner, closed, &at);
-                strip(&lay, &pts, closed, total, side, if closed { (0.0, 0.0) } else { heads })
+                strip(&lay, &pts, closed, total, side, heads)
             }
         };
         out.push(ribs);

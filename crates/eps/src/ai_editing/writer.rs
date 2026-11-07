@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
@@ -17,6 +17,7 @@ use crate::ps;
 
 mod images;
 mod paints;
+mod texts;
 mod variables;
 
 pub(super) use images::PAYLOAD;
@@ -25,6 +26,8 @@ pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
 pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name};
 #[cfg(test)]
+pub(super) use texts::TYPE_ATTRIBUTES;
+#[cfg(test)]
 pub(super) use variables::{BINDINGS, LIMITS, VALUES};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
@@ -32,7 +35,7 @@ pub(super) use variables::{BINDINGS, LIMITS, VALUES};
 /// [`vectorcraft_doc::MAX_DEPTH`].
 const MAX_NEST: u32 = 8;
 
-pub(super) const TYPE: &str = "type is written as its outlines in the editing data for other apps";
+pub(super) const TYPE: &str = "type in opacity masks, pattern tiles and art cut to a clipping object, mirrored type, area type and type on a path that is turned or unevenly scaled or whose frame or path has several parts, area type in an open frame, type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of type on a path, threads whose frames differ in orientation or hold a frame written as outlines, type of sizes past what the reader reads, stories past what the reader reads (1,048,576 bytes a story, 16,777,216 bytes in all, and the size of text document it reads), and type with inline graphics, ruby, gradient or pattern paint, or fills, strokes, effects or an opacity mask of the object's own, is written as its outlines in the editing data for other apps";
 pub(super) const PATTERNS: &str = "pattern fills whose tiles aren't a grid or whose art reaches past the tile, pattern fills in another pattern's tile and pattern fills nested more than 8 deep are written as their tiles cut to the shape in the editing data for other apps";
 pub(super) const PATTERN_TILES: &str = "pattern fills with more tiles than a fill places are written filled gray in the editing data for other apps";
 pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose clipping object isn't a path, and the clipping groups inside them, are written as their art cut to that object in the editing data for other apps";
@@ -165,6 +168,8 @@ pub(super) struct Writer<'a> {
     /// The objects bound to variables so far, in the order they are written: each one's id, its XML
     /// id and the variables it is bound to ([`Self::bound_variables`]).
     bound: Vec<(vectorcraft_doc::NodeId, String, Vec<String>)>,
+    /// The text document: the stories of the type written as text.
+    pub(super) texts: texts::TextDoc,
 }
 
 impl<'a> Writer<'a> {
@@ -186,6 +191,7 @@ impl<'a> Writer<'a> {
             hidden: 0,
             placed: false,
             bound: vec![],
+            texts: texts::TextDoc::default(),
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
             warnings: vec![],
@@ -342,6 +348,16 @@ impl<'a> Writer<'a> {
         }
     }
 
+    /// [`Self::set_xy`] for an object that writes no paint before its transparency (type, an image,
+    /// a guide): `XR` comes first, as in [`Self::paint_state`], because an `Xy` right after a compound
+    /// path or a text object would be theirs.
+    fn set_object_xy(&mut self, xy: Xy) {
+        if self.gs != Some(xy) {
+            self.line("0 XR");
+            self.write_xy(xy);
+        }
+    }
+
     /// `mode opacity isolate knockout shape Xy`.
     fn write_xy(&mut self, xy: Xy) {
         let knockout = match xy.knockout {
@@ -360,6 +376,11 @@ impl<'a> Writer<'a> {
     /// dictionary goes between the two ([`Self::node`]).
     fn end_group(&mut self, close: &str, xy: Xy) {
         self.line(close);
+        self.state_block(xy);
+    }
+
+    /// The state block of the group or text object just written ([`Self::end_group`]).
+    fn state_block(&mut self, xy: Xy) {
         self.block_start = self.body.len();
         if xy == Xy::PLAIN {
             self.line("9 () XW");
@@ -401,7 +422,7 @@ impl<'a> Writer<'a> {
                 if *guide {
                     // Its own transparency, not the one the object before it set.
                     if path.subpaths.iter().any(|sp| !sp.anchors.is_empty()) {
-                        self.set_xy(xy.object());
+                        self.set_object_xy(xy.object());
                     }
                     ai_ops::guide(&mut self.body, self.to_art, path, true);
                 } else {
@@ -542,8 +563,19 @@ impl<'a> Writer<'a> {
         let outer = std::mem::take(&mut self.body);
         let (state, clip) = (self.state, self.clip.take());
         (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
-        // A plain group holding the art is the group the art is read into.
-        let art = &m.art;
+        // The canvas draws the art's root even when it is hidden, and the reader puts a hidden object
+        // in a group that doesn't draw it, so a hidden root is written shown.
+        let shown;
+        let art = if m.art.visible {
+            &m.art
+        } else {
+            let mut a = (*m.art).clone();
+            a.visible = true;
+            shown = Arc::new(a);
+            &shown
+        };
+        // A plain group of two or more objects, or of none, is the group the art is read into. A group
+        // of one object is written as a group, because the reader makes one shown object the art.
         let plain = matches!(art.kind, NodeKind::Group { clip: false, .. })
             && Xy::of(art) == Xy::PLAIN
             && art.visible
@@ -551,7 +583,7 @@ impl<'a> Writer<'a> {
             && art.name.as_deref().is_none_or(str::is_empty)
             && art.extras().mask.is_none();
         let members = match art.children() {
-            Some(c) if plain => c.as_slice(),
+            Some(c) if plain && c.len() != 1 => c.as_slice(),
             _ => std::slice::from_ref(art),
         };
         self.nest += 1;
@@ -850,7 +882,7 @@ impl<'a> Writer<'a> {
 
     /// The paint of a path of transparency `xy` filled by `rule`: its fill color and `O`, its stroke
     /// color and `R`, `Xy`, the line style, `XR`. Without paint, `XR` comes first: an `Xy` right
-    /// after a group or compound path would be theirs.
+    /// after a compound path or a text object would be theirs.
     fn paint_state(&mut self, fill: Option<&FillLayer>, stroke: Option<&StrokeLayer>, xy: Xy, rule: FillRule) {
         let rule = if rule == FillRule::EvenOdd { "1 XR" } else { "0 XR" };
         if let Some(f) = fill {
@@ -900,12 +932,43 @@ impl<'a> Writer<'a> {
 
     // ---------- type ----------
 
+    /// Type `n`: a text object stub naming its story in the text document ([`texts`]) when the
+    /// text document can hold it, outside opacity masks, pattern tiles and art cut to a clipping
+    /// object; else its outlines ([`Self::outlined_text`]). A frame of threaded area type names the
+    /// story of its thread, which its first frame holds.
+    fn text(&mut self, n: &Node, xy: Xy) {
+        let NodeKind::Text(t) = &n.kind else { return };
+        let doc = self.doc;
+        let placed = if self.hidden > 0 || self.clip.is_some() {
+            None
+        } else if let Some(thread) = doc.text_threads.iter().find(|th| th.contains(&n.id)) {
+            // A thread is checked for what it loses, in every frame, when its story is written.
+            let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id));
+            placed.map(|p| (p, self.texts.take_lost()))
+        } else if texts::holds(n, t) {
+            self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
+        } else {
+            None
+        };
+        let Some(((story, frame), lost)) = placed else { return self.outlined_text(n, xy) };
+        if lost {
+            self.warn(texts::TYPE_ATTRIBUTES);
+        }
+        // The stub takes the transparency set before it, as a path does. Its isolation and knockout
+        // are read only from a state block after it, as a group's are.
+        self.set_object_xy(xy.object());
+        texts::stub(&mut self.body, story, frame, t, self.to_art);
+        if xy.isolate || xy.knockout != Knockout::Neutral {
+            self.state_block(xy);
+        }
+    }
+
     /// Type `n` as a group of what Type › Create Outlines makes of it
     /// ([`vectorcraft_effects::outline_text`]): each run's glyphs with their underline and
     /// strikethrough, its color glyphs, and the object's own fills and strokes; then its inline
     /// graphics as their symbols' art where the layout places them, as the PDF page draws them;
     /// the group has the type's transparency `xy`.
-    fn text(&mut self, n: &Node, xy: Xy) {
+    fn outlined_text(&mut self, n: &Node, xy: Xy) {
         self.warn(TYPE);
         self.line("u");
         let doc = self.doc;
@@ -1168,6 +1231,18 @@ fn compound_path(n: &Node) -> PathData {
         subpaths.extend(p.subpaths.iter().cloned());
     }
     PathData::new(subpaths)
+}
+
+/// Is object `id` of `doc` in (or inside) a clipping group or clipping layer whose clipping object
+/// isn't a path or compound path (its art is written cut to that object, [`Writer::clip_group`])?
+/// Type that is a clipping object is one of these: it isn't a path.
+fn cut_to_clipping_object(doc: &Document, id: NodeId) -> bool {
+    let ancestry = doc.ancestry(id).unwrap_or_default();
+    let above = ancestry.split_last().map(|(_, a)| a).unwrap_or_default();
+    above.iter().filter_map(|a| doc.node(*a)).any(|p| {
+        matches!(p.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. })
+            && p.children().and_then(|c| c.first()).is_none_or(|c| clip_path(c).is_none())
+    })
 }
 
 /// The outline and fill rule a clipping path or compound path `n` clips by; `None` for other

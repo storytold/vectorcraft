@@ -367,9 +367,9 @@ fn add_rect(doc: &mut Document, r: Rect) {
     doc.insert(Some(layer), usize::MAX, rect).unwrap();
 }
 
-/// The end of the document data: the artboards and the canvas size in the `/Recorded` part of the
-/// `/Document` dictionary, then an empty `/NotRecorded` part.
-const RECORDED: &str = "%_; (ArtboardArray) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n";
+/// The end of the document data: the artboards, the active artboard (the first) and the canvas
+/// size in the `/Recorded` part of the `/Document` dictionary, then an empty `/NotRecorded` part.
+const RECORDED: &str = "%_; (ArtboardArray) ,\n%_0 /Int (CropAreaActive) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n";
 
 /// One letter-size artboard: the art 36 points in from its top-left corner, the artboard's record
 /// and the boxes, with the artboards in the `/Recorded` part of the `/Document` dictionary.
@@ -637,10 +637,16 @@ fn unsupported() -> Document {
     };
     let im = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
     doc.insert(Some(layer), usize::MAX, im).unwrap();
+    // Type the text document can't hold (a gradient fill).
+    let shade = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))]);
     let t = vectorcraft_doc::TextObject::point(
         vectorcraft_geom::Point::new(10.0, 70.0),
         "Type",
-        vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), ..vectorcraft_doc::CharStyle::default() },
+        vectorcraft_doc::CharStyle {
+            size: 18.0,
+            fill: Paint::Gradient(Box::new(GradientPaint::new(shade))),
+            ..vectorcraft_doc::CharStyle::default()
+        },
     );
     let t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
     doc.insert(Some(layer), usize::MAX, t).unwrap();
@@ -720,7 +726,9 @@ fn brushed_strokes_are_written_as_their_brush_art() {
 fn type_is_written_as_create_outlines_makes_it() {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
-    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: solid(Color::BLACK), underline: true, ..vectorcraft_doc::CharStyle::default() };
+    // A pattern fill: type the text document can't hold.
+    let pattern = Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY };
+    let style = vectorcraft_doc::CharStyle { size: 18.0, fill: pattern, underline: true, ..vectorcraft_doc::CharStyle::default() };
     let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Under", style);
     let mut t = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
     t.name = Some("Title".into());
@@ -984,6 +992,29 @@ fn artboard_display_marks_are_written() {
     assert!(ab.show_center_mark && !ab.show_cross_hairs && ab.show_video_safe_areas);
 }
 
+/// The active artboard, the one `opened_artboard` names (else the first), is the selected one and
+/// its index follows the artboards in the recorded part; the editing data reads back with that
+/// artboard active.
+#[test]
+fn the_active_artboard_follows_the_artboards() {
+    let mut doc = Document::new(200.0, 100.0);
+    for (id, x0) in [(2, 250.0), (3, 500.0)] {
+        doc.artboards.push(Artboard { id, rect: Rect::new(x0, 0.0, x0 + 200.0, 100.0), ..doc.artboards[0].clone() });
+    }
+    let first = doc.artboards[0].id;
+    // None, the first, the third, and an artboard the document doesn't have (the first).
+    for (opened, index) in [(None, 0), (Some(first), 0), (Some(3), 2), (Some(9), 0)] {
+        doc.opened_artboard = opened;
+        let p = program(&doc);
+        let entry = format!("%_; (ArtboardArray) ,\n%_{index} /Int (CropAreaActive) ,\n%_16383 /Int (AIDocumentCanvasSize) ,\n%_; /Recorded ,\n");
+        assert!(p.contains(&entry), "{opened:?}: {p}");
+        assert_eq!(p.matches("%_1 /Bool (IsArtboardSelected) ,\n").count(), 1, "{opened:?}");
+        let back = read_back(&doc);
+        let active = back.opened_artboard.and_then(|id| back.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+        assert_eq!((back.artboards.len(), active), (3, index), "{opened:?}");
+    }
+}
+
 /// A guide is its path followed by `(n) *` (closed) or `(N) *` (open), with no `(N) *` before
 /// it, and reads back as the same guide.
 #[test]
@@ -1213,50 +1244,86 @@ fn same_lines(got: &[String], want: &[String]) {
     assert!(differ.is_empty(), "{}", differ.join("\n"));
 }
 
-/// `nodes` as the reader reads them back: an opacity mask's art that isn't a group comes back as
-/// a group holding it.
-fn mask_art_grouped(nodes: &mut [Arc<Node>]) {
-    for n in nodes {
-        let n = Arc::make_mut(n);
-        if let Some(m) = n.extras_mut().mask.as_mut()
-            && !matches!(m.art.kind, NodeKind::Group { .. })
-        {
-            let art = m.art.clone();
-            m.art = Arc::new(Node::new(art.id, NodeKind::Group { children: vec![art], clip: false }));
-        }
-        if let Some(c) = n.children_mut() {
-            mask_art_grouped(c);
-        }
-    }
-}
-
 #[test]
 fn transparency_clipping_and_masks_are_read_back() {
-    let mut doc = transparent();
+    let doc = transparent();
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     let back = read_back(&doc);
     same_lines(&lines(&back), &lines(&doc));
-    // The disabled mask's art is one path: it reads back as a group holding the path.
-    let mask_arts = |d: &Document| {
-        let mut out = vec![];
-        d.walk(|n| {
-            if let Some(m) = &n.extras().mask {
-                out.push(match &m.art.kind {
-                    NodeKind::Group { children, .. } => format!("group of {}", children.len()),
-                    NodeKind::Path { .. } => "path".into(),
-                    _ => "other".into(),
-                });
-            }
-        });
-        out
-    };
-    assert_eq!(
-        (mask_arts(&doc), mask_arts(&back)),
-        (vec!["group of 2".to_string(), "path".into()], vec!["group of 2".to_string(), "group of 1".into()])
-    );
-    mask_art_grouped(&mut doc.layers);
     same_lines(&all_looks(&back), &all_looks(&doc));
+}
+
+/// An opacity mask's art reads back in its own shape: one object, a group of one object, a group
+/// of two, a group of one group, a see-through group of two, and a group around a hidden object or
+/// a guide.
+#[test]
+fn opacity_mask_art_keeps_its_shape_when_read_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches = vec![Swatch { name: "Blue".into(), paint: solid(Color::rgb(0.0, 0.0, 1.0)), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let art = |doc: &mut Document| square(doc, Rect::new(5.0, 5.0, 10.0, 10.0), Color::gray(0.5));
+    let path = art(&mut doc);
+    let one = art(&mut doc);
+    let of_one = group(&mut doc, vec![one], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let of_two = group(&mut doc, vec![a, b], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let inner = group(&mut doc, vec![a, b], false);
+    let of_group = group(&mut doc, vec![inner], false);
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let faded = see_through(group(&mut doc, vec![a, b], false), 0.5, BlendMode::Normal);
+    let mut off = art(&mut doc);
+    off.visible = false;
+    let of_hidden = group(&mut doc, vec![off], false);
+    let line = Node::new(
+        doc.alloc_id(),
+        NodeKind::Path {
+            path: shapes::rectangle(Rect::new(5.0, 5.0, 10.0, 10.0)),
+            rule: FillRule::NonZero,
+            live: None,
+            clipping: false,
+            guide: true,
+        },
+    );
+    let of_guide = group(&mut doc, vec![line], false);
+    for mask_art in [path, of_one, of_two, of_group, faded, of_hidden, of_guide] {
+        let mut owner = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, true)));
+        doc.insert(Some(layer), usize::MAX, owner).unwrap();
+    }
+    let back = read_back(&doc);
+    same_lines(&all_looks(&back), &all_looks(&doc));
+    let first = String::from_utf8(export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let again = String::from_utf8(export_ai_editing(&back, &opts()).unwrap().program).unwrap();
+    same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
+}
+
+/// Hidden art of a mask is written shown: the canvas draws the art's root either way, and the reader
+/// puts a hidden object in a group that doesn't draw it.
+#[test]
+fn a_hidden_opacity_mask_art_root_reads_back_shown() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches = vec![Swatch { name: "Blue".into(), paint: solid(Color::rgb(0.0, 0.0, 1.0)), global: false, spot: false }].into();
+    doc.swatch_groups = vec![].into();
+    let layer = doc.layers[0].id;
+    let art = |doc: &mut Document| square(doc, Rect::new(5.0, 5.0, 10.0, 10.0), Color::gray(0.5));
+    let mut path = art(&mut doc);
+    path.visible = false;
+    let (a, b) = (art(&mut doc), art(&mut doc));
+    let mut of_two = group(&mut doc, vec![a, b], false);
+    of_two.visible = false;
+    for mask_art in [path, of_two] {
+        let mut owner = square(&mut doc, Rect::new(0.0, 0.0, 30.0, 30.0), Color::rgb(1.0, 0.0, 0.0));
+        owner.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, true)));
+        doc.insert(Some(layer), usize::MAX, owner).unwrap();
+    }
+    let back = read_back(&doc);
+    let roots: Vec<_> = back.layers[0].children().unwrap().iter().map(|o| o.extras().mask.as_ref().unwrap().art.clone()).collect();
+    assert!(matches!(roots.as_slice(), [p, g] if p.visible && g.visible
+        && matches!(p.kind, NodeKind::Path { .. })
+        && matches!(&g.kind, NodeKind::Group { children, clip: false } if children.len() == 2 && children.iter().all(|c| c.visible))));
 }
 
 #[test]
@@ -2579,8 +2646,6 @@ fn images_doc() -> Document {
         shapes::rectangle(Rect::new(10.0, 60.0, 40.0, 90.0)),
         Appearance::basic(solid(Color::rgb(0.0, 0.5, 1.0)), Paint::None, 0.0),
     );
-    // A mask's art is read into a group.
-    let mask_art = Node::group(doc.alloc_id(), vec![Arc::new(mask_art)]);
     square.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
     doc.insert(Some(layer), usize::MAX, square).unwrap();
     let links = Node::layer(doc.alloc_id(), "Links", LayerColor::Preset(1));
@@ -2649,6 +2714,30 @@ fn images_come_back_with_their_pixels_and_places() {
     assert_eq!(got.len(), want.len(), "{got:?}");
     // The clipping group and the masked square are there as themselves.
     assert_eq!(lines(&back).len(), lines(&doc).len(), "{:?}", lines(&back));
+}
+
+/// An image whose opacity defines the knockout shape comes back with it, embedded or linked. The
+/// image after it and their layer do not take it.
+#[test]
+fn an_images_knockout_shape_comes_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let at = |x: f64| Affine::new([10.0, 0.0, 0.0, 10.0, x, 10.0]);
+    let mut shaped = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(10.0), None);
+    (shaped.opacity, shaped.knockout_shape) = (0.5, true);
+    doc.insert(Some(layer), usize::MAX, shaped).unwrap();
+    let plain = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(50.0), None);
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/pic.png");
+    link.relative = Some("art/pic.png".into());
+    let mut linked = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), at(90.0), Some(link));
+    linked.knockout_shape = true;
+    doc.insert(Some(layer), usize::MAX, linked).unwrap();
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    let got: Vec<_> = art.iter().map(|n| (matches!(n.kind, NodeKind::Image(_)), n.opacity, n.knockout_shape)).collect();
+    assert_eq!(got, [(true, 0.5, true), (true, 1.0, false), (true, 1.0, true)]);
+    assert_eq!((back.layers[0].opacity, back.layers[0].knockout_shape), (1.0, false));
 }
 
 #[test]
@@ -3043,6 +3132,1005 @@ fn sixteen_bit_cmyk_images_are_written_at_eight_bits() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert_eq!(out.warnings, [writer::IMAGE_DEPTH]);
     assert!(program_shown(&doc).contains("/DeviceCMYK XN\n"));
+}
+
+// ---------- type ----------
+
+fn style(size: f64, fill: Color) -> vectorcraft_doc::CharStyle {
+    vectorcraft_doc::CharStyle { size, fill: solid(fill), ..vectorcraft_doc::CharStyle::default() }
+}
+
+fn text_node(doc: &mut Document, t: vectorcraft_doc::TextObject) -> Node {
+    Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)))
+}
+
+/// A 300 × 200 document of the type the slice writes as text, on a layer `Type`: two paragraphs
+/// of point type (the second centered, with space before, a fixed leading) named `Greeting`; point
+/// type turned 30° in CMYK; area type in two columns with a gutter and a first baseline at its
+/// leading, its runs plain, then bold, tracked, shifted, scaled, stroked and in capitals, then a
+/// right-to-left paragraph; type on an open curve from a tenth of its length; vertical point type;
+/// hidden, locked point type at half opacity multiplied; and area type threaded through two frames.
+fn typed() -> Document {
+    use vectorcraft_doc::{CharStyle, FirstBaseline, Justify, ParaDirection, ParaStyle, TextKind, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    let mut doc = Document::new(300.0, 200.0);
+    // One CMYK swatch, not the default ones: their CMYK equivalents round differently once read back.
+    doc.swatches = vec![
+        Swatch { name: "[None]".into(), paint: Paint::None, global: false, spot: false },
+        Swatch { name: "Ink".into(), paint: solid(BRAND), global: false, spot: false },
+    ]
+    .into();
+    doc.swatch_groups = vec![].into();
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Type"));
+
+    let mut greet = TextObject::point(Point::new(20.0, 40.0), "Hello\nWorld", CharStyle { leading: Some(30.0), ..style(24.0, SKY) });
+    let centered = ParaStyle { justify: Justify::Center, space_before: 6.0, ..ParaStyle::default() };
+    greet.set_paragraph_styles(vec![ParaStyle { first_line_indent: 10.0, ..ParaStyle::default() }, centered]);
+    let greet = named(text_node(&mut doc, greet), "Greeting");
+    doc.insert(Some(layer), usize::MAX, greet).unwrap();
+
+    let mut turned = TextObject::point(Point::ZERO, "Turned", style(18.0, BRAND));
+    turned.xf = Affine::translate((150.0, 100.0)) * Affine::rotate(-std::f64::consts::FRAC_PI_6);
+    let turned = text_node(&mut doc, turned);
+    doc.insert(Some(layer), usize::MAX, turned).unwrap();
+
+    let regular = style(10.0, Color::BLACK);
+    let bold = CharStyle {
+        font_style: "Bold".into(),
+        tracking: 50.0,
+        baseline_shift: 3.0,
+        h_scale: 120.0,
+        v_scale: 90.0,
+        stroke: solid(Color::rgb(0.0, 0.5, 0.0)),
+        stroke_width: 0.5,
+        all_caps: true,
+        ..regular.clone()
+    };
+    let mut area = TextObject::point(Point::ZERO, "", regular.clone());
+    area.runs = vec![
+        TextRun::new("Area type flows in two columns ", regular.clone()),
+        TextRun::new("and wraps", bold),
+        TextRun::new(" onto the next line.\nRight to left", regular.clone()),
+    ];
+    area.set_paragraph_styles(vec![
+        ParaStyle { left_indent: 4.0, right_indent: 2.0, space_after: 3.0, hyphenate: false, ..ParaStyle::default() },
+        ParaStyle { direction: Some(ParaDirection::RightToLeft), justify: Justify::JustifyAll, ..ParaStyle::default() },
+    ]);
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 80.0, 140.0, 160.0)) };
+    area.xf = Affine::IDENTITY;
+    area.area.columns = 2;
+    area.area.gutter = 12.0;
+    area.area.first_baseline = FirstBaseline::Leading;
+    area.area.first_baseline_min = 4.0;
+    let area = text_node(&mut doc, area);
+    doc.insert(Some(layer), usize::MAX, area).unwrap();
+
+    let mut on_path = TextObject::point(Point::ZERO, "On a curve", style(12.0, Color::gray(0.6)));
+    let mut curve = PathData::from_bezpath(&kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((160.0, 150.0).into()),
+        kurbo::PathEl::CurveTo((190.0, 110.0).into(), (250.0, 110.0).into(), (280.0, 150.0).into()),
+    ]));
+    curve.subpaths.iter_mut().for_each(|sp| sp.closed = false);
+    on_path.kind = TextKind::OnPath { path: curve, start: 0.1, end: None };
+    on_path.xf = Affine::IDENTITY;
+    let on_path = text_node(&mut doc, on_path);
+    doc.insert(Some(layer), usize::MAX, on_path).unwrap();
+
+    let mut down = TextObject::point(Point::new(280.0, 20.0), "Down", style(14.0, Color::BLACK));
+    down.vertical = true;
+    let down = text_node(&mut doc, down);
+    doc.insert(Some(layer), usize::MAX, down).unwrap();
+
+    let quiet = TextObject::point(Point::new(20.0, 190.0), "Quiet", style(9.0, Color::BLACK));
+    let mut quiet = see_through(text_node(&mut doc, quiet), 0.5, BlendMode::Multiply);
+    quiet.visible = false;
+    quiet.locked = true;
+    doc.insert(Some(layer), usize::MAX, quiet).unwrap();
+
+    let mut first = TextObject::point(Point::ZERO, "A story that runs from one frame into the next one.", regular.clone());
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(160.0, 20.0, 220.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs = vec![TextRun::new("", regular)];
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(160.0, 50.0, 220.0, 90.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    doc
+}
+
+/// What the reader's view of type is made of, one line per text object: its name, state,
+/// transparency, kind and frame, matrix, orientation, area options and path span; each paragraph's
+/// attributes; each run's characters and attributes. Lengths to three decimals.
+fn type_lines(doc: &Document) -> Vec<String> {
+    use vectorcraft_doc::TextKind;
+    let mut out = vec![];
+    let mut all = vec![];
+    paths(&doc.layers, &mut all);
+    for n in all {
+        let NodeKind::Text(t) = &n.kind else {
+            out.push(format!("not type: {:?}", n.name));
+            continue;
+        };
+        let pts = |p: &PathData| {
+            p.subpaths
+                .iter()
+                .map(|sp| {
+                    format!("[{} {}]", sp.closed, sp.anchors.iter().map(|a| format!("{},{}", r3(a.p.x), r3(a.p.y))).collect::<Vec<_>>().join(" "))
+                })
+                .collect::<String>()
+        };
+        let kind = match &t.kind {
+            TextKind::Point => "point".to_string(),
+            TextKind::Area { frame } => format!("area {}", pts(frame)),
+            TextKind::OnPath { path, start, end } => format!("path {} {} {:?}", pts(path), r3(*start), end.map(r3)),
+        };
+        let a = &t.area;
+        out.push(format!(
+            "{:?} shown={} locked={} {} {:?} {kind} xf={:?} vertical={} area {} {} {} {:?} {:?} {}",
+            n.name,
+            n.visible,
+            n.locked,
+            r3(f64::from(n.opacity)),
+            n.blend,
+            t.xf.as_coeffs().map(r3),
+            t.vertical,
+            a.rows,
+            a.columns,
+            r3(a.gutter),
+            a.row_gutter.map(r3),
+            a.first_baseline,
+            r3(a.first_baseline_min),
+        ));
+        for p in t.paragraph_styles() {
+            out.push(format!(
+                "  para {:?} {} {} {} {} {} {} {:?}",
+                p.justify,
+                r3(p.first_line_indent),
+                r3(p.left_indent),
+                r3(p.right_indent),
+                r3(p.space_before),
+                r3(p.space_after),
+                p.hyphenate,
+                p.direction
+            ));
+        }
+        for r in &t.runs {
+            let s = &r.style;
+            out.push(format!(
+                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={}",
+                r.text,
+                s.font_family,
+                s.font_style,
+                r3(s.size),
+                s.leading.map(r3),
+                r3(s.tracking),
+                r3(s.baseline_shift),
+                r3(s.h_scale),
+                r3(s.v_scale),
+                paint(&s.fill),
+                paint(&s.stroke),
+                r3(s.stroke_width),
+                s.all_caps,
+                s.small_caps.map(r3),
+                s.tate_chu_yoko,
+            ));
+        }
+    }
+    out
+}
+
+#[test]
+fn type_comes_back_as_type() {
+    let doc = typed();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    assert_eq!(back.text_threads.len(), 1, "the thread comes back");
+}
+
+#[test]
+fn type_is_written_again_as_the_same_bytes() {
+    let doc = typed();
+    let first = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
+    let again = export_ai_editing(&read_back(&doc), &opts()).unwrap();
+    let text = |p: &[u8]| text_document(&String::from_utf8_lossy(p).replace("\r\n", "\n"));
+    assert_eq!(text(&again.program), text(&first.program));
+    assert_eq!(String::from_utf8_lossy(&again.program), String::from_utf8_lossy(&first.program));
+}
+
+/// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero
+/// bytes left out.
+fn text_document(text: &str) -> String {
+    let Some(start) = text.find("%AI11_BeginTextDocument\n") else { return String::new() };
+    let end = text.find("%AI11_EndTextDocument").unwrap();
+    let packed: String = text[start..end].lines().skip(2).filter(|l| *l != ";").map(|l| l.strip_prefix('%').unwrap_or(l)).collect();
+    String::from_utf8_lossy(&crate::ps::ascii85_decode(&packed).unwrap()).replace('\0', "")
+}
+
+/// The text document: its section after the document data, ASCII85 on comment lines none of which
+/// is a `%_` line; a stub for each text object, area type and type on a path with their paths.
+#[test]
+fn type_is_a_text_document_and_stubs() {
+    let text = program(&typed());
+    let doc_data = text.find("%AI9_EndDocumentData").unwrap();
+    let start = text.find("%AI11_BeginTextDocument\n/AI11TextDocument : /ASCII85Decode ,\n").unwrap();
+    let end = text.find(";\n%AI11_EndTextDocument\n%%EndSetup\n").unwrap();
+    assert!(doc_data < start && start < end);
+    let body = &text[start..end];
+    for l in body.lines().skip(2) {
+        assert!(l.starts_with('%') && !l.starts_with("%_"), "{l}");
+    }
+    assert_eq!(text.matches("/AI11Text :\n0 /FreeUndo ,\n").count(), 8);
+    assert_eq!(text.matches("; /ConfiningPath ,\n").count(), 4);
+    assert!(text.contains("0 /FrameIndex ,\n6 /StoryIndex ,") && text.contains("1 /FrameIndex ,\n6 /StoryIndex ,"), "{text}");
+    // The decoded document: the version, a font of each face and the hidden characters' font, the
+    // stories, the normal sheets and the document's text settings.
+    let decoded = text_document(&text);
+    assert!(decoded.starts_with("/98 << /0 14 >> /0 <<"), "{decoded}");
+    for want in
+        ["SourceSans3-Regular", "SourceSans3-Bold", "AdobeInvisFont", "[Normal Character Style]", "[Normal Paragraph Style]", "Hello\rWorld\r"]
+    {
+        assert!(decoded.contains(want), "{want}: {decoded}");
+    }
+    // Tracking is a whole number, and colors are simple paints.
+    assert!(decoded.contains("/8 50 ") && !decoded.contains("/8 50."), "{decoded}");
+    assert!(decoded.contains("/53 << /99 /SimplePaint") && !decoded.contains("CAITextPaint"), "{decoded}");
+}
+
+/// Point type scaled 150% comes back at its size: its scale is in its sizes, its matrix only turns
+/// it. Type that ends in an empty paragraph keeps it.
+#[test]
+fn scaled_point_type_and_a_last_empty_paragraph_come_back() {
+    use vectorcraft_doc::{CharStyle, ParaStyle, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut big = TextObject::point(vectorcraft_geom::Point::ZERO, "Big", CharStyle { leading: Some(20.0), ..style(12.0, Color::BLACK) });
+    big.xf = Affine::translate((20.0, 40.0)) * Affine::rotate(0.3) * Affine::scale(1.5);
+    big.set_all_paras(ParaStyle { left_indent: 4.0, ..ParaStyle::default() });
+    let ends = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "Ends\n", style(12.0, Color::BLACK));
+    let (big, ends) = (text_node(&mut doc, big), text_node(&mut doc, ends));
+    doc.insert(Some(layer), usize::MAX, big).unwrap();
+    doc.insert(Some(layer), usize::MAX, ends).unwrap();
+    let back = read_back(&doc);
+    let texts: Vec<&vectorcraft_doc::TextObject> =
+        back.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.as_ref()) } else { None }).collect();
+    let [big, ends] = texts.as_slice() else { panic!("two text objects: {texts:?}") };
+    let s = big.xf.determinant().sqrt();
+    let st = &big.runs[0].style;
+    assert_eq!((r3(s), r3(st.size), st.leading.map(r3), r3(big.para.left_indent)), (r3(1.0), r3(18.0), Some(r3(30.0)), r3(6.0)));
+    assert_eq!(big.xf.as_coeffs().map(r3), (Affine::translate((20.0, 40.0)) * Affine::rotate(0.3)).as_coeffs().map(r3));
+    assert_eq!(ends.plain_text(), "Ends\n");
+    // A tiny size, and a stroke of no width that keeps its paint.
+    let mut d = Document::new(200.0, 100.0);
+    let layer = d.layers[0].id;
+    let st = CharStyle { stroke: solid(Color::rgb(1.0, 0.0, 0.0)), stroke_width: 0.0, ..style(0.00001, Color::BLACK) };
+    let n = text_node(&mut d, TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "Tiny", st));
+    d.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = read_back(&d);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    let s = &t.runs[0].style;
+    assert_eq!(
+        (format!("{:.6}", s.size), paint(&s.stroke), r3(s.stroke_width)),
+        ("0.000010".into(), paint(&solid(Color::rgb(1.0, 0.0, 0.0))), r3(0.0))
+    );
+}
+
+/// A threaded story whose frames each hold their slice of it, a paragraph split between them,
+/// comes back as one story in its first frame with each paragraph's attributes once.
+#[test]
+fn a_story_split_between_frames_comes_back_whole() {
+    use vectorcraft_doc::{Justify, ParaStyle, TextKind, TextObject, TextRun};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let st = style(10.0, Color::BLACK);
+    let (p1, p2, p3) = (
+        ParaStyle { justify: Justify::Center, ..ParaStyle::default() },
+        ParaStyle { left_indent: 5.0, ..ParaStyle::default() },
+        ParaStyle { space_before: 4.0, ..ParaStyle::default() },
+    );
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+    first.runs = vec![TextRun::new("One two\nthree ", st.clone())];
+    first.set_paragraph_styles(vec![p1.clone(), p2.clone()]);
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let p4 = ParaStyle { right_indent: 7.0, ..ParaStyle::default() };
+    let mut second = first.clone();
+    second.runs = vec![TextRun::new("four\nFive\n", st)];
+    second.set_paragraph_styles(vec![p2.clone(), p3.clone(), p4.clone()]);
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let back = read_back(&doc);
+    let texts: Vec<&TextObject> =
+        back.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.as_ref()) } else { None }).collect();
+    let [a, b] = texts.as_slice() else { panic!("two frames: {texts:?}") };
+    assert_eq!((a.plain_text().as_str(), b.plain_text().as_str()), ("One two\nthree four\nFive\n", ""));
+    let attrs = |p: &ParaStyle| (p.justify, r3(p.left_indent), r3(p.right_indent), r3(p.space_before));
+    let got: Vec<_> = a.paragraph_styles().iter().map(attrs).collect();
+    assert_eq!(got, [&p1, &p2, &p3, &p4].into_iter().map(attrs).collect::<Vec<_>>(), "the last, empty paragraph keeps its own");
+    assert_eq!(back.text_threads.len(), 1);
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    // An attribute the text document doesn't hold in a later frame is reported.
+    let second_id = doc.text_threads[0][1];
+    let mut lossy = doc.clone();
+    if let NodeKind::Text(t) = &mut lossy.node_mut(second_id).unwrap().kind {
+        t.runs[0].style.underline = true;
+    }
+    assert_eq!(export_ai_editing(&lossy, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+    // So is a paragraph split between the frames whose second part has other attributes.
+    let mut split = doc.clone();
+    if let NodeKind::Text(t) = &mut split.node_mut(second_id).unwrap().kind {
+        t.set_paragraph_styles(vec![ParaStyle { left_indent: 9.0, ..ParaStyle::default() }, p3, p4]);
+    }
+    assert_eq!(export_ai_editing(&split, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+}
+
+/// A story longer than the reader reads is written as its outlines.
+#[test]
+fn a_story_longer_than_the_reader_reads_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let long = format!("A{}", " ".repeat(crate::import::MAX_STORY));
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), &long, style(12.0, Color::BLACK));
+    let short = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "Short", style(12.0, Color::BLACK));
+    let (t, short) = (text_node(&mut doc, t), text_node(&mut doc, short));
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    doc.insert(Some(layer), usize::MAX, short).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE]);
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 1, "the short story is text");
+}
+
+/// Stories that together make a text document larger than the reader reads: the ones past it are
+/// written as their outlines, and what is written reads back.
+#[test]
+fn stories_past_the_text_document_the_reader_reads_are_written_as_their_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let long = format!("A{}", " ".repeat(900_000));
+    for i in 0..9 {
+        // A font of its own, which no other story names.
+        let st = vectorcraft_doc::CharStyle { font_family: format!("Probe Family {i}"), ..style(8.0, Color::BLACK) };
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 10.0 + f64::from(i) * 10.0), &long, st);
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE]);
+    let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    let stubs = text.matches("/AI11Text :").count();
+    assert!((1..9).contains(&stubs), "{stubs}");
+    // The font set holds the fonts of the stories written, and the hidden characters' font.
+    assert_eq!(text_document(&text).matches("/CoolTypeFont").count(), stubs + 1);
+    let back = read_back(&doc);
+    let texts = back.layers[0].children().unwrap().iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).count();
+    assert_eq!(texts, stubs, "every story written comes back");
+}
+
+/// A thread whose frames differ in orientation is written as its outlines: a story's frames share
+/// one.
+#[test]
+fn a_thread_of_horizontal_and_vertical_frames_is_written_as_its_outlines() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "Across, then down", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.vertical = true;
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 90.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("/AI11Text"));
+}
+
+/// Area type in an open frame whose ends meet is written as its outlines, alone or as a frame of a
+/// thread: as text it would be read back in a closed frame.
+#[test]
+fn an_open_frame_whose_ends_meet_is_written_as_its_outlines() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let open = |r: Rect| {
+        let mut frame = shapes::rectangle(r);
+        frame.subpaths[0].closed = false;
+        let start = frame.subpaths[0].anchors[0];
+        frame.subpaths[0].anchors.push(start);
+        frame
+    };
+    let mut alone = TextObject::point(vectorcraft_geom::Point::ZERO, "Open", style(10.0, Color::BLACK));
+    alone.kind = TextKind::Area { frame: open(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    alone.xf = Affine::IDENTITY;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let n = text_node(&mut doc, alone.clone());
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("/AI11Text"));
+
+    let mut first = alone;
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: open(Rect::new(110.0, 10.0, 190.0, 90.0)) };
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("/AI11Text"));
+}
+
+/// A thread with a frame in a clipping group whose clipping object is a path stays type, every frame
+/// of it, and comes back as one thread: the art of such a group isn't cut.
+#[test]
+fn a_thread_with_a_frame_in_a_clipping_group_stays_type() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "A story in two frames", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let clipper = clipping(&mut doc, shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 50.0)));
+    let clipped = group(&mut doc, vec![clipper, second], true);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 2);
+    assert_eq!(read_back(&doc).text_threads.len(), 1);
+}
+
+/// A thread with a frame in art cut to a clipping object that isn't a path is written as its
+/// outlines, every frame of it; so is type whose size is past what the reader reads.
+#[test]
+fn a_thread_with_a_frame_in_cut_art_and_type_past_the_readers_sizes_are_outlines() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "A story in two frames", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    // The second frame is clipped by type: its art is cut to the type's outlines.
+    let clipper = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(110.0, 30.0), "CUT", style(30.0, Color::BLACK)));
+    let cut = group(&mut doc, vec![clipper, second], true);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, cut).unwrap();
+    let huge = TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "Huge", style(12.0, Color::BLACK));
+    let huge = TextObject { xf: Affine::translate((10.0, 90.0)) * Affine::scale(1e5), ..huge };
+    let huge = text_node(&mut doc, huge);
+    doc.insert(Some(layer), usize::MAX, huge).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("/AI11Text"), "{text}");
+    // Tracking that rounds to the reader's limit, 100,000, is written as outlines.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut wide = TextObject::point(vectorcraft_geom::Point::new(10.0, 50.0), "Wide", style(12.0, Color::BLACK));
+    wide.runs[0].style.tracking = 99_999.6;
+    let wide = text_node(&mut doc, wide);
+    doc.insert(Some(layer), usize::MAX, wide).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("/AI11Text"), "{text}");
+    // A frame that is the clipping object of a clipping group is written as the clipping outline.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "A story in two frames", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = first.clone();
+    second.runs[0].text.clear();
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let backing = square(&mut doc, Rect::new(100.0, 0.0, 200.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    let clipped = group(&mut doc, vec![second, backing], true);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    let text = program(&doc);
+    assert!(!text.contains("/AI11Text"), "{text}");
+}
+
+#[test]
+fn type_the_data_cant_hold_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::rgb(1.0, 0.0, 0.0))]);
+    let fill = Paint::Gradient(Box::new(GradientPaint::new(g)));
+    let t = vectorcraft_doc::TextObject::point(
+        vectorcraft_geom::Point::new(10.0, 70.0),
+        "Shaded",
+        vectorcraft_doc::CharStyle { size: 18.0, fill, ..vectorcraft_doc::CharStyle::default() },
+    );
+    let mirrored = vectorcraft_doc::TextObject {
+        xf: Affine::new([-1.0, 0.0, 0.0, 1.0, 150.0, 70.0]),
+        ..vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Mirror", style(18.0, Color::BLACK))
+    };
+    // Area type in a frame of two subpaths: a frame of the text document is one path.
+    let mut holed = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Two rings", style(10.0, Color::BLACK));
+    let mut rings = shapes::rectangle(Rect::new(100.0, 10.0, 190.0, 90.0));
+    rings.subpaths.extend(shapes::rectangle(Rect::new(120.0, 30.0, 170.0, 70.0)).subpaths);
+    holed.kind = vectorcraft_doc::TextKind::Area { frame: rings };
+    holed.xf = Affine::IDENTITY;
+    // A carriage return in the characters: a story ends its paragraphs with it. Area type that
+    // flows around a wrap object: the wrap object's settings aren't written.
+    let returned = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "A\rB", style(10.0, Color::BLACK));
+    let mut wrapped = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped round", style(10.0, Color::BLACK));
+    wrapped.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0)) };
+    wrapped.xf = Affine::IDENTITY;
+    wrapped.wrap = vec![vectorcraft_doc::WrapShape { path: shapes::rectangle(Rect::new(30.0, 20.0, 50.0, 40.0)), wrap: Default::default() }];
+    let wrapped = text_node(&mut doc, wrapped);
+    doc.insert(Some(layer), usize::MAX, wrapped).unwrap();
+    // Type on an open path whose ends meet: it would be read back on a closed path.
+    let mut ring = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Round", style(10.0, Color::BLACK));
+    let mut open_ring = shapes::ellipse(Rect::new(120.0, 10.0, 180.0, 70.0));
+    if let Some(first) = open_ring.subpaths[0].anchors.first().copied() {
+        open_ring.subpaths[0].anchors.push(first);
+    }
+    open_ring.subpaths[0].closed = false;
+    ring.kind = vectorcraft_doc::TextKind::OnPath { path: open_ring, start: 0.0, end: None };
+    ring.xf = Affine::IDENTITY;
+    let ring = text_node(&mut doc, ring);
+    doc.insert(Some(layer), usize::MAX, ring).unwrap();
+    let (t, mirrored, holed, returned) =
+        (text_node(&mut doc, t), text_node(&mut doc, mirrored), text_node(&mut doc, holed), text_node(&mut doc, returned));
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    doc.insert(Some(layer), usize::MAX, mirrored).unwrap();
+    doc.insert(Some(layer), usize::MAX, holed).unwrap();
+    doc.insert(Some(layer), usize::MAX, returned).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE]);
+    assert!(!program(&doc).contains("%AI11_BeginTextDocument"));
+    let back = read_back(&doc);
+    let kinds: Vec<bool> = back.layers[0].children().unwrap().iter().map(|n| matches!(n.kind, NodeKind::Group { .. })).collect();
+    assert_eq!(kinds, [true; 6]);
+}
+
+#[test]
+fn type_attributes_the_data_cant_hold_are_reported() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let st = vectorcraft_doc::CharStyle { underline: true, ..style(18.0, Color::BLACK) };
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Under", st);
+    let t = text_node(&mut doc, t);
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE_ATTRIBUTES]);
+    let back = read_back(&doc);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Text(_)));
+    // Any other attribute the text document doesn't hold is reported too: No Break, a paragraph's
+    // left-to-right direction set on it, Optical Margin Alignment, a font version, a font that isn't
+    // installed whose name doesn't come back (a hyphen in its family), a Lab color,
+    // small capitals at another size, right-to-left letters aligned to the start of a paragraph
+    // without a direction of its own, tracking that isn't a whole number.
+    for edit in [
+        (|t: &mut vectorcraft_doc::TextObject| t.runs[0].style.no_break = true) as fn(&mut vectorcraft_doc::TextObject),
+        |t| t.runs[0].style.tracking = 12.5,
+        |t| t.para.direction = Some(vectorcraft_doc::ParaDirection::LeftToRight),
+        |t| t.optical_margin = true,
+        |t| t.runs[0].style.font_version = Some("2.0".into()),
+        |t| t.runs[0].style.font_family = "my-missing font".into(),
+        |t| t.runs[0].style.fill = Paint::solid(MINT),
+        |t| t.runs[0].style.small_caps = Some(80.0),
+        |t| {
+            t.runs[0].text = "\u{645}\u{631}\u{62d}\u{628}\u{627}".into();
+            t.para.justify = vectorcraft_doc::Justify::Auto;
+        },
+    ] {
+        let with = |t: vectorcraft_doc::TextObject| {
+            let mut d = Document::new(200.0, 100.0);
+            let layer = d.layers[0].id;
+            let n = text_node(&mut d, t);
+            d.insert(Some(layer), usize::MAX, n).unwrap();
+            export_ai_editing(&d, &opts()).unwrap().warnings
+        };
+        let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Kept", style(18.0, Color::BLACK));
+        assert!(with(t.clone()).is_empty());
+        // A font that isn't installed keeps its family and style as its name.
+        let mut missing = t.clone();
+        missing.runs[0].style.font_family = "Missing Sans Probe".into();
+        missing.runs[0].style.font_style = "Bold Italic".into();
+        assert!(with(missing).is_empty());
+        edit(&mut t);
+        assert_eq!(with(t), [writer::TYPE_ATTRIBUTES]);
+    }
+}
+
+/// On a large canvas, area type, threaded frames and type on a path stay type: the frames and
+/// lengths are written at the canvas's scale. Frames of a thread at two scales, and area type
+/// scaled by two factors, are written as outlines.
+#[test]
+fn scaled_area_type_and_type_on_a_path_stay_type() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let mut doc = Document::new(20_000.0, 10_000.0);
+    let layer = doc.layers[0].id;
+    let framed = |text: &str, r: Rect| {
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, text, style(100.0, Color::BLACK));
+        t.kind = TextKind::Area { frame: shapes::rectangle(r) };
+        t.xf = Affine::IDENTITY;
+        t
+    };
+    let mut area = framed("Area", Rect::new(1000.0, 1000.0, 5000.0, 3000.0));
+    area.area.columns = 2;
+    area.area.gutter = 200.0;
+    let mut on_path = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(100.0, Color::BLACK));
+    let mut curve = PathData::from_bezpath(&kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((1000.0, 5000.0).into()),
+        kurbo::PathEl::CurveTo((3000.0, 4000.0).into(), (7000.0, 4000.0).into(), (9000.0, 5000.0).into()),
+    ]));
+    curve.subpaths.iter_mut().for_each(|sp| sp.closed = false);
+    on_path.kind = TextKind::OnPath { path: curve, start: 0.0, end: None };
+    on_path.xf = Affine::IDENTITY;
+    let first = text_node(&mut doc, framed("A story in two frames", Rect::new(1000.0, 6000.0, 5000.0, 8000.0)));
+    let second = text_node(&mut doc, framed("", Rect::new(6000.0, 6000.0, 10_000.0, 8000.0)));
+    doc.text_threads.push(vec![first.id, second.id]);
+    let (area, on_path) = (text_node(&mut doc, area), text_node(&mut doc, on_path));
+    for n in [area, on_path, first, second] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    let texts: Vec<&TextObject> = art.iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.as_ref()) } else { None }).collect();
+    assert_eq!(texts.len(), 4);
+    assert_eq!(back.text_threads.len(), 1);
+    let TextKind::Area { frame } = &texts[0].kind else { panic!("area type") };
+    let b = frame.transformed(texts[0].xf).bounds().unwrap();
+    assert_eq!([b.x0, b.y0, b.x1, b.y1].map(r3), ["1000.000", "1000.000", "5000.000", "3000.000"].map(String::from));
+    // The reader scales the document back: its matrix holds the canvas's scale, and its lengths
+    // through that matrix are the ones written.
+    let k = |t: &TextObject| t.xf.as_coeffs()[0];
+    assert_eq!(
+        (r3(texts[0].runs[0].style.size * k(texts[0])), texts[0].area.columns, r3(texts[0].area.gutter * k(texts[0]))),
+        ("100.000".to_string(), 2, "200.000".to_string())
+    );
+    assert!(matches!(texts[1].kind, TextKind::OnPath { .. }));
+    assert_eq!(r3(texts[1].runs[0].style.size * k(texts[1])), "100.000");
+
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut uneven = framed("Uneven", Rect::new(10.0, 10.0, 50.0, 30.0));
+    uneven.xf = Affine::new([2.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    let uneven = text_node(&mut doc, uneven);
+    doc.insert(Some(layer), usize::MAX, uneven).unwrap();
+    assert!(!program(&doc).contains("/AI11Text"));
+
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let first = framed("A story in two frames", Rect::new(10.0, 10.0, 50.0, 30.0));
+    let mut second = framed("", Rect::new(30.0, 20.0, 50.0, 30.0));
+    second.xf = Affine::scale(2.0);
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    assert!(!program(&doc).contains("/AI11Text"));
+}
+
+/// See-through type with the knockout shape flag comes back with the flag and writes no warning.
+#[test]
+fn the_knockout_shape_of_type_comes_back() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut text = text_node(&mut doc, vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 40.0), "Hi", style(10.0, Color::BLACK)));
+    (text.opacity, text.knockout_shape) = (0.5, true);
+    doc.insert(Some(layer), usize::MAX, text).unwrap();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[0];
+    assert!(matches!(n.kind, NodeKind::Text(_)));
+    assert_eq!((n.opacity, n.knockout_shape), (0.5, true));
+}
+
+/// The kinds of object that write no paint before their `Xy` or no state block after them, and a
+/// group, which writes a state block.
+#[derive(Clone, Copy, Debug)]
+enum Beside {
+    Type,
+    Compound,
+    Image,
+    Guide,
+    Group,
+}
+
+/// An object of `kind` at `x`, with opacity, blending mode and knockout shape flag `state`.
+fn beside(doc: &mut Document, kind: Beside, x: f64, state: (f32, BlendMode, bool)) -> Node {
+    let r = Rect::new(x, 10.0, x + 20.0, 30.0);
+    let mut n = match kind {
+        Beside::Type => {
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(x, 40.0), "Hi", style(10.0, Color::BLACK));
+            text_node(doc, t)
+        }
+        Beside::Compound => {
+            let outer = Node::path(doc.alloc_id(), shapes::rectangle(r), Appearance::default());
+            let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(x + 5.0, 15.0, x + 15.0, 25.0)), Appearance::default());
+            let mut ring =
+                Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+            ring.appearance = Appearance::basic(solid(BRAND), Paint::None, 0.0).into();
+            ring
+        }
+        Beside::Image => {
+            let mut png = vec![];
+            let img = image::RgbaImage::from_raw(1, 1, vec![255, 0, 0, 255]).unwrap();
+            img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            let blob = ImageBlob::new("image/png", png);
+            let key = blob.content_key();
+            doc.images.insert(key.clone(), blob);
+            let xf = Affine::new([10.0, 0.0, 0.0, 10.0, x, 10.0]);
+            let im = ImageObject { key, width: 1, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+            Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)))
+        }
+        Beside::Guide => Node::new(
+            doc.alloc_id(),
+            NodeKind::Path { path: shapes::rectangle(r), rule: FillRule::NonZero, live: None, clipping: false, guide: true },
+        ),
+        Beside::Group => {
+            let member = square(doc, r, BRAND);
+            group(doc, vec![member], false)
+        }
+    };
+    (n.opacity, n.blend, n.knockout_shape) = state;
+    n
+}
+
+/// Two objects next to each other come back with their own opacity, blending mode and knockout
+/// shape flag, whichever is first and whichever is opaque: an `Xy` right after a text object or a
+/// compound path is theirs when no other operator comes between. The layer's stays its own.
+#[test]
+fn objects_next_to_each_other_keep_their_own_transparency() {
+    use Beside::{Compound, Group, Guide, Image, Type};
+    let (clear, screen, plain) = ((0.5, BlendMode::Multiply, true), (0.25, BlendMode::Screen, false), (1.0, BlendMode::Normal, false));
+    let pairs = [
+        (Type, Type),
+        (Compound, Type),
+        (Group, Type),
+        (Type, Group),
+        (Type, Compound),
+        (Type, Image),
+        (Type, Guide),
+        (Compound, Image),
+        (Compound, Guide),
+    ];
+    for (a, b) in pairs {
+        for (first, second) in [(clear, plain), (plain, clear), (clear, screen), (clear, clear)] {
+            let mut doc = Document::new(200.0, 100.0);
+            let layer = doc.layers[0].id;
+            let (x, y) = (beside(&mut doc, a, 10.0, first), beside(&mut doc, b, 60.0, second));
+            doc.insert(Some(layer), usize::MAX, x).unwrap();
+            doc.insert(Some(layer), usize::MAX, y).unwrap();
+            let back = read_back(&doc);
+            let at = format!("{a:?} {first:?} then {b:?} {second:?}");
+            let kids = back.layers[0].children().unwrap();
+            assert_eq!(kids.len(), 2, "{at}");
+            for (n, want) in kids.iter().zip([first, second]) {
+                assert_eq!((n.opacity, n.blend, n.knockout_shape), want, "{at}");
+            }
+            let l = &back.layers[0];
+            assert_eq!((l.opacity, l.blend, l.knockout_shape), plain, "the layer's own: {at}");
+        }
+    }
+}
+
+/// A layer whose last object is type keeps its own transparency, and the type keeps its.
+#[test]
+fn type_last_in_a_transparent_layer_keeps_its_own_transparency() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let text = beside(&mut doc, Beside::Type, 10.0, (0.5, BlendMode::Multiply, true));
+    doc.insert(Some(layer), usize::MAX, text).unwrap();
+    let l = Arc::make_mut(&mut doc.layers[0]);
+    (l.opacity, l.blend) = (0.75, BlendMode::Screen);
+    let back = read_back(&doc);
+    let (l, n) = (&back.layers[0], &back.layers[0].children().unwrap()[0]);
+    assert_eq!((l.opacity, l.blend), (0.75, BlendMode::Screen));
+    assert_eq!((n.opacity, n.blend, n.knockout_shape), (0.5, BlendMode::Multiply, true));
+}
+
+/// Isolate Blending and the Knockout Group state of type come back, named or not and whatever
+/// follows it, as outlines kept them on their group, and are written again as the same bytes.
+#[test]
+fn the_isolation_and_knockout_of_type_come_back() {
+    for name in [None, Some("Title")] {
+        let cases = [(true, Knockout::On), (false, Knockout::On), (false, Knockout::Off), (true, Knockout::Neutral), (false, Knockout::Neutral)];
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        for (i, (isolate, knockout)) in cases.into_iter().enumerate() {
+            let mut n = beside(&mut doc, Beside::Type, 10.0 + 30.0 * i as f64, (0.5, BlendMode::Multiply, false));
+            (n.isolate, n.knockout) = (isolate, knockout);
+            n.name = name.map(|s| format!("{s} {i}"));
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let after = beside(&mut doc, Beside::Compound, 170.0, (1.0, BlendMode::Normal, false));
+        doc.insert(Some(layer), usize::MAX, after).unwrap();
+        let back = read_back(&doc);
+        let kids = back.layers[0].children().unwrap();
+        assert_eq!(kids.len(), cases.len() + 1);
+        for (i, (n, (isolate, knockout))) in kids.iter().zip(cases).enumerate() {
+            assert!(matches!(n.kind, NodeKind::Text(_)));
+            assert_eq!((n.isolate, n.knockout, n.opacity, n.blend), (isolate, knockout, 0.5, BlendMode::Multiply), "{i}");
+            assert_eq!(n.name, name.map(|s| format!("{s} {i}")));
+        }
+        assert_eq!(kids[cases.len()].opacity, 1.0);
+        let art = |d: &Document| program(d).split_once("%%EndSetup").map(|(_, art)| art.to_string()).unwrap();
+        assert_eq!(art(&back), art(&doc));
+    }
+}
+
+/// The end marker of the text document stays on one line wherever the ASCII85 ends: the reader
+/// looks for `~>` in the lines as they are, before it joins them.
+#[test]
+fn the_end_marker_of_the_text_document_stays_on_one_line() {
+    let mut at_the_boundary = 0;
+    // A character is two bytes: sizes of more digits reach the lengths that characters don't.
+    for size in [10.0, 10.25, 10.125, 10.0625] {
+        for len in 1..=60 {
+            let mut doc = Document::new(200.0, 100.0);
+            let layer = doc.layers[0].id;
+            let text = "x".repeat(len);
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 40.0), &text, style(size, Color::BLACK));
+            let t = text_node(&mut doc, t);
+            doc.insert(Some(layer), usize::MAX, t).unwrap();
+            let p = program(&doc);
+            assert!(!p.contains("~\n%>"), "{size} {len}");
+            // A full line (`%` and 100 characters) that the `>` goes past.
+            at_the_boundary += usize::from(p.lines().any(|l| l.len() == 102 && l.ends_with("~>")));
+            let back = read_back(&doc);
+            let NodeKind::Text(read) = &back.layers[0].children().unwrap()[0].kind else { panic!("{size} {len}: not type") };
+            assert_eq!(read.plain_text(), text);
+        }
+    }
+    assert!(at_the_boundary > 0, "no length put the `~` at the end of a line");
+}
+
+/// An empty frame after a slice that ends with a paragraph break holds the story's last paragraph,
+/// and that paragraph comes back with the empty frame's style.
+#[test]
+fn an_empty_last_frame_keeps_the_style_of_the_last_paragraph() {
+    use vectorcraft_doc::{Justify, ParaStyle, TextKind, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "Ends\n", style(10.0, Color::BLACK));
+    first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+    first.xf = Affine::IDENTITY;
+    let mut second = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(10.0, Color::BLACK));
+    second.set_all_paras(ParaStyle { justify: Justify::Right, ..ParaStyle::default() });
+    second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+    second.xf = Affine::IDENTITY;
+    let (first, second) = (text_node(&mut doc, first), text_node(&mut doc, second));
+    doc.text_threads.push(vec![first.id, second.id]);
+    doc.insert(Some(layer), usize::MAX, first).unwrap();
+    doc.insert(Some(layer), usize::MAX, second).unwrap();
+    let back = read_back(&doc);
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    assert_eq!(t.plain_text(), "Ends\n");
+    let justify: Vec<Justify> = t.paragraph_styles().iter().map(|p| p.justify).collect();
+    assert_eq!(justify, [Justify::Left, Justify::Right]);
+}
+
+/// A minimum first baseline with the Ascent first baseline is reported, and kept with the others.
+/// An end bracket of an open path that the reader would read as none is reported, and one further
+/// from the path's end comes back.
+#[test]
+fn a_first_baseline_minimum_and_a_path_end_the_reader_cant_read_are_reported() {
+    use vectorcraft_doc::{FirstBaseline, TextKind, TextObject};
+    let with = |t: TextObject| {
+        let mut d = Document::new(300.0, 200.0);
+        let layer = d.layers[0].id;
+        let n = text_node(&mut d, t);
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        let warnings = export_ai_editing(&d, &opts()).unwrap().warnings;
+        (warnings, read_back(&d))
+    };
+    let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "Area", style(12.0, Color::BLACK));
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 20.0, 140.0, 160.0)) };
+    area.xf = Affine::IDENTITY;
+    area.area.first_baseline_min = 40.0;
+    let (warnings, _) = with(area.clone());
+    assert_eq!(warnings, [writer::TYPE_ATTRIBUTES]);
+    area.area.first_baseline = FirstBaseline::Fixed;
+    let (warnings, back) = with(area);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (FirstBaseline::Fixed, 40.0));
+
+    let on_path = |end: Option<f64>| {
+        let mut curve = PathData::from_bezpath(&kurbo::BezPath::from_vec(vec![
+            kurbo::PathEl::MoveTo((20.0, 150.0).into()),
+            kurbo::PathEl::CurveTo((50.0, 110.0).into(), (110.0, 110.0).into(), (140.0, 150.0).into()),
+        ]));
+        curve.subpaths.iter_mut().for_each(|sp| sp.closed = false);
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "On", style(12.0, Color::BLACK));
+        t.kind = TextKind::OnPath { path: curve, start: 0.0, end };
+        t.xf = Affine::IDENTITY;
+        t
+    };
+    assert_eq!(with(on_path(Some(0.999))).0, [writer::TYPE_ATTRIBUTES]);
+    assert!(with(on_path(None)).0.is_empty());
+    let (warnings, back) = with(on_path(Some(0.5)));
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+    let TextKind::OnPath { end: Some(end), .. } = t.kind else { panic!("an end bracket") };
+    assert!((end - 0.5).abs() < 1e-3, "{end}");
+}
+
+/// A right-to-left paragraph aligned to the start of its direction comes back aligned right, as
+/// it draws; Latin type aligned to the start comes back aligned left.
+#[test]
+fn type_aligned_to_the_start_of_its_direction_keeps_its_side() {
+    use vectorcraft_doc::{Justify, ParaDirection, ParaStyle, TextObject};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut rtl = TextObject::point(vectorcraft_geom::Point::new(150.0, 40.0), "\u{5e9}\u{5dc}\u{5d5}\u{5dd}", style(12.0, Color::BLACK));
+    rtl.set_all_paras(ParaStyle { justify: Justify::Auto, direction: Some(ParaDirection::RightToLeft), ..ParaStyle::default() });
+    let mut ltr = TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "Start", style(12.0, Color::BLACK));
+    ltr.set_all_paras(ParaStyle { justify: Justify::Auto, ..ParaStyle::default() });
+    let (rtl, ltr) = (text_node(&mut doc, rtl), text_node(&mut doc, ltr));
+    doc.insert(Some(layer), usize::MAX, rtl).unwrap();
+    doc.insert(Some(layer), usize::MAX, ltr).unwrap();
+    assert!(export_ai_editing(&doc, &opts()).unwrap().warnings.is_empty());
+    let back = read_back(&doc);
+    let sides: Vec<Justify> =
+        back.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.para.justify) } else { None }).collect();
+    assert_eq!(sides, [Justify::Right, Justify::Left]);
+}
+
+/// Type in an opacity mask is written as its outlines; the type beside it as text.
+#[test]
+fn type_in_opacity_masks_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let label = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 40.0), "Mask", style(18.0, Color::BLACK));
+    let label = text_node(&mut doc, label);
+    let mut square = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb(1.0, 0.0, 0.0));
+    square.extras_mut().mask = Some(Box::new(OpacityMask::new(label, false)));
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let plain = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "Plain", style(18.0, Color::BLACK));
+    let plain = text_node(&mut doc, plain);
+    doc.insert(Some(layer), usize::MAX, plain).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::TYPE]);
+    let text = program(&doc);
+    assert_eq!(text.matches("/AI11Text :").count(), 1);
+}
+
+/// Type with an opacity mask of its own is written as its outlines, which keep the mask.
+#[test]
+fn type_with_an_opacity_mask_is_written_as_its_outlines() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Masked", style(18.0, Color::BLACK));
+    let mut t = text_node(&mut doc, t);
+    let art = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb(1.0, 1.0, 1.0));
+    t.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+    doc.insert(Some(layer), usize::MAX, t).unwrap();
+    assert_eq!(export_ai_editing(&doc, &opts()).unwrap().warnings, [writer::TYPE]);
+    assert_eq!(program(&doc).matches("/AI11Text :").count(), 0);
+    let back = read_back(&doc);
+    let top = &back.layers[0].children().unwrap()[0];
+    assert!(!matches!(top.kind, NodeKind::Text(_)));
+    assert!(top.extras().mask.is_some());
 }
 
 // ---------- variables ----------

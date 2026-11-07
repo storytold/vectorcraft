@@ -80,6 +80,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
+        "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
         _ => return None,
     })
 }
@@ -169,6 +170,12 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
+    if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
+        if let Err(e) = r {
             app.status(e);
         }
         return;

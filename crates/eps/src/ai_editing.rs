@@ -97,12 +97,23 @@
 //!   (`w h rowBytes 32 17 `, then rows of premultiplied ARGB), each in versioned content, `~`,
 //!   `%AI5_EndPlace`. The box is the file's pixels at art space's origin on the canvas; the matrix
 //!   takes it into art space. In opacity masks and pattern tiles, linked images are embedded.
+//! - Type: a text object `/AI11Text :` naming its story and frame (`/StoryIndex`, `/FrameIndex`),
+//!   for area type and type on a path with its frame's path (`/Art :` … `; /ConfiningPath ,`), and
+//!   the text document after the document data (`%AI11_BeginTextDocument`, see
+//!   `writer::texts`), in the form the reader's `ate.rs` reads: the characters, the fonts, sizes,
+//!   leading, tracking, baseline shift, scales, solid fills and strokes and capitals of each run,
+//!   the alignment, indents, spacing, hyphenation and direction of each paragraph, and the frame:
+//!   point type's point and matrix, area type's frame, rows, columns, gutters and first baseline,
+//!   type on a path's path and span, vertical type, and the frames a threaded story flows through.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
-//! loss a warning: type as its outlines and its inline graphics' art, freeform gradients, gradients
+//! loss a warning: type the text document can't hold (in opacity masks, pattern tiles and art cut to
+//! a clipping object, mirrored, turned or unevenly scaled area type and type on a path, inline graphics, ruby,
+//! gradient or pattern paint, an appearance of its own) as its outlines and its inline graphics'
+//! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
 //! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
@@ -245,6 +256,9 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     w.definitions(&mut s);
     s.push_str(&palette);
     artboards(&mut s, doc, to_art, origin, &library);
+    if !w.texts.is_empty() {
+        s.push_str(&w.texts.section(doc));
+    }
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");
@@ -451,10 +465,12 @@ fn ruler_units(u: Unit) -> u8 {
 /// bottom-right corners in art space (`PositionPoint1`, `PositionPoint2`), its top-left corner on
 /// the canvas (`RulerOrigin`, `origin` being art space's origin there), its pixel aspect ratio
 /// (`PAR`), `DisplayMark` 0 (as in the files users sent), whether it is the selected one (the
-/// first) and its name; then the canvas's size. Every record holds all of these entries. The
-/// artboards and the canvas size are written in the `/Recorded` part of the `/Document`
-/// dictionary, followed by an empty `/NotRecorded` part.
+/// active one) and its name; then the index of the active artboard (`CropAreaActive`: the one
+/// [`Document::opened_artboard`] names, else the first) and the canvas's size. Every record holds
+/// all of these entries. The artboards, the active artboard and the canvas size are written in the
+/// `/Recorded` part of the `/Document` dictionary, followed by an empty `/NotRecorded` part.
 fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64), library: &str) {
+    let active = doc.opened_artboard.and_then(|id| doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
     s.push_str("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n");
     for (i, ab) in doc.artboards.iter().enumerate() {
         let r = to_art.transform_rect_bbox(ab.rect);
@@ -469,10 +485,11 @@ fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64),
         ps::push_num(s, if par.is_finite() && par > 0.0 { par } else { 1.0 });
         // Display marks: 1 the center mark, 2 cross hairs, 4 video safe areas.
         let mark = u8::from(ab.show_center_mark) | u8::from(ab.show_cross_hairs) << 1 | u8::from(ab.show_video_safe_areas) << 2;
-        let _ = writeln!(s, " /Real (PAR) ,\n%_{mark} /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == 0));
+        let _ = writeln!(s, " /Real (PAR) ,\n%_{mark} /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == active));
         let _ = writeln!(s, "%_{} /UnicodeString (Name) ,\n%_; ,", ps::bytes(ab.name.as_bytes()));
     }
     s.push_str("%_; (ArtboardArray) ,\n");
+    let _ = writeln!(s, "%_{active} /Int (CropAreaActive) ,");
     let _ = writeln!(s, "%_{CANVAS_SIZE} /Int (AIDocumentCanvasSize) ,");
     // The variable library, after the canvas size.
     s.push_str(library);
