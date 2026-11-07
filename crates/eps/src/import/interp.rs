@@ -373,7 +373,7 @@ impl<'a> Interp<'a> {
 
     /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
     /// charges per 64 bytes, so a loop of big copies runs out of the budget.
-    fn spend_bytes(&mut self, n: usize) -> Res {
+    pub fn spend_bytes(&mut self, n: usize) -> Res {
         self.spend((n / 256) as u64)
     }
 

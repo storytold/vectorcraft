@@ -187,3 +187,26 @@ fn type42_data_read_again_counts_once() {
     // 17 fonts of 431 kB, each read 200 times: 1.4 GB if each read counted.
     super::tests::check(&format!("{fonts} /Comp findfont 50 scalefont setfont 200 {{ ({s}) stringwidth pop pop }} repeat true"));
 }
+
+/// Reading `sfnts` data that turns out unreadable is charged too: a composite font cycling
+/// through more such descendants than are kept read copies their strings on every glyph, and a
+/// `loop` of it runs out of the budget.
+#[test]
+fn unreadable_type42_data_read_again_runs_out_of_the_budget() {
+    let mut fonts = String::from("/S [ 0 1 7 { pop 4000000 string } for ] def\n");
+    for k in 0..17 {
+        fonts.push_str(&format!(
+            "10 dict begin /FontName /Bad{k} def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+             /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for\n\
+             /CharStrings 1 dict def CharStrings /.notdef 0 put /sfnts [ S aload pop 0 ] def FontName currentdict end definefont pop\n"
+        ));
+    }
+    let deps: String = (0..17).map(|k| format!(" /Bad{k} findfont")).collect();
+    let picks: String = (0..17).map(|k| format!(" {k}")).collect();
+    let s: String = (0..17).map(|k| format!("\\{k:03o}\\001")).collect();
+    super::tests::runs_out_of_budget(&format!(
+        "{fonts}16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+         /Encoding [{picks}] def /FDepVector [{deps}] def FontName currentdict end definefont pop\n\
+         /Comp findfont 50 scalefont setfont {{ ({s}) stringwidth pop pop }} loop"
+    ));
+}
