@@ -819,6 +819,24 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
+/// A loaded character style whose size, scale, leading, shift or stroke width is out of the range
+/// `charStyle.new` takes is skipped.
+#[test]
+fn loaded_styles_out_of_range_are_skipped() {
+    let (mut s, _) = session_with_text("Title");
+    let file = [
+        ("Huge", json!({"size": 2000.0})),
+        ("Flat", json!({"h_scale": 0.5})),
+        ("Shifted", json!({"baseline_shift": 5000.0})),
+        ("Thick", json!({"stroke_width": -2.0})),
+        ("Fine", json!({"size": 12.0, "h_scale": 50.0})),
+    ];
+    let data = styles_file(&file, &[]);
+    let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
+    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick"]}));
+    assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Fine"]);
+}
+
 /// A loaded style brings the pattern it paints with, renamed when the document has another pattern
 /// of that name, as Paste brings it; a global color whose name the document gives another color
 /// is the document's.

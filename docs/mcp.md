@@ -5939,8 +5939,8 @@ in, come along as Paste brings those of pasted type; a global or spot color whos
 is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
 document's styles and the type that uses them keep their attributes, and the file's Normal styles are not loaded. The
-reply lists the names `added`, `existing` and `skipped` (a style whose attributes do not read, or whose name is
-empty); `textStyle.loadAll` replies `{charStyles, paraStyles}`. A Return the Type tool types (or `text.editRange`
+reply lists the names `added`, `existing` and `skipped` (a style whose attributes do not read or are out of the range
+`charStyle.new` takes, or whose name is empty); `textStyle.loadAll` replies `{charStyles, paraStyles}`. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
 the story re-flows (a paragraph split between frames has them in both).

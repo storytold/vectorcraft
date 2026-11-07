@@ -125,7 +125,7 @@ macro_rules! style_cmds {
 }
 
 /// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
-const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with and the styles of either kind that type in those patterns is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}})";
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with and the styles of either kind that type in those patterns is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}})";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -913,16 +913,21 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 }
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
-/// referring to them: not the Normal style, and not one whose attributes don't read or whose name is empty,
-/// which are skipped. → (the styles, the names in `src` of those skipped)
+/// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
+/// scales, leading, shifts or stroke width are out of the range `charStyle.new` takes, or whose name
+/// is empty, which are skipped. → (the styles, the names in `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
+    const RANGED: [&str; 8] = ["size", "h_scale", "v_scale", "leading", "baseline_shift", "tcyUpDown", "tcyLeftRight", "stroke_width"];
     let (mut defs, mut skipped) = (vec![], vec![]);
     for def in kind.defs(src) {
         let name = def.name.as_str();
         if name.trim() == kind.normal() {
             continue;
         }
-        match attrs_param(src, &json!({ "attrs": def.attrs }), kind, "load", Some(&def.attrs)).ok().flatten().filter(|_| !name.trim().is_empty()) {
+        // Paints, features and language are taken as the file stores them; the ranged values are checked.
+        let mut kept = def.attrs.clone();
+        kept.retain(|k, _| !RANGED.contains(&k.as_str()));
+        match attrs_param(src, &json!({ "attrs": def.attrs }), kind, "load", Some(&kept)).ok().flatten().filter(|_| !name.trim().is_empty()) {
             Some(attrs) => defs.push(TextStyleDef { name: name.to_string(), attrs }),
             None => skipped.push(def.name.clone()),
         }
