@@ -3169,8 +3169,9 @@ the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
 PDF export draws printer's marks and bleed itself (the Save PDF dialog's Marks and Bleeds section):
 `document.exportPdf {marks: {trim, registration, colorBars, pageInfo, kind, weight, offset}, bleed: {useDocument, top,
 bottom, left, right}}`. Each page's TrimBox is its artboard, its BleedBox the artboard grown by the bleed (the
-document's with `useDocument`, set by `document.setup {bleed}`; the art there is kept) and its MediaBox the bleed box
-grown to hold the marks (the art is clipped to the bleed box). Trim marks, registration targets and the page
+document's with `useDocument`, set by `document.setup {bleed}`; the art there is kept; a PDF/X file with no bleed on a
+side where the document's bleed has one is written as asked and comes back with a warning) and its MediaBox the bleed
+box grown to hold the marks (the art is clipped to the bleed box). Trim marks, registration targets and the page
 information (title, artboard, export date in UTC) are drawn in Registration (`/Separation /All`) outside the bleed;
 the colour bars are process, spot and black-tint patches. Layers whose Print option is off (`layer.setProps
 {printable: false}`) are left out unless `includeNonPrinting` (or `createLayers`) is on.

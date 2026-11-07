@@ -1903,6 +1903,20 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
+/// alone and in the status bar's note.
+#[test]
+fn pdfx_bleed_warning_is_translated() {
+    let w = vectorcraft_engine::cmd::fileio::pdf::BLEED_LEFT_OUT;
+    let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+    // A catalog's `{a}: {b}` row can translate the colon alone, so the check looks for the English words.
+    for lang in Lang::all().filter(|l| l.code() != Lang::EN.code()) {
+        for shown in [message(lang, w), message(lang, &status)] {
+            assert!(!shown.contains("leaves out") && !shown.contains("turn on"), "{}: {shown}", lang.code());
+        }
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
