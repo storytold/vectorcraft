@@ -1,9 +1,11 @@
 use super::build::Frame;
 use super::slots::OUTLINE_REACH;
 use super::{Arc, Document, Node, NodeKind, Rect};
+use vectorcraft_doc::ColorMode;
 
-/// `doc` with its layers that don't print hidden, when it has any.
-fn as_printed(doc: &Document) -> Option<Document> {
+/// `doc` as the page prints it, when that isn't `doc` as it is: its layers that don't print hidden,
+/// and, with `cmyk`, in CMYK when it is an RGB document (see [`blends_in_cmyk`]).
+fn as_printed(doc: &Document, cmyk: bool) -> Option<Document> {
     fn hide(nodes: &mut [Arc<Node>]) -> bool {
         let mut any = false;
         for n in nodes {
@@ -19,7 +21,24 @@ fn as_printed(doc: &Document) -> Option<Document> {
         any
     }
     let mut d = doc.clone();
-    hide(&mut d.layers).then_some(d)
+    let mut changed = hide(&mut d.layers);
+    if cmyk && d.color_mode == ColorMode::Rgb {
+        d.color_mode = ColorMode::Cmyk;
+        changed = true;
+    }
+    changed.then_some(d)
+}
+
+/// Whether the layers of `doc` may print differently from the CMYK page `page` (`page_cmyk`) by
+/// where their transparency was blended. An RGB document written as CMYK PostScript (the EPS option
+/// that converts its colours for output,
+/// https://helpx.adobe.com/illustrator/using/saving-artwork.html) has its page in the colours' CMYK
+/// equivalents, its transparency flattened in the document's blending space (Edit › Transparency
+/// Blend Space: Document RGB or Document CMYK), which the editing data doesn't name: blend modes
+/// such as Color or Screen mix the inks in CMYK, not the screen colours. Art without transparency
+/// prints alike either way.
+fn blends_in_cmyk(page_cmyk: bool, doc: &Document) -> bool {
+    page_cmyk && doc.color_mode == ColorMode::Rgb && doc.layers.iter().any(|l| l.shows_transparency())
 }
 
 /// A premultiplied pixel seen on white.
@@ -326,6 +345,12 @@ pub(super) struct PageView {
     boards: Vec<Rect>,
     sheets: Vec<Sheet>,
     samples: u32,
+    /// Whether the page is printed in CMYK ([`blends_in_cmyk`]).
+    cmyk: bool,
+    /// Whether the layers are drawn in CMYK to weigh them against the page: decided by the first
+    /// RGB document with transparency weighed, as the blending space that draws it closer to the
+    /// page.
+    in_cmyk: Option<bool>,
     layers: vectorcraft_render::Renderer,
     /// The drawings of the last [`KEPT_DOCUMENTS`] documents weighed, the last one weighed last (the
     /// import weighs two readings of a file back and forth).
@@ -373,7 +398,19 @@ impl PageView {
                 Page::on(frame.page, comparison_render(&mut renderer, frame.page, ra, scale, samples), ra, region, scale, moved)
             })
             .collect();
-        Self { pages, boards, sheets, samples, layers: vectorcraft_render::Renderer::new(), drawn: vec![], without: vec![], draws: 0 }
+        let cmyk = frame.page.color_mode == ColorMode::Cmyk;
+        Self {
+            pages,
+            boards,
+            sheets,
+            samples,
+            cmyk,
+            in_cmyk: None,
+            layers: vectorcraft_render::Renderer::new(),
+            drawn: vec![],
+            without: vec![],
+            draws: 0,
+        }
     }
 
     /// The areas in the layers' document that the pages are compared on: `rb` for the first page,
@@ -453,8 +490,23 @@ impl PageView {
             return;
         }
         // The page doesn't print what isn't printed.
-        let printed = as_printed(b);
-        for (i, pixels) in self.draw(printed.as_ref().unwrap_or(b), &missing) {
+        let drawn = if self.in_cmyk.is_none() && blends_in_cmyk(self.cmyk, b) {
+            // Drawn both ways, the closer to the page decides.
+            let both = [false, true].map(|cmyk| {
+                let printed = as_printed(b, cmyk);
+                let drawn = self.draw(printed.as_ref().unwrap_or(b), &missing);
+                let off: f64 = drawn.iter().filter_map(|(i, d)| Some(compared(&self.pages.get(*i)?.drawn, d, &[], &[]).any)).sum();
+                (off, cmyk, drawn)
+            });
+            let [rgb, cmyk] = both;
+            let (_, chosen, drawn) = if cmyk.0 < rgb.0 { cmyk } else { rgb };
+            self.in_cmyk = Some(chosen);
+            drawn
+        } else {
+            let printed = as_printed(b, self.in_cmyk == Some(true));
+            self.draw(printed.as_ref().unwrap_or(b), &missing)
+        };
+        for (i, pixels) in drawn {
             if let Some(slot) = self.drawn.last_mut().and_then(|d| d.pages.get_mut(i)) {
                 *slot = Some(Layered { pixels, laid: None, reflowed: None, colour: None });
             }
@@ -466,7 +518,7 @@ impl PageView {
     pub(super) fn differences(&mut self, b: &Document, rb: Rect, reflow: bool) -> Vec<Difference> {
         let all: Vec<usize> = (0..self.pages.len()).collect();
         self.layered(b, &all);
-        let printed = as_printed(b);
+        let printed = as_printed(b, self.in_cmyk == Some(true));
         let printed = printed.as_ref().unwrap_or(b);
         let mut out = vec![];
         for i in all {
@@ -506,7 +558,7 @@ impl PageView {
     pub(super) fn solid_regions_on_every_page(&mut self, b: &Document, reflow: bool) -> Option<(Difference, Vec<Rect>)> {
         let all: Vec<usize> = (0..self.pages.len()).collect();
         self.layered(b, &all);
-        let printed = as_printed(b);
+        let printed = as_printed(b, self.in_cmyk == Some(true));
         let b = printed.as_ref().unwrap_or(b);
         let (mut diff, mut regions) = (Difference { any: 0.0, art: 0.0, solid: 0.0, typed: 0.0 }, vec![]);
         for (page, layered) in self.pages.iter().zip(&self.drawn.last()?.pages) {
@@ -531,7 +583,7 @@ impl PageView {
     /// for [`Self::adopt`].
     pub(super) fn weigh_without(&mut self, doc: &Document, without: &Document, on: &[usize]) -> Vec<(usize, f64, f64)> {
         self.layered(doc, on);
-        let printed = as_printed(without);
+        let printed = as_printed(without, self.in_cmyk == Some(true));
         let drawn = self.draw(printed.as_ref().unwrap_or(without), on);
         let mut shares = vec![];
         self.without.clear();
@@ -647,19 +699,27 @@ fn colour_share(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Render
 }
 
 /// How `a` on `ra` and `b` on `rb` (rectangles of the same size) draw differently ([`compared`]),
-/// for a region other than the page's ([`PageView`] draws that one once).
+/// for a region other than the page's ([`PageView`] draws that one once): `b` blended the way that
+/// draws it closer to `a` ([`blends_in_cmyk`]).
 pub(super) fn difference(a: &Document, ra: Rect, b: &Document, rb: Rect) -> Difference {
-    let printed = as_printed(b);
-    let b = printed.as_ref().unwrap_or(b);
     let scale = compare_scale(ra);
     // A renderer each: the two documents' images can share their keys and not their pixels.
     let samples = comparison_samples(a);
     let x = comparison_render(&mut vectorcraft_render::Renderer::new(), a, ra, scale, samples);
-    let y = comparison_render(&mut vectorcraft_render::Renderer::new(), b, rb, scale, samples);
-    let mut areas = vec![];
-    type_areas(&a.layers, ra, scale, &mut areas);
-    type_areas(&b.layers, rb, scale, &mut areas);
-    compared(&x, &y, &areas, &[])
+    let ways: &[bool] = if blends_in_cmyk(a.color_mode == ColorMode::Cmyk, b) { &[false, true] } else { &[false] };
+    // The way of blending that draws `b` closer to the page.
+    ways.iter()
+        .map(|cmyk| {
+            let printed = as_printed(b, *cmyk);
+            let b = printed.as_ref().unwrap_or(b);
+            let y = comparison_render(&mut vectorcraft_render::Renderer::new(), b, rb, scale, samples);
+            let mut areas = vec![];
+            type_areas(&a.layers, ra, scale, &mut areas);
+            type_areas(&b.layers, rb, scale, &mut areas);
+            compared(&x, &y, &areas, &[])
+        })
+        .min_by(|p, q| p.any.total_cmp(&q.any))
+        .unwrap_or(Difference::ALL)
 }
 
 /// How two drawings of the same size differ, each drawn on nothing and seen on white, away from
@@ -879,7 +939,7 @@ const PAST_THE_PAGE: f64 = 1.0;
 pub(super) fn compare(frame: &Frame<'_>, view: &mut PageView, layered: &Document, type_reflow: bool) -> Result<Vec<String>, String> {
     let mut diff = view.difference_on_every_page(layered, frame.rect, type_reflow);
     if frame.whole
-        && let Some(art) = vectorcraft_render::encode::art_bounds(as_printed(layered).as_ref().unwrap_or(layered))
+        && let Some(art) = vectorcraft_render::encode::art_bounds(as_printed(layered, false).as_ref().unwrap_or(layered))
             .filter(|a| !frame.rect.inflate(PAST_THE_PAGE, PAST_THE_PAGE).contains_rect(*a))
     {
         // The page and the art the layers print beyond it, each in its own document's place.
@@ -1083,5 +1143,47 @@ mod tests {
             view.differences(&other, areas[0], false);
         }
         assert_eq!(view.draws, 2, "each document is drawn once");
+    }
+
+    /// The page of an RGB document printed in CMYK has its transparency blended in either space: a
+    /// green screened over a grey of black ink alone leaves no ink when blended in CMYK, and shows a
+    /// light green when blended in screen colours. The layers are weighed blended the way that
+    /// draws them closer to the page, so they match either page.
+    #[test]
+    fn an_rgb_documents_blending_matches_its_page_printed_in_cmyk() {
+        use vectorcraft_doc::ColorMode;
+        let area = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let page_with = |centre: vectorcraft_color::Color, blend: vectorcraft_color::BlendMode| {
+            let mut page = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
+            let layer = page.layers[0].id;
+            filled(&mut page, layer, area, 0.6);
+            let paint = vectorcraft_color::Paint::solid(centre);
+            let mut n = Node::path(
+                page.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)),
+                vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0),
+            );
+            n.blend = blend;
+            page.insert(Some(layer), usize::MAX, n).unwrap();
+            page
+        };
+        let screened = page_with(vectorcraft_color::Color::cmyk(1.0, 0.0, 1.0, 0.0), vectorcraft_color::BlendMode::Screen);
+        let mut layers = screened.clone();
+        layers.color_mode = ColorMode::Rgb;
+        // Blended in screen colours, the centre is a light green.
+        let shown = |d: &Document| comparison_render(&mut vectorcraft_render::Renderer::new(), d, area, compare_scale(area), 1);
+        let rgb = shown(&layers);
+        let at = (rgb.height as usize / 2 * rgb.width as usize + rgb.width as usize / 2) * 4;
+        let [r, g, b] = [0, 1, 2].map(|k| f32::from(rgb.pixels[at + k]) / 255.0);
+        assert!(compared(&shown(&screened), &rgb, &[], &[]).any > 0.3);
+        // A page blended in CMYK, and one blended in screen colours (its centre painted that green).
+        let in_rgb = page_with(vectorcraft_color::Color::rgb(r, g, b), vectorcraft_color::BlendMode::Normal);
+        for (page, cmyk) in [(&screened, true), (&in_rgb, false)] {
+            assert!(difference(page, area, &layers, area).any < 0.001, "cmyk: {cmyk}");
+            let frame = frame_of(page, &[area]);
+            let mut view = PageView::new(&frame);
+            assert_eq!(compare(&frame, &mut view, &layers, false), Ok(vec![]), "cmyk: {cmyk}");
+            assert_eq!(view.in_cmyk, Some(cmyk));
+        }
     }
 }
