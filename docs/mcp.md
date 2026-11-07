@@ -534,6 +534,20 @@ stroke instead of the whole object: `run_command effect.apply {"effect": "path.o
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.
 
+On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
+`appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
+`appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer` and `appearance.copyFrom` store the paint,
+weight and opacity of the topmost visible fill and stroke on the graph. When the graph is drawn again, columns, bars,
+wedges, areas, markers and legend swatches take the stored fill and stroke. A thin line takes the stored stroke and has
+no fill. A Filled Lines band takes the stored fill, or the stored stroke when no fill is stored and that stroke has
+paint, and has a 0.25 pt black outline, so these commands do not store a stroke for a series that draws a band. Graph
+designs keep their own paint. A row that had no paint before the command and has none after it does not change what the
+graph stores. `paint.setFill`, `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other
+store the topmost row of the kind even when it is hidden, and store a stroke set on a band.
+`stroke.set`, `paint.editGradient`, `paint.swap`, `paint.default`, graphic styles and the recolor commands do not store a
+series' paint. An `appearance.*` command given a series group's id edits the group's own rows, and the graph does not
+store them.
+
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
 those outlines. On paths, compound paths and images it does not change what is drawn.
