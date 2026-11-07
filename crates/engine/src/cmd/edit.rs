@@ -932,7 +932,8 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
     // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
     // the whole path then (#2122), unless a selection tool Cmd lent them picked the anchors (#6123).
-    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && s.lent_selection.as_ref() != Some(&st.selection);
+    let picked = s.lent_selection.as_ref().is_some_and(|(uid, sel)| *uid == st.uid && *sel == st.selection);
+    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
     let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {

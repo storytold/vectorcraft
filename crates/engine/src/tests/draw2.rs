@@ -2675,7 +2675,8 @@ fn pen_with_cmd_borrows_direct_selection_and_goes_on_drawing() {
 
 /// #6123: anchors that Cmd (Ctrl) held with the Pen selects with the Direct Selection it lends are
 /// what Copy and Cut take, as with Direct Selection chosen; the last anchor the Pen leaves selected
-/// while drawing is not, Copy taking the whole path (#2122).
+/// while drawing is not, Copy taking the whole path (#2122), nor after a Cmd gesture that picks
+/// nothing.
 #[test]
 fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     let (none, cmd) = (Mods::default(), Mods { cmd: true, ..Mods::default() });
@@ -2709,6 +2710,19 @@ fn pen_cmd_selected_anchors_are_what_copy_and_cut_take() {
     assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 4)].into());
     s.execute("edit.copy", &json!({})).unwrap();
     assert_eq!(pasted(&mut s), [5]);
+    // A Cmd+Shift marquee over nothing picks nothing: the Pen's last anchor stays its own.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let shift_cmd = Mods { shift: true, ..cmd };
+    gesture(&mut s, &[(600.0, 500.0), (700.0, 600.0)], shift_cmd);
+    assert_eq!(s.doc().unwrap().selection.anchors[&id], [(0, 4)].into());
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [5]);
+    // The tool started afresh in the same document (another view of it) keeps a pick picked.
+    s.execute("edit.undo", &json!({})).unwrap();
+    gesture(&mut s, &[(150.0, 250.0), (350.0, 350.0)], cmd);
+    s.reset_tool();
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(pasted(&mut s), [2]);
 }
 
 /// #4980: Cmd/Ctrl held with the Pen drags as Direct Selection: an anchor of the path being drawn
