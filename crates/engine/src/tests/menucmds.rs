@@ -257,10 +257,10 @@ fn tiles_under_squares() -> (Session, Vec<NodeId>, Vec<NodeId>) {
 }
 
 /// With 1,000 tiles selected under 50,000 squares, Lock › All Artwork Above locks every square in one
-/// undo step and Hide › All Artwork Above hides every square, each within 20 s, and the tiles stay
-/// selected.
+/// undo step and Hide › All Artwork Above hides every square, each in a few walks of the tree, and
+/// the tiles stay selected.
 #[test]
-fn lock_and_hide_all_artwork_above_1000_tiles_under_50000_objects_finish_within_20_s() {
+fn lock_and_hide_all_artwork_above_1000_tiles_under_50000_objects_take_few_tree_walks() {
     let (mut s, tiles, squares) = tiles_under_squares();
     sel(&mut s, &tiles);
     let before = s.doc().unwrap().doc.clone();
@@ -280,9 +280,10 @@ fn lock_and_hide_all_artwork_above_1000_tiles_under_50000_objects_finish_within_
 }
 
 /// With all 51,000 objects of [`tiles_under_squares`] selected, Lock › All Artwork Above and Hide ›
-/// All Artwork Above each find nothing to lock or hide within 20 s and record no undo step.
+/// All Artwork Above each find nothing to lock or hide in a few walks of the tree and record no undo
+/// step.
 #[test]
-fn lock_and_hide_all_artwork_above_with_51000_objects_selected_finish_within_20_s() {
+fn lock_and_hide_all_artwork_above_with_51000_objects_selected_take_few_tree_walks() {
     let (s, tiles, squares) = tiles_under_squares();
     let (steps, all) = (undo_len(&s), [tiles, squares].concat());
     assert!(selected(&s) == all, "everything is selected");
