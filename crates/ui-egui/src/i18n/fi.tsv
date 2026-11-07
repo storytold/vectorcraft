@@ -1911,6 +1911,9 @@ digits	Malayalam	Malajalam
 	More Paragraph options	Lisää kappaleasetuksia
 	No document open	Ei avointa asiakirjaa
 	Quick Actions	Pikatoiminnot
+	Rearrange	Järjestä uudelleen
+	Select All Artboards	Valitse kaikki piirtoalustat
+	Switch Orientation	Vaihda suuntaa
 	Rearrange All	Järjestä kaikki uudelleen
 	Rulers & Grids	Viivaimet ja ruudukot
 	Select a text object	Valitse tekstiobjekti
@@ -3423,6 +3426,7 @@ theme	Appearance	Ulkoasu
 	Character / Paragraph	Merkki / kappale
 	Copy Artboard	Kopioi piirtoalusta
 	Cut Artboard	Leikkaa piirtoalusta
+	Rename Artboards	Nimeä piirtoalustat uudelleen
 	Move Artboard Up/Down	Siirrä piirtoalustaa ylös/alas
 	Add Anchor (Pen)	Lisää ankkuri (kynä)
 	Add Anchor Point	Lisää ankkuripiste

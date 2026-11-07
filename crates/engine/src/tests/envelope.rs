@@ -221,6 +221,131 @@ fn envelope_options_round_trip_natively_and_old_files_load() {
     assert!(serde_json::to_value(&legacy).unwrap()["kind"].get("options").is_none());
 }
 
+/// Envelope Options change the options they name: the margins an envelope opens with from a file
+/// stay, and they survive a native save.
+#[test]
+fn envelope_options_keep_the_margins_of_an_opened_file() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}));
+    assert_eq!(options(&s, e).0.bounds_margin, [0.0; 4]);
+    let margin = [0.01, 0.02, 0.01, 0.02];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(NodeKind::Envelope { options, .. }) = doc.node_mut(e).map(|n| &mut n.kind) {
+        options.bounds_margin = margin;
+    }
+    s.execute("object.envelope.options", &json!({"antiAlias": false, "fidelity": 75})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin);
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert_eq!(back.node(e), d.node(e));
+    assert_eq!(s.execute("object.envelope.info", &json!({})).unwrap()["boundsMargin"], json!(margin));
+    s.execute("object.envelope.options", &json!({"distortAppearance": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin);
+}
+
+/// `object.envelope.info` leaves out margins that are zero.
+#[test]
+fn envelope_info_reports_margins_only_when_it_has_them() {
+    let mut s = session();
+    enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}));
+    assert!(s.execute("object.envelope.info", &json!({})).unwrap().get("boundsMargin").is_none());
+}
+
+/// Leaving Edit Contents measures the margins again when a stroke changed: a wider stroke gives
+/// larger ones and no stroke gives none, after which a stroke adds none, as in a new envelope. A
+/// new envelope's margins stay zero.
+#[test]
+fn leaving_edit_contents_measures_the_margins_again() {
+    let mut s = session();
+    let (a, e) = enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}));
+    let set_stroke = |s: &mut Session, weight: f64| {
+        sel(s, &[e]);
+        s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+        sel(s, &[a]);
+        s.execute("stroke.set", &json!({"weight": weight})).unwrap();
+        sel(s, &[e]);
+        s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    };
+    set_stroke(&mut s, 10.0);
+    assert_eq!(options(&s, e).0.bounds_margin, [0.0; 4]);
+
+    let margin = [0.05, 0.05, 0.025, 0.025];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(NodeKind::Envelope { options, .. }) = doc.node_mut(e).map(|n| &mut n.kind) {
+        options.bounds_margin = [0.5; 4];
+    }
+    set_stroke(&mut s, 20.0);
+    assert_eq!(options(&s, e).0.bounds_margin, margin.map(|m| m * 2.0));
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin.map(|m| m * 2.0));
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin.map(|m| m * 2.0));
+    set_stroke(&mut s, 10.0);
+    assert_eq!(options(&s, e).0.bounds_margin, margin);
+    // A stroke change, then a second entry, undone back to the first: leaving measures the change.
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("stroke.set", &json!({"weight": 30.0})).unwrap();
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin.map(|m| m * 3.0));
+    set_stroke(&mut s, 0.0);
+    assert_eq!(options(&s, e).0.bounds_margin, [0.0; 4]);
+    set_stroke(&mut s, 10.0);
+    assert_eq!(options(&s, e).0.bounds_margin, [0.0; 4]);
+}
+
+/// After an uneven scale, Edit Contents without a stroke change leaves the margins and the box the
+/// content maps from, and a stroke change measures them.
+#[test]
+fn edit_contents_keeps_the_margins_of_a_scaled_envelope_until_a_stroke_changes() {
+    let mut s = session();
+    let (a, e) = enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}));
+    sel(&mut s, &[a]);
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 10.0})).unwrap();
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    let margin = [0.05, 0.05, 0.025, 0.025];
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(NodeKind::Envelope { options, .. }) = doc.node_mut(e).map(|n| &mut n.kind) {
+        options.bounds_margin = margin;
+    }
+    s.execute("object.transform", &json!({"ids": [e.0], "matrix": [2, 0, 0, 0.5, 0, 0]})).unwrap();
+    let src = |s: &Session| live::EnvelopeMap::of(s.doc().unwrap().doc.node(e).unwrap()).unwrap().src();
+    let box_before = src(&s);
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin);
+    assert_eq!(src(&s), box_before);
+    // Undoing that step and leaving again gives the same.
+    s.execute("edit.undo", &json!({})).unwrap();
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, margin);
+    // So does saving natively in Edit Contents, reopening and leaving.
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    assert_eq!(back.node(e), s.doc().unwrap().doc.node(e));
+    assert!(back.node(e).unwrap().extras().envelope_edit_margin.is_some());
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert!(node(&s, e).extras().envelope_edit_margin.is_none());
+
+    s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("stroke.set", &json!({"weight": 0.0})).unwrap();
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+    assert_eq!(options(&s, e).0.bounds_margin, [0.0; 4]);
+}
+
 /// Regression: every exporter wrote type inside an envelope undistorted (no text outliner), so a
 /// warped line of type exported the same whatever its bend.
 #[test]

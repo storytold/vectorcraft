@@ -540,11 +540,13 @@ static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
-    if a == b {
+    let story = text_story(app);
+    // An empty selection has nothing to copy, unless the story's text is in the other frames.
+    if a == b && (story.is_none() || app.session.active().is_none_or(|st| st.doc.story_text(id).is_empty())) {
         return false;
     }
     // After Select All in threaded text: the whole story.
-    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let range = if story.is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
     let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
