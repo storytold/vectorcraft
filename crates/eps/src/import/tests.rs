@@ -1060,6 +1060,17 @@ fn an_executable_filter_runs_its_data_as_a_program() {
     check("(1 2 add) 0 () /SubFileDecode filter exec type /filetype eq");
 }
 
+/// `SubFileDecode`'s count is how many bytes (or end strings) to pass, not an allocation: a count
+/// past the 4 MiB cap on allocations (a long content stream's `/Length`) is read, and only the data
+/// there passes through.
+#[test]
+fn subfile_counts_past_the_allocation_cap_are_read() {
+    check("(1 2 add) 6000000 () /SubFileDecode filter cvx exec 3 eq");
+    check("(1 2 add) 5000000 (x) /SubFileDecode filter cvx exec 3 eq");
+    check("(abcd) 7000000 () /SubFileDecode filter 8 string readstring pop (abcd) eq");
+    check("{ (1) -1 () /SubFileDecode filter } stopped");
+}
+
 #[test]
 fn flushfile_skips_the_data_of_a_filter() {
     // Metadata that isn't PostScript, skipped up to its end marker.
