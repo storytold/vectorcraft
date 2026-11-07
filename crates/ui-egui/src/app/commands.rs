@@ -202,7 +202,7 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut") {
+        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") {
             self.publish_clipboard();
         }
         self.sync_views();

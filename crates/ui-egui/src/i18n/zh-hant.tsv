@@ -849,6 +849,7 @@ font-technology	Variable	可變
 	Duplicate Artboard	製作工作區域複本
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
+	Rename Artboards	重新命名工作區域
 	Duplicate Artboards	製作工作區域複本
 	Duplicate Brush	製作筆刷複本
 	Duplicate Character Style	製作字元樣式複本
@@ -3467,6 +3468,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
 	Rearrange All Artboards	重新排列所有工作區域
+	Rearrange	重新排列
+	Select All Artboards	選取所有工作區域
+	Switch Orientation	切換方向
 	Rearrange All	全部重新排列
 	Layout Order:	版面配置順序：
 	Change to Left-to-Right Layout	變更為由左至右版面配置

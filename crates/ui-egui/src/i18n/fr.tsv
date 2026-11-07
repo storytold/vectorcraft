@@ -890,6 +890,7 @@ font-technology	Variable	Variables
 	Duplicate Artboard	Dupliquer le plan de travail
 	Copy Artboard	Copier le plan de travail
 	Cut Artboard	Couper le plan de travail
+	Rename Artboards	Renommer les plans de travail
 	Duplicate Artboards	Dupliquer les plans de travail
 	Duplicate Brush	Dupliquer la forme
 	Duplicate Character Style	Dupliquer le style de caractère
@@ -2564,6 +2565,9 @@ digits	Malayalam	Malayalam
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
 	Rearrange All Artboards	Réorganiser tous les plans de travail
+	Rearrange	Réorganiser
+	Select All Artboards	Sélectionner tous les plans de travail
+	Switch Orientation	Changer d’orientation
 	Rearrange All	Tout réorganiser
 	Layout Order:	Ordre de disposition :
 	Change to Left-to-Right Layout	Passer à la disposition de gauche à droite
