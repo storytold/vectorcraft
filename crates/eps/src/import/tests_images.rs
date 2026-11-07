@@ -547,6 +547,7 @@ fn coarse_images_without_interpolate_draw_hard_pixels() {
     let cmyk = "100 100 scale /DeviceCMYK setcolorspace << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8 \
                 /MaskColor [0 0 0 0] /Decode [0 1 0 1 0 1 0 1] /ImageMatrix [2 0 0 -1 0 1] /DataSource <00000000 ff000000> >> image";
     assert_eq!(pixelated(cmyk), (true, Some(true)));
+}
 
 /// An image too large to read is left out, and its data is skipped, as reading it would leave
 /// the program: the art after it is read, not the data as PostScript. Here the data ends at its
