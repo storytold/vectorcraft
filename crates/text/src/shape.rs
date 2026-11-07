@@ -769,8 +769,9 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
-/// run's, see [`shape_segment`]) and the tracking, as long as the tracking keeps or drops standard
-/// ligatures alike ([`crate::features::ligatures_suppressed_by`]).
+/// run's, see [`shape_segment`]), the OpenType features (each run's apply to its own characters,
+/// as features over a range of the one buffer) and the tracking, as long as the tracking keeps or
+/// drops standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     // Every field is named, so that a new attribute has to be sorted into one group or the other.
     let CharStyle {
@@ -793,7 +794,9 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         underline: _,
         strikethrough: _,
         all_caps,
-        features,
+        // Runs with different feature lists shape as one buffer: each run's features apply to its
+        // own characters only ([`shape_segment`]).
+        features: _,
         style_name: _,
         overprint_fill: _,
         overprint_stroke: _,
@@ -826,7 +829,6 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         && *h_scale == b.h_scale
         && *v_scale == b.v_scale
         && *all_caps == b.all_caps
-        && *features == b.features
         && *position == b.position
         && *small_caps == b.small_caps
         && *proportional_metrics == b.proportional_metrics
@@ -978,6 +980,23 @@ struct Shaped {
     vpal: Vec<Option<VAdjust>>,
 }
 
+/// The features that turn the whole-text features `base` into `own` over the clusters `range`, put
+/// after `base` so that they win there: each feature of `own` that `base` lacks or has with
+/// another value, and each of `base` that `own` leaves out, back at the value the shaper has
+/// without it (on for the default features, off for the rest). The range is given with an
+/// inclusive end because harfrust's `Feature::new` takes an exclusive end one cluster short, but
+/// applies it as exclusive: a one-byte character would get an empty range.
+fn ranged_features(base: &[Feature], own: &[Feature], range: Range<usize>, out: &mut Vec<Feature>) {
+    const ON_BY_DEFAULT: [&[u8; 4]; 7] = [b"kern", b"liga", b"clig", b"calt", b"apkn", b"vkrn", b"vapk"];
+    for f in own.iter().filter(|f| !base.iter().any(|b| b.tag == f.tag && b.value == f.value)) {
+        out.push(Feature::new(f.tag, f.value, range.start..=range.end));
+    }
+    for b in base.iter().filter(|b| !own.iter().any(|f| f.tag == b.tag)) {
+        let default = ON_BY_DEFAULT.iter().any(|t| Tag::new(t) == b.tag);
+        out.push(Feature::new(b.tag, u32::from(default), range.start..=range.end));
+    }
+}
+
 fn is_mark(c: char) -> bool {
     use unicode_general_category::{GeneralCategory, get_general_category};
     matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
@@ -1043,6 +1062,23 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         return shape_apart(manual_ends, out);
     }
 
+    // Runs that differ only in their OpenType feature lists are shaped as one buffer: the features
+    // of each run apply to its own characters only (a feature with a range of clusters, which here
+    // are source bytes), over those of `base_style`, whose features apply to the whole segment. So
+    // a feature or an alternate (`salt=2`) on one letter of an Arabic word leaves the joining,
+    // ligatures and kerning of the whole word to the shaper, as the same text without it.
+    // `variant` makes a style's features and `base` is what it makes for `base_style`.
+    let run_features = |variant: &dyn Fn(&CharStyle) -> Vec<Feature>, base_style: &CharStyle, base: &[Feature]| {
+        let mut ranged = Vec::new();
+        for (r, run_style) in runs.get(source_runs.clone()).unwrap_or_default() {
+            let (a, b) = (r.start.max(range.start), r.end.min(range.end));
+            if run_style.features != base_style.features && a < b {
+                let own = variant(&CharStyle { features: run_style.features.clone(), ..base_style.clone() });
+                ranged_features(base, &own, a..b, &mut ranged);
+            }
+        }
+        ranged
+    };
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
         // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
@@ -1056,8 +1092,10 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let hb_shaped = face.hb().map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // gid, cluster, x and y advance, x and y offset.
-            let shape = |feats: &[Feature], direction: Direction| {
-                let feats: Vec<Feature> = feats.iter().chain(more).cloned().collect();
+            let shape = |variant: &dyn Fn(&CharStyle) -> Vec<Feature>, direction: Direction| {
+                let mut feats = variant(st);
+                feats.extend(run_features(variant, st, &feats));
+                feats.extend(more.iter().cloned());
                 let mut buf = UnicodeBuffer::new();
                 for (i, c) in text_seg.char_indices() {
                     let cl = (range.start + i) as u32;
@@ -1097,13 +1135,13 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
-            *raw = shape(&feats.resolve(st), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
+            *raw = shape(&|s| feats.resolve(s), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
             let raw = &*raw;
             let same_glyphs = |v: &[(u32, u32, i32, i32, i32, i32)]| v.len() == raw.len() && v.iter().zip(raw).all(|(a, b)| a.0 == b.0);
             if feats.proportional(st) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
-                let full = shape(&feats.resolve_fixed_width(st), along);
+                let full = shape(&|s| feats.resolve_fixed_width(s), along);
                 if same_glyphs(&full) {
                     *proportional = full.iter().zip(raw).map(|(a, b)| a.2 != b.2).collect();
                 }
@@ -1114,7 +1152,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 // and without either tell how it moves each and changes its advance down the column
                 // (y up, advances negative). Which advances `vpal` itself changed comes from setting
                 // them with it alone.
-                let ttb = |proportional, kerning| shape(&feats.resolve_vertical(st, proportional, kerning), Direction::TopToBottom);
+                let ttb = |proportional, kerning| shape(&|s| feats.resolve_vertical(s, proportional, kerning), Direction::TopToBottom);
                 let (with, without, alone) = (ttb(true, true), ttb(false, false), ttb(true, false));
                 if same_glyphs(&with) && same_glyphs(&without) && same_glyphs(&alone) {
                     *vpal = with

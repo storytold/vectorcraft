@@ -1,6 +1,6 @@
 # Control protocol
 
-> **Last updated:** 2026-10-31 · **Change:** Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
+> **Last updated:** 2026-11-07 · **Change:** text style commands take a feature with a value (`"features": ["salt=2"]`), the font's alternate number, and shape runs that differ only in features as one piece of text; previously: Confining file access refuses a `:` in a name after the drive on Windows, an NTFS alternate data stream such as `x.svg:evil` (#3604); previously: Object → Expand… dimmed while the selection has an appearance Expand Appearance expands (`object.expand.info`'s `appearance`, #3089); previously: brush library panels (`window.brushLibrary`, `window.brushLibrary.other`, `ui.saveBrushLibrary`); previously: Transform Each opens on the values it was last confirmed with; its Copy button confirms with `copy: true` (#1732); previously: panel docking on craft-ui's layout: `ui.docking`, the parameters of `window.panel.float` and `window.panel.dock`; previously: `ui.screenshot`'s 64 MiB inline-PNG cap and its path-plus-data downgrade; symbol library panels (`window.symbolLibrary`, `window.symbolLibrary.other`, `ui.saveSymbolLibrary`); synthetic input budgets (#1709); bounded transport waits (#1726).
 
 `vectorcraft --control <port>` listens on `127.0.0.1:<port>` (loopback only). The port must be a number
 from 1 to 65535 (`--control=<port>` works too), given once; otherwise the app prints an error and exits
@@ -922,6 +922,23 @@ handle); a Mesh tool click inside a mesh envelope adds a row and a column. While
 selected the Control bar shows its controls (Edit Envelope / Edit Contents, warp style, orientation, bend and
 distortions or mesh rows and columns, Reset, Envelope Options); each runs an `object.envelope.*` command.
 
+## OpenType feature values in text commands
+
+`text.setRangeStyle`, `text.setStyle` and the character style commands take OpenType features as a list of tags in
+`features` (the whole list) or `featureChanges` (changes on top of each character's own): `"dlig"` on, `"-liga"` off.
+A feature with alternates (`swsh`, `ss01`–`ss20`, `salt`, `titl`, `pnum`, `lnum`, `sups`, `subs`, `numr`, `dnom`,
+`aalt`) also takes `tag=N`, `N` from 0 to 65535, the font's alternate number: `"salt=2"` draws the second alternate of
+each glyph in the range that has one. It is the value the shaper gets (an OpenType alternate substitution picks the
+glyph at that position of its set), so `"salt"` is `"salt=1"`, and `"-salt"`, `"salt=0"` and a missing tag are off. A
+later value replaces an earlier one; `salt=x`, `salt=65536`, `-salt=2` and `liga=2` are refused. The style's
+`features` list and the saved file keep the string as typed (`["salt=2"]`), and SVG export writes CSS
+`font-feature-settings: "salt" 2`. Runs that differ only in `features` are shaped as one piece of text with each run's
+features over its own characters, so one letter of an Arabic word with `salt=2` keeps its neighbours' joining forms.
+
+```json
+{"id":1,"method":"engine.execute","params":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"features":["salt=2"]}}}
+```
+
 ## Shared panel docking
 
 The canvas and the panels form one craft-ui docking layout: the protected `canvas` panel beside a dock at the
@@ -1017,6 +1034,7 @@ hidden tab (whose frames the browser pauses) answers when it is shown again.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | Documented OpenType feature values in text commands (`"salt=2"`, the font's alternate number) and that runs differing only in features shape as one piece of text. |
 | 2026-10-31 | minor | Confining file access: on Windows a `:` in a name after the drive (an NTFS alternate data stream) is refused with the device names (#3604). |
 | 2026-10-25 | minor | Panel docking on craft-ui's layout: `ui.docking`, the floating and dock parameters, native floating windows. |
 | 2026-10-24 | minor | Documented the brush library panel commands (`window.brushLibrary`, `.other`, `ui.saveBrushLibrary`, `window.userBrushLibrary1`…`10`). |

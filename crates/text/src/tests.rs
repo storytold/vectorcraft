@@ -12,6 +12,7 @@ mod combos;
 mod devanagari;
 mod embed;
 mod fit;
+mod glyph_alternates;
 mod hang;
 mod inline;
 mod joiners;

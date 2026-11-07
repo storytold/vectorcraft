@@ -51,7 +51,9 @@ pub struct CharStyle {
     #[serde(default)]
     pub all_caps: bool,
     /// OpenType features that differ from the defaults (OpenType panel), as tags: `"dlig"` turns
-    /// a feature on, `"-liga"` off.
+    /// a feature on, `"-liga"` off, and `"salt=2"` turns a feature with alternates on at the font's
+    /// alternate number 2 (the value the shaper gets; a plain `"salt"` is value 1). Runs that
+    /// differ only in this list are shaped together, each with its own features.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
     /// Character style (Character Styles panel) these attributes come from; None = Normal.

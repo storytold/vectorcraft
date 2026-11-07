@@ -1208,6 +1208,18 @@
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
+	at the start of a word	a l’inici d’una paraula
+	in the middle of a word	al mig d’una paraula
+	at the end of a word	al final d’una paraula
+	standing alone	quan va sol
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no és una alternativa de {sel} (U+{code}) tal com es troba a la seva paraula.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Cap funció OpenType arriba a {glyph}, de manera que no es pot aplicar al text.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Feu doble clic per inserir {base} (U+{code}): una forma de presentació no s’uneix, la lletra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	S’ha inserit {base} (U+{code}) en lloc d’una forma de presentació: el tipus de lletra l’uneix als veïns segons la posició.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.
 	Double-click to insert	Feu doble clic per inserir
 	Double-click to rename	Feu doble clic per canviar el nom
 	Double-click to target the contents	Feu doble clic per apuntar al contingut

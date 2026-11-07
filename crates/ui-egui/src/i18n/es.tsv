@@ -861,6 +861,18 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
 	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
 	Double-click to replace	Doble clic para reemplazar
+	Select one character with the Type tool first.	Primero selecciona un carácter con la herramienta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} es un glifo de {font}, no de la fuente del texto seleccionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertenece a {base} (U+{base_code}) {place}; tu selección es {sel} (U+{code}).
+	at the start of a word	al principio de una palabra
+	in the middle of a word	en medio de una palabra
+	at the end of a word	al final de una palabra
+	standing alone	cuando está solo
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no es una alternativa de {sel} (U+{code}) tal como está en su palabra.
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Ninguna función OpenType llega a {glyph}, así que no se puede aplicar al texto.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doble clic para insertar {base} (U+{code}) en su lugar: una forma de presentación no se une, la letra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Se insertó {base} (U+{code}) en lugar de una forma de presentación: la fuente la une a sus vecinas según la posición.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ninguna función OpenType dibuja este glifo aquí, así que sustituye el glifo del carácter y puede que no se una a los caracteres vecinos.
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino

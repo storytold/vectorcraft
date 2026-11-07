@@ -1344,6 +1344,18 @@
 	Double-click to insert	सम्मिलित करने के लिए डबल क्लिक करें
 	Double-click to rename	नाम बदलने के लिए डबल क्लिक करें
 	Double-click to replace	प्रतिस्थापित करने के लिए डबल क्लिक करें
+	Select one character with the Type tool first.	पहले टाइप टूल से एक कैरेक्टर सिलेक्ट करें।
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} {font} का ग्लिफ़ है, उस फ़ॉन्ट का नहीं जिसमें सिलेक्ट किया टेक्स्ट सेट है ({text_font})।
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} {base} (U+{base_code}) का है, {place}; आपका सिलेक्शन {sel} (U+{code}) है।
+	at the start of a word	शब्द की शुरुआत में
+	in the middle of a word	शब्द के बीच में
+	at the end of a word	शब्द के अंत में
+	standing alone	अकेले खड़े होने पर
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}, {sel} (U+{code}) का विकल्प नहीं है, जैसा वह अपने शब्द में खड़ा है।
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	कोई OpenType फ़ीचर {glyph} तक नहीं पहुँचता, इसलिए इसे टेक्स्ट पर लागू नहीं किया जा सकता।
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	इसके बजाय {base} (U+{code}) सम्मिलित करने के लिए डबल क्लिक करें: प्रेज़ेंटेशन फ़ॉर्म नहीं जुड़ता, अक्षर जुड़ता है।
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	प्रेज़ेंटेशन फ़ॉर्म की जगह {base} (U+{code}) सम्मिलित किया गया: फ़ॉन्ट उसे स्थिति के अनुसार पड़ोसियों से जोड़ता है।
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	यहाँ कोई OpenType फ़ीचर इस ग्लिफ़ को नहीं बनाता, इसलिए यह कैरेक्टर के ग्लिफ़ की जगह लेता है और पड़ोसी कैरेक्टरों से जुड़ नहीं भी सकता।
 	Double-click to target the contents	सामग्री को लक्षित करने के लिए डबल क्लिक करें
 	Down (right reading)	नीचे (दाएं पढ़ने)
 	Download	डाउनलोड

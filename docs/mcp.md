@@ -5726,8 +5726,10 @@ it, as with any style change to one character (`text.setRangeStyle`). The type s
 ## Alternate glyphs
 
 The Glyphs panel's Show › Alternates for Current Selection lists the alternate glyphs of the character selected with
-the Type tool (a range's first character, else the one before the caret), with the default glyph first when the font
-does not list it, and a double-click on one draws that character with it. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
+the Type tool (a range's first character, else the one before the caret) as it stands in its word, with the glyph the
+shaper makes for it first, and a double-click on one applies the OpenType feature that draws it to that character alone
+(see [Alternates as OpenType feature values](#alternates-as-opentype-feature-values)); a glyph no feature draws there is
+drawn by `text.setGlyphAlternate`. `text.glyphAlternates {id, start}` lists them for the character at byte `start`: `{char, font, style, default,
 chosen, alternates: [{gid, feature}]}`, where `default` is the glyph the font's character map gives, `chosen` the glyph
 drawn now, and `alternates` the glyphs the font's `GSUB` single and alternate substitutions put in place of the default
 glyph: `aalt` first, then `salt`, `ss01` to `ss20`, `swsh`, `cv01` to `cv99`, `hist`, `jalt`, `nalt`, `ornm` and
@@ -5746,6 +5748,36 @@ system). Choosing the glyph a character already draws is not an edit. Character 
 ```json
 {"name":"run_command","arguments":{"command":"text.glyphAlternates","params":{"id":7,"start":2}}}
 {"name":"run_command","arguments":{"command":"text.setGlyphAlternate","params":{"id":7,"start":2,"gid":1043}}}
+```
+
+### Alternates as OpenType feature values
+
+`text.setGlyphAlternate`'s choice swaps a glyph id into one character and shapes that character apart from its neighbours.
+A feature with a value keeps the text real and joined: `features`, `featureChanges` (`text.setRangeStyle`,
+`text.setStyle`, `charStyle.*`) take `tag=N` for `swsh`, `ss01` to `ss20`, `salt`, `titl`, `pnum`, `lnum`, `sups`,
+`subs`, `numr`, `dnom` and `aalt`, `N` from 0 to 65535, and the style's `features` list keeps the string:
+`"salt=2"` draws the font's second alternate of every glyph in the run that has one (the OpenType alternate
+substitution picks the glyph at that position of its set; a glyph without one, or with fewer alternates, keeps the
+glyph it has). A plain `"salt"` is `"salt=1"` and is written so; `"salt=0"`, `"-salt"` and leaving it out are off. The
+next value for a feature replaces the last one, in `features` and in `featureChanges`, and a tag the build does not know
+(`salt=x`, `salt=65536`, `-salt=2`, `liga=2`) is refused with the unknown-feature error. SVG export writes the value as
+CSS `font-feature-settings: "salt" 2`.
+
+Runs that differ only in their `features` are shaped together as one piece of text, each run's features over its own
+characters: styling the middle letter of an Arabic word with `salt=2` leaves every other letter its initial, medial or
+final form and the letters still join, as the same word typed with no style change. Runs that differ in font, size,
+scale, case, language, script or direction are still shaped apart.
+
+`text.glyphAlternates` lists a character's alternates by the glyph the font's character map gives it; the Glyphs panel
+instead lists those of the glyph the shaper makes for the character in its word (a medial letter's medial form), finds
+for each the feature value that draws it there, and on a double-click runs one `text.setRangeStyle` on exactly that
+character: `featureChanges` turns its other alternate features (`salt`, `aalt`, `swsh`, `ss01`–`ss20`) off and sets the
+value (`["-ss01", "salt=2"]`), and `glyphAlternate: null` takes away a glyph choice that would otherwise keep drawing
+its own glyph (`text.setRangeStyle` takes it; any other value is refused). It is one undo step.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"features":["salt=2"]}}}
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":7,"start":4,"end":6,"featureChanges":["-salt"]}}}
 ```
 
 ## New type in a Japanese interface

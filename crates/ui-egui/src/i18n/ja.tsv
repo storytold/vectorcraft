@@ -1424,6 +1424,18 @@ digits	Malayalam	マラヤーラム数字
 	The selected character's font is not available.	選択した文字のフォントを使用できません。
 	No alternates for the selected character.	選択した文字には異体字がありません。
 	Double-click to replace	ダブルクリックで置換
+	Select one character with the Type tool first.	先に文字ツールで文字を 1 つ選択してください。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} は {font} のグリフで、選択したテキストのフォント ({text_font}) のものではありません。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} は {base} (U+{base_code}) の{place}のグリフです。選択中の文字は {sel} (U+{code}) です。
+	at the start of a word	語頭
+	in the middle of a word	語中
+	at the end of a word	語末
+	standing alone	単独のとき
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} は、{sel} (U+{code}) が単語の中で置かれている位置での異体字ではありません。
+	No OpenType feature reaches {glyph}, so it cannot be applied to text.	{glyph} に到達する OpenType フィーチャーはないため、テキストに適用できません。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	ダブルクリックで代わりに {base} (U+{code}) を挿入: 表示形は前後とつながりませんが、文字はつながります。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	表示形の代わりに {base} (U+{code}) を挿入しました。フォントが位置に応じて前後の文字とつなげます。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	このグリフを表示する OpenType フィーチャーがないため、文字のグリフが置き換わり、前後の文字とつながらないことがあります。
 	Double-click to insert	ダブルクリックで挿入
 	Double-click to rename	ダブルクリックで名前を変更
 	Double-click to target the contents	ダブルクリックで内容をターゲット

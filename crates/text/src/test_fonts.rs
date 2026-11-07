@@ -735,6 +735,90 @@ pub fn alternates_font(aalt: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`joining_alternates_font`].
+pub const JOINING_ALTERNATES_FAMILY: &str = "Jointest Sans";
+
+/// Beh, teh, noon and alef: the letters [`joining_alternates_font`] maps.
+pub const JOINING_LETTERS: [char; 4] = ['\u{0628}', '\u{062A}', '\u{0646}', '\u{0627}'];
+
+/// A test-only Arabic font over the bundled Source Sans 3, whose glyphs stand for the positional
+/// forms of beh, teh, noon and alef ([`JOINING_LETTERS`]), each a Latin letter's outline: isolated
+/// b t n I, initial B T N, medial v u m, final V U M A (alef joins to the right only). Its `arab`
+/// `GSUB` has `init`, `medi` and `fina` single substitutions from the isolated glyphs, `salt`
+/// alternate substitutions of the medial teh u (w, x, y: three alternates), of the final teh U
+/// (W, X), of the isolated teh t (E) and of the medial beh v (z), and `ss01` single substitutions
+/// u to w, U to W, t to E and v to z. A set differs by position, as in a font that draws each
+/// letter's alternates for the position they join in. Family [`JOINING_ALTERNATES_FAMILY`]. `None`
+/// when it can't be built.
+pub fn joining_alternates_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let font = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let charmap = font.charmap();
+    let gid = |c: char| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let family = JOINING_ALTERNATES_FAMILY;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (5, "Version 1.000"), (6, &postscript)])?;
+    let mapping = [(JOINING_LETTERS[0], 'b'), (JOINING_LETTERS[1], 't'), (JOINING_LETTERS[2], 'n'), (JOINING_LETTERS[3], 'I'), (' ', ' ')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    // A single substitution by (glyph, replacement) pairs, sorted by glyph id as coverage needs.
+    let single = |pairs: &[(char, char)]| {
+        let mut ids = pairs.iter().map(|(from, to)| Some((gid(*from)?, gid(*to)?))).collect::<Option<Vec<_>>>()?;
+        ids.sort_by_key(|p| p.0.to_u16());
+        let from = ids.iter().map(|p| p.0).collect();
+        let to = ids.iter().map(|p| p.1).collect();
+        Some(SubstitutionLookup::Single(Lookup::new(
+            Default::default(),
+            vec![SingleSubst::from(SingleSubstFormat2::new(CoverageFormat1::new(from).into(), to))],
+        )))
+    };
+    let alternates = |sets: &[(char, &[char])]| {
+        let mut ids = sets
+            .iter()
+            .map(|(from, set)| Some((gid(*from)?, set.iter().map(|c| gid(*c)).collect::<Option<Vec<_>>>()?)))
+            .collect::<Option<Vec<_>>>()?;
+        ids.sort_by_key(|p| p.0.to_u16());
+        let from = ids.iter().map(|p| p.0).collect();
+        let sets = ids.into_iter().map(|p| AlternateSet::new(p.1)).collect();
+        Some(SubstitutionLookup::Alternate(Lookup::new(
+            Default::default(),
+            vec![AlternateSubstFormat1::new(CoverageFormat1::new(from).into(), sets)],
+        )))
+    };
+    // Lookups: 0 init, 1 medi, 2 fina, 3 salt, 4 ss01.
+    let lookups = SubstitutionLookupList::new(vec![
+        single(&[('b', 'B'), ('t', 'T'), ('n', 'N')])?,
+        single(&[('b', 'v'), ('t', 'u'), ('n', 'm')])?,
+        single(&[('b', 'V'), ('t', 'U'), ('n', 'M'), ('I', 'A')])?,
+        alternates(&[('u', &['w', 'x', 'y']), ('U', &['W', 'X']), ('t', &['E']), ('v', &['z'])])?,
+        single(&[('u', 'w'), ('U', 'W'), ('t', 'E'), ('v', 'z')])?,
+    ]);
+    // Features sorted by tag, as OpenType requires: fina, init, medi, salt, ss01.
+    let records: Vec<FeatureRecord> = [(b"fina", 2), (b"init", 0), (b"medi", 1), (b"salt", 3), (b"ss01", 4)]
+        .into_iter()
+        .map(|(tag, lookup)| FeatureRecord::new(Tag::new(tag), Feature::new(None, vec![lookup])))
+        .collect();
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`ligature_caret_font`].
 pub const LIGATURE_CARET_FAMILY: &str = "Carettest Sans";
 
