@@ -759,7 +759,7 @@ fn paint_paper(
     // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
-    painter.rect_filled(rect, 0.0, t.pasteboard);
+    painter.rect_filled(rect, 0.0, if fades_outside_artboards(app) { faded(t.pasteboard) } else { t.pasteboard });
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
@@ -825,6 +825,22 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, xf: &Xf, rect:
             }
         }
     }
+}
+
+/// Does the pasteboard draw darker? Artboard Options › Fade Region Outside Artboard darkens it while
+/// the Artboard tool is active, and with Update While Dragging off it draws as usual while the tool
+/// moves or resizes an artboard. Exports and prints never draw the pasteboard.
+fn fades_outside_artboards(app: &VectorcraftApp) -> bool {
+    let prefs = &app.session.prefs;
+    app.session.tool_id() == "artboard"
+        && prefs.fade_region_outside_artboard
+        && (prefs.artboard_update_while_dragging || !app.session.tool_transforming())
+}
+
+/// The faded pasteboard: each channel of `c` at 60% of its value.
+fn faded(c: Color32) -> Color32 {
+    let dim = |v: u8| (f32::from(v) * 0.6).round() as u8;
+    Color32::from_rgba_premultiplied(dim(c.r()), dim(c.g()), dim(c.b()), c.a())
 }
 
 /// Do the artboards show? View › Hide Artboards hides them, except for the Artboard tool, which

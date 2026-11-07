@@ -423,6 +423,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // Artboard Options › Global: the canvas darkens the pasteboard while the Artboard tool is active.
+    p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
+    p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

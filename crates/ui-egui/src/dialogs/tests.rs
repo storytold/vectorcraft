@@ -1739,6 +1739,44 @@ fn artboard_options_show_center_mark_and_cross_hairs() {
     }
 }
 
+/// Artboard Options shows Fade Region Outside Artboard and Update While Dragging under Global,
+/// ticked as the preferences have them (on by default). OK sets the preferences, for the dialog of
+/// an existing artboard and of a new one alike, and the artboard keeps its other settings.
+#[test]
+fn artboard_options_global_checkboxes_set_the_preferences() {
+    let mut app = app();
+    let prefs = |app: &VectorcraftApp| (app.session.prefs.fade_region_outside_artboard, app.session.prefs.artboard_update_while_dragging);
+    assert_eq!(prefs(&app), (true, true));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.contains("Global") && text.contains("Fade Region Outside Artboard") && text.contains("Update While Dragging"), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(d.bool("fadeRegionOutsideArtboard") && d.bool("artboardUpdateWhileDragging"));
+    d.fields.insert("fadeRegionOutsideArtboard".into(), json!(false));
+    let rect = app.session.doc().unwrap().doc.artboards[0].rect;
+    super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(prefs(&app), (false, true));
+    assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect, rect);
+    // Opened again, it shows them as set; a value that is not true or false is refused and changes
+    // nothing. A new artboard's dialog sets them too.
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("fadeRegionOutsideArtboard"));
+    d.fields.insert("artboardUpdateWhileDragging".into(), json!("sometimes"));
+    assert!(super::confirm(&mut app).is_err());
+    assert_eq!(prefs(&app), (false, true), "nothing changed");
+    cancel(&mut app);
+    app.run("ui.newArtboard", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("fadeRegionOutsideArtboard") && d.bool("artboardUpdateWhileDragging"));
+    d.fields.insert("fadeRegionOutsideArtboard".into(), json!(true));
+    d.fields.insert("artboardUpdateWhileDragging".into(), json!(false));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(prefs(&app), (true, false));
+    assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 2);
+}
+
 /// Artboard Options shows Show Video Safe Areas and Video Ruler Pixel Aspect Ratio (one row of
 /// it), set as the artboard has them whether it opens from the Artboards panel or from a
 /// double-click with the Artboard tool. OK sets them in one undo step (a typed ratio is read as a

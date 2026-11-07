@@ -9112,6 +9112,98 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     assert_eq!(look(&mut app), (false, true));
 }
 
+/// One headless canvas frame → the fill of the pasteboard: the rect covering the canvas that is
+/// either the theme's pasteboard color or that color faded.
+fn pasteboard_fill(app: &mut VectorcraftApp, ctx: &egui::Context) -> Color32 {
+    let shapes = shapes(app, ctx);
+    let usual = Tokens::get(ctx).pasteboard;
+    let canvas = app.canvas_rect.unwrap();
+    shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Rect(r) if r.rect.contains_rect(canvas) && (r.fill == usual || r.fill == faded(usual)) => Some(r.fill),
+            _ => None,
+        })
+        .expect("the pasteboard is drawn")
+}
+
+/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the pasteboard
+/// draws darker; with another tool, or with the preference off, it draws as usual.
+#[test]
+fn the_artboard_tool_fades_the_pasteboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let usual = Tokens::get(&ctx).pasteboard;
+    let dark = faded(usual);
+    assert!(dark.r() < usual.r() && dark.g() < usual.g() && dark.b() < usual.b(), "{dark:?} is darker than {usual:?}");
+    assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
+    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the Selection tool");
+    app.select_tool("artboard");
+    assert_eq!(pasteboard_fill(&mut app, &ctx), dark, "the Artboard tool");
+    app.select_tool("rectangle");
+    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the Rectangle tool");
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    app.select_tool("artboard");
+    assert_eq!(pasteboard_fill(&mut app, &ctx), usual, "the preference off");
+}
+
+/// Artboard Options › Update While Dragging: on, the pasteboard stays darker while the Artboard tool
+/// moves or resizes an artboard; off, it draws as usual during the drag and darker again after it.
+#[test]
+fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
+    for update in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "artboardUpdateWhileDragging", "value": update})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let usual = Tokens::get(&ctx).pasteboard;
+        let r = app.session.active().unwrap().doc.artboards[0].rect;
+        let view = app.view_info();
+        // A move from the artboard's middle, then a resize from its right edge.
+        let (cx, cy) = (r.center().x, r.center().y);
+        for (from, to) in
+            [(Point::new(cx, cy), Point::new(cx + 40.0, cy + 30.0)), (Point::new(r.x1 + 40.0, cy + 30.0), Point::new(r.x1 + 90.0, cy + 30.0))]
+        {
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Down, from.x, from.y), view);
+            for p in [from + (to - from) * 0.5, to] {
+                dispatch(&mut app, &PointerEvent::new(PointerKind::Drag, p.x, p.y), view);
+            }
+            assert!(app.session.tool_transforming(), "the artboard is being dragged");
+            let during = pasteboard_fill(&mut app, &ctx);
+            assert_eq!(during, if update { faded(usual) } else { usual }, "Update While Dragging {update}");
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Up, to.x, to.y), view);
+            assert!(!app.session.tool_transforming());
+            assert_eq!(pasteboard_fill(&mut app, &ctx), faded(usual), "darker again after the drag");
+        }
+        let moved = app.session.active().unwrap().doc.artboards[0].rect;
+        assert!(moved.x0 > r.x0 && moved.width() > r.width(), "moved, then resized: {moved:?} from {r:?}");
+    }
+}
+
+/// The fade is drawn only on the canvas: exports with the Artboard tool active and the fade on are
+/// the same as with the Selection tool and the fade off.
+#[test]
+fn the_pasteboard_fade_leaves_exports_unchanged() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": -40, "y": 20, "width": 120, "height": 40})).unwrap();
+    let exports = |app: &mut VectorcraftApp| -> Vec<serde_json::Value> {
+        ["svg", "png"].iter().map(|f| app.run("document.export", json!({"format": f})).unwrap()).collect()
+    };
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    let plain = exports(&mut app);
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": true})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert!(fades_outside_artboards(&app));
+    assert_eq!(exports(&mut app), plain);
+}
+
 /// Finished worker renders are uploaded whenever they are not older than what is currently
 /// displayed on screen. During continuous edit streams (drag previews, held arrow nudges, or
 /// command bursts) where the document revision advances every frame, intermediate worker frames

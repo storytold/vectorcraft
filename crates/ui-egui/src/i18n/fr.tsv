@@ -285,6 +285,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Afficher le réticule
 	Show Video Safe Areas	Afficher les zones de sécurité vidéo
 	Video Ruler Pixel Aspect Ratio:	Format des pixels des règles vidéo :
+	Fade Region Outside Artboard	Assombrir la zone hors du plan de travail
+	Update While Dragging	Mettre à jour pendant le déplacement
 	Hide Video Rulers	Masquer les règles vidéo
 	Background Contents	Contenu de l’arrière-plan
 	Background Contents:	Contenu de l’arrière-plan :

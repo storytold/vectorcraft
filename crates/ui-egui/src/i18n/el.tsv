@@ -262,6 +262,8 @@ font-technology	Variable	Μεταβλητές
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
 	Video Ruler Pixel Aspect Ratio:	Αναλογία διαστάσεων pixel χαράκων βίντεο:
+	Fade Region Outside Artboard	Σκίαση περιοχής εκτός πίνακα σχεδίασης
+	Update While Dragging	Ενημέρωση κατά τη μεταφορά
 	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
 	Background Contents:	Περιεχόμενο φόντου:
