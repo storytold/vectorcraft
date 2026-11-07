@@ -1051,8 +1051,9 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
             StyleItem::Gradient { name, angle } => {
                 // The drawn look's gradients are keyed by the names they got in the document.
                 let paint = match (name.as_ref().and_then(|n| placed.get(paints.names.get(Global::Gradient, n))), gradients, own_gradient) {
-                    // Other objects than type: the object's own, as they always were.
-                    (_, 1, Some(own)) if !slot => own.paint.clone(),
+                    // Other objects than type: the object's own, as they always were (a stack's
+                    // where its drawn look places it).
+                    (_, 1, Some(own)) if !slot && !stacked => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
                     (None, 1, Some(own)) => own.paint.clone(),
                     _ => {

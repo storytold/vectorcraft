@@ -5346,6 +5346,26 @@ fn a_path_with_several_gradient_fills_comes_in_as_itself_where_its_look_places_t
     // Two fills of one swatch: which placement is whose isn't known, so the drawn look stays.
     let same = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "A"), layer(&square("A", "A"))));
     assert!(same.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", same.warnings);
+    // One gradient over a solid fill, on a path filled with that gradient placed elsewhere: the
+    // gradient lies where the drawn look has it, not where the path's own fill does.
+    let one = two_gradient_style("A", "B").replace("1 (A) 0 0 0 1 1 0 0 1 0 0 Bg\n", "0 0 0 1 0 0 0 Xa\n");
+    let own = format!(
+        "0 Ae\nu\n0 0 0 1 0 0 0 Xa\n{rect}f\n{}U\n%_{hidden_rect}Bb\n%_1 (B) 0 25 0 100 1 0 0 1 0 0 Bg\n%_f\n%_0 BB\n1 (Glow) XW\n",
+        look("B", 50.0)
+    );
+    let one = read_ok(&format!("%AI9_BeginArtStyles\n{one}%AI9_EndArtStyles\n{defs}{}", layer(&own)));
+    let a = art(&one.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let placed: Vec<_> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match i.paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.start.x),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(placed, [None, Some(50.0)], "{:?}", one.warnings);
     // A look that doesn't paint the gradient (a raster, say): the drawn look stays.
     let flat = format!("0 Ae\nu\n{RED}{rect}f\nU\n%_{hidden_rect}f\n1 (Glow) XW\n");
     let flat = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{defs}{}", two_gradient_style("A", "B"), layer(&flat)));
