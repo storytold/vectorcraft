@@ -244,6 +244,98 @@ fn the_relative_path_finds_the_file_after_the_folder_moves() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// Links in symbols, graph designs, patterns and opacity masks are saved with their relative
+/// paths, as links in the layers are: after the folder moves, each file is found and its link takes
+/// the new path, which the next save writes relative to the document again.
+#[test]
+fn links_outside_the_layers_find_their_files_after_the_folder_moves() {
+    let a = Folder::new("nested-move-a");
+    let b = Folder::new("nested-move-b");
+    let c = Folder::new("nested-move-c");
+    let names = ["layer", "symbol", "design", "pattern", "mask"];
+    for (i, name) in (0u8..).zip(names) {
+        write(&a.file(&format!("art/{name}.png")), &png(20, 10, [20 + 40 * i, 90, 160]));
+    }
+    let mut s = session();
+    place(&mut s, &a.file("art/layer.png"));
+    let id = place(&mut s, &a.file("art/symbol.png"));
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &a.file("art/design.png"));
+    s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let id = place(&mut s, &a.file("art/pattern.png"));
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &a.file("art/mask.png"));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    let mut in_layers = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            in_layers.extend(im.link.as_ref().map(|l| l.name().to_string()));
+        }
+    });
+    assert_eq!(in_layers, ["layer.png"], "only one file is shown by an object in the layers");
+    // The links' paths, each image checked to show its file's pixels rather than the saved preview.
+    let paths = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut out = vec![];
+        d.visit_images(|_, im| {
+            let l = im.link.as_ref().unwrap();
+            assert!(!d.images[&im.key].is_proxy(), "{} shows its preview", l.name());
+            out.push(PathBuf::from(&l.path));
+        });
+        out.sort();
+        out
+    };
+    let files = |dir: &Folder| {
+        let mut out: Vec<PathBuf> = names.iter().map(|n| PathBuf::from(dir.file(&format!("art/{n}.png")))).collect();
+        out.sort();
+        out
+    };
+    assert_eq!(paths(&s), files(&a));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    // Move the document with its links: the old folder is gone.
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert_eq!(paths(&s), files(&b), "the links follow the files");
+    // Saved again and moved again.
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(&c.0).unwrap();
+    std::fs::rename(&b.0, &c.0).unwrap();
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert_eq!(paths(&s), files(&c));
+}
+
+/// With Update Links: Automatically, a file in a symbol and in the layers that changed and moved
+/// with the document is read again for the layers' image, and the symbol's link takes its new path
+/// too.
+#[test]
+fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
+    let a = Folder::new("nested-modified-a");
+    let b = Folder::new("nested-modified-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(20, 10, RED));
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let id = place(&mut s, &pic);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    write(&pic, &png(30, 30, BLUE));
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"][0]["ids"].clone()), (json!([]), json!([id.0])), "{r}");
+    let moved = PathBuf::from(b.file("art/photo.png"));
+    let mut paths = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| paths.extend(im.link.as_ref().map(|l| PathBuf::from(&l.path))));
+    assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
+}
+
 #[test]
 fn a_missing_link_renders_its_preview_and_relinks() {
     let dir = Folder::new("missing");

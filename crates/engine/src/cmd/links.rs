@@ -678,6 +678,8 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
     // of other keys linking to the same file share them, rather than each reading, decoding and
     // keeping a copy of its own.
     let mut read_images: BTreeMap<String, (ImageBlob, String)> = BTreeMap::new();
+    // (the link as it was, the link now) of each file found away from its path or read again.
+    let mut moved: Vec<(LinkInfo, LinkInfo)> = vec![];
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), doc_path);
         let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
@@ -686,8 +688,15 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
                 match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread.then_some(Preserve::Bounds))) {
-                    Ok(()) if unread => {}
-                    Ok(()) => out.updated.extend(row),
+                    Ok(()) => {
+                        // Links with no ids here were not read: they only take the path the file was found at.
+                        if f.path != g.link.path {
+                            moved.push((g.link.clone(), LinkInfo { path: f.path.clone(), ..g.link.clone() }));
+                        }
+                        if !unread {
+                            out.updated.extend(row);
+                        }
+                    }
                     Err(_) => out.missing.extend(row),
                 }
             }
@@ -709,6 +718,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                         };
                         if link != g.link {
                             set_links(d, &g.ids, &link);
+                            moved.push((g.link.clone(), link));
                         }
                     }
                 }
@@ -720,6 +730,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                     let link = f.link_hashed(hash, &g.link);
                     if link != g.link {
                         set_links(d, &g.ids, &link);
+                        moved.push((g.link.clone(), link));
                     }
                     continue;
                 }
@@ -745,10 +756,27 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                 };
                 if link != g.link {
                     set_links(d, &g.ids, &link);
+                    moved.push((g.link.clone(), link));
                 }
             }
             (Status::Ok, None) => {}
         }
+    }
+    // The same links in symbols, graph designs, patterns and opacity masks, which have no ids here.
+    if !moved.is_empty() {
+        let mut by_path: BTreeMap<String, Vec<(LinkInfo, LinkInfo)>> = BTreeMap::new();
+        for (old, new) in moved {
+            by_path.entry(old.path.clone()).or_default().push((old, new));
+        }
+        let new = |l: &LinkInfo| by_path.get(&l.path).and_then(|m| m.iter().find(|(old, _)| old == l)).map(|(_, new)| new);
+        d.update_links_where(
+            |l| new(l).is_some(),
+            |l| {
+                if let Some(n) = new(l) {
+                    *l = n.clone();
+                }
+            },
+        );
     }
     out
 }
@@ -826,28 +854,20 @@ fn relative_path(target: &Path, base: &Path) -> Option<String> {
 }
 
 /// `d` as saved to `dest`: the links' paths relative to its folder written in; `None` when they
-/// are already.
+/// are already. Links in the layers, symbols, graph designs, patterns and opacity masks are all set.
 pub fn with_relative_paths(d: &Document, dest: &str) -> Option<Document> {
     let dest = absolute_path(dest);
     let dir = Path::new(&dest).parent()?;
-    let mut changes = vec![];
-    d.walk(|n| {
-        if let Some((l, _, _)) = linked(n) {
-            let r = relative_path(Path::new(&l.path), dir);
-            if r != l.relative {
-                changes.push((n.id, r));
-            }
-        }
-    });
-    if changes.is_empty() {
+    let relative = |l: &LinkInfo| relative_path(Path::new(&l.path), dir);
+    let outdated = |l: &LinkInfo| relative(l) != l.relative;
+    let mut changed = false;
+    d.visit_images(|_, im| changed |= im.link.as_ref().is_some_and(outdated));
+    d.visit_placed(|_, p| changed |= outdated(&p.link));
+    if !changed {
         return None;
     }
     let mut d = d.clone();
-    for (id, r) in changes {
-        if let Some(l) = d.node_mut(id).and_then(link_mut) {
-            l.relative = r;
-        }
-    }
+    d.update_links_where(outdated, |l| l.relative = relative(l));
     Some(d)
 }
 
