@@ -908,8 +908,8 @@ fn polygon_path(pts: &[Point]) -> PathData {
 }
 
 /// The part of an image under `r` (in document space) copied out of its pixels, as PNG bytes, with its size and
-/// placement. `None` when the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read), so
-/// the caller draws it instead.
+/// placement. `None` when the image can't be cut that way (turned or skewed, CMYK, pixels that can't be read, or
+/// `r` not on the pixel grid), so the caller draws it instead.
 fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Option<(Vec<u8>, u32, u32, Affine)> {
     let blob = doc.images.get(&im.key)?;
     let [a, b, c, d, _, _] = im.xf.as_coeffs();
@@ -923,12 +923,17 @@ fn crop_pixels(doc: &vectorcraft_doc::Document, im: &ImageObject, r: Rect) -> Op
     if w == 0 || h == 0 || (w, h) != (im.width, im.height) {
         return None;
     }
+    // Only a rect on the pixel grid is cut from the pixels; one between pixels keeps its exact bounds by being drawn.
+    let on_grid = |v: f64| (v - v.round()).abs() < 1e-3;
+    if ![p0.x, p0.y, p1.x, p1.y].into_iter().all(on_grid) {
+        return None;
+    }
     let lo = |v: f64, max: u32| v.round().clamp(0.0, f64::from(max)) as u32;
     let (x0, x1) = (lo(p0.x.min(p1.x), w), lo(p0.x.max(p1.x), w));
     let (y0, y1) = (lo(p0.y.min(p1.y), h), lo(p0.y.max(p1.y), h));
-    let (x1, y1) = (x1.max(x0 + 1).min(w), y1.max(y0 + 1).min(h));
-    let x0 = x0.min(x1 - 1);
-    let y0 = y0.min(y1 - 1);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
     let cut = image::imageops::crop_imm(&px, x0, y0, x1 - x0, y1 - y0).to_image();
     let mut png = Vec::new();
     cut.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
@@ -1075,15 +1080,7 @@ fn put_pixels(s: &mut Session, id: NodeId, png: Vec<u8>, w: u32, h: u32, xf: Aff
         let key = unique_key(d, "crop");
         d.images.insert(key.clone(), vectorcraft_doc::ImageBlob::new("image/png", png));
         if let Some(n) = d.node_mut(id) {
-            n.kind = NodeKind::Image(Box::new(ImageObject {
-                key,
-                width: w,
-                height: h,
-                xf,
-                link: None,
-                placement: Default::default(),
-                pixels: None,
-            }));
+            n.kind = NodeKind::Image(Box::new(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }));
         }
         Ok(())
     })?;
