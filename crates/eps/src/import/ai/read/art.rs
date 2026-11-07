@@ -2,13 +2,14 @@ use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::types::{
     FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
-    NON_NATIVE_ART_UNREAD, Place,
+    NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
-    NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
+    NodeId, NodeKind, Obj, OpacityMask, PageBox, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
 use vectorcraft_doc::links::missing_placeholder;
+use vectorcraft_doc::placed_document::key_for;
 
 impl<'a> Reader<'a> {
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
@@ -783,16 +784,57 @@ impl<'a> Reader<'a> {
         let bytes = Arc::new(png);
         let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
         let key = linked_key(&blob, &path);
+        let fresh = !self.doc.images.contains_key(&key);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PREVIEWS);
+        let id = NodeId(self.doc.peek_next_id());
         if let Some(shift) = elsewhere
             && self.placed_elsewhere.len() < MAX_PLACED_ELSEWHERE
         {
-            self.placed_elsewhere.push((NodeId(self.doc.peek_next_id()), shift));
+            self.placed_elsewhere.push((id, shift));
         }
+        // One waits at each depth: a placed file in another's opacity mask doesn't take the place of the outer one.
+        // An outer one waiting shares its blob with this one now: it no longer has it alone.
+        let depth = self.frames.len();
+        self.placed_tails.retain(|t| t.depth < depth);
+        for t in self.placed_tails.iter_mut().filter(|t| t.key == key) {
+            t.fresh = false;
+        }
+        self.placed_tails.push(PlacedTail { id, key: key.clone(), size: (b.width(), b.height()), fresh, depth });
         let mut link = LinkInfo::new(path);
         link.relative = folder.and_then(|f| relative_path(&f, link.name()));
         self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)
+    }
+
+    /// The dictionary `o` after the placed file just read: with a page or a box in it, that file is
+    /// a page of a PDF or `.ai` file. Its image keeps the preview under a key of its own for that
+    /// page and box, so that it doesn't share one with an image of another page of the file.
+    pub(super) fn placed_page(&mut self, o: &Obj) {
+        // The dictionaries of art read inside the placed file's own (its opacity mask's) are not its.
+        let depth = self.frames.len();
+        self.placed_tails.retain(|t| t.depth <= depth);
+        if self.placed_tails.last().is_none_or(|t| t.depth != depth) {
+            return;
+        }
+        let Some(tail) = self.placed_tails.pop() else { return };
+        let (page, crop) = (o.get(PLACED_PAGE).map(|_| o.nums(PLACED_PAGE)), o.get(PLACED_CROP).map(|_| o.nums(PLACED_CROP)));
+        // A placed document's box runs from (0, 0) to a positive size: a box written backward stays a linked image.
+        if (page.is_none() && crop.is_none()) || !(tail.size.0 > 0.0 && tail.size.1 > 0.0) {
+            return;
+        }
+        // An entry that is there but not a number leaves a linked image, as an unknown number does.
+        let page = page.map_or(Some(1), |v| v.first().copied().and_then(placed_page_number));
+        let crop = crop.map_or(Some((false, PageBox::Crop)), |v| v.first().copied().and_then(placed_crop));
+        let (Some(page), Some((bounding, page_box))) = (page, crop) else { return };
+        let Some(NodeKind::Image(im)) = self.last_object().filter(|n| n.id == tail.id).map(|n| &mut n.kind) else { return };
+        let old = im.key.clone();
+        let key = key_for(&old, page, bounding, page_box);
+        im.key.clone_from(&key);
+        let blob = if tail.fresh { self.doc.images.remove(&old) } else { self.doc.images.get(&old).cloned() };
+        if let Some(blob) = blob {
+            self.doc.images.entry(key).or_insert(blob);
+        }
+        self.placed_pages.push(PlacedPage { id: tail.id, page, bounding, page_box, size: tail.size });
     }
 
     pub(super) fn warn(&mut self, w: &str) {
@@ -894,6 +936,25 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     let mut png = vec![];
     image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some((png, width, height))
+}
+
+/// The page a placed file's dictionary names: a whole number from 1.
+fn placed_page_number(v: f64) -> Option<u32> {
+    (v.fract() == 0.0 && v >= 1.0 && v <= f64::from(u32::MAX)).then_some(v as u32)
+}
+
+/// The box a placed file's dictionary names: whether the art's bounds are shown, and the box of
+/// the page otherwise.
+fn placed_crop(v: f64) -> Option<(bool, PageBox)> {
+    match v {
+        0.0 => Some((false, PageBox::Art)),
+        1.0 => Some((false, PageBox::Crop)),
+        2.0 => Some((false, PageBox::Trim)),
+        3.0 => Some((false, PageBox::Bleed)),
+        4.0 => Some((false, PageBox::Media)),
+        5.0 => Some((true, PageBox::Crop)),
+        _ => None,
+    }
 }
 
 /// A placed file's path relative to the document's folder (`/` separators): its relative `folder`

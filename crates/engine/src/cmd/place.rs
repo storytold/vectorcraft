@@ -308,8 +308,10 @@ pub(crate) fn pdf_art(
         read = Err(e);
     }
     let (mut doc, warnings, alone) = fileio::page_or_editing_data(src, bytes, &o, index, read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
-    if alone {
-        // Linked images show their files, found from its folder.
+    // Linked images show their files, found from its folder. Its placed documents can place this
+    // file again: one already being read further up, or past the most nested reads, keeps its links
+    // as stored, as a VectorCraft document's do.
+    if alone && let Some(_reading) = document::Reading::enter(bytes) {
         super::links::resolve(&mut doc, path, false, false);
     }
     doc.drop_edit_modes();

@@ -4805,6 +4805,103 @@ fn a_placed_file_at_its_boxs_corner_matches_the_page() {
     assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
 }
 
+/// A placed file of [`a_placed_file_at_its_boxs_corner_matches_the_page`] whose dictionary names
+/// page 2 and its media box: `%_` lines when `hidden` (art inside another object's dictionary).
+fn placed_page_two(hidden: bool) -> String {
+    let lines = [
+        "%AI5_BeginPlace".to_string(),
+        "%%FileType: 1".into(),
+        "[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0".into(),
+        "(/files/pages.pdf)`".into(),
+        "%AI26_BeginPlacedObjectPreview".into(),
+        format!("2 2 8 32 17 {}", "\x7f\0\0\0".repeat(4)),
+        "%AI26_EndPlacedObjectPreview".into(),
+        "~".into(),
+        "%AI5_EndPlace".into(),
+    ];
+    let hide = if hidden { "%_" } else { "" };
+    let place: String = lines.iter().map(|l| format!("{hide}{l}\n")).collect();
+    format!(
+        "{place}%_/ArtDictionary :\n%_/XMLUID : (pages) ; (AI10_ArtUID) ,\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n"
+    )
+}
+
+/// The placed document of `n`, with its bounds.
+fn placed_document(n: &Node) -> (&vectorcraft_doc::PlacedDocument, vectorcraft_geom::Rect) {
+    let NodeKind::PlacedDocument(p) = &n.kind else { panic!("{:?}", n.kind) };
+    (p, n.geometric_bounds().unwrap())
+}
+
+/// A placed PDF page comes in as a placed document of its page and box, where its linked image
+/// would have gone: at its box's corner when that is where the layers draw as the page does.
+#[test]
+fn a_placed_pdf_page_is_a_placed_document_where_its_image_would_be() {
+    let data = native(&layer("Jig", true, &placed_page_two(false))).replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let (p, b) = placed_document(&d.layers[0].children().unwrap()[0]);
+    assert_eq!((p.link.path.as_str(), p.link.page, p.page_box, p.bounding), ("/files/pages.pdf", Some(2), vectorcraft_doc::PageBox::Media, false));
+    assert_eq!((p.width, p.height), (40.0, 40.0));
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+    assert!(d.images[&p.key].is_proxy(), "the preview until the file is read");
+}
+
+/// A placed PDF page in an object's opacity mask is a placed document there too.
+#[test]
+fn a_placed_pdf_page_in_an_opacity_mask_is_a_placed_document() {
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{}%_X+\n%_ (Art) ,\n%_; (AI9_Mask) ,\n%_;\n%_\n", placed_page_two(true));
+    let data = native(&layer("Masked", true, &format!("{}\n{mask}", square(10, 10))));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let square = &d.layers[0].children().unwrap()[0];
+    let mask = square.extras().mask.clone().unwrap_or_else(|| panic!("{notes:?}"));
+    let art = if let NodeKind::Group { children, .. } = &mask.art.kind { children[0].clone() } else { mask.art.clone() };
+    let (p, _) = placed_document(&art);
+    assert_eq!((p.link.page, p.page_box), (Some(2), vectorcraft_doc::PageBox::Media));
+}
+
+/// A placed PDF page whose box is too small for a finite placement stays a linked image.
+#[test]
+fn a_placed_pdf_page_too_small_to_place_stays_a_linked_image() {
+    let place = placed_page_two(false).replace("[1 0 0 -1 -7970 8070] 8000 8000 8040 8040", "[1e308 0 0 -1 0 200] 0 0 1e-309 2");
+    let data = native(&layer("Jig", true, &place));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let mut kinds = vec![];
+    d.walk(|n| match &n.kind {
+        NodeKind::Image(im) => kinds.push(("image", im.xf.as_coeffs().iter().all(|v| v.is_finite()))),
+        NodeKind::PlacedDocument(p) => kinds.push(("placed", p.xf.as_coeffs().iter().all(|v| v.is_finite()))),
+        _ => {}
+    });
+    assert_eq!(kinds, [("image", true)], "{notes:?}");
+}
+
+/// A placed PDF page bound to an image variable stays a linked image, the object an image variable
+/// binds, so the binding is kept.
+#[test]
+fn a_placed_pdf_page_bound_to_an_image_variable_stays_a_linked_image() {
+    use vectorcraft_testkit::ai::{XmlValue, variable_library_data, xml_element, xml_node};
+    let declared = vec![xml_node(
+        1,
+        "variable",
+        XmlValue::Str(""),
+        &[("trait", XmlValue::Str("fileref")), ("varName", XmlValue::Unicode("v_file")), ("docRef", XmlValue::Raw("/XMLUIDREF : (pages) ;"))],
+        &[],
+    )];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let data = native(&(library + &layer("Jig", true, &placed_page_two(false))));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let n = &d.layers[0].children().unwrap()[0];
+    assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().is_some_and(|l| l.page.is_none())), "{:?} {notes:?}", n.kind);
+    assert_eq!(d.variables.objects_of("v_file"), [n.id], "{notes:?}");
+}
+
 #[test]
 fn a_small_placed_file_goes_where_it_draws_closer_to_the_page() {
     // A 2 × 2 placed file (a small logo on a large page) whose box corner the matrix takes to

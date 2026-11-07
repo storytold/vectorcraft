@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, Obj, PageBox, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -286,6 +286,43 @@ pub(super) struct Place {
 
 /// The longest relative folder of a placed file read (bytes).
 pub(super) const MAX_PLACED_FOLDER: usize = 4096;
+
+/// The dictionary entry after a placed PDF or `.ai` file that holds the page shown (1-based).
+pub(super) const PLACED_PAGE: &str = "AI11 PlacedPDFPageIndex";
+/// The dictionary entry after a placed PDF or `.ai` file that holds the box it is cropped to.
+pub(super) const PLACED_CROP: &str = "AI11 PlacedPDFCropTo";
+
+/// The placed file just read, until the dictionary after it: it may say the file is a page of a
+/// PDF or `.ai` file.
+#[derive(Debug)]
+pub(super) struct PlacedTail {
+    /// Its linked image.
+    pub(super) id: NodeId,
+    /// Its image's key in the document's images.
+    pub(super) key: String,
+    /// The size of its box.
+    pub(super) size: (f64, f64),
+    /// Its image's blob was stored for it, not shared with an earlier image.
+    pub(super) fresh: bool,
+    /// The frames open when it was read: its dictionary closes at the same depth.
+    pub(super) depth: usize,
+}
+
+/// A placed file the dictionary after it says is a page of a PDF or `.ai` file. Its linked image
+/// becomes a placed document once the layers have been compared with the page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlacedPage {
+    /// The linked image.
+    pub id: NodeId,
+    /// The page shown (1-based).
+    pub page: u32,
+    /// The art's bounds are shown, not `page_box`.
+    pub bounding: bool,
+    /// The box of the page shown.
+    pub page_box: PageBox,
+    /// The size of the placed file's box.
+    pub size: (f64, f64),
+}
 
 /// What the open result says of placed files: they show the preview the file keeps of them.
 pub(super) const LINKED_PREVIEWS: &str =
