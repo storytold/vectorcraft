@@ -245,9 +245,9 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
 /// ([`step_through`]). The new value is applied at once, as in
 /// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
-/// replaces it. Returns the new number when a step was taken. While the pointer is over the focused
-/// field the wheel is the field's (the panel under it doesn't scroll); an unfocused field leaves the
-/// wheel to the panel and the canvas.
+/// replaces it when focused. Returns the new number when a step was taken. While the pointer is
+/// over an enabled field the wheel is the field's (the panel under it doesn't scroll), without
+/// taking keyboard focus. Arrow keys still require keyboard focus.
 fn step_value(
     ui: &Ui,
     resp: &Response,
@@ -259,11 +259,15 @@ fn step_value(
 ) -> Option<f64> {
     // Memory focus, as the field's highlight and its typing use: `Response::has_focus` also needs the
     // window to report keyboard focus.
-    if !ui.memory(|m| m.has_focus(resp.id)) {
+    if !resp.enabled() {
         return None;
     }
+    let focused = ui.memory(|m| m.has_focus(resp.id));
     use egui::{Event, Key, MouseWheelUnit};
     let wheel = resp.contains_pointer();
+    if !focused && !wheel {
+        return None;
+    }
     // Wheel turns in notches: a line each, or `line` points of a trackpad or a fine wheel; what is
     // left of a notch carries over to the next turn.
     let (line, notch_id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
@@ -276,8 +280,8 @@ fn step_value(
             let (Event::Key { modifiers, .. } | Event::MouseWheel { modifiers, .. }) = e else { return true };
             let Some(&(mods, size)) = STEPS.iter().find(|(m, _)| modifiers.matches_logically(*m)) else { return true };
             let n = match e {
-                Event::Key { key: Key::ArrowUp, pressed: true, .. } => 1.0,
-                Event::Key { key: Key::ArrowDown, pressed: true, .. } => -1.0,
+                Event::Key { key: Key::ArrowUp, pressed: true, .. } if focused => 1.0,
+                Event::Key { key: Key::ArrowDown, pressed: true, .. } if focused => -1.0,
                 Event::MouseWheel { unit, delta, .. } if wheel => {
                     // Shift may turn the wheel sideways (the Mac does).
                     let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
@@ -323,7 +327,9 @@ fn step_value(
     let v = within(if stops.contains(&v) { v } else { round_to(v, STEP_DECIMALS) }, bounds);
     *buf = show(v);
     ui.data_mut(|d| d.insert_temp(resp.id, buf.clone()));
-    select_all(ui, resp.id, buf);
+    if focused {
+        select_all(ui, resp.id, buf);
+    }
     Some(v)
 }
 
