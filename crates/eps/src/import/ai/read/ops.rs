@@ -1001,11 +1001,24 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         })
 }
 
+/// Can group `object` take style `st`'s own fills and strokes? A group (not a clipping group or a
+/// compound shape) whose style is one fill and one stroke at most in solid colours: they paint
+/// every member's outline, below or above the members as the style's contents row says, as a
+/// group's own fills and strokes do here (`vectorcraft_effects::group`). A gradient or a pattern on a group lies across the
+/// group in a way its drawn look doesn't say, so such a group keeps its drawn look.
+fn group_paints(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
+    use crate::import::ai::style::StyleItem;
+    st.simple
+        && matches!(object.kind, NodeKind::Group { clip: false, .. })
+        && !object.is_compound_shape()
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { brush: None, .. }))
+}
+
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
 const PATTERN_KEY: &str = "\u{1}pattern ";
 
 /// `object`'s appearance with style `st`, its drawn look `look`: `None` when the style isn't one
-/// this reads, asks a group for fills or strokes, has Pathfinder effects on anything but a group
+/// this reads, asks a group for fills or strokes it doesn't take ([`group_paints`]), has Pathfinder effects on anything but a group
 /// with no fills or strokes, or moves the outline of an object it isn't read on ([`moves_with`]).
 fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, paints: &StylePaints) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
@@ -1015,7 +1028,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     if !st.plain
         || matches!(object.kind, NodeKind::SymbolInstance { .. })
         || (!slot && !st.simple)
-        || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty())
+        || (object.is_container() && !slot && !matches!(object.kind, NodeKind::Compound { .. }) && !st.items.is_empty() && !group_paints(object, st))
         || (st.pathfinder
             && (slot || !st.items.is_empty() || object.is_compound_shape() || !matches!(object.kind, NodeKind::Group { clip: false, .. })))
         || (!slot && st.moves_outline() && !moves_with(object, st))
