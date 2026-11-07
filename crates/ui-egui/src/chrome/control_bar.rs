@@ -86,6 +86,7 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             (tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
             (tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
             (tl!("Snap to Pixel"), "view.snapToPixel", app.ui.view.snap_to_pixel),
+            (tl!("Snap to Glyph"), "view.snapToGlyph", app.ui.view.snap_to_glyph),
         ] {
             if widgets::check(ui, label, on, true) {
                 crate::menus::invoke(app, cmd, json!({}));
@@ -93,6 +94,7 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.separator();
         for (key, label, on) in [
+            ("alignmentGuides", tl!("Alignment Guides"), app.session.prefs.alignment_guides),
             ("snapTangent", tl!("Snap to Tangent"), app.session.prefs.snap_tangent),
             ("snapPerpendicular", tl!("Snap to Perpendicular"), app.session.prefs.snap_perpendicular),
         ] {
