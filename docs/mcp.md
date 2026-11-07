@@ -380,7 +380,9 @@ explicit `ids`, which stand in for the selection, so they work with nothing sele
 `ids?|id?` (or `id?, ids?: … (instead of id)`), `id` is `ids` of one object: `{"id": 7}` does what `{"ids": [7]}`
 does, with or without a selection, and an `id` or `ids` that is malformed (not a non-negative integer) or names no
 object is refused under the command's name, never replaced by the selection (`effect.apply {"id": "warp.arc"}`
-without `effect` names the effect). A command that leaves out an object selected inside a selected group also
+without `effect` names the effect). Other commands that act on `id` or else the selection, such as `css.export`,
+refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) instead of using the selection; an omitted
+or null `id` means the selection. A command that leaves out an object selected inside a selected group also
 leaves it out when `ids` list it together with a group that holds it.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,

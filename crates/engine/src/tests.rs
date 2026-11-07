@@ -3660,6 +3660,45 @@ fn malformed_ids_are_refused_by_commands_that_default_to_the_selection() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// The objects a command reads from `ids`, `id` or the selection: an `id` that isn't an object id
+/// (a numeric string included, as in `ids`) is an error, never the selection. An omitted or null
+/// `id` means the selection.
+#[test]
+fn targets_refuse_an_id_that_is_not_an_object_id() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    let b = rect(&mut s, 200.0, 100.0, 80.0, 60.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for bad in [json!("abc"), json!("5"), json!(true), json!({}), json!([b.0]), json!(-1), json!(2.5)] {
+        let r = crate::cmd::targets(&s, &json!({ "id": bad }));
+        assert!(r.as_ref().is_err_and(|e| e.to_string().contains("object id")), "{bad}: {r:?}");
+    }
+    assert_eq!(crate::cmd::targets(&s, &json!({})).unwrap(), vec![a]);
+    assert_eq!(crate::cmd::targets(&s, &json!({ "id": null })).unwrap(), vec![a]);
+    assert_eq!(crate::cmd::targets(&s, &json!({ "id": b.0 })).unwrap(), vec![b]);
+}
+
+/// `css.export`, whose `id` the shared check doesn't read, refuses an `id` that isn't an object id
+/// instead of exporting the selection. `effect.apply` with the effect given as `id` (its older key)
+/// still applies it to the selection, as one undo step.
+#[test]
+fn css_export_refuses_a_bad_id_and_effect_apply_takes_an_effect_as_id() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 80.0, 60.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for bad in [json!("abc"), json!("5"), json!(true), json!({}), json!([a.0])] {
+        let r = s.execute("css.export", &json!({"id": bad, "unnamed": true}));
+        assert!(r.as_ref().is_err_and(|e| e.to_string().contains("object id")), "{bad}: {r:?}");
+    }
+    for p in [json!({"unnamed": true}), json!({"id": null, "unnamed": true}), json!({"id": a.0, "unnamed": true})] {
+        assert_eq!(s.execute("css.export", &p).unwrap()["rules"], 1, "{p}");
+    }
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("effect.apply", &json!({"id": "stylize.dropShadow"})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
 #[test]
 fn malformed_anchor_selection_never_replaces_or_partially_changes_selection() {
     let mut s = session();

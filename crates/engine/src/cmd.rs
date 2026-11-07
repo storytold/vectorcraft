@@ -575,21 +575,12 @@ pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
     }
 }
 
-/// Objects a command targets: explicit `ids` param or the selection.
+/// Objects a command targets: its `ids`, else its `id` as `ids` of one ([`named_ids`]), else the
+/// selection. An `ids` or `id` that isn't an object id is an error, never the selection.
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    // Objects given are used as given: a value that isn't an object id fails rather than the
-    // command acting on the selection instead (#785).
-    match p.get("ids").filter(|v| !v.is_null()) {
-        Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
-        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
-        None => {}
-    }
-    match p.get("id").filter(|v| !v.is_null()) {
-        Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
-        // A step reference a batch couldn't resolve (other strings are other ids, such as an
-        // effect's).
-        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
-        _ => Ok(s.doc()?.selection.objects.clone()),
+    match named_ids(p)? {
+        Some(ids) => Ok(ids),
+        None => Ok(s.doc()?.selection.objects.clone()),
     }
 }
 
