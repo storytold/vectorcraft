@@ -138,3 +138,41 @@ fn named_fonts_take_the_show_operators_spacing() {
     let t = texts(&r);
     assert!(t[0].runs.len() == 1 && t[0].runs[0].style.tracking == 0.0, "{:?}", t[0].runs);
 }
+
+/// `kshow` runs its procedure between each two characters with their codes (PLRM 3rd ed.,
+/// `kshow`): where it moves the current point, the next character follows (kept on live type as
+/// tracking), and what it draws is drawn over the type.
+#[test]
+fn kshow_procedures_kern_live_type() {
+    let (h, wh) = glyph('H');
+    let (i, wi) = glyph('I');
+    let f = font(&[h, i, h]);
+    // Only the pair of codes 1 then 2 is kerned, 20 units.
+    let kern = "{ exch 1 eq exch 2 eq and { 20 0 rmoveto } if }";
+    let r = read(&format!("{f}/Plain42 findfont 50 scalefont setfont 10 20 moveto {kern} (\\001\\002\\003) kshow"));
+    let t = texts(&r);
+    assert_eq!(t.len(), 1, "{:?}", all(&r.document));
+    assert_eq!(t[0].plain_text(), "HIH");
+    let o = origins(&t[0]);
+    assert!((o[1] - o[0] - (50.0 * wh + 20.0)).abs() < 0.05, "{o:?}");
+    assert!((o[2] - o[1] - 50.0 * wi).abs() < 0.05, "{o:?}");
+    let check = |cond: String| super::tests::check(&format!("{f} /Plain42 findfont 50 scalefont setfont {cond}"));
+    check(format!(
+        "gsave nulldevice 10 20 moveto {kern} (\\001\\002\\003) kshow currentpoint grestore pop {} sub abs 0.01 lt",
+        10.0 + 50.0 * (2.0 * wh + wi) + 20.0
+    ));
+    // A font found by name kerns the same way.
+    let r = read("/Helvetica findfont 20 scalefont setfont 10 20 moveto { pop pop -3 0 rmoveto } (HIH) kshow");
+    let t = texts(&r);
+    let plain = read("/Helvetica findfont 20 scalefont setfont 10 20 moveto (HIH) show");
+    let (o, p) = (origins(&t[0]), origins(&texts(&plain)[0]));
+    assert!((o[1] - o[0] - (p[1] - p[0] - 3.0)).abs() < 0.05 && (o[2] - o[1] - (p[2] - p[1] - 3.0)).abs() < 0.05, "{o:?} {p:?}");
+    // A procedure that draws: a square after the type, over it.
+    let r = read("/Helvetica findfont 20 scalefont setfont 10 20 moveto { pop pop currentpoint 2 2 rectfill } (AB) kshow");
+    let kinds: Vec<bool> = all(&r.document)
+        .iter()
+        .filter(|n| matches!(n.kind, NodeKind::Text(_) | NodeKind::Path { .. }))
+        .map(|n| matches!(n.kind, NodeKind::Text(_)))
+        .collect();
+    assert_eq!(kinds, [true, false]);
+}
