@@ -138,3 +138,37 @@ fn named_fonts_take_the_show_operators_spacing() {
     let t = texts(&r);
     assert!(t[0].runs.len() == 1 && t[0].runs[0].style.tracking == 0.0, "{:?}", t[0].runs);
 }
+
+/// Characters the installed font would join in a ligature (`fi`) keep the places the file gives
+/// each of them: the type is set without ligatures and each character's tracking is its own.
+#[test]
+fn characters_a_ligature_would_join_keep_their_places() {
+    let r = read("/SourceSans3-Regular findfont 50 scalefont setfont 10 20 moveto (fit) [30 20 0] xshow");
+    let t = texts(&r);
+    assert_eq!(t[0].plain_text(), "fit");
+    let o = origins(&t[0]);
+    assert_eq!(o.len(), 3, "{o:?}");
+    assert!((o[1] - o[0] - 30.0).abs() < 0.05 && (o[2] - o[1] - 20.0).abs() < 0.05, "{o:?}");
+}
+
+/// A move that is finite in user space but not along the type's baseline (a font matrix
+/// squashed a thousandfold) is an `undefinedresult`, not a tracking that isn't a number.
+#[test]
+fn moves_too_large_for_the_baseline_are_refused() {
+    let r = read("/Helvetica findfont [0.001 0 0 50 0 0] makefont setfont 10 20 moveto (A\\001) [1e307 -1e307] xshow");
+    assert!(texts(&r).iter().all(|t| t.runs.iter().all(|r| r.style.tracking.is_finite())), "{:?}", texts(&r));
+    assert!(r.warnings.iter().any(|w| w.contains("undefinedresult")), "{:?}", r.warnings);
+}
+
+/// Reading a font's character map counts the mappings it visits, once, for the operation
+/// budget.
+#[test]
+fn reading_the_character_map_counts_its_mappings() {
+    let f = super::type42::Font::new(FONT.to_vec());
+    let (h, _) = glyph('H');
+    assert_eq!(f.char_of(h), Some('H'));
+    let n = f.take_char_map_work();
+    assert!(n > 100, "{n}");
+    f.char_of(h);
+    assert_eq!(f.take_char_map_work(), 0);
+}

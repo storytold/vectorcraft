@@ -7,7 +7,7 @@
 
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::collections::HashMap;
 
 use skrifa::{FontRef, GlyphId, MetadataProvider};
@@ -39,11 +39,19 @@ pub(super) fn font_data(sfnts: &[Obj]) -> Option<Vec<u8>> {
 pub(super) struct Font {
     pub data: Vec<u8>,
     chars: OnceCell<HashMap<u32, char>>,
+    /// The character-map mappings visited reading `chars`, not yet counted against the
+    /// operation budget (see [`Self::take_char_map_work`]).
+    work: Cell<u64>,
 }
 
 impl Font {
     pub fn new(data: Vec<u8>) -> Self {
-        Self { data, chars: OnceCell::new() }
+        Self { data, chars: OnceCell::new(), work: Cell::new(0) }
+    }
+
+    /// The work reading the character map did since last asked (mappings visited).
+    pub fn take_char_map_work(&self) -> u64 {
+        self.work.take()
     }
 
     /// The character glyph `gid` stands for: the one the font's character map maps to it
@@ -55,6 +63,7 @@ impl Font {
             let mut m = HashMap::new();
             if let Ok(font) = FontRef::new(&self.data) {
                 for (c, g) in font.charmap().mappings() {
+                    self.work.set(self.work.get().saturating_add(1));
                     // Not a symbol font's private-use codes, controls or the soft hyphen, which
                     // doesn't show (a hyphen glyph mapped from it is the hyphen's).
                     let Some(c) = char::from_u32(c).filter(|c| !('\u{F000}'..='\u{F0FF}').contains(c) && !c.is_control() && *c != '\u{AD}') else {

@@ -490,10 +490,19 @@ impl Interp<'_> {
         .map(|c| c.filter(|c| !c.is_control()))
         .collect();
         let text: String = chars.iter().flatten().collect();
-        let (mut t, layout, _) = self.set_text(&text, at)?;
+        let (mut t, mut layout, _) = self.set_text(&text, at)?;
         let size = t.runs.first().map_or(1.0, |r| r.style.size);
-        // Each character's advance in the layout (text space).
         let starts: Vec<usize> = text.char_indices().map(|(b, _)| b).collect();
+        // The file places each character's glyph: where the layout joins characters in a
+        // ligature, the type is set without ligatures, so each character has its own advance.
+        if starts.iter().any(|b| !layout.glyphs.iter().any(|g| g.byte == *b)) {
+            for run in &mut t.runs {
+                run.style.features.push("-liga".into());
+            }
+            layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+            t.cached_bounds = Some(layout.bounds);
+        }
+        // Each character's advance in the layout (text space).
         let mut natural = vec![0.0; starts.len()];
         for g in &layout.glyphs {
             if let Some(n) = starts.binary_search(&g.byte).ok().and_then(|k| natural.get_mut(k)) {
@@ -514,6 +523,9 @@ impl Interp<'_> {
             k += usize::from(c.is_some());
             let d = spacing.advance(i, i64::from(code), em(own));
             let e = inv * Point::new(d.x, d.y) - inv * Point::ZERO;
+            if ![d.x, d.y, e.x * size, e.y * size].iter().all(|v| v.is_finite()) {
+                return ps_err("undefinedresult", "a show");
+            }
             moves.push((d, e.x * size, e.y * size));
         }
         let total: Vec2 = moves.iter().map(|m| m.0).sum();
@@ -840,6 +852,9 @@ impl Interp<'_> {
                 Plain { ch, gid, width: super::type42::advance(&data.data, gid) }
             })
             .collect();
+        drop(f);
+        // Reading the font's character map (once) visits each of its mappings.
+        self.spend(data.take_char_map_work())?;
         Ok(Some((data, glyphs)))
     }
 
