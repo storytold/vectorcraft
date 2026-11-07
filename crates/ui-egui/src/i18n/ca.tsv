@@ -652,6 +652,7 @@
 	Clear Events	Esborra els esdeveniments
 	Clear Guides	Esborra les guies
 	Clear History	Esborra l’historial
+	New Document from State	Document nou a partir de l’estat
 	Clear Overrides	Esborra les modificacions
 	Clear Recent Files	Esborra els fitxers recents
 	Click	Fes clic
@@ -5271,6 +5272,7 @@ digits	Malayalam	Malaiàlam
 @msg	no graphic style `{name}`	no hi ha l’estil gràfic `{name}`
 @msg	no graphic style `{n}`	no hi ha l’estil gràfic `{n}`
 @msg	no history to clear	no hi ha historial per esborrar
+@msg	no history state {v}	no hi ha cap estat de l’historial {v}
 @msg	no interaction in progress	no hi ha cap interacció en curs
 @msg	no key object	no hi ha objecte clau
 @msg	no library `{id}`	no hi ha la biblioteca `{id}`

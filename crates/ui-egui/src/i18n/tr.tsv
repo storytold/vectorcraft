@@ -2792,6 +2792,7 @@ digits	Malayalam	Malayalam
 	Auto Leading:	Otomatik Satır Aralığı:
 	Cancel Export	Dışa Aktarmayı İptal Et
 	Clear History	Geçmişi Temizle
+	New Document from State	Durumdan Yeni Belge
 	Continue in Background	Arka Planda Devam Et
 	Delete Light	Işığı Sil
 	Desired	İstenen
@@ -5457,6 +5458,7 @@ theme	Appearance	Görünüm
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {pw} × {ph} pt sayfası için değil
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	düzenleme verileri {w} × {h} pt boyutunda bir sayfa içindir, dosyanın {scale} ölçeğindeki {pw} × {ph} pt sayfası
 @msg	no history to clear	temizlenecek geçmiş yok
+@msg	no history state {v}	{v} geçmiş durumu yok
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	tarayıcıda yalnızca http, https ve mailto URL'leri açılır, “{url}” açılmaz
 @msg	{_1} files are written by file.saveAsTemplate	{_1} dosyaları file.saveAsTemplate tarafından yazılır
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} başka bir uygulamayı açar: yalnızca klavye başındaki kişi çalıştırabilir
