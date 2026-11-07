@@ -1487,6 +1487,23 @@ fn abutting_strips_of_a_gradient_become_one_gradient() {
 }
 
 #[test]
+fn strips_under_a_larger_clip_keep_the_clip() {
+    // The same ramp under a clip larger than the strips: the gradient fills only where the
+    // strips were, still clipped, not the whole clip.
+    let r = read(
+        "gsave 5 5 90 90 rectclip
+         0 1 39 { /i exch def i 39 div setgray 88 i 2 mul sub 10 2 80 rectfill } for grestore",
+    );
+    let o = objects(&r.document);
+    assert_eq!(o.len(), 1, "{o:#?}");
+    let NodeKind::Group { children, clip: true } = &o[0].kind else { panic!("not a clipping group: {:#?}", o[0]) };
+    let [_, fill] = children.as_slice() else { panic!("{children:#?}") };
+    assert!(near(bounds(fill), Rect::new(10.0, 10.0, 90.0, 90.0)), "{:?}", bounds(fill));
+    let (stops, _, _) = linear_stops(fill);
+    assert_eq!(stops.len(), 2, "{stops:?}");
+}
+
+#[test]
 fn turned_strips_become_a_gradient_across_them() {
     // Strips drawn in a turned space: the gradient runs square to them.
     let r = read("50 50 translate 30 rotate 0 1 19 { /i exch def i 19 div 0 0 setrgbcolor i 2 mul 20 sub -20 2 40 rectfill } for");

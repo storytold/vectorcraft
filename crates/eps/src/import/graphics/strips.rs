@@ -16,7 +16,7 @@
 
 use super::{
     Affine, Appearance, AppearanceItem, BezPath, Color, Drawn, FillLayer, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, HashSet,
-    MAX_STITCH_STOPS, Node, NodeId, NodeKind, Paint, PathData, Point, Vec2,
+    MAX_STITCH_STOPS, Node, NodeId, NodeKind, Paint, PathData, PathEl, Point, Vec2,
 };
 
 /// Fewest strips (that paint something) a gradient is read from.
@@ -116,6 +116,13 @@ impl Axes {
         self.o + self.w * s + self.v * t
     }
 
+    /// Does `p` lie within the run's length, and across it from `lo` to `hi`?
+    fn holds(&self, p: Point, lo: f64, hi: f64) -> bool {
+        let (ts, ss) = (EPS / self.v.hypot(), EPS / self.w.hypot());
+        let l = self.inv * p;
+        l.x >= lo - ss && l.x <= hi + ss && l.y >= -ts && l.y <= 1.0 + ts
+    }
+
     /// The strip's extent across the run (`s` from, to), when it spans the run's length exactly.
     fn band(&self, st: &Strip) -> Option<(f64, f64)> {
         let (ts, ss) = (EPS / self.v.hypot(), EPS / self.w.hypot());
@@ -131,12 +138,14 @@ impl Axes {
     }
 }
 
-/// A run of strips found at one place in what was drawn: where it ends (exclusive) and the
-/// object it becomes.
+/// A run of strips found at one place in what was drawn: where it ends (exclusive), the object
+/// it becomes, and whether that object covers the clip around it (so the clip path filled with
+/// the gradient paints no more than the strips did).
 struct Run {
     start: usize,
     end: usize,
     node: Node,
+    covers_clip: bool,
 }
 
 /// Is `s` (from, to) too thin to paint anything?
@@ -226,9 +235,19 @@ fn run_at(drawn: &Drawn, strips: &[Option<Strip>], i: usize) -> Option<Run> {
     bp.line_to(axes.at(lo, 1.0));
     bp.close_path();
     let item = AppearanceItem::Fill(FillLayer { overprint: a.overprint, ..FillLayer::new(Paint::Gradient(Box::new(g))) });
-    let id = drawn.get(i).map(|(_, n)| n.id)?;
-    let node = Node::path(id, PathData::from_bezpath(&bp), Appearance { items: vec![item], ..Appearance::default() });
-    Some(Run { start: i, end, node })
+    let (clips, first_node) = drawn.get(i)?;
+    // Every point of a clip's path, control points included, inside the run: its curves are too
+    // (each lies in the hull of its points), and the run's area is convex.
+    let covers_clip = clips.last().and_then(|c| c.region.as_ref()).is_some_and(|(clip, _)| {
+        clip.elements().iter().all(|el| match *el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) => axes.holds(p, lo, hi),
+            PathEl::QuadTo(a, p) => axes.holds(a, lo, hi) && axes.holds(p, lo, hi),
+            PathEl::CurveTo(a, b, p) => axes.holds(a, lo, hi) && axes.holds(b, lo, hi) && axes.holds(p, lo, hi),
+            PathEl::ClosePath => true,
+        })
+    });
+    let node = Node::path(first_node.id, PathData::from_bezpath(&bp), Appearance { items: vec![item], ..Appearance::default() });
+    Some(Run { start: i, end, node, covers_clip })
 }
 
 /// The stops `stops` (offset, strip) needs: those the gradient between the stops kept on either
@@ -262,8 +281,9 @@ fn on_line(stops: &[(f32, &Strip)], a: usize, b: usize) -> bool {
     })
 }
 
-/// Runs of strips in `drawn` become one gradient-filled object each (marked in `shadings`, so a
-/// clipping group of nothing else is its clip path filled with the gradient).
+/// Runs of strips in `drawn` become one gradient-filled object each; one that covers its clip is
+/// marked in `shadings`, so a clipping group of nothing else is its clip path filled with the
+/// gradient (a clip larger than the strips keeps clipping the gradient to them).
 pub(crate) fn merge_strips(drawn: &mut Drawn, shadings: &mut HashSet<NodeId>) {
     let strips: Vec<Option<Strip>> = drawn.iter().map(|(_, n)| strip_of(n)).collect();
     if strips.iter().filter(|s| s.is_some()).count() < MIN_STRIPS {
@@ -292,7 +312,9 @@ pub(crate) fn merge_strips(drawn: &mut Drawn, shadings: &mut HashSet<NodeId>) {
         }
         if let Some(r) = runs.next_if(|r| r.start == k) {
             skip_to = r.end;
-            shadings.insert(r.node.id);
+            if r.covers_clip {
+                shadings.insert(r.node.id);
+            }
             drawn.push((item.0, r.node));
             continue;
         }
