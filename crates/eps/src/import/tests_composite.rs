@@ -102,3 +102,88 @@ fn named_descendants_set_type_at_the_composite_fonts_size() {
     let bounds_all = all(&r.document).iter().map(|n| bounds(n)).reduce(|a, b| a.union(b)).unwrap();
     assert!(bounds_all.width() < 60.0, "{bounds_all:?}");
 }
+
+/// `widthshow` adds its spacing to the composite character whose font number times 256 plus code
+/// is its `char` (PLRM 3rd ed., `widthshow` in chapter 8), not to every character with that code.
+#[test]
+fn widthshow_matches_a_composite_character_by_font_number_and_code() {
+    let (_, wh) = glyph('H');
+    let fonts = fonts().replace("/Encoding [0] def", "/Encoding [0 0] def");
+    let check = |cond: String| super::tests::check(&format!("{fonts} /Comp findfont 50 scalefont setfont {cond}"));
+    let end = |ch: u32| format!("gsave nulldevice 10 20 moveto 20 0 {ch} (\\000\\001\\001\\001) widthshow currentpoint grestore pop");
+    // 257 is font 1's code 1: the second H only.
+    check(format!("{} {} sub abs 0.01 lt", end(257), 10.0 + 100.0 * wh + 20.0));
+    // 1 is font 0's code 1: the first H only.
+    check(format!("{} {} sub abs 0.01 lt", end(1), 10.0 + 100.0 * wh + 20.0));
+    // 2 is neither.
+    check(format!("{} {} sub abs 0.01 lt", end(2), 10.0 + 100.0 * wh));
+}
+
+/// Measuring a composite font's Type 42 glyphs (`stringwidth` on a long string in a `loop`)
+/// counts against the operation budget, as drawing them does.
+#[test]
+fn measuring_type42_descendants_in_a_loop_runs_out_of_the_budget() {
+    super::tests::runs_out_of_budget(&format!(
+        "{} /Comp findfont 50 scalefont setfont /s 100000 string def {{ s stringwidth pop pop }} loop",
+        fonts()
+    ));
+}
+
+/// A descendant whose TrueType data can't be read (an `sfnts` element that isn't a string, after
+/// 32 MB of strings) is read once, not again for every character a loop measures.
+#[test]
+fn unreadable_type42_data_is_read_once() {
+    super::tests::runs_out_of_budget(
+        "10 dict begin /FontName /Bad def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+         /Encoding 256 array def 0 1 255 { Encoding exch /.notdef put } for\n\
+         /CharStrings 1 dict def CharStrings /.notdef 0 put /sfnts [ 0 1 7 { pop 4000000 string } for 0 ] def FontName currentdict end definefont pop\n\
+         16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+         /Encoding [0] def /FDepVector [/Bad findfont] def FontName currentdict end definefont pop\n\
+         /Comp findfont 50 scalefont setfont { (\\000\\001) stringwidth pop pop } loop",
+    );
+}
+
+/// A composite font's TrueType data stays read while it is in use: the font a string uses for
+/// every other character isn't dropped (and read again, counting its size against the memory
+/// budget each time) while 16 other fonts are read between its uses.
+#[test]
+fn type42_data_in_use_stays_read() {
+    let mut others = String::new();
+    for k in 1..=16 {
+        others.push_str(&format!(
+            "10 dict begin /FontName /B{k} def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+             /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for\n\
+             /CharStrings 1 dict def CharStrings /.notdef 0 put /sfnts [<00>] def FontName currentdict end definefont pop\n"
+        ));
+    }
+    let deps: String = (1..=16).map(|k| format!(" /B{k} findfont")).collect();
+    let fonts = fonts().replace(
+        "/Encoding [0] def /FDepVector [/T42 findfont] def",
+        &format!("/Encoding [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16] def /FDepVector [/T42 findfont{deps}] def"),
+    );
+    let s: String = (1..=16).map(|k| format!("\\000\\001\\{k:03o}\\001")).collect();
+    super::tests::check(&format!("{others}{fonts} /Comp findfont 50 scalefont setfont 3000 {{ ({s}) stringwidth pop pop }} repeat true"));
+}
+
+/// A page that cycles through more Type 42 fonts than are kept read reads each again when it
+/// comes back, but counts its data against the memory budget once.
+#[test]
+fn type42_data_read_again_counts_once() {
+    let mut fonts = format!("/S [\n{}] def\n", sfnts());
+    for k in 0..17 {
+        fonts.push_str(&format!(
+            "10 dict begin /FontName /F{k} def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+             /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for\n\
+             /CharStrings 1 dict def CharStrings /.notdef 0 put /sfnts [ S aload pop ] def FontName currentdict end definefont pop\n"
+        ));
+    }
+    let deps: String = (0..17).map(|k| format!(" /F{k} findfont")).collect();
+    let picks: String = (0..17).map(|k| format!(" {k}")).collect();
+    fonts.push_str(&format!(
+        "16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def\n\
+         /Encoding [{picks}] def /FDepVector [{deps}] def FontName currentdict end definefont pop\n"
+    ));
+    let s: String = (0..17).map(|k| format!("\\{k:03o}\\001")).collect();
+    // 17 fonts of 431 kB, each read 200 times: 1.4 GB if each read counted.
+    super::tests::check(&format!("{fonts} /Comp findfont 50 scalefont setfont 200 {{ ({s}) stringwidth pop pop }} repeat true"));
+}
