@@ -1179,6 +1179,18 @@ fn shadings_not_extended_paint_only_between_their_ends() {
         assert!((a.distance(centre) - 45.0).abs() < 1e-6, "{a:?}");
         assert!(a.midpoint(*b).distance(centre) > 45.0 - 0.01, "{a:?} {b:?}");
     }
+    // Stretched 4 times across and squashed to a quarter down (areas unchanged), the sides still
+    // lie within 0.01 pt of the ellipse it becomes.
+    let r = read(
+        "50 50 translate 4 0.25 scale << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [0 0 0 0 0 10] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    let sides = path.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    // A side of a regular polygon in the circle lies 1 - cos(pi / sides) of the radius inside it;
+    // stretched to 40 pt across, that is at most 0.01 pt.
+    assert!(40.0 * (1.0 - (std::f64::consts::PI / sides as f64).cos()) <= 0.01 + 1e-9, "{sides} sides");
     let b = shade(3, "50 50 0 50 50 30", "/Extend [true true]");
     assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
 }

@@ -479,8 +479,11 @@ pub(super) fn shading_extent(sh: &DictRef, m: Affine, area: Rect) -> Option<Vec<
             // The circles from a point to a circle cover the hull of that point and circle.
             let (p0, c1, r1) = (Point::new(at(0), at(1)), Point::new(at(3), at(4)), at(5));
             // Enough sides that each lies within `RING_TOLERANCE` of the circle in the document
-            // (the radius scaled by how `m` scales areas), from 64 to `MAX_RING`.
-            let r = r1 * m.determinant().abs().sqrt();
+            // (the radius scaled by the most `m` stretches any direction), from 64 to `MAX_RING`.
+            let [a, b, c, d, ..] = m.as_coeffs();
+            let (sum, det) = (a * a + b * b + c * c + d * d, a * d - b * c);
+            let stretch = ((sum + (sum * sum - 4.0 * det * det).max(0.0).sqrt()) / 2.0).sqrt();
+            let r = r1 * stretch;
             let sides = (std::f64::consts::PI / (1.0 - RING_TOLERANCE / r).clamp(-1.0, 1.0).acos()).ceil();
             let sides = if sides.is_finite() { (sides as usize).clamp(64, MAX_RING) } else { MAX_RING };
             let ring: Vec<Point> = (0..sides).map(|i| c1 + Vec2::from_angle(i as f64 * std::f64::consts::TAU / sides as f64) * r1).collect();
