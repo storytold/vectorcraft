@@ -177,6 +177,9 @@ fn envelope_options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Va
     v["distortAppearance"] = json!(o.distort_appearance);
     v["distortLinearGradients"] = json!(o.distort_linear_gradients);
     v["distortPatternFills"] = json!(o.distort_pattern_fills);
+    if o.bounds_margin != [0.0; 4] {
+        v["boundsMargin"] = json!(o.bounds_margin);
+    }
     v
 }
 
@@ -192,6 +195,7 @@ fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeO
         distort_appearance: switch_or(p, "distortAppearance", cur.distort_appearance, cmd)?,
         distort_linear_gradients: switch_or(p, "distortLinearGradients", cur.distort_linear_gradients, cmd)?,
         distort_pattern_fills: switch_or(p, "distortPatternFills", cur.distort_pattern_fills, cmd)?,
+        bounds_margin: cur.bounds_margin,
     })
 }
 
@@ -369,6 +373,12 @@ pub(super) fn env_expand(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// The margins the strokes of `content` give in the axes of `frame` (none for content without
+/// width or height).
+fn stroke_margin(content: &[Arc<Node>], frame: Affine) -> [f32; 4] {
+    live::envelope_content_boxes(content, frame).and_then(|(stroked, plain)| live::envelope_stroke_margin(stroked, plain)).unwrap_or_default()
+}
+
 pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.editContents";
     let envs = selected_of(s, is_envelope);
@@ -377,11 +387,25 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit(if want { "Edit Contents" } else { "Edit Envelope" }, |d, sel| {
         let mut content_ids = vec![];
         for e in &envs {
-            if let Some(n) = d.node_mut(*e)
-                && let NodeKind::Envelope { editing, content, .. } = &mut n.kind
-            {
+            let Some(n) = d.node_mut(*e) else { continue };
+            let start = n.extras().envelope_edit_margin;
+            let mut began = None;
+            if let NodeKind::Envelope { editing, content, options, frame, .. } = &mut n.kind {
+                // Margins stay when the strokes reach as far as when Edit Contents began, whatever
+                // transforms the envelope took before that.
+                if options.bounds_margin != [0.0; 4] {
+                    let now = stroke_margin(content, **frame);
+                    if want {
+                        began = start.filter(|_| *editing).or(Some(now));
+                    } else if *editing && start != Some(now) {
+                        options.bounds_margin = now;
+                    }
+                }
                 *editing = want;
                 content_ids.extend(content.iter().map(|c| c.id));
+            }
+            if began != start {
+                n.extras_mut().envelope_edit_margin = began;
             }
         }
         if want {

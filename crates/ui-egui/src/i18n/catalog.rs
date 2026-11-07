@@ -35,6 +35,8 @@ struct Template {
     /// Bytes of literal text: a template with more of it is the more specific match.
     literal: usize,
     forms: Vec<String>,
+    /// A `@msgplural` form: its `{n}` matches only a count.
+    counted: bool,
 }
 
 /// The placeholder values of a matched message template: placeholder name and value.
@@ -46,7 +48,7 @@ const MAX_MESSAGE_LEN: usize = 2000;
 impl Template {
     /// `None` for a template that can't be matched reliably: no literal text, or two placeholders
     /// in a row (where one ends and the next begins is unknowable).
-    fn parse(source: &str, forms: Vec<String>) -> Option<Template> {
+    fn parse(source: &str, forms: Vec<String>, counted: bool) -> Option<Template> {
         let mut pieces = Vec::new();
         let mut rest = source;
         while let Some(a) = rest.find('{') {
@@ -64,25 +66,26 @@ impl Template {
             pieces.push(Piece::Text(rest.to_string()));
         }
         let literal = pieces.iter().map(|p| if let Piece::Text(t) = p { t.len() } else { 0 }).sum();
-        (literal > 0).then_some(Template { pieces, literal, forms })
+        (literal > 0).then_some(Template { pieces, literal, forms, counted })
     }
 
     /// The placeholder values if `s` is an instance of this template.
     fn captures<'a>(&self, s: &'a str) -> Option<Vec<(&str, &'a str)>> {
         let mut out = Vec::new();
-        match_pieces(&self.pieces, s, &mut out).then_some(out)
+        match_pieces(&self.pieces, s, self.counted, &mut out).then_some(out)
     }
 }
 
 /// Match `s` against `pieces`, a placeholder taking the shortest non-empty text that lets the
-/// rest match (the last one takes what remains).
-fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, out: &mut Vec<(&'p str, &'a str)>) -> bool {
+/// rest match (the last one takes what remains). With `counted`, `{n}` takes only a count.
+fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>) -> bool {
     let Some((first, rest)) = pieces.split_first() else { return s.is_empty() };
     match first {
-        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, out)),
+        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out)),
         Piece::Hole(name) => {
+            let fits = |value: &str| !(counted && name == "n") || value.parse::<u64>().is_ok();
             let Some((next, after)) = rest.split_first() else {
-                if s.is_empty() {
+                if s.is_empty() || !fits(s) {
                     return false;
                 }
                 out.push((name.as_str(), s));
@@ -93,9 +96,13 @@ fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, out: &mut Vec<(&'p str,
             let mut from = s.chars().next().map_or(1, char::len_utf8);
             while let Some(at) = s.get(from..).and_then(|tail| tail.find(next.as_str())).map(|i| i + from) {
                 let (Some(value), Some(tail)) = (s.get(..at), s.get(at + next.len()..)) else { return false };
+                if !fits(value) {
+                    from = at + next.chars().next().map_or(1, char::len_utf8);
+                    continue;
+                }
                 let mark = out.len();
                 out.push((name.as_str(), value));
-                if match_pieces(after, tail, out) {
+                if match_pieces(after, tail, counted, out) {
                     return true;
                 }
                 out.truncate(mark);
@@ -167,14 +174,14 @@ impl Catalog {
                 }
                 "@msg" => {
                     if src.contains('{') {
-                        c.templates.extend(Template::parse(&src, vec![tr]));
+                        c.templates.extend(Template::parse(&src, vec![tr], false));
                     } else {
                         c.messages.insert(src, tr);
                     }
                 }
                 "@msgplural" => {
                     let forms: Vec<String> = tr.split('|').map(str::to_string).collect();
-                    c.templates.extend(src.split('|').filter_map(|english| Template::parse(english, forms.clone())));
+                    c.templates.extend(src.split('|').filter_map(|english| Template::parse(english, forms.clone(), true)));
                 }
                 _ => {
                     c.contextual.insert(format!("{ctx}\u{1}{src}"), tr);

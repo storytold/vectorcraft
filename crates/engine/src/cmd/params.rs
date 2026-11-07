@@ -303,14 +303,28 @@ fn is_effect_color(v: &Value) -> bool {
 pub(crate) fn check_effect_color(id: &str, effect: &str, params: &Value) -> Result<()> {
     let key = "color";
     let Some(v) = params.get(key) else { return Ok(()) };
-    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
-        return Ok(());
-    }
-    let takes_color = vectorcraft_render::effects::effect_info(effect).is_some_and(|info| info.defaults.get(key).is_some_and(Value::is_string));
-    if takes_color && !is_effect_color(v) {
+    if effect_takes_color(effect) && !is_effect_color(v) {
         return Err(bad(id, format!("`{key}` must be a #rrggbb color")));
     }
     Ok(())
+}
+
+/// Does built-in effect `effect` have a `color` parameter (one whose default is a string)? Plug-in
+/// effects have none here.
+pub(crate) fn effect_takes_color(effect: &str) -> bool {
+    !effect.starts_with(vectorcraft_plugins::effect::PREFIX)
+        && vectorcraft_render::effects::effect_info(effect).is_some_and(|info| info.defaults.get("color").is_some_and(Value::is_string))
+}
+
+/// The color that built-in effect `effect` draws with `params`: their `color`, else the effect's
+/// default color. `None` when the effect has no `color` parameter ([`effect_takes_color`]) or
+/// `params` hold a `color` it can't read ([`is_effect_color`]).
+pub(crate) fn effect_color(effect: &str, params: &Value) -> Option<vectorcraft_color::Color> {
+    if !effect_takes_color(effect) || params.get("color").is_some_and(|v| !is_effect_color(v)) {
+        return None;
+    }
+    let merged = vectorcraft_render::effects::merged_params(effect, params);
+    Some(vectorcraft_render::effects::color_param(&merged, vectorcraft_color::Color::BLACK))
 }
 
 /// The `channel` in `params` of Levels or Curves (`effect`), as command `id` was given it: a

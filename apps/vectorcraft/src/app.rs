@@ -51,6 +51,9 @@ impl eframe::App for App {
         // A pen contact with the barrel button held presses the secondary button (Windows Ink).
         #[cfg(windows)]
         windows_stylus::raw_input_hook(raw);
+        // The characters Alt + keypad codes typed (#5108).
+        #[cfg(windows)]
+        super::windows_alt_codes::raw_input_hook(raw);
         file_access::unconfined(|| self.app.raw_input_hook(ctx, raw));
         // A mouse-up that never reached the window (#4326) is delivered once AppKit reports
         // that no mouse button is down.

@@ -312,9 +312,9 @@ fn click_text(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
 
 /// Presses Escape.
 fn escape(ctx: &egui::Context, app: &mut VectorcraftApp) {
-    let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    frame(ctx, app, vec![key], "");
-    frame(ctx, app, vec![], "");
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(ctx, app, vec![key(true)], "");
+    frame(ctx, app, vec![key(false)], "");
 }
 
 /// Scatter, Art and Pattern Brush Options have a Tips button beside Method. A click on it opens
@@ -388,6 +388,24 @@ fn escape_closes_tips_or_the_method_list_and_leaves_the_dialog_open() {
     set(&mut app, json!({"tips": true}));
     escape(&ctx, &mut app);
     assert!(app.ui.dialog.is_none(), "Escape cancels Calligraphic Brush Options");
+}
+
+/// Holding Escape closes Tips and leaves Brush Options open until a new press.
+#[test]
+fn holding_escape_closes_tips_and_leaves_the_dialog_open() {
+    let (mut app, ctx) = (app(), ctx());
+    app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+    set(&mut app, json!({"tips": true}));
+    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    frame(&ctx, &mut app, vec![], "");
+    for repeat in 0..4 {
+        frame(&ctx, &mut app, vec![key(true)], "");
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("repeat {repeat}: Brush Options stays open"));
+        assert!(!d.bool("tips"), "repeat {repeat}: Tips closed");
+    }
+    frame(&ctx, &mut app, vec![key(false)], "");
+    frame(&ctx, &mut app, vec![key(true)], "");
+    assert!(app.ui.dialog.is_none(), "a new press cancels Brush Options");
 }
 
 /// Each Colorization Tips sample paints the brush with its own method on the blue stroke:

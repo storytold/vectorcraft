@@ -258,6 +258,41 @@ fn character_kerning_setter_and_automatic_pair_value() {
     assert_eq!(shared(&app, |s| (s.optical_kerning, s.kerning)), None, "a mixed range shows a blank Kerning field");
 }
 
+/// The Kerning menu lists Auto and Optical for a selection that mixes kerning modes, with
+/// neither checked, so one mode can be set on all of it.
+#[test]
+fn kerning_menu_lists_auto_and_optical_for_mixed_modes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 20, "y": 90, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    assert_eq!(kerning_methods(shared(&app, |s| (s.optical_kerning, s.kerning))), (Some(true), Some(false)), "Auto");
+    app.run("select.set", json!({"ids": [b.clone()]})).unwrap();
+    assert_eq!(kerning_methods(shared(&app, |s| (s.optical_kerning, s.kerning))), (Some(false), Some(true)), "Optical");
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, None, "the selection mixes Auto and Optical");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "both entries are listed, neither checked");
+}
+
+/// A number typed into the Kerning field after Optical keeps the Optical flag on the type, and
+/// the manual value sets the spacing; the menu then checks neither Auto nor Optical.
+#[test]
+fn kerning_menu_checks_neither_method_for_a_manual_value_after_optical() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AV", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("text.setFormat", json!({"kerning": "optical"})).unwrap();
+    app.run("text.setFormat", json!({"kerning": 50})).unwrap();
+    let mode = shared(&app, |s| (s.optical_kerning, s.kerning));
+    assert_eq!(mode, Some((true, Some(50.0))), "the manual value keeps the Optical flag");
+    assert_eq!(kerning_methods(mode), (Some(false), Some(false)), "a manual value checks neither method");
+}
+
 /// Highlight Kerning and Highlight Tracking show the Character panel and give its field the
 /// keyboard focus with the value selected: what is typed replaces it, and Enter applies it.
 /// Highlight Font Name opens the font family menu with its search field focused. Without
@@ -1172,6 +1207,87 @@ fn snap_to_glyph_options_show_from_the_menu_and_set_the_options() {
     assert!(!section(&mut app).iter().any(|(t, _)| t == "Proximity Guides"));
 }
 
+/// #5273: the Snap to Glyph options come after every character attribute, so showing them from the
+/// panel menu scrolls a short panel down to them; their first checkbox turns View › Snap to Glyph
+/// on and off, which undims the others.
+#[test]
+fn snap_to_glyph_options_scroll_into_view_and_turn_snapping_on() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Glyphs"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    const VIEW: f32 = 160.0;
+    // The panel as a short dock shows it: in a scroll area.
+    let panel = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+        egui::ScrollArea::vertical().max_height(VIEW).show(ui, |ui| show(app, ui));
+    };
+    let texts = frame_events(&ctx, &mut app, vec![], menu);
+    let item = texts.iter().find(|(t, _)| t.trim() == "Show Snap to Glyph Options").unwrap().1;
+    click(&ctx, &mut app, item.center(), menu);
+    // The scroll is animated: it lands over the next second.
+    let mut texts = vec![];
+    for i in 0..30 {
+        let raw = egui::RawInput { time: Some(10.0 + f64::from(i) * 0.1), ..Default::default() };
+        texts = super::super::tests_appearance::frame_raw(&ctx, &mut app, raw, panel);
+    }
+    for label in ["Snap to Glyph", "Anchor Point"] {
+        let r = text_rect(&texts, label);
+        assert!(r.top() >= 0.0 && r.bottom() <= VIEW + 1.0, "{label} at {r:?} is outside the panel");
+    }
+    assert!(!app.ui.view.snap_to_glyph);
+    click(&ctx, &mut app, text_rect(&texts, "Snap to Glyph").center(), panel);
+    assert!(app.ui.view.snap_to_glyph, "the first checkbox turns Snap to Glyph on");
+    let texts = frame_events(&ctx, &mut app, vec![], panel);
+    click(&ctx, &mut app, text_rect(&texts, "Anchor Point").center(), panel);
+    assert!(!app.session.prefs.glyph_snap.anchors, "the options take clicks once it is on");
+}
+
+/// Copy and Cut take a selected story after a frame threaded in before the edited one took its whole
+/// text.
+#[test]
+fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
+    for cut in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(4);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        app.run("text.thread.create", json!({})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        let c = app.run("text.thread.add", json!({"from": a, "before": true, "rect": [700, 10, 400, 600]})).unwrap()["id"].as_u64().unwrap();
+        let text = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!((text(&app, a), text(&app, b), text(&app, c)), (String::new(), String::new(), story.clone()));
+        assert!(intercept_text_command(&mut app, if cut { "edit.cut" } else { "edit.copy" }).is_some());
+        let copied: Vec<String> = app
+            .session
+            .clipboard
+            .nodes
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some(t.plain_text()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(copied, std::slice::from_ref(&story), "cut: {cut}");
+        assert_eq!(text(&app, c).is_empty(), cut);
+        if cut {
+            // A story that holds no text has nothing to copy, so Cut does not run its delete.
+            app.run("select.all", json!({})).unwrap();
+            assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
+            assert!(!text_copy(&mut app));
+        }
+    }
+}
+
 /// After Select All in a frame of threaded text, the Character and Paragraph panels and Copy act on
 /// the text of every frame of the story.
 #[test]
@@ -1212,4 +1328,106 @@ fn select_all_in_threaded_text_formats_and_copies_the_whole_story() {
         })
         .collect();
     assert_eq!(copied, [story]);
+}
+
+/// A story threaded through three frames in order, the first `height` tall.
+fn three_frame_story(height: u32) -> (VectorcraftApp, u64, u64, u64) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(6);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": height}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    (app, a, b, c)
+}
+
+/// Select All with the Type tool in frame `id` of a story.
+fn select_all_from(app: &mut VectorcraftApp, id: u64) {
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 0, "caret": 0}));
+    app.run("select.all", json!({})).unwrap();
+}
+
+fn story_frame(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::TextObject {
+    match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+fn story_sizes(app: &VectorcraftApp, id: u64) -> Vec<f64> {
+    story_frame(app, id).runs.iter().map(|r| r.style.size).collect()
+}
+
+/// The frames that Select All saved are not the frames of the story once the first of them has
+/// left the thread: the edited frame's story takes the change.
+#[test]
+fn story_changes_follow_the_edited_frames_thread_after_the_first_saved_frame_leaves() {
+    // The first frame is too short for a line, so Select All edits the second.
+    let (mut app, a, b, c) = three_frame_story(1);
+    select_all_from(&mut app, c);
+    assert_eq!(app.session.tool_options()["story"], json!([a, b, c]));
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(b));
+    app.run("text.thread.break", json!({"id": a, "port": "out"})).unwrap();
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(b));
+
+    assert_eq!(text_story(&app), Some(vec![NodeId(b), NodeId(c)]));
+    format(&mut app, json!({"size": 9}));
+    assert!(story_sizes(&app, a).iter().all(|s| (*s - 12.0).abs() < 1e-9), "the frame that left keeps its size");
+    for id in [b, c] {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 9.0).abs() < 1e-9), "frame {id} takes the size");
+    }
+}
+
+/// A frame that left the thread after Select All takes no change, and a frame added to it does.
+#[test]
+fn story_changes_leave_out_a_frame_that_left_and_take_in_a_frame_that_joined() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    select_all_from(&mut app, c);
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(a));
+    app.run("text.thread.break", json!({"id": b, "port": "out"})).unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b)]));
+    let d = app.run("text.thread.add", json!({"from": a, "rect": [600, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(d), NodeId(b)]));
+
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    for id in [a, d, b] {
+        assert!((story_frame(&app, id).para_at(0).space_before - 4.0).abs() < 1e-9, "frame {id} takes the space");
+    }
+    assert!(story_frame(&app, c).para_at(0).space_before.abs() < 1e-9, "the frame that left keeps its paragraphs");
+}
+
+/// With the thread gone, the selection is in the one edited frame.
+#[test]
+fn story_changes_stay_in_the_edited_frame_once_its_thread_is_removed() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    select_all_from(&mut app, c);
+    assert_eq!(text_editing(&app).unwrap().0, NodeId(a));
+    app.run("text.thread.remove", json!({})).unwrap();
+    assert_eq!(text_story(&app), None);
+
+    crate::panels::paragraph::run_on_paragraphs(&mut app, "text.setFormat", json!({"spaceBefore": 4})).unwrap();
+    assert!((story_frame(&app, a).para_at(0).space_before - 4.0).abs() < 1e-9);
+    for id in [b, c] {
+        assert!(story_frame(&app, id).para_at(0).space_before.abs() < 1e-9, "frame {id} keeps its paragraphs");
+    }
+}
+
+/// A selected story is one text: its locked and hidden frames take the change too.
+#[test]
+fn story_changes_take_in_locked_and_hidden_frames() {
+    let (mut app, a, b, c) = three_frame_story(60);
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    select_all_from(&mut app, a);
+    assert_eq!(text_story(&app), Some(vec![NodeId(a), NodeId(b), NodeId(c)]));
+
+    format(&mut app, json!({"size": 9}));
+    for id in [a, b, c] {
+        assert_eq!(story_sizes(&app, id).iter().filter(|s| (**s - 9.0).abs() > 1e-9).count(), 0, "frame {id} takes the size");
+    }
 }

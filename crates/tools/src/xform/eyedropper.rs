@@ -257,26 +257,30 @@ fn symbol_color_at(s: &mut Sampler, levels: &mut [Option<Document>], inst: &Node
 
 /// Whether the source has fill or stroke paint for an attribute sample.
 pub(crate) fn has_sampleable_paint(cx: &ToolContext, id: vectorcraft_doc::NodeId) -> bool {
-    cx.doc.node(id).is_some_and(|n| [false, true].into_iter().any(|stroke| n.proxy_paint(stroke, None).is_some_and(|(paint, ..)| !paint.is_none())))
+    cx.doc.node(id).is_some_and(|n| [false, true].into_iter().any(|stroke| n.proxy_paint_only(stroke, None).is_some_and(|paint| !paint.is_none())))
 }
 
 /// The colour of `n`'s fill (or its stroke, when the stroke was hit or there is no fill) at `p`,
 /// sampled in the paint's own space (text space for type runs) and box. A pattern gives the color
 /// of its tile art at `p` ([`pattern_color_at`]).
 fn paint_sample(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, on_stroke: bool, p: Point) -> Option<Color> {
-    let fill_none = n.proxy_paint(false, None).is_none_or(|(p, ..)| p.is_none());
+    let fill_none = n.proxy_paint_only(false, None).is_none_or(Paint::is_none);
     let stroke = on_stroke || fill_none;
     // Type takes its paint from its characters, and a colorized object from its colorize paint.
     let items: Vec<usize> = n.appearance.items.iter().enumerate().filter(|(_, it)| it.is_fill() != stroke).map(|(i, _)| i).collect();
     if items.is_empty() || matches!(n.kind, NodeKind::Text(_)) || (!stroke && n.extras().colorize.is_some()) {
-        let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
-        return paint_color(s, levels, paint, to_doc, bounds, p);
+        return proxy_color(s, levels, n, stroke, None, p);
     }
     // The visible fills (or strokes) from the top: where one leaves a gap, the next shows. Of a
     // path's strokes, only the ones that reach `p` count, when any does (a click within the hit
     // tolerance of a stroke may reach none).
     let mut visible: Vec<usize> = items.into_iter().filter(|&i| n.appearance.items.get(i).is_some_and(|it| it.visible())).collect();
-    if stroke && let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }, Some(bp)) = (&n.kind, n.stroke_path()) {
+    // With at most one visible stroke, reach testing cannot change which paint is sampled.
+    // Avoid rebuilding a long path just to keep that same stroke in the list.
+    if stroke
+        && visible.len() > 1
+        && let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }, Some(bp)) = (&n.kind, n.stroke_path())
+    {
         let reach =
             |i: &usize| matches!(n.appearance.items.get(*i), Some(vectorcraft_doc::AppearanceItem::Stroke(st)) if st.hits(&bp, *rule, p, 0.0));
         if visible.iter().any(&reach) {
@@ -284,12 +288,24 @@ fn paint_sample(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, on_s
         }
     }
     for &i in visible.iter().rev() {
-        let Some((paint, to_doc, bounds)) = n.proxy_paint(stroke, Some(i)) else { continue };
-        if let Some(c) = paint_color(s, levels, paint, to_doc, bounds, p) {
+        if let Some(c) = proxy_color(s, levels, n, stroke, Some(i), p) {
             return Some(c);
         }
     }
     None
+}
+
+/// The color the paint behind `n`'s Fill (or Stroke) proxy for `item` ([`Node::proxy_paint`])
+/// shows at `p`. Only a gradient or a pattern has `n` measured for the paint's space and box.
+fn proxy_color(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, stroke: bool, item: Option<usize>, p: Point) -> Option<Color> {
+    match n.proxy_paint_only(stroke, item)? {
+        Paint::None => None,
+        Paint::Solid { color, .. } => Some(*color),
+        _ => {
+            let (paint, to_doc, bounds) = n.proxy_paint(stroke, item)?;
+            paint_color(s, levels, paint, to_doc, bounds, p)
+        }
+    }
 }
 
 /// The color `paint`, in a space `to_doc` places in the document and with box `bounds` there,
@@ -1168,6 +1184,113 @@ mod tests {
         let at = |x: f64| sample_color_at(&cx(&d, &s, &p), Point::new(x, 150.0)).map(|c| c.to_hex());
         // x 100 is on both strokes; x 94 is on the blue one only.
         assert_eq!((at(100.0), at(94.0)), (Some("#ff0000".to_string()), Some("#0000ff".to_string())));
+    }
+
+    /// The color of `n`'s fill (or stroke) at `p` from its measured proxy paints: the reference
+    /// [`paint_sample`] is checked against.
+    fn measured_sample(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, on_stroke: bool, p: Point) -> Option<Color> {
+        let fill_none = n.proxy_paint(false, None).is_none_or(|(p, ..)| p.is_none());
+        let stroke = on_stroke || fill_none;
+        let items: Vec<usize> = n.appearance.items.iter().enumerate().filter(|(_, it)| it.is_fill() != stroke).map(|(i, _)| i).collect();
+        if items.is_empty() || matches!(n.kind, NodeKind::Text(_)) || (!stroke && n.extras().colorize.is_some()) {
+            let (paint, to_doc, bounds) = n.proxy_paint(stroke, None)?;
+            return paint_color(s, levels, paint, to_doc, bounds, p);
+        }
+        let mut visible: Vec<usize> = items.into_iter().filter(|&i| n.appearance.items.get(i).is_some_and(|it| it.visible())).collect();
+        if stroke && let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }, Some(bp)) = (&n.kind, n.stroke_path()) {
+            let reach =
+                |i: &usize| matches!(n.appearance.items.get(*i), Some(vectorcraft_doc::AppearanceItem::Stroke(st)) if st.hits(&bp, *rule, p, 0.0));
+            if visible.iter().any(&reach) {
+                visible.retain(&reach);
+            }
+        }
+        for &i in visible.iter().rev() {
+            let Some((paint, to_doc, bounds)) = n.proxy_paint(stroke, Some(i)) else { continue };
+            if let Some(c) = paint_color(s, levels, paint, to_doc, bounds, p) {
+                return Some(c);
+            }
+        }
+        None
+    }
+
+    /// Samples and the check for paint to sample give what the measured proxy paints give, on
+    /// paths, compound paths, groups, type and symbol instances whose fills and strokes have no
+    /// paint, a solid color or a gradient, in the top row and the row below, with and without a
+    /// colorize paint.
+    #[test]
+    fn samples_give_the_measured_proxy_paints_colors() {
+        use std::sync::Arc;
+        use vectorcraft_doc::{AppearanceItem, CharStyle, FillLayer, StrokeLayer, TextObject};
+        use vectorcraft_geom::Rect;
+        use vectorcraft_geom::shapes::rectangle;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let square = |id| Node::path(id, rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Default::default());
+        let ids: Vec<NodeId> = (0..5).map(|_| d.alloc_id()).collect();
+        let (outer, hole, inner) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let hole = Node::path(hole, rectangle(Rect::new(120.0, 120.0, 180.0, 180.0)), Default::default());
+        let text = TextObject::point(Point::new(100.0, 150.0), "Type", CharStyle { size: 40.0, ..Default::default() });
+        let objects = [
+            square(ids[0]),
+            Node::new(ids[1], NodeKind::Compound { children: vec![Arc::new(square(outer)), Arc::new(hole)], rule: Default::default() }),
+            Node::group(ids[2], vec![Arc::new(square(inner))]),
+            Node::new(ids[3], NodeKind::Text(Box::new(text))),
+            Node::new(ids[4], NodeKind::SymbolInstance { symbol: "Missing".into(), xf: Affine::translate((100.0, 100.0)) }),
+        ];
+        for (k, n) in objects.into_iter().enumerate() {
+            d.insert(Some(l), k + 1, n).unwrap();
+        }
+        let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+        let paints = [Paint::None, Paint::solid(Color::rgb8(200, 40, 10)), gradient];
+        let points = [Point::new(150.0, 150.0), Point::new(100.0, 150.0), Point::new(130.0, 110.0)];
+        let (sel, pd) = (Selection::default(), paint());
+        let (mut checked, mut colored) = (0, 0);
+        for &id in &ids {
+            for top in &paints {
+                for below in &paints {
+                    for colorize in [None, Some(&paints[1]), Some(&paints[2])] {
+                        let mut d = d.clone();
+                        let n = d.node_mut(id).unwrap();
+                        n.appearance.items = vec![
+                            AppearanceItem::Fill(FillLayer::new(below.clone())),
+                            AppearanceItem::Stroke(StrokeLayer::new(below.clone(), 4.0)),
+                            AppearanceItem::Fill(FillLayer::new(top.clone())),
+                            AppearanceItem::Stroke(StrokeLayer::new(top.clone(), 2.0)),
+                        ];
+                        n.extras_mut().colorize = colorize.map(|c| Box::new(c.clone()));
+                        if let NodeKind::Text(t) = &mut n.kind {
+                            for run in &mut t.runs {
+                                (run.style.fill, run.style.stroke, run.style.stroke_width) = (top.clone(), below.clone(), 2.0);
+                            }
+                        }
+                        let cx = cx(&d, &sel, &pd);
+                        let n = d.node(id).unwrap();
+                        let measured =
+                            [false, true].into_iter().any(|stroke| n.proxy_paint(stroke, None).is_some_and(|(paint, ..)| !paint.is_none()));
+                        assert_eq!(has_sampleable_paint(&cx, id), measured, "{n:?}");
+                        for on_stroke in [false, true] {
+                            for p in points {
+                                let mut s = Sampler {
+                                    doc: &d,
+                                    opts: sample_options(&cx),
+                                    raster_sample: 1,
+                                    symbol_nodes: 0,
+                                    work: MAX_WORK,
+                                    exhausted: false,
+                                    patterns: 0,
+                                };
+                                let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
+                                let sampled = paint_sample(&mut s, &mut levels, n, on_stroke, p);
+                                assert_eq!(sampled, measured_sample(&mut s, &mut levels, n, on_stroke, p), "{n:?} stroke {on_stroke} at {p:?}");
+                                checked += 1;
+                                colored += usize::from(sampled.is_some());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(colored > checked / 4 && colored < checked, "both answers come up: {colored} of {checked} gave a color");
     }
 
     /// A gap between a pattern's tile art shows what lies below it, in the document and in the tile

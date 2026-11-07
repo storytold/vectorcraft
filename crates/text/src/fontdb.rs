@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod alternates;
 mod build;
 mod cache;
 mod db;
@@ -30,6 +31,7 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+pub use alternates::GlyphAlternate;
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;

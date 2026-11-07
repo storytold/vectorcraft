@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Spine Point",
             [],
             None,
-            "{id? (default: the selected blend), anchor: index, x, y, handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on the point moves with it. The first edit turns the straight spine into a path",
+            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
         ),
@@ -181,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),
@@ -217,7 +217,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Contents",
             ["Object", "Envelope Distort"],
             None,
-            "{editing?: bool} toggle Edit Contents / Edit Envelope → {editing}",
+            "{editing?: bool} toggle Edit Contents / Edit Envelope; leaving Edit Contents measures an envelope's boundsMargin again when the content's strokes reach differently than when Edit Contents began → {editing}",
             has_envelope,
             env_edit_contents
         ),
@@ -245,7 +245,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index | points: [index…] | items: [{id, index | points}…], color?, keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
             has_doc,
             mesh_set_color
         ),
@@ -272,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color?, keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
+            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
             has_doc,
             mesh_add_line
         ),

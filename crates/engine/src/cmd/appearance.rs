@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Fill",
             ["Window", "Appearance"],
             Some("Cmd+/"),
-            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row (a copy of its top fill; type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids` and no `target: \"contents\"`, the new fill is a copy of that row, right above it, and becomes the active row",
+            "{ids?|id?, target?: \"object\"|\"contents\"} add a fill on top of each selected object's own stack, on an image right below its Contents row, with its top fill's paint (type without one: its characters' fill; else the default fill). With a fill row active (appearance.setActiveItem), no `ids`, no `id` and no `target: \"contents\"`, the new fill takes that row's paint, goes right above it, and becomes the active row; appearance.duplicateItem copies a whole row",
             has_doc,
             |s, p| add_item(s, p, true)
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add New Stroke",
             ["Window", "Appearance"],
             Some("Cmd+Alt+/"),
-            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row (a copy of its top stroke, else the default stroke)",
+            "{ids?|id?, target?} add a stroke on top of each selected object's own stack, on an image right below its Contents row, with its top stroke's paint (else the default stroke) and that stroke's weight when it has paint, at least 1 pt",
             has_doc,
             |s, p| add_item(s, p, false)
         ),
@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eyedropper",
             [],
             None,
-            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
+            "{source: id, ids?, pickUp?, apply? (trees as eyedropper.setOptions, merged over the Eyedropper Options for this call), reverse?: bool, append?: bool, defaultsOnly?: bool} copy the attributes both picked up and applied (by default the whole appearance stack, opacity and blend mode, and from type to type the character and paragraph attributes) from `source` to ids (default: highlighted characters while editing type, after Select All in a frame of threaded text the text of the story's frames, leaving out `source`, otherwise the object selection; highlighted characters reject enabled non-neutral object transparency), the fill, stroke and weight also to the paint defaults; `defaultsOnly` updates only paint defaults and cannot be combined with ids, reverse or append; `reverse` (Alt-click) copies from the first selected object (or ids) onto `source` instead, or with nothing selected what the Eyedropper picked up last (a click without Alt); `append` (Shift+Alt-click) adds the source's fills, strokes and effects on top of each target's stack; placed gradients land at the same place relative to each target's bounds (defaults: fitted to new art) → {ids}",
             has_doc,
             copy_from
         ),
@@ -190,7 +190,7 @@ impl Session {
         let ids: Vec<u64> = ids.into_iter().map(|id| id.0).collect();
         let aligned = match item {
             ItemTarget::Item { aligned, .. } => aligned,
-            ItemTarget::Top => aligned(params),
+            ItemTarget::Top => aligned(params, "effect.apply").ok()?,
         };
         Some((json!({"ids": ids, "item": at, "aligned": aligned}), effects.as_slice()))
     }
@@ -241,11 +241,12 @@ pub(crate) fn item_target(s: &Session, p: &Value, cmd: &str) -> Result<ItemTarge
 
 /// [`item_target`] read from param `key` (e.g. `fromItem`).
 pub(crate) fn item_target_at(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<ItemTarget> {
+    let aligned = aligned(p, cmd)?;
     match p.get(key) {
         Some(Value::Null) => Ok(ItemTarget::Top),
         Some(v) => v
             .as_u64()
-            .map(|i| ItemTarget::Item { index: index(i), explicit: true, aligned: aligned(p) })
+            .map(|i| ItemTarget::Item { index: index(i), explicit: true, aligned })
             .ok_or_else(|| bad(cmd, format!("`{key}` must be an appearance item index (paint order) or null"))),
         // The active item is a row of the first selected object's own stack.
         None if p.get("ids").is_some() || p.get("id").is_some() || targets_contents(p)? => Ok(ItemTarget::Top),
@@ -276,22 +277,24 @@ impl ItemTarget {
     /// This target for each of `ids` (in their order): an aligned item (a row of the first
     /// target's stack, or for the active item of the first selected object's, see
     /// [`ItemTarget::anchor`]) is, in each other target, the item equal to it there (see
-    /// [`SharedStack`]); `None` for a target that has none, which the edit leaves alone. A row the
-    /// targets don't share, and any other target, stands for itself in every target.
+    /// [`SharedStack`]), each target matched against that stack on its own, whatever the other
+    /// targets have. In a target without an equal item, and for any other target, the row stands
+    /// for itself. Every entry is `Some`.
     pub(crate) fn per_target(self, s: &Session, ids: &[NodeId]) -> Vec<Option<ItemTarget>> {
         let ItemTarget::Item { index, explicit, aligned: true } = self else { return vec![Some(self); ids.len()] };
         let Some(st) = s.active().filter(|_| ids.len() >= 2) else { return vec![Some(self); ids.len()] };
         let k = self.anchor(s, ids);
-        let mut order = ids.to_vec();
-        order.swap(0, k);
-        let Some(shared) = shared_stack(&st.doc, &order) else { return vec![Some(self); ids.len()] };
-        if !shared.has_item(index) {
-            return vec![Some(self); ids.len()];
-        }
-        let mut per: Vec<Option<ItemTarget>> =
-            (0..order.len()).map(|j| shared.item_in(index, j).map(|index| ItemTarget::Item { index, explicit, aligned: true })).collect();
-        per.swap(0, k);
-        per
+        let Some(first) = ids.get(k).and_then(|id| st.doc.node(*id)) else { return vec![Some(self); ids.len()] };
+        ids.iter()
+            .enumerate()
+            .map(|(j, id)| match st.doc.node(*id) {
+                Some(n) if j != k => {
+                    let at = SharedStack::of(&[&*first.appearance, &*n.appearance]).item_in(index, 1);
+                    Some(at.map_or(self, |index| ItemTarget::Item { index, explicit, aligned: true }))
+                }
+                _ => Some(self),
+            })
+            .collect()
     }
 
     /// Where among `ids` (the targets, in paint order) the object whose stack this item is a row of
@@ -335,8 +338,8 @@ impl ItemTarget {
 
 /// Does `p` say its item and effect indices are rows of the first target's stack (`aligned`),
 /// which each other target edits where it has them (see [`ItemTarget::per_target`])?
-pub(crate) fn aligned(p: &Value) -> bool {
-    p.get("aligned").and_then(Value::as_bool).unwrap_or(false)
+pub(crate) fn aligned(p: &Value, cmd: &str) -> Result<bool> {
+    switch_or(p, "aligned", false, cmd)
 }
 
 /// What the appearances of `ids` share, when there are several of them and they all exist.
@@ -357,11 +360,23 @@ pub(crate) fn appearances_differ(d: &vectorcraft_doc::Document, ids: &[NodeId]) 
 
 /// Indices `idx` of the first target's items (aligned with `aligned`) in each of `ids`: the first
 /// target's own, and in each other one the items equal to them there (see [`SharedStack`]), each
-/// index on its own: one the targets don't share is left out of the others (never taken as the
-/// same index there). Not aligned, or one target: the same indices in each.
+/// index and each target on its own: an index a target doesn't share with the first is left out
+/// of that target (never taken as the same index there), whatever the other targets have. Not
+/// aligned, or one target: the same indices in each.
 pub(crate) fn items_per_target(d: &vectorcraft_doc::Document, ids: &[NodeId], idx: &[usize], aligned: bool) -> Vec<Vec<usize>> {
-    match shared_stack(d, ids).filter(|_| aligned) {
-        Some(sh) => (0..ids.len()).map(|k| if k == 0 { idx.to_vec() } else { idx.iter().filter_map(|i| sh.item_in(*i, k)).collect() }).collect(),
+    let aps: Option<Vec<&Appearance>> = ids.iter().map(|id| d.node(*id).map(|n| &*n.appearance)).collect();
+    match aps.filter(|aps| aligned && aps.len() >= 2) {
+        Some(aps) => aps
+            .iter()
+            .enumerate()
+            .map(|(k, ap)| match aps.first() {
+                Some(first) if k > 0 => {
+                    let sh = SharedStack::of(&[*first, *ap]);
+                    idx.iter().filter_map(|i| sh.item_in(*i, 1)).collect()
+                }
+                _ => idx.to_vec(),
+            })
+            .collect(),
         None => vec![idx.to_vec(); ids.len()],
     }
 }
@@ -507,8 +522,8 @@ fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
 fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     let ids = require_targets(s, p, if fill { "appearance.addFill" } else { "appearance.addStroke" })?;
     let defaults = s.paint.clone();
-    // The panel's active Fill row, when the new fill goes on the selection: the new fill is a copy
-    // of that row, right above it in each target that has it (others get a copy of their top fill).
+    // The panel's active Fill row, when the new fill goes on the selection: the new fill takes that
+    // row's paint, right above it in each target that has it (others take their top fill's paint).
     // Where the new item went in on the active item's object, when it is an image.
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     // The active row is a row of the active object's stack, which need not come first in `ids`
@@ -547,8 +562,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     }
                     continue;
                 }
-                // A copy of the top fill (stroke); without one, type's characters' and otherwise the
-                // default paint, so a new fill on a group or type shows.
+                // The top fill's (stroke's) paint; without one, type's characters' and otherwise the
+                // default paint, so a new fill on a group or type shows. A new stroke takes the top
+                // stroke's weight when that stroke has paint, at least 1 pt.
                 let paint = match (n.appearance.paint_at(None, fill), &n.kind) {
                     (Some(p), _) => p.clone(),
                     (None, NodeKind::Text(_)) => super::paint::proxy_paint(n, !fill, None),
@@ -730,7 +746,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When every object comes out as it was (for example, when none has item `index`), the document
     // and its undo history stay as they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &[idx], aligned(p));
+    let per = items_per_target(&before, &ids, &[idx], aligned(p, "appearance.setItem")?);
     super::overprint::edit_counted(s, "Appearance", |d| {
         let mut edited = Vec::new();
         for (id, at) in ids.iter().zip(&per) {
@@ -803,7 +819,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
     // When no object has an item at any of the indices, the document and its undo history stay as
     // they are.
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p));
+    let per = items_per_target(&before, &ids, &idx, aligned(p, "appearance.removeItem")?);
     super::overprint::edit_counted(s, "Remove Item", |d| {
         for (id, idx) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
@@ -839,11 +855,11 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     let active = s.active_appearance_item.as_ref().and_then(|a| a.objects.first().copied());
     let mut active_at = None;
     // Aligned rows of a mixed selection are copied right above themselves in each object.
-    if aligned(p) && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
+    if aligned(p, C)? && to.is_some() && shared_stack(&s.doc()?.doc, &ids).is_some() {
         return Err(bad(C, "`to` takes the rows of one object's stack, not aligned rows"));
     }
     let before = s.doc()?.doc.clone();
-    let per = items_per_target(&before, &ids, &idx, aligned(p));
+    let per = items_per_target(&before, &ids, &idx, aligned(p, C)?);
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
         for (id, idx) in ids.iter().zip(&per) {
@@ -917,11 +933,12 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "appearance.moveItem";
     let to = index_param(p, "to", C)?;
     let ids = require_targets(s, p, C)?;
+    let aligned = aligned(p, C)?;
     if p.get("from").and_then(Value::as_str) == Some("contents") {
         return move_contents(s, &ids, to);
     }
     // Where an aligned row would go in each of several different stacks isn't one place.
-    if aligned(p) && appearances_differ(&s.doc()?.doc, &ids) {
+    if aligned && appearances_differ(&s.doc()?.doc, &ids) {
         return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
     }
     if p.get("indices").is_some() {
@@ -1086,14 +1103,17 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     if !reverse && !defaults_only {
         s.eyedropper_sample = Some(node);
     }
-    let range = range.filter(|(id, _, _)| targets.contains(id));
     // The highlighted characters' type objects and ranges: after Select All in threaded text, all
-    // the text of every frame of the story.
+    // the text of every frame of the story, except a frame the attributes come from, in place of
+    // the object selection.
     let story = super::textedit::editing_story(s);
     let ranges: Vec<(NodeId, Option<(usize, usize)>)> = match range {
-        Some((id, _, _)) if story.contains(&id) => story.iter().map(|f| (*f, None)).collect(),
-        Some((id, start, end)) => vec![(id, Some((start, end)))],
-        None => vec![],
+        Some((id, _, _)) if story.contains(&id) => {
+            targets.clear();
+            story.iter().copied().filter(|f| Some(*f) != source).map(|f| (f, None)).collect()
+        }
+        Some((id, start, end)) if targets.contains(&id) => vec![(id, Some((start, end)))],
+        _ => vec![],
     };
     // Character styles cannot represent object transparency. Refuse before even changing
     // paint defaults; applying it to the object would also alter the unselected characters.
@@ -1111,7 +1131,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     if !reverse {
         picked.to_defaults(s, &attrs.appearance);
     }
-    if targets.is_empty() || attrs.is_empty() {
+    if (targets.is_empty() && ranges.is_empty()) || attrs.is_empty() {
         return Ok(json!({ "ids": [] }));
     }
     if !ranges.is_empty() {
