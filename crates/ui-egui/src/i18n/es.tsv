@@ -6251,6 +6251,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Restablecer instancia de símbolo
 @msg	type must be static or dynamic, not {v}	type debe ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` es un símbolo estático: primero establezca su tipo de símbolo en Dinámico
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se puede cambiar el color sólido del relleno y del trazo
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend

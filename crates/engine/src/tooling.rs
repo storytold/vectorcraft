@@ -117,6 +117,8 @@ impl Session {
         // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
+        // `switch_tool` returns early for the tool already active.
+        self.select_whole_instance(id);
         if again {
             let acts = self.with_tool_cx(view, |t, cx| t.chosen_again(cx));
             self.apply_actions(acts)?;
@@ -147,8 +149,22 @@ impl Session {
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
+            self.select_whole_instance(id);
         }
         Ok(())
+    }
+
+    /// The selection tools other than Direct Selection pick whole objects: with one of them chosen,
+    /// an object selected in a symbol instance's art gives way to the instance. The revision
+    /// changes with it, so panels that cache by revision show the instance.
+    fn select_whole_instance(&mut self, id: &str) {
+        if id != "directSelection"
+            && vectorcraft_tools::catalog::is_selection_tool(id)
+            && let Some(st) = self.active_mut()
+            && st.selection.symbol_part.take().is_some()
+        {
+            st.revision += 1;
+        }
     }
 
     /// The selection tool Cmd lends tool `id` for a drag: the one chosen last; until one is,
@@ -200,6 +216,8 @@ impl Session {
             // Fails only without a document, and then there is no typing to keep.
             let _ = crate::cmd::settle_interaction(self);
         }
+        // The Selection and Group Selection tools act on the instance whole.
+        self.select_whole_instance(id);
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }

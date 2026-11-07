@@ -6339,6 +6339,7 @@ breakText	Glyphs	Merkit
 	Reset Symbol Instance	Palauta symboli-ilmentymä
 @msg	type must be static or dynamic, not {v}	type-arvon on oltava static tai dynamic, ei {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` on staattinen symboli: aseta ensin sen symbolin tyypiksi Dynaaminen
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Symboli-ilmentymästä valitusta polusta, yhdistelmäpolusta tai tekstistä voi muuttaa vain täytön ja viivan yhtenäistä väriä
 @msg	path must be a list of child indices	path-arvon on oltava luettelo alikohteiden indeksejä
 @msg	no object at path {shown} in the symbol's art	symbolin kuvituksessa ei ole objektia polussa {shown}
 @msg	give fill, stroke, opacity and/or blend	anna fill, stroke, opacity ja/tai blend

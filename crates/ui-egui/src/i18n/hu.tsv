@@ -6293,6 +6293,7 @@ breakText	Glyphs	Glifák
 	Reset Symbol Instance	Szimbólumpéldány visszaállítása
 @msg	type must be static or dynamic, not {v}	a type értéke static vagy dynamic lehet, nem {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statikus szimbólum: előbb állítsa a szimbólum típusát Dinamikusra
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Egy szimbólumpéldányban kijelölt útvonalnak, összetett útvonalnak vagy szövegnek csak a kitöltés és a körvonal egyszínű színe módosítható
 @msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
 @msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
 @msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét

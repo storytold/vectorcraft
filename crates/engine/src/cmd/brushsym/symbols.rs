@@ -832,6 +832,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let radius = number_or(p, "radius", 40.0, C)?.clamp(1.0, 2000.0);
     let intensity = number_or(p, "intensity", 5.0, C)?.clamp(1.0, 10.0) / 10.0;
     let alt = switch_or(p, "alt", false, C)?;
+    // Refused while an object of a dynamic instance's art is selected: the instance stays as it is.
+    crate::cmd::edit::refuse_symbol_part(s)?;
     let st = s.doc()?;
     let color = match color_param(p, "color", C)? {
         Some(c) => crate::cmd::paint::new_color(s, p, c),

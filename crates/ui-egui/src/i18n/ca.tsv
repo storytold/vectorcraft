@@ -6295,6 +6295,7 @@ breakText	Glyphs	Glifs
 	Reset Symbol Instance	Restableix la instància de símbol
 @msg	type must be static or dynamic, not {v}	type ha de ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` és un símbol estàtic: primer establiu el tipus de símbol a Dinàmic
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	D'un traçat, un traçat compost o un text seleccionat en una instància de símbol només es pot canviar el color sòlid de l'emplenament i el traç
 @msg	path must be a list of child indices	path ha de ser una llista d’índexs de fills
 @msg	no object at path {shown} in the symbol's art	no hi ha cap objecte al camí {shown} de l’art del símbol
 @msg	give fill, stroke, opacity and/or blend	indiqueu fill, stroke, opacity i/o blend

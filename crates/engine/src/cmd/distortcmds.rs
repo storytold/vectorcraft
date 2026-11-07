@@ -13,7 +13,7 @@ use vectorcraft_tools::distort::liquify::{Dabber, LiquifyParams, PathStroke, Sam
 use vectorcraft_tools::distort::perspective::{self as persp, PerspectiveGrid, Plane};
 use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project_node, stroke_owner, warp_from_rest, warp_node_with};
 
-use super::edit::{duplicate_in, outermost, selected_roots};
+use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
     CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, id_param,
     matrix_param, named_id, named_ids, number_or, ok, point_indices, point_param, str_param, switch_or, targets,
@@ -730,8 +730,13 @@ fn puppet_warp(s: &mut Session, p: &Value) -> Result<Value> {
     if pins.iter().chain(&moved).any(|q| !q.x.is_finite() || !q.y.is_finite()) {
         return Err(bad(C, "pins must be finite"));
     }
-    let ids =
-        if rest { puppet_ids(p, || Ok(s.doc()?.selection.objects.clone()))? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
+    // While an object of a dynamic symbol instance's art is selected, the selection is refused, as
+    // `selected_roots` refuses it.
+    let selected = || {
+        refuse_symbol_part(s)?;
+        Ok(s.doc()?.selection.objects.clone())
+    };
+    let ids = if rest { puppet_ids(p, selected)? } else { outermost(&s.doc()?.doc, puppet_ids(p, || selected_roots(s))?) };
     let expand = f64_or(p, "expand", 3.0).clamp(0.0, 1000.0);
     let angles: Vec<Option<f64>> = match p.get("angles") {
         None | Some(Value::Null) => vec![None; pins.len()],

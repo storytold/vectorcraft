@@ -575,7 +575,8 @@ pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
     }
 }
 
-/// Objects a command targets: explicit `ids` param or the selection.
+/// Objects a command targets: explicit `ids` param or the selection. The selection is refused
+/// while an object of a dynamic symbol instance's art is selected, as by [`edit::selected_roots`].
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     // Objects given are used as given: a value that isn't an object id fails rather than the
     // command acting on the selection instead (#785).
@@ -589,7 +590,10 @@ pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         // A step reference a batch couldn't resolve (other strings are other ids, such as an
         // effect's).
         Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
-        _ => Ok(s.doc()?.selection.objects.clone()),
+        _ => {
+            edit::refuse_symbol_part(s)?;
+            Ok(s.doc()?.selection.objects.clone())
+        }
     }
 }
 

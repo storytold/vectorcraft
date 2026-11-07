@@ -5994,6 +5994,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	シンボルインスタンスをリセット
 @msg	type must be static or dynamic, not {v}	type は static または dynamic にしてください({v} は無効です)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` はスタティックシンボルです。先にシンボルの種類をダイナミックに設定してください
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、テキストは、塗りと線の単色のみ変更できます
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください

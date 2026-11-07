@@ -6304,6 +6304,7 @@ breakText	Glyphs	Glyphes
 	Reset Symbol Instance	Réinitialiser l'instance de symbole
 @msg	type must be static or dynamic, not {v}	type doit être static ou dynamic, et non {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` est un symbole statique : définissez d'abord son type de symbole sur Dynamique
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Seules les couleurs unies du fond et du contour d'un tracé, d'un tracé transparent ou d'un texte sélectionné dans une instance de symbole peuvent changer
 @msg	path must be a list of child indices	path doit être une liste d'indices d'enfants
 @msg	no object at path {shown} in the symbol's art	aucun objet au chemin {shown} dans l'illustration du symbole
 @msg	give fill, stroke, opacity and/or blend	indiquez fill, stroke, opacity et/ou blend

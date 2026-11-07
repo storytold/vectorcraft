@@ -1,5 +1,6 @@
 use super::{
-    CommandSpec, EngineError, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard, strip_replay_only,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
+    strip_replay_only,
 };
 
 impl Session {
@@ -35,6 +36,13 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
+        let r = self.execute_spec(spec, id, params);
+        self.reading = outer;
+        r
+    }
+
+    fn execute_spec(&mut self, spec: &'static CommandSpec, id: &str, params: &Value) -> Result<Value> {
         // The crate's own tests are the audit of the params descriptions (#1442): a key a test
         // passes that its command's description doesn't name fails the test.
         #[cfg(test)]

@@ -6173,6 +6173,7 @@ breakText	Glyphs	Glyffer
 	Reset Symbol Instance	Nulstil symbolforekomst
 @msg	type must be static or dynamic, not {v}	type skal være static eller dynamic, ikke {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` er et statisk symbol: indstil først symboltypen til Dynamisk
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	For en kurve, sammensat kurve eller tekst, der er markeret i en symbolforekomst, kan kun ensfarvet fyld og streg ændres
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend

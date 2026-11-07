@@ -5947,6 +5947,7 @@ breakText	Glyphs	字符
 	Reset Symbol Instance	重設符號實體
 @msg	type must be static or dynamic, not {v}	type 必須是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是靜態符號:請先將其符號類型設為動態
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色和筆畫的純色
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend

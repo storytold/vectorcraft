@@ -444,6 +444,11 @@ impl GradientTool {
                 let id = paint_owner(cx.doc, h.leaf);
                 let Some(v) = cx.selection.objects.contains(&id).then(|| click_vector(cx, id)).flatten() else { return vec![] };
                 let mut params = Self::geom_params(cx, p, p + v);
+                // Without `ids`, the engine refuses the gradient while an object of a dynamic symbol
+                // instance's art is selected.
+                if cx.selection.symbol_part.is_some() {
+                    return vec![Action::Exec("paint.setGradientGeom".into(), params)];
+                }
                 params["ids"] = json!([id.0]);
                 // With `ids` the engine edits the topmost fill or stroke unless an item is named.
                 if let Some(i) = cx.doc.node(id).and_then(|n| n.appearance.item_of_kind(cx.appearance_item, cx.fill_active)) {

@@ -354,8 +354,10 @@ fn close(a: f64, b: f64) -> bool {
 }
 
 /// The members a Global Edit started on the one selected object would take, with `o`: that
-/// object first, then the others in paint order.
+/// object first, then the others in paint order. Refused while an object of a dynamic symbol
+/// instance's art is selected.
 fn matches(s: &Session, o: &Options) -> Result<Vec<(NodeId, Affine)>> {
+    super::edit::refuse_symbol_part(s)?;
     let st = s.doc()?;
     let d = &st.doc;
     let [id] = st.selection.objects.as_slice() else { return Err(bad(C, "select one object")) };
@@ -423,6 +425,7 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     if st.global_edit.is_some() {
         return Ok(());
     }
+    super::edit::no_symbol_part(s)?;
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
