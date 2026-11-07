@@ -2335,6 +2335,49 @@ fn an_ai_file_read_as_its_pdf_part_keeps_its_active_artboard() {
     assert_eq!(d.opened_artboard, Some(2));
 }
 
+/// A `.ai` whose editing data has artboards and no layers comes in as its PDF part, open on the
+/// page of the artboard the editing data names as the active one when there is a page per artboard
+/// of its size.
+#[test]
+fn an_ai_file_with_no_layers_keeps_its_active_artboard() {
+    let board = |x0: i32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    let no_layers = |active: &str| {
+        native(&format!(
+            "%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n{active}%_; /NotRecorded ,\n%_;\n",
+            board(0),
+            board(120)
+        ))
+    };
+    let mut pdf = pdf_part(10.0, 10.0);
+    let mut page = pdf.artboards[0].clone();
+    (page.id, page.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(page.clone());
+    let opened = |pdf: &Document, active: &str| {
+        let data = no_layers(active);
+        assert!(!data.contains("%AI5_BeginLayer"));
+        let (d, w, read) = crate::layered_ai(&private(&data), pdf.clone(), vec![], false, false, 1.0);
+        assert!(!read && !w.iter().any(|w| w.contains("layers weren't read")), "{w:?}");
+        assert_eq!(d.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), pdf.artboards.iter().map(|a| a.rect).collect::<Vec<_>>());
+        d.opened_artboard
+    };
+    assert_eq!(opened(&pdf, "%_1 /Int (CropAreaActive) ,\n"), Some(2));
+    assert_eq!(opened(&pdf, "%_0 /Int (CropAreaActive) ,\n"), None);
+    assert_eq!(opened(&pdf, ""), None);
+    // Not a page per artboard, or a page of another size: the pages aren't the artboards.
+    let mut three = pdf.clone();
+    (page.id, page.rect) = (3, vectorcraft_geom::Rect::new(240.0, 0.0, 340.0, 100.0));
+    three.artboards.push(page);
+    assert_eq!(opened(&three, "%_1 /Int (CropAreaActive) ,\n"), None);
+    let mut other_size = pdf.clone();
+    other_size.artboards[1].rect = vectorcraft_geom::Rect::new(120.0, 0.0, 320.0, 100.0);
+    assert_eq!(opened(&other_size, "%_1 /Int (CropAreaActive) ,\n"), None);
+}
+
 #[test]
 fn art_moved_with_its_page_moves_its_pattern_tile() {
     // Two 100-point artboards, the second 50 below the first; an operator this doesn't know, so
@@ -3372,6 +3415,41 @@ fn type_keeps_the_opacity_and_blend_mode_of_its_text_object() {
     assert_eq!((group.opacity, group.blend), (0.2, BlendMode::Multiply));
     assert_eq!(kinds(group), ["text", "path"]);
     assert!(group.children().unwrap().iter().all(|p| (p.opacity, p.blend) == (1.0, BlendMode::Normal)));
+}
+
+/// The knockout shape flag of a text object's `Xy` is its type's, made from the text document or
+/// taken from the page, and is on the group of the two where the type comes with other art.
+#[test]
+fn type_keeps_the_knockout_shape_of_its_text_object() {
+    let shapes = |d: &Document| {
+        let mut v = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(_) = &n.kind {
+                v.push(n.knockout_shape);
+            }
+        });
+        v
+    };
+    let doc = text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    for body in [format!("1 0.2 0 0 1 Xy\n{}", text_object(0)), format!("{}1 0.2 0 0 1 Xy\n", text_object(0))] {
+        let art = native_with_text(&layer("Art", true, &body), &doc);
+        let (d, notes) = crate::ai_alone(&private(&art)).unwrap();
+        assert_eq!(shapes(&d), [true], "{body}{notes:?}");
+        let r = import(&eps(page, &art)).unwrap();
+        assert_eq!(shapes(&r.document), [true], "{body}{:?}", r.warnings);
+    }
+    let art = native_with_text(&layer("Art", true, &format!("1 0.2 0 0 0 Xy\n{}", text_object(0))), &doc);
+    assert_eq!(shapes(&crate::ai_alone(&private(&art)).unwrap().0), [false]);
+    let page = format!(
+        "{}\n/Helvetica findfont 12 scalefont setfont 10 50 moveto (Hi) show\n10 50 moveto (Hi) false charpath 2 setlinewidth stroke",
+        page_square(10, 10)
+    );
+    let words = layer("Words", true, "0 1 0 0 1 Xy\n/AI11Text :\n0 /FreeUndo ,\n;\n");
+    let r = import(&eps(&page, &native(&(layer("Art", true, &square(10, 10)) + &words)))).unwrap();
+    let words = &r.document.layers[1];
+    assert_eq!(kinds(words), ["group[2]"], "{:?}", r.warnings);
+    assert!(words.children().unwrap()[0].knockout_shape);
 }
 
 #[test]

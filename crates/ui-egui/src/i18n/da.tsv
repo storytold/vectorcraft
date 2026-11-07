@@ -1756,6 +1756,9 @@ digits	Malayalam	Malayalam
 	More Paragraph options	Flere afsnitsindstillinger
 	No document open	Intet åbent dokument
 	Quick Actions	Hurtige handlinger
+	Rearrange	Omarrangér
+	Select All Artboards	Markér alle tegnebrætter
+	Switch Orientation	Skift retning
 	Rearrange All	Omarrangér alle
 	Rulers & Grids	Linealer og gitre
 	Select a text object	Markér et tekstobjekt
@@ -3228,6 +3231,7 @@ theme	Appearance	Udseende
 	Character / Paragraph	Tegn / Afsnit
 	Copy Artboard	Kopiér kunstplade
 	Cut Artboard	Klip kunstplade
+	Rename Artboards	Omdøb tegnebrætter
 	Move Artboard Up/Down	Flyt kunstplade op/ned
 	Add Anchor (Pen)	Tilføj anker (Pen)
 	Add Anchor Point	Tilføj ankerpunkt

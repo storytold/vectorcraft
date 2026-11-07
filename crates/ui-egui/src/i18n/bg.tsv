@@ -872,6 +872,7 @@ font-technology	Variable	Променливи
 	Duplicate Artboard	Дублиране на работна област
 	Copy Artboard	Копиране на работна област
 	Cut Artboard	Изрязване на работна област
+	Rename Artboards	Преименуване на работни области
 	Duplicate Artboards	Дублиране на работни области
 	Duplicate Brush	Дублиране на четка
 	Duplicate Character Style	Дублиране на стил на знаци
@@ -2504,6 +2505,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
 	Rearrange All Artboards	Пренареждане на всички работни области
+	Rearrange	Пренареждане
+	Select All Artboards	Избиране на всички работни области
+	Switch Orientation	Смяна на ориентацията
 	Rearrange All	Пренареждане на всички
 	Layout Order:	Ред на оформление:
 	Change to Left-to-Right Layout	Превключване към подредба отляво надясно

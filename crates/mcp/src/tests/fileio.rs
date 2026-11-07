@@ -263,8 +263,8 @@ fn save_file_warns_about_options_it_does_not_use() {
         assert_eq!(r["warnings"], json!([]), "{args}: {r}");
     }
 
-    // The app's save warns about the top-level options itself; the reply gets the notes on
-    // `options`, after the warnings the app sent.
+    // The app's save writes the notes on the top-level options and on `options` itself; the reply
+    // is the app's, with nothing added.
     struct App;
     impl Backend for App {
         fn call(&mut self, _: &str, _: Value) -> Result<Value, String> {
@@ -278,9 +278,35 @@ fn save_file_warns_about_options_it_does_not_use() {
         }
     }
     let r = text(&call_tool(&mut App, "save_file", &json!({"path": "/out/a.svg", "compress": true, "options": {"preview": true}})));
-    let w = warnings(&r);
-    assert_eq!(w.len(), 2, "{w:?}");
-    assert!(w[0] == "the app's own warning" && ignored(&w[1..], "options.preview"), "{w:?}");
+    assert_eq!(warnings(&r), ["the app's own warning"], "{r}");
+}
+
+/// The notes on `options` name the `.ai` file the save writes, as the note on a top-level option
+/// does: a legacy `.ai` for `aiVersion: "7"` (beside `pdfCompatible: false` too), a
+/// non-PDF-compatible `.ai` for `pdfCompatible: false`, and a PDF-compatible `.ai` otherwise, also
+/// when the save reuses the options the document was last saved with.
+#[test]
+fn save_file_notes_name_the_ai_file_it_writes() {
+    let mut h = Headless::with_document();
+    let notes = |r: &Value| -> Vec<String> {
+        r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
+    };
+    for (name, options, label) in [
+        ("legacy.ai", json!({"aiVersion": "7", "preview": true}), "legacy .ai (version 7)"),
+        ("legacy-no-pdf.ai", json!({"aiVersion": "7", "pdfCompatible": false, "preview": true}), "legacy .ai (version 7)"),
+        ("no-pdf.ai", json!({"pdfCompatible": false, "preview": true}), "non-PDF-compatible .ai"),
+        ("pdf.ai", json!({"pdfCompatible": true, "preview": true}), "PDF-compatible .ai"),
+    ] {
+        let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(name), "version": 3, "options": options})));
+        let expected =
+            [format!("`version` was not used: {label} files don't read it"), format!("`options.preview` was not used: {label} files don't read it")];
+        assert_eq!(notes(&r), expected, "{name}: {r}");
+    }
+    // A save given no option the file reads writes it as last saved: a legacy `.ai` again.
+    text(&call_tool(&mut h, "save_file", &json!({"path": tmp("again.ai"), "options": {"aiVersion": "7"}})));
+    let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp("again.ai"), "options": {"preview": true}})));
+    assert_eq!(notes(&r), ["`options.preview` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    assert!(std::fs::read(tmp("again.ai")).unwrap().starts_with(b"%!PS"), "a legacy .ai is written");
 }
 
 #[test]

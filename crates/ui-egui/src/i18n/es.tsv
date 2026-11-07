@@ -887,6 +887,7 @@ font-technology	Variable	Variables
 	Duplicate Artboard	Duplicar mesa de trabajo
 	Copy Artboard	Copiar mesa de trabajo
 	Cut Artboard	Cortar mesa de trabajo
+	Rename Artboards	Cambiar nombre de mesas de trabajo
 	Duplicate Artboards	Duplicar mesas de trabajo
 	Duplicate Brush	Duplicar pincel
 	Duplicate Character Style	Duplicar estilo de carácter
@@ -2573,6 +2574,9 @@ digits	Malayalam	Malayálam
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
+	Rearrange	Reorganizar
+	Select All Artboards	Seleccionar todas las mesas de trabajo
+	Switch Orientation	Cambiar orientación
 	Rearrange All	Reorganizar todo
 	Layout Order:	Orden de diseño:
 	Change to Left-to-Right Layout	Cambiar a diseño de izquierda a derecha

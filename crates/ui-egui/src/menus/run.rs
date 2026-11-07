@@ -125,6 +125,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
+        "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
+        "file.openInBackground" => Ok(crate::opening::hide_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -707,8 +709,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
+        "artboard.selectAll" => crate::panels::artboards::select_all_command(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),

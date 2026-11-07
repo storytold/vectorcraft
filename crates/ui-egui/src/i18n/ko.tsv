@@ -1431,6 +1431,7 @@ digits	Malayalam	말라얄람어
 	Duplicate Artboard	아트보드 복제
 	Copy Artboard	아트보드 복사
 	Cut Artboard	아트보드 잘라내기
+	Rename Artboards	아트보드 이름 바꾸기
 	Duplicate Artboards	아트보드 복제
 	Duplicate Brush	브러시 복제
 	Duplicate Character Style	문자 스타일 복제
@@ -2610,6 +2611,9 @@ mark-style	Japanese	일본식
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
 	Rearrange All Artboards	모든 아트보드 재정렬
+	Rearrange	재정렬
+	Select All Artboards	모든 아트보드 선택
+	Switch Orientation	방향 전환
 	Rearrange All	모두 재정렬
 	Layout Order:	배치 순서:
 	Change to Left-to-Right Layout	왼쪽에서 오른쪽 배치로 변경

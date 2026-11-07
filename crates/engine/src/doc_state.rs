@@ -76,6 +76,11 @@ pub struct DocState {
     /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
     /// save and restores it when the document opens.
     pub view: Option<vectorcraft_doc::SavedView>,
+    /// The id of the view's active artboard, which the UI keeps current before each command it
+    /// runs: a `.ai` save or export names that artboard as the file's active one. `None`, or an
+    /// artboard the document no longer has: the artboard the document opened on
+    /// ([`vectorcraft_doc::Document::opened_artboard`]), else the first.
+    pub active_artboard: Option<u32>,
     /// Restored by Data Recovery: the title says "[Recovered]" and Save asks where to save it
     /// (suggesting `path`, the file it was copied from) instead of overwriting that file.
     pub recovered: bool,
@@ -266,6 +271,7 @@ impl DocState {
             save_artboards: vec![],
             converted: false,
             view,
+            active_artboard: None,
             recovered: false,
             recovery: None,
             print_tiling: false,

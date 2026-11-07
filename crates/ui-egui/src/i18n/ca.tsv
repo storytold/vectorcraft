@@ -962,6 +962,7 @@
 	Customize…	Personalitza…
 	Cut	Retalla
 	Cut Artboard	Retalla el tauler
+	Rename Artboards	Canvia el nom dels taulers
 	Cut Path	Retalla el traçat
 	Cut Path at Selected Anchor Points	Retalla el traçat als punts d’ancoratge seleccionats
 	Cutout	Retall
@@ -3207,6 +3208,9 @@ digits	Malayalam	Malaiàlam
 	Real name	Nom real
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
+	Rearrange	Reorganitza
+	Select All Artboards	Selecciona tots els taulers
+	Switch Orientation	Canvia l’orientació
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…

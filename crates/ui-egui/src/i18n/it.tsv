@@ -887,6 +887,7 @@ font-technology	Variable	Variabili
 	Duplicate Artboard	Duplica tavola da disegno
 	Copy Artboard	Copia tavola da disegno
 	Cut Artboard	Taglia tavola da disegno
+	Rename Artboards	Rinomina tavole da disegno
 	Duplicate Artboards	Duplica tavole da disegno
 	Duplicate Brush	Duplica pennello
 	Duplicate Character Style	Duplica stile carattere
@@ -2606,6 +2607,9 @@ digits	Malayalam	Malayalam
 	Real World:	Mondo reale:
 	Real-time Drawing and Editing	Disegno e modifica in tempo reale
 	Rearrange All Artboards	Ridisponi tutte le tavole da disegno
+	Rearrange	Ridisponi
+	Select All Artboards	Seleziona tutte le tavole da disegno
+	Switch Orientation	Cambia orientamento
 	Rearrange All	Ridisponi tutto
 	Layout Order:	Ordine del layout:
 	Change to Left-to-Right Layout	Passa al layout da sinistra a destra

@@ -1924,6 +1924,9 @@ digits	Malayalam	Malajalam
 	More Paragraph options	Više opcija pasusa
 	No document open	Nijedan dokument nije otvoren
 	Quick Actions	Brze akcije
+	Rearrange	Preuredi
+	Select All Artboards	Odaberi sve radne ploče
+	Switch Orientation	Promijeni orijentaciju
 	Rearrange All	Preuredi sve
 	Rulers & Grids	Ravnala i mreže
 	Select a text object	Odaberite tekstualni objekat
@@ -3447,6 +3450,7 @@ theme	Appearance	Izgled
 	Character / Paragraph	Znak / pasus
 	Copy Artboard	Kopiraj radnu ploču
 	Cut Artboard	Izreži radnu ploču
+	Rename Artboards	Preimenuj radne ploče
 	Move Artboard Up/Down	Pomakni radnu ploču gore/dolje
 	Add Anchor (Pen)	Dodaj sidro (pero)
 	Add Anchor Point	Dodaj sidrenu tačku

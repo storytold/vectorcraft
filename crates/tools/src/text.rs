@@ -174,9 +174,10 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
-    /// After Select All in a frame of threaded text: the story's frames in thread order, the edited
-    /// one included. While the selection is the edited frame's whole text, the text of the other
-    /// frames is selected too. Empty otherwise.
+    /// After Select All in a frame of threaded text: the story's frames in thread order then, the
+    /// edited one included. While the selection is the edited frame's whole text and this holds the
+    /// edited frame, the text of the other frames of its current thread is selected too. Empty
+    /// otherwise.
     story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
@@ -230,8 +231,8 @@ impl TypeTool {
             return None;
         }
         let id = self.editing?;
-        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
         let story = !self.story_others(cx).is_empty();
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b && !story, vertical)?;
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
         // With the whole story selected, `type.step` steps the text of every frame of it.
@@ -441,8 +442,8 @@ impl TypeTool {
     }
 
     /// The other frames whose whole text is selected along with the edited frame's after Select
-    /// All in threaded text ([`Self::story`]): none once the selection is not all of the edited
-    /// frame's text.
+    /// All in threaded text ([`Self::story`]), read from the document's current thread: none once
+    /// the selection is not all of the edited frame's text.
     fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
         let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
         let Some(t) = Self::text(cx, id) else { return vec![] };
@@ -450,7 +451,22 @@ impl TypeTool {
         if a != 0 || b < edit::runs_len(&t.runs) {
             return vec![];
         }
-        self.story.iter().copied().filter(|f| *f != id && Self::text(cx, *f).is_some()).collect()
+        cx.doc.story_of(id).into_iter().filter(|f| *f != id).collect()
+    }
+
+    /// Whether the whole story is selected ([`Self::story_others`]) and its other frames hold text.
+    /// The story stays selected when the edited frame holds no text, as after a frame threaded in
+    /// before it took the text.
+    fn story_selected(&self, cx: &ToolContext) -> bool {
+        self.story_others(cx).into_iter().any(|f| Self::text(cx, f).is_some_and(|o| edit::runs_len(&o.runs) > 0))
+    }
+
+    /// Put back the caret and anchor `selected` that a key clamped to the edited frame's text, when
+    /// the key leaves the whole story selected.
+    fn keep_story_offsets(&mut self, story: bool, selected: (usize, usize)) {
+        if story {
+            (self.caret, self.anchor) = selected;
+        }
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.

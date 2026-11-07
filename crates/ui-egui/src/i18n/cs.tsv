@@ -1950,6 +1950,9 @@ digits	Malayalam	Malajálamské
 	More Paragraph options	Další možnosti odstavce
 	No document open	Není otevřen žádný dokument
 	Quick Actions	Rychlé akce
+	Rearrange	Přeuspořádat
+	Select All Artboards	Vybrat všechny pracovní plochy
+	Switch Orientation	Přepnout orientaci
 	Rearrange All	Přeuspořádat vše
 	Rulers & Grids	Pravítka a mřížky
 	Select a text object	Vyberte textový objekt
@@ -3486,6 +3489,7 @@ theme	Appearance	Motiv
 	Character / Paragraph	Znak / Odstavec
 	Copy Artboard	Kopírovat pracovní plochu
 	Cut Artboard	Vyjmout pracovní plochu
+	Rename Artboards	Přejmenovat pracovní plochy
 	Move Artboard Up/Down	Posunout pracovní plochu nahoru/dolů
 	Add Anchor (Pen)	Přidat kotevní bod (pero)
 	Add Anchor Point	Přidat kotevní bod
