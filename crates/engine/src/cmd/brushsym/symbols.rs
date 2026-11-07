@@ -710,8 +710,8 @@ pub fn reset_transformation(boxes: &vectorcraft_doc::SymbolBoxes, n: &Node) -> O
     if n.extras().perspective.is_some() || !d.symbols.iter().any(|s| s.name == *symbol) {
         return None;
     }
-    let (w, h) = natural_size(d, symbol);
-    let scale = Affine::scale_non_uniform(w / (2.0 * HALF), h / (2.0 * HALF));
+    // The symbol's stored natural size, or the art unscaled when that size is not positive and finite.
+    let scale = d.symbol_natural_xf(symbol);
     // The art's box in symbol space (the ±HALF square when the art cannot be measured): its
     // center keeps its place on the page.
     let art = boxes.art_bounds(symbol).unwrap_or_else(|| vectorcraft_geom::Rect::new(-HALF, -HALF, HALF, HALF));

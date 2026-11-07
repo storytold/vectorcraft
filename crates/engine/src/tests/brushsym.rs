@@ -1422,6 +1422,27 @@ fn reset_transformation_keeps_the_center_of_art_away_from_the_origin() {
     assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
 }
 
+/// A stored natural size that is not positive (from a damaged file) does not flatten the instance:
+/// Reset Transformation gives it the art's own size, as drawing the symbol does.
+#[test]
+fn reset_transformation_ignores_a_stored_size_that_is_not_positive() {
+    let mut s = session();
+    let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let art = node(&s, r);
+    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+    let st = s.doc_mut().unwrap();
+    let d = std::sync::Arc::make_mut(&mut st.doc);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({"Flat": [0.0, 20.0]}));
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
+    let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+}
+
 /// Reset Transformation adds no undo step for an instance already at its symbol's scale or for
 /// one in perspective, and refuses an id naming no object and objects without an instance,
 /// changing nothing.
