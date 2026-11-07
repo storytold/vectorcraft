@@ -215,3 +215,120 @@ fn cidfonts_the_file_lacks_draw_nothing_with_a_warning() {
 fn cidinit_operators_are_not_in_systemdict() {
     check("systemdict /begincmap known not /CIDInit /ProcSet findresource /begincmap known and systemdict /composefont known and");
 }
+
+/// A CFF INDEX (Adobe Technical Note #5176, §5) of `items`, with 2-byte offsets.
+fn cff_index(items: &[Vec<u8>]) -> Vec<u8> {
+    let mut out = (items.len() as u16).to_be_bytes().to_vec();
+    if items.is_empty() {
+        return out;
+    }
+    out.push(2);
+    let mut at = 1u16;
+    out.extend(at.to_be_bytes());
+    for i in items {
+        at += i.len() as u16;
+        out.extend(at.to_be_bytes());
+    }
+    out.extend(items.iter().flatten());
+    out
+}
+
+/// A CFF DICT operand as a 5-byte integer (TN #5176, Table 3), so offsets don't change its size.
+fn cff_int(v: i32) -> Vec<u8> {
+    [vec![29], v.to_be_bytes().to_vec()].concat()
+}
+
+/// A Type 2 charstring (Adobe Technical Note #5177) from numbers, each a 3-byte integer
+/// (`28`), and operators (`rmoveto` 21, `rlineto` 5, `endchar` 14).
+fn cs2(parts: &[(&[i16], u8)]) -> Vec<u8> {
+    parts.iter().flat_map(|(args, op)| args.iter().flat_map(|a| [vec![28], a.to_be_bytes().to_vec()].concat()).chain([*op])).collect()
+}
+
+/// A CID-keyed CFF font `/CffCID` (TN #5176, §18): glyph 0 `.notdef`, glyph 1 CID 1 a square
+/// (100 to 500 across, 500 high) 600 wide, glyph 2 CID 7 a triangle (500 across, 400 high) 500
+/// wide (the first number of a charstring its width, `nominalWidthX` 0).
+fn cid_cff() -> Vec<u8> {
+    let glyphs = vec![
+        cs2(&[(&[0], 14)]),
+        cs2(&[(&[600, 100, 0], 21), (&[400, 0, 0, 500, -400, 0], 5), (&[], 14)]),
+        cs2(&[(&[500, 0, 0], 21), (&[500, 0, -250, 400], 5), (&[], 14)]),
+    ];
+    let header = vec![1, 0, 4, 2];
+    let names = cff_index(&[b"CffCID".to_vec()]);
+    let strings = cff_index(&[b"Test".to_vec(), b"Shapes".to_vec()]);
+    let global = cff_index(&[]);
+    // The top DICT: ROS (12 30), CIDCount (12 34), charset (15), CharStrings (17), FDArray
+    // (12 36), FDSelect (12 37), each offset a 5-byte integer.
+    let top = |charset: i32, strings_at: i32, fd_array: i32, fd_select: i32| -> Vec<u8> {
+        [
+            cff_int(391),
+            cff_int(392),
+            cff_int(0),
+            vec![12, 30],
+            cff_int(8),
+            vec![12, 34],
+            cff_int(charset),
+            vec![15],
+            cff_int(strings_at),
+            vec![17],
+            cff_int(fd_array),
+            vec![12, 36],
+            cff_int(fd_select),
+            vec![12, 37],
+        ]
+        .concat()
+    };
+    let top_len = cff_index(&[top(0, 0, 0, 0)]).len();
+    let charset_at = header.len() + names.len() + top_len + strings.len() + global.len();
+    // Format 0: the CIDs of glyphs 1 and 2.
+    let charset = vec![0, 0, 1, 0, 7];
+    let fd_select_at = charset_at + charset.len();
+    let fd_select = vec![0, 0, 0, 0];
+    let strings_at = fd_select_at + fd_select.len();
+    let char_strings = cff_index(&glyphs);
+    let private_at = strings_at + char_strings.len();
+    // defaultWidthX (20) and nominalWidthX (21) 0.
+    let private = [cff_int(0), vec![20], cff_int(0), vec![21]].concat();
+    let fd_array_at = private_at + private.len();
+    let fd = [cff_int(private.len() as i32), cff_int(private_at as i32), vec![18]].concat();
+    let fd_array = cff_index(&[fd]);
+    let top = cff_index(&[top(charset_at as i32, strings_at as i32, fd_array_at as i32, fd_select_at as i32)]);
+    [header, names, top, strings, global, charset, fd_select, char_strings, private, fd_array].concat()
+}
+
+/// A FontSet holding CID-keyed Compact Font Format data (PLRM 3rd ed., §5.8.1, `StartData`;
+/// TN #5176) defines its CIDFont, whose glyphs are drawn by their CIDs.
+#[test]
+fn cff_fontsets_draw_their_cidfonts_glyphs() {
+    let data = cid_cff();
+    let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+    let set =
+        [format!("/FontSetInit /ProcSet findresource begin\n/CffCID {} StartData ", data.len()).into_bytes(), data, b"\nend\n".to_vec()].concat();
+    let body = "/CffFont /Identity-H [/CffCID] composefont 50 scalefont setfont 10 20 moveto <00010007> show\n\
+                (\\000\\001\\000\\007) stringwidth pop 55 sub abs 0.01 lt { 0 0 5 5 rectfill } if\nshowpage\n%%EOF\n";
+    let r = import(&[head, set, body.as_bytes().to_vec()].concat()).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let p = paths(&r);
+    assert_eq!(p.len(), 3, "{p:?}");
+    let (sq, tri) = (p[0], p[1]);
+    assert!((sq.x0 - 15.0).abs() < 0.01 && (sq.width() - 20.0).abs() < 0.01 && (sq.height() - 25.0).abs() < 0.01, "{sq:?}");
+    assert!((tri.x0 - 40.0).abs() < 0.01 && (tri.width() - 25.0).abs() < 0.01 && (tri.height() - 20.0).abs() < 0.01, "{tri:?}");
+}
+
+/// Damaged FontSet data (each byte of the CFF data changed, in turn) is read as fonts or as
+/// nothing, never a crash.
+#[test]
+fn damaged_cff_fontsets_never_panic() {
+    let data = cid_cff();
+    let head = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+    let body = b"/CffFont /Identity-H [/CffCID] composefont 50 scalefont setfont 10 20 moveto <000100070002> show showpage\n%%EOF\n".to_vec();
+    for at in 0..data.len() {
+        for v in [0u8, 0x7f, 0xff, data[at].wrapping_add(1)] {
+            let mut d = data.clone();
+            d[at] = v;
+            let set =
+                [format!("/FontSetInit /ProcSet findresource begin\n/CffCID {} StartData ", d.len()).into_bytes(), d, b"\nend\n".to_vec()].concat();
+            let _ = import(&[head.clone(), set, body.clone()].concat());
+        }
+    }
+}

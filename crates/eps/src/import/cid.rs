@@ -9,8 +9,10 @@
 
 use std::rc::Rc;
 
+use skrifa::raw::ps::cff::CffFontRef;
 use skrifa::raw::ps::cs::{self, CharstringContext, CharstringKind, CommandSink};
 use skrifa::raw::ps::error::Error as CsError;
+use skrifa::raw::ps::string::Sid;
 use skrifa::raw::types::Fixed;
 use vectorcraft_geom::BezPath;
 
@@ -328,8 +330,9 @@ impl Interp<'_> {
     /// (`n` bytes after the space that ends the name, or `n` bytes in hexadecimal for `(Hex)`)
     /// into the CIDFont's `GlyphData`, defines the CIDFont (the current dictionary) as a resource
     /// and ends it and the CIDInit dictionary under it (Adobe Technical Note #5014, §4.3). A
-    /// FontSet's `/name n StartData` (Compact Font Format data: PLRM 3rd ed., §5.8.1) is skipped:
-    /// its fonts are set as type by name.
+    /// FontSet's `/name n StartData` (Compact Font Format data: PLRM 3rd ed., §5.8.1) defines its
+    /// CID-keyed fonts as CIDFonts (see [`Self::font_set`]); its other fonts are set as type by
+    /// name.
     fn start_data(&mut self) -> Res {
         let n = self.pop_count()?;
         let kind = self.pop()?;
@@ -352,7 +355,7 @@ impl Interp<'_> {
             self.read(&f, n)?
         };
         if !matches!(kind, Obj::Str(_)) {
-            return Ok(());
+            return self.font_set(data);
         }
         let d = self.dicts.last().cloned().ok_or(PsError::Ps("dictstackunderflow", "StartData".into()))?;
         self.insert(&d, Key::name("GlyphData"), Some(Obj::string(data)))?;
@@ -383,6 +386,32 @@ impl Interp<'_> {
             {
                 self.dicts.pop();
             }
+        }
+        Ok(())
+    }
+
+    /// The CID-keyed fonts of FontSet data `data` (Compact Font Format: Adobe Technical Note
+    /// #5176, a top DICT with `ROS`), each defined as a Type 0 CIDFont of its name in the CFF's
+    /// Name INDEX, in glyph space of its units an em, whose glyphs are its Type 2 charstrings
+    /// picked by the CIDs its charset gives them.
+    fn font_set(&mut self, data: Vec<u8>) -> Res {
+        let data: Rc<[u8]> = data.into();
+        for index in 0..MAX_FONT_SET {
+            let Ok(font) = CffFontRef::new_cff(&data, index, None) else { break };
+            let Some(name) = font.metadata().and_then(|m| m.name().map(str::to_string)) else { continue };
+            if !font.is_cid() || self.cff.len() >= MAX_CFF {
+                continue;
+            }
+            let upem = f64::from(font.upem());
+            let upem = if upem.is_finite() && upem >= 1.0 { upem } else { 1000.0 };
+            let mut d = Dict::new();
+            d.insert(Key::name("CIDFontName"), Obj::name(&name));
+            d.insert(Key::name("CIDFontType"), Obj::Int(0));
+            d.insert(Key::name("FontType"), Obj::Int(9));
+            d.insert(Key::name("FontMatrix"), matrix_obj(vectorcraft_geom::Affine::scale(1.0 / upem)));
+            let d = DictRef::new(d);
+            self.instances(&Obj::name("CIDFont"))?.borrow_mut().insert(Key::name(&name), Obj::Dict(d.clone()));
+            self.cff.push((d, Rc::new(Cff { data: data.clone(), index })));
         }
         Ok(())
     }
@@ -492,6 +521,10 @@ impl Interp<'_> {
     /// FDArray dictionary's `Private` dictionary, in the FDArray dictionary's glyph space under
     /// the CIDFont's; its width in the CIDFont's glyph space.
     fn cid_type0(&mut self, font: &DictRef, cid: u32) -> Res<Option<(BezPath, f64)>> {
+        if let Some(cff) = self.cff.iter().find(|(k, _)| k.same(font)).map(|(_, c)| c.clone()) {
+            self.spend(64)?;
+            return Ok(cff.glyph(cid));
+        }
         let f = font.borrow();
         let num = |k: &str, default: f64| f.get(&Key::name(k)).and_then(Obj::as_num).unwrap_or(default);
         let fd_bytes = num("FDBytes", 0.0);
@@ -575,6 +608,34 @@ impl Interp<'_> {
         outline.apply_affine(fdm);
         let w = fdm * vectorcraft_geom::Point::new(width, 0.0) - fdm * vectorcraft_geom::Point::ZERO;
         Ok(Some((outline, w.x)))
+    }
+}
+
+/// Most fonts read from one FontSet.
+const MAX_FONT_SET: u32 = 64;
+/// Most CIDFonts read from FontSets.
+const MAX_CFF: usize = 256;
+
+/// A CID-keyed font in Compact Font Format data: the data and the font's index in it.
+pub(super) struct Cff {
+    data: Rc<[u8]>,
+    index: u32,
+}
+
+impl Cff {
+    /// Glyph `cid`: the glyph the charset gives that CID, drawn from its Type 2 charstring with
+    /// the subroutines and widths of its FDSelect subfont, in font units; `None` when the font
+    /// has no glyph for it.
+    fn glyph(&self, cid: u32) -> Option<(BezPath, f64)> {
+        let font = CffFontRef::new_cff(&self.data, self.index, None).ok()?;
+        let gid = font.charset()?.glyph_id(Sid::new(u16::try_from(cid).ok()?))?;
+        if gid.to_u32() == 0 && cid != 0 {
+            return None;
+        }
+        let sub = font.subfont(font.subfont_index(gid)?, &[]).ok()?;
+        let mut pen = super::type42::Pen(BezPath::new(), 1.0);
+        let w = font.draw(&sub, gid, &[], None, &mut pen).ok()?.map_or(0.0, f64::from);
+        Some((pen.0, if w.is_finite() { w } else { 0.0 }))
     }
 }
 
