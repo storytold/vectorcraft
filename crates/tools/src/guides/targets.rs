@@ -186,6 +186,13 @@ impl Targets {
         (self.last_location && d.hypot() <= tol).then(|| from.and_then(|r| self.label(r.center(), "last location")).into_iter().collect())
     }
 
+    /// Targets that hold nothing but Smart Guides › Snap to Last Location ([`Self::snap_back`]),
+    /// styled as `cx` asks: for a move of the selection whose other snaps come from other targets,
+    /// such as paths selected whole that Direct Selection moves held by an anchor.
+    pub fn last_location(cx: &ToolContext) -> Self {
+        Self { last_location: cx.snap_to_last_location, ..Self::default() }.styled(cx)
+    }
+
     /// Targets for scaling the selection: the other art, styled as `cx` asks, and with Smart Guides ›
     /// Spacing Guides the neighbours whose gaps the moving edge should match ([`Self::snap_scale`]).
     pub fn for_scale(cx: &ToolContext) -> Self {
