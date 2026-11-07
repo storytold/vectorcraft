@@ -3576,7 +3576,7 @@ Guides change where a snapped point lands:
 The Snap to Glyph options (the desktop app's Character panel menu › Show Snap to Glyph Options; View › Snap to Glyph
 is the desktop app's): `view.snapToGlyph.options {baseline?, xHeight?, bounds?, proximity?, angular?, anchors?}` (or
 `prefs.get`/`prefs.set` with key `glyphSnap`, a partial object) reads and sets which guides Snap to Glyph gives, all on
-by default: the baseline and the x-height of a single line of type, the glyph bounds (each glyph's edges), the
+by default: the baseline and the x-height of a single line of type, the glyph bounds (each glyph's edges and corners, turning with rotated type), the
 proximity guides at both edges of each character's width, the angular guides (along a glyph's slanted strokes, and
 every guide of rotated type, which runs at its angle) and the glyphs' anchor points. `{}` reads them; a key it doesn't
 know or a value that isn't a boolean is refused and changes nothing.
