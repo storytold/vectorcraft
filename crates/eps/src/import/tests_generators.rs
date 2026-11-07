@@ -1141,3 +1141,31 @@ fn filter_output_counts_against_the_memory_budget() {
     let Err(err) = many else { panic!("the budget ends the program") };
     assert!(err.contains("too much memory"), "{err}");
 }
+
+/// A shading painted with `shfill` and not extended paints only between its ends: an axial one
+/// between the lines through them across its axis, a radial one from a point over its circles
+/// (PLRM 3rd ed. §4.9.3: `Extend` is `[false false]` by default). Extended both ways it paints
+/// the whole clip.
+#[test]
+fn shadings_not_extended_paint_only_between_their_ends() {
+    let shade = |kind: u8, coords: &str, extend: &str| {
+        let r = read(&format!(
+            "<< /ShadingType {kind} /ColorSpace /DeviceRGB /Coords [{coords}] {extend} \
+             /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill"
+        ));
+        let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+        bounds(&n)
+    };
+    // Axial, from x 10 to 90 (and its reflection in y: the document's y runs down).
+    let b = shade(2, "10 0 90 0", "");
+    assert!(near(b, Rect::new(10.0, 0.0, 90.0, 100.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [false true]");
+    assert!(near(b, Rect::new(10.0, 0.0, 100.0, 100.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [true true]");
+    assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
+    // Radial from the centre point to a circle of radius 30.
+    let b = shade(3, "50 50 0 50 50 30", "");
+    assert!((b.width() - 60.0).abs() < 0.5 && (b.height() - 60.0).abs() < 0.5 && (b.center().x - 50.0).abs() < 0.5, "{b:?}");
+    let b = shade(3, "50 50 0 50 50 30", "/Extend [true true]");
+    assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
+}

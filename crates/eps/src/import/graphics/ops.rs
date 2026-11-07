@@ -1,4 +1,4 @@
-use super::paint::is_mesh;
+use super::paint::{is_mesh, polygon, shading_extent};
 use super::state::{GState, Space};
 use super::{
     Affine, Color, FillRule, Interp, Key, LineCap, LineJoin, MAX_DASH_ENTRIES, MAX_DASHES, MAX_GSAVE, MAX_PATH, Obj, Op, Paint, Point, PsError, Rc,
@@ -531,10 +531,20 @@ impl Interp<'_> {
                 let m = self.xf();
                 if let Some(g) = self.gradient(&d, m)? {
                     let area = self.clip_bounds()?;
+                    // Not extended, it paints only between its ends.
+                    let extent = shading_extent(&d, m, area);
+                    let path = match &extent {
+                        Some(pts) if pts.len() < 3 => return Ok(()),
+                        Some(pts) => polygon(pts),
+                        None => area.to_path(0.1),
+                    };
                     let paint = Paint::Gradient(Box::new(g));
                     let clips = self.g.clips.clone();
-                    self.out.fill(area.to_path(0.1), FillRule::NonZero, paint, self.g.overprint, &clips);
-                    if let Some((_, n)) = self.out.drawn.last() {
+                    self.out.fill(path, FillRule::NonZero, paint, self.g.overprint, &clips);
+                    // Only a fill of the whole clip can stand in for the clip's shape.
+                    if extent.is_none()
+                        && let Some((_, n)) = self.out.drawn.last()
+                    {
                         let id = n.id;
                         self.out.shadings.insert(id);
                     }
