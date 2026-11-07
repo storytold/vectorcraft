@@ -632,6 +632,50 @@ fn the_panel_menus_duplicate_artboards_copies_every_selected_artboard() {
     assert_eq!((d.artboards.len(), d.layers[0].children().unwrap().len()), (3, 2), "one undo step");
 }
 
+/// The panel menu's New Artboard adds one artboard in one undo step and makes it the active one, as
+/// the panel's button does, with any tool. With the Artboard tool, the new artboard is then the only
+/// one selected.
+#[test]
+fn the_panel_menus_new_artboard_makes_the_new_artboard_active() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 2})).unwrap();
+    app.view_mut().unwrap().artboard = 0;
+    let ctx = egui::Context::default();
+    let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| menu(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let click = |app: &mut VectorcraftApp| {
+        let item = frame(app, vec![])
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text().trim_start() == "New Artboard" => Some(t.visual_bounding_rect().center()),
+                _ => None,
+            })
+            .unwrap();
+        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(item), button(true), button(false)]);
+    };
+    click(&mut app);
+    assert_eq!(boards(&app).2.len(), 3);
+    assert_eq!(selected(&app, 3), 2, "the new artboard is active with the Selection tool");
+    let undo_steps = app.session.active().unwrap().history.undo.len();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(boards(&app).2.len(), 2, "one undo step removes the new artboard");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo_steps - 1);
+
+    app.select_tool("artboard");
+    select(&mut app, 1);
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    click(&mut app);
+    assert_eq!(boards(&app).2.len(), 3);
+    assert_eq!(app.view().unwrap().artboard, 2, "the new artboard is active with the Artboard tool");
+    assert_eq!(app.session.tool_options()["active"], json!(2));
+    assert_eq!(app.session.tool_options()["selected"], json!([2]), "and is the only one selected");
+}
+
 /// The panel menu's Convert to Artboards turns the geometric bounds of each selected rectangle
 /// into a new artboard and removes the rectangles, in one undo step, as Object › Artboards ›
 /// Convert to Artboards does; with nothing selected it is off.
