@@ -169,6 +169,23 @@ const MIN_GC_BYTES: usize = 1 << 20;
 /// The most arguments `Function.prototype.apply` passes.
 pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 
+/// The estimated bytes of a name's entries in the list and the set `for-in` builds.
+const KEY_ENTRY_BYTES: usize = 32;
+
+/// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
+fn index_keys_bytes(len: usize) -> usize {
+    let mut total = 0usize;
+    let (mut lo, mut hi, mut digits) = (0usize, 10usize, 1usize);
+    while lo < len {
+        let count = hi.min(len) - lo;
+        total = total.saturating_add(count.saturating_mul(string_bytes(digits) + KEY_ENTRY_BYTES));
+        lo = hi;
+        hi = hi.saturating_mul(10);
+        digits += 1;
+    }
+    total
+}
+
 /// A call to a function written in JavaScript, ready to enter.
 struct Entry {
     callee: ObjId,
@@ -348,6 +365,20 @@ impl Interp {
                 return Err(Abrupt::Limit(LimitKind::Heap));
             }
             self.gc_threshold = self.next_threshold();
+        }
+        Ok(())
+    }
+
+    /// Ends the run with the heap limit when `bytes` more would not fit in it after a
+    /// collection. Everything the caller still needs must be reachable from the roots.
+    fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
+        if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
+            return Ok(());
+        }
+        self.collect_garbage();
+        self.gc_threshold = self.next_threshold();
+        if self.heap.bytes.saturating_add(bytes) > self.limits.heap_bytes {
+            return Err(Abrupt::Limit(LimitKind::Heap));
         }
         Ok(())
     }
@@ -1309,14 +1340,21 @@ impl Interp {
     /// The names `for-in` visits (section 12.6.4): the enumerable properties of the object and
     /// its prototypes, own properties in the order they were added, each name once, and none
     /// that an object nearer the start of the chain has (enumerable or not).
-    fn enumerable_keys(&self, id: ObjId) -> JsResult<Vec<Key>> {
+    ///
+    /// For a String object, the heap budget for all its index names is checked before any is
+    /// built, and each name takes a unit of fuel.
+    fn enumerable_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut cur = Some(id);
         while let Some(o) = cur {
             let obj = self.object(o)?;
-            if let Class::String(s) = &obj.class {
-                for i in 0..s.len() {
+            let string_len = if let Class::String(s) = &obj.class { Some(s.len()) } else { None };
+            let is_array = matches!(obj.class, Class::Array { .. });
+            if let Some(len) = string_len {
+                self.reserve_heap(index_keys_bytes(len))?;
+                for i in 0..len {
+                    self.use_fuel()?;
                     let k = index_key(u32::try_from(i).unwrap_or(u32::MAX));
                     if seen.insert(k.clone()) {
                         out.push(k);
@@ -1324,9 +1362,10 @@ impl Interp {
                 }
                 seen.insert(key("length"));
             }
-            if matches!(obj.class, Class::Array { .. }) {
+            if is_array {
                 seen.insert(key("length"));
             }
+            let obj = self.object(o)?;
             for (k, p) in obj.props.iter() {
                 if seen.insert(k.clone()) && p.enumerable() {
                     out.push(k.clone());
@@ -1343,7 +1382,13 @@ impl Interp {
             (Vec::new(), None)
         } else {
             let o = self.to_object(&v)?;
-            (self.enumerable_keys(o)?, Some(o))
+            // A wrapper made by ToObject is not on the stack; a collection while the names are
+            // listed must not free it.
+            let saved = self.temp_roots.len();
+            self.temp_roots.push(Value::Object(o));
+            let keys = self.enumerable_keys(o);
+            self.temp_roots.truncate(saved);
+            (keys?, Some(o))
         };
         self.heap.bytes += keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         let iter = self.heap.alloc_object(Object::new(Class::ForIn(Box::new(ForIn { keys, pos: 0, object })), None));

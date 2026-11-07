@@ -428,6 +428,21 @@ fn an_apply_that_throws_while_reading_its_arguments_keeps_nothing_alive() {
 }
 
 #[test]
+fn for_in_over_a_long_string_checks_the_heap_before_listing_its_indices() {
+    // The string fits in the heap and its 131,072 index names do not. The fuel runs out partway
+    // through listing them, so only the check before the listing ends the run with the heap limit.
+    let mut realm = small(Limits { heap_bytes: 1 << 20, fuel: 50_000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "var s = 'x'; while (s.length < 100000) s += s; for (var k in s) {}"), LimitKind::Heap);
+    assert_eq!(realm.run("var n = ''; for (var k in 'abc') n += k; n"), Ok(JsValue::String("012".into())));
+}
+
+#[test]
+fn for_in_over_a_long_string_takes_fuel_for_each_index() {
+    let mut realm = small(Limits { fuel: 10_000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "var s = 'x'; while (s.length < 100000) s += s; for (var k in s) break;"), LimitKind::Fuel);
+}
+
+#[test]
 fn wasm_builds_have_smaller_default_limits() {
     let limits = Limits::default();
     #[cfg(target_arch = "wasm32")]
