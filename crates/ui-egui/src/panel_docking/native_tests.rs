@@ -462,10 +462,10 @@ fn assert_submenu_reaches_its_end(h: &mut Harness, panel: &str, height: f32, row
         }
         wheel_down(h, viewport, pos2(menu.x - 60.0, height - 30.0), 40.0);
     }
-    let at = inside(h).unwrap_or_else(|| panic!("the {row} row")).center();
+    let at = inside(h).expect("the row that opens the submenu").center();
     h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(at), button(at, true), button(at, false)]);
     h.frames(8);
-    let over = text_rect(h, viewport, first).unwrap_or_else(|| panic!("the {row} submenu's item {first}"));
+    let over = text_rect(h, viewport, first).expect("the submenu's first item");
     assert!(text_rect(h, viewport, last).is_none_or(|end| end.bottom() > height), "the submenu opens at the top of its list");
     for _ in 0..3 {
         if text_rect(h, viewport, last).is_some() {
@@ -473,7 +473,7 @@ fn assert_submenu_reaches_its_end(h: &mut Harness, panel: &str, height: f32, row
         }
         wheel_down(h, viewport, pos2(over.center().x, height - 30.0), 5000.0);
     }
-    let end = text_rect(h, viewport, last).unwrap_or_else(|| panic!("the {row} submenu's item {last}"));
+    let end = text_rect(h, viewport, last).expect("the submenu's last item");
     assert!(end.bottom() <= height, "{last} at {end:?} is inside the {height} pt window");
 }
 
