@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (M4/M7: `.ai`/EPS type from the text document lays its lines out as the file's page, #6137; Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (M4/M7: `.ai`/EPS type keeps its tab stops, and right-aligned lines with tabs lay out as the file's page, #6147; M4/M7: `.ai`/EPS type from the text document lays its lines out as the file's page, #6137; Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -36,6 +36,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | M4/M7: `.ai`/EPS type from the text document keeps its paragraphs' tab stops, and right-aligned area type sets the text after a line's last tab against the right edge, the text before it at its stops from the left edge (#6147). Scores and estimates unchanged. |
 | 2026-11-07 | minor | M4/M7: `.ai`/EPS type from the text document keeps auto leading at the paragraph's share, the paragraph's hyphenation options and the last lines the file sets in a frame, and a line a soft return ends is justified as a wrapped line is (#6137); a user's `.ai` that opened from its PDF part now opens from its layers. Scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |
