@@ -381,7 +381,12 @@ impl<'a> Reader<'a> {
         let f = self.close("X+", |k| matches!(k, Kind::Mask))?;
         // The mask's art is one level under the object it masks.
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 2)?;
-        let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
+        // One shown object is the art itself. A hidden object or a guide stays in a group: the canvas draws the art's root
+        // whether it is shown or not and whether guides show, and a group doesn't draw a hidden member or a left-out guide.
+        let art = match children.as_slice() {
+            [only] if !clip && only.visible && !matches!(only.kind, NodeKind::Path { guide: true, .. }) => only.clone(),
+            _ => Arc::new(self.new_node(NodeKind::Group { children, clip }, &f.gs)),
+        };
         self.gs = f.gs;
         self.pending_unread_fill = f.pending_unread_fill;
         self.pending_unread_stroke = f.pending_unread_stroke;
@@ -390,7 +395,7 @@ impl<'a> Reader<'a> {
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
             return Err("mask art ends outside a mask dictionary".into());
         };
-        if o.art.replace(Arc::new(art)).is_some() {
+        if o.art.replace(art).is_some() {
             return Err("a mask has more than one art block".into());
         }
         o.unread = f.unread;

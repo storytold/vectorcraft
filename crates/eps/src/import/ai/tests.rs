@@ -6555,7 +6555,7 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
         assert_eq!(fill(&a[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "mask colour must not leak");
         let m = a[0].extras().mask.as_ref().unwrap();
         assert_eq!((m.clip, m.invert, m.disabled, m.linked), (true, invert, disabled, linked));
-        let mask_path = &m.art.children().unwrap()[0].children().unwrap()[0];
+        let mask_path = &m.art.children().unwrap()[0];
         assert!(matches!(mask_path.kind, NodeKind::Path { .. }));
         assert_eq!(mask_path.geometric_bounds(), Some(Rect::new(10.0, 40.0, 30.0, 80.0)));
         assert_ne!(mask_path.id, a[0].id);
@@ -6563,6 +6563,37 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
     for broken in [mask.replace("%_X+\n", ""), mask.replace("%_U\n", ""), mask.replace("%_f", "%_unknownMaskOperator")] {
         assert!(read(stream(&layer(&format!("{owner}{broken}"))).as_bytes()).is_err());
     }
+}
+
+/// An opacity mask's art of one shown object is that object; other art is read into a group.
+#[test]
+fn opacity_mask_art_of_one_object_is_that_object() {
+    let owner = format!("{RED}{}f\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let square = "%_1 g\n%_10 20 m\n%_10 60 L\n%_30 60 L\n%_30 20 L\n%_f\n";
+    let read_art = |ops: &str| {
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{ops}%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n");
+        let r = read_ok(&layer(&format!("{owner}{mask}")));
+        art(&r.doc)[0].extras().mask.as_ref().unwrap().art.clone()
+    };
+    assert!(matches!(read_art(square).kind, NodeKind::Path { .. }));
+    // A group is one object: it stays a group, holding its path.
+    let grouped = read_art(&format!("%_u\n{square}%_U\n"));
+    let NodeKind::Group { children, clip: false } = &grouped.kind else { panic!("{:?}", grouped.kind) };
+    assert!(matches!(children.as_slice(), [p] if matches!(p.kind, NodeKind::Path { .. })));
+    // Two objects are held in a group.
+    let two = read_art(&format!("{square}{square}"));
+    assert!(matches!(&two.kind, NodeKind::Group { children, clip: false } if children.len() == 2), "{:?}", two.kind);
+    // A clipping path alone keeps its group, which clips.
+    let clipped = read_art("%_10 20 m\n%_10 60 L\n%_30 60 L\n%_30 20 L\n%_h\n%_W\n%_n\n");
+    assert!(matches!(&clipped.kind, NodeKind::Group { children, clip: true } if children.len() == 1), "{:?}", clipped.kind);
+    // A hidden object stays in a group, which doesn't draw it.
+    let hidden = read_art(&format!("%_1 Xw\n{square}%_0 Xw\n"));
+    let NodeKind::Group { children, clip: false } = &hidden.kind else { panic!("{:?}", hidden.kind) };
+    assert!(matches!(children.as_slice(), [p] if !p.visible && matches!(p.kind, NodeKind::Path { .. })));
+    // So does a guide, which a group leaves out when guides aren't drawn.
+    let guide = read_art("%_10 20 m\n%_30 60 L\n%_(N) *\n");
+    let NodeKind::Group { children, clip: false } = &guide.kind else { panic!("{:?}", guide.kind) };
+    assert!(matches!(children.as_slice(), [p] if matches!(p.kind, NodeKind::Path { guide: true, .. })));
 }
 
 /// `9 () XW` also follows legacy compound member groups. The final gradient paints

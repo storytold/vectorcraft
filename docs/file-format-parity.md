@@ -47,6 +47,8 @@ private editing data. VectorCraft:
   objects keep what only the format records (locks, for example); it opens as its page when the layer can't be used.
   A multi-layer mask (`Mb` … `Md` … `MB`) comes in as a clipping group in each layer it covers, each
   clipped by a copy of the mask's path.
+  An opacity mask's art of one shown object, other than a guide or a clipping path, opens as that object in the
+  editing data of a `.ai`, EPS or PDF; other art opens in a group.
   RGB in the PDF page's `ICCBased` spaces keeps the file's numbers in a `.ai` (the `uncalibrated_rgb`
   import option, on for editor documents, off for PDFs), so `.ai` files tagged with a non-sRGB RGB profile
   open with different, unconverted RGB colours than before.
