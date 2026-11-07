@@ -334,10 +334,13 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 }
                 Tool::Art => {
                     // The older form's 8 numbers aren't known: its brush keeps the defaults and its
-                    // paths their drawn look.
-                    let (colorization, plain) = match <&[f64; 15]>::try_from(n.as_slice()) {
-                        Ok(n15) => (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15)),
-                        Err(_) => (Colorization::None, false),
+                    // paths their drawn look. Any other count isn't a form this reads.
+                    let (colorization, plain) = if let Ok(n15) = <&[f64; 15]>::try_from(n.as_slice()) {
+                        (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15))
+                    } else if n.len() == 8 {
+                        (ArtBrush::default().colorization, false)
+                    } else {
+                        return Err(BrushError::Values);
                     };
                     DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain }
                 }
