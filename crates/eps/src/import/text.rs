@@ -170,7 +170,9 @@ impl Interp<'_> {
             ResourceForAll => self.resource_for_all()?,
             Show | AShow | WidthShow | AWidthShow | XShow | YShow | XYShow | KShow => {
                 let (s, spacing) = self.show_operands(op)?;
-                if let Some(glyphs) = self.composite_glyphs(&s)? {
+                if let Some((text, font)) = self.unicode_type(&s) {
+                    self.show_unicode(&text, &font)?;
+                } else if let Some(glyphs) = self.composite_glyphs(&s)? {
                     self.show_composite(&glyphs, &spacing)?;
                 } else {
                     match self.type3_font() {
@@ -280,6 +282,12 @@ impl Interp<'_> {
 
     /// How far `s` moves the current point (user space).
     fn width_of(&mut self, s: &[u8]) -> Res<Vec2> {
+        if let Some((text, font)) = self.unicode_type(s) {
+            let saved = self.g.font.replace(font);
+            let r = self.set_text(&text, Point::ZERO).map(|t| t.2);
+            self.g.font = saved;
+            return r;
+        }
         if let Some(glyphs) = self.composite_glyphs(s)? {
             let mut w = Vec2::ZERO;
             for g in &glyphs {
@@ -386,11 +394,22 @@ impl Interp<'_> {
         self.out.push(group, &clips);
     }
 
-    /// The font named `k`: one the program defined, else a font of that name.
+    /// The font named `k`: one the program defined; else, for a name `CIDFont-CMap` whose CMap
+    /// is a predefined Unicode CMap, the CID-keyed font of those two (the usual name of a
+    /// CID-keyed font, as `composefont` makes them: PLRM 3rd ed., chapter 8); else a font of
+    /// that name.
     fn find_font(&mut self, k: &Obj) -> Res<DictRef> {
         let key = k.key().ok_or(PsError::Ps("typecheck", "findfont".into()))?;
         if let Some(Obj::Dict(d)) = self.fonts.borrow().get(&key) {
             return Ok(d.clone());
+        }
+        let text = k.text().map(|t| t.to_string()).unwrap_or_default();
+        let split =
+            text.match_indices('-').map(|(i, _)| i).find(|&i| i > 0 && super::cid::unicode_cmap(text.get(i + 1..).unwrap_or_default()).is_some());
+        if let Some((cid_font, cmap)) = split.and_then(|i| Some((text.get(..i)?, text.get(i + 1..)?))) {
+            let cmap = self.find_cmap(&Obj::name(cmap))?;
+            let dep = self.find_cid_font(&Obj::name(cid_font))?;
+            return Ok(self.composed(key, cmap, vec![Obj::Dict(dep)]));
         }
         let mut d = Dict::new();
         d.insert(Key::name("FontName"), key.obj());
@@ -851,6 +870,49 @@ impl Interp<'_> {
                 _ => None,
             })
             .collect())
+    }
+
+    /// The characters of `s` and the font to set them in when the current font is a CID-keyed
+    /// font over a predefined Unicode CMap the file doesn't define (`UniJIS-UCS2-H`), whose
+    /// mappings to CIDs aren't known: its codes say the characters, set as type in the font of
+    /// its CIDFont's name.
+    fn unicode_type(&self, s: &[u8]) -> Option<(String, DictRef)> {
+        let font = self.g.font.clone()?;
+        let f = font.borrow();
+        if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(9.0) {
+            return None;
+        }
+        let Some(Obj::Dict(cmap)) = f.get(&Key::name("CMap")) else { return None };
+        let cmap = cmap.borrow();
+        // A CMap the file built has mappings of its own.
+        if cmap.contains_key(&Key::name("CodeSpaceRange")) {
+            return None;
+        }
+        let (form, _) = super::cid::unicode_cmap(&cmap.get(&Key::name("CMapName")).and_then(Obj::text)?)?;
+        let Some(Obj::Dict(dep)) = f.get(&Key::name("FDepVector")).and_then(|v| v.items()?.get(0)) else { return None };
+        let name = {
+            let d = dep.borrow();
+            d.get(&Key::name("CIDFontName")).or_else(|| d.get(&Key::name("FontName"))).cloned()?
+        };
+        let mut named = f.clone();
+        named.insert(Key::name("FontName"), name);
+        Some((super::cid::unicode_text(s, form), DictRef::new(named)))
+    }
+
+    /// `text` set as point type at the current point in font `font` (see
+    /// [`Self::unicode_type`]), which moves past it.
+    fn show_unicode(&mut self, text: &str, font: &DictRef) -> Res {
+        let at = self.user_point()?;
+        let saved = self.g.font.replace(font.clone());
+        let r = self.set_text(text, at);
+        self.g.font = saved;
+        let (t, _, adv) = r?;
+        if !self.g.paint.is_none() && !self.g.null && !text.trim().is_empty() {
+            let clips = self.g.clips.clone();
+            self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
+        }
+        self.g.cur = Some(self.xf() * (at + adv));
+        Ok(())
     }
 
     /// The characters of a composite font shown at the current point, spaced as `spacing` says.

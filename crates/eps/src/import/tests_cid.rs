@@ -376,3 +376,29 @@ fn cmaps_map_codes_to_base_fonts_codes_and_glyph_names() {
         .collect();
     assert_eq!(text, "ABC");
 }
+
+/// A CID-keyed font over a predefined Unicode CMap the file doesn't define, its CIDFont only
+/// named: the codes say their characters, set as type in the font of the CIDFont's name,
+/// whether found as `CIDFont-CMap` or composed.
+#[test]
+fn named_cidfonts_over_unicode_cmaps_set_their_characters_as_type() {
+    let texts = |r: &crate::Imported| -> Vec<vectorcraft_doc::TextObject> {
+        all(&r.document)
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Text(t) => Some((**t).clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let r = super::tests::read("/Ryumin-Light-UniJIS-UCS2-H findfont 20 scalefont setfont 10 20 moveto <4e2d0041> show");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let t = texts(&r);
+    assert_eq!(t.len(), 1, "{:?}", all(&r.document));
+    assert_eq!(t[0].plain_text(), "\u{4e2d}A");
+    assert_eq!((t[0].runs[0].style.font_family.as_str(), t[0].runs[0].style.size), ("Ryumin", 20.0));
+    let r = super::tests::read("/X /UniGB-UTF8-H [/NotInFile] composefont 20 scalefont setfont 10 20 moveto (\\344\\270\\255A) show");
+    assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<String>(), "\u{4e2d}A");
+    // The point moves past the type.
+    check("/Ryumin-Light-UniJIS-UCS2-H findfont 20 scalefont setfont <00410042> stringwidth pop dup 5 gt exch 40 lt and");
+}
