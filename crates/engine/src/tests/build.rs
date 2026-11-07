@@ -831,6 +831,39 @@ fn shape_builder_drag_from_a_merged_shape_over_a_line_under_its_edge_makes_one_r
 }
 
 #[test]
+fn shape_builder_removes_the_stretch_of_every_line_under_a_merged_edge() {
+    // Two lines along the same stretch, under the bottom edge of the merged top row: merging the
+    // row with the cell below takes the stretch between them from both lines.
+    for erase in [false, true] {
+        let mut s = session();
+        let h1 = line(&mut s, (100.0, 200.0), (300.0, 200.0));
+        let h2 = line(&mut s, (100.0, 200.0), (300.0, 200.0));
+        let v = line(&mut s, (200.0, 100.0), (200.0, 300.0));
+        let sq = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+        s.edit("t", |d, _| {
+            for id in [h1, h2, v, sq] {
+                d.node_mut(id).unwrap().appearance.set_fill(Paint::None);
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [h1.0, h2.0, v.0, sq.0]})).unwrap();
+        s.execute("shapeBuilder.merge", &json!({"points": [[150, 150], [250, 150]]})).unwrap();
+        s.execute("shapeBuilder.merge", &json!({"points": [[250, 150], [150, 250]], "erase": erase})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        let left: Vec<Rect> = d
+            .children(d.default_layer())
+            .into_iter()
+            .flatten()
+            .filter(|n| !outline(n).0.is_closed())
+            .filter_map(|n| n.geometric_bounds())
+            .filter(|b| b.height() < 1e-6 && (b.y0 - 200.0).abs() < 1e-6 && b.x0 < 199.0)
+            .collect();
+        assert!(left.is_empty(), "erase {erase}: {left:?}");
+    }
+}
+
+#[test]
 fn shape_builder_alt_deletes_a_region_or_a_line_piece() {
     let mut s = session();
     square_and_line(&mut s);
@@ -2242,6 +2275,25 @@ fn live_paint_gap_detection_stops_paint_at_a_gap() {
     // Expand leaves a plain group, without the options.
     s.execute("livePaint.expand", &json!({"id": g.0})).unwrap();
     assert!(node(&s, g).extras().live_paint_gaps.is_none());
+}
+
+/// A Gap Preview Color with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes nothing;
+/// `#rrggbb` and a layer color's name still set it.
+#[test]
+fn a_gap_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let depth = s.doc().unwrap().history.undo.len();
+    for bad in ["#00ff0080", "00ff0080", "#0f08"] {
+        let err = s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": bad})).unwrap_err().to_string();
+        assert!(err.contains(&format!("`{bad}` is not a colour (#rrggbb or a preset name)")), "{bad}: {err}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth);
+    assert_eq!(gap_options(&s, g).color, [0xff, 0x4f, 0x4f]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "#00ff00"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0, 0xff, 0]);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "color": "Green"})).unwrap();
+    assert_eq!(gap_options(&s, g).color, [0x4f, 0xff, 0x4f]);
 }
 
 #[test]

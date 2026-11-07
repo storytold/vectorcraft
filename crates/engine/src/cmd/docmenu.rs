@@ -14,7 +14,7 @@ use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
     CommandSpec, EngineError, Point, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ok,
-    str_param,
+    str_param, switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Instance",
             ["Select", "Same"],
             None,
-            "{} select the instances of the symbol of the first selected object that can be selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated, or outside the isolated group or layer are passed over → {count}",
+            "{} select the instances of the symbol of the first selected object that can be selected, including a group member selected on its own; when that object is not a symbol instance, such as a group, nothing is selected; objects that are hidden or locked, inside a hidden or locked object or layer, on a template layer, on a locked artboard while nothing is isolated (new art while it stays selected excepted), or outside the isolated group or layer are passed over → {count}",
             has_selection,
             |s, _| same(s, "select.same.symbolInstance", |a, b| match (&a.kind, &b.kind) {
                 (NodeKind::SymbolInstance { symbol: x, .. }, NodeKind::SymbolInstance { symbol: y, .. }) => x == y,
@@ -256,7 +256,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Color Mode",
             ["File", "Document Color Mode"],
             None,
-            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks included), symbols, graph designs, pattern tiles, graphic styles, brushes and swatches through the color settings; swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
+            "{mode: \"cmyk\"|\"rgb\", convert?: true (convert every color of the art (opacity masks, effect colors and graphs' series and label paints included), symbols, graph designs, pattern tiles, graphic styles (their effect colors included), brushes, swatches and the paints new art takes through the color settings, together in one undo step (Undo restores their original values; Redo reapplies the conversion); swatch links kept; Gray colors stay Gray, on the black plate), intent?, grays?: \"profile\" (default: RGB grays separate through the CMYK profile like any color, into four-color grays and a rich black) | \"black\" (to CMYK, RGB grays with R = G = B go on the black plate only, K = their gray value)} → {changed: how many colors of the art, symbols, graph designs and pattern tiles changed; the colors of graphic styles and brushes are not counted}",
             has_doc,
             super::colormgmt::convert_mode
         ),
@@ -337,7 +337,7 @@ fn same_text(s: &mut Session, cmd: &str, eq: fn(&CharStyle, &CharStyle) -> bool)
 /// object inside two selected objects is given twice. The walk stops when `f` returns false.
 fn each_selected_text(s: &Session, mut f: impl FnMut(NodeId) -> bool) {
     fn inside(n: &Node, f: &mut impl FnMut(NodeId) -> bool) -> bool {
-        if !n.visible || n.locked {
+        if !n.visible || n.locked || n.is_template() {
             return true;
         }
         if matches!(n.kind, NodeKind::Text(_)) && !f(n.id) {
@@ -716,7 +716,7 @@ fn release_guides(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn lock_guides(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.guides_locked);
+    let v = switch_or(p, "locked", !s.menu.guides_locked, "view.guides.lock")?;
     s.menu.guides_locked = v;
     // Locked guides can't stay selected, ruler guides or guide paths, in any open document
     // ([`Session::select`] lets those go in the active one).

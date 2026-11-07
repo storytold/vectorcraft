@@ -316,6 +316,14 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     Some((value, true))
 }
 
+/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
+/// `mode` (Optical on, manual value). A manual value checks neither, as it sets the spacing even
+/// with Optical on. A selection that mixes modes checks neither, and the menu still lists both.
+fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
+    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical && manual.is_none()));
+    (Some(automatic), Some(optical))
+}
+
 /// The faces Type › Bold and Type › Italic switch to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {
@@ -491,18 +499,16 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
 }
 
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
-/// in thread order; `None` when its selection is in one type object.
+/// in the order of the edited frame's thread as the document holds it now; `None` when its
+/// selection is in one type object.
 pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     let o = app.session.tool_options();
     let st = app.session.active()?;
-    let ids: Vec<NodeId> = o
-        .get("story")?
-        .as_array()?
-        .iter()
-        .filter_map(Value::as_u64)
-        .map(NodeId)
-        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
-        .collect();
+    let id = NodeId(o.get("editing")?.as_u64()?);
+    if o.get("story")?.as_array()?.is_empty() {
+        return None;
+    }
+    let ids = st.doc.story_of(id);
     (ids.len() >= 2).then_some(ids)
 }
 
@@ -532,19 +538,18 @@ static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
-    if a == b {
+    let story = text_story(app);
+    // An empty selection has nothing to copy, unless the story's text is in the other frames.
+    if a == b && (story.is_none() || app.session.active().is_none_or(|st| st.doc.story_text(id).is_empty())) {
         return false;
     }
     // After Select All in threaded text: the whole story.
-    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let range = if story.is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
     let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
     *CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()) = Some(runs.clone());
     let text = r["text"].as_str().unwrap_or("").to_string();
-    if let Some(ctx) = CTX.get() {
-        ctx.copy_text(text.clone());
-    }
     *CLIP.lock().unwrap_or_else(|e| e.into_inner()) = text.clone();
     if let Ok(parsed_runs) = serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs)
         && !parsed_runs.is_empty()
@@ -552,7 +557,19 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         let mut t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "", vectorcraft_doc::CharStyle::default());
         t.runs = parsed_runs;
         let node = vectorcraft_doc::Node::new(vectorcraft_doc::NodeId(1), vectorcraft_doc::NodeKind::Text(Box::new(t)));
-        app.session.clipboard.nodes = vec![node];
+        let Ok(st) = app.session.doc() else { return false };
+        let clip = vectorcraft_engine::cmd::clipboard::Clipboard::from_node(st, node);
+        app.session.clipboard = clip;
+        // The desktop clipboard must own the same styled art as the internal clipboard. An egui
+        // plain-text copy would replace its formats, so let the publisher provide both text and
+        // rich art. Paste on the canvas can then keep the runs after Type editing ends.
+        if app.services.system_clipboard.is_some() {
+            app.publish_clipboard();
+            return true;
+        }
+    }
+    if let Some(ctx) = app.ui_ctx.clone().or_else(|| CTX.get().cloned()) {
+        ctx.copy_text(text);
     }
     true
 }
@@ -573,17 +590,27 @@ fn text_key(app: &mut VectorcraftApp, k: ToolKey, m: Mods) {
 }
 
 fn text_paste(app: &mut VectorcraftApp, s: Option<String>, plain: bool) {
-    let text_from_clip = CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let s = s.unwrap_or(text_from_clip);
+    let s = match s {
+        Some(text) => text,
+        None if app.services.system_clipboard.is_some() => app.written_clipboard_text().unwrap_or_default(),
+        None => CLIP.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+    };
     if !s.is_empty() {
-        if plain {
-            app.session.set_tool_option("copy", &json!([]));
-        } else if let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        let internal = app.type_paste_has_our_clipboard();
+        let mut styled = false;
+        if !plain
+            && internal
+            && let Some(runs) = CLIP_RUNS.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        {
             let clip_text: String =
                 serde_json::from_value::<Vec<vectorcraft_doc::TextRun>>(runs.clone()).unwrap_or_default().into_iter().map(|r| r.text).collect();
             if clip_text == s {
                 app.session.set_tool_option("copy", &runs);
+                styled = true;
             }
+        }
+        if !styled {
+            app.session.set_tool_option("copy", &json!([]));
         }
         let v = app.view_info();
         let target_before = crate::ime::target(&mut app.session, v);
@@ -624,7 +651,7 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
     Some(Ok(Value::Null))
 }
 
-enum TextInput {
+pub(crate) enum TextInput {
     Key(ToolKey, Mods),
     Copy,
     Cut,
@@ -632,83 +659,87 @@ enum TextInput {
     Face(Face),
 }
 
-/// Route editing keys (with modifiers), clipboard events and Cmd+C/X/V to the Type tool (Cmd+A is
-/// left to the Select All shortcut, which selects the text being edited).
-pub(crate) fn route_type_input(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Takes an editing key (with modifiers), a clipboard event or Cmd+C/X/V for the Type tool into
+/// `todo` (Cmd+A is left to the Select All shortcut, which selects the text being edited). Returns
+/// false for an event the tool takes, which is then removed from the input.
+pub(crate) fn type_input(e: &egui::Event, todo: &mut Vec<TextInput>) -> bool {
+    match e {
+        egui::Event::Copy => {
+            todo.push(TextInput::Copy);
+            false
+        }
+        egui::Event::Cut => {
+            todo.push(TextInput::Cut);
+            false
+        }
+        egui::Event::Paste(s) => {
+            todo.push(TextInput::Paste(Some(s.clone())));
+            false
+        }
+        egui::Event::Key { key, pressed, modifiers: m, .. } => {
+            let mods = Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl && !m.command, space: false };
+            let tk = match key {
+                Key::ArrowLeft => Some(ToolKey::Left),
+                Key::ArrowRight => Some(ToolKey::Right),
+                Key::ArrowUp => Some(ToolKey::Up),
+                Key::ArrowDown => Some(ToolKey::Down),
+                Key::Home => Some(ToolKey::Home),
+                Key::End => Some(ToolKey::End),
+                Key::Backspace => Some(ToolKey::Backspace),
+                Key::Delete => Some(ToolKey::Delete),
+                Key::Tab if !m.command => Some(ToolKey::Tab),
+                _ => None,
+            };
+            if let Some(tk) = tk {
+                if *pressed {
+                    todo.push(TextInput::Key(tk, mods));
+                }
+                return false;
+            }
+            // Type › Bold and Italic, as page layout apps have them while text is edited.
+            if m.command && m.shift && !m.alt && matches!(key, Key::B | Key::I) {
+                if *pressed {
+                    todo.push(TextInput::Face(if *key == Key::B { Face::Bold } else { Face::Italic }));
+                }
+                return false;
+            }
+            if m.command && !m.shift && !m.alt && matches!(key, Key::C | Key::X | Key::V) {
+                if *pressed {
+                    todo.push(match key {
+                        Key::C => TextInput::Copy,
+                        Key::X => TextInput::Cut,
+                        _ => TextInput::Paste(None),
+                    });
+                }
+                return false;
+            }
+            true
+        }
+        _ => true,
+    }
+}
+
+/// Keeps `ctx` for the Type tool's clipboard, which Edit › Copy and Cut also write to.
+pub(crate) fn keep_ctx(ctx: &egui::Context) {
     CTX.get_or_init(|| ctx.clone());
-    let mut todo = vec![];
-    ctx.input_mut(|i| {
-        i.events.retain(|e| match e {
-            egui::Event::Copy => {
-                todo.push(TextInput::Copy);
-                false
+}
+
+/// Applies an editing key or clipboard event taken by [`type_input`] to the Type tool.
+pub(crate) fn apply_type_input(app: &mut VectorcraftApp, t: TextInput) {
+    match t {
+        TextInput::Key(k, m) => text_key(app, k, m),
+        TextInput::Copy => {
+            text_copy(app);
+        }
+        TextInput::Cut => {
+            if text_copy(app) {
+                text_key(app, ToolKey::Delete, Mods::default());
             }
-            egui::Event::Cut => {
-                todo.push(TextInput::Cut);
-                false
-            }
-            egui::Event::Paste(s) => {
-                todo.push(TextInput::Paste(Some(s.clone())));
-                false
-            }
-            egui::Event::Key { key, pressed, modifiers: m, .. } => {
-                let mods = Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl && !m.command, space: false };
-                let tk = match key {
-                    Key::ArrowLeft => Some(ToolKey::Left),
-                    Key::ArrowRight => Some(ToolKey::Right),
-                    Key::ArrowUp => Some(ToolKey::Up),
-                    Key::ArrowDown => Some(ToolKey::Down),
-                    Key::Home => Some(ToolKey::Home),
-                    Key::End => Some(ToolKey::End),
-                    Key::Backspace => Some(ToolKey::Backspace),
-                    Key::Delete => Some(ToolKey::Delete),
-                    Key::Tab if !m.command => Some(ToolKey::Tab),
-                    _ => None,
-                };
-                if let Some(tk) = tk {
-                    if *pressed {
-                        todo.push(TextInput::Key(tk, mods));
-                    }
-                    return false;
-                }
-                // Type › Bold and Italic, as page layout apps have them while text is edited.
-                if m.command && m.shift && !m.alt && matches!(key, Key::B | Key::I) {
-                    if *pressed {
-                        todo.push(TextInput::Face(if *key == Key::B { Face::Bold } else { Face::Italic }));
-                    }
-                    return false;
-                }
-                if m.command && !m.shift && !m.alt && matches!(key, Key::C | Key::X | Key::V) {
-                    if *pressed {
-                        todo.push(match key {
-                            Key::C => TextInput::Copy,
-                            Key::X => TextInput::Cut,
-                            _ => TextInput::Paste(None),
-                        });
-                    }
-                    return false;
-                }
-                true
-            }
-            _ => true,
-        })
-    });
-    for t in todo {
-        match t {
-            TextInput::Key(k, m) => text_key(app, k, m),
-            TextInput::Copy => {
-                text_copy(app);
-            }
-            TextInput::Cut => {
-                if text_copy(app) {
-                    text_key(app, ToolKey::Delete, Mods::default());
-                }
-            }
-            TextInput::Paste(s) => text_paste(app, s, false),
-            TextInput::Face(f) => {
-                if let Err(e) = toggle_face(app, f) {
-                    app.status(e);
-                }
+        }
+        TextInput::Paste(s) => text_paste(app, s, false),
+        TextInput::Face(f) => {
+            if let Err(e) = toggle_face(app, f) {
+                app.status(e);
             }
         }
     }
@@ -756,8 +787,7 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             let caret = text_editing(app).is_some_and(|(_, a, b)| a == b);
             let at_caret = if caret { caret_kerning(app, ui) } else { None };
             let kerning = at_caret.map(|(v, _)| v).or_else(|| mode.map(|(_, manual)| manual.unwrap_or(0.0)));
-            let automatic = mode.map(|(optical, manual)| !optical && manual.is_none());
-            let optical = mode.map(|(optical, _)| optical);
+            let (automatic, optical) = kerning_methods(mode);
             match widgets::spin_kerning(
                 ui,
                 "ch-kern",
@@ -968,6 +998,9 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
 const SNAP_TO_GLYPH_OPTIONS: &str = "ch-snap-to-glyph-options";
+/// Set when Show Snap to Glyph Options is chosen: the next frame scrolls the panel to the options,
+/// which come after every character attribute (#5273).
+const SNAP_TO_GLYPH_REVEAL: &str = "ch-snap-to-glyph-reveal";
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     show_owned(app, ui, crate::font_menu::WheelOwner::Character);
@@ -981,13 +1014,18 @@ fn show_owned(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
     }
 }
 
-/// The Snap to Glyph options (Show Snap to Glyph Options): which guides View › Snap to Glyph gives,
-/// each a checkbox running `view.snapToGlyph.options`. Dimmed while Snap to Glyph is off.
+/// The Snap to Glyph options (Show Snap to Glyph Options): View › Snap to Glyph itself, then which
+/// guides it gives, each a checkbox running `view.snapToGlyph.options` (dimmed while Snap to Glyph
+/// is off). Shown from the panel menu, the panel scrolls to them (#5273).
 fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     ui.separator();
-    widgets::section_header(ui, "Snap to Glyph");
+    let top = ui.cursor().min;
     let (o, enabled) = (app.session.prefs.glyph_snap, app.ui.view.snap_to_glyph);
+    // A UI command that takes no params: it can't refuse.
+    if widgets::check(ui, "Snap to Glyph", enabled, true) {
+        app.run("view.snapToGlyph", json!({})).ok();
+    }
     egui::Grid::new("ch-snap-to-glyph").num_columns(2).show(ui, |ui| {
         for (i, (label, key, on)) in [
             ("Baseline", "baseline", o.baseline),
@@ -1009,6 +1047,10 @@ fn snap_to_glyph_options(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
+    if pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_REVEAL) {
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_REVEAL, false);
+        ui.scroll_to_rect(egui::Rect::from_min_max(top, ui.min_rect().max), Some(egui::Align::BOTTOM));
+    }
 }
 
 /// The character attributes of the type selected (an empty state without any).
@@ -1196,6 +1238,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let glyph = pstate::<bool>(ui.ctx(), SNAP_TO_GLYPH_OPTIONS);
     if menu_item(ui, if glyph { tl!("Hide Snap to Glyph Options") } else { tl!("Show Snap to Glyph Options") }, true, false) {
         set_pstate(ui.ctx(), SNAP_TO_GLYPH_OPTIONS, !glyph);
+        set_pstate(ui.ctx(), SNAP_TO_GLYPH_REVEAL, !glyph);
     }
     // Show Font Height Options shows the Set Font Height Reference dropdown under Font Size.
     let heights: bool = pstate(ui.ctx(), FONT_HEIGHT_OPTIONS);

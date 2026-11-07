@@ -677,18 +677,22 @@ mod input {
             "vectorcraft document windows input"
         }
 
-        fn input_hook(&mut self, _: &egui::Context, input: &mut egui::RawInput) {
-            if let Some(hook) = self.hook.as_ref().filter(|_| self.windows.contains(&input.viewport_id)) {
-                hook(input);
+        fn input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+            if self.windows.contains(&input.viewport_id) {
+                if let Some(hook) = &self.hook {
+                    hook(input);
+                }
+                crate::font_menu::take_raw_wheel(ctx, input);
             }
         }
     }
 
     /// Run `hook` on the input of `windows` from their next frame on.
     pub(super) fn register(ctx: &egui::Context, hook: Option<NativeInputHook>, windows: HashSet<egui::ViewportId>) {
-        if hook.is_none() && ctx.with_plugin(|_: &mut DocumentWindowInput| ()).is_none() {
+        if windows.is_empty() && ctx.with_plugin(|_: &mut DocumentWindowInput| ()).is_none() {
             return;
         }
+        crate::font_menu::ensure_native_wheel_layers(ctx);
         ctx.add_plugin(DocumentWindowInput::default());
         ctx.with_plugin(|p: &mut DocumentWindowInput| {
             p.hook = hook;

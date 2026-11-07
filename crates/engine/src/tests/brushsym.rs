@@ -1225,6 +1225,32 @@ fn place_and_break_link_round_trip_geometry() {
 }
 
 #[test]
+fn hidden_instance_fill_does_not_tint_expanded_symbol_art() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let mut s = session();
+        let source = rect(&mut s, 100.0, 50.0, 80.0, 40.0);
+        s.execute("paint.setFill", &json!({"ids": [source.0], "color": "#0000ff"})).unwrap();
+        let inst = NodeId(s.execute("symbol.new", &json!({"name": "Blue Box"})).unwrap()["id"].as_u64().unwrap());
+        s.execute("appearance.addFill", &json!({"ids": [inst.0]})).unwrap();
+        let fill = node(&s, inst).appearance.items.len() - 1;
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "color": "#ff0000"})).unwrap();
+        let center = |s: &Session| {
+            let doc = s.doc().unwrap().doc.clone();
+            vectorcraft_render::Renderer::new().render_region(&doc, Rect::new(0.0, 0.0, 400.0, 300.0), 1.0, true).pixel(140, 70)
+        };
+        let tinted = center(&s);
+        assert!(tinted[0] > tinted[2], "the visible instance fill tints the symbol: {tinted:?}");
+        s.execute("appearance.setItem", &json!({"ids": [inst.0], "index": fill, "visible": false})).unwrap();
+        let original = center(&s);
+        assert!(original[2] > original[0], "hiding the fill restores the blue symbol: {original:?}");
+
+        let params = if command == "symbol.breakLink" { json!({"ids": [inst.0]}) } else { json!({"object": true, "fill": false, "stroke": false}) };
+        s.execute(command, &params).unwrap();
+        assert_eq!(center(&s), original, "{command} must keep the untinted colors");
+    }
+}
+
+#[test]
 fn break_link_then_update_redefines_all_instances() {
     let mut s = session();
     let (inst, name, _) = make_symbol(&mut s);
@@ -1403,6 +1429,26 @@ fn symbolism_adjustments() {
     let far = s.execute("symbol.adjust", &json!({"tool": "size", "points": [[0, 290]], "radius": 5})).unwrap();
     assert_eq!(far["count"], 0);
     assert!(s.execute("symbol.adjust", &json!({"tool": "nope", "points": at})).is_err());
+}
+
+/// The Symbol Stainer's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, rather than staining with the current fill; `#rrggbb` still stains with it.
+#[test]
+fn a_stain_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let (inst, _, b) = make_symbol(&mut s);
+    let c = b.center();
+    let at = json!([[c.x, c.y]]);
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#ff000080", "ff000080", "#f008"] {
+        assert!(s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": bad, "intensity": 10})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("symbol.adjust", &json!({"tool": "stain", "points": at, "color": "#ff0000", "intensity": 10})).unwrap();
+    let f = node(&s, inst).appearance.fill().cloned().unwrap();
+    assert_eq!(f.paint.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
 }
 
 /// In a CMYK document the Symbol Stainer's RGB `color` separates through the color settings, as

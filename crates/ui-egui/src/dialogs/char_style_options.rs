@@ -264,23 +264,29 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
                 .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
+            // Character Style fields use the Character panel's visible ranges.
+            let max = match key {
+                "size" => 1296.0,
+                "leading" => 5000.0,
+                _ => vectorcraft_doc::MAX_COORD,
+            };
             if ["size", "leading"].contains(&key) && n < 0.1 {
                 return Err(format!("{label} must be a number of at least 0.1"));
             }
-            // The limits the document model keeps scales and baseline shift in.
-            let max = vectorcraft_doc::MAX_COORD;
-            if ["h_scale", "v_scale"].contains(&key) && !(n > 0.0 && n <= max) {
-                return Err(format!("{label} must be a number above 0 and at most {max}"));
+            if ["size", "leading"].contains(&key) && n > max {
+                return Err(format!("{label} must be a number at most {max}"));
             }
-            let min = -max;
-            if key == "baseline_shift" && !(min..=max).contains(&n) {
-                return Err(format!("{label} must be a number from {min} to {max}"));
+            if ["h_scale", "v_scale"].contains(&key) && !(1.0..=10000.0).contains(&n) {
+                return Err(format!("{label} must be a number from 1 to 10000"));
+            }
+            if key == "baseline_shift" && !(-1296.0..=1296.0).contains(&n) {
+                return Err(format!("{label} must be a number from -1296 to 1296"));
             }
             // Weight from 0 to the document limit, a tint from 0% to 100%.
             let (min, max) = match key {
-                "stroke_width" => (0.0, max),
+                "stroke_width" => (0.0, vectorcraft_doc::MAX_COORD),
                 "fill_tint" | "stroke_tint" => (0.0, 100.0),
-                _ => (min, max),
+                _ => (0.0, 0.0),
             };
             if ["stroke_width", "fill_tint", "stroke_tint"].contains(&key) && !(min..=max).contains(&n) {
                 return Err(format!("{label} must be a number from {min} to {max}"));
@@ -912,12 +918,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
             form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
         }
-        Err(why) => {
-            ui.add_space(6.0);
-            ui.colored_label(crate::theme::Tokens::get(ui.ctx()).error, crate::i18n::message(crate::i18n::current(), &why));
-        }
+        Err(why) => attrs_error(ui, &why),
     }
     false
+}
+
+/// The message `edited_attrs` gave for a field value it does not accept, drawn under the dialog.
+pub(crate) fn attrs_error(ui: &mut egui::Ui, why: &str) {
+    ui.add_space(6.0);
+    ui.colored_label(crate::theme::Tokens::get(ui.ctx()).error, crate::i18n::message(crate::i18n::current(), why));
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -1135,13 +1144,15 @@ mod tests {
     }
 
     #[test]
-    fn advanced_numbers_outside_their_limits_are_errors() {
+    fn character_style_numbers_outside_their_limits_are_errors() {
         for (key, value, message) in [
-            ("h_scale", "0", "Horizontal Scale must be a number above 0 and at most 4000000"),
-            ("h_scale", "-5", "Horizontal Scale must be a number above 0 and at most 4000000"),
-            ("v_scale", "4000001", "Vertical Scale must be a number above 0 and at most 4000000"),
-            ("baseline_shift", "4000001", "Baseline Shift must be a number from -4000000 to 4000000"),
-            ("baseline_shift", "-4000001", "Baseline Shift must be a number from -4000000 to 4000000"),
+            ("size", "1296.1", "Size must be a number at most 1296"),
+            ("leading", "5000.1", "Leading must be a number at most 5000"),
+            ("h_scale", "0", "Horizontal Scale must be a number from 1 to 10000"),
+            ("h_scale", "0.9", "Horizontal Scale must be a number from 1 to 10000"),
+            ("v_scale", "10000.1", "Vertical Scale must be a number from 1 to 10000"),
+            ("baseline_shift", "1296.1", "Baseline Shift must be a number from -1296 to 1296"),
+            ("baseline_shift", "-1296.1", "Baseline Shift must be a number from -1296 to 1296"),
             ("rotation", "inf", "Character Rotation must be a number"),
             ("h_scale", "wide", "Horizontal Scale must be a number"),
         ] {
@@ -1150,10 +1161,15 @@ mod tests {
             assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
         }
         let mut d = dialog_for(json!({}));
-        for (key, value) in [("h_scale", "0.5"), ("v_scale", "4000000"), ("baseline_shift", "-4000000"), ("rotation", "-200")] {
+        for (key, value) in
+            [("size", "1296"), ("leading", "5000"), ("h_scale", "1"), ("v_scale", "10000"), ("baseline_shift", "-1296"), ("rotation", "-200")]
+        {
             d.fields.insert(key.into(), json!(value));
         }
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"h_scale": 0.5, "v_scale": 4000000.0, "baseline_shift": -4000000.0, "rotation": 160.0})));
+        assert_eq!(
+            edited_attrs(&d).unwrap(),
+            attrs(json!({"size": 1296.0, "leading": 5000.0, "h_scale": 1.0, "v_scale": 10000.0, "baseline_shift": -1296.0, "rotation": 160.0}))
+        );
     }
 
     #[test]
@@ -1511,6 +1527,40 @@ mod tests {
             assert_eq!(app.session.doc().unwrap().doc, before, "{key} preview");
             assert!(super::super::confirm(&mut app).is_err(), "{key} confirm");
             assert_eq!(app.session.doc().unwrap().doc, before, "{key} confirm");
+        }
+    }
+
+    #[test]
+    fn new_character_style_shows_size_and_leading_errors_before_ok() {
+        use egui_kittest::kittest::Queryable;
+        for (key, value) in [("size", json!(0)), ("leading", json!(0.05))] {
+            let mut app = app();
+            app.run("ui.newCharStyle", json!({})).unwrap();
+            let why = {
+                let d = app.ui.dialog.as_mut().unwrap();
+                d.fields.insert("section".into(), json!("basic"));
+                d.fields.insert(key.into(), value);
+                edited_attrs(d).unwrap_err()
+            };
+            let shown = crate::i18n::message(crate::i18n::current(), &why);
+            let mut fonts = false;
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).with_accessibility_check(false).build_ui_state(
+                move |ui, app: &mut VectorcraftApp| {
+                    if !std::mem::replace(&mut fonts, true) {
+                        crate::theme::install_fonts(ui.ctx());
+                        return;
+                    }
+                    super::super::show(app, ui.ctx());
+                },
+                app,
+            );
+            h.run_steps(4);
+            assert!(h.query_by_label(&shown).is_some(), "{key}: {shown} is not shown");
+            let app = h.state_mut();
+            let styles = app.session.doc().unwrap().doc.char_styles.len();
+            assert!(super::super::confirm(app).is_err(), "{key} confirm");
+            assert!(app.ui.dialog.is_some(), "{key} dialog stays open");
+            assert_eq!(app.session.doc().unwrap().doc.char_styles.len(), styles, "{key} style count");
         }
     }
 

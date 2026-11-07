@@ -126,7 +126,7 @@ fn effect_params_are_the_effects_own() {
         check_effect_params("effect.apply", e.id, &e.defaults).unwrap_or_else(|why| panic!("{}'s defaults: {why}", e.id));
     }
     let apply = |effect: &str, params| json!({"effect": effect, "params": params});
-    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius");
+    assert_eq!(refusal("effect.apply", apply("blur.gaussian", json!({"blurr": 3}))), "unknown parameter `blurr`; the command takes: radius, linear");
     assert_eq!(
         refusal("appearance.addEffect", apply("stylize.dropShadow", json!({"opacty": 50}))),
         "unknown parameter `opacty`; did you mean `opacity`?"

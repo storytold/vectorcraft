@@ -14,7 +14,7 @@ use vectorcraft_geom::{ArcPath, PathData};
 use crate::GlyphBend;
 use crate::composer::{Breakpoint, Params, compose};
 use crate::fontdb::FontDb;
-use crate::hyphen::hyphen_points_with;
+use crate::hyphen::points_for;
 use crate::justify::{Flex, LineFit, apply_desired, fit_line, is_word_space};
 use crate::kashida;
 use crate::shape::{
@@ -327,10 +327,14 @@ impl Ctx<'_> {
         } else if self.vertical && stands_upright(g) {
             let next = self.out.glyphs.len();
             let after_base = self.out.glyphs.last().is_some_and(|p| p.byte == g.byte && p.line == line && p.len > 0);
+            // Baseline shift moves it across the column at any Character Rotation: the shift is
+            // taken off before the turn and put back after it.
+            let shift = pre * Point::new(0.0, -g.bshift) - pre * Point::ZERO;
+            let (shift, unshift) = (Affine::translate(shift), Affine::translate(-shift));
             if let Some((_, _, turn, after)) = cluster.filter(|c| c.0 == g.byte && c.1 == next && after_base && g.len > 0) {
                 // A later glyph of an upright glyph's cluster: set after it as the shaper placed
                 // it, and turned with it.
-                m = turn * Affine::translate((after - origin.x, 0.0)) * m;
+                m = shift * turn * Affine::translate((after - origin.x, 0.0)) * unshift * m;
                 self.upright_cluster = Some((g.byte, next + 1, turn, after));
             } else {
                 // Turned about the centre of its cell, which the column's centre line runs through:
@@ -342,7 +346,7 @@ impl Ctx<'_> {
                 // turning point instead would move it across the column too).
                 let turn = Affine::translate((-g.lead, 0.0))
                     * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
-                m = turn * m;
+                m = shift * turn * unshift * m;
                 // Its own advance across, from where the cell centres it: where the shaper set the
                 // next glyph of its cluster.
                 let across = g.face.advance(g.gid) * g.sx;

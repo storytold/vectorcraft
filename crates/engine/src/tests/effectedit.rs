@@ -70,6 +70,29 @@ fn effects_move_and_copy_between_the_object_and_its_items() {
     assert!(s.execute("effect.move", &json!({"from": 0, "fromItem": 1, "to": 0, "toItem": 7})).is_err());
 }
 
+#[test]
+fn invalid_effect_move_flags_leave_the_effects_alone() {
+    let (mut s, id) = session_with_rect();
+    run(&mut s, "effect.apply", json!({"effect": "distort.twist"}));
+    let before_undo = s.doc().unwrap().history.undo.len();
+    let to_fill = json!({"from": 0, "fromItem": null, "to": 0, "toItem": 0});
+    for (key, value) in [("copy", json!("true")), ("copy", json!(1)), ("aligned", json!("false"))] {
+        let mut params = to_fill.clone();
+        params[key] = value;
+        assert!(s.execute("effect.move", &params).is_err(), "accepted {params}");
+        assert_eq!(fx(&s, id, None), ["distort.twist"], "moved the effect for {params}");
+        assert!(fx(&s, id, Some(0)).is_empty(), "copied the effect for {params}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before_undo, "recorded undo for {params}");
+    }
+    // Null, as for every command, is the same as leaving the flag out: a move.
+    let mut params = to_fill;
+    params["copy"] = Value::Null;
+    params["aligned"] = Value::Null;
+    run(&mut s, "effect.move", params);
+    assert!(fx(&s, id, None).is_empty());
+    assert_eq!(fx(&s, id, Some(0)), ["distort.twist"]);
+}
+
 /// `effect.duplicate` copies a fill's effect right after it.
 #[test]
 fn duplicate_selected_works_for_effects() {

@@ -44,6 +44,12 @@ fn activated_at_id() -> Id {
     Id::unique("document-drag-activated-at")
 }
 
+/// Whether a Selection drag is carrying artwork across the document tabs, which then switch
+/// documents and never move along the strip.
+pub(crate) fn carrying_artwork(ctx: &Context) -> bool {
+    egui::DragAndDrop::payload::<Artwork>(ctx).is_some()
+}
+
 /// Record the Selection drag source and grab point, clearing any previous tab-hover timer.
 pub(crate) fn begin(app: &VectorcraftApp, ctx: &Context, grab: Point) {
     ctx.data_mut(|d| {

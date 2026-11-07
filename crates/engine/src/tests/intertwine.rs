@@ -82,6 +82,28 @@ fn clicking_an_overlap_brings_the_object_below_to_the_front_there_only() {
     assert_eq!(hit(&s, 50.0, 70.0), Some(b));
 }
 
+/// #5337: where A is brought over B, the edges of B that cross A leave no blue hairline in A.
+#[test]
+fn the_object_brought_over_shows_no_seam_of_the_one_below() {
+    let mut s = session();
+    intertwined(&mut s);
+    arrange(&mut s, json!({"at": [50, 30]}));
+    let zoom = 8.0;
+    let r = vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 800, 800, Affine::scale(zoom), &Default::default());
+    let mut worst = 0;
+    for y in 160..360 {
+        for x in 320..480 {
+            let (px, py) = ((x as f64 + 0.5) / zoom, (y as f64 + 0.5) / zoom);
+            // Well inside ring A's 8 pt stroke (radius 21 to 29), A covers every pixel.
+            let d = ((px - 35.0).powi(2) + (py - 50.0).powi(2)).sqrt();
+            if (22.0..28.0).contains(&d) {
+                worst = worst.max(r.pixel(x, y)[2]);
+            }
+        }
+    }
+    assert!(worst < 8, "blue shows through ring A at the top crossing (blue {worst})");
+}
+
 #[test]
 fn clicking_the_same_overlap_again_swaps_back() {
     let mut s = session();

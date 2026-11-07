@@ -192,7 +192,22 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.path()
+        }
+    }
+
+    impl AsRef<Path> for TestDir {
+        fn as_ref(&self) -> &Path {
+            self.0.path()
+        }
+    }
 
     fn environment(key: &str) -> Option<OsString> {
         match key {
@@ -287,12 +302,8 @@ mod tests {
         assert_eq!(install_dir("macos", mounted, &appimage), Some("/tmp/.mount_vc/usr/bin".into()));
     }
 
-    fn temp(tag: &str) -> PathBuf {
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let d = std::env::temp_dir().join(format!("vectorcraft-profile-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn temp(tag: &str) -> TestDir {
+        TestDir(tempfile::Builder::new().prefix(&format!("vectorcraft-profile-{tag}-")).tempdir().unwrap())
     }
 
     #[test]

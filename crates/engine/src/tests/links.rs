@@ -283,6 +283,44 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
 }
 
+/// A link stored as a classic Mac OS path (`Disk:Folder:file`, as older `.ai` files keep them) is
+/// named by its last component: the Links panel shows that name and its folder, Relink to Folder
+/// looks for that name, and the document's own folder is searched for it. The stored path is kept.
+#[test]
+fn a_classic_mac_path_is_found_by_its_file_name() {
+    const CLASSIC: &str = "Macintosh HD:Images:photo.png";
+    let dir = Folder::new("classic-mac");
+    let pic = dir.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    saved_image(&mut v)["link"] = json!({ "path": CLASSIC });
+    let doc_path = dir.file("poster.vectorcraft");
+    write(&doc_path, &serde_json::to_vec(&v).unwrap());
+    let r = open(&mut s, &doc_path);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(r["missingLinks"], json!([{"name": "photo.png", "path": CLASSIC, "ids": [id.0]}]));
+    let i = s.execute("links.info", &json!({"id": id.0})).unwrap();
+    assert_eq!(
+        (i["fileName"].as_str(), i["location"].as_str(), i["path"].as_str()),
+        (Some("photo.png"), Some("Macintosh HD:Images"), Some(CLASSIC)),
+        "{i}"
+    );
+    // Relink to Folder: the file of the link's name there.
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [], "notFound": ["photo.png"]}));
+    write(&dir.file("found/photo.png"), &png(600, 300, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    // The document's folder: the file of the link's name beside the document.
+    write(&dir.file("photo.png"), &png(600, 300, RED));
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
 /// A `w`×`h` PNG of noise cut to half its length: its header reads, its pixels don't.
 pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
     let img = image::RgbImage::from_fn(w, h, |x, y| {
@@ -462,6 +500,38 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
         assert!(*b.doc == *a.doc, "{update}: the same document");
         assert!(b.history.undo.is_empty() && !b.is_dirty(), "{update}");
     }
+}
+
+/// Opening lays out each type object with the plans the objects before it left on the font's
+/// face: its bounds and baselines are those of a layout in a font database of its own, which holds
+/// no plans. The objects share a script and direction and differ in features and language. Only
+/// bundled Latin glyphs are set, which every font database holds.
+#[test]
+fn type_read_for_opening_has_the_layout_of_a_font_database_with_no_plans() {
+    let dir = Folder::new("read-for-open-plans");
+    let style = vectorcraft_doc::CharStyle { size: 100.0, ..Default::default() };
+    let manual = vectorcraft_doc::CharStyle { kerning: Some(0.0), ..style.clone() };
+    let turkish = vectorcraft_doc::CharStyle { language: Some("tr".into()), ..style.clone() };
+    let mut doc = Document::new(800.0, 600.0);
+    let layer = doc.layers[0].id;
+    for (text, style) in [("AVAV", &style), ("AVAV", &manual), ("office", &turkish), ("To Wa", &style), ("To Wa", &manual)] {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 120.0), text, style.clone());
+        let id = doc.alloc_id();
+        doc.insert(Some(layer), usize::MAX, vectorcraft_doc::Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    }
+    let doc_path = dir.file("type.vectorcraft");
+    let bytes = vectorcraft_format::save_file(&doc);
+    let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, false, false).unwrap();
+    let mut seen = 0;
+    file.document().walk(|node| {
+        if let NodeKind::Text(t) = &node.kind {
+            let fresh = vectorcraft_text::layout(&vectorcraft_text::FontDb::with_font_dirs(vec![]), t);
+            assert_eq!(t.cached_bounds, Some(fresh.bounds), "{:?}", t.plain_text());
+            assert_eq!(t.cached_baselines, fresh.baselines(), "{:?}", t.plain_text());
+            seen += 1;
+        }
+    });
+    assert_eq!(seen, 5);
 }
 
 #[test]

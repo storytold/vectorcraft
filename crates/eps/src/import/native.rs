@@ -23,7 +23,9 @@
 //! before; on a layer that doesn't show it is left out of that layer, with a warning. The page is
 //! also the safety net: when the layers' art looks different from it (one draws an object the
 //! other doesn't, or much of it differs; an EPS whose page is its art's box has nothing printed
-//! outside it), the page is used.
+//! outside it), the page is used. A `.ai` whose text document makes all of its type, with no
+//! object unread and nothing else that the page would decide, opens from its layers without its
+//! PDF part being imported, so nothing is compared ([`ai_layers_alone`]).
 //!
 //! Where a file doesn't match what this module expects, it is left alone and its page is imported.
 
@@ -32,7 +34,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit};
+use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, Scaling, TextKind, Unit, VariableKind};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 
 use super::Imported;
@@ -52,8 +54,9 @@ use build::{Frame, MADE, prune_unseen};
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,
 };
-pub use layers::{ai_alone, ai_alone_on_page, layered_ai};
+pub use layers::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, layered_ai, layered_ai_from};
 pub(super) use layers::{layered, program_alone};
+pub(crate) use slots::MAX_TEXT;
 pub use slots::is_loss;
 #[cfg(test)]
 use slots::join_pieces;

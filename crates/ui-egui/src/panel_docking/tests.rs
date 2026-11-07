@@ -161,6 +161,52 @@ fn a_tab_dragged_out_floats_and_comes_back_where_it_was_after_its_window_closes(
     assert!(h.tab("layers").is_some());
 }
 
+#[test]
+fn thumbnail_work_is_needed_only_while_layers_or_links_can_be_seen() {
+    let mut h = Harness::new();
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    assert!(thumbnail_panel_showing(&h.app.ui, &h.ctx));
+    h.app.ui.dock = false;
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "Tab hides every panel");
+    h.app.ui.dock = true;
+    h.app.ui.screen_mode = 3;
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "presentation mode hides panels");
+    h.app.ui.screen_mode = 0;
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    assert!(thumbnail_panel_showing(&h.app.ui, &h.ctx), "a floating Layers panel still needs thumbnails");
+    h.app.run("window.panel", json!({"panel": "layers", "toggle": true})).unwrap();
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx));
+    h.app.run("window.panel", json!({"panel": "links"})).unwrap();
+    h.frame(vec![]);
+    assert!(thumbnail_panel_showing(&h.app.ui, &h.ctx), "the Links flyout also uses row thumbnails");
+}
+
+#[test]
+fn a_collapsed_dock_uses_the_flyouts_active_tab_for_thumbnail_work() {
+    let mut h = Harness::new();
+    h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+    // A customized layout keeps the group's active tab independent of the icon that opened it.
+    h.app.ui.docking = Some(layout_of(&h.app.ui));
+    h.app.run("window.panel", json!({"panel": "properties"})).unwrap();
+    h.frame(vec![]);
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "Properties does not use row thumbnails");
+    // A tab press emits Activate without revealing a different flyout anchor.
+    gesture(&mut h.app, Action::Activate { panel: "layers".into() }).unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("properties"), "the flyout is still named for its opening icon");
+    assert!(thumbnail_panel_showing(&h.app.ui, &h.ctx), "the active Layers tab keeps thumbnail jobs");
+    gesture(&mut h.app, Action::Activate { panel: "properties".into() }).unwrap();
+    h.frame(vec![]);
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "returning to Properties drops hidden Layers jobs");
+    h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    assert!(thumbnail_panel_showing(&h.app.ui, &h.ctx));
+    gesture(&mut h.app, Action::Activate { panel: "properties".into() }).unwrap();
+    h.frame(vec![]);
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+    assert!(!thumbnail_panel_showing(&h.app.ui, &h.ctx), "a Properties tab under the Layers icon does not need thumbnails");
+}
+
 /// A Character field shortcut with the Character panel in front of its floating window brings
 /// that window forward and leaves the panel showing.
 #[test]
@@ -610,6 +656,19 @@ fn f7_hides_and_restores_a_floating_tab_group() {
     assert_eq!(floating_window(&h.layout(), "layers").unwrap().rect, rect);
     assert_eq!(group_of(&h.layout(), &"layers".into()), ["properties", "layers", "libraries"]);
     assert!(showing(&h.app.ui, "layers"));
+}
+
+#[test]
+fn showing_a_hidden_floating_group_returns_its_window_panels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "swatches"})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frame(vec![]);
+    h.press(egui::Key::F7, egui::Modifiers::NONE);
+    assert!(floating_window(&h.layout(), "layers").is_none());
+    let reply = h.app.run("window.panel", json!({"panel": "layers"})).unwrap();
+    assert_eq!(reply, json!({"floating": ["properties", "layers", "libraries"]}), "only the restored window's panels");
 }
 
 #[test]

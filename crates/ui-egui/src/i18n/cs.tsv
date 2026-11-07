@@ -691,6 +691,8 @@
 	Update Changed Links	Aktualizovat změněná propojení
 	Magic Wand	Kouzelná hůlka
 	Navigator	Navigátor
+	Navigator Panel Options	Možnosti panelu Navigátor
+	Draw Dashed Lines as Solid Lines	Kreslit čárkované čáry jako plné
 	Pattern Options	Možnosti vzorku
 	Properties	Vlastnosti
 	Separations Preview	Náhled separací
@@ -967,6 +969,10 @@ lighting	Light	Světlo
 	Home	Domů
 	Import Keyboard Shortcuts…	Importovat klávesové zkratky…
 	Justify all lines	Do bloku včetně posledního řádku
+	Align Top	Zarovnat nahoru
+	Align Center	Zarovnat svisle na střed
+	Align Bottom	Zarovnat dolů
+	Justify Vertically	Zarovnat svisle do bloku
 	Justify with last line aligned left	Do bloku, poslední řádek vlevo
 	Keyboard Shortcut Conflicts	Konflikty klávesových zkratek
 	Keyboard Shortcut Set	Sada klávesových zkratek
@@ -1487,7 +1493,9 @@ digits	Malayalam	Malajálamské
 	Standard Vertical Roman Alignment	Standardní svislé zarovnání latinky
 	Strikethrough	Přeškrtnutí
 	Character:	Znak:
+	Paragraph:	Odstavec:
 	Character options	Možnosti znaků
+	Paragraph options	Možnosti odstavce
 	Subscript	Dolní index
 	Subscript (on the roadmap)	Dolní index (v plánu)
 	Superscript	Horní index
@@ -1565,6 +1573,11 @@ digits	Malayalam	Malajálamské
 	Save Transparency Flattener Preset…	Uložit přednastavení sloučení průhlednosti…
 	Basic Latin	Základní latinka
 	Currency & Symbols	Měny a symboly
+	Alternates for Current Selection	Alternativy pro aktuální výběr
+	Select a character with the Type tool to see its alternates.	Alternativy znaku uvidíte, když ho vyberete nástrojem Text.
+	The selected character's font is not available.	Písmo vybraného znaku není k dispozici.
+	No alternates for the selected character.	Vybraný znak nemá žádné alternativy.
+	Double-click to replace	Dvojklikem nahradíte
 	Double-click to insert	Dvojklikem vložíte
 	Entire Font	Celé písmo
 	glyph {id}	glyf {id}
@@ -1937,6 +1950,9 @@ digits	Malayalam	Malajálamské
 	More Paragraph options	Další možnosti odstavce
 	No document open	Není otevřen žádný dokument
 	Quick Actions	Rychlé akce
+	Rearrange	Přeuspořádat
+	Select All Artboards	Vybrat všechny pracovní plochy
+	Switch Orientation	Přepnout orientaci
 	Rearrange All	Přeuspořádat vše
 	Rulers & Grids	Pravítka a mřížky
 	Select a text object	Vyberte textový objekt
@@ -2426,6 +2442,7 @@ digits	Malayalam	Malajálamské
 	“{file}” is protected by a password.	Soubor „{file}“ je chráněn heslem.
 	Dim Images to:	Ztlumit obrázky na:
 	Light Blue	Světle modrá
+	Light Red	Světle červená
 	Layers Panel Options	Možnosti panelu Vrstvy
 	Row Size:	Velikost řádků:
 	Show Layers Only	Zobrazit pouze vrstvy
@@ -2515,6 +2532,12 @@ digits	Malayalam	Malajálamské
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} soubor v {folder} {note}. Zobrazit složku balíčku?|{n} soubory v {folder} {note}. Zobrazit složku balíčku?|{n} souborů v {folder} {note}. Zobrazit složku balíčku?
 @plural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
 	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	{n} linked file not found|{n} linked files not found	Nenalezen {n} propojený soubor|Nenalezeny {n} propojené soubory|Nenalezeno {n} propojených souborů
+@msg	fonts not copied: {fonts}	nezkopírovaná písma: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nenalezen {n} propojený soubor)|(Nenalezeny {n} propojené soubory)|(Nenalezeno {n} propojených souborů)
+@msg	(fonts not copied: {fonts})	(nezkopírovaná písma: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	Built-in presets are read-only: New… starts an editable copy.	Vestavěná přednastavení jsou jen pro čtení: Nový… vytvoří kopii, kterou lze upravit.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na pracovní ploše odpovídá {real} {unit} ve scéně.
 	Grid Color & Opacity	Barva a krytí mřížky
@@ -3465,6 +3488,7 @@ theme	Appearance	Motiv
 	Character / Paragraph	Znak / Odstavec
 	Copy Artboard	Kopírovat pracovní plochu
 	Cut Artboard	Vyjmout pracovní plochu
+	Rename Artboards	Přejmenovat pracovní plochy
 	Move Artboard Up/Down	Posunout pracovní plochu nahoru/dolů
 	Add Anchor (Pen)	Přidat kotevní bod (pero)
 	Add Anchor Point	Přidat kotevní bod
@@ -4273,6 +4297,8 @@ imageTrace	Outline	Obrys
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Vytvořit z vodítek: vodítka vytvářejí více než {MAX_PIECES} řezů
 @msg	Create from Selection: the selection has no area	Vytvořit z výběru: výběr nemá žádnou plochu
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Obnovení dat nemá kam ukládat kopie: nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Data Recovery can't keep copies in {path}: {e}	Obnovení dat nemůže ukládat kopie do {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Zásuvné moduly nelze načíst z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
@@ -4617,6 +4643,8 @@ imageTrace	Outline	Obrys
 @msg	no such saved selection	takový uložený výběr neexistuje
 @msg	no such segment	takový segment neexistuje
 @msg	no such spine point	takový bod páteře neexistuje
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` musí být seznam nejvýše 10000 indexů bodů páteře
+@msg	`with` moves points, not a handle	`with` posouvá body, ne táhlo
 @msg	no such spine segment	takový segment páteře neexistuje
 @msg	no such subpath	taková dílčí cesta neexistuje
 @msg	no such user library	taková uživatelská knihovna neexistuje
@@ -4954,12 +4982,17 @@ imageTrace	Outline	Obrys
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	obsahuje {_1}, což z něj VectorCraft zatím nečte
 @msg	its objects are nested too deeply	jeho objekty jsou vnořené příliš hluboko
 @msg	its section ending with `%{end}` doesn't end	jeho oddíl končící `%{end}` nemá konec
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	štětce, které VectorCraft zatím neumí načíst, byly vynechány z panelu Štětce ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekty s více výplněmi nebo tahy, efekty či štětci byly načteny jako vykreslený vzhled ({_1}): jejich vzhled zatím nelze upravovat
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	přechod „{name}“ není v souboru definován: zastupuje ho plná barva
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
 @msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
+@msg	linked type areas past VectorCraft's limits were left out	propojené textové oblasti nad limity aplikace VectorCraft byly vynechány
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	text, který mění směr psaní uvnitř textového objektu, se otevře ve směru svého prvního znaku
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	text použitý jako maska v propojených oblastech, obtékaném textu nebo složené cestě neořezává
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	propojené obrázky bez náhledu v souboru se zobrazují jako zástupný symbol, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	text v oblasti v rámcích příliš nízkých pro řádek písma, ve kterém se zde zobrazuje, dostal vyšší rámce ({_1}): jinak by nebyl vidět
 @msg	its editing data doesn't say where its art is	z jeho dat pro úpravy není zřejmé, kde je kresba
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	tento soubor byl uložen bez kompatibility s PDF a jeho data pro úpravy nelze přečíst ({why})
@@ -5584,6 +5617,10 @@ mark-style	Japanese	Japonské
 	Movie Clip	Filmový klip
 @msg	name is empty	název je prázdný
 @msg	an action is already recording	akce se už zaznamenává
+@msg	an action is already playing	akce se už přehrává
+@msg	the action stopped playing: its document is no longer active	přehrávání akce se zastavilo: její dokument už není aktivní
+@msg	speed must be accelerated, step or pause	speed musí být accelerated, step nebo pause
+@msg	seconds must be a whole number from 1 to 60	seconds musí být celé číslo od 1 do 60
 @msg	no such function key	taková funkční klávesa neexistuje
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
@@ -5656,7 +5693,7 @@ mark-style	Japanese	Japonské
 	Word Spacing:	Mezery mezi slovy:
 	Letter Spacing:	Mezery mezi písmeny:
 	Glyph Scaling:	Změna velikosti glyfů:
-	Auto Leading:	Automatické proklady:
+	Auto Leading:	Automatický proklad:
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
@@ -5669,6 +5706,7 @@ mark-style	Japanese	Japonské
 	Effect Gallery	Galerie efektů
 	Filters	Filtry
 	Select artwork to apply effects	Vyberte grafiku, na kterou chcete použít efekty
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nebyly načteny všechny vazby proměnných souboru (vynechané vazby: {_1}): tyto objekty nejsou vázány na své proměnné
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	knihovna proměnných souboru byla načtena jen částečně (vynechané položky: {_1}): panel Proměnné zobrazuje zbytek
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	knihovnu proměnných souboru nebylo možné načíst: panel Proměnné ji nezobrazuje
 @msg	a variable of unknown kind can't be bound to objects	proměnnou neznámého druhu nelze svázat s objekty
@@ -5757,6 +5795,11 @@ axis	Y Axis	osa Y
 	Set Options	Možnosti sady
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
+	Playback Options…	Možnosti přehrávání…
+	Playback Options	Možnosti přehrávání
+	Accelerated	Zrychleně
+	Step by Step	Krok za krokem
+	Pause For	Pozastavit na
 	Rename Action	Přejmenovat akci
 	New Action…	Nová akce…
 	New Action	Nová akce
@@ -6069,6 +6112,9 @@ anchor	Points:	Body:
 	Find Nearest Swatch…	Najít nejbližší položku vzorníku…
 	Find Nearest Swatch	Najít nejbližší položku vzorníku
 	Apply Nearest Swatch	Použít nejbližší položku vzorníku
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Použít výplň na tah
+	Apply Stroke to Fill	Použít tah na výplň
 	Select objects to find the swatches nearest their colors.	Vyberte objekty, k jejichž barvám chcete najít nejbližší položky vzorníku.
 @msg	select objects or give `color`	vyberte objekty nebo zadejte `color`
 @msg	`color` is not a colour	`color` není barva
@@ -6250,6 +6296,11 @@ breakText	Glyphs	Glyfy
 	Export All Open Documents as SVG	Exportovat všechny otevřené dokumenty jako SVG
 @msgplural	Exported {n} document|Exported {n} documents	Exportován {n} dokument|Exportovány {n} dokumenty|Exportováno {n} dokumentů
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportován {n} dokument; {title} nebyl zapsán: {error}|Exportovány {n} dokumenty; {title} nebyl zapsán: {error}|Exportováno {n} dokumentů; {title} nebyl zapsán: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Dávková vektorizace složky
+@msgplural	Traced {n} image|Traced {n} images	Vektorizován {n} obraz|Vektorizovány {n} obrazy|Vektorizováno {n} obrazů
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} obraz nebylo možné vektorizovat|{n} obrazy nebylo možné vektorizovat|{n} obrazů nebylo možné vektorizovat
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizován {n} obraz; nevektorizováno: {failed}|Vektorizovány {n} obrazy; nevektorizováno: {failed}|Vektorizováno {n} obrazů; nevektorizováno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Typ symbolu:
 	Dynamic Symbol	Dynamický symbol
@@ -6300,4 +6351,58 @@ breakText	Glyphs	Glyfy
 	Bow	Oblouk
 	Spike	Špička
 	Skip Spaces	Přeskočit mezery
+	Release Type on a Path…	Uvolnit text na cestě…
+	Release Type on a Path	Uvolnit text na cestě
+	Text and Path	Text a cesta
+	Path Only	Pouze cesta
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Kresba je příliš velká na zkopírování jako obrázek: ostatní aplikace z ní nedostanou PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Vybrat podle pracovních ploch
+	Select by Artboards…	Vybrat podle pracovních ploch…
+	Selection Tools	Nástroje výběru
+	Search artboards	Hledat pracovní plochy
+	Fully Inside	Zcela uvnitř
+	Fully Outside	Zcela vně
+	No artboards match.	Žádná pracovní plocha neodpovídá.
+	Chosen: {n} of {total}	Zvoleno: {n} z {total}
+
+# Contour add-on
+	Contour	Obrys
+	Contour Tool	Nástroj Obrys
+	Sharp	Ostrý
+	Bake	Rozložit
+	Turn the Contour into plain paths	Převést obrys na běžné cesty
+	Set Corners…	Nastavit rohy…
+	All Anchors	Všechny kotevní body
+	Odd-Numbered Anchors	Liché kotevní body
+	Even-Numbered Anchors	Sudé kotevní body
+	Minimum angle	Minimální úhel
+	Maximum angle	Maximální úhel
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Vybrat propojené
+	Select Embedded	Vybrat vložené
+	Select Missing	Vybrat chybějící
+	Select Modified	Vybrat upravené
+	Select by Link Status	Vybrat podle stavu propojení
+	Select by Link Status…	Vybrat podle stavu propojení…
+	Search images	Hledat obrazy
+	No images match.	Žádný obraz neodpovídá.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Vybrán {n} propojený obraz|Vybrány {n} propojené obrazy|Vybráno {n} propojených obrazů
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Vybrán {n} vložený obraz|Vybrány {n} vložené obrazy|Vybráno {n} vložených obrazů
+@msgplural	Selected {n} missing image|Selected {n} missing images	Vybrán {n} chybějící obraz|Vybrány {n} chybějící obrazy|Vybráno {n} chybějících obrazů
+@msgplural	Selected {n} modified image|Selected {n} modified images	Vybrán {n} upravený obraz|Vybrány {n} upravené obrazy|Vybráno {n} upravených obrazů
+@msgplural	Selected {n} image|Selected {n} images	Vybrán {n} obraz|Vybrány {n} obrazy|Vybráno {n} obrazů
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; další {n} je skrytý nebo zamčený|{selected}; další {n} jsou skryté nebo zamčené|{selected}; dalších {n} je skrytých nebo zamčených
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; další {n} je na vrstvě šablony|{selected}; další {n} jsou na vrstvách šablony|{selected}; dalších {n} je na vrstvách šablony
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; další {n} je mimo izolovanou skupinu|{selected}; další {n} jsou mimo izolovanou skupinu|{selected}; dalších {n} je mimo izolovanou skupinu
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; další {n} teď nelze vybrat|{selected}; další {n} teď nelze vybrat|{selected}; dalších {n} teď nelze vybrat
+
+# Compound Shapes add-on
+	Compound Shapes	Složené tvary
+	Shape Mode Buttons Make Compound Shapes	Tlačítka režimů tvarů vytvářejí složené tvary
+
+# 3D Box add-on
+	3D Box	3D kvádr
+	3D Box Tool	Nástroj 3D kvádr
