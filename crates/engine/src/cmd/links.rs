@@ -669,9 +669,10 @@ impl Resolved {
 
 /// The linked files of document `d`, just read from `doc_path`: those found unchanged are read
 /// again (their images had the preview), modified ones are read again when `update`, links found
-/// away from their path take the new path. A link nothing is known of whose image shows a preview
-/// (a file another app wrote kept only that) was never read: its file is read now, into the
-/// image's bounds, which isn't a change to report. Nothing here is an undo step.
+/// away from their path take the new path. A link nothing is known of whose image, or placed
+/// document, shows a preview (a file another app wrote kept only that) was never read: its file is
+/// read now, into the object's bounds, which isn't a change to report. A placed document whose
+/// file's bytes are gone isn't showing a preview. Nothing here is an undo step.
 pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_proxy_eps: bool) -> Resolved {
     let mut out = Resolved::default();
     // The image (with its preview) and hash of each file read for a preview here, by path: images
@@ -680,7 +681,11 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
     let mut read_images: BTreeMap<String, (ImageBlob, String)> = BTreeMap::new();
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), doc_path);
-        let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
+        let shows_preview = match g.document {
+            None => previewing(d, &g.key),
+            Some(_) => d.images.get(&g.key).is_some_and(ImageBlob::is_proxy),
+        };
+        let unread = g.link.hash.is_none() && g.link.size.is_none() && shows_preview;
         let eps_preview = keep_eps_preview(low_res_proxy_eps, &g, d);
         match probe(&g, doc_path) {
             (Status::Missing, _) => out.missing.extend(row),

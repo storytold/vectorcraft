@@ -3160,6 +3160,211 @@ fn placed_files_of_other_paths_keep_images_of_their_own() {
     assert_eq!(r.doc.images.len(), 2);
 }
 
+/// A placed file followed by the dictionary `numbers` (`value /Int (key)` lines, on `%_` lines).
+fn placed_with(numbers: &[(&str, &str)]) -> Structure {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let entries: String = numbers.iter().map(|(key, v)| format!("%_{v} /Int ({key}) ,\r")).collect();
+    let dictionary = format!("%_/ArtDictionary :\r{entries}%_;\r%_\r");
+    read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &dictionary)).unwrap()
+}
+
+#[test]
+fn a_placed_files_dictionary_names_the_page_and_box_it_shows() {
+    use vectorcraft_doc::PageBox;
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    for (crop, bounding, page_box) in [
+        ("0", false, PageBox::Art),
+        ("1", false, PageBox::Crop),
+        ("2", false, PageBox::Trim),
+        ("3", false, PageBox::Bleed),
+        ("4", false, PageBox::Media),
+        ("5", true, PageBox::Crop),
+    ] {
+        let r = placed_with(&[(PAGE, "3"), (CROP, crop)]);
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        assert_eq!(r.placed_pages.len(), 1, "{crop}");
+        let p = r.placed_pages[0];
+        assert_eq!((p.id, p.page, p.bounding, p.page_box, p.size), (a[0].id, 3, bounding, page_box, (4.0, 2.0)), "{crop}");
+        assert_eq!(r.doc.images.keys().collect::<Vec<_>>(), [&im.key], "{crop}: the preview is stored once, under the image's key");
+        assert!(r.doc.images[&im.key].is_proxy(), "{crop}");
+    }
+    // One entry alone: the first page, or the page's crop box.
+    let r = placed_with(&[(CROP, "4")]);
+    assert_eq!((r.placed_pages[0].page, r.placed_pages[0].page_box), (1, PageBox::Media));
+    let r = placed_with(&[(PAGE, "2")]);
+    assert_eq!((r.placed_pages[0].bounding, r.placed_pages[0].page_box), (false, PageBox::Crop));
+}
+
+#[test]
+fn a_placed_files_dictionary_it_cant_read_leaves_a_linked_image() {
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    let plain = placed_with(&[]);
+    let plain_key = {
+        let a = art(&plain.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        im.key.clone()
+    };
+    assert!(plain.placed_pages.is_empty());
+    for entries in [
+        vec![(PAGE, "0"), (CROP, "4")],
+        vec![(PAGE, "-1"), (CROP, "4")],
+        vec![(PAGE, "1.5"), (CROP, "4")],
+        vec![(PAGE, "1e30"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "6")],
+        vec![(PAGE, "2"), (CROP, "-1")],
+        vec![(PAGE, "2"), (CROP, "0.5")],
+        vec![(PAGE, "(2)"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "(4)")],
+        vec![(PAGE, "(2)")],
+    ] {
+        let r = placed_with(&entries);
+        assert!(r.placed_pages.is_empty(), "{entries:?}");
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{entries:?}: {:?}", a[0].kind) };
+        assert_eq!((im.key.as_str(), im.link.as_ref().and_then(|l| l.page)), (plain_key.as_str(), None), "{entries:?}");
+    }
+}
+
+/// The dictionaries of the art in a placed file's opacity mask, read inside its own dictionary,
+/// don't speak for the placed file.
+#[test]
+fn a_placed_files_mask_art_leaves_its_page_to_the_placed_files_dictionary() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_0 g\r%_0 0 m\r%_5 0 l\r%_5 -5 l\r%_f\r\
+                      %_/ArtDictionary :\r%_/XMLUID : (Inner) ; (AI10_ArtUID) ,\r%_;\r%_\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+                      %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary)).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    assert_eq!(r.placed_pages.len(), 1);
+    assert_eq!((r.placed_pages[0].id, r.placed_pages[0].page_box), (a[0].id, vectorcraft_doc::PageBox::Media));
+}
+
+/// A placed file in a placed file's opacity mask, read before the outer file's dictionary closes,
+/// leaves the outer file's page to that dictionary.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_leaves_the_outer_files_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut inner =
+        b"%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/mask.pdf)`\r%_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    inner.extend_from_slice(&preview);
+    inner.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_/ArtDictionary :\r%_5 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let mut dictionary = b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r".to_vec();
+    dictionary.extend_from_slice(&inner);
+    dictionary
+        .extend_from_slice(b"%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r");
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    let outer: Vec<_> = r.placed_pages.iter().filter(|p| p.id == a[0].id).collect();
+    assert_eq!(outer.len(), 1, "{:?}", r.placed_pages);
+    assert_eq!((outer[0].page, outer[0].page_box), (2, vectorcraft_doc::PageBox::Media));
+    assert!(r.placed_pages.iter().any(|p| p.id != a[0].id && p.page == 5), "the inner one names its own page: {:?}", r.placed_pages);
+}
+
+/// A placed file in a placed file's opacity mask that shows the same file with no page of its own
+/// keeps the preview they share when the outer one's dictionary names a page.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_keeps_the_preview_they_share() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut dictionary =
+        b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/flyer.pdf)`\r\
+          %_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    dictionary.extend_from_slice(&preview);
+    dictionary.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+          %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(r.placed_pages.len(), 1, "{:?}", r.placed_pages);
+    let mask = a[0].extras().mask.clone().expect("the mask is read");
+    let mut keys = vec![];
+    mask.art.walk(&mut |n| {
+        if let NodeKind::Image(im) = &n.kind {
+            keys.push(im.key.clone());
+        }
+    });
+    let [inner] = &keys[..] else { panic!("{keys:?}") };
+    assert!(r.doc.images.contains_key(inner), "the mask's image keeps its preview");
+    let NodeKind::Image(outer) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(r.doc.images.contains_key(&outer.key) && outer.key != *inner);
+}
+
+#[test]
+fn a_placed_file_with_its_box_written_backward_stays_a_linked_image() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary);
+    let at = data.windows(11).position(|x| x == b"10 20 14 22").unwrap();
+    let data = [&data[..at], b"14 22 10 20", &data[at + 11..]].concat();
+    let r = read(&data).unwrap();
+    assert!(r.placed_pages.is_empty());
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(im.link.as_ref().and_then(|l| l.page), None);
+}
+
+#[test]
+fn only_the_dictionary_right_after_a_placed_file_names_its_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    // After another object: that object's dictionary. Art with such a dictionary stays art.
+    let after = format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    assert_eq!(art(&r.doc).len(), 2);
+    // A second dictionary after the first: the first one spoke for the placed file.
+    let after = format!("%_/ArtDictionary :\r%_(Photo) /String (AIArtName) ,\r%_;\r%_\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    // Without a placed file before it, nothing happens.
+    let r = read(stream(&layer(&format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}"))).as_bytes()).ok();
+    assert!(r.is_none_or(|r| r.placed_pages.is_empty()));
+}
+
+/// Two pages of a file with the same preview don't share a key: reading one page's file in would
+/// change the other's image.
+#[test]
+fn placed_pages_of_one_file_keep_images_of_their_own() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let one =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_1 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let two =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let find = |d: &[u8], w: &[u8]| d.windows(w.len()).position(|x| x == w).unwrap();
+    let body = two[find(&two, b"%AI5_BeginPlace")..find(&two, b"LB\n%AI5_EndLayer")].to_vec();
+    let mut both = one.clone();
+    let at = find(&both, b"LB\n%AI5_EndLayer");
+    both.splice(at..at, body);
+    let r = read(&both).unwrap();
+    assert_eq!(r.placed_pages.len(), 2);
+    let keys: Vec<String> = art(&r.doc)
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::Image(im) => im.key.clone(),
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_ne!(keys[0], keys[1]);
+    assert!(keys.iter().all(|k| r.doc.images.contains_key(k)) && r.doc.images.len() == 2, "{keys:?}");
+}
+
 #[test]
 fn placed_files_are_linked_images_showing_their_preview() {
     // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.

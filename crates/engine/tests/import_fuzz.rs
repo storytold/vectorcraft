@@ -3391,7 +3391,8 @@ proptest! {
                       %_/ArtDictionary :\n%_/Mask :\n%_X=\n%_0 g\n%_0 0 m\n%_5 0 l\n%_5 -5 l\n%_f\n%_X+\n%_ (Art) ,\n%_; (AI9_Mask) ,\n%_/XMLUID : (Photo) ; (AI10_ArtUID) ,\n%_;\n%_\n";
         let place = "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -8000 8000] 8000 8000 8002 8001 4 4 0\n(/tmp/p.png)`\n%%IncludeFile:/tmp/p.png\n\
                      %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n()\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n\
-                     %AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 @@\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n";
+                     %AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 @@\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n\
+                     %_/ArtDictionary :\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n";
         let text = ai::editing_data(100.0, 100.0, &ai::layer("L", &format!("{raster}{place}")));
         let samples: &[u8] = &[255, 0, 0, 0, 0, 255, 128, 0];
         let preview: &[u8] = &[255, 255, 0, 0, 0, 0, 0, 0];
@@ -4367,6 +4368,9 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI26_EndPlacedObjectPreview\n",
             "[1 0 0 -1 0 0] 0 0 2 1 4 4 0 (a.png) `",
             "[1e308 0 0 1e308 0 0] 0 0 -1e308 1e308 4 4 0 (a.png) `",
+            "\n%_/ArtDictionary :\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
+            "\n%_/ArtDictionary :\n%_-1e308 /Real (AI11 PlacedPDFPageIndex) ,\n%_99 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
+            "\n%_/ArtDictionary :\n%_(2) /String (AI11 PlacedPDFPageIndex) ,\n%_5 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
             "\n%AI28_BeginPlacedRelativePath\n",
             "\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n",
             "\n%AI28_BeginPlacedRelativePath\n(..\\\\..\\\\art\\\\)\n%AI28_EndPlacedRelativePath\n",

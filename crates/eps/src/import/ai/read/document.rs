@@ -597,6 +597,7 @@ impl<'a> Reader<'a> {
             head.registration = Some(*r);
         }
         self.constraint_art(o);
+        self.placed_page(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -1125,6 +1126,7 @@ impl<'a> Reader<'a> {
             restyled: self.restyled,
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
+            placed_pages: self.placed_pages,
             envelopes_drawn: self.envelopes_drawn,
             styles_read,
             canvas_scale: self.canvas_scale,
