@@ -384,3 +384,79 @@ fn every_context_label_is_a_menu_string() {
         assert!(shown.contains(label), "`{label}` is listed but the context menu never shows it");
     }
 }
+
+/// #5267: a right-click on a stroked object offers Outline Stroke, which runs
+/// `object.path.outlineStroke` (the Object › Path item) and leaves filled art; an object with no
+/// stroke to outline has no such item.
+#[test]
+fn the_canvas_context_menu_offers_outline_stroke_for_a_stroked_selection() {
+    use vectorcraft_doc::AppearanceItem;
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    // Stroked: a visible stroke of some weight.
+    app.run("stroke.set", json!({"weight": 6})).unwrap();
+    let strokes = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        n.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)).count()
+    };
+    assert!(strokes(&app) > 0, "the rectangle starts with a stroke");
+    let ctx = egui::Context::default();
+    app.run("select.none", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 100.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Outline Stroke"), "Outline Stroke in {texts:?}");
+    click(&mut app, &ctx, at(&texts, "Outline Stroke"), PointerButton::Primary);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(id).is_none(), "the stroked rectangle was replaced by its outline");
+    assert_eq!(strokes(&app), 0, "the outline is filled art with no stroke left");
+
+    // The outline has no stroke any more: nothing to outline, so no item.
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert!(has(&texts, "Arrange"), "the menu opened: {texts:?}");
+    assert!(!has(&texts, "Outline Stroke"), "no stroke, no Outline Stroke in {texts:?}");
+}
+
+/// A compound path of two rectangles, filled and stroked with `weight`, isolated, with a member
+/// right-clicked → (the app, the context, the compound path, the context menu's text). The member
+/// stays selected and has no appearance of its own: the compound holds the paint.
+fn right_click_member_of_compound(weight: f64) -> (VectorcraftApp, egui::Context, NodeId, Vec<(String, Rect)>) {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    let (a, b) = (rect(&mut app, 50.0, 50.0), rect(&mut app, 200.0, 50.0));
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    // Filled, so that a click inside a member hits it whether or not the compound has a stroke.
+    app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+    app.run("stroke.set", json!({"weight": weight})).unwrap();
+    menus::invoke(&mut app, "object.isolate", json!({}));
+    frame(&mut app, &ctx, vec![]);
+    let member = app.session.active().unwrap().doc.node(compound).and_then(|n| n.children().and_then(|c| c.first()).map(|m| m.id)).unwrap();
+    app.run("select.set", json!({"ids": [member.0]})).unwrap();
+    let p = screen(&app, 100.0, 100.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.objects, [member], "the right-click leaves the member selected");
+    assert!(st.doc.node(member).is_some_and(|m| m.appearance.items.is_empty()), "a member has no appearance of its own");
+    (app, ctx, compound, texts)
+}
+
+/// With a member of an isolated compound path selected (a right-click inside the isolated compound
+/// leaves a member selected), the member's own appearance is empty: the compound holds the paint.
+/// `object.path.outlineStroke` promotes the member to its compound, so the menu offers Outline
+/// Stroke exactly when the compound has a stroke to outline.
+#[test]
+fn outline_stroke_is_offered_for_a_member_of_a_stroked_compound_path() {
+    // No stroke on the compound path: nothing to outline.
+    let (.., texts) = right_click_member_of_compound(0.0);
+    assert!(has(&texts, "Arrange"), "the menu opened: {texts:?}");
+    assert!(!has(&texts, "Outline Stroke"), "no stroke, no Outline Stroke in {texts:?}");
+
+    // Stroked: the item is offered for the member, and the command outlines the compound.
+    let (mut app, ctx, compound, texts) = right_click_member_of_compound(6.0);
+    assert!(has(&texts, "Outline Stroke"), "Outline Stroke for a member of a stroked compound in {texts:?}");
+    click(&mut app, &ctx, at(&texts, "Outline Stroke"), PointerButton::Primary);
+    assert!(app.session.active().unwrap().doc.node(compound).is_none(), "the stroked compound path was replaced by its outline");
+}
