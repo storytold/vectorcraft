@@ -3474,6 +3474,96 @@ fn a_tz_with_use_default_0_leaves_te_out() {
     assert_eq!(legacy_chars(setup, &["_F", "_S", "_M", "_G"], "\\047\\140\\200"), ["'`€", "'`€", "'`€", "’`Ä"]);
 }
 
+/// Strings in a composite font `base-CMap` decode by that predefined CMap (codes to CIDs, then the
+/// character collection's CIDs to Unicode), and the font is `base`; `TE`'s encoding does not apply
+/// to them. Codes the CMap leaves out are dropped. A font whose name ends in no predefined CMap
+/// decodes byte by byte.
+#[test]
+fn legacy_type_in_a_cjk_font_decodes_by_its_cmap() {
+    let typed = |font: &str, chars: &str| point_type("", chars).replace("/_Helvetica", &format!("/{font}"));
+    let cases: &[(&str, &str, &str)] = &[
+        // 日 is 0x93FA and 本 0x967B in Shift-JIS; `\r` ends a paragraph.
+        ("83pv-RKSJ-H", "\\223\\372\\226{A\\r\\223\\372", "日本A\n日"),
+        // A tab stays a tab, also after a UTF-16 string's last whole code.
+        ("90ms-RKSJ-H", "\\223\\372\\tA", "日\tA"),
+        ("H", "F|\\tF|", "日\t日"),
+        ("UniJIS-UTF16-H", "e\\345\\t", "日\t"),
+        // One-byte codes in the Mac Shift-JIS CMap: 0x5C yen, 0x7E tilde, 0x80 backslash, 0xFD
+        // copyright, and the underscore and grave accent.
+        ("83pv-RKSJ-H", "\\\\~\\200\\375_`", "¥~\\©_`"),
+        ("90ms-RKSJ-H", "\\\\~_`", "¥~_`"),
+        ("90ms-RKSJ-V", "\\223\\372", "日"),
+        ("90pv-RKSJ-V", "\\223\\372", "日"),
+        // JIS row and cell: 日 is 0x4652.
+        ("H", "F|", "日"),
+        ("V", "F|", "日"),
+        ("EUC-H", "\\306\\374", "日"),
+        ("GBK-EUC-H", "\\326\\320", "中"),
+        ("GBpc-EUC-H", "\\326\\320", "中"),
+        ("B5pc-H", "\\244\\244", "中"),
+        ("KSCms-UHC-H", "\\307\\321", "한"),
+        ("KSCpc-EUC-H", "\\307\\321", "한"),
+        ("UniJIS-UCS2-H", "e\\345", "日"),
+        ("UniGB-UTF8-H", "\\344\\270\\255", "中"),
+        // An encoded U+FFFD is a character; the invalid byte 0xFF is dropped.
+        ("UniGB-UTF8-H", "\\357\\277\\275\\377\\344\\270\\255", "\u{fffd}中"),
+        ("UniJIS-UTF32-H", "\\000\\000e\\345", "日"),
+        ("UniAKR-UTF16-H", "\\254\\000", "가"),
+        // CMaps VectorCraft doesn't carry: read with the nearest carried one, row-and-cell codes in
+        // their EUC form (中 is 0x5650 in GB 2312, 한 0x4751 in KS X 1001), or byte by byte.
+        ("78-RKSJ-H", "\\223\\372", "日"),
+        ("RKSJ-V", "\\223\\372", "日"),
+        ("GB-H", "VP", "中"),
+        ("KSC-V", "GQ", "한"),
+        ("GBT-H", "AB", "AB"),
+        // Codes are as long as the code space range they fall in, and unmapped ones are dropped:
+        // 0x8540 as two bytes, and 0xFD and EUC's 0x8F (in no range) as one.
+        ("90ms-RKSJ-H", "\\205\\100\\223\\372A\\375B", "日AB"),
+        ("EUC-H", "\\217A\\306\\374", "A日"),
+    ];
+    let art: String = cases.iter().map(|(cmap, chars, _)| typed(&format!("_Test-W3-{cmap}"), chars)).collect();
+    let art = [art, typed("_Test-W3-Identity-H", "\\223"), typed("_Test-W3-UniFoo-UTF8-H", "\\223"), typed("_Helvetica", "\\223")].concat();
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", "%%BeginSetup\n[147/Adieresis\nTE\n%%EndSetup");
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    let chars: Vec<String> = texts.iter().map(|t| t.plain_text()).collect();
+    let mut want: Vec<&str> = cases.iter().map(|(_, _, want)| *want).collect();
+    want.extend(["Ä", "Ä", "Ä"]);
+    assert_eq!(chars, want);
+    let test = crate::import::family_style("Test-W3");
+    for (t, (cmap, _, _)) in texts.iter().zip(cases) {
+        assert_eq!((&t.runs[0].style.font_family, &t.runs[0].style.font_style), (&test.0, &test.1), "{cmap}");
+    }
+    assert_eq!(texts[0].paragraph_count(), 2);
+    assert_ne!(texts[cases.len()].runs[0].style.font_style, test.1, "an Identity CMap is not read");
+    assert_ne!(texts[cases.len() + 1].runs[0].style.font_style, test.1, "`UniFoo` is not a character collection");
+}
+
+/// A font whose `TZ` gives encoding pairs is not a composite font, even when its name ends in a
+/// CMap name: its strings decode byte by byte, and the font keeps its whole name. A `TZ` without
+/// encoding pairs only names a composite font.
+#[test]
+fn a_re_encoded_font_ending_in_a_cmap_name_is_not_composite() {
+    let setup = "%AI3_BeginEncoding: _F-Bold-H F-Bold-H\n[ 39/quotesingle\n/_F-Bold-H/F-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F-Bold-H"], "F|'"), ["F|'"]);
+    let setup = "%AI3_BeginEncoding: _G-Bold-H G-Bold-H\n[ 65/A\n/_G-Bold-H/G-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_G-Bold-H"], "F|"), ["F|"]);
+    let setup = "%AI3_BeginEncoding: _R-W3-83pv-RKSJ-H R-W3-83pv-RKSJ-H\n[/_R-W3-83pv-RKSJ-H/R-W3-83pv-RKSJ-H 0 1 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_R-W3-83pv-RKSJ-H"], "\\223\\372"), ["日"]);
+}
+
+/// In a font with a Unicode CMap, a one-byte `(\r)` string, or a 0x0D byte after a string's last
+/// whole UTF-16 code, still ends a paragraph, as in other fonts, and an overflow `(\r) TX` still
+/// ends the story.
+#[test]
+fn legacy_type_in_a_utf16_font_keeps_its_paragraph_breaks() {
+    let art = point_type("", "e\\345")
+        .replace("/_Helvetica", "/_Test-W3-UniJIS-UTF16-H")
+        .replace("TO\n", "(\\r) Tx\n(e\\345\\r) Tx\n(e\\345) Tx\n(\\r) TX\nTO\n");
+    let texts = legacy_texts(&art);
+    assert_eq!(texts[0].plain_text(), "日\n日\n日");
+    assert_eq!(texts[0].paragraph_count(), 3);
+}
+
 fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
     art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
 }

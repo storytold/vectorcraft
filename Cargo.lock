@@ -6283,6 +6283,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
+ "craft-pdf",
  "fax",
  "flate2",
  "hayro-ccitt",

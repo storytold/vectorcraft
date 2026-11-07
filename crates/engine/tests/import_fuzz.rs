@@ -3390,6 +3390,26 @@ proptest! {
         survive("hostile .ai line widths", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose legacy type is set in a CJK composite font (a predefined CMap the reader
+    /// carries, one it reads through another, one it decodes byte by byte, a Unicode CMap, or a
+    /// name that only looks like one), with any bytes in its strings.
+    #[test]
+    fn ai_legacy_type_in_cjk_fonts_never_panics(
+        cmap in prop::sample::select(vec![
+            "83pv-RKSJ-H", "90ms-RKSJ-V", "90pv-RKSJ-V", "H", "V", "EUC-H", "GBK2K-H", "CNS-EUC-V", "KSCpc-EUC-H", "KSCms-UHC-HW-V",
+            "78-RKSJ-H", "GB-H", "KSC-V", "HKdlb-B5-H", "GBT-H", "UniJIS-UCS2-H", "UniGB-UTF8-V", "UniKS-UTF32-H", "UniAKR-UTF16-H",
+            "Identity-H", "UniFoo-UTF8-H", "-H", "RKSJ",
+        ]),
+        strings in prop::collection::vec(prop::collection::vec(any::<u8>(), 0..24), 1..4),
+    ) {
+        use vectorcraft_testkit::ai;
+        let tx: String = strings.iter().map(|s| format!("({}) Tx\n", s.iter().map(|b| format!("\\{b:03o}")).collect::<String>())).collect();
+        let art = format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n/_Test-W3-{cmap} 9 Tf\n{tx}(\\r) TX\nTO\n");
+        let data = ai::editing_data(100.0, 100.0, &ai::layer("L", &art));
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("legacy type in CJK fonts", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose pattern definition (a marked tile box, a gradient placed by `Bg`'s matrix) and
     /// pattern fill are damaged or hostile.
     #[test]
