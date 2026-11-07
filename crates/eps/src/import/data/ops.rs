@@ -12,6 +12,9 @@ const MAX_FILTER_CHAIN: usize = 64;
 
 /// Most pixels an image may have.
 const MAX_PIXELS: usize = 1 << 26;
+/// Points across an image's pixels from which, without `Interpolate`, it is drawn with hard
+/// pixels ([`coarse`]): 36 pixels an inch or fewer.
+const COARSE_PIXEL: f64 = 2.0;
 
 /// Why an image is missing.
 const TOO_LARGE: &str = "images too large to read were left out";
@@ -584,7 +587,8 @@ impl Interp<'_> {
             .flatten();
         // An image mask paints its 0 bits with Decode [0 1], its 1 bits with [1 0].
         let stencil = mask.then(|| decode.first().is_some_and(|v| *v > 0.5));
-        Ok(Spec { w, h, bpc, space, decode, matrix, sources, mask_color, stencil })
+        let interpolate = matches!(get("Interpolate"), Some(Obj::Bool(true)));
+        Ok(Spec { w, h, bpc, space, decode, matrix, sources, mask_color, stencil, interpolate })
     }
 
     /// The operand forms: `w h bpc matrix src image`, `w h polarity matrix src imagemask`, and
@@ -613,7 +617,7 @@ impl Interp<'_> {
         let size = |v: i64| usize::try_from(v).ok().filter(|v| (1..=65_535).contains(v)).ok_or(PsError::Ps("rangecheck", "image".into()));
         let h = size(self.pop_int()?)?;
         let w = size(self.pop_int()?)?;
-        Ok(Spec { w, h, bpc, space, decode: vec![], matrix, sources, mask_color: None, stencil })
+        Ok(Spec { w, h, bpc, space, decode: vec![], matrix, sources, mask_color: None, stencil, interpolate: false })
     }
 
     /// The image's pixels, straight RGBA, rows from the first one read, and a CMYK image's ink
@@ -734,7 +738,7 @@ impl Interp<'_> {
                 rgba.extend([rgb[0], rgb[1], rgb[2], if masked { 0 } else { 255 }]);
             }
         }
-        Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix }))
+        Ok(Some(Pixels { w: s.w as u32, h: s.h as u32, rgba, inks, matrix: s.matrix, interpolate: s.interpolate }))
     }
 
     /// One pixel's colour in `space` as display RGB.
@@ -763,13 +767,14 @@ impl Interp<'_> {
         if self.g.null {
             return Ok(());
         }
+        let pixelated = !img.interpolate && coarse(xf);
         // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps an 8- or
         // 16-bit CMYK image's samples, and transparent pixels (`MaskColor`, an ImageType 3 mask)
         // become its opacity mask.
         if let Some(blob) = img.inks.and_then(|i| Inks::new(img.w, img.h, i)).and_then(|i| ImageBlob::cmyk_tiff(&i)) {
             let alpha: Vec<u8> = img.rgba.iter().skip(3).step_by(4).copied().collect();
-            let mask = self.alpha_mask(&alpha, img.w, img.h, xf);
-            return self.add_image(blob, img.w, img.h, xf, mask);
+            let mask = self.alpha_mask(&alpha, img.w, img.h, xf, pixelated);
+            return self.add_image(blob, img.w, img.h, xf, mask, pixelated);
         }
         let Some(rgba) = image::RgbaImage::from_raw(img.w, img.h, img.rgba) else { return Ok(()) };
         let mut png = vec![];
@@ -777,23 +782,25 @@ impl Interp<'_> {
             self.out.warn("an image that couldn't be read was left out");
             return Ok(());
         }
-        self.add_image(ImageBlob::new("image/png", png), img.w, img.h, xf, None)
+        self.add_image(ImageBlob::new("image/png", png), img.w, img.h, xf, None, pixelated)
     }
 
     /// Add image `blob` (`w` × `h` pixels, mapped into user space by `xf`) with `mask` as its
-    /// opacity mask.
-    fn add_image(&mut self, blob: ImageBlob, w: u32, h: u32, xf: Affine, mask: Option<OpacityMask>) -> Res {
+    /// opacity mask, drawn without smoothing when `pixelated`.
+    fn add_image(&mut self, blob: ImageBlob, w: u32, h: u32, xf: Affine, mask: Option<OpacityMask>, pixelated: bool) -> Res {
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
         let clips = self.g.clips.clone();
-        self.out.push(Node::new(NodeId(0), NodeKind::Image(Box::new(im))).with_mask(mask.map(Box::new)), &clips);
+        let mut node = Node::new(NodeId(0), NodeKind::Image(Box::new(im))).with_mask(mask.map(Box::new));
+        node.extras_mut().pixelated = pixelated;
+        self.out.push(node, &clips);
         Ok(())
     }
 
     /// An image's alpha (`w` × `h` bytes) as a grayscale image over the image (`xf`): its opacity
     /// mask, as in PDF import. `None` when it hides nothing.
-    fn alpha_mask(&mut self, alpha: &[u8], w: u32, h: u32, xf: Affine) -> Option<OpacityMask> {
+    fn alpha_mask(&mut self, alpha: &[u8], w: u32, h: u32, xf: Affine, pixelated: bool) -> Option<OpacityMask> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
@@ -803,6 +810,19 @@ impl Interp<'_> {
         let key = blob.content_key();
         self.out.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
-        Some(OpacityMask::new(Node::new(self.out.doc.alloc_id(), NodeKind::Image(Box::new(im))), true))
+        let mut node = Node::new(self.out.doc.alloc_id(), NodeKind::Image(Box::new(im)));
+        node.extras_mut().pixelated = pixelated;
+        Some(OpacityMask::new(node, true))
     }
+}
+
+/// Is an image whose pixels `xf` maps into the document coarse: each pixel at least
+/// [`COARSE_PIXEL`] across both ways? Without `Interpolate` (an image dictionary entry, default
+/// false: PLRM 3rd ed. §4.10, Images) PostScript paints an enlarged image with hard pixels, so such
+/// an image is drawn without smoothing: its pixels show at the size the document is drawn. A finer
+/// image (a photo) is still smoothed when the view enlarges it, as placed images are, and keeps its
+/// smooth reduced views.
+fn coarse(xf: Affine) -> bool {
+    let [a, b, c, d, ..] = xf.as_coeffs();
+    a.hypot(b) >= COARSE_PIXEL && c.hypot(d) >= COARSE_PIXEL
 }
