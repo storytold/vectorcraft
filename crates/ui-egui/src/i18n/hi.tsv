@@ -3295,6 +3295,7 @@
 	Allow Continue	जारी रखने दें
 	Continue	जारी रखें
 	Continue Action	एक्शन जारी रखें
+	Delete Action Step	एक्शन का चरण हटाएं
 	Press Play Current Selection in the Actions panel to go on.	आगे बढ़ने के लिए एक्शन्स पैनल में वर्तमान सिलेक्शन प्ले करें दबाएँ।
 	Stop: {message}	स्टॉप: {message}
 @msg	no action is waiting at a stop	कोई एक्शन स्टॉप पर प्रतीक्षा नहीं कर रहा है

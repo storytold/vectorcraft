@@ -5650,6 +5650,7 @@ axis	Y Axis	Oś Y
 	Allow Continue	Zezwalaj na kontynuację
 	Continue	Kontynuuj
 	Continue Action	Kontynuuj operację
+	Delete Action Step	Usuń krok operacji
 	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
 	Stop: {message}	Zatrzymanie: {message}
 @msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu

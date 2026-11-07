@@ -5720,6 +5720,7 @@ axis	Y Axis	Y ღერძი
 	Allow Continue	გაგრძელების დაშვება
 	Continue	გაგრძელება
 	Continue Action	მოქმედების გაგრძელება
+	Delete Action Step	მოქმედების ნაბიჯის წაშლა
 	Press Play Current Selection in the Actions panel to go on.	გასაგრძელებლად მოქმედებების პანელზე დააჭირეთ „მიმდინარე მონიშნულის შესრულებას“.
 	Stop: {message}	გაჩერება: {message}
 @msg	no action is waiting at a stop	გაჩერებაზე არცერთი მოქმედება არ ელოდება

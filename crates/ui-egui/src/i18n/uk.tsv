@@ -5393,6 +5393,7 @@ axis	Y Axis	Вісь Y
 	Allow Continue	Дозволити продовження
 	Continue	Продовжити
 	Continue Action	Продовжити дію
+	Delete Action Step	Видалити крок дії
 	Press Play Current Selection in the Actions panel to go on.	Щоб продовжити, натисніть «Відтворити поточне виділення» на панелі «Дії».
 	Stop: {message}	Зупинка: {message}
 @msg	no action is waiting at a stop	жодна дія не очікує на зупинці

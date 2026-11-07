@@ -69,6 +69,14 @@ impl Action {
         self.excluded_steps = self.excluded_steps.iter().filter(|&&i| i < len).map(|&i| if i >= at { i + 1 } else { i }).collect();
     }
 
+    /// Removes the step at index `at`; the steps after it keep whether they are excluded. An
+    /// exclusion past the last step, which saved preferences can hold, goes.
+    fn remove_step(&mut self, at: usize) {
+        let len = self.steps.len();
+        self.steps.remove(at);
+        self.excluded_steps = self.excluded_steps.iter().filter(|&&i| i < len && i != at).map(|&i| if i > at { i - 1 } else { i }).collect();
+    }
+
     /// The included steps as `command.batch` takes them. A recorded `command.batch` step (an action
     /// played, or a panel operation that runs as one batch, while recording) gives its own steps,
     /// since batches do not nest.
@@ -338,8 +346,11 @@ pub(crate) fn has_stop(commands: &[Value]) -> bool {
 }
 
 /// The message and Allow Continue setting in a stop's params; each may be left out. A value of
-/// another type is an error.
+/// another type, or params that are neither null nor an object, is an error.
 pub(crate) fn stop_params(p: &Value) -> Result<(String, bool), String> {
+    if !(p.is_null() || p.is_object()) {
+        return Err("`params` must be an object".into());
+    }
     let message = match p.get("message") {
         None => "",
         Some(v) => v.as_str().ok_or("message must be text")?,
@@ -857,9 +868,10 @@ const SELECTED_STEP: &str = "actions-selected-step";
 /// and `action`, it goes into that action, after step `step`, else after its last step. Without
 /// them, it goes into the recording in progress, after the steps recorded so far. `message` is
 /// the text playback shows (default: none), and `allowContinue` offers Continue in the message box
-/// (default: false). An index past the last set, action or step, a param of another type, or no
-/// action and no recording is an error, and then nothing changes. Record Stop's OK runs this, and
-/// the new stop is the selected step. → {set, action, step}, or {recording: true}
+/// (default: false). An index past the last set, action or step, a param of another type, params
+/// that are not an object, or no action and no recording is an error, and then nothing changes.
+/// Record Stop's OK runs this, and the new stop is the selected step. → {set, action, step}, or
+/// {recording: true}
 pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (message, allow_continue) = stop_params(p)?;
     let step = (STOP_STEP.to_string(), json!({"message": message, "allowContinue": allow_continue}));
@@ -888,11 +900,53 @@ pub fn insert_stop(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     Ok(json!({"set": set, "action": at, "step": after}))
 }
 
-/// The selected step of the action `selected`, if it has one.
+/// The selected step of the action `selected`, if it has one and the panel shows its steps.
 fn selected_step(app: &VectorcraftApp, ctx: &egui::Context, selected: Option<(usize, usize)>) -> Option<usize> {
     let (s, a) = selected?;
     let action = app.ui.action_sets.get(s)?.actions.get(a)?;
+    if !pstate::<BTreeSet<u64>>(ctx, "actions-expanded").contains(&action.id) {
+        return None;
+    }
     pstate::<Option<(u64, usize)>>(ctx, SELECTED_STEP).filter(|&(id, step)| id == action.id && step < action.steps.len()).map(|(_, step)| step)
+}
+
+/// The command that deletes one step of an action ([`delete_step`]).
+pub const DELETE_STEP: &str = "ui.action.deleteStep";
+
+/// `ui.action.deleteStep {set, action, step}`: deletes step `step`, a stop or a command, of the
+/// action at index `action` of set `set`. The steps after it keep whether they are excluded, and
+/// no step of that action stays selected. A Record Stop dialog open on that step closes, and one
+/// open on a later step of the action follows it up. A missing or invalid index is an error, and
+/// then nothing changes. Undo does not bring the step back. Delete Selection runs this for the
+/// selected step. → {set, action, step}
+pub fn delete_step(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let number = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok());
+    let index = |k: &str| p.get(k).and_then(number);
+    let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
+    let action = app.ui.action_sets.get_mut(set).and_then(|s| s.actions.get_mut(at)).ok_or("no such action")?;
+    let step = index("step").filter(|&s| s < action.steps.len()).ok_or("no such action step")?;
+    action.remove_step(step);
+    let id = action.id;
+    if let Some(ctx) = app.ui_ctx.clone()
+        && pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP).is_some_and(|(selected, _)| selected == id)
+    {
+        set_pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP, None);
+    }
+    let held = app
+        .ui
+        .dialog
+        .as_ref()
+        .filter(|d| d.kind == crate::dialogs::action_stop::RECORD_KIND)
+        .filter(|d| d.fields.get("set").and_then(number) == Some(set) && d.fields.get("action").and_then(number) == Some(at))
+        .and_then(|d| d.fields.get("step").and_then(number));
+    if held == Some(step) {
+        app.ui.dialog = None;
+    } else if let Some(later) = held.filter(|&s| s > step)
+        && let Some(d) = app.ui.dialog.as_mut()
+    {
+        d.fields.insert("step".into(), json!(later - 1));
+    }
+    Ok(json!({"set": set, "action": at, "step": step}))
 }
 
 /// The command that `chord` runs under `km`, pressed once or pressed twice.
@@ -1022,12 +1076,20 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<usize> {
     if current.is_some_and(|c| sets.contains(&c)) { sets } else { current.into_iter().collect() }
 }
 
-/// Delete Selection, from the bottom bar and the panel menu: deletes the selected action, else asks
-/// whether to delete the selected sets ([`DELETE_SETS`]).
+/// Delete Selection, from the bottom bar and the panel menu: deletes the selected step
+/// ([`DELETE_STEP`]), else the selected action, else asks whether to delete the selected sets
+/// ([`DELETE_SETS`]).
 fn delete_selection(app: &mut VectorcraftApp, ctx: &egui::Context) {
     const SELECTED: &str = "actions-selected";
     // A selected action counts only while its set is the current one, as the panel shows it.
-    if let Some((si, ai)) = pstate::<Option<(usize, usize)>>(ctx, SELECTED).filter(|&(s, _)| app.ui.action_set == Some(s)) {
+    let selected = pstate::<Option<(usize, usize)>>(ctx, SELECTED).filter(|&(s, _)| app.ui.action_set == Some(s));
+    if let Some(((set, action), step)) = selected.zip(selected_step(app, ctx, selected)) {
+        if let Err(e) = app.run(DELETE_STEP, json!({"set": set, "action": action, "step": step})) {
+            app.status(e);
+        }
+        return;
+    }
+    if let Some((si, ai)) = selected {
         if let Some(s) = app.ui.action_sets.get_mut(si)
             && ai < s.actions.len()
         {
@@ -3616,14 +3678,125 @@ mod tests {
             (json!({"set": 0, "action": 0, "message": 5}), "message must be text"),
             (json!({"set": 0, "action": 0, "message": null}), "message must be text"),
             (json!({"set": 0, "action": 0, "allowContinue": "yes"}), "allowContinue must be true or false"),
+            (json!(5), "`params` must be an object"),
+            (json!([1]), "`params` must be an object"),
+            (json!("message"), "`params` must be an object"),
         ] {
             assert_eq!(app.run(INSERT_STOP, params.clone()).unwrap_err(), want, "{params}");
             assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
         }
         app.run(START_RECORDING, json!({})).unwrap();
         assert_eq!(app.run(INSERT_STOP, json!({"message": 5})).unwrap_err(), "message must be text");
+        for params in [json!(5), json!([1]), json!(true)] {
+            assert_eq!(app.run(INSERT_STOP, params.clone()).unwrap_err(), "`params` must be an object", "{params}");
+        }
         app.run(STOP_RECORDING, json!({})).unwrap();
         assert!(app.ui.action_sets[0].actions.last().unwrap().steps.is_empty(), "the refused stop is not recorded");
+    }
+
+    #[test]
+    fn delete_step_removes_one_step_and_moves_the_exclusions_up() {
+        let (mut app, _) = app_with_a_stop(false);
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([0, 1, 3, usize::MAX]);
+        assert_eq!(app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 1})).unwrap(), json!({"set": 0, "action": 0, "step": 1}));
+        let action = &app.ui.action_sets[0].actions[0];
+        let ids: Vec<&str> = action.steps.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(ids, ["object.move", "object.move", "object.move"]);
+        assert_eq!(action.excluded_steps, BTreeSet::from([0, 2]), "the deleted step's exclusion goes and a later one moves up");
+    }
+
+    #[test]
+    fn delete_step_refuses_bad_params_and_changes_nothing() {
+        let (mut app, _) = app_with_three_moves();
+        for (params, want) in [
+            (json!({}), "no such action"),
+            (json!(5), "no such action"),
+            (json!([1]), "no such action"),
+            (json!({"set": 1, "action": 0, "step": 0}), "no such action"),
+            (json!({"set": 0, "action": 1, "step": 0}), "no such action"),
+            (json!({"set": "0", "action": 0, "step": 0}), "no such action"),
+            (json!({"set": 0, "action": 0}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": 3}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": -1}), "no such action step"),
+            (json!({"set": 0, "action": 0, "step": null}), "no such action step"),
+        ] {
+            assert_eq!(app.run(DELETE_STEP, params.clone()).unwrap_err(), want, "{params}");
+            assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 3, "{params}");
+        }
+    }
+
+    #[test]
+    fn delete_step_keeps_an_open_record_stop_on_its_place() {
+        let (mut app, _) = app_with_three_moves();
+        crate::dialogs::action_stop::open_record(&mut app, Some((0, 0)), Some(2));
+        app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 0})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["step"], json!(1), "a deleted step above moves it up");
+        app.run(DELETE_STEP, json!({"set": 0, "action": 0, "step": 1})).unwrap();
+        assert_eq!(open_kind(&app), None, "deleting its step closes it");
+    }
+
+    /// Selects the first step of "Three Moves" by clicking its row, with the action open.
+    fn click_first_step(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        use super::super::tests_appearance::{click, frame_events};
+        set_pstate(ctx, "actions-expanded", BTreeSet::from([app.ui.action_sets[0].actions[0].id]));
+        let texts = frame_events(ctx, app, vec![], show);
+        let first = texts.iter().filter(|(s, _)| s == "object.move").map(|(_, r)| *r).min_by(|a, b| a.top().total_cmp(&b.top())).unwrap();
+        click(ctx, app, first.center(), show);
+    }
+
+    #[test]
+    fn delete_selection_on_a_selected_step_deletes_that_step_and_keeps_the_action() {
+        use super::super::tests_appearance::click;
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        app.ui.action_sets[0].actions[0].excluded_steps = BTreeSet::from([2]);
+        click_first_step(&ctx, &mut app);
+        let delete = trash(&ctx, &mut app);
+        click(&ctx, &mut app, delete, show);
+        let action = &app.ui.action_sets[0].actions[0];
+        assert_eq!(action.name, "Three Moves", "the action stays");
+        assert_eq!(action.steps.len(), 2, "one step goes");
+        assert_eq!(action.excluded_steps, BTreeSet::from([1]));
+        assert_eq!(pstate::<Option<(u64, usize)>>(&ctx, SELECTED_STEP), None, "no step stays selected");
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((0, 0)), "the action stays selected");
+
+        let delete = trash(&ctx, &mut app);
+        click(&ctx, &mut app, delete, show);
+        assert!(app.ui.action_sets[0].actions.is_empty(), "with no step selected, the selected action goes");
+    }
+
+    #[test]
+    fn the_panel_menus_delete_deletes_the_selected_step_and_a_stop_inserted_there() {
+        use super::super::tests_appearance::{click, frame_events};
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        click_first_step(&ctx, &mut app);
+        menu_insert_stop(&ctx, &mut app, "Paint it", false);
+        assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 4);
+        let texts = frame_events(&ctx, &mut app, vec![], menu);
+        let item = texts.iter().find(|(s, _)| s.trim() == "Delete").map(|(_, r)| *r).expect("Delete in the menu");
+        click(&ctx, &mut app, item.center(), menu);
+        let action = &app.ui.action_sets[0].actions[0];
+        assert!(action.steps.iter().all(|(c, _)| c == "object.move"), "the new stop was selected, and it goes");
+        assert_eq!(action.steps.len(), 3);
+    }
+
+    #[test]
+    fn a_step_in_a_closed_action_is_not_the_selection() {
+        use super::super::tests_appearance::click;
+        let (mut app, _) = app_with_three_moves();
+        app.ui.action_set = Some(0);
+        let ctx = egui::Context::default();
+        app.ui_ctx = Some(ctx.clone());
+        click_first_step(&ctx, &mut app);
+        set_pstate(&ctx, "actions-expanded", BTreeSet::<u64>::new());
+        let delete = trash(&ctx, &mut app);
+        click(&ctx, &mut app, delete, show);
+        assert!(app.ui.action_sets[0].actions.is_empty(), "the step's row is hidden and the action's row is the one highlighted");
     }
 
     #[test]

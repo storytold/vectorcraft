@@ -3805,6 +3805,7 @@ digits	Malayalam	Malaiàlam
 	Allow Continue	Permet continuar
 	Continue	Continua
 	Continue Action	Continua l’acció
+	Delete Action Step	Suprimeix el pas de l’acció
 	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
 	Stop: {message}	Aturada: {message}
 @msg	no action is waiting at a stop	cap acció no espera en una aturada

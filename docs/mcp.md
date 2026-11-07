@@ -1897,14 +1897,19 @@ already walks Image Trace. Short agent entry points:
   `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
   returns `{recording: true}`. `message` is the text playback shows (default: none), and `allowContinue` (default:
   false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
-  VectorCraft's own rule. An index past the last set, action or step, a param of another type, or no action and no
-  recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  VectorCraft's own rule. An index past the last set, action or step, a param of another type, params that are not an
+  object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
   (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
 - Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
   closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
   the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
   error. The panel's Play Current Selection runs this while an action waits. In the message box, Continue (shown with
   Allow Continue) runs this, and Stop closes the box while the action keeps waiting for the manual task.
+- Actions: `ui.action.deleteStep {set, action, step}` deletes one step, a stop or a command, of the action at `action`
+  in set `set` (0 is the top set, action or step), and returns `{set, action, step}`. The steps after it keep whether
+  they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one
+  open on a later step of the action follows it up. A missing or invalid index is an error, and then nothing changes.
+  Undo does not restore a deleted step. The panel's Delete Selection runs this for the selected step.
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
@@ -1922,7 +1927,8 @@ already walks Image Trace. Short agent entry points:
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the
   sets with these ids are deleted wherever they are now and `sets` is not read; when one of them no longer exists, the
   command returns an error and deletes no set. A recording into a deleted set stops and keeps no steps; a recording into another set
-  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) asks before it runs
+  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) deletes a selected
+  step (`ui.action.deleteStep`), else a selected action. Otherwise it asks before it runs
   this for the selected sets, and Shift-click on a set's name selects the sets from the current one to it. Undo does
   not restore a deleted set.
   `ui.actionSet.duplicate {set?: index, action?: index}` copies the action at `action` in set `set` to right after it

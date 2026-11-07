@@ -5478,6 +5478,7 @@ axis	Y Axis	Y 軸
 	Allow Continue	続行を許可
 	Continue	続行
 	Continue Action	アクションを続行
+	Delete Action Step	アクションステップを削除
 	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
 	Stop: {message}	停止: {message}
 @msg	no action is waiting at a stop	停止で待機中のアクションはありません

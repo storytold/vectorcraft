@@ -1275,13 +1275,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::INSERT_STOP,
         "Insert Stop",
         "",
-        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. An index past the last set, action or step, a param of another type, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. An index past the last set, action or step, a param of another type, params that are not an object, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
     ),
     (
         crate::panels::actions::CONTINUE_PLAYBACK,
         "Continue Action",
         "",
         "{} play on from the stop the Actions panel's playing action waits at, on the document active now, and close the stop's message box (dialog `actionStopMessage`): the next step runs at once, or at Accelerated the steps up to the next stop as one undo step. The panel's Play Current Selection runs this while an action waits. With no action waiting at a stop it is an error → {results, pending, atStop?}",
+    ),
+    (
+        crate::panels::actions::DELETE_STEP,
+        "Delete Action Step",
+        "",
+        "{set: index, action: index, step: index} delete one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step). The steps after it keep whether they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one open on a later step of the action follows it up. A missing or invalid index is an error and changes nothing. Undo does not bring the step back. The panel's Delete Selection runs this for the selected step → {set, action, step}",
     ),
     (
         "ui.batchDialog",

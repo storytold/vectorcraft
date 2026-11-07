@@ -5742,6 +5742,7 @@ axis	Y Axis	Y-as
 	Allow Continue	Doorgaan toestaan
 	Continue	Doorgaan
 	Continue Action	Actie voortzetten
+	Delete Action Step	Actiestap verwijderen
 	Press Play Current Selection in the Actions panel to go on.	Druk in het paneel Acties op Huidige selectie afspelen om door te gaan.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	geen actie wacht bij een stop

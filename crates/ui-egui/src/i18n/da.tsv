@@ -5696,6 +5696,7 @@ axis	Y Axis	Y-akse
 	Allow Continue	Tillad fortsæt
 	Continue	Fortsæt
 	Continue Action	Fortsæt handling
+	Delete Action Step	Slet handlingstrin
 	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
 	Stop: {message}	Stop: {message}
 @msg	no action is waiting at a stop	ingen handling venter ved et stop

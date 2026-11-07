@@ -128,7 +128,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
         return Err("an action in the action set file has more than 10,000 steps".into());
     }
     let mut stops = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| stops_in(&s.command, &s.params));
-    if stops.any(|p| !(p.is_null() || p.is_object()) || super::stop_params(p).is_err()) {
+    if stops.any(|p| super::stop_params(p).is_err()) {
         return Err("not an action set file".into());
     }
     let actions = f

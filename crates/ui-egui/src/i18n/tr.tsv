@@ -5754,6 +5754,7 @@ axis	Y Axis	Y ekseni
 	Allow Continue	Devam Etmeye İzin Ver
 	Continue	Devam Et
 	Continue Action	Eyleme Devam Et
+	Delete Action Step	Eylem Adımını Sil
 	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
 	Stop: {message}	Durak: {message}
 @msg	no action is waiting at a stop	durakta bekleyen eylem yok
