@@ -18,7 +18,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -73,8 +73,16 @@ private editing data. VectorCraft:
   RGB or CMYK ink amounts, and their alpha channel) and linked images as placed files with their path, their folder
   relative to the document's and a preview; images that can't be decoded or have more than 33,554,432 pixels are
   written as their outlines filled mid gray, images of 16 bits a channel at 8 bits, and linked images in opacity
-  masks and pattern tiles as embedded images, each with a warning. Type, other patterns, symbols, other clipping
-  objects and live objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
+  masks and pattern tiles as embedded images, each with a warning. Point type, area type (with its rows, columns,
+  gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
+  each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
+  scales, solid fills and strokes, capitals and paragraph alignment, indents, spacing and direction; other character
+  and paragraph attributes are left out with a warning. Type in opacity masks, pattern tiles and art cut to a
+  clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type in an open frame,
+  type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of
+  type on a path, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
+  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, symbols, other clipping objects and live
+  objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
   color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
   gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity

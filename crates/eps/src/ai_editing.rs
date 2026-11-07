@@ -78,12 +78,23 @@
 //!   (`w h rowBytes 32 17 `, then rows of premultiplied ARGB), each in versioned content, `~`,
 //!   `%AI5_EndPlace`. The box is the file's pixels at art space's origin on the canvas; the matrix
 //!   takes it into art space. In opacity masks and pattern tiles, linked images are embedded.
+//! - Type: a text object `/AI11Text :` naming its story and frame (`/StoryIndex`, `/FrameIndex`),
+//!   for area type and type on a path with its frame's path (`/Art :` … `; /ConfiningPath ,`), and
+//!   the text document after the document data (`%AI11_BeginTextDocument`, see
+//!   `writer::texts`), in the form the reader's `ate.rs` reads: the characters, the fonts, sizes,
+//!   leading, tracking, baseline shift, scales, solid fills and strokes and capitals of each run,
+//!   the alignment, indents, spacing, hyphenation and direction of each paragraph, and the frame:
+//!   point type's point and matrix, area type's frame, rows, columns, gutters and first baseline,
+//!   type on a path's path and span, vertical type, and the frames a threaded story flows through.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
-//! loss a warning: type as its outlines and its inline graphics' art, freeform gradients, gradients
+//! loss a warning: type the text document can't hold (in opacity masks, pattern tiles and art cut to
+//! a clipping object, mirrored, turned or unevenly scaled area type and type on a path, inline graphics, ruby,
+//! gradient or pattern paint, an appearance of its own) as its outlines and its inline graphics'
+//! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
 //! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
@@ -225,6 +236,9 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     w.definitions(&mut s);
     s.push_str(&palette);
     artboards(&mut s, doc, to_art, origin);
+    if !w.texts.is_empty() {
+        s.push_str(&w.texts.section(doc));
+    }
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");

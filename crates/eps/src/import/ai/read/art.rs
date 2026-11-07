@@ -35,6 +35,9 @@ impl<'a> Reader<'a> {
         // The type takes the state's transparency, as a path does; an `Xy` after it sets the slot's own.
         n.opacity = gs.opacity;
         n.blend = gs.blend;
+        n.knockout_shape = gs.knockout_shape;
+        // An `Xy` before the text object was the object's, not its layer's, when the layer's `LB` follows.
+        self.layer_state = None;
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }
