@@ -1754,7 +1754,8 @@ already walks Image Trace. Short agent entry points:
   first value at −180° to its second at 180°. A stroke without that input draws the brush's own value (a Scatter
   brush's value half way between the two).
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
-  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`,
+  `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
+  (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
   `variable.unbind`, `variable.rename`, `variable.delete`, `variable.highlight` (image values are file paths, graph
   values CSV as `graph.setData`). `variable.lock {locked?}` (Lock Variables) locks or unlocks the variables;
   without `locked` it toggles, and the lock is saved with the document. While the variables are locked,
