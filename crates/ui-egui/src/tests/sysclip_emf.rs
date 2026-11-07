@@ -126,6 +126,13 @@ fn a_vector_picture_with_plain_text_beside_it_still_pastes_the_picture() {
     run(&mut app, "edit.paste", json!({}));
     let p = pasted(&app);
     assert!(!p.is_empty() && pasted_type(&app).is_empty(), "{p:?}");
+    // Tab-separated text that reads as SVG markup is not taken over the picture: it would load as
+    // SVG, fail, and paste nothing.
+    let (mut markup, board) = self::app();
+    copy_elsewhere(&board, vec![(PNG, blue_png()), (EMF, ellipse_emf()), (TEXT, b"<svg\tQty\nItem\t2".to_vec())]);
+    run(&mut markup, "edit.paste", json!({}));
+    let p = pasted(&markup);
+    assert!(!p.is_empty() && pasted_type(&markup).is_empty(), "{p:?}");
     // One column of lines, or text indented with tabs, is not a table either.
     for text in ["a\nb\nc", "\tindented\n\tlines"] {
         let f = Flavour { mime: EMF, data: vec![] };

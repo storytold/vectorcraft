@@ -121,13 +121,17 @@ pub(crate) fn imports_as_image(mime: &str) -> bool {
 
 /// When Paste would take the vector picture `f` (a PDF, an EPS or an EMF) and the clipboard's text
 /// is cells copied from a spreadsheet ([`pastes_as_table`]), that text: a desktop spreadsheet puts
-/// a picture of the cells beside it. `read` reads the clipboard.
+/// a picture of the cells beside it. Text that reads as SVG markup is not cells: it would load as
+/// SVG ([`import_command`]), so the picture keeps its place. `read` reads the clipboard.
 pub(crate) fn spreadsheet_text(f: &Flavour, mut read: impl FnMut(&[&'static str]) -> Option<ClipboardRead>) -> Option<Flavour> {
     if ![PDF, EPS, EMF].contains(&f.mime) {
         return None;
     }
     match read(&[TEXT])? {
-        ClipboardRead::Now(text) if text.mime == TEXT && pastes_as_table(&String::from_utf8_lossy(&text.data)) => Some(text),
+        ClipboardRead::Now(text) if text.mime == TEXT => {
+            let t = String::from_utf8_lossy(&text.data);
+            (pastes_as_table(&t) && !looks_like_svg(&t)).then_some(text)
+        }
         _ => None,
     }
 }
