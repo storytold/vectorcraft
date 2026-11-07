@@ -375,6 +375,28 @@ fn a_drawn_look_keeps_its_objects_tags() {
     assert_eq!(tags(&a[0]), ("https://example.com/n".to_string(), vec![tag("own", "L"), tag("sku", "N-1")]));
 }
 
+/// A clipping subpath on `%_` lines in a drawn look leaves with the fill read apart from it.
+#[test]
+fn a_hidden_clipping_paths_fill_leaves_the_look_with_it() {
+    let (a, b, c) = (rect_path(0.0, 0.0, 30.0, 30.0), rect_path(5.0, 5.0, 25.0, 25.0), rect_path(0.0, 0.0, 10.0, 10.0));
+    let two = rect_path(8.0, 8.0, 20.0, 20.0);
+    let second: String = format!("0 0 1 0 0 0 1 Xa\n{two}h\nW\nf\n").lines().map(|l| format!("%_{l}\n")).collect();
+    let hidden_clip = format!("*u\n{RED}{a}h\nW\nf\n{second}*U\n");
+    let body = format!("0 Ae\nu\nu\n{hidden_clip}{b}f\nU\nU\n0 0 Xd\n6 () XW\n%_{}n\n1 (Gone style) XW\n", c.replace('\n', "\n%_"));
+    let doc = read_ok(&layer(&body)).doc;
+    let mut leaves = vec![];
+    doc.layers.iter().for_each(|l| {
+        l.walk(&mut |n| {
+            if let NodeKind::Path { clipping, .. } = &n.kind {
+                leaves.push((*clipping, fill(n).color()));
+            }
+        })
+    });
+    // The first subpath, its fill and the look's plain path stay; the second subpath and its fill leave.
+    let (red, blue) = (Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(leaves, [(true, None), (false, red), (false, blue)]);
+}
+
 /// Tags in a brush's art don't keep it from being read, and stay out of the art: it isn't an object
 /// of the document.
 #[test]
