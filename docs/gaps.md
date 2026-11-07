@@ -1,6 +1,6 @@
 # Gaps
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (G9: Gaussian Blur on objects other than type in EPS and `.ai` editing data; Indian-language hyphenation review and license allowlist, #4947; opening a slow file shows a progress window, part of #5930; Hindi catalog and contributor loanword preferences; agent wording pass complete; wider native proofreading welcome; an image zoomed in on is separated, colorized or proofed only where it shows (#4155); scores and estimates unchanged; a document's first frame renders on the render worker, so opening a heavy file no longer freezes the window; scores and estimates unchanged; large images in CMYK documents are shrunk before they are separated into ink planes (#4155); scores and estimates unchanged; `.ai` paths with a Calligraphic brush open brushed, with the 6D Art Pen's channels, and Windows reads the pen's tilt and barrel rotation, #372; scores and estimates unchanged; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; a slow first frame is waited for instead of restarting without the graphics adapter, and the menu bar no longer waits for the installed fonts' scan; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -189,6 +189,12 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 - **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
 
 - **Done (2026-10-16):** EPS legacy mesh corners and vector opacity masks retained; winding-declared compound member groups keep shared paint. Raster print-page minification no longer causes a false editing-data fallback; comparison limits remain unchanged. Synthetic regressions cover damage and missing artwork. This narrows G9; scores and estimates unchanged.
+
+- **Done (2026-11-07):** objects with a Gaussian Blur in their art style open as themselves with the effect, a
+  group's members blurred together, in the editing data of EPS and `.ai` files (from a user's files: 12 groups of
+  them). A blurred object whose style paints a gradient that isn't its own (24 in the same files) keeps its drawn
+  look: that look is an image, so it places no gradient, and the style's own placement isn't documented. This
+  narrows G9; scores and estimates unchanged.
 
 - **Done (2026-11-05):** paths with a Calligraphic brush open as paths with the brush on their stroke, at their
   weight, where the object's brush settings are the brush's own and its angle is on the page (#372, from a
@@ -817,6 +823,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | EPS and `.ai` editing data: objects with a Gaussian Blur in their art style open as themselves with the effect (a group's members blurred together); a blurred object whose style paints a gradient that isn't its own keeps its drawn look, an image that places no gradient. Checked on four users' Illustrator EPS files; scores unchanged |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | G15: nearby hits on plain long strokes and outlines check their candidate segments directly; a 200,000-anchor middle hit took about 11–13 ms before and 1.0–1.4 ms after in paired runs. An inside-bounds miss fell from 18.7 ms to 1.6 ms. Estimate unchanged; idle budget run still open. |
 | 2026-11-05 | minor | G15: an image zoomed in on is separated, colorized or proofed only for the tiles in view (#4155); 100% zoom on that file 8.6 s → 0.05 s. Estimate unchanged. |

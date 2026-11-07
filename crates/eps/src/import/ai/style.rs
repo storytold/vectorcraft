@@ -160,8 +160,8 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke)
-    /// and some Distort & Transform effects ([`any_object_takes`]) on the object
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
+    /// Gaussian Blur and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
@@ -1362,7 +1362,8 @@ impl Builder<'_> {
 /// Is `e`, on the whole object, an effect any object is read with? Of the Distort & Transform
 /// effects: Transform without copies (Random is never read), Twist, a Tweak that moves nothing,
 /// Pucker & Bloat at 0, and Free Distort when its corners make a parallelogram (an affine map).
-/// Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
+/// Gaussian Blur blurs what the object paints, a group's members together (`read::ops`' `styled`
+/// keeps the drawn look of an object whose style gradient it can't place). Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
 /// `read::ops`' `moves_with`.
 fn any_object_takes(e: &Effect) -> bool {
     match e.id.as_str() {
@@ -1379,7 +1380,8 @@ fn any_object_takes(e: &Effect) -> bool {
         | "path.outlineObject"
         | "path.outlineStroke"
         | "distort.twist"
-        | "distort.tweak" => true,
+        | "distort.tweak"
+        | "blur.gaussian" => true,
         // Copies are drawn as one path, its fills under all its strokes, where the file paints each
         // copy's fill and stroke in turn.
         "distort.transform" => e.params["copies"].as_i64() == Some(0),
