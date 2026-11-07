@@ -98,7 +98,14 @@ impl<'a> Reader<'a> {
             ..
         } = f;
         if matches!(kind, Kind::Clip) {
+            // `Q` restores the painting state, not the transparency: the writer sets `Xy` only when
+            // the next object's differs from the last one written, wherever that was, so a state set
+            // inside a clipping group stays after it (a glow set to Screen, then a clipping path set
+            // back to Normal: the type after the group has no `Xy` and is Normal).
+            let now = &self.gs;
+            let transparency = (now.opacity, now.blend, now.isolate, now.knockout, now.knockout_shape);
             self.gs = gs.clone();
+            (self.gs.opacity, self.gs.blend, self.gs.isolate, self.gs.knockout, self.gs.knockout_shape) = transparency;
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
         }
