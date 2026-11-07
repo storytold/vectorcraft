@@ -616,10 +616,11 @@ impl Interp<'_> {
     /// Glyph outline `outline` (glyph space) under font matrix `fm` at user point `at`: filled, or
     /// added to the current path (`charpath`).
     fn type42_paint(&mut self, mut outline: vectorcraft_geom::BezPath, at: Point, fm: Affine, paint: Draw) -> Res {
+        // Measuring a glyph reads its outline too, so `stringwidth` in a loop pays for it.
+        self.spend((outline.elements().len() as u64).saturating_add(16))?;
         if paint == Draw::No {
             return Ok(());
         }
-        self.spend((outline.elements().len() as u64).saturating_add(16))?;
         outline.apply_affine(self.xf() * Affine::translate(at.to_vec2()) * fm);
         if paint == Draw::Fill {
             return self.fill_path(outline, vectorcraft_geom::FillRule::NonZero);
@@ -709,6 +710,8 @@ impl Spacing {
 /// composite font's matrix (over the descendant's own).
 struct Mapped {
     font: DictRef,
+    /// The byte that picked the descendant (the font number).
+    pick: u8,
     code: u8,
     outer: Affine,
 }
@@ -752,8 +755,8 @@ impl Interp<'_> {
         if font_type(&f) != Some(0.0) || f.get(&Key::name("FMapType")).and_then(Obj::as_num) != Some(2.0) {
             return None;
         }
-        let encoding = f.get(&Key::name("Encoding"))?.items()?.to_vec();
-        let fonts = f.get(&Key::name("FDepVector"))?.items()?.to_vec();
+        let (encoding, fonts) = (f.get(&Key::name("Encoding"))?.items()?.clone(), f.get(&Key::name("FDepVector"))?.items()?.clone());
+        let (encoding, fonts) = (encoding.borrow(), fonts.borrow());
         let outer = font_matrix(&f, 1.0);
         let mut out = Vec::with_capacity(s.len() / 2);
         for &[pick, code] in s.as_chunks::<2>().0 {
@@ -762,7 +765,7 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), code, outer });
+                out.push(Mapped { font: d.clone(), pick, code, outer });
             }
         }
         Some(out)
@@ -775,7 +778,9 @@ impl Interp<'_> {
         for (i, g) in glyphs.iter().enumerate() {
             let at = self.user_point()?;
             let w = self.composite_glyph(g, at, Draw::Fill)?;
-            let d = spacing.advance(i, i64::from(g.code), w);
+            // `widthshow` and `awidthshow` match a composite font's character by its font number
+            // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
+            let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
             let c = code_char(&g.font.borrow(), g.code);
             if c != '\u{2022}' {
@@ -869,18 +874,26 @@ impl Interp<'_> {
             let Some(Obj::Array { items: sfnts, .. }) = f.get(&Key::name("sfnts")).cloned() else { return Ok(None) };
             sfnts
         };
-        if let Some((_, d)) = self.type42.iter().find(|(k, _)| k.same(&sfnts)) {
-            return Ok(Some(d.clone()));
+        // The least recently used font goes first: a hit moves to the end.
+        if let Some(i) = self.type42.iter().position(|(k, _)| k.same(&sfnts)) {
+            let hit = self.type42.remove(i);
+            let data = hit.1.clone();
+            self.type42.push(hit);
+            return Ok(data);
         }
-        let Some(data) = super::type42::font_data(&sfnts.borrow()) else { return Ok(None) };
-        self.alloc(data.len())?;
-        self.spend((data.len() / 4096) as u64)?;
-        let data = Rc::new(super::type42::Font::new(data));
+        // Fonts whose data can't be read are kept too, so they are copied only once.
+        let data = super::type42::font_data(&sfnts.borrow()).map(|d| Rc::new(super::type42::Font::new(d)));
+        if let Some(d) = &data {
+            if self.type42_counted.insert(sfnts.clone()) {
+                self.alloc(d.data.len())?;
+            }
+            self.spend((d.data.len() / 4096) as u64)?;
+        }
         if self.type42.len() >= MAX_TYPE42 {
             self.type42.remove(0);
         }
         self.type42.push((sfnts, data.clone()));
-        Ok(Some(data))
+        Ok(data)
     }
 }
 

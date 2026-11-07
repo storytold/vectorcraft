@@ -1125,7 +1125,7 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 /// budget. Running to the end of the budget can take over 20 s on a slow CI runner
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
-fn runs_out_of_budget(body: &str) {
+pub(super) fn runs_out_of_budget(body: &str) {
     let r = read_within(&format!("0 0 10 10 rectfill {body}"), 120);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
