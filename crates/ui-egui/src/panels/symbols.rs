@@ -164,8 +164,7 @@ pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
 /// symbol's, which Reset Transformation restores?
 fn transformed_instances_selected(app: &VectorcraftApp) -> bool {
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
-    let boxes = doc.symbol_boxes();
-    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation(&boxes, c).is_some())
+    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c))
 }
 
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
