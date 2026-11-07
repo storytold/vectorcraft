@@ -343,6 +343,23 @@ fn lock_station_point_swings_the_other_vanishing_point() {
 }
 
 #[test]
+fn a_grid_dragged_off_its_preset_reports_no_preset_name() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"name": "[1P-Normal View]"}));
+    let name = |s: &mut Session| run(s, "perspective.grid.get", json!({}))["define"]["name"].clone();
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+    // Moving a plane keeps the definition: still the preset.
+    run(&mut s, "perspective.plane.move", json!({"plane": "ground", "by": 50}));
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+    let g = grid(&s);
+    drag(&mut s, "perspectiveGrid", Point::new(g.vp_left, g.horizon), Point::new(g.vp_left - 40.0, g.horizon - 60.0));
+    assert!(!near(grid(&s).horizon, g.horizon), "the horizon moved");
+    assert_eq!(name(&mut s), json!(""), "a custom grid now");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(name(&mut s), json!("[1P-Normal View]"));
+}
+
+#[test]
 fn snap_to_grid_lands_drawn_and_moved_art_on_gridlines() {
     let mut s = session();
     run(&mut s, "perspective.grid.preset", json!({"kind": 2}));

@@ -710,12 +710,21 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
     d.fields.extend(own);
     let darkness = d.str("shade").eq_ignore_ascii_case("darkness");
     ui.add_space(4.0);
+    // A double-click on Color's swatch asks for the Color Picker over this dialog (#5364).
+    let mut pick = None;
     egui::Grid::new("fx-shade").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         if widgets::radio(ui, tl!("Color"), !darkness, true) {
             d.fields.insert("shade".into(), json!("color"));
         }
         ui.add_enabled_ui(!darkness, |ui| {
-            form::color_text(ui, d, "color", 128.0);
+            ui.horizontal(|ui| {
+                form::color_text(ui, d, "color", 128.0);
+                if let Some(c) = d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value)
+                    && form::colour_swatch(ui, "color", c)
+                {
+                    pick = Some(c);
+                }
+            });
         });
         ui.end_row();
         if widgets::radio(ui, tl!("Darkness"), darkness, true) {
@@ -728,7 +737,11 @@ fn drop_shadow_fields(ui: &mut egui::Ui, d: &mut Dialog, unit: vectorcraft_doc::
         });
         ui.end_row();
     });
-    values_changed(d)
+    let changed = values_changed(d);
+    if let Some(c) = pick {
+        *d = super::color_picker::over_effect(d, "color", c);
+    }
+    changed
 }
 
 /// A curve's graph of its points `pts` (0..1 each; input across, output up), as Curves and
@@ -1040,6 +1053,67 @@ mod tests {
         let st = app.session.doc().unwrap();
         let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
         assert_eq!(fx.params.get("color"), Some(&json!("#00ff00")), "Outer Glow takes the picked colour");
+    }
+
+    /// Effect > Stylize > Drop Shadow: Color has a swatch beside its field, as Outer Glow's does
+    /// (#5364); a double-click opens the Color Picker over the dialog, whose OK fills Color and
+    /// comes back, and the effect applies the picked colour. With Darkness chosen the swatch is
+    /// dimmed and opens nothing.
+    #[test]
+    fn drop_shadow_colour_swatch_opens_the_color_picker() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": DROP_SHADOW})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let frame = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            out
+        };
+        for n in 0..6 {
+            frame(&mut app, f64::from(n) * 0.01, vec![]);
+        }
+        let rect = ctx.read_response(form::colour_swatch_id("color")).expect("the colour swatch is drawn").rect;
+        let swatch = |out: &egui::FullOutput| {
+            out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.rect == rect => Some(r.fill),
+                _ => None,
+            })
+        };
+        assert_eq!(swatch(&frame(&mut app, 0.2, vec![])), Some(egui::Color32::BLACK), "the swatch shows the shadow's #000000");
+        let pos = rect.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        let double_click = |app: &mut VectorcraftApp, t: f64| {
+            frame(app, t, vec![egui::Event::PointerMoved(pos), button(true)]);
+            frame(app, t + 0.05, vec![button(false)]);
+            frame(app, t + 0.1, vec![button(true)]);
+            frame(app, t + 0.15, vec![button(false)]);
+            frame(app, t + 0.2, vec![]);
+        };
+        // With Darkness chosen the swatch opens nothing.
+        app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!("darkness"));
+        frame(&mut app, 0.25, vec![]);
+        double_click(&mut app, 0.3);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, "effect", "a dimmed swatch opens nothing");
+        app.ui.dialog.as_mut().unwrap().fields.insert("shade".into(), json!("color"));
+        frame(&mut app, 0.6, vec![]);
+        double_click(&mut app, 0.7);
+        let d = app.ui.dialog.as_ref().expect("a dialog");
+        assert_eq!(d.kind, "colorPicker", "a double-click opens the Color Picker over Drop Shadow");
+        assert_eq!(d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), Some(Color::rgb(0.0, 0.0, 0.0)), "on the shadow's colour");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#0000ff"));
+        super::super::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().expect("Drop Shadow is back");
+        assert_eq!((d.kind.as_str(), d.fields.get("color")), ("effect", Some(&json!("#0000ff"))), "OK fills Color and comes back");
+        frame(&mut app, 1.2, vec![]);
+        super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let fx = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0];
+        assert_eq!((fx.id.as_str(), fx.params.get("color")), (DROP_SHADOW, Some(&json!("#0000ff"))), "Drop Shadow takes the picked colour");
     }
 
     /// Effect > Stylize > Drop Shadow and Outer Glow: Opacity, the offsets, Blur and Darkness have

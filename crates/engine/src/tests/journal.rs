@@ -247,6 +247,149 @@ fn a_batch_step_records_what_it_took_from_the_preferences() {
     assert_eq!(doc(&r), doc(&s));
 }
 
+/// A document of three artboards with a rectangle on the second, the Artboard tool chosen and that
+/// artboard selected → the journal's length, where the entries under test start.
+fn second_artboard_selected(s: &mut Session) -> usize {
+    s.execute("file.new", &json!({"width": 400, "height": 200, "created": null})).unwrap();
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 300, "height": 100})).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 100, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 1010, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 2})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.select_tool("artboard", crate::tooling::ViewInfo::default()).unwrap();
+    s.set_tool_option("selected", &json!([1]));
+    s.journal.len()
+}
+
+/// A new session's Artboard tool has nothing selected, so a replay of a command that took its
+/// artboards from the selection acts on the artboards it recorded, and an action does not keep them.
+#[test]
+fn artboard_commands_record_the_selected_artboards_for_a_replay_and_not_for_an_action() {
+    for (id, params, recorded, action) in [
+        ("artboard.switchOrientation", json!({}), json!({"selectedArtboards": [1], "scaleArt": false}), json!({"scaleArt": false})),
+        ("artboard.rename", json!({"name": "Back"}), json!({"name": "Back", "selectedArtboards": [1]}), json!({"name": "Back"})),
+        ("artboard.duplicate", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
+        ("artboard.cut", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
+        ("artboard.copy", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
+    ] {
+        let mut s = Session::new();
+        let start = second_artboard_selected(&mut s);
+        s.execute(id, &params).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded), "{id}");
+        assert_eq!(s.journal_for_action(start), [(id.to_string(), action)], "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// A copy of the artboard the tool had selected replays as a copy of that artboard: what it pastes
+/// is the same.
+#[test]
+fn a_replayed_artboard_copy_pastes_the_selected_artboard() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.execute("artboard.copy", &json!({})).unwrap();
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// The artboards a call names are recorded as given and stay in an action, and a batch step records
+/// the selected ones in its own params.
+#[test]
+fn artboard_commands_keep_a_named_artboard_and_note_a_batch_steps_artboards() {
+    let mut s = Session::new();
+    let start = second_artboard_selected(&mut s);
+    s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"index": 0, "scaleArt": false}));
+    s.execute("artboard.duplicate", &json!({"indices": [0]})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true}));
+    let steps = json!([{"command": "artboard.switchOrientation", "params": {}}]);
+    s.execute("command.batch", &json!({ "commands": steps })).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "scaleArt": false}));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+    let action = s.journal_for_action(start);
+    assert_eq!(action[0].1, json!({"index": 0, "scaleArt": false}));
+    assert_eq!(action[1].1, json!({"indices": [0], "art": true}));
+    assert_eq!(action[2].1["commands"][0]["params"], json!({"scaleArt": false}));
+}
+
+/// A recorded `selectedArtboards` goes ahead of the tool's selection, gives way to a named artboard,
+/// and is checked as `indices` is.
+#[test]
+fn artboard_commands_read_the_recorded_selected_artboards() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let run = |s: &mut Session, p| s.execute("artboard.switchOrientation", &p).map(|r| r["switched"].clone());
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2]})).unwrap(), json!([2]));
+    assert_eq!(run(&mut s, json!({"selectedArtboards": [2], "index": 0})).unwrap(), json!([0]));
+    for bad in [json!([9]), json!([]), json!("1"), json!(null)] {
+        assert!(run(&mut s, json!({ "selectedArtboards": bad })).is_err(), "{bad}");
+    }
+}
+
+/// `edit.copy` and `edit.cut` run the Artboard tool's copy and take no artboards, so their entries
+/// stay as given.
+#[test]
+fn edit_copy_and_cut_with_the_artboard_tool_record_their_params_as_given() {
+    for id in ["edit.copy", "edit.cut"] {
+        let mut s = Session::new();
+        second_artboard_selected(&mut s);
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), json!({})), "{id}");
+    }
+}
+
+/// `artboard.duplicate` and the cut and copy record the tool's Move/Copy Artwork option: replayed in
+/// a new session, where the option is on, the art stays behind as it did.
+#[test]
+fn artboard_commands_record_the_tools_move_art_option() {
+    for id in ["artboard.duplicate", "artboard.cut", "artboard.copy"] {
+        let mut s = Session::new();
+        second_artboard_selected(&mut s);
+        s.set_tool_option("moveArt", &json!(false));
+        s.execute(id, &json!({})).unwrap();
+        assert_eq!(s.journal.last().unwrap().1["art"], json!(false), "{id}");
+        assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
+    }
+}
+
+/// `artboard.switchOrientation` records the tool's Scale Artwork option: replayed in a new session,
+/// where it is off, the art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_the_tools_scale_art_option() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["scaleArt"], json!(true));
+    assert_eq!(documents(&replayed(&s)), documents(&s));
+}
+
+/// `artboard.switchOrientation` records whether locked and hidden art goes along: replayed in a new
+/// session, where the preference is off, the locked art scales as it did.
+#[test]
+fn artboard_switch_orientation_records_whether_locked_art_goes_along() {
+    let mut s = Session::new();
+    second_artboard_selected(&mut s);
+    let r = s.execute("shape.rectangle", &json!({"x": 1150, "y": 10, "width": 100, "height": 50})).unwrap();
+    s.execute("layer.setProps", &json!({"ids": [r["id"]], "locked": true})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    s.set_tool_option("scaleArt", &json!(true));
+    s.execute("artboard.switchOrientation", &json!({})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], json!(true));
+    let r = replayed(&s);
+    assert!(!r.prefs.move_locked_with_artboard);
+    assert_eq!(documents(&r), documents(&s));
+    // The params' own values win over the preferences.
+    let mut t = Session::new();
+    second_artboard_selected(&mut t);
+    t.prefs.move_locked_with_artboard = true;
+    t.execute("artboard.switchOrientation", &json!({"scaleArt": true, "lockedAndHidden": false})).unwrap();
+    assert_eq!(t.journal.last().unwrap().1["lockedAndHidden"], json!(false));
+    assert!(t.execute("artboard.switchOrientation", &json!({"strokes": "yes"})).is_err());
+}
+
 /// Every open document of `s`, as JSON.
 fn documents(s: &Session) -> Vec<serde_json::Value> {
     s.documents().iter().map(|d| serde_json::to_value(&*d.doc).unwrap()).collect()
