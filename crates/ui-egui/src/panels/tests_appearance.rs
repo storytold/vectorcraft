@@ -1481,6 +1481,25 @@ fn after_a_row_click_delete_reaches_the_layers_panel_not_edit_clear() {
     assert!(d.node(rect).is_some(), "the rectangle on Layer 1 stays");
 }
 
+/// After Delete removed the last highlighted Layers row, the panel has nothing left to delete: the
+/// next Delete must go back to the app and clear the selected object, not be swallowed by the
+/// panel's row keys.
+#[test]
+fn delete_after_the_last_highlighted_layer_row_is_deleted_clears_the_selection() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let row = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, row, boxed_layers);
+    app_key(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Layer 2 is deleted");
+    assert!(app.session.active().unwrap().selection.contains(rect), "the rectangle stays selected");
+    app_key(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert!(app.session.active().unwrap().doc.node(rect).is_none(), "Delete clears the selected object once the panel has no rows");
+}
+
 /// A tool that claims Delete and Backspace (the Artboard tool's active artboard) leaves them to a
 /// clicked Layers row.
 #[test]

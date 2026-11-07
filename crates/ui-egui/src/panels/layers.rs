@@ -361,9 +361,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
-    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]). With no highlighted rows
+    // left (the last one was deleted) the panel gives the keys back, so Delete clears the selected
+    // art again instead of doing nothing.
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside && !view.rows.is_empty();
     super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
         && !view.rows.is_empty()
