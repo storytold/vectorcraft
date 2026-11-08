@@ -59,6 +59,11 @@
 	3 Color Job…	3-Farben-Auftrag…
 	30° Angles	30°-Winkel
 	3D and Materials	3D und Materialien
+	Plane	Ebene
+	Extrude	Extrudieren
+	Revolve	Kreiseln
+	Inflate	Aufblasen
+	Select objects, then pick an object type to give them a 3D effect.	Wählen Sie Objekte aus und dann einen Objekttyp, um ihnen einen 3D-Effekt zu geben.
 	3D Ribbon	3D-Band
 	45° Angles	45°-Winkel
 	60° Angles	60°-Winkel
@@ -259,6 +264,8 @@ font-technology	Variable	Variabel
 	Show Cross Hairs	Fadenkreuz einblenden
 	Show Video Safe Areas	Videosichere Bereiche einblenden
 	Video Ruler Pixel Aspect Ratio:	Pixel-Seitenverhältnis der Videolineale:
+	Fade Region Outside Artboard	Bereich außerhalb der Zeichenfläche abblenden
+	Update While Dragging	Beim Ziehen aktualisieren
 	Hide Video Rulers	Videolineale ausblenden
 	Background Contents	Hintergrundinhalt
 	Background Contents:	Hintergrundinhalt:
@@ -1360,6 +1367,8 @@ file-filter	Templates	Vorlagen
 	Grays	Grautöne
 	Grays and Neutrals	Grautöne und neutrale Farben
 	Grayscale	Graustufen
+	High Color	Viele Farben
+	Low Color	Wenige Farben
 	Grayscale images	Graustufenbilder
 	Greek & Cyrillic	Griechisch und Kyrillisch
 	Green	Grün
@@ -1432,6 +1441,7 @@ file-filter	Templates	Vorlagen
 	Step Backward	Schritt zurück
 	Step Forward	Schritt vorwärts
 	Clear History	Protokoll löschen
+	New Document from State	Neues Dokument aus Protokollschritt
 	Set History Limit…	Protokollgrenze festlegen…
 	History States	Protokollschritte
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1825,6 +1835,9 @@ file-filter	Templates	Vorlagen
 	Live Paint Selection Tool	Interaktiv-malen-Auswahlwerkzeug
 	Live Shape Properties	Eigenschaften interaktiver Formen
 	Load Color Profile…	Farbprofil laden…
+	Load Character Styles…	Zeichenformate laden…
+	Load Paragraph Styles…	Absatzformate laden…
+	Load All Styles…	Alle Formate laden…
 	Remove Color Profile…	Farbprofil entfernen…
 	Load Image into Clipboard	Bild in die Zwischenablage laden
 	Load Metafile into Clipboard	Metadatei in die Zwischenablage laden
@@ -2652,6 +2665,14 @@ digits	Malayalam	Malayalam
 	Relink	Neu verknüpfen
 	Relink Linked Files to the Document	Verknüpfte Dateien neu mit dem Dokument verknüpfen
 	Relink to Folder…	Mit Ordner neu verknüpfen…
+	Each Link Separately	Jede Verknüpfung einzeln
+	Selected Instances	Ausgewählte Instanzen
+	All Instances	Alle Instanzen
+	Missing Links from This Folder	Fehlende Verknüpfungen aus diesem Ordner
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} ist nicht each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each und paths gehören zusammen: paths listet Einträge mit ids und path anstelle von ids, path und folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-Eintrag {i} braucht path und ids (Objekt-IDs, die kein anderer Eintrag hat)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder nimmt path: Im Ordner dieser Datei wird nach den anderen fehlenden Verknüpfungen gesucht
 	Relink…	Neu verknüpfen…
 	Find Linked Files	Verknüpfte Dateien suchen
 	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…
@@ -2696,6 +2717,7 @@ digits	Malayalam	Malayalam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersetzen Sie sie durch eine andere Datei oder ignorieren Sie sie: Ihre Bilder zeigen weiterhin die mit dem Dokument gespeicherte Vorschau.
 	Replace Spine	Achse ersetzen
 	Replace Symbol	Symbol ersetzen
+	Reset Transformation	Transformation zurücksetzen
 	Replace With Font	Durch Schrift ersetzen
 	Replace With Font From	Ersetzende Schrift aus
 	System	System
@@ -2712,6 +2734,8 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	OpenType-Funktionen zurücksetzen
 	Reset Panel	Bedienfeld zurücksetzen
 	Reset Preferences	Voreinstellungen zurücksetzen
+	Search Preferences	Voreinstellungen durchsuchen
+	No settings found	Keine Einstellungen gefunden
 	Reset Profiles	Profile zurücksetzen
 	Rotate View	Ansicht drehen
 	Reset Rotate View	Ansichtsdrehung zurücksetzen
@@ -2767,6 +2791,7 @@ digits	Malayalam	Malayalam
 	Rotate Tool	Drehen-Werkzeug
 	Rotate View Tool	Ansichtdrehung-Werkzeug
 	Trackpad Gesture to Rotate View	Ansicht mit Trackpad-Geste drehen
+	Hold a Tool Shortcut to Use the Tool Temporarily	Werkzeug-Tastaturbefehl gedrückt halten, um das Werkzeug vorübergehend zu verwenden
 	Rotate…	Drehen…
 	Rotation	Drehung
 	Roughen…	Aufrauen…
@@ -3209,6 +3234,7 @@ effect	Points	Punkte
 	Spaces	Leerzeichen
 	Spacing Guides	Abstandshilfslinien
 	Invoke Distance Guides	Distanzhilfslinien aufrufen
+	Snap to Last Location	An letzter Position ausrichten
 	Spacing:	Abstand:
 	Spanish	Spanisch
 	Specified Distance	Festgelegter Abstand
@@ -3846,6 +3872,9 @@ theme	Appearance	Erscheinungsbild
 	Put back in the toolbar	Zurück in die Werkzeugleiste setzen
 	Float Panel	Bedienfeld ablösen
 	Dock Panel	Bedienfeld andocken
+	Dock to Top	Oben andocken
+	Dock to Bottom	Unten andocken
+	Dock Control Bar	Steuerungsleiste andocken
 	Drag to float the toolbar	Ziehen, um die Werkzeugleiste abzulösen
 	Drag to the window's left edge to dock	Zum Andocken an den linken Fensterrand ziehen
 	Float Tool Group	Werkzeuggruppe ablösen
@@ -4294,6 +4323,7 @@ theme	Appearance	Erscheinungsbild
 @msg	nothing to save: the document has no visible art	nichts zu speichern: Das Dokument enthält keine sichtbare Grafik
 @msg	nothing to undo	nichts rückgängig zu machen
 @msg	no history to clear	kein Protokoll zu löschen
+@msg	no history state {v}	kein Protokollschritt {v}
 @msg	nothing to warp	nichts zu verkrümmen
 @msg	nothing to wrap	nichts zu umfließen
 @msg	object {0} cannot have children	Objekt {0} kann keine untergeordneten Objekte haben
@@ -4676,6 +4706,7 @@ theme	Appearance	Erscheinungsbild
 	ICF Box	ICF-Rahmen
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` muss ein Array von Farben sein, nicht {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` muss ein Array von Ankerpunkt-Indizes sein, nicht {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: Das Ergebnis von Schritt {i} hat keinen solchen Wert (schreiben Sie $$ für ein literales $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: Vor diesem Schritt gibt es keinen Schritt {i} (Schritte zählen ab 0; schreiben Sie $$ für ein literales $)
@@ -5383,6 +5414,11 @@ axis	Y Axis	Y-Achse
 	Keep data of its own with the document	Eigene Daten mit dem Dokument speichern
 	Change how the objects its effect is applied to are drawn	Ändern, wie die Objekte gezeichnet werden, auf die sein Effekt angewendet ist
 	Write the document as a file in its own format	Das Dokument als Datei in einem eigenen Format schreiben
+	Show its progress, see Cancel and write log lines	Den Fortschritt anzeigen, ein Abbrechen erkennen und Protokollzeilen schreiben
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	die Berechtigung `progress` braucht die Plug-in-API-Stufe {PROGRESS_API}: Geben Sie `api` {PROGRESS_API} an
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	das Modul importiert `env.{name}` mit einem anderen Typ als dem des Hosts: Der Typ des Hosts ist {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	das Modul importiert `env.{name}`, das ein Plug-in nur auf der Plug-in-API-Stufe {PROGRESS_API} (`api` {PROGRESS_API}) und mit der Berechtigung `progress` verwenden darf
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	das Modul importiert `{from}.{name}`, das der Host nicht anbietet: Ein Plug-in darf nur `env.vc_progress`, `env.vc_cancelled` und `env.vc_log` importieren (Plug-in-API-Stufe 2), aber kein WASI, keine Dateien und kein Netzwerk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ist {_1}; dieser Host unterstützt die Plug-in-API-Stufen 1 bis {API_LEVEL}
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gilt nur für einen Live-Effekt (`kind` "effect") mit `api` 2
 @msg	`grant` must be a list of permission names	`grant` muss eine Liste von Berechtigungsnamen sein
@@ -5859,6 +5895,7 @@ breakText	Glyphs	Glyphen
 	Gap 5	Lücke 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sie wurden als Seitengrafik importiert
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	verkrümmte Textobjekte, die als Grafik und nicht als bearbeitbarer Text importiert wurden: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	Objekte, die anders als die eigene Seite der Datei gezeichnet wurden, wurden als Seitengrafik importiert: {_1}
 
 @msg	You must choose a side pattern.	Sie müssen ein Seitenmuster auswählen.

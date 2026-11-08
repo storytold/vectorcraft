@@ -463,6 +463,39 @@ fn dialogs_do_not_stretch_to_the_screen() {
     assert!(checked >= 10, "only {checked} dialogs drew in the shared frame");
 }
 
+#[test]
+fn workspace_and_toolbar_dialogs_end_at_their_buttons() {
+    // New Workspace, Manage Workspaces, New Toolbar and Manage Toolbars draw their own windows: each
+    // ends just below its OK button, with no empty band above or below the buttons.
+    for (kind, fields, window) in [
+        ("newWorkspace", json!({"name": "Mine"}), "dialog-workspace"),
+        ("manageWorkspaces", json!({"selected": "", "name": ""}), "dialog-workspace"),
+        (crate::custom_toolbars::KIND, json!({"name": "Toolbar 1"}), "dialog-new-toolbar"),
+        (crate::custom_toolbars::MANAGE, json!({"selected": "", "name": ""}), "dialog-manage-toolbars"),
+    ] {
+        let mut app = app();
+        open(&mut app, kind, fields);
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let mut ok = None;
+        for _ in 0..4 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            ok = out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == "OK" => Some(t.visual_bounding_rect()),
+                _ => None,
+            });
+        }
+        let ok = ok.unwrap_or_else(|| panic!("{kind} draws no OK button"));
+        let outer = ctx.memory(|m| m.area_rect(egui::Id::unique(window))).unwrap();
+        let below = outer.bottom() - ok.bottom();
+        assert!(below < 40.0, "{kind}: {below} pt between OK and the bottom of its {} pt window", outer.height());
+    }
+}
+
 /// The dialog window of `app`'s open dialog after a few frames in a `w` × 900 window.
 fn dialog_rect(app: &mut VectorcraftApp, w: f32) -> egui::Rect {
     let ctx = egui::Context::default();
@@ -1739,6 +1772,66 @@ fn artboard_options_show_center_mark_and_cross_hairs() {
         super::confirm(&mut app).unwrap();
         let last = app.session.doc().unwrap().doc.artboards.len() - 1;
         assert_eq!(marks(&app, last), want);
+    }
+}
+
+/// Artboard Options shows Fade Region Outside Artboard and Update While Dragging under Global,
+/// ticked as the preferences have them (on by default). OK sets the preferences, for the dialog of
+/// an existing artboard and of a new one alike, and the artboard keeps its other settings.
+#[test]
+fn artboard_options_global_checkboxes_set_the_preferences() {
+    let mut app = app();
+    let prefs = |app: &VectorcraftApp| (app.session.prefs.fade_region_outside_artboard, app.session.prefs.artboard_update_while_dragging);
+    assert_eq!(prefs(&app), (true, true));
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+    assert!(text.contains("Global") && text.contains("Fade Region Outside Artboard") && text.contains("Update While Dragging"), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(d.bool("fadeRegionOutsideArtboard") && d.bool("artboardUpdateWhileDragging"));
+    d.fields.insert("fadeRegionOutsideArtboard".into(), json!(false));
+    let rect = app.session.doc().unwrap().doc.artboards[0].rect;
+    super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(prefs(&app), (false, true));
+    assert_eq!(app.session.doc().unwrap().doc.artboards[0].rect, rect);
+    // Opened again, it shows them as set; a value that is not true or false is refused and changes
+    // nothing. A new artboard's dialog sets them too.
+    crate::dialogs::artboard_options::open(&mut app).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("fadeRegionOutsideArtboard"));
+    d.fields.insert("artboardUpdateWhileDragging".into(), json!("sometimes"));
+    assert!(super::confirm(&mut app).is_err());
+    assert_eq!(prefs(&app), (false, true), "nothing changed");
+    cancel(&mut app);
+    app.run("ui.newArtboard", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert!(!d.bool("fadeRegionOutsideArtboard") && d.bool("artboardUpdateWhileDragging"));
+    d.fields.insert("fadeRegionOutsideArtboard".into(), json!(true));
+    d.fields.insert("artboardUpdateWhileDragging".into(), json!(false));
+    super::confirm(&mut app).unwrap();
+    assert_eq!(prefs(&app), (true, false));
+    assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 2);
+}
+
+/// When the artboard command refuses a value, OK leaves the Global checkboxes' preferences as they
+/// were, for the dialog of an existing artboard and of a new one alike.
+#[test]
+fn artboard_options_error_leaves_the_global_preferences_unchanged() {
+    let mut app = app();
+    let prefs = |app: &VectorcraftApp| (app.session.prefs.fade_region_outside_artboard, app.session.prefs.artboard_update_while_dragging);
+    for new in [false, true] {
+        if new {
+            app.run("ui.newArtboard", json!({})).unwrap();
+        } else {
+            crate::dialogs::artboard_options::open(&mut app).unwrap();
+        }
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("fadeRegionOutsideArtboard".into(), json!(false));
+        d.fields.insert("videoRulerPixelAspectRatio".into(), json!(20));
+        assert!(super::confirm(&mut app).is_err(), "new: {new}");
+        assert_eq!(prefs(&app), (true, true), "new: {new}");
+        assert_eq!(app.session.doc().unwrap().doc.artboards.len(), 1, "new: {new}");
+        cancel(&mut app);
     }
 }
 

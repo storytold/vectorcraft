@@ -312,9 +312,9 @@ proptest! {
             0..6,
         ),
         permissions in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
-        api in prop_oneof![3 => Just(json!(1)), 1 => arb_junk()],
+        api in prop_oneof![2 => Just(json!(1)), 1 => Just(json!(2)), 1 => arb_junk()],
         name in prop_oneof![3 => "[a-z\u{202E}\u{2066}\u{200F} ]{1,64}", 1 => "[a-z\u{202E}\u{2066}\u{0007}\u{200F} ]{1,80}"],
-        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]))],
+        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write", "progress"]))],
     ) {
         let mut m = json!({"id": "fuzz.permissions", "name": name, "kind": kind, "api": api});
         if kind == "exporter" {
@@ -328,8 +328,7 @@ proptest! {
         let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
         let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
         if let Ok(man) = &parsed {
-            let implied = vectorcraft_plugins::permissions::Permission::implied(man.kind);
-            prop_assert!(man.permissions().iter().all(|p| implied.contains(p)), "{}", text);
+            prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind)), "{}", text);
             let shown = vectorcraft_plugins::permissions::display_text(&man.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
             prop_assert!(!shown.chars().any(|c| c.is_control() || matches!(c, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
@@ -345,5 +344,48 @@ proptest! {
         prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
         vectorcraft_plugins::registry::remove("fuzz.permissions");
         vectorcraft_plugins::registry::revoke("fuzz.permissions");
+    }
+
+    /// A plug-in of API level 2 that calls the host imports with hostile arguments (any progress
+    /// counts, any log level, pointers and lengths in and out of its memory, text that isn't
+    /// UTF-8) runs to an error or an output, never a panic, and its report stays within the caps.
+    #[test]
+    fn hostile_host_import_arguments_never_crash(
+        calls in prop::collection::vec(
+            prop_oneof![
+                (any::<i64>(), any::<i64>()).prop_map(|(d, t)| format!("(call $vc_progress (i64.const {d}) (i64.const {t}))")),
+                Just("(drop (call $vc_cancelled))".to_string()),
+                (prop_oneof![any::<i32>(), -1..5i32], prop_oneof![any::<i32>(), 0x1ff00..0x20100i32], prop_oneof![any::<i32>(), 0..5000i32])
+                    .prop_map(|(l, p, n)| format!("(drop (call $vc_log (i32.const {l}) (i32.const {p}) (i32.const {n})))")),
+            ],
+            0..24,
+        ),
+        bytes in prop::collection::vec(any::<u8>(), 0..64),
+        effect in any::<bool>(),
+    ) {
+        use vectorcraft_plugins::host::{LOG_TRUNCATED, MAX_LOG_BYTES, MAX_LOG_LINE, MAX_LOG_LINES};
+        let manifest = if effect {
+            r#"{"id":"fuzz.host","name":"F","kind":"effect","api":2,"permissions":["doc.read","effect.render","progress"]}"#
+        } else {
+            r#"{"id":"fuzz.host","name":"F","kind":"filter","api":2,"permissions":["doc.read","doc.write","progress"]}"#
+        };
+        let text: String = bytes.iter().map(|b| format!("\\{b:02x}")).collect();
+        let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::HOST_IMPORTS);
+        let wasm = wat::parse_str(tpl::with_imports(manifest, &imports, &calls.concat(), r#"{"objects":[]}"#)).unwrap();
+        let r = catch_quiet(|| {
+            let p = vectorcraft_plugins::Plugin::load(&wasm, vectorcraft_plugins::Limits::default())?;
+            let token = vectorcraft_doc::cancel::CancelToken::new();
+            let sink: vectorcraft_doc::cancel::ProgressSink = std::rc::Rc::new(|_, _, _| {});
+            Ok::<_, vectorcraft_plugins::Error>(vectorcraft_doc::cancel::scope(&token, Some(sink), || p.run_reporting(b"{\"objects\":[]}", b"{}", p.limits())))
+        });
+        let r = r.map_err(|msg| TestCaseError::fail(format!("panicked on {calls:?}: {msg}")))?;
+        let (out, report) = r.map_err(|e| TestCaseError::fail(format!("refused at load: {e}")))?;
+        prop_assert!(out.is_ok(), "{:?}", out);
+        prop_assert!(report.lines.len() <= MAX_LOG_LINES + 1);
+        prop_assert!(report.lines.iter().all(|l| l.text.chars().count() <= MAX_LOG_LINE));
+        prop_assert!(report.lines.iter().filter(|l| l.text != LOG_TRUNCATED).map(|l| l.text.len()).sum::<usize>() <= MAX_LOG_BYTES);
+        if let Some((done, total)) = report.progress {
+            prop_assert!(total == 0 || done <= total);
+        }
     }
 }

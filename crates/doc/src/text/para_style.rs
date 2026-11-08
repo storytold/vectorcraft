@@ -228,7 +228,8 @@ pub struct ParaStyle {
     pub leading_model: LeadingModel,
     /// Hanging punctuation (Paragraph panel menu › Burasagari): a comma or full stop ending a line
     /// may stand outside the frame. New type takes [`Burasagari::Standard`]; documents from before
-    /// it and imported text keep [`Burasagari::None`].
+    /// it and imported text keep [`Burasagari::None`], except legacy `.ai` type with binding
+    /// punctuation on, which opens with [`Burasagari::Forced`].
     pub burasagari: Burasagari,
     /// Kinsoku (Paragraph panel › Kinsoku Set): which Japanese characters may not start or end a
     /// line.

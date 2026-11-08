@@ -261,19 +261,83 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
     true
 }
 
-/// The Control bar (Window → Control), context-sensitive like Illustrator's.
+/// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
+/// the bottom.
+pub const CONTROL_BAR_EDGES: [&str; 2] = ["top", "bottom"];
+
+/// The side of the Control bar's panel menu button, at the bar's right end.
+const MENU_BUTTON: f32 = 16.0;
+
+/// The height of the band drawn along the edge of the window that a gripper drag docks the bar to.
+const DOCK_BAND: f32 = 4.0;
+
+/// Docks the Control bar to `edge` of [`CONTROL_BAR_EDGES`], through its command.
+fn dock(app: &mut VectorcraftApp, edge: &str) {
+    crate::menus::invoke(app, "window.control.dock", json!({ "edge": edge }));
+}
+
+/// The Control bar's panel menu: Dock to Top and Dock to Bottom, the edge the bar is docked to
+/// checked.
+fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
+    let resp = crate::panels::menu_button(ui, "control", rect);
+    egui::Popup::menu(&resp).show(|ui| {
+        ui.set_min_width(160.0);
+        for (i, label) in [tl!("Dock to Top"), tl!("Dock to Bottom")].into_iter().enumerate() {
+            if widgets::menu_item(ui, label, true, usize::from(app.ui.control_bar_bottom) == i) {
+                dock(app, CONTROL_BAR_EDGES[i]);
+            }
+        }
+    });
+}
+
+/// The Control bar's gripper. Dragging it shows a band along the top or the bottom edge of the
+/// window, whichever the pointer is nearer, and docks the bar there on release.
+fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+    let (g, resp) = ui.allocate_exact_size(vec2(6.0, 20.0), Sense::drag());
+    for i in 0..5 {
+        ui.painter().circle_filled(g.center_top() + vec2(0.0, 2.0 + i as f32 * 4.0), 0.9, t.text_disabled);
+    }
+    let resp = resp.on_hover_cursor(egui::CursorIcon::Grab);
+    if !resp.dragged() && !resp.drag_stopped() {
+        return;
+    }
+    let Some(pos) = resp.interact_pointer_pos().or_else(|| ui.ctx().pointer_latest_pos()) else { return };
+    let window = ui.ctx().content_rect();
+    let bottom = pos.y > window.center().y;
+    if resp.drag_stopped() {
+        if bottom != app.ui.control_bar_bottom {
+            dock(app, CONTROL_BAR_EDGES[usize::from(bottom)]);
+        }
+        return;
+    }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    let band = if bottom {
+        egui::Rect::from_min_max(egui::pos2(window.left(), window.bottom() - DOCK_BAND), window.max)
+    } else {
+        egui::Rect::from_min_max(window.min, egui::pos2(window.right(), window.top() + DOCK_BAND))
+    };
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("control_bar_dock_band"));
+    ui.ctx().layer_painter(layer).rect_filled(band, 0.0, t.accent);
+}
+
+/// The Control bar (Window → Control), context-sensitive like Illustrator's, docked to the top or
+/// the bottom of the window.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    egui::Panel::top("control_bar")
+    let bottom = app.ui.control_bar_bottom;
+    let panel = if bottom { egui::Panel::bottom("control_bar") } else { egui::Panel::top("control_bar") };
+    let bar = panel
         .exact_size(34.0)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                // Gripper
-                let (g, _) = ui.allocate_exact_size(vec2(6.0, 20.0), Sense::hover());
-                for i in 0..5 {
-                    ui.painter().circle_filled(g.center_top() + vec2(0.0, 2.0 + i as f32 * 4.0), 0.9, t.text_disabled);
-                }
+            // The panel menu button takes the right end, and the controls trim to the room left of it:
+            // they are laid out in that room, so every room check below leaves the button's width.
+            let full = ui.max_rect();
+            let menu = egui::Rect::from_center_size(egui::pos2(full.right() - MENU_BUTTON / 2.0, full.center().y), vec2(MENU_BUTTON, MENU_BUTTON));
+            let room = egui::Rect::from_min_max(full.min, egui::pos2(menu.left() - ui.spacing().item_spacing.x, full.bottom()));
+            let layout = egui::Layout::left_to_right(egui::Align::Center);
+            let controls = ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(layout), |ui| {
+                gripper(app, ui, &t);
                 if app.session.active().is_none() {
                     ui.label(egui::RichText::new(tl!("No Document")).color(t.text_dim));
                     return;
@@ -405,5 +469,14 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
             });
+            // Controls that keep their size can still run into the button's room in a narrow window;
+            // the button is left out then.
+            if controls.response.rect.right() <= menu.left() {
+                panel_menu(app, ui, menu);
+            }
         });
+    // Docked at the bottom, the bar is a bottom bar that menus stop above.
+    if bottom {
+        widgets::set_menu_floor(ui.ctx(), bar.response.rect.top());
+    }
 }

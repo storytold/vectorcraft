@@ -19,6 +19,12 @@
 //! a filter does only what they allow: without `doc.read` it is given no objects, without
 //! `doc.write` an output that changes the document is refused, and without `state` it neither
 //! reads nor writes the data it keeps with the document.
+//!
+//! A plug-in of API level 2 that lists `progress` may import the host's `vc_progress`,
+//! `vc_cancelled` and `vc_log` ([`vectorcraft_plugins::host`]): run inside a
+//! [`vectorcraft_doc::cancel::scope`] (the app's heavy filters and background exports), its
+//! progress goes to the scope's sink and it sees the scope's Cancel; its log lines go to the log
+//! under its id.
 
 use std::sync::{Arc, Mutex};
 
@@ -45,7 +51,7 @@ pub fn describe(p: &Plugin) -> Value {
         "id": m.id, "name": m.name, "version": m.version, "kind": m.kind.name(), "author": m.author, "description": m.description,
         "params": m.params_doc(), "paramsSchema": serde_json::to_value(m).ok().and_then(|v| v.get("params").cloned()),
         "size": p.size(), "source": p.source(),
-        "permissions": permissions::names(&m.permissions()), "hash": p.hash(),
+        "permissions": permissions::names(&m.permissions()), "hash": p.hash(), "api": m.api,
     });
     match m.kind {
         Kind::Effect => v["effect"] = json!(effect::effect_id(&m.id)),
@@ -58,7 +64,6 @@ pub fn describe(p: &Plugin) -> Value {
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
     }
-    v["api"] = json!(m.api);
     if m.paint_output {
         v["paintOutput"] = json!(true);
     }
@@ -497,7 +502,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), api (the plug-in API level its manifest is written for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies), hash (the module's SHA-256)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
             always,
             list
         ),

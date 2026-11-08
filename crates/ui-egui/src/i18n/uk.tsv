@@ -78,6 +78,11 @@
 	3 Color Job…	Завдання з 3 кольорами…
 	30° Angles	Кути 30°
 	3D and Materials	3D та матеріали
+	Plane	Площина
+	Extrude	Видавлювання
+	Revolve	Обертання
+	Inflate	Надування
+	Select objects, then pick an object type to give them a 3D effect.	Виділіть об’єкти, потім виберіть тип об’єкта, щоб надати їм 3D-ефект.
 	3D Ribbon	3D-стрічка
 	45° Angles	Кути 45°
 	60° Angles	Кути 60°
@@ -278,6 +283,8 @@ font-technology	Variable	Варіативні
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
 	Video Ruler Pixel Aspect Ratio:	Співвідношення сторін пікселя відео-лінійок:
+	Fade Region Outside Artboard	Затемнювати ділянку поза монтажною областю
+	Update While Dragging	Оновлювати під час перетягування
 	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
 	Background Contents:	Вміст фону:
@@ -1384,6 +1391,8 @@ file-filter	Templates	Шаблони
 	Grays	Сірі
 	Grays and Neutrals	Сірі та нейтральні
 	Grayscale	Відтінки сірого
+	High Color	Багато кольорів
+	Low Color	Мало кольорів
 	Grayscale images	Зображення у відтінках сірого
 	Greek & Cyrillic	Грецька та кирилиця
 	Green	Зелений
@@ -1457,6 +1466,7 @@ file-filter	Templates	Шаблони
 	Step Backward	Крок назад
 	Step Forward	Крок вперед
 	Clear History	Очистити історію
+	New Document from State	Новий документ зі стану
 	Set History Limit…	Задати межу історії…
 	History States	Стан історії
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1851,6 +1861,9 @@ file-filter	Templates	Шаблони
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
 	Live Shape Properties	Властивості динамічної фігури
 	Load Color Profile…	Завантажити профіль кольору…
+	Load Character Styles…	Завантажити стилі символів…
+	Load Paragraph Styles…	Завантажити стилі абзаців…
+	Load All Styles…	Завантажити всі стилі…
 	Remove Color Profile…	Видалити профіль кольору…
 	Load Image into Clipboard	Завантажити зображення в буфер обміну
 	Load Metafile into Clipboard	Завантажити метафайл у буфер обміну
@@ -2720,6 +2733,14 @@ digits	Malayalam	Малаялам
 	Relink	Відновити зв’язок
 	Relink Linked Files to the Document	Відновити зв’язані файли з документом
 	Relink to Folder…	Відновити зв’язок із папкою…
+	Each Link Separately	Кожен зв’язок окремо
+	Selected Instances	Вибрані екземпляри
+	All Instances	Усі екземпляри
+	Missing Links from This Folder	Відсутні зв’язки з цієї папки
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не є одним із each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each і paths задаються разом: paths перелічує записи з ids і path замість ids, path і folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	запису {i} у paths потрібні path і ids (ідентифікатори об’єктів, яких немає в інших записах)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder приймає path: у папці цього файлу шукаються інші відсутні зв’язки
 	Relink…	Відновити зв’язок…
 	Find Linked Files	Знайти пов’язані файли
 	Find Linked Files in Folder…	Знайти пов’язані файли в папці…
@@ -2764,6 +2785,7 @@ digits	Malayalam	Малаялам
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замініть його іншим файлом або ігноруйте: зображення продовжать показувати попередній перегляд, збережений з документом.
 	Replace Spine	Замінити вісь
 	Replace Symbol	Замінити символ
+	Reset Transformation	Скинути трансформацію
 	Replace With Font	Замінити шрифтом
 	Replace With Font From	Замінити шрифтом з
 	System	Система
@@ -2780,6 +2802,8 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Скинути функції OpenType
 	Reset Panel	Скинути панель
 	Reset Preferences	Скинути налаштування
+	Search Preferences	Пошук у налаштуваннях
+	No settings found	Налаштування не знайдено
 	Reset Profiles	Скинути профілі
 	Rotate View	Повернути вид
 	Reset Rotate View	Скинути поворот виду
@@ -2835,6 +2859,7 @@ digits	Malayalam	Малаялам
 	Rotate Tool	Інструмент «Поворот»
 	Rotate View Tool	Інструмент «Поворот виду»
 	Trackpad Gesture to Rotate View	Повертати вид жестом трекпада
+	Hold a Tool Shortcut to Use the Tool Temporarily	Тимчасово використовувати інструмент, утримуючи його клавішу
 	Rotate…	Повернути…
 	Rotation	Поворот
 	Roughen…	Надати нерівності…
@@ -3277,6 +3302,7 @@ effect	Points	Точки
 	Spaces	Пробіли
 	Spacing Guides	Напрямні інтервалів
 	Invoke Distance Guides	Викликати напрямні відстаней
+	Snap to Last Location	Прив’язати до останнього розташування
 	Spacing:	Інтервал:
 	Spanish	Іспанська
 	Specified Distance	Задана відстань
@@ -3962,6 +3988,9 @@ axis	Both	Обидві
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
+	Dock to Top	Прикріпити вгорі
+	Dock to Bottom	Прикріпити внизу
+	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
@@ -4404,6 +4433,7 @@ axis	Both	Обидві
 @msg	nothing to save: the document has no visible art	нічого зберігати: у документі немає видимого малюнка
 @msg	nothing to undo	нічого скасовувати
 @msg	no history to clear	немає історії для очищення
+@msg	no history state {v}	немає стану історії {v}
 @msg	nothing to warp	нічого деформувати
 @msg	nothing to wrap	нічого обтікати
 @msg	object {0} cannot have children	об’єкт {0} не може мати нащадків
@@ -4765,6 +4795,7 @@ axis	Both	Обидві
 	Exit	Вийти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` має бути масивом кольорів, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` має бути масивом індексів опорних точок, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед цим кроком немає кроку {i} (кроки рахуються з 0; щоб написати сам $, введіть $$)
@@ -5397,6 +5428,11 @@ axis	Y Axis	Вісь Y
 	Keep data of its own with the document	Зберігати власні дані в документі
 	Change how the objects its effect is applied to are drawn	Змінювати те, як малюються об’єкти, до яких застосовано його ефект
 	Write the document as a file in its own format	Записувати документ у файл власного формату
+	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `progress` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль імпортує `env.{name}` з іншим типом, ніж у хоста: у хоста тип {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише `env.vc_progress`, `env.vc_cancelled` і `env.vc_log` (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
@@ -5873,6 +5909,7 @@ breakText	Glyphs	Гліфи
 	Gap 5	Проміжок 5
 
 @msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	деформовані текстові об’єкти, імпортовані як графіка, а не як редагований текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	об’єкти, що малювалися інакше, ніж власна сторінка файлу, імпортовано як графіку сторінки: {_1}
 
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.

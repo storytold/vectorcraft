@@ -24,7 +24,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, api, paintOutput?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `api` is the manifest's plug-in API level, and `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source, api, paintOutput?, permissions, hash}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed. With `hash`, a module whose SHA-256 differs is refused. |
@@ -68,7 +68,7 @@ The host is [`wasmi`](https://github.com/wasmi-labs/wasmi), a pure-Rust WebAssem
 
 | Limit | Default | On violation |
 |---|---|---|
-| Host imports | none: no WASI, file system, network, clock or randomness | module rejected at install |
+| Host imports | none at API level 1; at level 2 only the three [host imports](#host-imports-api-level-2): no WASI, file system, network, clock or randomness | module rejected at install, naming the import |
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
@@ -116,15 +116,16 @@ capability model proposed for PhotoCraft plug-ins
 | `state` | filter | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
 | `export.write` | exporter | Write the document as a file in its own format. |
+| `progress` | all | Show its progress, see Cancel and write log lines through the [host imports](#host-imports-api-level-2). Needs `api` 2. |
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`; an exporter `doc.read` and
   `export.write`. Such a plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is
   empty may do none of these, and also installs without a prompt.
 - An effect or an exporter that lists permissions lists both of its implied ones. A filter may list any of its three.
-  An unknown name, a name listed twice, a name that doesn't apply to the kind, more than 16 names, or one of the names
-  kept for a later plug-in API (`progress`, `ui.panel`, `ui.tool`) is refused when the module is installed, and the
-  error names it.
+  Any kind may add `progress`, which no kind implies. An unknown name, a name listed twice, a name that doesn't apply
+  to the kind, more than 16 names, `progress` with an `api` below 2, or one of the names kept for a later plug-in API
+  (`ui.panel`, `ui.tool`) is refused when the module is installed, and the error names it.
 - **Installing asks first.** Install Plug-in… and File › Open show the plug-in's name, id, version, the SHA-256 of
   the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
   SHA-256 shown; Cancel installs nothing. The
@@ -134,16 +135,20 @@ capability model proposed for PhotoCraft plug-ins
   `plugin.inspect` entry's `hash` so that the module installed is the one the user saw.
 - The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
   `Plug-ins` folder. Installing a module with the same id that lists no new permission needs no new approval; one that
-  lists more asks again. `plugin.remove` forgets the grant. When a `Plug-ins` folder is in use, only the grants kept
+  lists more asks again. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
+  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
+  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in whose permissions are not granted is skipped. The Additional Plug-ins Folder and `plugin.reload`
   install only plug-ins whose permissions were granted, and report the others.
 - The host enforces the grant on a filter run: without `doc.read` the filter is given no objects; without `state` its
   `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
   document is refused. A refused output leaves the document as it was.
-- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds a live effect's
-  `paintOutput`. A higher one is refused. A level 2 effect that declares `paintOutput` needs no other permission than
-  `doc.read` and `effect.render`.
+- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
+  imports](#host-imports-api-level-2) and a live effect's [`paintOutput`](#painted-live-effects). A higher one is
+  refused. `plugin.list` and `plugin.info` give it as `api`. A level 2 effect that declares `paintOutput` needs no
+  other permission than `doc.read` and `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
@@ -168,8 +173,9 @@ each time it is drawn.
 ## ABI v1
 
 A plug-in is a core WebAssembly module (MVP + the usual post-MVP features: bulk memory, sign extension, multi-value,
-saturating conversions; no SIMD, no memory64) with **no imports** and these exports. Integers are `i32` unless noted;
-pointers are offsets into the module's memory.
+saturating conversions; no SIMD, no memory64) with these exports and no imports other than the [host
+imports](#host-imports-api-level-2) of API level 2. Integers are `i32` unless noted; pointers are offsets into the
+module's memory.
 
 | Export | Signature | Meaning |
 |---|---|---|
@@ -178,6 +184,34 @@ pointers are offsets into the module's memory.
 | `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+
+### Host imports (API level 2)
+
+A plug-in whose manifest gives `"api": 2` and lists the `progress` [permission](#permissions) may import these
+functions from module `env` (the module a Rust or C toolchain gives `extern` functions by default). `vc_abi_version`
+still returns `1`.
+
+| Import | Signature | Meaning |
+|---|---|---|
+| `vc_progress` | `(done: i64, total: i64)` | `done` of `total` steps are finished; `total` 0 or less when not known. Negative values count as 0, and `done` is clamped to `total`. |
+| `vc_cancelled` | `() -> i32` | `1` once the user cancelled the run or its time budget ran out, else `0`. |
+| `vc_log` | `(level, ptr, len) -> i32` | Writes the UTF-8 text at `ptr` as a log line of `level` (0 error, 1 warning, 2 information, 3 debug). Returns `0` when written, `1` when the run's log budget is spent and the line was dropped, `-1` when the text doesn't lie inside the module's memory, `-2` when it is not UTF-8, `-3` for another level. |
+
+- The host checks the imports when the module is installed: an import it doesn't offer, one with another signature,
+  and one the manifest doesn't allow (an `api` below 2, or no `progress` permission) refuse the module, and the error
+  names the import.
+- A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
+  window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
+  stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
+  ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
+  it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
+  in a run, one change in 1,000 is passed on, and so is the first report after the total becomes known or unknown. A
+  live effect's progress is not shown, since it is drawn as part of something else.
+- Log lines go to the app's log (target `vectorcraft_plugins`) as `<plug-in id>: <text>`, with control and
+  bidirectional characters escaped. The whole text must be UTF-8. A line shows its first 1,024 bytes, as at most 1,024
+  characters with the escapes, and ends with `…` when it is cut. A run writes at most 200 lines and 32 KiB of shown
+  text, and the host reads at most 1 MiB of log text in a run; past any of these, one "log truncated" line is written
+  and the rest are dropped.
 
 ### Manifest
 
@@ -418,12 +452,12 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
 The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
-WAT…), as long as the module has no imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never
+WAT…), as long as the module imports nothing but the host imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as long as it never
 touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text, which the tests
 build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters (with a
 base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with, and
 `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows in a
-live effect's geometry.
+live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host functions.
 
 ## Performance
 
@@ -433,9 +467,8 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 ## Not in v1
 
-- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, host
-  callbacks (a plug-in reporting progress or asking whether it was cancelled), importers (plug-in formats that open
-  files).
+- Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
+  (plug-in formats that open files).
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
   it returns), and filters on type, images or symbols.
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

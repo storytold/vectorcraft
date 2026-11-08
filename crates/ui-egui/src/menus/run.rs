@@ -448,6 +448,18 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        "window.control.dock" => {
+            let key = "edge";
+            let edges = crate::chrome::CONTROL_BAR_EDGES;
+            match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
+                Some(i) => {
+                    app.ui.control_bar_bottom = i == 1;
+                    Ok(json!({ key: edges[i] }))
+                }
+                None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
+            }
+        }
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
@@ -744,6 +756,9 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let names = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::save_style_library::open(app, names.unwrap_or_default())
         }
+        "ui.loadCharStyles" => crate::panels::text_styles::load(app, "charStyle.load", s("path")),
+        "ui.loadParaStyles" => crate::panels::text_styles::load(app, "paraStyle.load", s("path")),
+        "ui.loadAllStyles" => crate::panels::text_styles::load(app, "textStyle.loadAll", s("path")),
         id if id.starts_with(crate::panels::graphic_styles::USER_SLOT) => match crate::panels::graphic_styles::user_library(app, id) {
             Some(l) => crate::panels::graphic_styles::open_library(app, &json!({ "library": l.id })),
             None => Err("no such user library".into()),
@@ -836,6 +851,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "links.editOriginal" => crate::panels::links::open_file(app, p, false),
         "links.reveal" => crate::panels::links::open_file(app, p, true),
         "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
+        "ui.relinkDialog" => crate::dialogs::relink::open(app, p),
         "ui.findLinksInFolder" => {
             crate::dialogs::find_links::find_in_folder_command(app, s("folder"), p.get("ids").and_then(Value::as_array).cloned())
         }

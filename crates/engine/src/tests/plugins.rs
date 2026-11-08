@@ -907,6 +907,77 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
     run(&mut granted, "plugin.remove", json!({"id": id}));
 }
 
+/// A grants file entry this version can't use (a permission it doesn't know, an invalid id) is
+/// skipped without dropping the other grants, and recording a grant writes it back as it was,
+/// except an entry for the plug-in being granted or removed. A grants file that doesn't parse as a
+/// list is never overwritten.
+#[test]
+fn grants_this_version_cant_read_are_kept() {
+    let folder = crate::tests_links::Folder::new("plugin-store-grants-unknown");
+    let kept = "test.engine.permissions.kept";
+    let added = "test.engine.permissions.added";
+    let later = "test.engine.permissions.later";
+    let empty = json!({"objects": []});
+    let kept_wasm = asking(kept, r#"["doc.read"]"#, &empty);
+    let added_wasm = asking(added, r#"["doc.read"]"#, &empty);
+    let later_wasm = asking(later, r#"["doc.read"]"#, &empty);
+    let future = json!({"id": later, "hash": "00", "permissions": ["doc.read", "ui.panel"]});
+    let invalid = json!({"id": "bad id/", "hash": "00", "permissions": ["doc.read"]});
+    let grant = json!({"id": kept, "hash": vectorcraft_plugins::permissions::sha256_hex(&kept_wasm), "permissions": ["doc.read"]});
+    let grants = folder.0.join("grants.json");
+    std::fs::write(&grants, serde_json::to_vec(&json!([future, grant, invalid])).unwrap()).unwrap();
+    std::fs::write(folder.0.join("kept.wasm"), &kept_wasm).unwrap();
+    let entries = || serde_json::from_slice::<Vec<Value>>(&std::fs::read(&grants).unwrap()).unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(kept).is_some(), "the entries this version can't read don't drop the grant next to them");
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
+    let now = entries();
+    assert_eq!(now.len(), 4, "{now:?}");
+    assert!(now.contains(&future) && now.contains(&invalid), "written back as they were: {now:?}");
+    assert!(now.iter().any(|e| e["id"] == added), "{now:?}");
+    run(&mut s, "plugin.remove", json!({"id": added}));
+    assert_eq!(entries().len(), 3);
+    // Granting the plug-in an entry names replaces that entry.
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&later_wasm), "grant": ["doc.read"]}));
+    let now = entries();
+    assert!(!now.contains(&future), "{now:?}");
+    assert_eq!(now.iter().filter(|e| e["id"] == later).count(), 1, "{now:?}");
+    run(&mut s, "plugin.remove", json!({"id": later}));
+    run(&mut s, "plugin.remove", json!({"id": kept}));
+    assert_eq!(entries(), vec![invalid.clone()], "the last usable grant removed leaves the entry it can't read");
+
+    // A file that doesn't hold a list is left as it is: installing still works in this session.
+    for broken in [&b"[{\"id\": "[..], &b"{\"id\": \"x\"}"[..]] {
+        std::fs::write(&grants, broken).unwrap();
+        run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
+        assert!(vectorcraft_plugins::registry::get(added).is_some());
+        assert_eq!(std::fs::read(&grants).unwrap(), broken, "not overwritten");
+        run(&mut s, "plugin.remove", json!({"id": added}));
+        assert_eq!(std::fs::read(&grants).unwrap(), broken, "not overwritten by a removal either");
+    }
+
+    // The file stays within the 1 MiB it is read up to: compact when pretty-printing would pass it,
+    // and left as it is when even compact would.
+    let cap = 1 << 20;
+    let many: Vec<Value> = (0..14_000).map(|i| json!({"id": format!("x.{i}"), "hash": "00", "permissions": ["ui.panel"]})).collect();
+    let compact = serde_json::to_vec(&many).unwrap();
+    assert!(compact.len() < cap && serde_json::to_vec_pretty(&many).unwrap().len() > cap);
+    std::fs::write(&grants, &compact).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
+    let written = std::fs::read(&grants).unwrap();
+    assert!(written.len() <= cap, "{}", written.len());
+    assert_eq!(entries().len(), many.len() + 1);
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm)}));
+    assert_eq!(inspected["needsApproval"], json!(false), "the compact file is read back");
+    run(&mut s, "plugin.remove", json!({"id": added}));
+    let full = serde_json::to_vec(&json!([{"id": "x.full", "hash": "0".repeat(cap - 100), "permissions": ["ui.panel"]}])).unwrap();
+    std::fs::write(&grants, &full).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&added_wasm), "grant": ["doc.read"]}));
+    assert_eq!(std::fs::read(&grants).unwrap(), full, "not written past the cap");
+    run(&mut s, "plugin.remove", json!({"id": added}));
+}
+
 /// The user agreed once: a heavy filter kept in the plug-in store is installed again at the next
 /// start without asking, with its budget.
 #[test]
@@ -998,6 +1069,35 @@ fn a_filter_run_made_elsewhere_keeps_its_document_data() {
     assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(s.doc().unwrap().doc.plugin_data(id), Some(&json!({"pens": 2})), "undone with its objects");
+}
+
+/// A plug-in of API level 2 that uses the host imports lists `progress`, which the user grants like
+/// any permission; a filter run made elsewhere then reports its progress, as a share, to the
+/// progress the caller shows, and sees the caller's Cancel.
+#[test]
+fn a_level_2_filter_installs_with_progress_granted_and_reports_to_the_caller() {
+    use crate::cmd::fileio::progress::{self, Progress};
+    use crate::cmd::plugin::FilterRun;
+    let mut s = session();
+    let id = "test.engine.level2";
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write","progress"]}}"#);
+    let wasm = wat::parse_str(tpl::cooperating(&manifest, 1000, r#"{"objects":[]}"#, r#"{"objects":[]}"#)).unwrap();
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert_eq!((&inspected["needsApproval"], &inspected["permissions"]), (&json!(true), &json!(["doc.read", "doc.write", "progress"])));
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write, progress"), "{e}");
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write", "progress"]}));
+    let shown = Progress::new();
+    let r = FilterRun::prepare(&s, &json!({"id": id})).unwrap();
+    assert!(progress::scope(&shown, || r.run()).is_ok());
+    assert_eq!((shown.counts(), shown.counts_share()), ((999, 1000), true));
+    // Cancelled, it stops on its first step, and what it returns then is discarded.
+    shown.cancel();
+    let cancelled = progress::scope(&shown, || r.run());
+    assert!(matches!(cancelled, Err(EngineError::Cancelled)), "{cancelled:?}");
+    assert_eq!(shown.counts(), (0, 1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
 /// A filter run the caller cancels (MCP's `notifications/cancelled`, the app's Cancel) stops between

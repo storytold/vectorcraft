@@ -31,6 +31,8 @@ pub(crate) use paint::{CROP_STROKES, crop_line};
 
 impl Renderer {
     pub fn new() -> Self {
+        // Envelopes map type from its glyphs here too, without an engine session.
+        vectorcraft_text::register_envelope_ink();
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
             text_ids: PtrMap::default(),

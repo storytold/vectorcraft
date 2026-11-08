@@ -23,6 +23,7 @@ mod toggles;
 
 pub use blend::{
     TransparencyEdit, angle_dial, blend_dropdown, blend_param, blend_param_dropdown, blend_separator_before, opacity_blend, reference_point,
+    reference_point_named,
 };
 pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
@@ -43,6 +44,8 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::menu_floor;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
@@ -68,7 +71,7 @@ pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
-pub use toggles::{check, check_box, check_name, check_tip, check3, radio, radio_button};
+pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do
@@ -236,6 +239,121 @@ pub(crate) mod accessibility_tests {
         {
             let chosen = if i == 4 { Toggled::True } else { Toggled::False };
             assert_eq!(role_and_state(&tree, label), (Role::RadioButton, Some(chosen)), "{label}");
+        }
+        let grid = named(&tree, "Reference Point");
+        assert_eq!((grid.role(), grid.value()), (Role::RadioGroup, Some("Center")), "the grid is a radio group showing the current point");
+    }
+
+    /// Screen readers find the nine squares inside the Reference Point radio group.
+    #[test]
+    fn the_reference_point_group_holds_its_squares() {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        let mut nodes = vec![];
+        for time in [0.0, 0.1] {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| {
+                reference_point(ui, 0);
+            });
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let node = |id: &egui::accesskit::NodeId| nodes.iter().find(|(n, _)| n == id).map(|(_, n)| n);
+        let Some((group, _)) = nodes.iter().find(|(_, n)| n.label() == Some("Reference Point")) else { panic!("no Reference Point group") };
+        let mut inside = vec![];
+        let mut todo = vec![*group];
+        while let Some(id) = todo.pop() {
+            for child in node(&id).map(|n| n.children()).unwrap_or_default() {
+                inside.extend(node(child).and_then(|n| n.label()).map(str::to_owned));
+                todo.push(*child);
+            }
+        }
+        for label in ["Top Left", "Top", "Top Right", "Left", "Center", "Right", "Bottom Left", "Bottom", "Bottom Right"] {
+            assert!(inside.iter().any(|l| l == label), "{label} is in the group: {inside:?}");
+        }
+    }
+
+    /// A frame of a button, the reference point grid at `point` and another button, after `events`;
+    /// a new point from the grid replaces `point`. Returns the two buttons' ids.
+    fn grid_frame(ctx: &egui::Context, events: Vec<egui::Event>, point: &mut usize) -> (egui::Id, egui::Id) {
+        let mut ids = (egui::Id::NULL, egui::Id::NULL);
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+            ids.0 = ui.button("Before").id;
+            if let Some(i) = reference_point(ui, *point) {
+                *point = i;
+            }
+            ids.1 = ui.button("After").id;
+        });
+        // No renderer takes the font atlas updates in a test; dropping them unapplied panics.
+        out.textures_delta.clear();
+        ids
+    }
+
+    /// Tab stops once on the reference point grid, not on each of its nine squares.
+    #[test]
+    fn the_reference_point_grid_is_one_tab_stop() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut point = 4;
+        let mut ids = (egui::Id::NULL, egui::Id::NULL);
+        let stops = tab_stops(&ctx, 3, |events| ids = grid_frame(&ctx, events, &mut point));
+        assert_eq!(stops.len(), 3, "{stops:?}");
+        assert_eq!(stops[0], ids.0, "the first Tab reaches the button before the grid");
+        let size = ctx.read_response(stops[1]).map(|r| r.rect.size());
+        assert_eq!(size, Some(egui::Vec2::splat(23.0)), "the second Tab reaches the whole grid, not one of its squares");
+        assert_eq!(stops[2], ids.1, "the third Tab leaves the grid for the button after it");
+        assert_eq!(point, 4, "Tab leaves the point as it was");
+    }
+
+    /// While the grid has the focus, the arrow keys move the point one square, stop at the edges and
+    /// keep the focus on the grid.
+    #[test]
+    fn arrow_keys_move_the_reference_point() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let mut point = 4;
+        let stops = tab_stops(&ctx, 2, |events| {
+            grid_frame(&ctx, events, &mut point);
+        });
+        let grid = stops[1];
+        let arrow = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        for (key, want) in [
+            (egui::Key::ArrowRight, 5),
+            (egui::Key::ArrowUp, 2),
+            (egui::Key::ArrowRight, 2),
+            (egui::Key::ArrowUp, 2),
+            (egui::Key::ArrowLeft, 1),
+            (egui::Key::ArrowDown, 4),
+            (egui::Key::ArrowDown, 7),
+            (egui::Key::ArrowLeft, 6),
+            (egui::Key::ArrowDown, 6),
+        ] {
+            grid_frame(&ctx, vec![arrow(key)], &mut point);
+            grid_frame(&ctx, vec![], &mut point);
+            assert_eq!(point, want, "{key:?}");
+            assert_eq!(ctx.memory(|m| m.focused()), Some(grid), "{key:?} keeps the focus on the grid");
+        }
+        // From no point, an arrow moves from the center.
+        point = 9;
+        grid_frame(&ctx, vec![arrow(egui::Key::ArrowLeft)], &mut point);
+        grid_frame(&ctx, vec![], &mut point);
+        assert_eq!(point, 3, "← from no point chose the middle of the left side");
+        assert_eq!(ctx.memory(|m| m.focused()), Some(grid), "← from no point keeps the focus on the grid");
+    }
+
+    /// A locator under another label takes that label, without its colon, as the group's name.
+    #[test]
+    fn a_named_reference_point_group_takes_its_label() {
+        // Each locator gets its own id scope, so their ids differ.
+        let tree = tree(|ui| {
+            for (point, label) in [(4, "Pivot:"), (0, "Origine :"), (8, "基準点：")] {
+                ui.push_id(label, |ui| reference_point_named(ui, point, label));
+            }
+        });
+        for (label, value) in [("Pivot", "Center"), ("Origine", "Top Left"), ("基準点", "Bottom Right")] {
+            let grid = named(&tree, label);
+            assert_eq!((grid.role(), grid.value()), (Role::RadioGroup, Some(value)), "{label}");
         }
     }
 

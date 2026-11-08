@@ -155,6 +155,17 @@ impl History {
         self.undo.iter().chain(&self.redo).map(|e| e.bytes).sum()
     }
 
+    /// The document at row `row` of the History panel, `now` being the document now: the rows before
+    /// it are the undo steps, oldest first, and the rows after it the redo steps, nearest first.
+    pub(crate) fn state<'a>(&'a self, now: &'a Arc<Document>, row: usize) -> Option<&'a Arc<Document>> {
+        let current = self.undo.len();
+        match row.cmp(&current) {
+            std::cmp::Ordering::Less => self.undo.get(row).map(|e| &e.doc),
+            std::cmp::Ordering::Equal => Some(now),
+            std::cmp::Ordering::Greater => self.redo.len().checked_sub(row - current).and_then(|i| self.redo.get(i)).map(|e| &e.doc),
+        }
+    }
+
     /// Let the oldest steps go while over the step limit or the memory budget: undo steps first
     /// (the oldest), then redo steps (the furthest ahead).
     pub fn trim(&mut self) {

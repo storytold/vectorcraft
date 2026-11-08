@@ -1186,3 +1186,32 @@ fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
         format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
 }
+
+/// A style as a writer checks it: the reader's appearance, with a gradient fill as the object's own,
+/// and nothing for styles it doesn't read.
+#[test]
+fn a_style_is_read_as_a_writer_checks_it() {
+    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
+    let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
+    let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
+    let data = style(&[stack, blend(1, 0.5)]);
+    let own = Paint::solid(vectorcraft_color::Color::WHITE);
+    let got = read(&data, Some(&own)).unwrap();
+    assert_eq!(got.appearance.items.len(), 1);
+    assert_eq!(got.appearance.items[0].paint(), &own);
+    assert!(got.simple && !got.pathfinder);
+    // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
+    assert!(read(&data, None).is_none());
+    let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
+    assert!(read(&pattern, None).is_none());
+    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
+    // Damaged text: every cut of the style, and stray bytes, without a panic.
+    for cut in 0..data.len() {
+        let _ = read(data.get(..cut).unwrap_or_default(), Some(&own));
+    }
+    for junk in ["(", ")", ";", "/KnownStyle :\n(Odd) /Name ,\n;;;;", "/KnownStyle :\n(Odd) /Name ,\n/Array : 1 /Real , ; (x) ,"] {
+        let _ = read(junk, Some(&own));
+    }
+}
