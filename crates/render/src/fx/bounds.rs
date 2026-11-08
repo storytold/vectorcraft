@@ -63,6 +63,9 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             b.inflate(o, o)
         });
     }
+    if let Some(art) = painted_art(symbols, n) {
+        return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
+    }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
     let g = effected_path(symbols.document(), n, &bp);
@@ -78,13 +81,21 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         }
     }
     let s = n.appearance.outset();
-    r.map(|r| {
-        let r = r.inflate(s, s);
-        // The fills' and strokes' own raster effects, then the object's.
-        let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
-        let o = outset(symbols, &n.appearance.effects, r);
-        r.inflate(o, o)
-    })
+    r.map(|r| with_raster_reach(symbols, n, r.inflate(s, s)))
+}
+
+/// `r`, the art of `n` with its strokes, grown by how far the raster effects of `n`'s fills and
+/// strokes and then `n`'s own paint past it.
+fn with_raster_reach(symbols: &SymbolBoxes, n: &Node, r: Rect) -> Rect {
+    let r = n.appearance.items.iter().filter(|i| paints(i)).map(|i| spread(symbols, item_effects(i), r)).fold(r, |acc, b| acc.union(b));
+    let o = outset(symbols, &n.appearance.effects, r);
+    r.inflate(o, o)
+}
+
+/// The art of `n` with each piece a live-effect plug-in returns and the paints of that piece
+/// ([`effects::has_painted_effects`]); `None` for any other object.
+fn painted_art(symbols: &SymbolBoxes, n: &Node) -> Option<Node> {
+    effects::has_painted_effects(n).then(|| effects::reshape(Some(symbols.document()), n, None)).flatten()
 }
 
 /// Does `item` paint (as [`Renderer::paint_items`] draws it)?
@@ -105,10 +116,16 @@ pub(crate) fn drawn_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 
 /// The bounds of what `item`, a fill or stroke of the path or compound path `n`, paints: the path
 /// with `n`'s and `item`'s geometry effects, and for a stroke its width. `None` for other objects,
-/// 3D art, a brushed stroke and an item that draws no path.
+/// 3D art, a path whose live-effect plug-ins paint their pieces, a brushed stroke and an item that
+/// draws no path.
 fn item_bounds(doc: &Document, n: &Node, item: &AppearanceItem) -> Option<Rect> {
     let stroke = matches!(item, AppearanceItem::Stroke(_));
-    if !has_fx(n) || effects::has_revolve(n) || effects::has_solid(n) || (stroke && vectorcraft_brush::has_brush(n)) {
+    if !has_fx(n)
+        || effects::has_revolve(n)
+        || effects::has_solid(n)
+        || effects::has_painted_effects(n)
+        || (stroke && vectorcraft_brush::has_brush(n))
+    {
         return None;
     }
     let g = effected_path(doc, n, &node_bezpath(n)?);
@@ -168,6 +185,9 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
             // A 3D effect's art.
             if let Some(art) = effects::revolve_art(n).or_else(|| effects::solid_art(n)) {
                 return drawn_bounds(symbols, &art);
+            }
+            if let Some(art) = painted_art(symbols, n) {
+                return art.visual_bounds_with(symbols);
             }
             let g = effected_path(symbols.document(), n, &node_bezpath(n)?);
             // The path as the fills and strokes without geometry effects of their own paint it

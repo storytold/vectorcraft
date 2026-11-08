@@ -510,6 +510,28 @@ fn a_swatch_linked_piece_is_not_culled_with_its_off_screen_path() {
     assert_eq!(drawn(&s).pixel(50, 50), GREEN);
 }
 
+/// The renderer measures a painted piece with its own strokes: a piece off screen whose wide stroke
+/// reaches the view is drawn, and the bounds raster effects work over take in that stroke, on a
+/// path with no stroke of its own and with a blur on the stroke the effect is on.
+#[test]
+fn a_piece_s_own_stroke_counts_in_the_bounds_of_what_is_drawn() {
+    let mut s = session();
+    let wide = json!({"objects": [{"path": square_at(-120.0), "strokes": [{"paint": solid("#00ff00"), "width": 300}]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.widestroke", true), &wide));
+    let id = rect(&mut s, -300.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.widestroke"}));
+    assert_eq!(drawn(&s).pixel(30, 50), GREEN, "only the piece's stroke is on screen");
+    let bounds = |s: &Session, id: NodeId| vectorcraft_render::drawn_bounds(&s.doc().unwrap().doc, &node(s, id)).unwrap();
+    assert!(bounds(&s, id).x1 >= 50.0, "{:?}", bounds(&s, id));
+
+    let blurred = rect(&mut s, -300.0, "#ff0000");
+    run(&mut s, "paint.setStroke", json!({"ids": [blurred.0], "color": "#0000ff", "width": 1}));
+    let stroke = node(&s, blurred).appearance.items.iter().position(|i| !i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [blurred.0], "effect": "plugin.test.engine.widestroke", "item": stroke}));
+    run(&mut s, "effect.apply", json!({"ids": [blurred.0], "effect": "blur.gaussian", "params": {"radius": 10}, "item": stroke}));
+    assert!(bounds(&s, blurred).x1 > 55.0, "the blur spreads the piece's stroke: {:?}", bounds(&s, blurred));
+}
+
 /// A retained renderer's kept bounds follow the document's swatches: a swatch-linked piece on
 /// screen appears when its swatch is added, though the path it comes from is off screen.
 #[test]
