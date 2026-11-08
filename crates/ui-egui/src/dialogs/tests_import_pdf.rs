@@ -3,7 +3,8 @@
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_engine::Session;
-use vectorcraft_testkit::pdf::{PdfPage, pdf};
+use vectorcraft_testkit::ai;
+use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf, pdf_with};
 
 use super::*;
 use crate::io;
@@ -208,18 +209,44 @@ fn two_pages(editing_data: bool, password: Option<&str>) -> Vec<u8> {
     pdf(&[first, PdfPage::new(200.0, 100.0, "1 0 0 rg 0 0 30 30 re f")], password)
 }
 
-/// #6135: the editing data of a `.ai` or `.ait` holds every artboard, so opening one asks nothing
-/// and opens them all.
+/// Two 100 pt pages and, on the first, editing data with two artboards to match and a layer of its
+/// own, which draws the square the first page draws.
+fn two_pages_with_a_layer_in_the_editing_data(layer: &str) -> Vec<u8> {
+    let point = |x: i32, y: i32, n: u8| format!("%_{x} {y} /RealPointRelToROrigin\n%_ (PositionPoint{n}) ,\n");
+    let board = |top: i32| format!("%_/Dictionary :\n{}{}%_; ,\n", point(0, top, 1), point(100, top - 100, 2));
+    let boards = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n", board(100), board(-50));
+    let art = format!("0 0 0 1 k\n{}f\n", ai::rect(10.0, 10.0, 30.0, 30.0));
+    let data = ai::editing_data(100.0, 100.0, &format!("{boards}{}", ai::layer(layer, &art)));
+    let mut first = PdfPage::new(100.0, 100.0, "0 0 0 1 k 10 10 20 20 re f");
+    first.entries = format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(2));
+    let stream = format!("<< /Length {} >>\nstream\n{data}\nendstream", data.len());
+    pdf_with(&[first, PdfPage::new(100.0, 100.0, "")], &[&stream], None)
+}
+
+/// #6135: the editing data of a `.ai` holds every artboard, so opening one asks nothing, opens
+/// them all and reads the art from that data: the layer is in nothing else.
 #[test]
-fn opening_an_ai_with_editing_data_opens_every_artboard_without_asking() {
+fn opening_an_ai_with_editing_data_reads_it_without_asking() {
     let mut app = app();
-    let bytes = two_pages(true, None);
+    let bytes = two_pages_with_a_layer_in_the_editing_data("Only in the editing data");
     io::open_bytes(&mut app, "two.ai", &bytes, Some("/tmp/two.ai".into())).unwrap();
     assert!(app.ui.dialog.is_none(), "no Import PDF dialog");
     assert_eq!(app.session.documents().len(), 2);
-    assert_eq!(artboard_widths(&app), [100.0, 200.0]);
+    assert_eq!(artboard_widths(&app), [100.0, 100.0]);
+    let layers = &app.session.active().unwrap().doc.layers;
+    assert!(layers.iter().any(|l| l.name.as_deref() == Some("Only in the editing data")), "read from the editing data");
     assert!(!import_pdf::offer(&mut app, "two.ait", &bytes, None, None), "a template too");
     assert!(app.ui.dialog.is_none());
+}
+
+/// A `.ai` whose editing data can't be read asks nothing either, and every page opens from the PDF
+/// part. Asking at that point is #6134.
+#[test]
+fn opening_an_ai_with_unreadable_editing_data_opens_every_page_without_asking() {
+    let mut app = app();
+    io::open_bytes(&mut app, "two.ai", &two_pages(true, None), Some("/tmp/two.ai".into())).unwrap();
+    assert!(app.ui.dialog.is_none(), "no Import PDF dialog");
+    assert_eq!(artboard_widths(&app), [100.0, 200.0]);
 }
 
 /// #6135: the dialog stays for what still has something to ask: a PDF, even one with editing data
