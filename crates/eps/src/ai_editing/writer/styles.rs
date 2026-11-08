@@ -19,7 +19,7 @@ use super::{Writer, Xy, blend_code, compound_path, hide};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, no art styles or graphic styles are written, and objects with live effects keep only their geometry effects in the editing data for other apps";
+pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, no art styles or graphic styles are written: objects with live effects are written with their geometry effects applied to the artwork, where they can no longer be edited, and their other effects are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_STYLES: &str = "graphic styles with gradient or pattern fills, with fills, strokes or effects the editing data can't hold as a graphic style, with a name another style has, with names over 1,024 bytes, or past 4,096 styles, are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_EMPTY: &str =
     "a Graphic Styles panel with no style written opens from the editing data with a new document's styles";
