@@ -1,5 +1,7 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
-use super::panel_chrome::chevron_cell;
+use super::panel_chrome::{
+    alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
+};
 use super::text::{
     after_shift_enter, focus_field, recessed_text, select_all, select_all_on_focus, shift_enter_keeps_focus, take_armed_focus, take_dialog_focus,
 };
@@ -822,9 +824,10 @@ fn spin_generic(
     let h = 26.0;
     let enabled = ui.is_enabled();
     ui.scope(|ui| {
-        // The spinner, the field and the chevron share their borders: one box in three parts.
+        // The spinner, the field and the chevron share their borders: one box in three parts. The
+        // spinner is not a Tab stop (↑/↓ in the field step it), so Tab goes from field to field.
         ui.spacing_mut().item_spacing.x = -1.0;
-        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::click());
+        let (sr, sresp) = ui.allocate_exact_size(vec2(16.0, h), Sense::CLICK);
         ui.painter().rect_filled(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, t.input);
         ui.painter().rect_stroke(sr, CornerRadius { nw: 2, sw: 2, ne: 0, se: 0 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         let up = Rect::from_min_max(sr.min, pos2(sr.right(), sr.center().y));
@@ -855,30 +858,41 @@ fn spin_generic(
             out = Some(SpinPick::Value(spinner_step(v, step, min, up.contains(p), modifiers, stops, fmt)));
         }
         let fw = if presets.is_empty() { width - 15.0 } else { width - 34.0 };
+        let keyed = if presets.is_empty() { None } else { alt_down_in_field(ui, Rect::from_x_y_ranges(sr.right()..=sr.right() + fw, sr.y_range())) };
         if let Some(v) = field(ui, fw, label) {
             out = Some(SpinPick::Value(v.max(min)));
         }
         if !presets.is_empty() {
             let dresp = chevron_cell(ui, h);
+            let keyed = open_presets_from_keys(ui, &dresp, keyed);
+            let was_open = presets_open(ui, &dresp);
             egui::Popup::menu(&dresp).show(|ui| {
                 ui.set_min_width(width - 10.0);
-                if let Some(on) = auto
-                    && ui.selectable_label(on, tl!("Auto")).clicked()
-                {
-                    out = Some(SpinPick::Auto);
-                }
-                if let Some(on) = optical
-                    && ui.selectable_label(on, optical_label.unwrap_or_default()).clicked()
-                {
-                    out = Some(SpinPick::Optical);
-                }
                 let current = value.filter(|_| auto != Some(true));
-                for p in presets {
-                    if ui.selectable_label(current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p)).clicked() {
-                        out = Some(SpinPick::Value(*p));
+                let mut entries: Vec<(bool, String, SpinPick)> = Vec::new();
+                if let Some(on) = auto {
+                    entries.push((on, tl!("Auto").to_string(), SpinPick::Auto));
+                }
+                if let Some(on) = optical {
+                    entries.push((on, optical_label.unwrap_or_default().to_string(), SpinPick::Optical));
+                }
+                entries.extend(presets.iter().map(|p| (current.is_some_and(|v| (v - p).abs() < 1e-6), fmt(*p), SpinPick::Value(*p))));
+                let focus = entry_to_focus(keyed, entries.iter().map(|e| e.0));
+                for (i, (on, text, pick)) in entries.into_iter().enumerate() {
+                    let r = ui.selectable_label(on, text);
+                    if focus == Some(i) {
+                        r.request_focus();
+                    }
+                    if r.clicked() {
+                        out = Some(pick);
+                        // Enter or Space on the focused entry is a click too, which the menu
+                        // does not close on by itself.
+                        ui.close();
                     }
                 }
             });
+            keep_enter_in_presets(ui, was_open);
+            return_focus_from_presets(ui, &dresp);
         }
     });
     out

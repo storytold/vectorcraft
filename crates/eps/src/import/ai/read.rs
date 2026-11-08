@@ -138,6 +138,7 @@ pub use document::{
     BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
+pub(crate) use ops::read_art_style;
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
@@ -146,6 +147,10 @@ pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
 mod legacy_text;
+
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
 
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]
@@ -183,6 +188,8 @@ pub struct Structure {
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The warped text objects, checked against their drawn looks once their type is laid out.
+    pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
@@ -495,10 +502,13 @@ struct Reader<'a> {
     envelope_art: Option<Node>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
-    /// How many more envelopes this import may draw to check ([`super::envelope::drawn_alike`]).
+    /// How many more envelopes and warped text objects this import may draw to check
+    /// ([`super::envelope::drawn_alike`]).
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
+    warped_type: Vec<super::envelope::WarpedLook>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -700,6 +710,7 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            warped_type: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),

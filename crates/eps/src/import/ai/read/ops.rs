@@ -706,6 +706,7 @@ impl<'a> Reader<'a> {
             self.looks.insert(look.id);
         }
         // The type that a text object's look draws is the object's own, whatever comes of its style.
+        let mut look_drew_type = false;
         if after
             && let Some(f) = self.frames.last_mut()
             && let [.., look, object] = f.children.as_mut_slice()
@@ -715,7 +716,7 @@ impl<'a> Reader<'a> {
             && self.hidden_ids.contains(&look.id) == hidden
             && matches!(look.kind, NodeKind::Group { clip: false, .. })
         {
-            strip_look_type(look);
+            look_drew_type = strip_look_type(look);
         }
         if code != 1.0 || style.is_empty() || !after {
             return;
@@ -761,8 +762,24 @@ impl<'a> Reader<'a> {
             }
             let Some(mut object) = f.children.pop() else { return };
             let Some(look) = f.children.pop() else { return };
-            if let Some(b) = look.visual_bounds().filter(|_| !hidden && object.visible && look.visible) {
+            let left_out = look.visual_bounds().filter(|_| !hidden && object.visible && look.visible);
+            if let Some(b) = left_out {
                 self.restyled.push(b);
+            }
+            // Warped type is checked against its look once it is laid out. The look stands in for
+            // the type only when it holds all that the object draws: not when it draws nothing or
+            // draws type of its own.
+            if slot_of(object.name.as_deref()).is_some() && crate::import::ai::envelope::warps(&appearance) && self.warped_type.len() < MAX_NODES {
+                let mut saved = look.clone();
+                // When the object itself is on `%_` lines, every child of its look is too, so the
+                // look's own copies can't be told apart from the rest.
+                if !hidden {
+                    strip(&mut saved, &self.hidden_ids);
+                }
+                if !look_drew_type && !holds_type(&saved) && saved.visual_bounds().is_some() && draws_art(&saved, 0) {
+                    take_attributes(&mut saved, &object);
+                    self.warped_type.push(crate::import::ai::envelope::WarpedLook { slot: object.id, look: saved, left_out });
+                }
             }
             object.appearance = appearance.into();
             // The object's transparency is written on its look, after the look's group ends.
@@ -814,26 +831,44 @@ impl<'a> Reader<'a> {
         look.name = object.name.clone().or(look.name.take());
         look.visible = object.visible;
         look.locked = object.locked;
-        // The object's note, Show Center, URL and data (object tags) stay with the look that stands
-        // for it, in place of the look's own where the object has them.
-        if let Some(a) = object.extras().attrs.as_deref().cloned() {
-            look.edit_attrs(|l| {
-                if a.show_center.is_some() {
-                    l.show_center = a.show_center;
-                }
-                if !a.url.is_empty() {
-                    l.url = a.url;
-                }
-                if !a.note.is_empty() {
-                    l.note = a.note;
-                }
-                let room = MAX_TAGS.saturating_sub(l.data.len());
-                l.data.extend(a.data.into_iter().take(room));
-            });
-        }
+        take_attributes(look, &object);
         if !hidden {
             self.drawn_looks += 1;
         }
+    }
+}
+
+/// Does `n` or anything shown in it (to [`MAX_DEPTH`]) paint? Any object other than a path, a
+/// compound path or a group counts: it draws more than its fills and strokes.
+fn draws_art(n: &Node, depth: usize) -> bool {
+    depth > MAX_DEPTH
+        || !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { .. })
+        || n.appearance.items.iter().any(|i| i.visible() && !i.paint().is_none())
+        || n.children().into_iter().flatten().any(|c| c.visible && draws_art(c, depth + 1))
+}
+
+/// Is `n` or anything in it a text slot?
+fn holds_type(n: &Node) -> bool {
+    slot_of(n.name.as_deref()).is_some() || n.children().into_iter().flatten().any(|c| holds_type(c))
+}
+
+/// The note, Show Center, URL and data (object tags) of `object` stay with the `look` that stands
+/// for it, in place of the look's own where the object has them.
+fn take_attributes(look: &mut Node, object: &Node) {
+    if let Some(a) = object.extras().attrs.as_deref().cloned() {
+        look.edit_attrs(|l| {
+            if a.show_center.is_some() {
+                l.show_center = a.show_center;
+            }
+            if !a.url.is_empty() {
+                l.url = a.url;
+            }
+            if !a.note.is_empty() {
+                l.note = a.note;
+            }
+            let room = MAX_TAGS.saturating_sub(l.data.len());
+            l.data.extend(a.data.into_iter().take(room));
+        });
     }
 }
 
@@ -1121,6 +1156,37 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
     Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
 }
 
+/// What the reader makes of art style `name` in `section` (the text between `%AI9_BeginArtStyles`
+/// and its end), for writers that check a style before they write it.
+#[derive(Clone, Debug)]
+pub(crate) struct StyleRead {
+    /// The style's appearance: a gradient fill is the object's own gradient.
+    pub appearance: Appearance,
+    /// An object other than type is read with it ([`crate::import::ai::style::ArtStyle::simple`]).
+    pub simple: bool,
+    /// It has Effect › Pathfinder effects, which only a group with no fills or strokes is read with.
+    pub pathfinder: bool,
+}
+
+/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
+/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
+/// it on objects other than type. `None` when the section doesn't define it, the reader doesn't read
+/// it, or it paints with a pattern, a brush or a gradient that isn't the object's own.
+pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+    use crate::import::ai::style::StyleItem;
+    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
+        let own = own_gradient?;
+        for item in &mut st.items {
+            if matches!(item, StyleItem::Gradient { .. }) {
+                *item = StyleItem::Fill(own.clone());
+            }
+        }
+    }
+    let appearance = appearance_from_art_style(&st)?;
+    Some(StyleRead { appearance, simple: st.simple, pathfinder: st.pathfinder })
+}
+
 /// A style's stroke as an appearance item (`None` for a fill).
 fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
     let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, brush } = item else { return None };
@@ -1138,14 +1204,19 @@ fn with_look(layer: &mut AppearanceItem, look: &crate::import::ai::style::ItemLo
     }
 }
 
-/// Remove from `n` the text slots of the type its look draws ([`super::is_look_slot`]), in its groups too.
-fn strip_look_type(n: &mut Node) {
+/// Remove from `n` the text slots of the type its look draws ([`super::is_look_slot`]), in its groups
+/// too. Returns whether there were any.
+fn strip_look_type(n: &mut Node) -> bool {
+    let mut any = false;
     if let Some(children) = n.children_mut() {
+        let before = children.len();
         children.retain(|c| !super::is_look_slot(c.name.as_deref()));
+        any = children.len() != before;
         for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
-            strip_look_type(Arc::make_mut(c));
+            any |= strip_look_type(Arc::make_mut(c));
         }
     }
+    any
 }
 
 /// Remove from `n` the children read from `%_` lines (`hidden`: the object itself, not its look).

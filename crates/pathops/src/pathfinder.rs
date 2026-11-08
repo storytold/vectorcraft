@@ -2,6 +2,7 @@
 //! (index 0 = back-most, last = front-most).
 
 use std::collections::{HashMap, HashSet};
+use std::ops::ControlFlow;
 
 use kurbo::{BezPath, Line, ParamCurve, ParamCurveNearest, PathSeg, Point, Shape as _};
 use linesweeper::topology::{ContourIdx, Contours};
@@ -11,6 +12,12 @@ use crate::boolean::{
     Arrangement, DEFAULT_PRECISION, Multi, Seg, Tidy, all_contours_to_path, contours_to_path, eps_for, fill_bezpath, normalize_bez, segs_to_subpath,
     to_seg, unite_all, unite_all_with,
 };
+
+#[cfg(test)]
+thread_local! {
+    /// The face outlines [`regions_of_within`] has built on this thread.
+    static FACE_PATHS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// A filled shape in a Pathfinder stack. `key` identifies its paint (e.g. a hashed fill colour);
 /// results carry the key of the object whose paint they keep.
@@ -221,20 +228,41 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
 /// The faces of `arr`, each distinct coverage mask's in turn (sorted), each face an outer contour
 /// and the holes of its mask directly inside it ([`face_groups`]).
 fn regions_of(arr: &Arrangement) -> Vec<Region> {
+    regions_of_within(arr, usize::MAX).unwrap_or_default()
+}
+
+/// [`regions_of`] while there are at most `limit` faces: `None` as soon as one more is found,
+/// without building the faces after it.
+fn regions_of_within(arr: &Arrangement, limit: usize) -> Option<Vec<Region>> {
     let masks = arr.distinct_masks();
     let refs: Vec<&[bool]> = masks.iter().map(Vec::as_slice).collect();
     let mut faces: Vec<Vec<PathData>> = vec![Vec::new(); masks.len()];
-    each_face(arr, &refs, |m, c, group| {
-        if let Some(f) = faces.get_mut(m) {
-            f.push(contours_to_path(c, group.iter().copied(), &arr.tidy));
+    let mut found = 0usize;
+    let walk = each_face_until(arr, &refs, |m, c, group| {
+        #[cfg(test)]
+        FACE_PATHS.with(|n| n.set(n.get() + 1));
+        let path = contours_to_path(c, group.iter().copied(), &arr.tidy);
+        if path.is_empty() {
+            return ControlFlow::Continue(());
         }
+        found += 1;
+        if found > limit {
+            return ControlFlow::Break(());
+        }
+        if let Some(f) = faces.get_mut(m) {
+            f.push(path);
+        }
+        ControlFlow::Continue(())
     });
+    if walk.is_break() {
+        return None;
+    }
     let mut out = Vec::new();
     for (mask, paths) in masks.iter().zip(faces) {
         let sources: Vec<usize> = mask.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
-        out.extend(paths.into_iter().filter(|p| !p.is_empty()).map(|path| Region { path, sources: sources.clone() }));
+        out.extend(paths.into_iter().map(|path| Region { path, sources: sources.clone() }));
     }
-    out
+    Some(out)
 }
 
 /// Calls `f` with each face of `arr` classified by `classify: impl Fn(&Multi) -> Option<usize>`
@@ -251,8 +279,21 @@ fn each_classified_face(
     classify: impl Fn(&Multi) -> Option<usize>,
     mut f: impl FnMut(usize, &Contours, &[ContourIdx]),
 ) {
+    let _ = each_classified_face_until(arr, num_classes, classify, |m, c, group| {
+        f(m, c, group);
+        ControlFlow::Continue(())
+    });
+}
+
+/// [`each_classified_face`] until `f` breaks: no face after that one is walked.
+fn each_classified_face_until(
+    arr: &Arrangement,
+    num_classes: usize,
+    classify: impl Fn(&Multi) -> Option<usize>,
+    mut f: impl FnMut(usize, &Contours, &[ContourIdx]) -> ControlFlow<()>,
+) -> ControlFlow<()> {
     if num_classes == 0 {
-        return;
+        return ControlFlow::Continue(());
     }
     let top = &arr.top;
     // The classes of the faces around each vertex.
@@ -304,15 +345,20 @@ fn each_classified_face(
                 let c = arr.contours_where(|w| classify(w) == Some(m));
                 let owner = vec![m; c.contours().count()];
                 for (_, group) in face_groups(&c, &owner) {
-                    f(m, &c, &group);
+                    if f(m, &c, &group).is_break() {
+                        return ControlFlow::Break(());
+                    }
                 }
             }
             continue;
         };
         for (m, group) in face_groups(&c, &owner) {
-            f(m, &c, &group);
+            if f(m, &c, &group).is_break() {
+                return ControlFlow::Break(());
+            }
         }
     }
+    ControlFlow::Continue(())
 }
 
 /// Calls `f` with each face of `arr` whose coverage is one of `masks` (distinct): the index of
@@ -325,13 +371,21 @@ fn each_classified_face(
 /// share no vertex (so no edge either): one pass per batch walks each face's contours exactly as
 /// its own mask's pass would, and the mask a contour bounds is the one of its batch at its first
 /// point.
-fn each_face(arr: &Arrangement, masks: &[&[bool]], f: impl FnMut(usize, &Contours, &[ContourIdx])) {
+fn each_face(arr: &Arrangement, masks: &[&[bool]], mut f: impl FnMut(usize, &Contours, &[ContourIdx])) {
+    let _ = each_face_until(arr, masks, |m, c, group| {
+        f(m, c, group);
+        ControlFlow::Continue(())
+    });
+}
+
+/// [`each_face`] until `f` breaks: no face after that one is walked.
+fn each_face_until(arr: &Arrangement, masks: &[&[bool]], f: impl FnMut(usize, &Contours, &[ContourIdx]) -> ControlFlow<()>) -> ControlFlow<()> {
     if masks.is_empty() {
-        return;
+        return ControlFlow::Continue(());
     }
     // Each mask is found by the inputs it covers.
     let ids = CoverIds::new(masks.iter().map(|m| m.iter().enumerate().filter(|(_, b)| **b).map(|(k, _)| k).collect()).collect());
-    each_classified_face(arr, masks.len(), |w| ids.of(arr, w), f);
+    each_classified_face_until(arr, masks.len(), |w| ids.of(arr, w), f)
 }
 
 /// Lists of inputs, each ascending as [`Arrangement::covered`] gives them, found by the inputs
@@ -461,6 +515,15 @@ pub fn regions(shapes: &[Shape]) -> Vec<Region> {
 /// [`regions`] refit to `precision`.
 pub(crate) fn regions_with(shapes: &[Shape], precision: f64) -> Vec<Region> {
     arrangement(shapes, precision).map(|a| regions_of(&a)).unwrap_or_default()
+}
+
+/// [`regions`] when there are at most `limit` of them; `None` when there are more, found as soon
+/// as the face past `limit` is built (the faces after it are not built).
+pub fn regions_within(shapes: &[Shape], limit: usize) -> Option<Vec<Region>> {
+    match arrangement(shapes, DEFAULT_PRECISION) {
+        Some(a) => regions_of_within(&a, limit),
+        None => Some(Vec::new()),
+    }
 }
 
 /// The face under `point`, if any (Shape Builder hover/click).
@@ -1271,6 +1334,29 @@ mod tests {
         assert_eq!(merged.subpaths.len(), 2, "{merged:?}");
         let area = crate::area(&merged, FillRule::NonZero);
         assert!((area - 490.0 * 40.0).abs() < 1e-6, "{area}");
+    }
+
+    /// The row of 49 rectangles makes 97 faces: within a limit of 97 or more they are [`regions`]'s
+    /// faces, and over a lower one the build stops at the face past it.
+    #[test]
+    fn regions_within_a_limit_stop_at_the_face_past_it() {
+        let v: Vec<Shape> = (0..49)
+            .map(|k| {
+                let x = 10.0 * f64::from(k);
+                Shape::new(rect(x, 0.0, x + 15.0, 40.0), FillRule::NonZero, 1)
+            })
+            .collect();
+        let all = regions(&v);
+        assert_eq!(all.len(), 97);
+        for limit in [97, 98, usize::MAX] {
+            assert_eq!(regions_within(&v, limit).as_ref(), Some(&all), "limit {limit}");
+        }
+        for limit in [0, 1, 10, 96] {
+            FACE_PATHS.with(|n| n.set(0));
+            assert_eq!(regions_within(&v, limit), None, "limit {limit}");
+            assert_eq!(FACE_PATHS.with(std::cell::Cell::get), limit + 1, "limit {limit}: faces built");
+        }
+        assert_eq!(regions_within(&[], 0), Some(vec![]));
     }
 
     /// The lists of inputs a winding covers are found by those inputs, also among lists that share

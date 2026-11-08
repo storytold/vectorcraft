@@ -380,6 +380,11 @@
 	Document Raster Effects Settings…	დოკუმენტის რასტრული ეფექტების პარამეტრები…
 	Vector Effects	ვექტორული ეფექტები
 	3D and Materials	3D და მასალები
+	Plane	სიბრტყე
+	Extrude	ამოწევა
+	Revolve	ბრუნვა
+	Inflate	გაბერვა
+	Select objects, then pick an object type to give them a 3D effect.	აირჩიეთ ობიექტები, შემდეგ აირჩიეთ ობიექტის ტიპი, რომ მათ 3D ეფექტი მიეცეთ.
 	Extrude & Bevel…	ამოწევა და წაკვეთა…
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
@@ -703,6 +708,9 @@
 	Put back in the toolbar	ხელსაწყოთა ზოლში დაბრუნება
 	Float Panel	მცურავი პანელი
 	Dock Panel	პანელის მიმაგრება
+	Dock to Top	ზემოთ მიმაგრება
+	Dock to Bottom	ქვემოთ მიმაგრება
+	Dock Control Bar	მართვის ზოლის მიმაგრება
 	Float Tool Group	მცურავი ხელსაწყოთა ჯგუფი
 	Services	სერვისები
 	Hide VectorCraft	VectorCraft-ის დამალვა
@@ -2279,6 +2287,8 @@ digits	Malayalam	მალაიალამური
 	Show Cross Hairs	ჯვარედინი ხაზების ჩვენება
 	Show Video Safe Areas	ვიდეოს უსაფრთხო არეების ჩვენება
 	Video Ruler Pixel Aspect Ratio:	ვიდეოს სახაზავების პიქსელის თანაფარდობა:
+	Fade Region Outside Artboard	სამუშაო დაფის გარეთ არის დაბნელება
+	Update While Dragging	განახლება გადათრევისას
 	Hide Video Rulers	ვიდეოს სახაზავების დამალვა
 	Client-side (.html)	კლიენტის მხარე (.html)
 	Color Reduction:	ფერების შემცირება:
@@ -2765,6 +2775,7 @@ theme	Appearance	იერსახე
 	Redefine Symbol	სიმბოლოს ხელახლა განსაზღვრა
 	Remove Brush Stroke	ფუნჯის შტრიხის მოხსნა
 	Replace Symbol	სიმბოლოს ჩანაცვლება
+	Reset Transformation	გარდაქმნის ჩამოყრა
 	Select All Instances	ყველა ეგზემპლარის მონიშვნა
 	Symbol Sprayer	სიმბოლოების სპრეი
 	Symbolism Tool	სიმბოლოების ხელსაწყო
@@ -2792,6 +2803,9 @@ theme	Appearance	იერსახე
 	Convert Document Color Mode	დოკუმენტის ფერის რეჟიმის გარდაქმნა
 	Gamut Warning	ფერთა გამიდან გასვლის გაფრთხილება
 	Load Color Profile…	ფერის პროფილის ჩატვირთვა…
+	Load Character Styles…	სიმბოლოს სტილების ჩატვირთვა…
+	Load Paragraph Styles…	აბზაცის სტილების ჩატვირთვა…
+	Load All Styles…	ყველა სტილის ჩატვირთვა…
 	Plates	ფირფიტები
 	Spot Color	სპოტ-ფერი
 	Add to Swatches	ფერის ნიმუშებში დამატება
@@ -3219,6 +3233,8 @@ theme	Appearance	იერსახე
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
+	Search Preferences	პარამეტრებში ძიება
+	No settings found	პარამეტრები ვერ მოიძებნა
 	Scale Corners	კუთხეების მასშტაბირება
 	Scale Cursor Proportional to UI	კურსორის მასშტაბირება ინტერფეისის პროპორციულად
 	Scale Strokes & Effects	კონტურებისა და ეფექტების მასშტაბირება
@@ -3239,6 +3255,7 @@ theme	Appearance	იერსახე
 	Snapping Tolerance	მიბმის დაშვება
 	Spacing Guides	შუალედის დამხმარე ხაზები
 	Invoke Distance Guides	მანძილის დამხმარე ხაზების გამოძახება
+	Snap to Last Location	ბოლო მდებარეობაზე მიბმა
 	Spanish	ესპანური
 	Subdivisions	ქვედანაყოფები
 	Templates Folder	შაბლონების საქაღალდე
@@ -3384,6 +3401,8 @@ axis	Both	ორივე
 	Center	ცენტრში
 	Transform in Perspective	პერსპექტივაში გარდაქმნა
 	Grayscale	ნაცრისფერი გრადაციები
+	High Color	ბევრი ფერი
+	Low Color	ცოტა ფერი
 	Embed	ჩაშენება
 	Star	ვარსკვლავი
 	Power Saving (integrated)	ენერგიის დაზოგვა (ინტეგრირებული)
@@ -4441,6 +4460,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for it is taken in the Fonts folder	შრიფტების საქაღალდეში მისთვის ყველა დანომრილი სახელი დაკავებულია
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` არის ნაბიჯის მიმართვა {r}, რომელსაც მხოლოდ `run` და `command_batch` ხსნის
 @msg	`ids` must be an array of object ids, not {v}	`ids` უნდა იყოს ობიექტების id-ების მასივი და არა {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` უნდა იყოს ფერების მასივი და არა {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` უნდა იყოს საყრდენი წერტილების ინდექსების მასივი და არა {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ნაბიჯ {i}-ის შედეგს ასეთი მნიშვნელობა არ აქვს (ლიტერალური $-ისთვის დაწერეთ $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: ამის წინ ნაბიჯი {i} არ არის (ნაბიჯები 0-დან ითვლება; ლიტერალური $-ისთვის დაწერეთ $$)
@@ -5564,6 +5584,7 @@ imageTrace	Outline	კონტური
 @plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
 	Clear History	ისტორიის გასუფთავება
+	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
 	Artboard {n} of {total}	სამუშაო დაფა {n} / {total}
 	File {n} of {total}	ფაილი {n} / {total}
@@ -5582,6 +5603,7 @@ imageTrace	Outline	კონტური
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის და არა ფაილის {pw} × {ph} pt გვერდს
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის: ეს ფაილის {pw} × {ph} pt გვერდია მასშტაბით {scale}
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
+@msg	no history state {v}	ისტორიის მდგომარეობა {v} არ არსებობს
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ფაილის ცვლადების ყველა კავშირი არ იქნა წაკითხული (გამოტოვებული კავშირები: {_1}): ეს ობიექტები არ არის დაკავშირებული თავიანთ ცვლადებთან
@@ -6247,6 +6269,7 @@ breakText	Glyphs	გლიფები
 	Gap 5	შუალედი 5
 
 @msg	{_1}: they came in as the page's art	{_1}: იმპორტირებულია გვერდის გამოსახულების სახით
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	გაღუნული ტექსტური ობიექტები, რომლებიც იმპორტირებულია გამოსახულების და არა რედაქტირებადი ტექსტის სახით: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	ობიექტები, რომლებიც ფაილის საკუთარი გვერდისგან განსხვავებულად იხატებოდა, იმპორტირებულია გვერდის გამოსახულების სახით: {_1}
 
 @msg	You must choose a side pattern.	აირჩიეთ გვერდითი ნიმუში.

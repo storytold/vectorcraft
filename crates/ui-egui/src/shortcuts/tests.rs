@@ -1288,6 +1288,31 @@ fn holding_the_enter_that_confirms_a_dialog_types_no_line_break() {
     assert_ne!(text_and_layers(&mut app, text).0, before, "a new press types one");
 }
 
+/// A held Cmd+Enter ends text editing once. Its repeats add no line break and do not open the Move
+/// dialog for the type it leaves selected; a new press does, as after Escape.
+#[test]
+fn holding_cmd_enter_ends_text_editing_once() {
+    let mut app = app_with_a_selected_rectangle();
+    let text = app.session.execute("text.create", &json!({"x": 20, "y": 250, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    let held = HeldKey::new(Key::Enter, Modifiers::COMMAND);
+    held.frame(&mut app, vec![]);
+    let before = text_and_layers(&mut app, text);
+    held.press(&mut app);
+    assert!(!app.session.tool_wants_text(), "the press ends editing");
+    assert_eq!(app.session.tool_id(), "selection");
+    for repeat in 0..4 {
+        held.press(&mut app);
+        assert_eq!(text_and_layers(&mut app, text), before, "repeat {repeat}: no line break");
+        assert_eq!(open_dialog(&app), None, "repeat {repeat}: no dialog");
+    }
+    held.release(&mut app);
+    held.press(&mut app);
+    assert_eq!(open_dialog(&app).as_deref(), Some("move"), "a new press opens Move");
+}
+
 /// A release that never reaches the main window costs the next press: egui takes that press for a
 /// repeat, and its release clears the key, so the press after it acts again.
 #[test]

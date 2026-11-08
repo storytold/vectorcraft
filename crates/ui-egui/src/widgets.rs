@@ -43,6 +43,8 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
+#[cfg(test)]
+pub(crate) use dropdowns::menu_floor;
 pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, popover_is_open};
 pub use dropdowns::{
     dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
@@ -68,7 +70,7 @@ pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
     text_presets_named,
 };
-pub use toggles::{check, check_box, check_name, check_tip, check3, radio, radio_button};
+pub use toggles::{check, check_box, check_name, check_tip, check3, check3_tip, radio, radio_button};
 
 /// A widget id salt that needs only [`std::hash::Hash`]. egui 0.37's [`egui::AsIdSalt`] also
 /// requires `Debug` for its debug-only id-source registry; VectorCraft's public field helpers do

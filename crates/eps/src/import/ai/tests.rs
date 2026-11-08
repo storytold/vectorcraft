@@ -3474,6 +3474,96 @@ fn a_tz_with_use_default_0_leaves_te_out() {
     assert_eq!(legacy_chars(setup, &["_F", "_S", "_M", "_G"], "\\047\\140\\200"), ["'`€", "'`€", "'`€", "’`Ä"]);
 }
 
+/// Strings in a composite font `base-CMap` decode by that predefined CMap (codes to CIDs, then the
+/// character collection's CIDs to Unicode), and the font is `base`; `TE`'s encoding does not apply
+/// to them. Codes the CMap leaves out are dropped. A font whose name ends in no predefined CMap
+/// decodes byte by byte.
+#[test]
+fn legacy_type_in_a_cjk_font_decodes_by_its_cmap() {
+    let typed = |font: &str, chars: &str| point_type("", chars).replace("/_Helvetica", &format!("/{font}"));
+    let cases: &[(&str, &str, &str)] = &[
+        // 日 is 0x93FA and 本 0x967B in Shift-JIS; `\r` ends a paragraph.
+        ("83pv-RKSJ-H", "\\223\\372\\226{A\\r\\223\\372", "日本A\n日"),
+        // A tab stays a tab, also after a UTF-16 string's last whole code.
+        ("90ms-RKSJ-H", "\\223\\372\\tA", "日\tA"),
+        ("H", "F|\\tF|", "日\t日"),
+        ("UniJIS-UTF16-H", "e\\345\\t", "日\t"),
+        // One-byte codes in the Mac Shift-JIS CMap: 0x5C yen, 0x7E tilde, 0x80 backslash, 0xFD
+        // copyright, and the underscore and grave accent.
+        ("83pv-RKSJ-H", "\\\\~\\200\\375_`", "¥~\\©_`"),
+        ("90ms-RKSJ-H", "\\\\~_`", "¥~_`"),
+        ("90ms-RKSJ-V", "\\223\\372", "日"),
+        ("90pv-RKSJ-V", "\\223\\372", "日"),
+        // JIS row and cell: 日 is 0x4652.
+        ("H", "F|", "日"),
+        ("V", "F|", "日"),
+        ("EUC-H", "\\306\\374", "日"),
+        ("GBK-EUC-H", "\\326\\320", "中"),
+        ("GBpc-EUC-H", "\\326\\320", "中"),
+        ("B5pc-H", "\\244\\244", "中"),
+        ("KSCms-UHC-H", "\\307\\321", "한"),
+        ("KSCpc-EUC-H", "\\307\\321", "한"),
+        ("UniJIS-UCS2-H", "e\\345", "日"),
+        ("UniGB-UTF8-H", "\\344\\270\\255", "中"),
+        // An encoded U+FFFD is a character; the invalid byte 0xFF is dropped.
+        ("UniGB-UTF8-H", "\\357\\277\\275\\377\\344\\270\\255", "\u{fffd}中"),
+        ("UniJIS-UTF32-H", "\\000\\000e\\345", "日"),
+        ("UniAKR-UTF16-H", "\\254\\000", "가"),
+        // CMaps VectorCraft doesn't carry: read with the nearest carried one, row-and-cell codes in
+        // their EUC form (中 is 0x5650 in GB 2312, 한 0x4751 in KS X 1001), or byte by byte.
+        ("78-RKSJ-H", "\\223\\372", "日"),
+        ("RKSJ-V", "\\223\\372", "日"),
+        ("GB-H", "VP", "中"),
+        ("KSC-V", "GQ", "한"),
+        ("GBT-H", "AB", "AB"),
+        // Codes are as long as the code space range they fall in, and unmapped ones are dropped:
+        // 0x8540 as two bytes, and 0xFD and EUC's 0x8F (in no range) as one.
+        ("90ms-RKSJ-H", "\\205\\100\\223\\372A\\375B", "日AB"),
+        ("EUC-H", "\\217A\\306\\374", "A日"),
+    ];
+    let art: String = cases.iter().map(|(cmap, chars, _)| typed(&format!("_Test-W3-{cmap}"), chars)).collect();
+    let art = [art, typed("_Test-W3-Identity-H", "\\223"), typed("_Test-W3-UniFoo-UTF8-H", "\\223"), typed("_Helvetica", "\\223")].concat();
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", "%%BeginSetup\n[147/Adieresis\nTE\n%%EndSetup");
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    let chars: Vec<String> = texts.iter().map(|t| t.plain_text()).collect();
+    let mut want: Vec<&str> = cases.iter().map(|(_, _, want)| *want).collect();
+    want.extend(["Ä", "Ä", "Ä"]);
+    assert_eq!(chars, want);
+    let test = crate::import::family_style("Test-W3");
+    for (t, (cmap, _, _)) in texts.iter().zip(cases) {
+        assert_eq!((&t.runs[0].style.font_family, &t.runs[0].style.font_style), (&test.0, &test.1), "{cmap}");
+    }
+    assert_eq!(texts[0].paragraph_count(), 2);
+    assert_ne!(texts[cases.len()].runs[0].style.font_style, test.1, "an Identity CMap is not read");
+    assert_ne!(texts[cases.len() + 1].runs[0].style.font_style, test.1, "`UniFoo` is not a character collection");
+}
+
+/// A font whose `TZ` gives encoding pairs is not a composite font, even when its name ends in a
+/// CMap name: its strings decode byte by byte, and the font keeps its whole name. A `TZ` without
+/// encoding pairs only names a composite font.
+#[test]
+fn a_re_encoded_font_ending_in_a_cmap_name_is_not_composite() {
+    let setup = "%AI3_BeginEncoding: _F-Bold-H F-Bold-H\n[ 39/quotesingle\n/_F-Bold-H/F-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F-Bold-H"], "F|'"), ["F|'"]);
+    let setup = "%AI3_BeginEncoding: _G-Bold-H G-Bold-H\n[ 65/A\n/_G-Bold-H/G-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_G-Bold-H"], "F|"), ["F|"]);
+    let setup = "%AI3_BeginEncoding: _R-W3-83pv-RKSJ-H R-W3-83pv-RKSJ-H\n[/_R-W3-83pv-RKSJ-H/R-W3-83pv-RKSJ-H 0 1 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_R-W3-83pv-RKSJ-H"], "\\223\\372"), ["日"]);
+}
+
+/// In a font with a Unicode CMap, a one-byte `(\r)` string, or a 0x0D byte after a string's last
+/// whole UTF-16 code, still ends a paragraph, as in other fonts, and an overflow `(\r) TX` still
+/// ends the story.
+#[test]
+fn legacy_type_in_a_utf16_font_keeps_its_paragraph_breaks() {
+    let art = point_type("", "e\\345")
+        .replace("/_Helvetica", "/_Test-W3-UniJIS-UTF16-H")
+        .replace("TO\n", "(\\r) Tx\n(e\\345\\r) Tx\n(e\\345) Tx\n(\\r) TX\nTO\n");
+    let texts = legacy_texts(&art);
+    assert_eq!(texts[0].plain_text(), "日\n日\n日");
+    assert_eq!(texts[0].paragraph_count(), 3);
+}
+
 fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
     art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
 }
@@ -5312,10 +5402,15 @@ fn editing_data_past_the_limit_is_refused() {
 fn many_zstandard_frames_are_read_in_one_pass_and_capped() {
     let frame = zstd(b" ");
     let frames = |n: usize| -> Vec<u8> { [&b"%AI24_ZStandard_Data"[..], &frame.repeat(n), &[0; 64]].concat() };
-    let started = std::time::Instant::now();
-    assert_eq!(decode_private(&frames(4000)).unwrap().len(), 4000);
-    assert!(decode_private(&frames(50_000)).unwrap_err().contains("Zstandard"));
-    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+    let (few, many) = (frames(4000), frames(50_000));
+    let before = padding_looks();
+    assert_eq!(decode_private(&few).unwrap().len(), 4000);
+    assert!(decode_private(&many).unwrap_err().contains("Zstandard"));
+    // The first byte of each of the 4,000 frames and of the 4,097 read before the cap, and the
+    // 64 zeros of padding once: looking past the frames to the padding before each frame would
+    // look at 64 or more bytes per frame.
+    let looked = padding_looks() - before;
+    assert!(looked <= 2 * (4000 + 4097 + 64), "looked at {looked} bytes for padding");
 }
 
 /// A Zstandard frame that ends in a zero byte keeps it: only the zeros after the last frame are
@@ -6752,6 +6847,134 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
 }
 
+/// A document of `n` warped text objects, with the art the live warp makes of each, in its look.
+fn warped_type_doc(n: usize) -> (Document, Vec<super::envelope::WarpedLook>) {
+    use vectorcraft_doc::{Appearance, Effect, TextObject};
+    let mut doc = Document::new(400.0, 200.0);
+    let mut looks = vec![];
+    let mut layer = Node::layer(doc.alloc_id(), "Art", vectorcraft_doc::LayerColor::Preset(0));
+    for i in 0..n {
+        let t = TextObject::point(kurbo::Point::new(20.0, 40.0 + 40.0 * i as f64), "TILT", Default::default());
+        let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        let mut appearance = Appearance::default();
+        appearance.effects.push(Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+        text.appearance = appearance.into();
+        text.name = Some(format!("Type {i}"));
+        text.locked = i == 0;
+        text.visible = i != 0;
+        let mut look = vectorcraft_effects::expand_outlined(None, &text, None).unwrap();
+        look.id = doc.alloc_id();
+        looks.push(super::envelope::WarpedLook { slot: text.id, look, left_out: None });
+        layer.children_mut().unwrap().push(Arc::new(text));
+    }
+    doc.layers = vec![Arc::new(layer)];
+    (doc, looks)
+}
+
+/// Warped text objects share the import's budget of checks. One past it keeps its drawn art with its
+/// text object's name and state, as one that fails the check does, and its box and wrap setting.
+#[test]
+fn warped_type_past_the_budget_comes_in_as_its_look() {
+    let (mut doc, mut looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let left_out = Rect::new(1.0, 2.0, 3.0, 4.0);
+    looks[1].left_out = Some(left_out);
+    let wrap = vectorcraft_doc::TextWrap::default();
+    doc.node_mut(second).unwrap().extras_mut().wrap = Some(wrap);
+    let warped = super::envelope::WarpedType { looks, checks: 1, ..Default::default() };
+    let mut restyled = vec![Rect::new(5.0, 6.0, 7.0, 8.0), left_out];
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut restyled), 1);
+    assert_eq!(restyled, [Rect::new(5.0, 6.0, 7.0, 8.0)]);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    let kept = doc.node(second).unwrap();
+    assert!(matches!(kept.kind, NodeKind::Group { .. } | NodeKind::Path { .. }), "{kept:#?}");
+    assert_eq!((kept.name.as_deref(), kept.visible, kept.locked), (Some("Type 1"), true, false));
+    assert_eq!(kept.extras().wrap, Some(wrap));
+}
+
+/// The budget for warped type is what the envelopes left: their checks and the page's share they
+/// spent, with the page they are held to.
+#[test]
+fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let exact = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat))));
+    let beside = format!("{RED}{}f\n", rect_path(40.5, 20.0, 160.5, 80.0));
+    let shifted = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &beside)));
+    for r in [&exact, &shifted] {
+        assert_eq!(r.warped_type.checks, super::envelope::MAX_CHECKED - 1);
+        assert!(r.warped_type.page.is_some());
+    }
+    live_envelope(&art(&shifted.doc)[0]);
+    assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
+}
+
+/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+#[test]
+fn warped_type_is_held_to_the_first_artboard() {
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+                  %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+                  %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
+                  %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
+    assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
+    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+}
+
+/// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
+#[test]
+fn type_with_a_hidden_warp_stays_type() {
+    let (mut doc, looks) = warped_type_doc(1);
+    let slot = looks[0].slot;
+    let mut appearance = (*doc.node(slot).unwrap().appearance).clone();
+    appearance.effects[0].visible = false;
+    doc.node_mut(slot).unwrap().appearance = appearance.into();
+    let warped = super::envelope::WarpedType { looks, checks: 0, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut vec![]), 0);
+    assert!(matches!(doc.node(slot).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// A warped frame of threaded type stays type, whatever its look draws: the thread's frames share
+/// one story. So does a slot that became no text object.
+#[test]
+fn warped_type_in_a_thread_stays_type() {
+    let (mut doc, looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let warped = super::envelope::WarpedType { looks, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, |id| (id != second).then_some(id), &[first].into(), &mut vec![]), 0);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    assert!(matches!(doc.node(second).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// What is left of the page's share of the budget decides, and the page's share counts only for
+/// what the document shows.
+#[test]
+fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
+    use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE};
+    let (doc, mut looks) = warped_type_doc(2);
+    // The second object shows; the first is hidden. Each look draws a little more than its object.
+    let mark = read_ok(&layer(&format!("{RED}{}f\n", rect_path(2.0, 2.0, 2.6, 2.6))));
+    let mark = art(&mark.doc)[0].clone();
+    for (i, w) in looks.iter_mut().enumerate() {
+        w.look.visible = true;
+        w.look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10 - i as u64), vec![Arc::new(w.look.clone()), mark.clone()]);
+    }
+    let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
+    let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
+    let settle = |w: &super::envelope::WarpedLook, spent| {
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page };
+        warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
+    };
+    let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
+    assert_eq!(settle(&looks[1], Default::default()), 0);
+    assert_eq!(settle(&looks[1], spent()), 1);
+    assert_eq!(settle(&looks[0], spent()), 0);
+}
+
 /// An envelope that comes out close to its drawn art, but with more of the page differing than the
 /// page check can take from the live envelopes (its drawn art 2 pt to the side on a 200 × 100
 /// page), keeps the drawn art, so the file still opens from its layers.
@@ -7145,19 +7368,25 @@ pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> S
 /// [`blend_file`] with the left key in RGB `from`, the right one in `to`, and the steps drawn
 /// between their colors.
 fn blend_file_colored(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3]) -> String {
+    blend_file_apart(spine, ids, record, from, to, 100.0, 3)
+}
+
+/// [`blend_file_colored`] with the right key `apart` points right of the left one and `between`
+/// steps drawn between them.
+fn blend_file_apart(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3], apart: f64, between: usize) -> String {
     let mut art = String::from("%_0 Ae\n%_u\n");
     art += &square(0.0, 40.0, 20.0, from, true);
     art += &blend_part("K", ids[0]);
-    art += &square(100.0, 40.0, 20.0, to, true);
+    art += &square(apart, 40.0, 20.0, to, true);
     art += &blend_part("K", ids[1]);
     art += spine;
     art += "%_N\n";
     art += &blend_part("S", None);
     art += "%_U\n%_9 () XW\nu\n";
-    for i in 0..5 {
-        let t = i as f64 / 4.0;
+    for i in 0..between + 2 {
+        let t = i as f64 / (between + 1) as f64;
         let rgb = [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * t);
-        art += &square(t * 100.0, 40.0, 20.0, rgb, false);
+        art += &square(t * apart, 40.0, 20.0, rgb, false);
     }
     art += "U\n9 () XW\n0 Ae\n";
     art += record;
@@ -7233,7 +7462,7 @@ fn a_blends_spine_written_backwards_keeps_its_keys_order() {
 
 /// A blend's spacing comes from its record: Specified Distance with its distance (25 pt from one
 /// step's edge to the corresponding edge of the next lays three out between keys 100 pt apart),
-/// Smooth Color (keys 5/255 apart in blue take three steps), and Specified Steps with the steps
+/// Smooth Color (keys 3/255 apart in blue take three steps), and Specified Steps with the steps
 /// counted from the drawn ones, whatever its record's word 4 holds. The distance counts along the
 /// spine between the keys, also where the spine runs on past the last key.
 #[test]
@@ -7241,7 +7470,7 @@ fn a_blend_keeps_its_spacing() {
     use vectorcraft_doc::live::BlendSpacing;
     let straight = "%_10 50 m\n%_110 50 L\n";
     let longer = "%_10 50 m\n%_110 50 L\n%_1010 50 L\n";
-    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 5.0 / 255.0], [0.0, 0.0, 1.0]);
+    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 3.0 / 255.0], [0.0, 0.0, 1.0]);
     for (spine, record, (from, to), spacing) in [
         (straight, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
         (longer, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
@@ -7254,6 +7483,23 @@ fn a_blend_keeps_its_spacing() {
         assert_eq!(spec.spacing, spacing);
         assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5, "{spacing:?}");
         assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{spacing:?}: {warnings:?}");
+    }
+}
+
+/// Smooth Color blends of two 20 pt squares 200 pt apart come in live with the steps drawn
+/// between them: 254 from red to blue, and 9 between two red squares.
+#[test]
+fn a_smooth_color_blend_comes_in_with_its_drawn_steps() {
+    use vectorcraft_doc::live::BlendSpacing;
+    let (red, blue) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    for (to, between) in [(blue, 254), (red, 9)] {
+        let record = blend_record_spaced(&['A', 'B'], 0, 4.0, between as u32);
+        let body = blend_file_apart("%_10 50 m\n%_210 50 L\n", [Some("A"), Some("B")], &record, red, to, 200.0, between);
+        let (blend, warnings) = read_blend(&body);
+        let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend for {between} steps: {:?} {warnings:?}", blend.kind) };
+        assert_eq!(spec.spacing, BlendSpacing::SmoothColor);
+        assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), between + 2);
+        assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{between}: {warnings:?}");
     }
 }
 

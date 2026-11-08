@@ -71,7 +71,9 @@ pub fn opacity_blend(
                 edit = Some(TransparencyEdit::Opacity(o, Live::Released));
             }
         });
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if enabled { Sense::click() } else { Sense::hover() });
+        // Like a field's preset chevron, the slider's chevron is not a Tab stop: the field takes
+        // the same value from the keyboard, and Tab goes on to the next field.
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 26.0), if enabled { Sense::CLICK } else { Sense::hover() });
         ui.painter().rect_stroke(r, 2, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
         icons::paint(ui, "chevron-right", r.shrink2(vec2(3.0, 7.0)), if enabled { t.icon } else { t.text_disabled });
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled && ui.is_enabled(), tl!("Opacity")));

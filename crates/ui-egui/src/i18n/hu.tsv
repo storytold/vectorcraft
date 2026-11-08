@@ -111,6 +111,11 @@
 	32 bit	32 bit
 	32 bits/pixel	32 bit/pixel
 	3D and Materials	3D és anyagok
+	Plane	Sík
+	Extrude	Kihúzás
+	Revolve	Forgatás tengely körül
+	Inflate	Felfújás
+	Select objects, then pick an object type to give them a 3D effect.	Jelöljön ki objektumokat, majd válasszon objektumtípust, hogy 3D-effektust kapjanak.
 	3D Ribbon	3D szalag
 	4 bit	4 bit
 	4-Up	4 nézet
@@ -380,6 +385,8 @@ font-technology	Variable	Változó
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
 	Video Ruler Pixel Aspect Ratio:	Videovonalzók képpont-méretaránya:
+	Fade Region Outside Artboard	A rajztáblán kívüli terület elhalványítása
+	Update While Dragging	Frissítés húzás közben
 	Hide Video Rulers	Videovonalzók elrejtése
 	Background Contents	Háttértartalom
 	Background Contents:	Háttértartalom:
@@ -1073,6 +1080,9 @@ font-technology	Variable	Változó
 	Do Not Scale	Nincs méretezés
 	Do you want to save the changes you made to “{name}”?	Mented a módosításokat ebben: „{name}”?
 	Dock Panel	Panel dokkolása
+	Dock to Top	Dokkolás felülre
+	Dock to Bottom	Dokkolás alulra
+	Dock Control Bar	Vezérlősáv dokkolása
 	Document	Dokumentum
 	Document Color Mode	Dokumentum színmódja
 	Document Info	Dokumentuminformáció
@@ -1744,6 +1754,8 @@ file-filter	Templates	Sablonok
 	Grays	Szürkék
 	Grays and Neutrals	Szürkék és semleges színek
 	Grayscale	Szürkeárnyalatos
+	High Color	Sok szín
+	Low Color	Kevés szín
 	Grayscale images	Szürkeárnyalatos képek
 	Greek & Cyrillic	Görög és cirill
 	Green	Zöld
@@ -1846,6 +1858,7 @@ file-filter	Templates	Sablonok
 	Step Backward	Lépés vissza
 	Step Forward	Lépés előre
 	Clear History	Előzmények törlése
+	New Document from State	Új dokumentum az állapotból
 	Set History Limit…	Előzménykorlát beállítása…
 	History States	Előzmények lépésszáma
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2302,6 +2315,9 @@ file-filter	Templates	Sablonok
 	Live Paint Selection Tool	Élőfestés-kijelölés
 	Live Shape Properties	Élő alakzat tulajdonságai
 	Load Color Profile…	Színprofil betöltése…
+	Load Character Styles…	Karakterstílusok betöltése…
+	Load Paragraph Styles…	Bekezdésstílusok betöltése…
+	Load All Styles…	Az összes stílus betöltése…
 	Remove Color Profile…	Színprofil eltávolítása…
 	Load Image into Clipboard	Kép betöltése a vágólapra
 	Load Metafile into Clipboard	Metafájl betöltése a vágólapra
@@ -3267,6 +3283,7 @@ mark-style	Japanese	Japán
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Cseréld le egy másik fájlra, vagy hagyd ki: a képei a dokumentummal mentett előnézetet mutatják tovább.
 	Replace Spine	Gerinc cseréje
 	Replace Symbol	Szimbólum cseréje
+	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus
 	Replace With Font From	Helyettesítő betűtípus forrása
 	System	Rendszer
@@ -3293,6 +3310,8 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Search Preferences	Keresés a beállításokban
+	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
 	Reset Profiles	Profilok visszaállítása
 	Reset Rotate View	Nézetforgatás visszaállítása
@@ -3883,6 +3902,7 @@ mark-style	Japanese	Japán
 	Spacing	Térköz
 	Spacing Guides	Térköz-segédvonalak
 	Invoke Distance Guides	Távolság-segédvonalak előhívása
+	Snap to Last Location	Illesztés az utolsó helyre
 	Spacing:	Térköz:
 	Spanish	Spanyol
 	Spatter	Fröcskölés
@@ -4583,6 +4603,7 @@ imageTrace	Outline	Körvonal
 @msg	`groupColors` must be an array	`groupColors`: tömb kell
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	az `id` lépéshivatkozás ({r}), ezt csak a `run` és a `command_batch` oldja fel
 @msg	`ids` must be an array of object ids, not {v}	`ids`: objektumazonosítók tömbje kell, ez nem az: {v}
+@msg	`colors` must be an array of colors, not {v}	`colors`: színek tömbje kell, ez nem az: {v}
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell
@@ -5058,6 +5079,7 @@ imageTrace	Outline	Körvonal
 @msg	nothing to save: the document has no visible art	nincs mit menteni: a dokumentumban nincs látható grafika
 @msg	nothing to undo	nincs mit visszavonni
 @msg	no history to clear	nincs törölhető előzmény
+@msg	no history state {v}	nincs {v} előzményállapot
 @msg	nothing to warp	nincs mit torzítani
 @msg	nothing to wrap	nincs mit körbefuttatni
 @msg	object ids are non-negative integers, not {v}	az objektumazonosító nemnegatív egész szám, ez nem az: {v}
@@ -6234,6 +6256,7 @@ breakText	Glyphs	Glifák
 	Gap 5	Hézag 5
 
 @msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	hajlított szövegobjektumok, amelyek rajzként, nem szerkeszthető szövegként lettek importálva: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	a fájl saját oldalától eltérően rajzolt objektumok az oldal rajzaként lettek importálva: {_1}
 
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.

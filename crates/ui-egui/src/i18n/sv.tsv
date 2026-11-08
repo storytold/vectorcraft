@@ -72,6 +72,11 @@
 	3 Color Job…	3-färgsjobb…
 	30° Angles	30°-vinklar
 	3D and Materials	3D och material
+	Plane	Plan
+	Extrude	Extrudera
+	Revolve	Rotera runt axel
+	Inflate	Blås upp
+	Select objects, then pick an object type to give them a 3D effect.	Markera objekt och välj sedan en objekttyp för att ge dem en 3D-effekt.
 	3D Ribbon	3D-band
 	45° Angles	45°-vinklar
 	60° Angles	60°-vinklar
@@ -273,6 +278,8 @@ font-technology	Variable	Variabla
 	Show Cross Hairs	Visa hårkors
 	Show Video Safe Areas	Visa videosäkra områden
 	Video Ruler Pixel Aspect Ratio:	Pixelproportion för videolinjaler:
+	Fade Region Outside Artboard	Tona ned området utanför ritytan
+	Update While Dragging	Uppdatera vid dragning
 	Hide Video Rulers	Dölj videolinjaler
 	Background Contents	Bakgrundsinnehåll
 	Background Contents:	Bakgrundsinnehåll:
@@ -1337,6 +1344,8 @@ font-technology	Variable	Variabla
 	Grays	Gråtoner
 	Grays and Neutrals	Gråtoner och neutrala toner
 	Grayscale	Gråskala
+	High Color	Många färger
+	Low Color	Få färger
 	Grayscale images	Gråskalebilder
 	Greek & Cyrillic	Grekiska och kyrilliska
 	Green	Grön
@@ -1409,6 +1418,7 @@ font-technology	Variable	Variabla
 	Step Backward	Stega bakåt
 	Step Forward	Stega framåt
 	Clear History	Rensa historik
+	New Document from State	Nytt dokument från tillstånd
 	Set History Limit…	Ange historikgräns…
 	History States	Historiktillstånd
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1769,6 +1779,9 @@ font-technology	Variable	Variabla
 	Live Paint Selection Tool	Markeringsverktyg för direktmålning
 	Live Shape Properties	Egenskaper för direktform
 	Load Color Profile…	Läs in färgprofil…
+	Load Character Styles…	Läs in teckenstilar…
+	Load Paragraph Styles…	Läs in styckestilar…
+	Load All Styles…	Läs in alla stilar…
 	Remove Color Profile…	Ta bort färgprofil…
 	Load Image into Clipboard	Läs in bild till urklipp
 	Load Metafile into Clipboard	Läs in metafil till urklipp
@@ -2675,6 +2688,7 @@ digits	Malayalam	Malayalam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
+	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
 	Replace With Font From	Ersätt med typsnitt från
 	System	System
@@ -2691,6 +2705,8 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Återställ OpenType-funktioner
 	Reset Panel	Återställ panel
 	Reset Preferences	Återställ inställningar
+	Search Preferences	Sök i inställningar
+	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
@@ -3170,6 +3186,7 @@ digits	Malayalam	Malayalam
 	Spaces	Blanksteg
 	Spacing Guides	Avståndsstödlinjer
 	Invoke Distance Guides	Anropa mätstödlinjer för avstånd
+	Snap to Last Location	Fäst mot senaste plats
 	Spacing:	Avstånd:
 	Spanish	Spanska
 	Specified Distance	Angivet avstånd
@@ -3848,6 +3865,9 @@ axis	Both	Båda
 	Put back in the toolbar	Lägg tillbaka i verktygsfältet
 	Float Panel	Gör panelen flytande
 	Dock Panel	Docka panel
+	Dock to Top	Docka överst
+	Dock to Bottom	Docka nederst
+	Dock Control Bar	Docka kontrollfältet
 	Drag to float the toolbar	Dra för att göra verktygsfältet flytande
 	Drag to the window's left edge to dock	Dra till fönstrets vänsterkant för att docka
 	Float Tool Group	Gör verktygsgruppen flytande
@@ -4283,6 +4303,7 @@ axis	Both	Båda
 @msg	nothing to save: the document has no visible art	inget att spara: dokumentet har ingen synlig grafik
 @msg	nothing to undo	inget att ångra
 @msg	no history to clear	ingen historik att rensa
+@msg	no history state {v}	inget historiktillstånd {v}
 @msg	nothing to warp	inget att böja
 @msg	nothing to wrap	inget att radbryta
 @msg	object {0} cannot have children	objekt {0} kan inte ha underordnade objekt
@@ -4656,6 +4677,7 @@ axis	Both	Båda
 	ICF Box	ICF-ruta
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` måste vara en array med färger, inte {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` måste vara en array med index för ankarpunkter, inte {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet från steg {i} har inget sådant värde (skriv $$ för ett bokstavligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: det finns inget steg {i} före det här (stegen räknas från 0; skriv $$ för ett bokstavligt $)
@@ -6302,6 +6324,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	förvrängda textobjekt som importerades som bild och inte som redigerbar text: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.

@@ -24,7 +24,7 @@ and the work list in [`docs/gaps.md`](docs/gaps.md).
 **Why alpha:** the core workflows exist end to end (drawing and path editing, Pathfinder, paint and appearance,
 type, SVG/PDF/EPS, print, export) and feature depth is ~75%, but a professional can't yet switch: Illustrator's
 own `.ai` files open with a wrong layer structure in real cases and are saved back with an editing copy that
-leaves out live effects and writes symbols and live objects as their art, the interaction details have never been checked side by side, and some machines fail to start the
+keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), and writes live objects as their art, the interaction details have never been checked side by side, and some machines fail to start the
 app. Beta needs those closed (the beta list in [gaps.md](docs/gaps.md)). It passes the core-workflow
 gate: all six core workflows (path drawing and editing, paint and style, type, layers/artboards/export, print
 production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without

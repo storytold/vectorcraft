@@ -414,6 +414,11 @@
 	Document Raster Effects Settings…	Indstillinger for rastereffekter i dokumentet…
 	Vector Effects	Vektoreffekter
 	3D and Materials	3D og materialer
+	Plane	Plan
+	Extrude	Ekstrudér
+	Revolve	Omdrej
+	Inflate	Pust op
+	Select objects, then pick an object type to give them a 3D effect.	Markér objekter, og vælg derefter en objekttype for at give dem en 3D-effekt.
 	Extrude & Bevel…	Ekstrudér og facet…
 	Revolve…	Omdrej…
 	Inflate…	Pust op…
@@ -753,6 +758,9 @@
 	Put back in the toolbar	Sæt tilbage på værktøjslinjen
 	Float Panel	Flydende panel
 	Dock Panel	Dok panel
+	Dock to Top	Dok øverst
+	Dock to Bottom	Dok nederst
+	Dock Control Bar	Dok kontrollinjen
 	Float Tool Group	Flydende værktøjsgruppe
 	Services	Tjenester
 	Hide VectorCraft	Skjul VectorCraft
@@ -1546,6 +1554,7 @@ digits	Malayalam	Malayalam
 	Step Backward	Et trin tilbage
 	Step Forward	Et trin frem
 	Clear History	Ryd historik
+	New Document from State	Nyt dokument fra tilstand
 	Set History Limit…	Angiv historikgrænse…
 	Open a document to see its history.	Åbn et dokument for at se dets historik.
 	Abutting	Stødende
@@ -2376,6 +2385,8 @@ digits	Malayalam	Malayalam
 	Show Cross Hairs	Vis trådkors
 	Show Video Safe Areas	Vis sikre videoområder
 	Video Ruler Pixel Aspect Ratio:	Pixelformat for videolinealer:
+	Fade Region Outside Artboard	Ton området uden for kunstpladen ned
+	Update While Dragging	Opdater under trækning
 	Hide Video Rulers	Skjul videolinealer
 	Client-side (.html)	Klientbaseret (.html)
 	Color Reduction:	Farvereduktion:
@@ -2945,6 +2956,7 @@ theme	Appearance	Udseende
 	Redefine Symbol	Omdefinér symbol
 	Remove Brush Stroke	Fjern penselstrøg
 	Replace Symbol	Erstat symbol
+	Reset Transformation	Nulstil transformation
 	Select All Instances	Markér alle forekomster
 	Symbol Sprayer	Symbolsprøjter
 	Symbolism Tool	Symbolværktøj
@@ -2972,6 +2984,9 @@ theme	Appearance	Udseende
 	Convert Document Color Mode	Konvertér dokumentets farvetilstand
 	Gamut Warning	Gamut-advarsel
 	Load Color Profile…	Indlæs farveprofil…
+	Load Character Styles…	Indlæs tegnstile…
+	Load Paragraph Styles…	Indlæs afsnitsstile…
+	Load All Styles…	Indlæs alle stile…
 	Plates	Plader
 	Spot Color	Spotfarve
 	Add to Swatches	Føj til farveprøver
@@ -3401,6 +3416,8 @@ theme	Appearance	Udseende
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
+	Search Preferences	Søg i præferencer
+	No settings found	Ingen indstillinger fundet
 	Scale Corners	Skalér hjørner
 	Scale Cursor Proportional to UI	Skalér markør proportionalt med brugergrænsefladen
 	Scale Strokes & Effects	Skalér konturer & effekter
@@ -3421,6 +3438,7 @@ theme	Appearance	Udseende
 	Snapping Tolerance	Snap-tolerance
 	Spacing Guides	Afstandshjælpelinjer
 	Invoke Distance Guides	Aktivér hjælpelinjer for afstandsmåling
+	Snap to Last Location	Fastgør til sidste placering
 	Spanish	Spansk
 	Subdivisions	Underinddelinger
 	Templates Folder	Skabelonmappe
@@ -3588,6 +3606,8 @@ axis	Both	Begge
 	Center	Midt
 	Transform in Perspective	Transformer i perspektiv
 	Grayscale	Gråtoner
+	High Color	Mange farver
+	Low Color	Få farver
 	Embed	Integrér
 	Star	Stjerne
 	Power Saving (integrated)	Strømbesparende (integreret)
@@ -4339,6 +4359,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to save: the document has no visible art	intet at gemme: dokumentet har ingen synlig grafik
 @msg	nothing to undo	intet at fortryde
 @msg	no history to clear	ingen historik at rydde
+@msg	no history state {v}	ingen historiktilstand {v}
 @msg	nothing to warp	intet at forvride
 @msg	nothing to wrap	intet at ombryde
 @msg	object {0} cannot have children	objektet {0} kan ikke have underobjekter
@@ -4647,6 +4668,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Ingen linkede filer at lede efter
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` er trinreferencen {r}, som kun `run` og `command_batch` fortolker
 @msg	`ids` must be an array of object ids, not {v}	`ids` skal være et array af objekt-id'er, ikke {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` skal være et array af farver, ikke {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` skal være et array af ankerindekser, ikke {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet af trin {i} har ingen sådan værdi (skriv $$ for at få et bogstaveligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: der findes intet trin {i} før dette (trin nummereres fra 0; skriv $$ for at få et bogstaveligt $)
@@ -6114,6 +6136,7 @@ breakText	Glyphs	Glyffer
 	Gap 5	Mellemrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de blev importeret som sidens grafik
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	vredne tekstobjekter, der blev importeret som grafik og ikke som redigerbar tekst: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekter, der blev tegnet anderledes end filens egen side, blev importeret som sidens grafik: {_1}
 
 @msg	You must choose a side pattern.	Du skal vælge et sidemønster.

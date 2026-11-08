@@ -418,6 +418,181 @@ fn key(key: Key, modifiers: Modifiers) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
 }
 
+/// What [`preset_row`]'s fields committed or picked in a frame: the two numbers, the text and the
+/// pick of the field with an Auto entry.
+type PresetPicks = (Option<f64>, Option<f64>, Option<String>, Option<widgets::SpinPick>);
+
+const NO_PICK: PresetPicks = (None, None, None, None);
+
+thread_local! {
+    /// Whether the last [`preset_row`] frame left an Enter press for a dialog drawn after it.
+    static ENTER_LEFT: Cell<bool> = const { Cell::new(false) };
+}
+
+/// One frame in `ctx` with `events` of a row of two numeric fields with a spinner and presets
+/// (Stroke Weight, and a font size that is none of its presets), a text field with presets (Export
+/// for Screens' scale) and a numeric field whose list starts with Auto, which is on (Leading).
+fn preset_row(ctx: &egui::Context, time: &Cell<f64>, events: Vec<Event>) -> PresetPicks {
+    time.set(time.get() + 0.05);
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+    let mut got = NO_PICK;
+    let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+        ui.horizontal(|ui| {
+            got.0 = widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[1.0, 2.0, 4.0]);
+            got.1 = widgets::spin_field(ui, "size", Some(13.0), Unit::Points, 100.0, 1.0, 0.0, &[9.0, 12.0]);
+            got.2 = widgets::text_presets(ui, "scale", "1x", &["1x", "2x"], 100.0);
+            got.3 = widgets::spin_field_auto(ui, "leading", Some(14.0), Some(true), Unit::Points, 100.0, 1.0, 0.0, &[12.0, 14.0]);
+        });
+        ENTER_LEFT.set(crate::shortcuts::pressed_anew(ui.ctx(), Key::Enter));
+    });
+    out.textures_delta.clear();
+    got
+}
+
+/// Tab goes from one field to the next in one press: it does not stop on a field's spinner or on
+/// the chevron that opens its presets, and Shift+Tab goes back the same way.
+#[test]
+fn tab_goes_from_field_to_field_past_the_spinner_and_the_preset_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    preset_row(&ctx, &time, vec![]);
+    preset_row(&ctx, &time, vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 8, |events| {
+        preset_row(&ctx, &time, events);
+    });
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 8, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 40.0), "only the fields are Tab stops, not the spinners or chevrons: {widths:?}");
+    assert_eq!(stops[..4], stops[4..], "four fields, then back to the first: {widths:?}");
+    let mut back = vec![];
+    for _ in 0..2 {
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::SHIFT)]);
+        preset_row(&ctx, &time, vec![]);
+        back.extend(ctx.memory(|m| m.focused()));
+    }
+    assert_eq!(back, [stops[2], stops[1]], "Shift+Tab goes back field by field");
+}
+
+/// The Transparency row's opacity slider chevron is not a Tab stop either: Tab goes from the
+/// Opacity field straight to the next field.
+#[test]
+fn tab_goes_from_the_opacity_field_past_its_slider_chevron() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let frame = |events: Vec<Event>| {
+        time.set(time.get() + 0.05);
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(600.0, 300.0)));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time.get()), screen_rect, focused: true, ..Default::default() }, |ui| {
+            ui.horizontal(|ui| {
+                widgets::opacity_blend(ui, "transparency", Some(0.5), None, true);
+                widgets::spin_field(ui, "weight", Some(2.0), Unit::Points, 100.0, 1.0, 0.0, &[]);
+            });
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    frame(vec![]);
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 6, frame);
+    let widths: Vec<f32> = stops.iter().filter_map(|id| ctx.read_response(*id)).map(|r| r.rect.width()).collect();
+    assert_eq!(widths.len(), 6, "{stops:?}");
+    assert!(widths.iter().all(|w| *w > 20.0), "the 18 pt slider chevron is not a Tab stop: {widths:?}");
+    assert_eq!(stops[..3], stops[3..], "blend mode, Opacity and the next field, then back: {widths:?}");
+}
+
+/// Gives the keyboard focus to the field that `tabs` presses of Tab reach in [`preset_row`], with
+/// every list closed, and returns that field.
+fn focus_preset_field(ctx: &egui::Context, time: &Cell<f64>, tabs: usize) -> Option<egui::Id> {
+    egui::Popup::close_all(ctx);
+    ctx.memory_mut(|m| m.surrender_focus(m.focused().unwrap_or(egui::Id::NULL)));
+    preset_row(ctx, time, vec![]);
+    for _ in 0..tabs {
+        preset_row(ctx, time, vec![key(Key::Tab, Modifiers::NONE)]);
+    }
+    preset_row(ctx, time, vec![]);
+    ctx.memory(|m| m.focused())
+}
+
+/// The presets stay in reach of the keyboard: Alt+↓ in a field opens its preset list with the
+/// keyboard focus on the chosen preset (the first entry when none is chosen, Auto when it is on),
+/// Tab goes on to the next one and Enter picks it, without reaching a dialog's OK. The field then
+/// has the keyboard focus again.
+#[test]
+fn alt_down_opens_a_fields_presets_for_the_keyboard() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let alt_down = || key(Key::ArrowDown, Modifiers::ALT);
+    // (Tabs to the field, the pick after Tab and Enter in its list.)
+    let cases = [
+        (1, (Some(4.0), None, None, None)),
+        (2, (None, Some(12.0), None, None)),
+        (3, (None, None, Some("2x".to_string()), None)),
+        (4, (None, None, None, Some(widgets::SpinPick::Value(12.0)))),
+    ];
+    for (tabs, picked) in cases {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        assert!(field.is_some(), "{tabs}");
+        assert_eq!(preset_row(&ctx, &time, vec![alt_down()]), NO_PICK, "{tabs}");
+        preset_row(&ctx, &time, vec![]);
+        let entry = ctx.memory(|m| m.focused());
+        assert!(entry.is_some() && entry != field, "{tabs}: the list takes the focus");
+        let layer = ctx.read_response(entry.unwrap_or(egui::Id::NULL)).map(|r| r.layer_id.order);
+        assert_eq!(layer, Some(egui::Order::Foreground), "{tabs}: on an entry of the list");
+        preset_row(&ctx, &time, vec![key(Key::Tab, Modifiers::NONE)]);
+        preset_row(&ctx, &time, vec![]);
+        let mut got = preset_row(&ctx, &time, vec![enter()]);
+        assert!(!ENTER_LEFT.get(), "{tabs}: the list takes the Enter, so a dialog's OK does not");
+        if got == NO_PICK {
+            got = preset_row(&ctx, &time, vec![]);
+        }
+        assert_eq!(got, picked, "{tabs}: Enter picks the next preset");
+        preset_row(&ctx, &time, vec![]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Escape closes a preset list that Alt+↓ opened without picking anything, and the field has the
+/// keyboard focus again.
+#[test]
+fn escape_closes_a_fields_presets_and_returns_to_the_field() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    for tabs in [1, 3] {
+        let field = focus_preset_field(&ctx, &time, tabs);
+        preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::ALT)]);
+        preset_row(&ctx, &time, vec![]);
+        assert!(egui::Popup::is_any_open(&ctx), "{tabs}: Alt+↓ opened the list");
+        let mut picks = vec![preset_row(&ctx, &time, vec![key(Key::Escape, Modifiers::NONE)])];
+        picks.push(preset_row(&ctx, &time, vec![]));
+        picks.push(preset_row(&ctx, &time, vec![]));
+        assert!(picks.iter().all(|p| *p == NO_PICK), "{tabs}: nothing picked: {picks:?}");
+        assert!(!egui::Popup::is_any_open(&ctx), "{tabs}: the list closed");
+        assert_eq!(ctx.memory(|m| m.focused()), field, "{tabs}: the field has the keyboard focus again");
+    }
+}
+
+/// Only Alt+↓ with no other modifier opens the presets: Shift+Alt+↓ in a field with presets
+/// steps it down by ten, as before, and leaves the list closed.
+#[test]
+fn shift_alt_down_still_steps_a_field_with_presets() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let time = Cell::new(0.0);
+    let field = focus_preset_field(&ctx, &time, 2);
+    let mut got = preset_row(&ctx, &time, vec![key(Key::ArrowDown, Modifiers::SHIFT | Modifiers::ALT)]);
+    if got == NO_PICK {
+        got = preset_row(&ctx, &time, vec![]);
+    }
+    assert_eq!(got.1, Some(3.0), "13 pt steps down by ten");
+    assert!(!egui::Popup::is_any_open(&ctx), "the list stays closed");
+    assert_eq!(ctx.memory(|m| m.focused()), field);
+}
+
 #[test]
 fn math_before_the_unit_suffix_evaluates_in_every_unit() {
     assert_eq!(Unit::Pixels.parse("1080/2 px"), Some(540.0));

@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TextStyleDef};
 
+use super::clipboard::resources::import_text_styles;
 use super::typecmd::{refresh_bounds, text_targets};
 use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
 
@@ -111,9 +112,20 @@ macro_rules! style_cmds {
                 |s, _| unused(s, $kind),
                 false,
             ),
+            spec(
+                concat!($p, ".load"),
+                concat!("Load ", $what, " Styles…"),
+                &["Window", "Type", $menu],
+                LOAD_PARAMS,
+                |s, p| load(s, p, &[$kind]),
+                true,
+            ),
         ]
     };
 }
+
+/// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -132,6 +144,7 @@ pub fn specs() -> Vec<CommandSpec> {
         true,
     ));
     v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph", ""));
+    v.push(spec("textStyle.loadAll", "Load All Styles…", &["Window", "Type"], LOAD_PARAMS, |s, p| load(s, p, &[Kind::Char, Kind::Para]), true));
     v
 }
 
@@ -897,6 +910,90 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
     let uses = uses(d, kind);
     let names: Vec<&str> = kind.defs(d).iter().map(|s| s.name.as_str()).filter(|n| *n != kind.normal() && uses_of(&uses, kind, n) == 0).collect();
     Ok(json!({ "names": names }))
+}
+
+/// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
+/// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
+/// scales, leading, shifts or stroke width are out of the range `charStyle.new` takes, or whose name
+/// is empty, which are skipped. → (the styles, the names in `src` of those skipped)
+fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
+    const RANGED: [&str; 8] = ["size", "h_scale", "v_scale", "leading", "baseline_shift", "tcyUpDown", "tcyLeftRight", "stroke_width"];
+    let (mut defs, mut skipped) = (vec![], vec![]);
+    for def in kind.defs(src) {
+        let name = def.name.as_str();
+        if name.trim() == kind.normal() {
+            continue;
+        }
+        // Paints, features and language are taken as the file stores them; the ranged values are checked.
+        let mut kept = def.attrs.clone();
+        kept.retain(|k, _| !RANGED.contains(&k.as_str()));
+        match attrs_param(src, &json!({ "attrs": def.attrs }), kind, "load", Some(&kept)).ok().flatten().filter(|_| !name.trim().is_empty()) {
+            Some(attrs) => defs.push(TextStyleDef { name: name.to_string(), attrs }),
+            None => skipped.push(def.name.clone()),
+        }
+    }
+    (defs, skipped)
+}
+
+/// Load Character Styles, Load Paragraph Styles and Load All Styles: the `kinds` of style of the
+/// document `p` gives (`path`, `data` or `dataBase64`) added to the active one with the swatches and
+/// patterns they paint with, as Paste adds those of pasted type ([`import_text_styles`]).
+fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
+    let label = match kinds {
+        [Kind::Char] => "Load Character Styles",
+        [Kind::Para] => "Load Paragraph Styles",
+        _ => "Load All Styles",
+    };
+    let c = &match kinds {
+        [kind] => kind.cmd("load"),
+        _ => "textStyle.loadAll".to_string(),
+    };
+    let path = str_param(p, "path");
+    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::fileio::read_file(path)?,
+        (None, Some(text), _) => text.as_bytes().to_vec(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?,
+        _ => return Err(bad(c, "give `path`, `data` or `dataBase64`")),
+    };
+    let file = str_param(p, "name").or(path).unwrap_or("Styles");
+    let src = super::fileio::load(file, &bytes).map_err(|e| bad(c, e.to_string()))?;
+    if src.preview_only {
+        return Err(bad(c, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
+    }
+    // The source with only the styles that load. Those of a kind not loaded still come along when
+    // a pattern or symbol that a loaded style paints with sets type in them.
+    let mut src = src.doc;
+    let mut skipped = [vec![], vec![]];
+    for kind in [Kind::Char, Kind::Para] {
+        let (defs, names) = loadable(&src, kind);
+        *kind.defs_mut(&mut src) = defs;
+        if kinds.contains(&kind) {
+            skipped[usize::from(kind == Kind::Para)] = names;
+        }
+    }
+    let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
+    let mut trial = (*s.doc()?.doc).clone();
+    let mut placed = import_text_styles(&src, &mut trial, chars, paras);
+    // An undo step only when the document changes. The step takes the document the import made,
+    // unless the edit first ends a typing session, which can change the document it starts from.
+    if trial != *s.doc()?.doc {
+        if super::typing_in_progress(s) {
+            placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
+        } else {
+            s.edit(label, |d, _| {
+                *d = trial;
+                Ok(())
+            })?;
+        }
+    }
+    let reply = |para: bool| {
+        let names = |added: bool| placed.iter().filter(|p| p.para == para && p.added == added).map(|p| p.name.as_str()).collect::<Vec<_>>();
+        json!({ "added": names(true), "existing": names(false), "skipped": skipped[usize::from(para)] })
+    };
+    Ok(match kinds {
+        [kind] => reply(*kind == Kind::Para),
+        _ => json!({ "charStyles": reply(false), "paraStyles": reply(true) }),
+    })
 }
 
 #[cfg(test)]

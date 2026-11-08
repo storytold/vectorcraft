@@ -463,6 +463,29 @@ fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// `shortcuts.export` and `shortcuts.import` given a `path` that is not a string open no file
+/// dialog, read and write nothing, and give an error naming `path`; a null `path` still asks.
+#[test]
+fn keyboard_shortcuts_commands_reject_a_path_that_is_not_a_string() {
+    let (mut app, shown, written) = app();
+    let read: Written = Default::default();
+    let r = read.clone();
+    app.services.read = Some(Box::new(move |path: &str| {
+        r.borrow_mut().push(path.to_string());
+        Ok(SVG.to_vec())
+    }));
+    for path in [json!(5), json!(true), json!({"file": "/keys/a.json"}), json!(["/keys/a.json"])] {
+        for id in ["shortcuts.export", "shortcuts.import"] {
+            assert_eq!(app.run(id, json!({ "path": path })), Err("`path` must be a string".to_string()), "{id} {path}");
+            assert!(shown.requests().is_empty(), "{id} {path}: {:?}", shown.requests());
+        }
+    }
+    assert!(written.borrow().is_empty() && read.borrow().is_empty());
+    assert!(app.ui.shortcut_overrides.is_empty());
+    assert_eq!(app.run("shortcuts.export", json!({"path": null})), Err("cancelled".to_string()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+}
+
 /// A dialog's folder button answered after the dialog closed fills nothing, and the status says
 /// why.
 #[test]

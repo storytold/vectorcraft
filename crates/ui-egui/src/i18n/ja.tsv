@@ -487,6 +487,11 @@ digits	Malayalam	マラヤーラム数字
 	Document Raster Effects Settings…	ドキュメントのラスタライズ効果設定…
 	Vector Effects	ベクター効果
 	3D and Materials	3D とマテリアル
+	Plane	平面
+	Extrude	押し出し
+	Revolve	回転体
+	Inflate	膨張
+	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
 	Revolve…	回転体…
 	Inflate…	膨張…
@@ -1029,6 +1034,8 @@ digits	Malayalam	マラヤーラム数字
 	Show Cross Hairs	十字線を表示
 	Show Video Safe Areas	ビデオセーフエリアを表示
 	Video Ruler Pixel Aspect Ratio:	ビデオ定規のピクセル縦横比:
+	Fade Region Outside Artboard	アートボードの外側を暗く表示
+	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
 	Background Contents:	背景のカラー:
@@ -1729,6 +1736,8 @@ digits	Malayalam	マラヤーラム数字
 	Graphics: {adapter}	グラフィックス: {adapter}
 	Grays	グレー
 	Grayscale	グレースケール
+	High Color	多色
+	Low Color	少色
 	Flat Logo	フラットロゴ
 	Grayscale images	グレースケールイメージ
 	Green	グリーン
@@ -1774,6 +1783,7 @@ digits	Malayalam	マラヤーラム数字
 	Step Backward	一段階戻る
 	Step Forward	一段階進む
 	Clear History	ヒストリーを消去
+	New Document from State	状態から新規ドキュメント
 	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2083,6 +2093,9 @@ digits	Malayalam	マラヤーラム数字
 	Live Paint Selection Tool	ライブペイント選択ツール
 	Live Shape Properties	ライブシェイプのプロパティ
 	Load Color Profile…	カラープロファイルを読み込む…
+	Load Character Styles…	文字スタイルを読み込み…
+	Load Paragraph Styles…	段落スタイルを読み込み…
+	Load All Styles…	すべてのスタイルを読み込み…
 	Remove Color Profile…	カラープロファイルを削除…
 	Load Image into Clipboard	画像をクリップボードに読み込む
 	Load Metafile into Clipboard	メタファイルをクリップボードに読み込む
@@ -2752,6 +2765,7 @@ mark-style	Japanese	日本式
 	Replace:	置換:
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
+	Reset Transformation	変形をリセット
 	Replace With Font	置換するフォント
 	Replace With Font From	置換するフォントの一覧
 	System	システム
@@ -2766,6 +2780,8 @@ mark-style	Japanese	日本式
 	Reset OpenType Features	OpenType 機能をリセット
 	Reset Panel	パネルをリセット
 	Reset Preferences	環境設定をリセット
+	Search Preferences	環境設定を検索
+	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す
@@ -3066,6 +3082,7 @@ mark-style	Japanese	日本式
 	Spaces	スペース
 	Spacing Guides	間隔ガイド
 	Invoke Distance Guides	距離ガイドを呼び出す
+	Snap to Last Location	最後の位置にスナップ
 	Spacing:	間隔:
 	Spanish	スペイン語
 	Specify:	指定:
@@ -3915,6 +3932,9 @@ axis	Both	両方
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
+	Dock to Top	上部にドッキング
+	Dock to Bottom	下部にドッキング
+	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
@@ -4168,6 +4188,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	no history to clear	消去するヒストリーがありません
+@msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
@@ -4822,6 +4843,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
@@ -5935,6 +5957,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	編集可能なテキストではなくアートとして読み込んだワープのテキストオブジェクト: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。
