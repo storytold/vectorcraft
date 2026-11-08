@@ -4727,6 +4727,9 @@ axis	Both	И двете
 effect	Soft	Меко
 	Edge	Роб
 	System Title Bar	Заглавна лента на системата
+	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
+	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна

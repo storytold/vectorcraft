@@ -4793,6 +4793,9 @@ axis	Both	Båda
 effect	Soft	Mjuk
 	Edge	Kant
 	System Title Bar	Systemets namnlist
+	VectorCraft Title Bar on Every Desktop	VectorCrafts namnlist på alla skrivbord
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljövariabeln VECTORCRAFT_TITLEBAR väljer namnlisten så länge den är angiven.
+	System Title Bar takes precedence over this option while it is on.	Systemets namnlist har företräde framför det här alternativet så länge den är på.
 	Value Axis	Värdeaxel
 	On Left Side	På vänster sida
 	On Right Side	På höger sida

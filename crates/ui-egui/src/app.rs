@@ -122,6 +122,7 @@ impl VectorcraftApp {
             frame_rate: Default::default(),
             canvas_rect: None,
             hover_doc: None,
+            titlebar_from_env: false,
             custom_titlebar: false,
             desktop_frame: false,
             last_window_title: String::new(),

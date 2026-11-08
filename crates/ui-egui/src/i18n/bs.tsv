@@ -880,6 +880,9 @@
 	Stained Glass…	Vitraž…
 	Texturizer…	Teksturizator…
 	System Title Bar	Sistemska naslovna traka
+	VectorCraft Title Bar on Every Desktop	Naslovna traka VectorCrafta na svakoj radnoj površini
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dok je varijabla okruženja VECTORCRAFT_TITLEBAR postavljena, ona bira naslovnu traku.
+	System Title Bar takes precedence over this option while it is on.	Dok je uključena, Sistemska naslovna traka ima prednost pred ovom opcijom.
 	Exit	Izlaz
 	Distort	Izobliči
 	Diffuse Glow…	Difuzni sjaj…

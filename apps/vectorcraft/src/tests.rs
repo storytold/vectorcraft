@@ -164,6 +164,60 @@ fn the_system_title_bar_preference_keeps_the_window_decorations() {
     assert_eq!(super::native_options(true).viewport.decorations, Some(false));
 }
 
+/// Preferences › User Interface › VectorCraft Title Bar on Every Desktop gives the app frame where
+/// the probe chose the desktop's (KDE, X11, a window opened through XWayland); without it the probe
+/// decides, and `VECTORCRAFT_TITLEBAR` takes precedence over both.
+#[test]
+fn the_app_title_bar_preference_gives_the_app_frame_on_desktop_frames() {
+    assert!(!super::opted_into_app_title_bar(None), "no preferences: the default");
+    let off = ui_state_with_prefs(serde_json::json!({"appTitleBar": false}));
+    assert!(!super::opted_into_app_title_bar(Some(&off)));
+    let on = ui_state_with_prefs(serde_json::json!({"appTitleBar": true}));
+    assert!(super::opted_into_app_title_bar(Some(&on)));
+
+    // (probed_app, overridden, forced_to_x11): without the preference, then with it.
+    let cases = [
+        ((false, None, false), false, true),        // KDE, Sway, X11: the desktop frame
+        ((true, None, false), true, true),          // GNOME on Wayland: the app frame either way
+        ((true, None, true), false, true),          // GNOME, the window opened through XWayland
+        ((false, Some(true), false), true, true),   // VECTORCRAFT_TITLEBAR=app
+        ((false, Some(true), true), true, true),    // VECTORCRAFT_TITLEBAR=app, the window opened through XWayland
+        ((true, Some(false), false), false, false), // VECTORCRAFT_TITLEBAR=desktop takes precedence over the preference
+        ((false, Some(false), true), false, false),
+    ];
+    for ((probed_app, overridden, forced_to_x11), without, with) in cases {
+        assert_eq!(super::app_draws_frame(probed_app, overridden, forced_to_x11, false), without, "{probed_app} {overridden:?} {forced_to_x11}");
+        assert_eq!(super::app_draws_frame(probed_app, overridden, forced_to_x11, true), with, "{probed_app} {overridden:?} {forced_to_x11}");
+    }
+}
+
+/// The frame a start uses: the preference turns the desktop frame the probe chose into the app frame
+/// with the default window buttons, a probed app frame keeps its own buttons, and the desktop frame
+/// stays where the app frame is not drawn. System Title Bar takes precedence over the preference.
+#[test]
+fn the_start_frame_applies_the_app_title_bar_preference() {
+    use craft_window::{Button, Frame, Layout};
+    let gnome = Layout { left: vec![Button::Close], right: vec![] };
+    let cases = [
+        // (probed, overridden, forced_to_x11, opted_into_app), expected
+        ((Frame::Desktop, None, false, false), Frame::Desktop),
+        ((Frame::Desktop, None, false, true), Frame::App(Layout::default())),
+        ((Frame::Desktop, None, true, true), Frame::App(Layout::default())),
+        ((Frame::App(gnome.clone()), None, false, false), Frame::App(gnome.clone())),
+        ((Frame::App(gnome.clone()), None, true, false), Frame::Desktop),
+        ((Frame::App(gnome.clone()), None, true, true), Frame::App(gnome.clone())),
+        ((Frame::Desktop, Some(false), false, true), Frame::Desktop),
+        ((Frame::App(gnome.clone()), Some(true), true, false), Frame::App(gnome.clone())),
+    ];
+    for ((probed, overridden, forced_to_x11, opted_into_app), expected) in cases {
+        let label = format!("{probed:?} {overridden:?} {forced_to_x11} {opted_into_app}");
+        assert_eq!(super::start_frame(probed, overridden, forced_to_x11, opted_into_app), expected, "{label}");
+    }
+    // With both preferences on, System Title Bar takes precedence: the desktop draws the frame.
+    let both = super::start_frame(Frame::Desktop, None, false, true);
+    assert!(!super::custom_titlebar_from(&both, true), "System Title Bar takes precedence over the app title bar preference");
+}
+
 /// The file extensions the macOS bundle declares: its document types and its own exported type.
 fn plist_extensions(plist: &str) -> Vec<&str> {
     ["<key>CFBundleTypeExtensions</key>", "<key>public.filename-extension</key>"]

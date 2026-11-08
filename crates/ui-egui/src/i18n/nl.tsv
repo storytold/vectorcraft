@@ -835,6 +835,9 @@
 	Stained Glass…	Glas in lood…
 	Texturizer…	Texturizer…
 	System Title Bar	Systeemtitelbalk
+	VectorCraft Title Bar on Every Desktop	VectorCraft-titelbalk op elk bureaublad
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Zolang de omgevingsvariabele VECTORCRAFT_TITLEBAR is ingesteld, kiest die de titelbalk.
+	System Title Bar takes precedence over this option while it is on.	Zolang Systeemtitelbalk is ingeschakeld, heeft die voorrang op deze optie.
 	Exit	Afsluiten
 	Distort	Vervormen
 	Diffuse Glow…	Diffuse gloed…
