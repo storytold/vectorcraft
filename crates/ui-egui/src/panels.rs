@@ -661,6 +661,8 @@ mod tests_freeform;
 #[cfg(test)]
 mod tests_links;
 #[cfg(test)]
+mod tests_long_popups;
+#[cfg(test)]
 mod tests_maskview;
 #[cfg(test)]
 mod tests_stroke;
