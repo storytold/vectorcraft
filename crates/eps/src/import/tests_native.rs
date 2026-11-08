@@ -4095,23 +4095,43 @@ fn a_small_label_of_the_page_in_no_text_object_is_noted() {
     assert!(note.is_some_and(|w| crate::is_loss(w)), "{:?}", r.warnings);
 }
 
-/// Right-aligned point type ends at its anchor: its made type lies where the page draws it, so the
-/// page's type has its text object and nothing is left out.
+/// Point type aligned right ends at its anchor, and centred (here also tracked) is centred on it:
+/// its made type lies where the page draws it, so the page's type has its text object, nothing is
+/// left out, and the text object's layout ends at (or is centred on) the anchor as the page's type is.
 #[test]
-fn right_aligned_point_type_holds_the_pages_type() {
-    // The anchor is at (50, 61.5) in the art; the line starts the width of "Hi there" left of it.
-    let doc = text_document(&[("Hi there\r", 1, (8191.5, 8180.0), (0.0, 0.0), -49.0)]);
-    let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0))), &doc);
-    let page = format!(
-        "{} 0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont (Hi there) dup stringwidth pop 50 exch sub 61.5 moveto show",
-        page_square(10, 10)
-    );
-    let r = import(&eps(&page, &art)).unwrap();
-    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
-    assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{:?}", r.warnings);
-    let texts = text_of(&r.document.layers[0]);
-    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there"], "{:?}", r.warnings);
-    assert_eq!(texts[0].para.justify, vectorcraft_doc::Justify::Right);
+fn right_aligned_and_centred_point_type_hold_the_pages_type() {
+    // Each case: alignment (1 right, 2 centred), tracking (thousandths of an em), the story's line
+    // start from the anchor, where the page's line starts (from its width `w`, PostScript on the
+    // stack), and the justification. The anchor is at (50, 61.5) on the page.
+    let width = 49.014; // "Hi there" in Helvetica at 14 pt.
+    let cases = [
+        (1, 0.0, -width, "50 exch sub", vectorcraft_doc::Justify::Right),
+        (2, 50.0, -(width + 8.0 * 0.7) / 2.0, "2 div 50 exch sub", vectorcraft_doc::Justify::Center),
+    ];
+    for (align, tracking, start, from_width, justify) in cases {
+        let doc = text_document(&[("Hi there\r", align, (8191.5, 8180.0), (0.0, 0.0), start)])
+            .replace("/1 14.0 /53", &format!("/1 14.0 /8 {tracking} /53"));
+        let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0))), &doc);
+        let ax = 14.0 * tracking / 1000.0;
+        let page = format!(
+            "{} 0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont \
+             (Hi there) dup stringwidth pop {} add {from_width} 61.5 moveto {ax} 0 3 -1 roll ashow",
+            page_square(10, 10),
+            8.0 * ax
+        );
+        let r = import(&eps(&page, &art)).unwrap();
+        assert_eq!(names(&r.document), ["Art"], "{justify:?}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("left out")), "{justify:?}: {:?}", r.warnings);
+        assert!(!r.warnings.iter().any(|w| w.contains("has no text object")), "{justify:?}: {:?}", r.warnings);
+        let texts = text_of(&r.document.layers[0]);
+        assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there"], "{:?}", r.warnings);
+        let t = texts[0];
+        assert_eq!(t.para.justify, justify);
+        // Its layout ends at the anchor (right) or is centred on it, on the page's left-to-right axis.
+        let laid = t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
+        let at = if justify == vectorcraft_doc::Justify::Right { laid.x1 } else { (laid.x0 + laid.x1) / 2.0 };
+        assert!((at - 50.0).abs() < 0.5, "{justify:?}: {laid:?}");
+    }
 }
 
 /// A line break inside a paragraph (`\x03` in the text document) stays a line break in it.
