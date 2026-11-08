@@ -4976,8 +4976,12 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - `includeLinked: true` keeps linked images' own pixels in the file (they stay linked), not just the previews.
 - `embedProfiles` (default true) carries the ICC profiles the document is tagged with that were loaded from files;
   opening the file installs them where they are missing (a warning names one that can't be used).
-- `pdfCompatible`: native files (default false) also carry a PDF of every artboard (`pdf` in the file); `.ai` files
+- `pdfCompatible`: native files (default true) also carry a PDF of every artboard (`pdf` in the file). This makes saves
+  larger and adds PDF rendering work. Set it to false to leave the PDF out; Save remembers that choice. `.ai` files
   (default true) with false write blank pages around the native document (smaller; other apps show empty pages).
+  Native files without artboards and Data Recovery copies omit the PDF.
+  Reopening a native file keeps its saved PDF preference, falling back to whether it declared a PDF in older files.
+  Existing files saved without a PDF remain compact.
 - `.ai` only: `compress` (default true) is the PDF option `compression.compressText`.
 - The editing copy of a `.ai` or `.ait` file (`editingData`) names its active artboard (`CropAreaActive`): the active
   artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the

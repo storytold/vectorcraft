@@ -128,12 +128,17 @@ USAGE:
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
 
-  vectorcraft-cli perf [--paths N] [--deep]
+  vectorcraft-cli perf [--paths N] [--deep] [--native-io [--artboards 1..4]]
       Check the performance budgets (render, pan, hit test, save/load, SVG, Pathfinder, handle
       and segment drags) on a synthetic N-path document (default 50000). Exits non-zero if a
       budget is exceeded, unless the report says the machine is busy. --deep also times work with
       no budget yet and prints memory use (the working set on Windows), with the peak so far on
       Windows and Linux.
+      --native-io instead measures the application's native save/open commands (one warmup,
+      five samples, no disk I/O), including preview, PDF, compression and API base64 costs.
+      It reports the default and explicit PDF opt-out, with and without preview/compression;
+      --artboards repeats the same artwork
+      on 1 to 4 overlapping artboards. This mode allows at most 50000 paths.
 ";
 
 /// The usage text plus the formats `document.open` reads and `document.export` writes.
