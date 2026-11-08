@@ -1330,6 +1330,7 @@ lighting	Light	სინათლე
 	Arabic	არაბული
 	Hindi	ჰინდი
 	Farsi	სპარსული
+digits	Hindi	ჰინდი
 digits	Devanagari	დევანაგარი
 digits	Bengali	ბენგალური
 digits	Gurmukhi	გურმუხი
@@ -3559,6 +3560,7 @@ effect	Regular	ჩვეულებრივი
 	Find in Folder…	საქაღალდეში ძებნა…
 	Replace With Font	ჩანაცვლება შრიფტით
 	Replace With Font From	ჩანაცვლების შრიფტის წყარო
+	Find In	ძებნის არე
 	System	სისტემა
 	  — substituted by {style}	  — ჩანაცვლებულია: {style}
 	  — {n} characters from another font	  — სხვა შრიფტის სიმბოლოები: {n}

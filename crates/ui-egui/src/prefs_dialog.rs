@@ -511,10 +511,13 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             }
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let mut x = v.as_f64().unwrap_or(min);
                     let new = if sp.key == "uiScaling" {
-                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05).text(tl!("Smaller ↔ Larger"))).changed().then_some(x)
+                        // Without internal text, both slider controls inherit the row's name across focus changes.
+                        let response = widgets::slider(ui, egui::Slider::new(&mut x, min..=max).step_by(0.05)).labelled_by(label_id);
+                        ui.add(egui::Label::new(tl!("Smaller ↔ Larger")).wrap_mode(egui::TextWrapMode::Extend));
+                        response.changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x, min..=max, &format!(" {unit}"), 3, 110.0)
                     };
@@ -527,17 +530,19 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                 // In the dialog's own Units choice, so a change there shows right away.
                 let unit = vectorcraft_doc::Unit::named(&d.str(measure.pref_key())).unwrap_or_default();
                 let x = d.f64(sp.key, min);
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     if let Some(x) = widgets::num_field(ui, sp.key, Some(x), unit, 110.0) {
                         d.fields.insert(sp.key.into(), json!(x.clamp(min, max)));
                     }
                 });
             }
             PrefKind::Int { min, max } => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let mut x = v.as_i64().unwrap_or(min);
                     let new = if sp.key == "anchorSize" {
-                        widgets::slider(ui, egui::Slider::new(&mut x, min..=max).show_value(false).text(tl!("Size"))).changed().then_some(x)
+                        let response = widgets::slider(ui, egui::Slider::new(&mut x, min..=max).show_value(false)).labelled_by(label_id);
+                        ui.add(egui::Label::new(tl!("Size")).wrap_mode(egui::TextWrapMode::Extend));
+                        response.changed().then_some(x)
                     } else {
                         widgets::range_field(ui, sp.key, x as f64, min as f64..=max as f64, "", 0, 110.0).map(|x| x as i64)
                     };
@@ -569,11 +574,11 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                 }
             }
             PrefKind::Color => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, label_id| {
                     let hex = v.as_str().unwrap_or("#000000");
                     let c = vectorcraft_color::Color::from_hex(hex).map(|c| c.to_rgba8(1.0)).unwrap_or([0, 0, 0, 255]);
                     let mut rgb = [c[0], c[1], c[2]];
-                    if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    if ui.color_edit_button_srgb(&mut rgb).labelled_by(label_id).changed() {
                         d.fields.insert(sp.key.into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
                     }
                     ui.label(egui::RichText::new(hex).color(t.text_dim).size(11.0));
@@ -581,7 +586,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             }
             PrefKind::Text if sp.key == "interfaceLanguage" => {
                 // `auto` plus every registered language, by its own name.
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     let cur = v.as_str().unwrap_or("auto");
                     let codes: Vec<&str> = std::iter::once("auto").chain(crate::i18n::Lang::for_picker().into_iter().map(|l| l.code())).collect();
                     let labels: Vec<&str> =
@@ -598,7 +603,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
             // Plug-ins Folder: typed, or picked with Choose… where the host has a folder picker
             // (not on the web).
             PrefKind::Text if folder_check(sp.key).is_some() => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     let mut s = v.as_str().unwrap_or("").to_string();
                     if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(200.0)).changed() {
                         d.fields.insert(sp.key.into(), json!(s));
@@ -609,7 +614,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                 });
             }
             PrefKind::Text => {
-                labeled(ui, sp.label, |ui| {
+                labeled(ui, sp.label, |ui, _| {
                     let mut s = v.as_str().unwrap_or("").to_string();
                     if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(260.0)).changed() {
                         d.fields.insert(sp.key.into(), json!(s));
@@ -644,7 +649,7 @@ fn picas_in_use(d: &Dialog) -> bool {
 }
 
 fn choice_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, opts: &[(&str, &str)], v: &Value) {
-    labeled(ui, label, |ui| {
+    labeled(ui, label, |ui, _| {
         let cur = v.as_str().unwrap_or("");
         let cur_label = opts.iter().find(|o| o.0 == cur).map(|o| o.1).unwrap_or(cur);
         let labels: Vec<&str> = opts.iter().map(|o| o.1).collect();
@@ -664,14 +669,16 @@ fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     }
 }
 
-fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id)) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
-        ui.allocate_ui_with_layout(egui::vec2(210.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(210.0);
-            ui.add(egui::Label::new(egui::RichText::new(format!("{}{}", tl!(label), tl!(":"))).color(t.text)).truncate());
-        });
-        add(ui);
+        let label = ui
+            .allocate_ui_with_layout(egui::vec2(210.0, 22.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.set_min_width(210.0);
+                ui.add(egui::Label::new(egui::RichText::new(format!("{}{}", tl!(label), tl!(":"))).color(t.text)).truncate())
+            })
+            .inner;
+        ui.label_inputs_by(label.id, |ui| add(ui, label.id));
     });
 }
 

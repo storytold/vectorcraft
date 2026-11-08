@@ -1,9 +1,12 @@
 //! Character Styles and Paragraph Styles panels (one implementation, two kinds).
 //!
 //! Click a style to apply it to the selected text (or the Type tool's selected characters);
-//! Alt-click applies it and clears overrides. The style of the selection is highlighted, with a
-//! "+" when the text overrides some of its attributes. New makes a style from the selected text;
-//! Alt-click on New first asks for its name (`ui.newCharStyle`, `ui.newParaStyle`).
+//! Alt-click applies it and clears overrides. Double-clicking a character style's row opens its
+//! Character Style Options (`ui.charStyleOptions`), as the panel menu does; a paragraph style's row
+//! opens its Paragraph Style Options, the rename dialog the panel menu opens. The style of the
+//! selection is highlighted, with a "+" when the text overrides some of its attributes. New makes
+//! a style from the selected text; Alt-click on New first asks for its name (`ui.newCharStyle`,
+//! `ui.newParaStyle`).
 
 use std::cell::RefCell;
 
@@ -225,6 +228,19 @@ fn row_look(is_cur: bool, in_highlight: bool, hovered: bool, t: &Tokens) -> (Opt
     (fill, is_cur && in_highlight)
 }
 
+/// Opens `name`'s options: Character Style Options for a character style, or the Paragraph Style
+/// Options the Paragraph Styles panel menu opens, which rename the style (`ui.paramDialog` runs
+/// `paraStyle.rename`).
+fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
+    if kind == Kind::Char {
+        app.run("ui.charStyleOptions", json!({ "name": name })).ok();
+    } else {
+        let label = format!("{} Style Options", kind.what());
+        app.run("ui.paramDialog", json!({ "command": format!("{}.rename", kind.prefix()), "label": label, "params": { "name": name, "to": name } }))
+            .ok();
+    }
+}
+
 /// The style list and its New and Delete buttons. Shift-click highlights every style from the
 /// last one clicked without Shift through this one, and Cmd/Ctrl-click adds or removes one; both
 /// leave the text as it is. Delete deletes every highlighted style but the Normal style.
@@ -235,6 +251,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
     let cur_name = cur.as_ref().map(|(n, _)| n.clone().unwrap_or_else(|| normal.clone()));
     let mut clicked: Option<(String, egui::Modifiers)> = None;
+    // A double-clicked Character Style's row, whose options open after the list is laid out.
+    let mut options: Option<String> = None;
+    // Set on a double-click's second click, which must not apply the style again.
+    let mut double_click = false;
     let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
     // A highlighted style that is no longer listed (renamed in Style Options, deleted by a command
     // or undone) is no longer highlighted.
@@ -279,6 +299,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
             }
+            // A double-click on a user character style opens its Character Style Options, as the
+            // panel menu's item does; with Shift, Cmd/Ctrl or Alt held it only follows the click
+            // rules. The second click never applies the style again, also on the Normal style,
+            // which has no options to open.
+            if resp.double_clicked() {
+                double_click = true;
+                let m = ui.input(|i| i.modifiers);
+                if *name != normal && !(m.shift || m.command || m.alt) {
+                    options = Some(name.clone());
+                }
+            }
         }
     });
     if scroll_to.is_some() {
@@ -287,11 +318,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let has_text = cur.is_some();
     if let Some((name, m)) = clicked {
         sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
-        // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel.
-        if has_text && !(m.shift || m.command) {
+        // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel. The second
+        // click of a double-click opens the options instead of applying the style again.
+        if has_text && !(m.shift || m.command) && options.is_none() && !double_click {
             let p = apply_target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
             app.run(&format!("{}.apply", kind.prefix()), p).ok();
         }
+    }
+    if let Some(name) = options {
+        open_style_options(app, kind, &name);
     }
     set_highlighted(ui.ctx(), kind, sel.clone());
     let doomed: Vec<&String> = sel.iter().filter(|s| **s != normal).collect();
@@ -389,12 +424,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
         && let Some(n) = &sel
     {
-        if kind == Kind::Char {
-            app.run("ui.charStyleOptions", json!({ "name": n })).ok();
-        } else {
-            let label = format!("{} Style Options", kind.what());
-            app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
-        }
+        open_style_options(app, kind, n);
     }
     ui.separator();
     // As commands, so a file dialog shown off the UI thread loads the styles when it answers.
