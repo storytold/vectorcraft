@@ -291,15 +291,11 @@ fn join_elements(interp: &mut Interp, o: ObjId, len: u32, sep: &[u16], item: fn(
     while let Some(k) = it.next(interp)? {
         let v = get_at(interp, o, k as f64)?;
         let Some(s) = item(interp, v)? else { continue };
-        for _ in seps..k {
-            out.push_units(interp, sep)?;
-        }
+        out.push_repeated(interp, sep, k.saturating_sub(seps))?;
         seps = k;
         out.push_units(interp, &s.flat())?;
     }
-    for _ in seps..u64::from(len - 1) {
-        out.push_units(interp, sep)?;
-    }
+    out.push_repeated(interp, sep, u64::from(len - 1).saturating_sub(seps))?;
     Ok(out.finish())
 }
 

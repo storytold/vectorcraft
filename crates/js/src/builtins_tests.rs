@@ -231,6 +231,8 @@ fn sparse_arrays_of_any_length_cost_only_their_elements() {
     let cases = [
         ("var a = new Array(4294967295); a.join('')", JsValue::String(String::new())),
         ("var a = []; a[4294967294] = 'z'; a[3] = 'y'; a.join('').length", JsValue::Number(2.0)),
+        // An empty separator is not written once per hole, so a thousand such joins finish.
+        ("var b = []; b[4294967294] = 'z'; for (var i = 0; i < 1000; i++) new Array(4294967295).join('') + b.join(''); i", JsValue::Number(1000.0)),
         ("var a = []; a[4294967294] = 2; a[7] = 1; a.sort(); a[0] * 10 + a[1] + (a.length === 4294967295 ? 0 : 100)", JsValue::Number(12.0)),
         ("var a = []; a[4294967294] = 1; a.indexOf(1)", JsValue::Number(4_294_967_294.0)),
         ("var a = []; a[4294967294] = 1; a.lastIndexOf(1, -1) + a.lastIndexOf(2)", JsValue::Number(4_294_967_293.0)),

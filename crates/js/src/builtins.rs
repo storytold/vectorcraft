@@ -227,6 +227,20 @@ impl Builder {
         Ok(())
     }
 
+    /// Appends `units` `count` times. Nothing is written for an empty `units`, however large
+    /// `count` is.
+    fn push_repeated(&mut self, interp: &mut Interp, units: &[u16], count: u64) -> JsResult<()> {
+        if units.is_empty() || count == 0 {
+            return Ok(());
+        }
+        let more = usize::try_from(count).unwrap_or(usize::MAX).saturating_mul(units.len());
+        self.make_room(interp, more)?;
+        for _ in 0..count {
+            self.units.extend_from_slice(units);
+        }
+        Ok(())
+    }
+
     fn push_str(&mut self, interp: &mut Interp, s: &str) -> JsResult<()> {
         let units: Vec<u16> = s.encode_utf16().collect();
         self.push_units(interp, &units)
