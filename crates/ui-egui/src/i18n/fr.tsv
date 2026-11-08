@@ -1168,6 +1168,7 @@ font-technology	Variable	Variables
 	Stroke When Editable	Contour quand il est modifiable
 	Fill Color	Couleur de fond
 	Fill New Type Objects With Placeholder Text	Remplir les nouveaux objets texte avec un texte de substitution
+	Start Lists From Typed Markers	Commencer des listes à partir des marqueurs saisis
 	Fill Rule	Règle de remplissage
 	Fill with Placeholder Text	Remplir avec un texte de substitution
 	Fill:	Fond :
@@ -1178,6 +1179,7 @@ font-technology	Variable	Variables
 	Find Font…	Rechercher une police…
 	Find Next	Rechercher le suivant
 	Find Objects	Rechercher des objets
+	Compare with Image	Comparer à une image
 	First Page	Première page
 	First-line Left Indent	Retrait gauche de première ligne
 	Fisheye…	Fish-eye…
@@ -3052,6 +3054,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Nuances sélectionnées
 	Selected Swatches Only	Nuances sélectionnées uniquement
 	Selection	Sélection
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Sélection rectangulaire
+	Touching	Objets touchés
+	Fully Enclosed	Entièrement inclus
+	Drag Direction	Sens du glissement
 	Selection & Anchor Display	Affichage de la sélection et des points d’ancrage
 	Selection Only	Sélection uniquement
 	Selection Tool	Outil Sélection
@@ -3189,6 +3196,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Simuler un papier de couleur
 	Simulate Paper	Simuler le papier
 	Double Column	Deux colonnes
+	Keep Tools Beside the Canvas	Outils à côté de la zone de travail
 	Single Left Quotation Mark	Guillemet simple ouvrant
 	Single Quotes:	Guillemets simples :
 	Single Right Quotation Mark	Guillemet simple fermant
@@ -3784,6 +3792,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Zoom sur la sélection
 	Zoom Tool	Outil Zoom
 	Zoom with Mouse Wheel	Zoom avec la molette de la souris
+	Scroll Sideways with Cmd/Ctrl + Wheel	Défilement horizontal avec Cmd/Ctrl + molette
 	Scrub Numeric Fields by Dragging	Modifier les champs numériques en faisant glisser
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fichier dans {folder} {note}. Afficher le dossier de l’assemblage ?|{n} fichiers dans {folder} {note}. Afficher le dossier de l’assemblage ?
 @plural	{n} linked file not found|{n} linked files not found	{n} fichier lié introuvable|{n} fichiers liés introuvables
@@ -4810,6 +4819,9 @@ axis	Both	Les deux
 @msg	the Pixar file's image data is damaged	les données d'image du fichier Pixar sont endommagées
 @msg	the JPEG 2000 file can't be read	le fichier JPEG 2000 ne peut pas être lu
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	le fichier JPEG 2000 contient un espace colorimétrique ou un contenu JPX non pris en charge
+@msg	the HEIC or HEIF file can't be read	le fichier HEIC ou HEIF ne peut pas être lu
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	le fichier HEIC ou HEIF contient un type d'image qui ne peut pas être lu
+@msg	HEIC and HEIF images can't be opened in this build	les images HEIC et HEIF ne peuvent pas être ouvertes dans cette version
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'image PSD est trop grande pour être lue ({_1} × {_2} pixels)
 @msg	zipped 32-bit PSD image data with prediction can't be read	les données d'image PSD 32 bits compressées en ZIP avec prédiction ne peuvent pas être lues
 @msg	{depth}-bit PSD files in this colour mode can't be read	les fichiers PSD {depth} bits dans ce mode colorimétrique ne peuvent pas être lus
@@ -5508,6 +5520,11 @@ mark-style	Japanese	Japonais
 theme	Appearance	Apparence
 	Load EPS into Clipboard	Charger un EPS dans le presse-papiers
 @msg	an image of {w} × {h} pixels is too large to draw	une image de {w} × {h} pixels est trop grande pour être dessinée
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path} : ce n’est pas une image PNG, JPEG, WebP, TIFF ou BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	l’image fait {iw} × {ih} pixels et le plan de travail à cette largeur fait {rw} × {rh} pixels : leurs proportions diffèrent
+@msg	`threshold` must be a number from 0 to 1	`threshold` doit être un nombre de 0 à 1
+@msg	background {v}: a color such as "#808080"	arrière-plan {v} : une couleur comme "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparaison avec un fichier image n’est pas disponible dans le navigateur
 @msg	an image of {w} × {h} pixels is shown at reduced size	une image de {w} × {h} pixels est affichée en taille réduite
 @msg	the image can't be read as a texture	l'image ne peut pas être lue comme texture
 	Fill and Stroke Controls	Commandes de fond et de contour
@@ -5700,6 +5717,9 @@ theme	Appearance	Apparence
 @msg	too many library panels were opened in this session	trop de panneaux de bibliothèque ont été ouverts dans cette session
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	L’image fait {_1} × {_2} pixels, plus de {LARGE_TRACE_SIDE} sur un côté : elle est vectorisée, mais plus lentement. Un paramètre prédéfini moins fidèle ou une copie plus petite de l’image se vectorise plus vite.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	L’image a été vectorisée à {_1} × {_2} pixels, réduite de {_3} × {_4} ({_5} mégapixels au plus).
+@msg	byColor must be true or false	byColor doit être true ou false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor ne peut pas scinder les groupes du Groupement automatique : vectorisez sans Groupement automatique
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor ne peut pas regrouper un tracé avec un effet Pathfinder actif : développez sans byColor
 	Snapping	Magnétisme
 	Snap to Tangent	Magnétisme de la tangente
 	Snap to Perpendicular	Magnétisme de la perpendiculaire
@@ -6260,6 +6280,8 @@ breakText	Glyphs	Glyphes
 	File + Data Set Name	Fichier + nom du jeu de données
 	Data Set Name	Nom du jeu de données
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` doit être `fileNumber`, `fileDataSetName` ou `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Chaque jeu de données est enregistré sur le même fichier, qui ne conserve que le dernier jeu de données.
+@msg	save the document with Save As before Save and Close	enregistrez le document avec Enregistrer sous avant Enregistrer et fermer
 @msg	no free data set file name in destination folder	Aucun nom de fichier libre pour le jeu de données dans le dossier de destination
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6379,6 +6401,7 @@ breakText	Glyphs	Glyphes
 	Reset Symbol Instance	Réinitialiser l'instance de symbole
 @msg	type must be static or dynamic, not {v}	type doit être static ou dynamic, et non {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` est un symbole statique : définissez d'abord son type de symbole sur Dynamique
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Seules les couleurs unies du fond et du contour d'un tracé, d'un tracé transparent ou d'un texte sélectionné dans une instance de symbole peuvent changer
 @msg	path must be a list of child indices	path doit être une liste d'indices d'enfants
 @msg	no object at path {shown} in the symbol's art	aucun objet au chemin {shown} dans l'illustration du symbole
 @msg	give fill, stroke, opacity and/or blend	indiquez fill, stroke, opacity et/ou blend

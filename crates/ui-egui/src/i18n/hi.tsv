@@ -5474,6 +5474,7 @@
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` एक अंतर्निहित वर्कस्पेस है; एक और नाम चुनें
 @msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` एक प्रक्रिया रंग है: टिंट वैश्विक और स्पॉट रंगों पर लागू होते हैं
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` एक स्थिर सिंबल है: अपने सिंबल प्रकार को पहले गतिशील करने के लिए सेट करें
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	सिंबल इंस्टेंस में चुने गए पाथ, कंपाउंड पाथ या टाइप का केवल ठोस रंग वाला फ़िल और स्ट्रोक बदला जा सकता है
 @msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` `{base}` का एक टिंट है: `{base}` संपादित करें (केवल एक टिंट swatch केवल एक नया नाम लेता है)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` वर्किंग स्पेस है: पहले edit.colorSettings से दूसरा चुनें
 @msg	`{name}` is built in and stays	`{name}` बनाया गया है और रहता है
@@ -7961,3 +7962,8 @@ swatch	White, Black	सफ़ेद, काला
 swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
+	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
+	Marquee Selection	मार्की चयन
+	Touching	स्पर्श करते हुए
+	Fully Enclosed	पूरी तरह घिरे हुए
+	Drag Direction	खींचने की दिशा

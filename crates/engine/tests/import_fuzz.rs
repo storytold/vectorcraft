@@ -1934,6 +1934,33 @@ proptest! {
     }
 }
 
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated HEIF boxes and HEVC data must return errors rather than unwind.
+    #[test]
+    fn mutated_heif_files_do_not_panic(which in 0usize..4, cut in 0usize..1300, edits in prop::collection::vec((0usize..1300, any::<u8>()), 0..8)) {
+        let mut bytes = match which {
+            0 => include_bytes!("fixtures/heif/quadrants.heic").to_vec(),
+            1 => include_bytes!("fixtures/heif/quadrants-alpha.heic").to_vec(),
+            2 => include_bytes!("fixtures/heif/quadrants-grid.heic").to_vec(),
+            // Its stream's VUI gives the color description.
+            _ => include_bytes!("fixtures/heif/tones-p3-icc-only.heic").to_vec(),
+        };
+        for (at, byte) in edits {
+            if let Some(slot) = bytes.get_mut(at) { *slot = byte; }
+        }
+        bytes.truncate(cut);
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let params = json!({"name": "a.heic", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        prop_assert!(result.is_ok(), "a.heic: panicked: {:?}", result.err());
+    }
+}
+
 /// The rich document with a hidden layer, saved as SVG with its editing data.
 fn saved_svg() -> String {
     let mut d = rich_doc();
@@ -4693,6 +4720,13 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(Fill Style Filter) 0 0 /Filter ,",
             "(Adobe Outer Glow) 1 0 /Filter ,",
             "(Adobe Drop Shadow) 1 0 /Filter ,",
+            "(PSAdapter_plugin_BsRl) 1 0 /Filter ,",
+            "/Binary : /ASCII85Decode ,",
+            "/Binary : /ASCII85Decode ,\n%!!!!\"z~>\n; (data) ,",
+            "\n%zzzz~>\n",
+            "; (data) ,",
+            "8 /Int (dataSize) ,",
+            "8 /Real (dataSize) ,",
             "(Adobe Pathfinder) 1 0 /Filter ,",
             "0 /Int (Command) ,",
             "0.5 /Real (Mix) ,",
@@ -5202,6 +5236,53 @@ proptest! {
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.eps", &file).ok().map(|l| l.doc))?;
         }
     }
+
+    /// A filter-gallery effect's settings block in an art style: fields of any key, marker, type and
+    /// value, objects nested in objects, any version and `dataSize`, and its ASCII85 lines damaged or cut.
+    #[test]
+    fn ai_filter_gallery_settings_never_panic(
+        fields in prop::collection::vec(arb_settings_field(), 0..8),
+        inner in prop::collection::vec(arb_settings_field(), 0..4),
+        nesting in 0usize..4,
+        version in prop_oneof![Just(1u32), any::<u32>()],
+        size in prop_oneof![Just(None), any::<i64>().prop_map(Some)],
+        cut in 0usize..600,
+        edits in prop::collection::vec((0usize..600, prop::sample::select(vec!['%', '~', '>', 'z', 'v', '!', 'u', '\n', ';', ' '])), 0..6),
+    ) {
+        use vectorcraft_testkit::ai;
+        let object = |body: Vec<u8>| [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &(body.len() as u32 + 4).to_be_bytes(), &1u32.to_be_bytes(), &body].concat();
+        let mut nested = inner.concat();
+        for _ in 0..nesting {
+            nested = object(nested);
+        }
+        let data = [version.to_be_bytes().to_vec(), fields.concat(), nested].concat();
+        let lines: String = ascii85(&data).as_bytes().chunks(60).map(|c| format!("%{}\n", String::from_utf8_lossy(c))).collect();
+        let size = size.unwrap_or(data.len() as i64);
+        let block = mutate_text(&format!("/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n{size} /Int (dataSize) ,\n"), cut, &edits);
+        let styles = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(R) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(PSAdapter_plugin_BsRl) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{block}; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        );
+        let hidden = ai::rect(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+        let art = format!("0 Ae\nu\n0 1 1 0 1 0 0 Xa\n{}f\nU\n%_{hidden}f\n1 (R) XW\n", ai::rect(0.0, 0.0, 10.0, 10.0));
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("filter-gallery settings", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("filter-gallery settings in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+}
+
+/// A field of a filter-gallery settings descriptor: a key, a marker, a type and a value, each one
+/// that is read or anything else.
+fn arb_settings_field() -> impl Strategy<Value = Vec<u8>> {
+    let key = prop_oneof![prop::sample::select(vec![*b"GEfk", *b"Dtl ", *b"Smth", *b"LghD", *b"Xtra"]), any::<[u8; 4]>()];
+    let marker = prop_oneof![Just(0u32), Just(0x2000), Just(0x8000_0000), any::<u32>()];
+    let kind = prop_oneof![prop::sample::select(vec![*b"long", *b"doub", *b"bool", *b"LghD", *b"GEft"]), any::<[u8; 4]>()];
+    let value = prop_oneof![
+        prop::sample::select(vec![b"LDBt".to_vec(), b"BsRl".to_vec(), 8i32.to_be_bytes().to_vec(), vec![1], f64::NAN.to_be_bytes().to_vec()]),
+        prop::collection::vec(any::<u8>(), 0..12),
+    ];
+    (key, marker, kind, value).prop_map(|(k, m, t, v)| [&k[..], &m.to_be_bytes(), &t, &v].concat())
 }
 
 // ---------- font files a folder search reads ----------

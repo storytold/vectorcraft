@@ -139,7 +139,15 @@ impl FilterRun {
         let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
         let may = m.permissions();
         let st = s.doc()?;
-        let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
+        // While an object of a dynamic symbol instance's art is selected, the selection is refused,
+        // as `selected_roots` refuses it.
+        let selected = match ids_param(p, "ids") {
+            Some(ids) => ids,
+            None => {
+                super::edit::refuse_symbol_part(s)?;
+                st.selection.objects.clone()
+            }
+        };
         // Without `doc.read` a filter is given no objects: it can only add new ones.
         let inputs = if may.contains(&Permission::DocRead) { objects::filter_targets(&st.doc, &selected) } else { Vec::new() };
         let parent = st.insertion_parent();

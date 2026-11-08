@@ -172,6 +172,11 @@
 	Ungroup	Afgruppér
 	Lock	Lås
 	Selection	Markering
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rektangelmarkering
+	Touching	Berørte objekter
+	Fully Enclosed	Helt omsluttet
+	Drag Direction	Trækretning
 	All Artwork Above	Al grafik ovenfor
 	Other Layers	Andre lag
 	Unlock All	Lås alle op
@@ -622,6 +627,7 @@
 	Toolbars	Værktøjslinjer
 	Advanced	Avanceret
 	Double Column	Dobbelt kolonne
+	Keep Tools Beside the Canvas	Værktøjer ved siden af canvaset
 	Actions	Handlinger
 	Asset Export	Aktiveksport
 	Attributes	Attributter
@@ -3058,6 +3064,7 @@ theme	Appearance	Udseende
 	Document JSON	Dokument-JSON
 	Duplicate	Duplikér
 	Find Objects	Find objekter
+	Compare with Image	Sammenlign med billede
 	Inspect Document	Inspicér dokument
 	Inspect Object	Inspicér objekt
 	Begin Undo Group	Start fortrydelsesgruppe
@@ -3361,6 +3368,7 @@ theme	Appearance	Udseende
 	Feet	Fod
 	Files	Filer
 	Fill New Type Objects With Placeholder Text	Udfyld nye tekstobjekter med pladsholdertekst
+	Start Lists From Typed Markers	Start lister fra indtastede markører
 	Folder	Mappe
 	Font Preview Size	Størrelse på skrifttypeforhåndsvisning
 	Get Preferences	Hent indstillinger
@@ -3471,6 +3479,7 @@ theme	Appearance	Udseende
 	Yards	Yards
 	Zoom to Selection	Zoom til markering
 	Zoom with Mouse Wheel	Zoom med musehjul
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rul vandret med Cmd/Ctrl + musehjul
 	Scrub Numeric Fields by Dragging	Juster numeriske felter ved at trække
 	Linux Display Server	Linux-visningsserver
 	Print Preview	Udskriftsvisning
@@ -6113,6 +6122,8 @@ breakText	Glyphs	Glyffer
 	File + Data Set Name	Fil + datasætnavn
 	Data Set Name	Datasætnavn
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` skal være `fileNumber`, `fileDataSetName` eller `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Hvert datasæt gemmes oven i den samme fil, som kun beholder det sidste datasæt.
+@msg	save the document with Save As before Save and Close	gem dokumentet med Gem som før Gem og luk
 @msg	no free data set file name in destination folder	Intet ledigt filnavn til datasættet i destinationsmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6232,6 +6243,7 @@ breakText	Glyphs	Glyffer
 	Reset Symbol Instance	Nulstil symbolforekomst
 @msg	type must be static or dynamic, not {v}	type skal være static eller dynamic, ikke {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` er et statisk symbol: indstil først symboltypen til Dynamisk
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	For en kurve, sammensat kurve eller tekst, der er markeret i en symbolforekomst, kan kun ensfarvet fyld og streg ændres
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend

@@ -340,7 +340,7 @@ impl Session {
             preview.1.get("dy").and_then(Value::as_f64).unwrap_or(0.0),
         );
         st.keep_interaction(it);
-        if preview.0 == "object.transform" {
+        if preview.0 == "object.transform" && changed {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
                 // The options are the last preview's params with the values it noted, without the

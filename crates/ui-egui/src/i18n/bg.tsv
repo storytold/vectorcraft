@@ -1130,6 +1130,7 @@ font-technology	Variable	Променливи
 	Live curve fitting	Напасване на кривата в реално време
 	Fill Color	Цвят на запълване
 	Fill New Type Objects With Placeholder Text	Запълване на нови текстови обекти с примесен текст
+	Start Lists From Typed Markers	Започване на списъци от въведени маркери
 	Fill Rule	Правило за запълване
 	Fill with Placeholder Text	Запълване с примесен текст
 	Fill:	Запълване:
@@ -1140,6 +1141,7 @@ font-technology	Variable	Променливи
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ
 	Find Objects	Търсене на обекти
+	Compare with Image	Сравняване с изображение
 	First Page	Първа страница
 	First-line Left Indent	Ляв отстъп на първи ред
 	Fisheye…	Рибено око…
@@ -2978,6 +2980,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Избрани образци
 	Selected Swatches Only	Само избрани образци
 	Selection	Селекция
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Избор с рамка
+	Touching	Докоснати обекти
+	Fully Enclosed	Изцяло вътре
+	Drag Direction	Посока на плъзгане
 	Selection & Anchor Display	Показване на селекция и опорни точки
 	Selection Only	Само селекция
 	Selection Tool	Инструмент „Селекция“
@@ -3113,6 +3120,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Симулиране на цветна хартия
 	Simulate Paper	Симулиране на хартия
 	Double Column	Две колони
+	Keep Tools Beside the Canvas	Инструментите до платното
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
@@ -3709,6 +3717,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Приближаване до селекцията
 	Zoom Tool	Инструмент „Мащаб“
 	Zoom with Mouse Wheel	Мащабиране с колелцето на мишката
+	Scroll Sideways with Cmd/Ctrl + Wheel	Хоризонтално превъртане с Cmd/Ctrl + колелцето
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
@@ -6098,6 +6107,8 @@ breakText	Glyphs	Глифи
 	File + Data Set Name	Файл + име на набора от данни
 	Data Set Name	Име на набора от данни
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` трябва да е `fileNumber`, `fileDataSetName` или `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Всеки набор от данни се записва върху същия файл, в който остава само последният набор от данни.
+@msg	save the document with Save As before Save and Close	запазете документа със „Запази като“ преди „Запази и затвори“
 @msg	no free data set file name in destination folder	Няма свободно име за файл на набор от данни в целевата папка
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6218,6 +6229,7 @@ breakText	Glyphs	Глифи
 	Reset Symbol Instance	Нулиране на екземпляра на символ
 @msg	type must be static or dynamic, not {v}	type трябва да е static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` е статичен символ: първо задайте типа на символа на „Динамичен“
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	На път, съставен път или текст, избран в екземпляр на символ, могат да се променят само плътните цветове на запълването и контура
 @msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
 @msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
 @msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend

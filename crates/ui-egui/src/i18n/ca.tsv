@@ -1206,6 +1206,7 @@
 	Double Bar	Barra doble
 	Double Click To Isolate	Doble clic per aïllar
 	Double Column	Columna doble
+	Keep Tools Beside the Canvas	Eines al costat del llenç
 	Double Left Quotation Marks	Cometes dobles esquerres
 	Double Quotes:	Cometes dobles:
 	Double Right Quotation Marks	Cometes dobles dretes
@@ -1555,6 +1556,7 @@ digits	Malayalam	Malaiàlam
 	Fill Line	Línia de farciment
 	Fill new strokes	Omple els traços nous
 	Fill New Type Objects With Placeholder Text	Omple els objectes de text nous amb text de mostra
+	Start Lists From Typed Markers	Comença llistes a partir dels marcadors escrits
 	Fill Rule	Regla de farciment
 	Fill with Placeholder Text	Omple amb text de mostra
 	Fill:	Farciment:
@@ -1580,6 +1582,7 @@ digits	Malayalam	Malaiàlam
 	Find Linked Files in Folder…	Cerca fitxers enllaçats en una carpeta…
 	Find Next	Cerca el següent
 	Find Objects	Cerca objectes
+	Compare with Image	Compara amb una imatge
 	Fine Dots	Punts fins
 	Fine noise hides banding in the gradient fill	El soroll fi amaga l’efecte de bandes del farciment de degradat
 	First	Primer
@@ -3727,6 +3730,7 @@ digits	Malayalam	Malaiàlam
 	Scribble…	Garabateig…
 	Script / Brush	Cal·ligràfica / Pinzell
 	Scripts	Scripts
+	Scroll Sideways with Cmd/Ctrl + Wheel	Desplaça horitzontalment amb Cmd/Ctrl + roda del ratolí
 	Scrub Numeric Fields by Dragging	Canvia els camps numèrics arrossegant
 	Search	Cerca
 	Search All	Cerca a tot
@@ -3795,6 +3799,11 @@ digits	Malayalam	Malaiàlam
 	Selected Swatches Only (0)	Només les mostres seleccionades (0)
 	Selected Symbols Only	Només els símbols seleccionats
 	Selection	Selecció
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Selecció rectangular
+	Touching	Objectes tocats
+	Fully Enclosed	Totalment inclosos
+	Drag Direction	Direcció de l’arrossegament
 	Selection & Anchor Display	Selecció i visualització d’ancoratges
 	Selection Only	Només la selecció
 	Selection Tool	Eina de selecció
@@ -5006,6 +5015,11 @@ digits	Malayalam	Malaiàlam
 @msg	an image has no pixels and was left out	una imatge no té píxels i s’ha omès
 @msg	an image of {w} × {h} pixels is shown at reduced size	una imatge de {w} × {h} píxels es mostra a mida reduïda
 @msg	an image of {w} × {h} pixels is too large to draw	una imatge de {w} × {h} píxels és massa gran per dibuixar-la
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no és una imatge PNG, JPEG, WebP, TIFF ni BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	la imatge fa {iw} × {ih} píxels i el tauler a aquesta amplada fa {rw} × {rh} píxels: les proporcions són diferents
+@msg	`threshold` must be a number from 0 to 1	`threshold` ha de ser un nombre de 0 a 1
+@msg	background {v}: a color such as "#808080"	fons {v}: un color com "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparació amb un fitxer d’imatge no està disponible al navegador
 @msg	an image VectorCraft can't read was left out	s’ha omès una imatge que VectorCraft no pot llegir
 @msg	graphs come in as plain art, without their data or settings	els gràfics s’importen com a il·lustració normal, sense les seves dades ni la seva configuració
 @msg	an image whose data is cut short was left out	s’ha omès una imatge les dades de la qual estan tallades
@@ -6121,6 +6135,9 @@ anchor	Points:	Punts:
 	CMYK Images	Imatges CMYK
 	Grayscale Images	Imatges en escala de grisos
 @msg	`kind` must be spotColors, colorEffects, rgbImages, cmykImages or grayImages	`kind` ha de ser spotColors, colorEffects, rgbImages, cmykImages o grayImages
+@msg	byColor must be true or false	byColor ha de ser true o false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor no pot separar els grups de l'agrupació automàtica: traça sense l'agrupació automàtica
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor no pot tornar a agrupar un traçat amb un efecte Pathfinder actiu: expandeix-lo sense byColor
 
 # Color Effects add-on: Vector Halftone (Effect › Color Effects).
 	Dot Color from Art	Color dels punts de la il·lustració
@@ -6246,6 +6263,8 @@ breakText	Glyphs	Glifs
 	File + Data Set Name	Fitxer + nom del conjunt de dades
 	Data Set Name	Nom del conjunt de dades
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` ha de ser `fileNumber`, `fileDataSetName` o `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunt de dades es desa sobre el mateix fitxer, que només conserva l'últim conjunt de dades.
+@msg	save the document with Save As before Save and Close	deseu el document amb «Desa com a» abans de «Desa i tanca»
 @msg	no free data set file name in destination folder	No hi ha cap nom de fitxer de conjunt de dades lliure a la carpeta de destinació
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6294,6 +6313,9 @@ breakText	Glyphs	Glifs
 
 @msg	the JPEG 2000 file can't be read	no es pot llegir el fitxer JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el fitxer JPEG 2000 té un espai de color o contingut JPX no compatible
+@msg	the HEIC or HEIF file can't be read	no es pot llegir el fitxer HEIC o HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	el fitxer HEIC o HEIF conté un tipus d'imatge que no es pot llegir
+@msg	HEIC and HEIF images can't be opened in this build	les imatges HEIC i HEIF no es poden obrir en aquesta compilació
 @msg	You must choose a side pattern.	Heu de triar un patró lateral.
 @msg	invalid pattern tile choice	opció de mosaic de patró no vàlida
 @msg	no pattern named `{choice}`	no hi ha cap patró anomenat `{choice}`
@@ -6367,6 +6389,7 @@ breakText	Glyphs	Glifs
 	Reset Symbol Instance	Restableix la instància de símbol
 @msg	type must be static or dynamic, not {v}	type ha de ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` és un símbol estàtic: primer establiu el tipus de símbol a Dinàmic
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	D'un traçat, un traçat compost o un text seleccionat en una instància de símbol només es pot canviar el color sòlid de l'emplenament i el traç
 @msg	path must be a list of child indices	path ha de ser una llista d’índexs de fills
 @msg	no object at path {shown} in the symbol's art	no hi ha cap objecte al camí {shown} de l’art del símbol
 @msg	give fill, stroke, opacity and/or blend	indiqueu fill, stroke, opacity i/o blend

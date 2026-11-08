@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected)",
+            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
             has_selection,
             move_anchors
         ),
@@ -226,6 +226,8 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let d = Vec2::new(number_or(p, "dx", 0.0, "path.moveAnchors")?, number_or(p, "dy", 0.0, "path.moveAnchors")?);
     check_switches(p, &["patterns"], "path.moveAnchors")?;
+    // An object selected in a symbol instance's art stays where the symbol puts it.
+    super::edit::refuse_symbol_part(s)?;
     // Objects selected whole move as objects, and their pattern tiles move with them when
     // `patterns` (default: General › Transform Pattern Tiles) is on.
     let whole = s.doc()?.selection.whole();
@@ -341,7 +343,7 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The compound path enclosing `id`, or `id` itself if it is not inside a compound path.
-pub(super) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
+pub(crate) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
     d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).unwrap_or(id)
 }
 

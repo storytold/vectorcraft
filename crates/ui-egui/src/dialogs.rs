@@ -473,7 +473,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
 /// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
-/// and Dim Images, as its checkbox does).
+/// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
+/// one picked from its menu does, and the preset it shows follows the DXF options set this way.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -484,7 +485,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
 }
 
 /// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
