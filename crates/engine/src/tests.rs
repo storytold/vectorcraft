@@ -31,6 +31,7 @@ mod colorize;
 pub(super) mod colormgmt;
 mod colorthemes;
 mod colourfonts;
+mod compare;
 mod compound_shape;
 mod compoundpaint;
 mod constrain_new;
