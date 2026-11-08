@@ -182,19 +182,26 @@ fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) ->
     }
 }
 
-/// Validate before a command changes the document; the evaluator bounds loaded files too.
-pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+/// Check solid `id`'s parameter values `p` alone: the part of [`validate_solid`] that does not
+/// need the object.
+fn validate_solid_params(id: &str, p: &Value) -> Result<(), String> {
     if id == CLASSIC_EXTRUDE {
         classic::validate(p)?;
     }
     crate::lighting::validate(p)?;
-    let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     if let Some(v) = p.get("bevel")
         && !v.as_str().is_some_and(|s| s == "none" || BevelShape::parse(s).is_some())
     {
         let names: Vec<_> = BevelShape::ALL.iter().map(|b| b.id()).collect();
         return Err(format!("bevel must be none or one of {}", names.join(", ")));
     }
+    Ok(())
+}
+
+/// Validate before a command changes the document; the evaluator bounds loaded files too.
+pub fn validate_solid(n: &Node, id: &str, p: &Value) -> Result<(), String> {
+    validate_solid_params(id, p)?;
+    let label = crate::effect_info(id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     if is_container(n) {
         let shapes = members(n, label)?;
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
@@ -275,6 +282,13 @@ fn members(n: &Node, label: &str) -> Result<Vec<Profile>, String> {
 /// [`validate_solid`].
 pub fn validate_three_d(n: &Node, id: &str, p: &Value) -> Result<(), String> {
     if id == crate::REVOLVE { crate::validate_revolve(n, p) } else { validate_solid(n, id, p) }
+}
+
+/// Are 3D effect `id`'s parameter values `p` valid? The checks of [`validate_three_d`] that do not
+/// build the art, for an edit that hides the effect: hidden, it draws nothing, so its object does
+/// not need to fit.
+pub fn validate_three_d_params(id: &str, p: &Value) -> Result<(), String> {
+    if id == crate::REVOLVE { crate::revolve::validate_revolve_params(p) } else { validate_solid_params(id, p) }
 }
 
 /// One surface: each facet a path shaded from `paint`, as a group with the paint's opacity and

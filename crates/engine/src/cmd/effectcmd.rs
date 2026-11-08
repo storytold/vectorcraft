@@ -487,7 +487,7 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
 /// `effect.setParams`: merges `params` into the effect at `index` of the targets' active item, and
 /// sets its Warp style (`warpStyle`), its 3D type (`threeDType`) or visibility (`visible`), as one
 /// undo step. They are checked as `effect.apply` checks them, and a visible 3D effect must still
-/// fit. → `{ids}`.
+/// fit; a hidden one has its given values checked. → `{ids}`.
 fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.setParams";
     let index = index_param(p, "index", C)?;
@@ -539,7 +539,6 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         }
         if let Some(e) = effect
             && effects::is_three_d(&e.id)
-            && visible != Some(false)
         {
             let to = kind.unwrap_or(&e.id);
             let mut prospective =
@@ -547,7 +546,14 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             if let (Some(cur), Value::Object(new)) = (prospective.as_object_mut(), effects::upgrade_params(to, &params)) {
                 cur.extend(new);
             }
-            effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+            if visible != Some(false) {
+                effects::validate_three_d(n, to, &prospective).map_err(|e| bad(C, e))?;
+            } else {
+                // Hidden, the effect draws nothing, so its object need not fit. The values given are
+                // checked, and after a change of 3D type so is every value it keeps.
+                let checked = if to == e.id { effects::upgrade_params(to, &params) } else { prospective };
+                effects::validate_three_d_params(to, &checked).map_err(|e| bad(C, e))?;
+            }
         }
     }
     let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
