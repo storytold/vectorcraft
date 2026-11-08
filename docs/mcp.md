@@ -4186,6 +4186,15 @@ selects them. `edit.paste {artboardsAt: [x, y]}` instead centers the copied artb
 value that is not `[x, y]` fails with `` `artboardsAt` must be [x, y] ``. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
 Window › Artboards › Duplicate Artboards passes the selected artboards (those the Artboard tool has selected, else the
 active one) as `indices`, and a row dragged onto New Artboard passes its artboard as `index`.
+`artboard.new {beside?, side}` adds an empty artboard the size of artboard `beside` (default: the last), 20 pt from
+that side of it, and `artboard.duplicate {index, side}` puts the copies there instead, together as they lay on that side
+of the artboards they copy; `side` is `"left"`, `"right"`, `"top"` or `"bottom"`. Another `side` fails with
+`` `side` must be "left", "right", "top" or "bottom" ``, `beside` without `side` fails with `` `beside` needs `side` ``,
+and `artboard.new` refuses `side` given with `x`, `y`, `width` or `height`; each leaves the document and its undo
+history as they were. With the Artboard tool and one artboard selected, a button with a plus shows just outside the
+middle of each edge where an artboard of the same size fits on that side (within the canvas and overlapping no other
+artboard): a click runs `artboard.new {beside, side}`, an Alt-click `artboard.duplicate {index, side, art: true}`, and
+the new artboard becomes the active one. An Alt-click on a locked artboard's button does nothing.
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
 also move the pattern tiles of the copies when `patterns` is true (default: prefs `transformPatternTiles`);
 `edit.paste` leaves the tiles of a pasted artboard's art where they were.

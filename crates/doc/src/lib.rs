@@ -141,7 +141,7 @@ mod limits;
 mod records;
 mod units;
 
-pub use artboard::{Artboard, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
+pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
