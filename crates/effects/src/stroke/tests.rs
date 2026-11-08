@@ -225,20 +225,23 @@ fn expand_stroke_region_of_a_round_line_stays_compact() {
     assert_eq!(dense_anchors, anchors, "colinear spine points should not add outline anchors");
 }
 
+/// A line's outline takes its width profile, its dashes (each reading the profile where it sits) or neither.
 #[test]
 fn line_outline_uses_the_profile_dashes_or_a_plain_stroke() {
     let l = line(0.0, 100.0);
     let plain = line_outline(&l, &stroke(10.0, |_| {}), 10.0, 1e-3);
     assert!(near(plain.area().abs(), 1000.0, 1e-6));
     let lens = line_outline(&l, &stroke(10.0, |s| s.profile = Some(WidthProfile::lens())), 10.0, 1e-3);
-    assert!(near(lens.area().abs(), 500.0, 1e-6));
-    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0): the dash over
-    // 0..25 averages a quarter of the width, the one over 50..75 three quarters.
+    // The lens swells on a cubic, flat at the middle: 7/12 of the full-width band (#5714).
+    assert!(near(lens.area().abs(), 1000.0 * 7.0 / 12.0, 0.05));
+    // Each dash takes its widths from where it sits along the lens (0 → 1 → 0). Half of the lens
+    // rises as w(u) = u + u² − u³ (u from 0 to 1 across that half): the dash over 0..25 covers
+    // its first half, ∫₀^½ w = 29/192, the one over 50..75 the wider other half, 83/192.
     let st = stroke(10.0, |s| {
         s.profile = Some(WidthProfile::lens());
         s.dash = Some(dashed(&[25.0, 25.0], 0.0));
     });
-    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 62.5 + 187.5, 1e-6));
+    assert!(near(line_outline(&l, &st, 10.0, 1e-3).area().abs(), 500.0 * (29.0 + 83.0) / 192.0, 0.05));
     assert!(line_outline(&BezPath::new(), &st, 10.0, 1e-3).elements().is_empty());
 }
 
@@ -499,5 +502,47 @@ fn a_stroke_narrower_than_the_shape_keeps_its_hole() {
         assert_ne!(outline.winding(Point::new(6.0, 0.0)), 0, "{join:?}");
         assert_ne!(outline.winding(Point::new(200.0, 0.0)), 0, "{join:?}: the small circle is solid");
         assert_eq!(moves(&outline), 3, "{join:?}: two contours for the ring, one for the blob");
+    }
+}
+
+/// A subpixel stroke must retain its geometric thickness even when the normal display tolerance
+/// is close to its weight. Original uneven circular arcs, independent of any user fixture.
+#[test]
+fn thin_curved_strokes_keep_their_width_between_notches() {
+    use kurbo::{CubicBez, ParamCurve, ParamCurveDeriv, Shape};
+    for (radius, degrees) in [(450.0, 47.0_f64), (438.0, 77.0), (450.0, 54.0)] {
+        let a = degrees.to_radians();
+        let k = 4.0 / 3.0 * (a / 4.0).tan();
+        let curve = CubicBez::new(
+            (radius, 0.0),
+            (radius, k * radius),
+            (radius * a.cos() + k * radius * a.sin(), radius * a.sin() - k * radius * a.cos()),
+            (radius * a.cos(), radius * a.sin()),
+        );
+        let mut line = BezPath::new();
+        line.move_to(curve.p0);
+        line.curve_to(curve.p1, curve.p2, curve.p3);
+        for width in [0.25, 1.0 / 3.0, 0.5, 1.0] {
+            let st = StrokeLayer::new(Paint::solid(Color::BLACK), width);
+            let outline = line_outline(&line, &st, width, 0.25);
+            for step in 1..40 {
+                let t = step as f64 / 40.0;
+                let p = curve.eval(t);
+                let tangent = curve.deriv().eval(t).to_vec2().normalize();
+                let normal = kurbo::Vec2::new(-tangent.y, tangent.x);
+                for side in [-1.0, 1.0] {
+                    assert_ne!(
+                        outline.winding(p + normal * (side * width * 0.45)),
+                        0,
+                        "missing inner band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                    assert_eq!(
+                        outline.winding(p + normal * (side * width * 0.55)),
+                        0,
+                        "outside intended band at radius {radius}, {degrees} degrees, width {width}, t {t}"
+                    );
+                }
+            }
+        }
     }
 }

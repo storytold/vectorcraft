@@ -7,29 +7,50 @@
 //! - One object, the brush manager's order, has the order of the Brushes panel: its parameters
 //!   are the plug-in name and brush name of each brush, each one after a `/` and a space.
 //! - A Calligraphic brush's parameters are 11 numbers: the first is 1; the diameter, roundness and
-//!   angle as (low, high) pairs; how the diameter, roundness and angle vary (0 Fixed, 1 Random, 2
-//!   Pressure, other codes the pen's other channels); a last number.
+//!   angle as (low, high) pairs; how the diameter, roundness and angle vary; a last number. The
+//!   codes follow the order of the Brush Options menu: 0 Fixed, 1 Random, 2 Pressure, 3 Stylus
+//!   Wheel, 4 Tilt, 5 Bearing, 6 Rotation. A user's 6D Art Pen brushes (#372) vary the diameter
+//!   with 2, the roundness with 5 and the angle with 6, the angle over a whole turn, as the barrel
+//!   rotation turns the nib. VectorCraft reads no stylus wheel: 3 is read as Random when the value
+//!   varies, as an unknown code is.
+//! - A path with a Calligraphic brush is a stroke in its art style ([`super::style`]): the filter
+//!   `(Adobe Calligraphic Brush Tool)`, its stroke's paint and weight (the weight scales the brush:
+//!   1 pt draws it at its own size), the brush by name (`/GObjRef : (name) (plug-in)
+//!   /PluginObject`), and the brush's settings for this path as entries: `Diameter`, `Roundness`,
+//!   `Angle`, their `…Variation` either side and `…DependsOn` codes, and `AngleRelativeTo` (0 the
+//!   page).
+//! - A path with an Art brush is a stroke in its art style too: the filter
+//!   `(Adobe ArtOnPath Brush Tool)`, its stroke's paint and weight (the weight scales the art across
+//!   the path), the brush by name, and its settings for this path as entries: `Scaling`,
+//!   `MinScaling` and `MaxScaling` (the width as a factor), `Colorization`, `Proportional`,
+//!   `Segmented` with `StartSegmentLength` and `EndSegmentLength`, `UpsideDown`, `Counterclockwise`,
+//!   `ScaleYDependsOn`, `Spacing`, `Adjustment` and `FoldAdjustment` (1 is
+//!   [`vectorcraft_brush::ArtBrush`]'s `overlap: false`).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
 //!   after a space for Art and Pattern), more fields, and last 15 numbers.
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
-//!     rotation follows the path (14).
+//!     rotation follows the path (14), and 1 Tints (1).
+//!   - Art: 1 Tints (2).
 //!   - Pattern: its scale as a factor (3).
 //! - A Bristle brush's parameters start with 8 numbers: two codes, then the stiffness, bristle
 //!   thickness, density, paint opacity and bristle length as fractions and the size in
 //!   millimeters.
 //! - The art is a `%AI8_BeginBrushPattern` section: its name as a string, then the art (read by
-//!   [`super::read`]).
+//!   [`super::read`]), usually in a group after its frame, an unpainted rectangle around it. A frame
+//!   at the art's bounds isn't kept ([`without_frame`]); a wider one is.
 //!
-//! What isn't read keeps its default: the Art brush's options, the pattern brush's tiles (which
-//! slot is which tile isn't known) and every brush's colorization, which is left at None so the
-//! art keeps its own colors.
+//! What isn't read keeps its default: the Art brush's other options, the pattern brush's tiles
+//! (which slot is which tile isn't known) and the colorization of the other brushes, which is left
+//! at None so the art keeps its own colors.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use kurbo::Affine;
 use vectorcraft_brush::{ArtBrush, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
-use vectorcraft_doc::Node;
+use vectorcraft_color::Paint;
+use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
 use super::lex::{Lexer, Tok};
 use super::obj;
@@ -50,6 +71,9 @@ const TOOLS: [(&str, Tool); 5] = [
 pub(super) const MAX_BRUSHES: usize = 4096;
 /// Most brush art sections read from one file (a pattern brush has up to five).
 pub(super) const MAX_BRUSH_ART: usize = 5 * MAX_BRUSHES;
+/// Most named colors kept from one brush art section, and brought in from the art of one file's
+/// brushes, each name once per section: the rest are left out.
+pub(super) const MAX_BRUSH_ART_COLORS: usize = 20_000;
 /// Most [`art_weight`] copied into the brushes of one file, each brush counting its own copy.
 const MAX_BRUSH_ART_NODES: usize = 250_000;
 
@@ -90,10 +114,13 @@ pub(super) enum DraftKind {
         brush: Scatter,
         art: String,
     },
-    /// The art is the section named `art`.
+    /// The art is the section named `art`. `plain`: the brush stretches its art along the path,
+    /// unflipped, at 100% in Tints (see [`art_is_plain`]), so [`Self::Art`]'s `brush` draws as the
+    /// file's brush does.
     Art {
         brush: ArtBrush,
         art: String,
+        plain: bool,
     },
     /// The five art sections the brush names, in its order (which is which tile isn't known), and
     /// its scale (%).
@@ -168,12 +195,15 @@ fn numbers(s: &str) -> Option<Vec<f64>> {
     s.split_whitespace().map(|w| w.parse::<f64>().ok().filter(|v| v.is_finite())).collect()
 }
 
-/// How a value varies, by its code: `None` for a code that isn't Fixed, Random or Pressure.
+/// How a value varies, by its code: `None` for the stylus wheel and codes that aren't known.
 fn variation(code: f64) -> Option<Variation> {
     match code {
         0.0 => Some(Variation::Fixed),
         1.0 => Some(Variation::Random),
         2.0 => Some(Variation::Pressure),
+        4.0 => Some(Variation::Tilt),
+        5.0 => Some(Variation::Bearing),
+        6.0 => Some(Variation::Rotation),
         _ => None,
     }
 }
@@ -181,6 +211,75 @@ fn variation(code: f64) -> Option<Variation> {
 /// [`variation`], or for another code, Random when the value varies and Fixed when it doesn't.
 fn mode(code: f64, varies: bool) -> Variation {
     variation(code).unwrap_or(if varies { Variation::Random } else { Variation::Fixed })
+}
+
+/// A Calligraphic brush of angle, roundness and size `values`, each varying `variation` either side
+/// as its code in `codes` says.
+pub(super) fn calligraphic(values: [f64; 3], variation: [f64; 3], codes: [f64; 3]) -> Calligraphic {
+    let [angle, roundness, size] = values;
+    let modes = [0, 1, 2].map(|i| mode(codes[i], variation[i] != 0.0));
+    Calligraphic { angle, roundness, size, variation, modes: Some(modes) }
+}
+
+/// The settings a path's art style gives its stroke's brush.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum PathBrush {
+    Calligraphic(Calligraphic),
+    /// An Art brush whose art stretches along the path, at the brush's own width, in Tints.
+    Art,
+}
+
+/// Does an Art brush draw `art` as the file does? It bends paths in solid colors: other objects
+/// are left out of the pieces, a gradient or pattern stays where it was and takes no color from the
+/// stroke, an effect isn't bent with its path, a stroke's outline isn't stretched along it, and art
+/// with no length along the path draws nothing.
+pub(super) fn art_bends(art: &Node) -> bool {
+    let mut bends = art.geometric_bounds().is_some_and(|b| b.width() > 1e-9);
+    art.walk(&mut |n| {
+        bends &= matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Group { .. })
+            && n.extras().mask.is_none()
+            && n.appearance.effects.is_empty()
+            && n.appearance.items.iter().all(|i| i.effects().is_empty() && !matches!(i, AppearanceItem::Stroke(s) if !s.paint.is_none()))
+            && vectorcraft_doc::swatches::node_paints(n).all(|p| matches!(p, Paint::Solid { .. } | Paint::None));
+    });
+    bends
+}
+
+/// The art sections of `drafts`' Art brushes that an Art brush draws as the file does.
+pub(super) fn bending_art(drafts: &[BrushDraft], art: &HashMap<String, Node>) -> HashSet<String> {
+    let names: HashSet<&String> = drafts
+        .iter()
+        .filter_map(|d| match &d.kind {
+            DraftKind::Art { art, .. } => Some(art),
+            _ => None,
+        })
+        .collect();
+    names.into_iter().filter(|n| art.get(*n).is_some_and(art_bends)).cloned().collect()
+}
+
+/// Does the brush `draft` draw as `settings`, the settings a path's art style gives it? A path whose
+/// settings differ (Options of Selected Object) keeps its drawn look: a stroke names a brush, and
+/// has no settings of its own. `bending`: [`bending_art`].
+pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashSet<String>) -> bool {
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-3 * a.abs().max(b.abs()).max(1.0);
+    match (&draft.kind, settings) {
+        (DraftKind::Calligraphic(d), PathBrush::Calligraphic(c)) => {
+            close(d.angle, c.angle)
+                && close(d.roundness, c.roundness)
+                && close(d.size, c.size)
+                && d.variation.iter().zip(&c.variation).all(|(a, b)| close(*a, *b))
+                && d.modes() == c.modes()
+        }
+        (DraftKind::Art { plain: true, art: name, .. }, PathBrush::Art) => bending.contains(name),
+        _ => false,
+    }
+}
+
+/// Are an Art brush's last 15 numbers those of a brush that stretches its art along the path,
+/// unflipped, at 100% in Tints? The numbers aren't read otherwise: any other value keeps its paths'
+/// drawn look.
+fn art_is_plain(numbers: &[f64; 15]) -> bool {
+    *numbers == [1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 }
 
 /// The brush named `name` of kind `kind` from its parameters `params`.
@@ -191,15 +290,11 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
             let [_, d0, d1, r0, r1, a0, a1, dm, rm, am, ..] = n.as_slice() else { return Err(BrushError::Values) };
             let mid = |a: f64, b: f64| (a + b) / 2.0;
             let half = |a: f64, b: f64| (b - a).abs() / 2.0;
-            let variation = [half(*a0, *a1), half(*r0, *r1), half(*d0, *d1)];
-            let modes = [mode(*am, variation[0] != 0.0), mode(*rm, variation[1] != 0.0), mode(*dm, variation[2] != 0.0)];
-            DraftKind::Calligraphic(Calligraphic {
-                angle: mid(*a0, *a1),
-                roundness: mid(*r0, *r1),
-                size: mid(*d0, *d1),
-                variation,
-                modes: Some(modes),
-            })
+            DraftKind::Calligraphic(calligraphic(
+                [mid(*a0, *a1), mid(*r0, *r1), mid(*d0, *d1)],
+                [half(*a0, *a1), half(*r0, *r1), half(*d0, *d1)],
+                [*am, *rm, *dm],
+            ))
         }
         Tool::Scatter | Tool::Art | Tool::Pattern => {
             let fields: Vec<&str> = params.split('/').collect();
@@ -217,7 +312,8 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 })
                 .collect();
             let n = fields.last().and_then(|f| numbers(f)).ok_or(BrushError::Values)?;
-            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n.as_slice() else { return Err(BrushError::Values) };
+            let n: &[f64; 15] = n.as_slice().try_into().map_err(|_| BrushError::Values)?;
+            let [_, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, _] = n;
             let art = || tiles.first().cloned().flatten().ok_or(BrushError::NoArt);
             match kind {
                 Tool::Scatter => {
@@ -232,13 +328,17 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                         scatter,
                         rotation,
                         rotation_relative_to_path: *p14 == 1.0,
-                        colorization: Colorization::None,
+                        // The first of the 15 numbers: 1 is Tints.
+                        colorization: if n.first() == Some(&1.0) { Colorization::Tints } else { Colorization::None },
                         modes: Some(modes),
                         ..Scatter::default()
                     };
                     DraftKind::Scatter { brush, art: art()? }
                 }
-                Tool::Art => DraftKind::Art { brush: ArtBrush { colorization: Colorization::None, ..ArtBrush::default() }, art: art()? },
+                Tool::Art => {
+                    let colorization = if *p2 == 1.0 { Colorization::Tints } else { Colorization::None };
+                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain: art_is_plain(n) }
+                }
                 _ => {
                     let tiles: [Option<String>; 5] = tiles.try_into().map_err(|_| BrushError::Values)?;
                     DraftKind::Pattern { tiles, scale: p3 * 100.0 }
@@ -284,6 +384,43 @@ pub(super) fn art_weight(art: &Node) -> usize {
     weight
 }
 
+/// Which of `drafts` [`finish_brushes`] makes into brushes, with [`MAX_BRUSH_ART_NODES`] of art.
+pub(super) fn kept(drafts: &[BrushDraft], art: &HashMap<String, Node>) -> Vec<bool> {
+    kept_brushes(drafts, art, MAX_BRUSH_ART_NODES)
+}
+
+/// Which of `drafts` become brushes, with at most `budget` of [`art_weight`] copied into them: not
+/// a pattern brush, a brush whose art isn't read, a brush whose art would go past `budget`, or a
+/// brush named as one kept before it.
+pub(super) fn kept_brushes(drafts: &[BrushDraft], art: &HashMap<String, Node>, budget: usize) -> Vec<bool> {
+    let mut copied = 0usize;
+    let mut weights: HashMap<&str, usize> = HashMap::new();
+    let mut names: HashSet<&str> = HashSet::new();
+    drafts
+        .iter()
+        .map(|d| {
+            let fits = match &d.kind {
+                _ if names.contains(d.name.as_str()) => false,
+                DraftKind::Calligraphic(_) | DraftKind::Bristle(_) => true,
+                DraftKind::Pattern { .. } => false,
+                DraftKind::Scatter { art: name, .. } | DraftKind::Art { art: name, .. } => art.get_key_value(name).is_some_and(|(key, a)| {
+                    let weight = *weights.entry(key.as_str()).or_insert_with(|| art_weight(a));
+                    let total = copied.saturating_add(weight);
+                    let fits = total <= budget;
+                    if fits {
+                        copied = total;
+                    }
+                    fits
+                }),
+            };
+            if fits {
+                names.insert(&d.name);
+            }
+            fits
+        })
+        .collect()
+}
+
 /// [`finish_brushes`] with at most `budget` of [`art_weight`] copied into the brushes (each brush
 /// that uses a section holds its own copy): a brush whose art would go past it is left out.
 pub(super) fn finish_brushes_within(
@@ -292,27 +429,22 @@ pub(super) fn finish_brushes_within(
     order: Option<&[(Tool, String)]>,
     budget: usize,
 ) -> (Vec<Brush>, usize) {
+    let kept = kept_brushes(&drafts, art, budget);
+    let copy = |name: &str| art.get(name).cloned();
     let mut left_out = 0;
-    let mut copied = 0usize;
-    let mut weights: HashMap<&str, usize> = HashMap::new();
-    let mut copy = |name: &str| -> Option<Node> {
-        let (key, a) = art.get_key_value(name)?;
-        let weight = *weights.entry(key.as_str()).or_insert_with(|| art_weight(a));
-        let total = copied.saturating_add(weight);
-        (total <= budget).then(|| {
-            copied = total;
-            a.clone()
-        })
-    };
     let mut made: Vec<Option<(Tool, Brush)>> = vec![];
-    for d in drafts {
+    for (d, kept) in drafts.into_iter().zip(kept) {
         let tool = d.kind.tool();
-        let repeated = made.iter().flatten().any(|(_, b)| b.name == d.name);
         let kind = match d.kind {
-            _ if repeated => None,
+            _ if !kept => None,
             DraftKind::Calligraphic(c) => Some(BrushKind::Calligraphic(c)),
             DraftKind::Scatter { brush, art: name } => copy(&name).map(|a| BrushKind::Scatter(Scatter { art: a, ..brush })),
-            DraftKind::Art { brush, art: name } => copy(&name).map(|a| BrushKind::Art(ArtBrush { art: a, ..brush })),
+            DraftKind::Art { brush, art: name, .. } => copy(&name).map(|mut a| {
+                // The side of the section with y up draws on the right of the path, and a brush
+                // draws art's y (down here) on the left of the path.
+                a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+                BrushKind::Art(ArtBrush { art: a, ..brush })
+            }),
             DraftKind::Pattern { .. } => None,
             DraftKind::Bristle(b) => Some(BrushKind::Bristle(b)),
         };
@@ -340,4 +472,80 @@ pub(super) fn finish_brushes_within(
 /// The note for brushes [`finish_brushes`] left out.
 pub(super) fn left_out_note(n: usize) -> String {
     format!("brushes VectorCraft can't read yet were left out of the Brushes panel ({n})")
+}
+
+/// Is `n` a frame: an unnamed, unpainted rectangle with nothing of its own (shown, unlocked, at full
+/// opacity in Normal, with no effects, note, mask or other settings), a path of one subpath whose
+/// anchors, without handles, are its four corners in order around it: closed, with the first again
+/// at the end or not, or open with the first again at the end?
+fn unpainted_rectangle(n: &Node) -> bool {
+    let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind else { return false };
+    let ([sp], Some(b)) = (path.subpaths.as_slice(), n.geometric_bounds()) else { return false };
+    let corner = |p: kurbo::Point| (p.x == b.x0 || p.x == b.x1) && (p.y == b.y0 || p.y == b.y1);
+    let mut corners: Vec<kurbo::Point> = vec![];
+    for a in &sp.anchors {
+        if !corners.contains(&a.p) {
+            corners.push(a.p);
+        }
+    }
+    let last_repeats = sp.anchors.len() == 5 && sp.anchors.first().map(|a| a.p) == sp.anchors.last().map(|a| a.p);
+    // Each corner to the next goes along a side, not across: one coordinate stays.
+    let sides = corners.len() == 4
+        && (0..4).all(|i| match (corners.get(i), corners.get((i + 1) % 4)) {
+            (Some(a), Some(b)) => (a.x == b.x) != (a.y == b.y),
+            _ => false,
+        });
+    n.name.is_none()
+        && *n.extras() == vectorcraft_doc::NodeExtras::default()
+        && n.visible
+        && !n.locked
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.knockout == vectorcraft_doc::Knockout::Neutral
+        && !n.knockout_shape
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.paint().is_none())
+        && ((sp.closed && sp.anchors.len() == 4) || last_repeats)
+        && sides
+        && b.width() > 0.0
+        && b.height() > 0.0
+        && sp.anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p && corner(a.p))
+}
+
+/// Brush art `art` without its frame: a group whose first object is an unpainted rectangle around
+/// the rest, exactly (within 1/1000 pt), loses that rectangle, and a group without a look or state
+/// of its own (hidden, locked, isolation, knockout, opacity, blend mode, name, appearance, or a mask,
+/// note or other setting) that is left with one object is that object. A frame wider than the art
+/// is kept.
+pub(super) fn without_frame(art: Node) -> Node {
+    let NodeKind::Group { children, clip: false } = &art.kind else { return art };
+    let Some((first, rest)) = children.split_first() else { return art };
+    let around = rest.iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b));
+    let exact = match (around, first.geometric_bounds()) {
+        (Some(a), Some(f)) => [a.x0 - f.x0, a.y0 - f.y0, a.x1 - f.x1, a.y1 - f.y1].iter().all(|d| d.abs() <= 1e-3),
+        _ => false,
+    };
+    if !exact || !unpainted_rectangle(first) {
+        return art;
+    }
+    let plain = art.opacity >= 1.0
+        && art.visible
+        && !art.locked
+        && !art.isolate
+        && art.knockout == vectorcraft_doc::Knockout::Neutral
+        && !art.knockout_shape
+        && art.blend == vectorcraft_color::BlendMode::Normal
+        && art.name.is_none()
+        && *art.extras() == vectorcraft_doc::NodeExtras::default()
+        && art.appearance.effects.is_empty()
+        && art.appearance.items.is_empty();
+    if let ([only], true) = (rest, plain) {
+        return Node::clone(only);
+    }
+    let mut out = art.clone();
+    if let Some(c) = out.children_mut() {
+        c.remove(0);
+    }
+    out
 }

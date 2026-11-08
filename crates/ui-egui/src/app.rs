@@ -70,6 +70,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
                 fill: None,
@@ -80,6 +81,7 @@ impl VectorcraftApp {
                 print_tiling: None,
                 live_paint_gaps: None,
                 hidden_chars: Default::default(),
+                selection_marks: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
@@ -169,6 +171,7 @@ impl VectorcraftApp {
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
+            held_tool: Vec::new(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -195,6 +198,9 @@ impl VectorcraftApp {
         let s = &mut self.services;
         if let Some(read) = s.read.take() {
             s.read = Some(Box::new(move |p: &str| file_access::check_read(p).and_then(|()| read(p))));
+        }
+        if let Some(read_head) = s.read_head.take() {
+            s.read_head = Some(Box::new(move |p: &str, max: usize| file_access::check_read(p).and_then(|()| read_head(p, max))));
         }
         if let Some(mut write) = s.write.take() {
             s.write = Some(Box::new(move |p: &str, b: &[u8]| file_access::check_write(p).and_then(|()| write(p, b))));
@@ -251,6 +257,7 @@ impl VectorcraftApp {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.tick_frame(ctx))) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -280,6 +287,7 @@ impl VectorcraftApp {
         let now = now_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
         // background thread reads it where the host installs one (an unresponsive owner must never
@@ -489,6 +497,7 @@ impl VectorcraftApp {
             })
         }) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
         crate::ime::finish_ui(self, &ctx);
@@ -526,8 +535,9 @@ impl VectorcraftApp {
         if self.ui.status_bar && self.ui.screen_mode < 3 {
             chrome::status_bar(self, ui);
             chrome::hint_bar(self, ui);
-        } else {
-            // Keeps the previous frame's value valid for menus drawn above, before the bars.
+        } else if !(self.ui.control_bar && self.ui.control_bar_bottom && self.ui.screen_mode < 2) {
+            // Keeps the previous frame's value valid for menus drawn above, before the bars. A
+            // Control bar docked at the bottom has set it to the bar's top.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
@@ -546,7 +556,10 @@ impl VectorcraftApp {
         export_progress::show(self, &ctx);
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
+        opening::show(self, &ctx);
         palette::show(self, &ctx);
+        // After every panel had its chance to draw in this pass.
+        crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }

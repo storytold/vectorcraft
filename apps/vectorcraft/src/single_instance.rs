@@ -263,15 +263,23 @@ mod tests {
 
     use super::*;
 
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.path()
+        }
+    }
+
     /// A fresh folder for one test, with an existing file in it.
-    fn folder(name: &str) -> (PathBuf, PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("vc-single-instance-{}-{name}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("a b.svg");
+    fn folder(name: &str) -> (PathBuf, TestDir, String) {
+        let dir = tempfile::Builder::new().prefix(&format!("vc-single-instance-{name}-")).tempdir().unwrap();
+        let file = dir.path().join("a b.svg");
         fs::write(&file, "<svg/>").unwrap();
         let file = file.to_string_lossy().into_owned();
-        (dir.join(FILE_NAME), dir, file)
+        (dir.path().join(FILE_NAME), TestDir(dir), file)
     }
 
     fn primary(path: &Path) -> (Primary, mpsc::Receiver<Vec<String>>) {
@@ -303,12 +311,11 @@ mod tests {
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
         drop(primary);
         assert!(!path.exists(), "the endpoint file goes with the app");
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_wrong_token_garbage_and_oversized_messages_are_refused() {
-        let (path, dir, file) = folder("refused");
+        let (path, _dir, file) = folder("refused");
         let (_primary, rx) = primary(&path);
         let token = read_endpoint(&path).unwrap().token;
         let wrong = format!("{}\n", json!({ "token": "0".repeat(token.len()), "files": [file] }));
@@ -323,12 +330,11 @@ mod tests {
         // The listener still serves a launch with the right token.
         forward(&path, std::slice::from_ref(&file)).unwrap();
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_stale_endpoint_file_is_ignored_and_replaced() {
-        let (path, dir, file) = folder("stale");
+        let (path, _dir, file) = folder("stale");
         // The recorded app is gone: whatever holds the port closes without a greeting. (A freed
         // port can be taken by another test's listener meanwhile, which would then accept this
         // connection in place of its own client's.)
@@ -357,18 +363,16 @@ mod tests {
         let (_primary, rx) = primary(&path);
         forward(&path, std::slice::from_ref(&file)).unwrap();
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_replaced_endpoint_file_stays_when_the_earlier_app_ends() {
-        let (path, dir, _) = folder("replaced");
+        let (path, _dir, _) = folder("replaced");
         let (first, _rx1) = primary(&path);
         let (_second, _rx2) = primary(&path);
         let second_token = read_endpoint(&path).unwrap().token;
         drop(first);
         assert_eq!(read_endpoint(&path).map(|e| e.token), Some(second_token));
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -383,9 +387,8 @@ mod tests {
     #[test]
     fn the_endpoint_file_is_the_users_alone() {
         use std::os::unix::fs::PermissionsExt as _;
-        let (path, dir, _) = folder("mode");
+        let (path, _dir, _) = folder("mode");
         let _primary = primary(&path);
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
-        let _ = fs::remove_dir_all(dir);
     }
 }

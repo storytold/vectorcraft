@@ -1094,6 +1094,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-web-api"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=fd5e2feff6ea25bed371a99cc732b3968d621505#fd5e2feff6ea25bed371a99cc732b3968d621505"
+dependencies = [
+ "js-sys",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "craft-window"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb#9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb"
@@ -2967,8 +2978,7 @@ checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
 [[package]]
 name = "linesweeper"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25df1b0c5432893f41bba817150e323703ee5f6d974f3a6808ac7fd7f046d18"
+source = "git+https://github.com/storytold/craft-libs?rev=481f66d287b2a06845f3667a19daf35f0fe958ed#481f66d287b2a06845f3667a19daf35f0fe958ed"
 dependencies = [
  "arrayvec",
  "kurbo 0.13.1",
@@ -6101,6 +6111,7 @@ dependencies = [
  "serde_json",
  "smithay-clipboard",
  "socket2",
+ "tempfile",
  "vectorcraft-engine",
  "vectorcraft-render",
  "vectorcraft-text",
@@ -6164,6 +6175,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-text",
  "serde_json",
+ "tempfile",
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-engine",
@@ -6253,6 +6265,7 @@ dependencies = [
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-js",
  "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
@@ -6271,6 +6284,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
+ "craft-pdf",
  "fax",
  "flate2",
  "hayro-ccitt",
@@ -6318,6 +6332,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-testkit",
+]
+
+[[package]]
+name = "vectorcraft-js"
+version = "0.21.0"
+dependencies = [
+ "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]
@@ -6401,8 +6423,10 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "log",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "vectorcraft-color",
  "vectorcraft-doc",
@@ -6470,6 +6494,7 @@ dependencies = [
  "vectorcraft-doc",
  "vectorcraft-effects",
  "vectorcraft-geom",
+ "vectorcraft-pathops",
  "vectorcraft-testkit",
  "vectorcraft-text",
 ]
@@ -6592,6 +6617,7 @@ dependencies = [
 name = "vectorcraft-web"
 version = "0.21.0"
 dependencies = [
+ "craft-web-api",
  "eframe",
  "egui",
  "js-sys",

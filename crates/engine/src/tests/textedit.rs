@@ -1613,6 +1613,269 @@ fn the_eyedropper_styles_the_whole_story_that_select_all_selected() {
     }
 }
 
+/// A red rectangle outside the story of [`threaded_story_edited_in_its_second_frame`], to pick up
+/// from at (525, 325), with the Type tool editing frame `b` at its start again.
+fn red_source(s: &mut Session, b: NodeId) {
+    let source = s.execute("shape.rectangle", &json!({"x": 500, "y": 300, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"ids": [source], "color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+}
+
+fn all_red(s: &Session, id: NodeId) -> bool {
+    obj(s, id).runs.iter().all(|r| r.style.fill.color().is_some_and(|c| c.to_hex() == "#ff0000"))
+}
+
+fn any_red(s: &Session, id: NodeId) -> bool {
+    obj(s, id).runs.iter().any(|r| r.style.fill.color().is_some_and(|c| c.to_hex() == "#ff0000"))
+}
+
+/// A click and a Shift-click of the Eyedropper on the rectangle of [`red_source`].
+fn eyedropper_picks() -> [Mods; 2] {
+    [Mods::default(), Mods { shift: true, ..Default::default() }]
+}
+
+fn pick_red_source(s: &mut Session, mods: Mods) {
+    s.pointer(&PointerEvent::new(PointerKind::Down, 525.0, 325.0).with_mods(mods), ViewInfo::default()).unwrap();
+}
+
+fn highlights(s: &mut Session) -> usize {
+    s.overlays(ViewInfo::default()).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Highlight { .. })).count()
+}
+
+#[test]
+fn switching_to_the_eyedropper_keeps_the_whole_story_selected() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.execute("select.all", &json!({})).unwrap();
+        let highlighted = highlights(&mut s);
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options()["story"], json!([a.0, b.0]));
+        assert!(highlights(&mut s) >= highlighted, "the Eyedropper highlights the text of both frames");
+        let undo = s.doc().unwrap().history.undo.len();
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b), "every frame takes the pick");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(!any_red(&s, a) && !any_red(&s, b), "one undo takes the pick back from every frame");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        let o = s.tool_options();
+        assert_eq!((&o["editing"], &o["story"]), (&json!(a.0), &json!([a.0, b.0])), "back in the Type tool the story stays selected");
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "x", "typing replaces the whole story");
+    }
+}
+
+#[test]
+fn a_selection_inside_one_threaded_frame_stays_in_that_frame_under_the_eyedropper() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.set_tool_option("select", &json!({"start": 0, "end": 4}));
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        assert!(s.tool_options().get("story").is_none());
+        let undo = s.doc().unwrap().history.undo.len();
+        pick_red_source(&mut s, mods);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+        assert_eq!(obj(&s, b).runs[0].text.len(), 4, "only the selected characters take the pick");
+        assert!(any_red(&s, b) && !all_red(&s, b) && !any_red(&s, a));
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        let o = s.tool_options();
+        assert_eq!((o["editing"].as_u64(), o["start"].as_u64(), o["end"].as_u64()), (Some(b.0), Some(0), Some(4)));
+    }
+}
+
+#[test]
+fn an_eyedropper_pick_on_the_whole_story_styles_locked_and_hidden_frames() {
+    for command in ["object.lock", "object.hide"] {
+        for held_first in [false, true] {
+            for mods in eyedropper_picks() {
+                let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+                let (held, other) = if held_first { (a, b) } else { (b, a) };
+                s.execute(command, &json!({"ids": [held.0]})).unwrap();
+                red_source(&mut s, other);
+                assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0]));
+                s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+                let undo = s.doc().unwrap().history.undo.len();
+                pick_red_source(&mut s, mods);
+                assert!(all_red(&s, other), "{command}: the other frame takes the pick");
+                assert!(all_red(&s, held), "{command}: the held frame takes the pick");
+                assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: one undo step");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_eyedropper_pick_from_a_frame_of_the_selected_story_styles_the_other_frames() {
+    for source_first in [false, true] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        let (source, other) = if source_first { (a, b) } else { (b, a) };
+        s.execute("text.setStyle", &json!({"ids": [source.0], "fill": "#ff0000"})).unwrap();
+        assert!(all_red(&s, source) && !any_red(&s, other));
+        s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": b.0, "anchor": 0, "caret": 0}));
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        let undo = s.doc().unwrap().history.undo.len();
+        let r = s.execute("appearance.copyFrom", &json!({"source": source.0})).unwrap();
+        assert_eq!(r, json!({"ids": [other.0]}));
+        assert!(all_red(&s, other) && all_red(&s, source));
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    }
+}
+
+/// Whether a character in the frame that `text.thread.add` places at [`THREADED_AT`] is highlighted.
+fn third_frame_highlighted(s: &mut Session) -> bool {
+    let in_frame = |o: &vectorcraft_tools::Overlay| matches!(o, vectorcraft_tools::Overlay::Highlight { quad, color: [60, 120, 255, 90] } if quad.iter().all(|p| p.x > 690.0));
+    s.overlays(ViewInfo::default()).iter().any(in_frame)
+}
+
+/// Where a third frame of the story of [`threaded_story_edited_in_its_second_frame`] goes, clear
+/// of its other frames.
+const THREADED_AT: [f64; 2] = [700.0, 10.0];
+
+#[test]
+fn a_frame_threaded_into_the_selected_story_is_highlighted_and_takes_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        red_source(&mut s, b);
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        let c = s.execute("text.thread.add", &json!({"from": a.0, "before": true, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        assert!(!obj(&s, c).plain_text().is_empty(), "the story starts in the new frame");
+        assert!(third_frame_highlighted(&mut s), "the new frame's text is highlighted");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b) && all_red(&s, c), "every frame takes the pick");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        assert!(third_frame_highlighted(&mut s), "back in the Type tool too");
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        let text = [a, b, c].map(|f| obj(&s, f).plain_text()).concat();
+        assert_eq!(text, "x", "typing replaces the text of every frame");
+    }
+}
+
+/// After Select All in the story of [`threaded_story_edited_in_its_second_frame`], a frame threaded
+/// in before the edited one takes the whole story, and the edited frame holds no text.
+fn selected_story_moved_into_a_new_frame(s: &mut Session, a: NodeId, b: NodeId) -> NodeId {
+    let rect = [THREADED_AT[0], THREADED_AT[1], 400.0, 600.0];
+    let c = NodeId(s.execute("text.thread.add", &json!({"from": a.0, "before": true, "rect": rect})).unwrap()["id"].as_u64().unwrap());
+    assert!(obj(s, a).plain_text().is_empty() && obj(s, b).plain_text().is_empty(), "the new frame holds the whole story");
+    assert!(!obj(s, c).plain_text().is_empty());
+    c
+}
+
+#[test]
+fn a_story_that_left_the_edited_frame_is_highlighted_and_typing_replaces_it() {
+    for through_eyedropper in [false, true] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        if through_eyedropper {
+            s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        }
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        assert!(third_frame_highlighted(&mut s), "through the Eyedropper: {through_eyedropper}");
+        if through_eyedropper {
+            s.select_tool("type", ViewInfo::default()).unwrap();
+            assert!(third_frame_highlighted(&mut s), "back in the Type tool");
+        }
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "x", "through the Eyedropper: {through_eyedropper}");
+    }
+}
+
+#[test]
+fn delete_replaces_a_story_that_left_the_edited_frame() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), "", "{k:?} empties every frame");
+        assert_eq!(undo_labels(&s).len(), steps + 1, "{k:?}: one undo step");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!([a, b, c].map(|f| obj(&s, f).plain_text()).concat(), story);
+    }
+}
+
+#[test]
+fn delete_in_a_story_that_holds_no_text_records_no_undo_step() {
+    for k in [ToolKey::Backspace, ToolKey::Delete] {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        key(&mut s, ToolKey::Delete, Mods::default());
+        s.execute("select.all", &json!({})).unwrap();
+        assert_eq!(s.tool_options()["story"], json!([a.0, b.0]));
+        let steps = undo_labels(&s).len();
+        key(&mut s, k, Mods::default());
+        key(&mut s, ToolKey::Escape, Mods::default());
+        assert_eq!(undo_labels(&s).len(), steps, "{k:?}");
+    }
+}
+
+#[test]
+fn a_type_step_keeps_a_story_that_left_the_edited_frame_selected() {
+    let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let c = selected_story_moved_into_a_new_frame(&mut s, a, b);
+    // Alt+Right steps the tracking of the selected text, not the kerning at a caret.
+    key(&mut s, ToolKey::Right, Mods { alt: true, ..Mods::default() });
+    assert!(obj(&s, c).runs.iter().all(|r| r.style.tracking > 0.0), "every character of the story takes the step");
+    // A key that does nothing leaves it selected as well.
+    key(&mut s, ToolKey::BracketLeft, Mods::default());
+    assert!(third_frame_highlighted(&mut s));
+    // The story stays the target of a fill and of a switch to the Eyedropper.
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    assert!(all_red(&s, c), "the fill reaches the story");
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    assert!(third_frame_highlighted(&mut s), "the Eyedropper keeps the story");
+}
+
+#[test]
+fn a_frame_that_left_the_selected_story_is_not_highlighted_and_leaves_the_edit() {
+    for mods in eyedropper_picks() {
+        let (mut s, a, b, _) = threaded_story_edited_in_its_second_frame();
+        let c = s.execute("text.thread.add", &json!({"from": b.0, "at": THREADED_AT})).unwrap()["id"].as_u64().unwrap();
+        let c = NodeId(c);
+        red_source(&mut s, b);
+        assert_eq!(s.execute("select.all", &json!({})).unwrap()["story"], json!([a.0, b.0, c.0]));
+        s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        s.execute("text.thread.break", &json!({"id": b.0, "port": "out"})).unwrap();
+        s.execute("text.setText", &json!({"id": c.0, "text": "Kept"})).unwrap();
+        assert!(!third_frame_highlighted(&mut s), "the frame that left has no highlight");
+        pick_red_source(&mut s, mods);
+        assert!(all_red(&s, a) && all_red(&s, b), "the frames still threaded take the pick");
+        assert!(!any_red(&s, c), "the frame that left stays as it is");
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(obj(&s, c).plain_text(), "Kept", "typing leaves the frame that left");
+    }
+}
+
+#[test]
+fn typing_after_a_thread_is_removed_leaves_the_frame_that_left_the_story() {
+    for through_eyedropper in [false, true] {
+        let (mut s, _, b, _) = threaded_story_edited_in_its_second_frame();
+        s.execute("select.all", &json!({})).unwrap();
+        if through_eyedropper {
+            s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+        }
+        s.execute("text.thread.remove", &json!({})).unwrap();
+        assert_eq!(s.execute("text.thread.info", &json!({})).unwrap(), json!([]));
+        if through_eyedropper {
+            s.select_tool("type", ViewInfo::default()).unwrap();
+        }
+        let left = obj(&s, b).plain_text();
+        assert!(!left.is_empty());
+        s.tool_text("x", ViewInfo::default()).unwrap();
+        assert_eq!(obj(&s, b).plain_text(), left, "through the Eyedropper: {through_eyedropper}");
+    }
+}
+
 #[test]
 fn typing_over_the_whole_story_replaces_every_frames_text_in_one_step() {
     let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
@@ -3002,4 +3265,29 @@ fn the_fallback_glyph_of_a_consonant_after_its_vowel_sign_is_reported() {
     assert!(vectorcraft_text::layout(db, &obj(&s, boxed)).glyphs.is_empty(), "the text overflows");
     let query = s.execute("text.glyphAlternates", &json!({"id": boxed.0, "start": 0})).unwrap();
     assert_eq!(query["chosen"], json!(ka), "an overflowing Ka reports the fallback face's glyph for Ka");
+}
+
+/// Apply Fill to Stroke with characters selected with the Type tool: only those characters take
+/// a stroke of their own fill, as one undo step (#5530).
+#[test]
+fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 50.0, 300.0);
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Sample Text", v).unwrap();
+    // All of it red, then the first word green: a stroke on the rest would show.
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 6}));
+    s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("addon.color.fillToStroke", &json!({})).unwrap();
+    let t = obj(&s, id);
+    assert_eq!(t.runs[0].text, "Sample");
+    assert_eq!(t.runs[0].style.stroke, t.runs[0].style.fill, "the selected characters take their fill as a stroke");
+    assert!(t.runs[0].style.stroke_width > 0.0);
+    assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
+    let labels = undo_labels(&s);
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
 }

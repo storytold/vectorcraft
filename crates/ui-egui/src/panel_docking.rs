@@ -270,6 +270,28 @@ pub(crate) fn showing(ui: &UiState, panel: &str) -> bool {
     (ui.open_panel.as_deref() == Some(panel) && iconic) || (!iconic && layout.panel_state(&panel.to_string()) == craft_ui::docking::PanelState::Front)
 }
 
+/// Can either panel that uses row thumbnails be seen, including in a floating window or flyout?
+/// An iconic group's open flyout is named for the icon that opened it; its active tab can differ.
+fn thumbnail_panel_showing(ui: &UiState, ctx: &egui::Context) -> bool {
+    if !ui.dock || ui.screen_mode >= 3 {
+        return false;
+    }
+    let layout = layout_of(ui);
+    let regular = ["layers", "links"]
+        .iter()
+        .any(|panel| !in_iconic_column(&layout, panel) && layout.panel_state(&(*panel).to_string()) == craft_ui::docking::PanelState::Front);
+    let flyout = craft_ui::docking::flyout::<String>(ctx, area_id());
+    let iconic = flyout.as_ref().and_then(|anchor| {
+        dock_columns(&layout)
+            .into_iter()
+            .filter(|column| column.iconic)
+            .flat_map(|column| &column.groups)
+            .find(|group| group.panels.contains(anchor))
+            .and_then(|group| group.active_panel())
+    });
+    regular || iconic.is_some_and(|panel| matches!(panel.as_str(), "layers" | "links"))
+}
+
 /// Where a panel with no other destination goes: a panel of the first expanded dock column,
 /// else of any column.
 fn first_dock_panel(layout: &Layout<String>, except: &str) -> Option<String> {
@@ -1114,9 +1136,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
     let modal = modal_open(app, &ctx);
     // Palette windows are OS windows of their own, held above the app's window while it is active,
-    // so a dialog or a menu drawn in the main window would be covered by them.
+    // so a dialog, a menu or a tool flyout drawn in the main window would be covered by them.
     #[cfg(not(target_arch = "wasm32"))]
-    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx));
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx) || crate::toolbar::flyout_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());
@@ -1125,6 +1147,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let mut dock = craft_ui::docking::DockArea::new(area)
         .blocked_rects(&blocked)
         .input_blocked(modal)
+        .monitors(app.services.dock_monitors.clone())
         .auto_collapse_iconic(app.session.prefs.auto_collapse_icon_panels);
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -1173,6 +1196,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         app.open_dropped_files(window.dropped, None, shift);
     }
     forward_keys(app, &ctx, output.forwarded_events, output.forwarded_modifiers);
+    if !thumbnail_panel_showing(&app.ui, &ctx) {
+        // No panel can ask for these rows again this pass. Keep the cache of open documents, but
+        // discard worker jobs queued behind the one already rendering.
+        crate::panels::layers::show_thumbs_of(None);
+    }
 }
 
 /// Whether a modal is open: a dialog, About, the command palette, a native file dialog, or a

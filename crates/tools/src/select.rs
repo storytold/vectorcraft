@@ -231,9 +231,13 @@ impl MoveSnap {
     }
 
     /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
-    /// guides.
+    /// guides. With Smart Guides › Snap to Last Location, a move within Snapping Tolerance of where
+    /// it began goes back there before anything else snaps ([`Targets::snap_back`]).
     pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
@@ -291,7 +295,8 @@ impl MoveSnap {
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
     /// with the other art ([`Targets::snap_rects_along`]) and the grabbed point lands where the line
     /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
-    /// length does not snap.
+    /// length does not snap, and Snap to Last Location goes back to where the move began first, as
+    /// in [`Self::snap`].
     pub(crate) fn snap_along(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let len = d.hypot();
         if !len.is_finite() || len <= 1e-9 {
@@ -309,6 +314,9 @@ impl MoveSnap {
                 .unwrap_or(0.0)
         };
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
@@ -379,6 +387,8 @@ struct MemoState {
     entry: Option<Measured>,
     /// How many measurements the memo has made.
     measurements: u64,
+    /// How many times the memo has checked its key.
+    checks: u64,
 }
 
 /// The measurements for one key; a slot holds `None` until it is measured.
@@ -404,8 +414,15 @@ impl PreviewMemo {
         self.0.try_borrow().map_or(0, |st| st.measurements)
     }
 
+    /// How many times the memo has checked its key against the document. A check compares the whole
+    /// selection, so a hover has to make the same few however many objects are selected.
+    pub fn checks(&self) -> u64 {
+        self.0.try_borrow().map_or(0, |st| st.checks)
+    }
+
     /// The measurements for the state `cx` shows, after the ones for any other state are dropped.
     fn current<'m>(st: &'m mut MemoState, cx: &ToolContext) -> &'m mut Measured {
+        st.checks += 1;
         let fresh = || Measured {
             revision: cx.revision,
             objects: cx.selection.objects.clone(),
@@ -460,13 +477,46 @@ pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
 /// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
 /// on their own): its handles take a press only then. A path the Pen is drawing keeps its end
 /// anchor selected, so Cmd/Ctrl lending the Selection tool doesn't scale it by hidden handles (#4980).
-fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
+/// The shape tools press it too (#5477).
+pub(crate) fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
     (cx.show_bbox && cx.selection.anchors.is_empty()).then(|| selection_box(cx)).flatten()
+}
+
+/// The selected object whose centre point (Attributes panel › Show Center), drawn while it is
+/// selected, is within `tol` of `p`: (object, where the point is). A press there grabs the object
+/// by that point — it moves the selection even where no art is painted (an unfilled shape) — as
+/// Direct Selection's does (#4891).
+pub(crate) fn hit_center(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Point)> {
+    let (symbols, editable) = (cx.doc.symbol_boxes(), cx.doc.editable());
+    cx.selection.objects.iter().copied().filter(|id| editable(*id) && crate::direct::in_scope(cx.doc, cx.isolation, *id)).find_map(|id| {
+        let c = cx.doc.node(id).filter(|n| n.shows_center())?.geometric_bounds_with(&symbols)?.center();
+        (c.distance(p) <= tol).then_some((id, c))
+    })
 }
 
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
 fn object_bounds(cx: &ToolContext, id: NodeId) -> Option<Rect> {
-    remembered(cx, |m| m.by_object.entry(id).or_insert(None), || vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds))
+    with_object_bounds(cx, |bounds| bounds(id))
+}
+
+/// Runs `walk` with a lookup of [`object_bounds`]. The lookups share one check of the memo's key,
+/// which compares the whole selection: a walk of every selected object checking it each time takes
+/// time in the square of their number.
+fn with_object_bounds<R>(cx: &ToolContext, walk: impl FnOnce(&mut dyn FnMut(NodeId) -> Option<Rect>) -> R) -> R {
+    let mut measure = |id: NodeId| vectorcraft_effects::preview::bounds_of(cx.doc, &[id], cx.preview_bounds);
+    let Some(mut st) = cx.preview_memo.and_then(|memo| memo.0.try_borrow_mut().ok()) else {
+        return walk(&mut measure);
+    };
+    let mut measured = 0;
+    let by_object = &mut PreviewMemo::current(&mut st, cx).by_object;
+    let out = walk(&mut |id| {
+        *by_object.entry(id).or_insert(None).get_or_insert_with(|| {
+            measured += 1;
+            measure(id)
+        })
+    });
+    st.measurements += measured;
+    out
 }
 
 /// The objects of `ids` that lie entirely inside marquee `r`, edges included, measured by their
@@ -485,13 +535,25 @@ enum BoxHit {
     Rotate,
 }
 
+/// How far (screen points) outside a corner of the bounding box a press turns the selection: the
+/// Selection tool's rotate zone, and the shape tools' (#5477).
+pub(crate) const ROTATE_ZONE: f64 = 18.0;
+
+/// Where a press at `p` just outside a corner of box `b` turns the selection about its centre, as
+/// the Selection tool's rotate zone does: the box's centre. None on a handle, on the corner itself
+/// or away from every corner.
+pub(crate) fn rotate_zone(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<Point> {
+    let (tol, lp) = (cx.tol(5.0), b.to_local(p));
+    (hit_handle(b.rect, lp, tol).is_none() && in_rotate_zone(b.rect, lp, tol, cx.tol(ROTATE_ZONE)).is_some()).then(|| b.center())
+}
+
 /// The bounding-box handle or rotate zone under `p`.
 fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
     let (tol, lp) = (cx.tol(5.0), b.to_local(p));
     if let Some(h) = hit_handle(b.rect, lp, tol) {
         return Some(BoxHit::Handle(h));
     }
-    in_rotate_zone(b.rect, lp, tol, cx.tol(18.0)).map(|_| BoxHit::Rotate)
+    in_rotate_zone(b.rect, lp, tol, cx.tol(ROTATE_ZONE)).map(|_| BoxHit::Rotate)
 }
 
 /// Whether the current selection's bounding-box handle is under `p`, using the same geometry as
@@ -560,15 +622,17 @@ impl SelectionTool {
         };
         // A press on an unselected object selects it alone: the selected ones stay behind.
         let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
-        under.into_iter().chain(selected.iter().copied()).find_map(|id| {
-            let n = cx.doc.node(id)?;
-            let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
-            anchor.map(|q| (q, "anchor")).or_else(|| {
-                if !cx.smart_guides {
-                    return None;
-                }
-                let c = object_bounds(cx, id)?.center();
-                (c.distance(p) <= reach).then_some((c, "center"))
+        with_object_bounds(cx, |bounds| {
+            under.into_iter().chain(selected.iter().copied()).find_map(|id| {
+                let n = cx.doc.node(id)?;
+                let anchor = n.path_data().and_then(|pd| nearest(&mut pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))));
+                anchor.map(|q| (q, "anchor")).or_else(|| {
+                    if !cx.smart_guides {
+                        return None;
+                    }
+                    let c = bounds(id)?.center();
+                    (c.distance(p) <= reach).then_some((c, "center"))
+                })
             })
         })
     }
@@ -748,6 +812,8 @@ impl Tool for SelectionTool {
         }
     }
 
+    /// A press takes the selection's widgets, a ruler guide, a selected object's centre point or
+    /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
@@ -790,6 +856,19 @@ impl Tool for SelectionTool {
                 if let Some(out) = self.guide.press(cx, ev) {
                     self.state = State::Idle;
                     return out;
+                }
+                // 2b. A selected object's centre point (Attributes › Show Center), drawn while it
+                // is selected: a drag from it moves the selection, also where no art is painted
+                // (an unfilled shape), which a press there would otherwise take for a marquee. A
+                // click there is a click on that object: it makes it the key object of several,
+                // and a Shift-click takes it out of the selection on release.
+                if !m.cmd
+                    && let Some((id, center)) = hit_center(cx, p, cx.point_tol())
+                {
+                    let several = cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty();
+                    let (deselect, key) = if m.shift { (Some(id), None) } else { (None, (several && !m.alt).then_some(id)) };
+                    self.state = State::Moving { start: p, press: p, hold: center, began: false, deselect, key, exclude: None };
+                    return vec![];
                 }
                 // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
                 if m.cmd
@@ -992,6 +1071,8 @@ impl Tool for SelectionTool {
         o
     }
 
+    /// The pointer for the drag in progress, else the one for what a press would take: a widget,
+    /// a ruler guide, the box's handles or rotate zone, a selected object's centre point or the art.
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         if let State::Mirror(d) = &self.state {
             return d.cursor(cx, p);
@@ -1028,10 +1109,16 @@ impl Tool for SelectionTool {
         if self.guide.busy() {
             return self.guide.cursor(cx, p).unwrap_or_default();
         }
-        if over_widget(cx, p, false) {
+        // Corner widgets sit inside selected art, and pie widgets extend at most 17 screen
+        // pixels beyond it. A distant pointer cannot take either one, so avoid building their
+        // widgets for every selected object on each cursor move.
+        let near_selected = cx.selection.objects.len() <= 128
+            || cx.preview_bounds
+            || selection_bounds(cx).is_none_or(|b| b.inflate(cx.tol(32.0), cx.tol(32.0)).contains(p));
+        if near_selected && over_widget(cx, p, false) {
             return Cursor::CornerRadius;
         }
-        if pie::over_widget(cx, p) {
+        if near_selected && pie::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
         if over_rotate_all(cx, p) {
@@ -1055,6 +1142,13 @@ impl Tool for SelectionTool {
         }
         if let Some(c) = self.guide.cursor(cx, p) {
             return c;
+        }
+        // A selected object's centre point (Show Center): a press there moves it, where the art
+        // may not reach. The box's handles and the ruler guides take a press before it, so they
+        // take the pointer too (on a thin box the centre lies within a handle's reach), and with
+        // Cmd/Ctrl held the press selects the object behind instead.
+        if near_selected && !m.cmd && hit_center(cx, p, cx.point_tol()).is_some() {
+            return Cursor::Move;
         }
         // View → Snap to Point: over an anchor a press would grab the object by, the arrow turns
         // hollow.

@@ -2,6 +2,7 @@ use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::Value;
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, fx_menu_ends};
 use super::*;
 
 /// One frame of the panel with `events` → the texts painted, with their rects.
@@ -28,6 +29,19 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, texts: &[(String, Rect)]
     let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
     frame(app, ctx, vec![b(false)]);
+}
+
+/// The Appearance section's fx button opens the Add Effect popup, with one row per effect group,
+/// plug-in groups included: in a short window the wheel reaches its last row.
+#[test]
+fn the_fx_popup_scrolls_inside_a_short_window() {
+    let (first, last) = fx_menu_ends();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let fx = |window: &PopupWindow| window.text("fx").expect("the fx button").center();
+    assert_last_row_scrolls_into_view(&mut app, 190.0, appearance_section, fx, &first, &last);
 }
 
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,
@@ -433,11 +447,11 @@ fn boards(app: &VectorcraftApp) -> Vec<(f64, f64, f64, f64)> {
 }
 
 /// #1482: with Artboards 1 and 3 selected, a W typed into Properties or the Transform panel
-/// resizes both in one undo step, and Artboard 2 keeps its size. Properties keeps each top-left
-/// corner; the Transform panel resizes each about its own center, its default reference point.
+/// resizes both in one undo step, and Artboard 2 keeps its size. Both resize each about its own
+/// center, their shared default reference point (#5219).
 #[test]
 fn artboard_width_resizes_every_selected_artboard_in_properties_and_transform() {
-    for (draw, centered) in [(show as fn(&mut VectorcraftApp, &mut Ui), false), (super::super::transform::show, true)] {
+    for (draw, centered) in [(show as fn(&mut VectorcraftApp, &mut Ui), true), (super::super::transform::show, true)] {
         let mut app = two_selected_artboards();
         let before = boards(&app);
         let undo = app.session.doc().unwrap().history.undo.len();
@@ -497,6 +511,31 @@ fn properties_variable_font_button_for_variable_type() {
     assert!(!frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
     app.run("select.set", json!({"ids": [id]})).unwrap();
     assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Variable Font"));
+}
+
+/// #5219: Edit Artboards starts with a Transform section (the reference point, X, Y, W and H, the
+/// preset and orientation) above the Artboards section (the name, Artboard Options and Fill), as in
+/// the reference app; X and Y are the reference point's, which the Transform panel shares.
+#[test]
+fn edit_artboards_shows_transform_above_the_artboard_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let texts = frame(&mut app, &ctx, vec![]);
+    let y = |label: &str| texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center().y).unwrap_or_else(|| panic!("{label} in {texts:?}"));
+    let (transform, artboards) = (y("Transform"), y("Artboards"));
+    assert!(transform < artboards, "{texts:?}");
+    for label in ["X:", "Y:", "W:", "H:"] {
+        assert!((transform..artboards).contains(&y(label)), "{label} is in the Transform section: {texts:?}");
+    }
+    for label in ["Artboard 1", "Fill:"] {
+        assert!(y(label) > artboards, "{label} is in the Artboards section: {texts:?}");
+    }
+    // X and Y read the shared reference point, the center by default, as the Transform panel does.
+    // (100 pt is X and H, 50 pt is Y.)
+    assert!(texts.iter().filter(|(t, _)| t == "100 pt").count() == 2 && texts.iter().any(|(t, _)| t == "50 pt"), "{texts:?}");
 }
 
 #[test]
@@ -1337,6 +1376,34 @@ fn blend_options_is_a_quick_action_for_one_blend() {
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a blend and another object");
     app.run("select.set", json!({"ids": [c]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Blend Options"), "a rectangle");
+}
+
+/// One selected repeat, radial, grid or mirror, has Repeat Options in Quick Actions (#5181), which
+/// opens the Repeat Options dialog with its values; a plain rectangle, or a repeat selected with
+/// another object, does not.
+#[test]
+fn repeat_options_is_a_quick_action_for_one_repeat() {
+    let ctx = egui::Context::default();
+    for (cmd, field) in [("object.repeat.radial", "instances"), ("object.repeat.grid", "rows"), ("object.repeat.mirror", "angle")] {
+        let mut app = new_app();
+        let a = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+        let repeat = app.run(cmd, json!({"ids": [a]})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [repeat]})).unwrap();
+        let texts = tall(&mut app, &ctx, vec![]);
+        assert!(shows(&texts, "Repeat Options"), "{cmd}");
+        let depth = undo_depth(&app);
+        press(&mut app, &ctx, text_at(&texts, "Repeat Options").center());
+        let d = app.ui.dialog.as_ref().expect("the Repeat Options dialog opens");
+        assert_eq!(d.kind, "command", "{cmd}");
+        assert!(d.fields.contains_key(field), "{cmd}: the dialog has the repeat's {field}");
+        assert_eq!(undo_depth(&app), depth, "opening the dialog changes nothing");
+        app.ui.dialog = None;
+        let c = rect(&mut app, 20.0, 200.0, 40.0, 40.0);
+        app.run("select.set", json!({"ids": [repeat, c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "{cmd}: a repeat and another object");
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        assert!(!shows(&tall(&mut app, &ctx, vec![]), "Repeat Options"), "a rectangle");
+    }
 }
 
 /// Quick Actions offer Lock for a selected member in isolation and for a selected group outside it.

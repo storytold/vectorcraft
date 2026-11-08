@@ -150,6 +150,27 @@ pub struct LegacyAiOutput {
     pub warnings: Vec<String>,
 }
 
+/// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
+/// (ImageMask 1, §8.1) that draws as the document does: it is colorized with a solid color, its
+/// pixels take the color and are all black or white (or clear), it has no opacity mask turned on,
+/// and it has no more pixels than the writer writes. Such an image keeps its clear pixels in the file.
+pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    // The size from the file's header, before any pixels are decoded.
+    let fits = |bytes: &[u8]| {
+        image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
+    };
+    matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+        && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+        && doc
+            .image_blob(im)
+            .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
+}
+
 /// Write `doc`'s first artboard and every layer (all its art, on the artboard or not) as a
 /// legacy `.ai` file of version 7. Art space is y up, its origin at the artboard's left edge and
 /// just under its bottom edge: the artboard's top is on a whole point, where readers that place

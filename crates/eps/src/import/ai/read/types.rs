@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Named, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -39,6 +39,12 @@ pub(crate) const FLIP: Affine = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
 
 /// Most patterns read (others can't fill art).
 pub(super) const MAX_PATTERNS: usize = 4096;
+
+/// Most symbol definitions read (instances of others come in as the page draws them).
+pub(crate) const MAX_SYMBOLS: usize = 4096;
+
+/// Most names a symbol list orders.
+pub(super) const MAX_LISTED: usize = 4 * MAX_SYMBOLS;
 
 /// Most characters of a path's note read (the version 7 specification allows 254, §5.3.1).
 pub(super) const MAX_NOTE: usize = 1024;
@@ -227,6 +233,45 @@ pub(super) struct PatternHead {
     pub(super) tile: Option<Rect>,
 }
 
+/// What a reader of a symbol's definition has read of the symbol besides its art.
+#[derive(Debug, Default)]
+pub(super) struct SymbolHead {
+    /// `AI13PatternRegistrationType` in the dictionary after the art.
+    pub(super) registration: Option<f64>,
+    /// Art the reader left out (type, a placed file, non-native art, an image it can't read or
+    /// place, a gradient it can't read): the symbol isn't kept, and its instances come in as the
+    /// page draws them, within the box of the rest.
+    pub(super) left_out: bool,
+    /// A gradient instance the reader can't make a paint of (a gradient the file doesn't define,
+    /// or one it can't place) is the next path's fill or stroke: the art is left out when that
+    /// path paints it.
+    pub(super) missing_fill: bool,
+    pub(super) missing_stroke: bool,
+}
+
+/// The colors a brush's art uses, counted as the page's are once a brush that is kept uses the art.
+#[derive(Debug, Default)]
+pub(super) struct BrushArtColors {
+    /// The named colors its color operators define.
+    pub(super) spots: Vec<Named>,
+    /// The named colors its gradient stops name.
+    pub(super) stop_spots: Vec<Named>,
+    /// Its colors set in each model.
+    pub(super) cmyk: usize,
+    pub(super) rgb: usize,
+}
+
+impl BrushArtColors {
+    /// Keep each name's first definition only, its color operators' before its gradient stops',
+    /// and at most `limit` names in all. The process-color counts stay as they are.
+    pub(super) fn keep_first(&mut self, limit: usize) {
+        let mut seen = std::collections::HashSet::new();
+        let mut keep = |n: &Named| seen.len() < limit && seen.insert(n.name.clone());
+        self.spots.retain(|n| keep(n));
+        self.stop_spots.retain(|n| keep(n));
+    }
+}
+
 /// An image's operands, from `XN` and before `XI`.
 #[derive(Debug, Default)]
 pub(super) struct Raster {
@@ -292,10 +337,9 @@ pub(super) const IGNORED: &[&str] = &[
     "i",
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
-    "TZ",
     "Xs",
     "Xt",
-    // A brushed path's width at each anchor (`(…) Xt n XD`), on its hidden source path.
+    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
     "XD",
     "Xi",
     "XI",
@@ -315,6 +359,8 @@ pub(super) const IGNORED: &[&str] = &[
 ];
 
 /// Sections skipped whole, by their markers without the `AI<version>_` prefix: begin → end.
+/// Patterns, symbols and the symbol list are read before this list is looked at; their markers
+/// stay here for sections of the same kind nested in them to be skipped.
 pub(super) const SKIPPED: &[(&str, &str)] = &[
     ("BeginPattern", "EndPattern"),
     ("BeginBrushPattern", "EndBrushPattern"),

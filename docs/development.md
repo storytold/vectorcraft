@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-11-06 · **Change:** Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending.
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
 > **Last updated:** 2026-10-31 · **Change:** files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance`.
 > **Last updated:** 2026-10-29 · **Change:** Linux clipboard: the Flatpak on GNOME copies and pastes text through the core Wayland protocol.
@@ -233,6 +234,11 @@ Try it: `cd apps/vectorcraft-web && CRAFT_FONTS_DIR=$PWD/../../../craft-fonts tr
 another craft-fonts face on the web, add a line to `web-fonts.txt`.
 
 ## Localisation
+
+Hindi (`hi`, हिन्दी): complete machine-assisted catalog; every `hi-*` locale resolves here, with
+0 and 1 singular and 2+ plural. Desktop text uses an installed Devanagari font or an embedded
+craft-fonts face tagged `Deva`. The web needs that font supplied separately. Native wording
+review is pending; see [Hindi terminology and checks](localization-hi.md).
 
 Strings in code stay English and are the default lookup keys. `crates/ui-egui/src/i18n` maps them to display
 text at render time from one catalog per language (`i18n/<code>.tsv`; the format is documented in the header of
@@ -502,6 +508,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
 | 2026-10-31 | minor | Files opened while the app runs open in its window on Windows and Linux (#4892); `--new-instance` opts out. |
 | 2026-10-29 | minor | Linux clipboard: core Wayland protocol text fallback where arboard has neither data-control nor X11 (the Flatpak on GNOME).; its reads wait 2 s at most. |
 | 2026-10-29 | minor | Linux clipboard: a clipboard arboard can't open is retried after 1 s doubling to 60 s and logged once, instead of every 250 ms. |

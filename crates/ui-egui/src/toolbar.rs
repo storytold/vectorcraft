@@ -426,6 +426,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
 /// [`crate::panels::artboards::control_bar`].
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if crate::addons::shapes::control_bar(app, ui) {
+        return;
+    }
     if app.session.tool_id() == "dimension" {
         return crate::dialogs::dimension::controls(app, ui);
     }
@@ -870,7 +873,30 @@ fn flyout(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // long press) leaves it to that button.
         app.ui.flyout = None;
     }
+    if app.ui.flyout.is_some() {
+        mark_flyout_open(ctx);
+    }
     let _ = theme::semibold;
+}
+
+/// The pass in which a tool group's flyout or the All Tools drawer last stayed open.
+fn flyout_open_pass_id() -> egui::Id {
+    egui::Id::unique("flyout-open-pass")
+}
+
+/// Records that a tool group's flyout or the All Tools drawer drew in this pass and stays open.
+pub(crate) fn mark_flyout_open(ctx: &egui::Context) {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.insert_temp(flyout_open_pass_id(), pass));
+}
+
+/// Whether a tool group's flyout or the All Tools drawer is on screen in the main window this pass.
+/// One left set while its toolbar is hidden does not draw, so it does not count. The toolbars draw
+/// before the panels, which read this.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn flyout_open(ctx: &egui::Context) -> bool {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|d| d.get_temp::<u64>(flyout_open_pass_id())) == Some(pass)
 }
 
 /// The toolbar made with New Toolbar whose group the open flyout shows (none: the Tools panel's).

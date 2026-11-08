@@ -44,10 +44,10 @@ mod tiff;
 
 pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
 pub use import::{
-    AiLayers, Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_layers_alone, family_style, import, import_trusting, import_with, is_loss,
-    layered_ai, layered_ai_from, page,
+    AiLayers, Imported, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_layers_alone, ai_opened_artboard, family_style, import, import_trusting,
+    import_with, is_loss, layered_ai, layered_ai_from, page,
 };
-pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai};
+pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;

@@ -136,7 +136,7 @@ impl Renderer {
             ctx.set_fill_rule(peniko::Fill::NonZero);
             match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
                 Some(o) => ctx.fill_path(&o),
-                None => ctx.fill_path(&effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+                None => ctx.fill_path(&crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
             }
             for head in &pieces.heads {
                 ctx.fill_path(&head.outline);
@@ -231,7 +231,7 @@ impl Renderer {
         };
         let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
             Some(o) => o,
-            None => Arc::new(effects::stroke::line_outline(&pieces.line, st, width, f.px * 0.25)),
+            None => Arc::new(crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
         };
         ctx.set_fill_rule(peniko::Fill::NonZero);
         for clip in std::iter::once(&*line).chain(pieces.heads.iter().map(|h| &h.outline)) {
@@ -277,7 +277,7 @@ impl Renderer {
         width: f64,
     ) -> Option<Arc<BezPath>> {
         let level = (f.px * 0.25).log2().floor() as i32;
-        let expand = || Arc::new(effects::stroke::line_outline(line, st, width, 2f64.powi(level)));
+        let expand = || Arc::new(crate::stroke::outline(line, st, width, 2f64.powi(level)));
         if let Some((g, run)) = chars {
             let key = (self.stroke_owner(Arc::as_ptr(g) as usize), run, width.to_bits(), level);
             if let Some((kept, outline)) = self.char_strokes.get(&key, self.stamp)
@@ -313,11 +313,25 @@ impl Renderer {
         }
         #[cfg(test)]
         STROKES_OUTLINED.with(|n| n.set(n.get() + 1));
-        // A long stroke without a width profile is outlined only in and around the view, with a
-        // margin of the view's own size on each side ([`crop_dashed`] for a dashed one,
-        // [`crop_line`] otherwise).
+        // A long stroke is outlined only in and around the view, with a margin of the view's
+        // own size on each side. Width profiles keep their positions on the whole path.
         let region = v.inflate(v.width(), v.height());
         let tol = 2f64.powi(level);
+        if crops()
+            && line.elements().len() > CROP_ELEMENTS
+            && st.dash.is_none()
+            && width >= tol * 4.0
+            && let Some(profile) = &st.profile
+            && profile.points.iter().all(|(t, l, r)| t.is_finite() && l.is_finite() && r.is_finite())
+        {
+            let side = profile.points.iter().flat_map(|&(_, l, r)| [l, r]).fold(1.0_f64, f64::max);
+            let reach = crop_reach(st, width * side, f.px, tol);
+            if let Some(outline) = effects::stroke::line_outline_profile_near(line, st, width, tol, region.inflate(reach, reach)) {
+                let outline = Arc::new(outline);
+                self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), own }, moved);
+                return Some(outline);
+            }
+        }
         if crops()
             && line.elements().len() > CROP_ELEMENTS
             && st.dash.is_some()
@@ -332,7 +346,7 @@ impl Renderer {
             .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
             .flatten();
         let (outline, crop) = match cropped {
-            Some(part) => (Arc::new(effects::stroke::line_outline(&part, st, width, tol)), Some(region)),
+            Some(part) => (Arc::new(crate::stroke::outline(&part, st, width, tol)), Some(region)),
             None => (expand(), None),
         };
         self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, own }, moved);

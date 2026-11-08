@@ -122,6 +122,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
     let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
+    // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
+    // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
+    // (<https://helpx.adobe.com/illustrator/desktop/paint-and-fill/create-and-edit-patterns/set-radial-repeat-options.html>,
+    // #5181).
+    let repeat_options = n_sel == 1 && crate::menus::enabled(app, "object.repeat.options");
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
@@ -132,6 +137,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if blend_options {
         actions.push((tl!("Blend Options"), "ui.blendOptions"));
+    }
+    if repeat_options {
+        actions.push((tl!("Repeat Options"), "object.repeat.options"));
     }
     if is_group {
         actions.push((tl!("Ungroup"), "object.ungroup"));
@@ -427,7 +435,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));
@@ -459,20 +467,27 @@ fn multi_color(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-/// Edit Artboards (the Artboard tool): the active artboard's name, which can be edited to rename
-/// it, and the Artboard Options icon; its position and size, its preset and
-/// orientation (#671) (with Scale Artwork with Artboard on, a new size scales its art, #602; a new
-/// W or H, preset or orientation goes to every selected artboard, in one undo step), its Fill (background color, also for every selected artboard), Move
-/// and Scale Artwork with Artboard, New Artboard and Delete Artboard, and Quick Actions: Rearrange All (#681) and
-/// Exit back to the Selection tool (#530).
+/// Edit Artboards (the Artboard tool), as in the reference app (#5219): a Transform section with
+/// the active artboard's reference point, position and size (as in the Transform panel: X and Y
+/// are the reference point's, and a new W or H keeps it in place, with the Constrain Width and
+/// Height Proportions link; with Scale Artwork with Artboard on, a new size scales its art, #602;
+/// a new W or H, preset or orientation goes to every selected artboard, in one undo step), its
+/// preset and orientation (#671), and Move and Scale Artwork with Artboard; then an Artboards
+/// section with its name, which can be edited to rename it, the Artboard Options icon, its Fill
+/// (background color, also for every selected artboard), New Artboard and Delete Artboard; and
+/// Quick Actions: Rearrange All (#681) and Exit back to the Selection tool (#530).
 fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let units = app.session.general_unit();
-    let origin = app.ruler_origin();
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     let i = super::artboards::selected(app, n);
-    let scale_art = super::artboards::scale_art(app);
-    let move_art = super::artboards::move_art(app);
     if let Some(ab) = app.session.active().and_then(|d| d.doc.artboards.get(i)).cloned() {
+        section_header(ui, tl!("Transform"));
+        let fw = super::field_width(ui);
+        super::transform::artboard_fields(app, ui, i, ab.rect, fw);
+        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
+        ui.add_space(2.0);
+        super::artboards::art_options(app, ui);
+        divider(ui);
+        section_header(ui, tl!("Artboards"));
         // The field shows the artboard's name as it is (names are never translated). Typing a new
         // name and pressing Enter or clicking elsewhere renames the artboard as the Artboards panel's
         // rename does; pressing Escape or leaving the field empty keeps the old name. A click on
@@ -487,39 +502,13 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                 app.run("tool.options", json!({"tool": "artboard"})).ok();
             }
         });
-        let fw = super::field_width(ui);
-        egui::Grid::new("ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            let r = ab.rect;
-            for (row, [(l1, k1, v1), (l2, k2, v2)]) in
-                [[("X:", "x", r.x0), ("W:", "width", r.width())], [("Y:", "y", r.y0), ("H:", "height", r.height())]].into_iter().enumerate()
-            {
-                for (label, key, v) in [(l1, k1, v1), (l2, k2, v2)] {
-                    dim_label(ui, label);
-                    let offset = match key {
-                        "x" => origin.x,
-                        "y" => origin.y,
-                        _ => 0.0,
-                    };
-                    if let Some(v) = widgets::num_field_named(ui, ("ab", key, row), Some(tl!(label)), Some(v - offset), units, fw) {
-                        // A new X or Y moves the active artboard; a new W or H goes to every selected one.
-                        let indices = if matches!(key, "width" | "height") { super::artboards::resized_with(app, i) } else { vec![i] };
-                        let common = json!({"scaleArt": scale_art, "moveArt": move_art});
-                        super::artboards::set_props(app, &indices, common, |j, _| Some(json!({"index": j, key: v + offset}))).ok();
-                    }
-                }
-                ui.end_row();
-            }
-        });
-        artboard_size_row(app, ui, i, ab.rect.width(), ab.rect.height());
         artboard_fill_row(app, ui, i, ab.color);
-        ui.add_space(2.0);
-        super::artboards::art_options(app, ui);
     }
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            super::artboards::select(app, n);
+        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
+            super::artboards::add_new(app);
         }
         let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
         if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {

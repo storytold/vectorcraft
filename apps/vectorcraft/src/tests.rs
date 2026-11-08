@@ -99,9 +99,8 @@ fn unreadable_saved_docking_keeps_preferences_and_every_workspace() {
 
 #[test]
 fn an_unreadable_ui_json_is_kept_beside_it() {
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-prefs-{}-{stamp}", std::process::id()));
-    std::fs::create_dir(&dir).unwrap();
+    let temp = tempfile::Builder::new().prefix("vectorcraft-ui-prefs-").tempdir().unwrap();
+    let dir = temp.path();
     let path = dir.join("ui.json");
     super::keep_prefs_copy(&path, b"{\"docking\": {\"root\": {\"FutureNode\": {}}}}", "ui.unreadable");
     super::keep_prefs_copy(&path, b"not json", "ui.unreadable");
@@ -109,7 +108,6 @@ fn an_unreadable_ui_json_is_kept_beside_it() {
     let first = std::fs::read(dir.join("ui.unreadable.json")).unwrap();
     let second = std::fs::read(dir.join("ui.unreadable-2.json")).unwrap();
     let before = std::fs::read(dir.join("ui.before-layout-migration.json")).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
     assert!(first.starts_with(b"{\"docking\""), "the first copy is not replaced");
     assert_eq!(second, b"not json");
     assert_eq!(before, b"{}");

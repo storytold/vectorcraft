@@ -10,8 +10,8 @@ use super::create::anchor_from_json;
 use super::draw2::usize_opt;
 use super::pathops::Beside;
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selection,
-    id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selected_path,
+    has_selection, id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
-            has_doc,
+            has_selected_path,
             reverse
         ),
         cmd!(
@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+J"),
             "{ids?: [path, ...] (default: the selected paths; a compound path ID expands to its open member paths), subpaths?: [usize, usize] (which subpaths to join), ends?: [\"first\"|\"last\", \"first\"|\"last\"] (which end of each path to join, for two paths/subpaths; default without ids: direct-selected ends if any, else the nearest pair; default with ids: the nearest pair), to?: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours)} join two or more open paths/subpaths into one (the first keeps its id, selected), or close a single open path; without ids, direct-selected anchors lying on one another along a path merge into one anchor instead",
-            has_selection,
+            has_selected_path,
             join
         ),
         cmd!(
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+J"),
             "{axis?: \"horizontal\"|\"vertical\"|\"both\"}",
-            has_selection,
+            has_selected_path,
             average
         ),
         cmd!(
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+Shift+J"),
             "{to: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours), ids?: [path, ...] (default: the selection; a compound path ID expands to its open member paths)} move two open path ends to their midpoint and join them there, as one undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in ids or the selection (or both ends of one open path, closing it) → the joined path stays selected",
-            has_selection,
+            has_selected_path,
             average_join
         ),
         cmd!(
@@ -1191,7 +1191,7 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
 
 pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
-    let with_guides = p.get("guides").and_then(Value::as_bool).unwrap_or(false);
+    let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();

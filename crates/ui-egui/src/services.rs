@@ -37,6 +37,10 @@ pub type PickSave = Box<dyn FnMut(&FilePick) -> Option<String>>;
 
 pub type ReadFn = Box<dyn Fn(&str) -> Result<Vec<u8>, String>>;
 
+/// The first `max` bytes of the file at a path (all of it when it is shorter); the rest of the file
+/// is not read.
+pub type ReadHeadFn = Box<dyn Fn(&str, usize) -> Result<Vec<u8>, String>>;
+
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 
 pub type ExistsFn = Box<dyn Fn(&str) -> bool>;
@@ -76,6 +80,10 @@ pub struct Services {
     /// Show a save dialog (suggested name, folder, file types); returns a path.
     pub pick_save: Option<PickSave>,
     pub read: Option<ReadFn>,
+    /// Read at most a number of bytes from a file (desktop). A file with a size limit is read one
+    /// byte past the limit, so a larger file is refused without reading all of it. Without it, the
+    /// whole file is read with `read`.
+    pub read_head: Option<ReadHeadFn>,
     pub write: Option<WriteFn>,
     /// Is there a file or folder at a path (desktop)? The app asks before replacing a file that a
     /// save panel's name names once the app gives it an extension ([`picks::ask_to_replace`]).
@@ -161,6 +169,11 @@ pub struct Services {
     /// bar's open menu) for floating panels in OS windows of their own: eframe runs the host's
     /// `raw_input_hook` for the main window only.
     pub native_input_hook: Option<NativeInputHook>,
+    /// The connected monitors, kept current by the desktop host: floating panels in OS windows of
+    /// their own store the monitor they are on and reopen on it. The rects are in the points egui
+    /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
+    /// window by these points, which sends floating panels to the main window's monitor.
+    pub dock_monitors: Vec<craft_ui::docking::Monitor>,
 }
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).

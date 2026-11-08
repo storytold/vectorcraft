@@ -258,24 +258,33 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
 
 /// Load Variable Library: replace the document's variables and data sets with a variable library's
 /// ([`parse_library`]) in one undo step, or none when the document already holds what the library
-/// gives. Every variable of the document is deleted with its bindings
-/// and values, and every data set is deleted. The library's text variables are then defined,
-/// unbound, and its data sets are added. The library's variables of other kinds are left out, named
-/// in `skipped` and in a warning.
+/// gives. Every data set is deleted, and every variable of the document is deleted with its
+/// bindings and values, except a text variable the library also declares: it stays bound to its
+/// objects, so the library's data sets change them (#4136; a template's bound variables take a
+/// library of the same names:
+/// <https://community.adobe.com/questions-652/illustrator-error-with-csv-files-812184>). The
+/// library's other text variables are then defined, unbound, and its data sets are added. The
+/// library's variables of other kinds are left out, named in `skipped` and in a warning.
 pub(super) fn load_library(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.loadLibrary";
     let bytes = library_bytes(p, C)?;
     let xml = std::str::from_utf8(bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes)).map_err(|_| bad(C, "the variable library is not UTF-8"))?;
     let lib = parse_library(xml, C)?;
     let vars = &s.doc()?.doc.variables;
-    let deleted: Vec<String> = vars.variables.iter().map(|v| v.name.clone()).collect();
+    let kept = |v: &Variable| v.kind == VariableKind::Text && lib.text.contains(&v.name);
+    let deleted: Vec<String> = vars.variables.iter().filter(|v| !kept(v)).map(|v| v.name.clone()).collect();
     let deleted_sets: Vec<String> = vars.datasets.iter().map(|d| d.name.clone()).collect();
+    let added: Vec<Variable> = lib
+        .text
+        .iter()
+        .filter(|n| !vars.variables.iter().any(|v| kept(v) && &v.name == *n))
+        .map(|n| Variable { name: n.clone(), kind: VariableKind::Text })
+        .collect();
     // Lock Variables refuses New Variable and Delete Variable, so the load is refused when it would
     // delete or define a variable.
-    if !deleted.is_empty() || !lib.text.is_empty() {
+    if !deleted.is_empty() || !added.is_empty() {
         variables_unlocked(s).map_err(|why| EngineError::Disabled(C.into(), why))?;
     }
-    let added: Vec<Variable> = lib.text.iter().map(|n| Variable { name: n.clone(), kind: VariableKind::Text }).collect();
     let names: Vec<String> = lib.datasets.iter().map(|d| d.name.clone()).collect();
     // A load that leaves the variables and data sets as they were adds no undo step.
     super::edit_variables(s, "Load Variable Library", |vars| {

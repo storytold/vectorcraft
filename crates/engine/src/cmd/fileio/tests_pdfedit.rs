@@ -488,7 +488,7 @@ fn an_ai_file_opens_from_its_vectorcraft_document_when_the_editing_copy_differs(
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
-    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [id]})).unwrap();
     let r = s.execute("document.export", &json!({"format": "ai"})).unwrap();
     assert!(r["warnings"].to_string().contains("live effects"), "{r}");
     let bytes = b64(&r);
@@ -598,36 +598,17 @@ fn editing_copy(bytes: &[u8]) -> vectorcraft_doc::Document {
     l.doc
 }
 
-/// `nodes` as the editing copy reads them back: an opacity mask's art that isn't a group comes
-/// back as a plain group holding it.
-fn mask_art_grouped(nodes: &mut [std::sync::Arc<vectorcraft_doc::Node>]) {
-    use vectorcraft_doc::{Node, NodeKind};
-    for n in nodes {
-        let n = std::sync::Arc::make_mut(n);
-        if let Some(m) = n.extras_mut().mask.as_mut()
-            && !matches!(m.art.kind, NodeKind::Group { .. })
-        {
-            let art = m.art.clone();
-            m.art = std::sync::Arc::new(Node::new(art.id, NodeKind::Group { children: vec![art], clip: false }));
-        }
-        if let Some(c) = n.children_mut() {
-            mask_art_grouped(c);
-        }
-    }
-}
-
 /// Transparency, a compound path, a clipping group, an opacity mask and a clipping layer come back
 /// from the editing copy for other apps alone, its page matching it, with every save option that
 /// writes the copy; the version 7 `.ai` keeps the compound path and the clipping group.
 #[test]
 fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
     let mut s = see_through_session();
-    let mut before = (*s.doc().unwrap().doc).clone();
-    // The mask's art is one path; it reads back as a group holding the path.
+    let before = (*s.doc().unwrap().doc).clone();
+    // The mask's art is one path, and it reads back as that path.
     let mut arts = vec![];
     before.walk(|n| arts.extend(n.extras().mask.as_ref().map(|m| matches!(m.art.kind, vectorcraft_doc::NodeKind::Path { .. }))));
     assert_eq!(arts, [true]);
-    mask_art_grouped(&mut before.layers);
     let want = see_through_outline(&before);
     for opts in [json!({"format": "ai"}), json!({"format": "ai", "compress": false}), json!({"format": "ai", "pdfCompatible": true})] {
         let bytes = b64(&s.execute("document.export", &opts).unwrap());
@@ -800,6 +781,65 @@ fn images_come_back_from_the_editing_copy() {
         assert!(copy.editing_data && !copy.restored, "{opts} {:?}", copy.warnings);
         assert!(!copy.warnings.iter().any(|w| w.contains("editing data")), "{opts} {:?}", copy.warnings);
         assert_eq!(image_outline(&copy.doc), before, "{opts}");
+    }
+}
+
+/// The type of `doc`'s art, one line each: its kind, point type's matrix or area type's frame on the
+/// document (rounded to hundredths), its characters, and each run's font, size and fill.
+fn type_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
+    use vectorcraft_doc::{NodeKind, TextKind};
+    let mut out = vec![];
+    let round = |v: f64| (v * 100.0).round() / 100.0 + 0.0;
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let (kind, xf) = match &t.kind {
+                TextKind::Point => ("point", t.xf.as_coeffs().map(round).to_vec()),
+                TextKind::Area { frame } => {
+                    let b = frame.transformed(t.xf).bounds().unwrap();
+                    ("area", vec![round(b.x0), round(b.y0), round(b.x1), round(b.y1)])
+                }
+                TextKind::OnPath { .. } => ("path", vec![]),
+            };
+            let runs: Vec<String> = t
+                .runs
+                .iter()
+                .map(|r| format!("{:?} {} {} {} {:?}", r.text, r.style.font_family, r.style.font_style, round(r.style.size), r.style.fill))
+                .collect();
+            out.push(format!("{kind} {xf:?} {runs:?}"));
+        }
+    });
+    out
+}
+
+/// Point type of two paragraphs, turned point type and area type come back from the editing copy
+/// for other apps alone as type, with every save option that writes the copy.
+#[test]
+fn type_comes_back_from_the_editing_copy() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+    s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Hello\nWorld", "size": 24})).unwrap();
+    s.execute("text.create", &json!({"x": 150, "y": 100, "text": "Turned"})).unwrap();
+    // The new type is selected.
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("text.create", &json!({"x": 20, "y": 120, "text": "Area type in a frame", "area": {"width": 120, "height": 60}})).unwrap();
+    let path = tmp("type.ai");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    let before = type_outline(&s.doc().unwrap().doc);
+    assert_eq!(before.len(), 3, "{before:#?}");
+    for opts in [
+        json!({"format": "ai"}),
+        json!({"format": "ai", "compress": false}),
+        json!({"format": "ai", "embedProfiles": false}),
+        json!({"format": "ai", "includeLinked": true}),
+        json!({"format": "ai", "range": "all"}),
+        json!({"format": "ai", "pdfCompatible": false}),
+    ] {
+        let r = s.execute("document.export", &opts).unwrap();
+        assert!(!r["warnings"].to_string().contains("type"), "{opts} {}", r["warnings"]);
+        let copy = load::load_with(&path, &b64(&r), &LoadOptions { native: false, ..Default::default() }).unwrap();
+        assert!(copy.editing_data && !copy.restored, "{opts} {:?}", copy.warnings);
+        assert!(!copy.warnings.iter().any(|w| w.contains("editing data")), "{opts} {:?}", copy.warnings);
+        assert_eq!(type_outline(&copy.doc), before, "{opts}");
     }
 }
 

@@ -14,7 +14,7 @@ pub(super) fn curvature(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "need at least one point"));
     }
     let sp = vectorcraft_tools::draw2::curvature_spline(&pts, switch_or(p, "closed", false, C)?);
-    if let Some(id) = id_param(p, "id") {
+    if let Some(id) = crate::cmd::object_param(p, "id", C)? {
         s.edit("Curvature", |d, sel| {
             *path_mut(d, id)? = PathData::single(sp);
             sel.set([id]);

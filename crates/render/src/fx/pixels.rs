@@ -100,6 +100,7 @@ impl Renderer {
         // The cached raster: of the whole content at full size at this zoom, else of this view (and
         // the margin around it).
         let whole = fits && k >= 1.0;
+        self.stats.view_sized += usize::from(!whole);
         let in_view = (!whole).then(|| ViewCrop::of(f.view, room));
         let stamp = self.stamp;
         let channels = match f.ink.base() {
@@ -236,7 +237,10 @@ impl Renderer {
             bounds = fx.spread(before, space.line);
             let outline = image_outline.as_ref().map(|g| (g, FillRule::NonZero)).or(content.outline);
             match fx {
-                RasterFx::GaussianBlur { radius } => effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px),
+                RasterFx::GaussianBlur { radius, linear } => {
+                    let blur = if *linear { effects::pixel::gaussian_rgba_linear } else { effects::pixel::gaussian_rgba };
+                    blur(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px)
+                }
                 RasterFx::Feather { radius } => {
                     effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px);
                     if let Some((g, rule)) = outline {
@@ -571,10 +575,15 @@ impl Renderer {
         composite: Option<(vectorcraft_doc::color::BlendMode, f32)>,
         draw: impl FnOnce(&mut Self, &mut RenderContext, &Frame, Option<(vectorcraft_doc::color::BlendMode, f32)>),
     ) {
+        // A filter layer's coarser grid starts where its context does: at the corner of a context
+        // drawn single-threaded, and at the frame's edge for a region cropped to the frame.
+        let screen = Rect::new(0.0, 0.0, f64::from(ctx.width()), f64::from(ctx.height()));
+        self.stats.view_sized += usize::from(!f.mt || f.view.transform_rect_bbox(reach).union(screen) != screen);
         if !f.mt {
             return self.inside_layer(|r| draw(r, ctx, f, composite));
         }
         let Some((x0, y0, w, h, k)) = filter_region(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px) else { return };
+        self.stats.view_sized += usize::from(k < 1.0);
         // During a drag, the region holds at most `DRAG_PIXEL_BUDGET` pixels (#2558).
         let drag = || filter_region_within(f.view.transform_rect_bbox(reach), (ctx.width(), ctx.height()), blur / f.px, DRAG_PIXEL_BUDGET);
         let (x0, y0, w, h, k) = match f.opts.dragging.then(drag).flatten().filter(|r| r.4 < k) {
@@ -648,7 +657,7 @@ impl Renderer {
                 AppearanceItem::Stroke(st) => {
                     let st = &*f.stroke(st);
                     let w = effects::stroke::aligned_width(st, effects::stroke::is_closed(ig));
-                    effects::stroke::line_outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
+                    crate::stroke::outline(&effects::stroke::stroke_pieces(ig, st).line, st, w, f.px * 0.25)
                 }
             };
             let outset = n.appearance.outset();

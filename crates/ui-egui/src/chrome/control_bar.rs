@@ -172,26 +172,172 @@ fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
 /// language, the four fields, the W/H link and the item spacing ahead of each of them. With less,
 /// only the Transform link shows.
 fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
-    let measure = |text: egui::WidgetText| text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x;
-    let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| measure(inline_label(t, lbl).into())).sum();
+    let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| widgets::text_width(ui, inline_label(t, lbl))).sum();
     let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
     let items = 2 * INLINE_FIELDS.len() + 1;
     labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
 }
 
-/// The Control bar (Window → Control), context-sensitive like Illustrator's.
+/// The size of the Control bar's Align, Distribute and area type vertical alignment buttons.
+const BUTTON: f32 = 24.0;
+
+/// The space ahead of the separator that ends a group of the Control bar's controls.
+const GROUP_GAP: f32 = 4.0;
+
+/// The width of the separators of the Control bar's [`group_end`] and ahead of the Transform link.
+const SEPARATOR: f32 = 6.0;
+
+/// The widths of the Document Setup and Preferences buttons, shown with nothing selected.
+const DOCUMENT_SETUP_WIDTH: f32 = 112.0;
+const PREFERENCES_WIDTH: f32 = 90.0;
+
+/// The room `n` of the bar's buttons take, with the spacing after each.
+fn buttons_width(ui: &Ui, n: usize) -> f32 {
+    (BUTTON + ui.spacing().item_spacing.x) * n as f32
+}
+
+/// The separator that ends a group of the Control bar's controls, as [`group_end_width`] measures it.
+fn group_end(ui: &mut Ui) {
+    ui.add_space(GROUP_GAP);
+    separator(ui);
+}
+
+fn group_end_width(ui: &Ui) -> f32 {
+    GROUP_GAP + separator_width(ui)
+}
+
+/// A separator [`SEPARATOR`] wide.
+fn separator(ui: &mut Ui) {
+    ui.add(egui::Separator::default().spacing(SEPARATOR));
+}
+
+fn separator_width(ui: &Ui) -> f32 {
+    SEPARATOR + ui.spacing().item_spacing.x
+}
+
+/// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
+/// and Preferences with nothing selected. The groups ahead of them (the Paragraph section, area
+/// type's vertical alignment, the Align and Distribute buttons) show only while it is left, so
+/// the bar trims them from its right end (#5372), after the inline X/Y/W/H fields.
+fn end_width(ui: &Ui, nothing_selected: bool) -> f32 {
+    if nothing_selected { DOCUMENT_SETUP_WIDTH + ui.spacing().item_spacing.x + PREFERENCES_WIDTH } else { crate::panels::transform::link_width(ui) }
+}
+
+/// Draws the Control bar's groups between its Character controls and the Transform link, and
+/// returns whether the Transform link and X/Y/W/H follow (false: nothing is selected, and Document
+/// Setup and Preferences, drawn here, end the bar). The groups are the Paragraph section and area
+/// type's vertical alignment (#3759), then the Align buttons and, for two or more objects, the
+/// Distribute buttons (a single object keeps the bar as it was); each shows only while the end of
+/// the bar keeps its room.
+fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize) -> bool {
+    let nothing = objects == 0;
+    if crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end_width(ui, nothing)) {
+        group_end(ui);
+    }
+    if crate::panels::properties::vertical_align::shown(app).is_some()
+        && ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end_width(ui, nothing)
+        && crate::panels::properties::vertical_align::buttons(app, ui, BUTTON)
+    {
+        group_end(ui);
+    }
+    if nothing {
+        if widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
+            app.run("file.documentSetup", json!({})).ok();
+        }
+        if widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
+            app.run("edit.preferences", json!({})).ok();
+        }
+        return false;
+    }
+    let end = separator_width(ui) + end_width(ui, false);
+    if ui.available_width() >= buttons_width(ui, 7) + end {
+        crate::panels::align::align_buttons(app, ui, BUTTON);
+        if objects > 1 && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) + end {
+            ui.add_space(GROUP_GAP);
+            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        }
+        separator(ui);
+    }
+    true
+}
+
+/// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
+/// the bottom.
+pub const CONTROL_BAR_EDGES: [&str; 2] = ["top", "bottom"];
+
+/// The side of the Control bar's panel menu button, at the bar's right end.
+const MENU_BUTTON: f32 = 16.0;
+
+/// The height of the band drawn along the edge of the window that a gripper drag docks the bar to.
+const DOCK_BAND: f32 = 4.0;
+
+/// Docks the Control bar to `edge` of [`CONTROL_BAR_EDGES`], through its command.
+fn dock(app: &mut VectorcraftApp, edge: &str) {
+    crate::menus::invoke(app, "window.control.dock", json!({ "edge": edge }));
+}
+
+/// The Control bar's panel menu: Dock to Top and Dock to Bottom, the edge the bar is docked to
+/// checked.
+fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
+    let resp = crate::panels::menu_button(ui, "control", rect);
+    egui::Popup::menu(&resp).show(|ui| {
+        ui.set_min_width(160.0);
+        for (i, label) in [tl!("Dock to Top"), tl!("Dock to Bottom")].into_iter().enumerate() {
+            if widgets::menu_item(ui, label, true, usize::from(app.ui.control_bar_bottom) == i) {
+                dock(app, CONTROL_BAR_EDGES[i]);
+            }
+        }
+    });
+}
+
+/// The Control bar's gripper. Dragging it shows a band along the top or the bottom edge of the
+/// window, whichever the pointer is nearer, and docks the bar there on release.
+fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+    let (g, resp) = ui.allocate_exact_size(vec2(6.0, 20.0), Sense::drag());
+    for i in 0..5 {
+        ui.painter().circle_filled(g.center_top() + vec2(0.0, 2.0 + i as f32 * 4.0), 0.9, t.text_disabled);
+    }
+    let resp = resp.on_hover_cursor(egui::CursorIcon::Grab);
+    if !resp.dragged() && !resp.drag_stopped() {
+        return;
+    }
+    let Some(pos) = resp.interact_pointer_pos().or_else(|| ui.ctx().pointer_latest_pos()) else { return };
+    let window = ui.ctx().content_rect();
+    let bottom = pos.y > window.center().y;
+    if resp.drag_stopped() {
+        if bottom != app.ui.control_bar_bottom {
+            dock(app, CONTROL_BAR_EDGES[usize::from(bottom)]);
+        }
+        return;
+    }
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    let band = if bottom {
+        egui::Rect::from_min_max(egui::pos2(window.left(), window.bottom() - DOCK_BAND), window.max)
+    } else {
+        egui::Rect::from_min_max(window.min, egui::pos2(window.right(), window.top() + DOCK_BAND))
+    };
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("control_bar_dock_band"));
+    ui.ctx().layer_painter(layer).rect_filled(band, 0.0, t.accent);
+}
+
+/// The Control bar (Window → Control), context-sensitive like Illustrator's, docked to the top or
+/// the bottom of the window.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    egui::Panel::top("control_bar")
+    let bottom = app.ui.control_bar_bottom;
+    let panel = if bottom { egui::Panel::bottom("control_bar") } else { egui::Panel::top("control_bar") };
+    let bar = panel
         .exact_size(34.0)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                // Gripper
-                let (g, _) = ui.allocate_exact_size(vec2(6.0, 20.0), Sense::hover());
-                for i in 0..5 {
-                    ui.painter().circle_filled(g.center_top() + vec2(0.0, 2.0 + i as f32 * 4.0), 0.9, t.text_disabled);
-                }
+            // The panel menu button takes the right end, and the controls trim to the room left of it:
+            // they are laid out in that room, so every room check below leaves the button's width.
+            let full = ui.max_rect();
+            let menu = egui::Rect::from_center_size(egui::pos2(full.right() - MENU_BUTTON / 2.0, full.center().y), vec2(MENU_BUTTON, MENU_BUTTON));
+            let room = egui::Rect::from_min_max(full.min, egui::pos2(menu.left() - ui.spacing().item_spacing.x, full.bottom()));
+            let layout = egui::Layout::left_to_right(egui::Align::Center);
+            let controls = ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(layout), |ui| {
+                gripper(app, ui, &t);
                 if app.session.active().is_none() {
                     ui.label(egui::RichText::new(tl!("No Document")).color(t.text_dim));
                     return;
@@ -256,7 +402,8 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     ui.add_space(4.0);
                     ui.separator();
                 }
-                if ui.link(egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
+                // A click opens the Transparency panel; a drag scrubs the field (#4088).
+                if crate::scrub::link_label(ui, egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
                     app.ui.open_panel = Some("transparency".into());
                 }
                 if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
@@ -283,28 +430,9 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 ui.separator();
                 crate::panels::character::control_bar(app, ui);
-                // Area type: its vertical alignment in the frame (#3759).
-                if crate::panels::properties::vertical_align::buttons(app, ui, 24.0) {
-                    ui.add_space(4.0);
-                    ui.separator();
-                }
-                if sel.is_empty() {
-                    if widgets::flat_button(ui, tl!("Document Setup"), 112.0).clicked() {
-                        app.run("file.documentSetup", json!({})).ok();
-                    }
-                    if widgets::flat_button(ui, tl!("Preferences"), 90.0).clicked() {
-                        app.run("edit.preferences", json!({})).ok();
-                    }
+                if !groups_before_transform(app, ui, sel.len()) {
                     return;
                 }
-                crate::panels::align::align_buttons(app, ui, 24.0);
-                // Two or more objects get the six Distribute Objects buttons too; a single
-                // object keeps the bar as it was.
-                if sel.len() > 1 {
-                    ui.add_space(4.0);
-                    crate::panels::align::distribute_buttons(app, ui, 24.0);
-                }
-                ui.separator();
                 // The Transform link opens the whole Transform panel (reference point, rotate,
                 // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
                 crate::panels::transform::link(app, ui);
@@ -317,10 +445,12 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let link = crate::panels::transform::proportional(app, ui);
                     let copy = crate::panels::transform::alt_enter_copies(app, ui);
                     let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+                    // The W/H link sits between W and H, but is made after H so Tab goes from W
+                    // straight to H and finds the link after it.
+                    let mut link_room = None;
                     for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
-                        // The W/H link sits between W and H.
                         if k == "height" {
-                            crate::panels::transform::constrain_link(app, ui);
+                            link_room = Some(crate::panels::transform::constrain_link_room(ui));
                         }
                         widgets::field_label(ui, inline_label(&t, lbl));
                         let (id, shown) = (("cb", k), Some(v - offset));
@@ -333,7 +463,20 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                             app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
                         }
                     }
+                    if let Some(room) = link_room {
+                        let id = ui.scope_id().with("cb-constrain-link");
+                        crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
+                    }
                 }
             });
+            // Controls that keep their size can still run into the button's room in a narrow window;
+            // the button is left out then.
+            if controls.response.rect.right() <= menu.left() {
+                panel_menu(app, ui, menu);
+            }
         });
+    // Docked at the bottom, the bar is a bottom bar that menus stop above.
+    if bottom {
+        widgets::set_menu_floor(ui.ctx(), bar.response.rect.top());
+    }
 }

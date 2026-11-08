@@ -16,6 +16,7 @@ impl<'a> Reader<'a> {
         if self.pattern.is_some() {
             self.unreadable("type in a pattern", false);
         }
+        self.left_out_of_symbol();
         // `1 /FreeUndo`: type in a drawn look. Its story is one of another text document
         // (`/AI11UndoFreeTextDocument`), which counts its stories on its own, so its slot has none.
         // In the look of a text object that has an appearance, the object itself follows the look,
@@ -34,6 +35,9 @@ impl<'a> Reader<'a> {
         // The type takes the state's transparency, as a path does; an `Xy` after it sets the slot's own.
         n.opacity = gs.opacity;
         n.blend = gs.blend;
+        n.knockout_shape = gs.knockout_shape;
+        // An `Xy` before the text object was the object's, not its layer's, when the layer's `LB` follows.
+        self.layer_state = None;
         let hidden = self.obj_hidden;
         self.add(n, hidden)
     }
@@ -46,6 +50,11 @@ impl<'a> Reader<'a> {
     /// group. Without data, or with a PDF that can't be read, nothing is drawn.
     pub(super) fn foreign_art(&mut self, o: &Obj) -> Result<(), String> {
         let Some(text) = self.foreign_data.take() else { return Ok(()) };
+        // Where a symbol's art puts it isn't known.
+        if self.symbol.is_some() {
+            self.left_out_of_symbol();
+            return Ok(());
+        }
         // One `%` starts each line; the rest, `_` included, is data.
         let mut encoded = String::with_capacity(text.len());
         for line in text.split(|b| matches!(b, b'\r' | b'\n')) {
@@ -165,6 +174,9 @@ impl<'a> Reader<'a> {
         self.path_kinds.clear();
         self.points = 0;
         self.clip_next = false;
+        if let Some(head) = self.symbol.as_mut() {
+            (head.missing_fill, head.missing_stroke) = (false, false);
+        }
     }
 
     /// Paint the current path (`op`), as a guide when `guide`.
@@ -177,6 +189,7 @@ impl<'a> Reader<'a> {
             self.set_instance(&i);
         }
         let (fill_paint, stroke_paint) = (self.pending_fill.take(), self.pending_stroke.take());
+        let missing = self.symbol.as_mut().map_or((false, false), |h| (std::mem::take(&mut h.missing_fill), std::mem::take(&mut h.missing_stroke)));
         if bp.elements().is_empty() {
             return Ok(());
         }
@@ -196,16 +209,18 @@ impl<'a> Reader<'a> {
             "b" => (true, true),
             _ => (false, false),
         };
+        // A symbol's art painted with a gradient the file doesn't define is left out.
+        if (missing.0 && fill) || (missing.1 && stroke) {
+            self.left_out_of_symbol();
+        }
         // A gradient instance's paint replaces the missing pattern.
         let unread = (fill && self.pending_unread_fill && fill_paint.is_none()) || (stroke && self.pending_unread_stroke && stroke_paint.is_none());
         let mut items = Vec::new();
-        if fill && !clip {
-            items.push(AppearanceItem::Fill(FillLayer {
-                overprint: gs.overprint_fill,
-                ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
-            }));
+        // A clipping path keeps its fill and its stroke: its fill paints under the art it clips and its stroke over it
+        // (`Node::clip_paint`), as the file's PDF part draws them.
+        if fill {
+            items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
-        // A clipping path keeps its stroke, which paints over the art it clips.
         if stroke {
             let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
             st.cap = gs.cap;
@@ -237,23 +252,6 @@ impl<'a> Reader<'a> {
         if clip && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
-        // A clipping path's fill is painted too, under the art it clips, as the file's PDF part draws it.
-        let painted = clip && fill && !matches!(gs.fill, Paint::None);
-        let copy = painted.then(|| {
-            let mut copy = node.clone();
-            copy.id = self.doc.alloc_id();
-            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
-                *clipping = false;
-            }
-            let paint = fill_paint.clone().unwrap_or_else(|| gs.fill.clone());
-            copy.appearance = Appearance {
-                items: vec![AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(paint) })],
-                ..Appearance::default()
-            }
-            .into();
-            copy
-        });
-        // The note and Show Center are the path's, not its painted copy's.
         node.edit_attrs(|a| {
             a.note = gs.note.clone().unwrap_or_default();
             a.show_center = gs.show_center;
@@ -280,10 +278,6 @@ impl<'a> Reader<'a> {
                 }
             }
         }
-        if let Some(copy) = copy {
-            self.clip_fills.insert(copy.id);
-            self.add(copy, hidden)?;
-        }
         Ok(())
     }
 
@@ -302,6 +296,7 @@ impl<'a> Reader<'a> {
                 let mut node = self.new_node(NodeKind::Mesh(one), &gs);
                 node.opacity = gs.opacity;
                 node.blend = gs.blend;
+                node.knockout_shape = gs.knockout_shape;
                 self.add(node, hidden)?;
                 self.mesh_ended = true;
                 return Ok(());
@@ -318,24 +313,19 @@ impl<'a> Reader<'a> {
         };
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         self.add(node, hidden)?;
         self.mesh_ended = true;
         Ok(())
     }
 
-    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state. A clipping path
-    /// takes the stroke itself, not the painted copy of its fill.
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
     pub(super) fn stroke_last(&mut self) {
         let gs = self.gs.clone();
         if !self.after_object {
             return;
         }
-        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
-        let Some(mut at) = kids.len().checked_sub(1) else { return };
-        if kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) && at > 0 {
-            at -= 1;
-        }
-        let Some(n) = kids.get_mut(at) else { return };
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
@@ -353,15 +343,20 @@ impl<'a> Reader<'a> {
     pub(super) fn set_instance(&mut self, i: &Instance) {
         let mut to_doc = self.space();
         // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
-        // origin, as the file's PDF part draws them.
-        if self.pattern.is_some()
+        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are.
+        if (self.pattern.is_some() || self.symbol.is_some())
             && i.has_matrix()
             && let Some(t) = self.template
         {
             let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
             to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
         }
-        match i.paint(&self.gradients, to_doc) {
+        let paint = i.paint(&self.gradients, &self.global_names, to_doc);
+        if let Some(head) = self.symbol.as_mut() {
+            let missing = if i.stroke { &mut head.missing_stroke } else { &mut head.missing_fill };
+            *missing = paint.is_none();
+        }
+        match paint {
             Some(p) if i.stroke => self.pending_stroke = Some(p),
             Some(p) => self.pending_fill = Some(p),
             None => {
@@ -421,20 +416,22 @@ impl<'a> Reader<'a> {
         self.image_link = None;
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
         let Some((m, n)) = Self::image_operands(&vals) else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, ..] = n.as_slice() else {
-            self.warn("an image VectorCraft can't read was left out");
+        let [_, _, _, _, w, h, bits, kind, alpha, _, binary, rest @ ..] = n.as_slice() else {
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
+        // ImageMask 1: the image is transparent and takes a color (version 7 specification §8.1).
+        let image_mask = rest.first() == Some(&1.0);
         let (w, h) = (*w as u64, *h as u64);
         if w.saturating_mul(h) > MAX_PIXELS {
-            self.warn(IMAGE_TOO_LARGE);
+            self.image_left_out(IMAGE_TOO_LARGE);
             return Ok(());
         }
         if w == 0 || h == 0 || ![1.0, 8.0].contains(bits) {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
         let channels: usize = match space.as_str() {
@@ -460,7 +457,7 @@ impl<'a> Reader<'a> {
         // An alpha channel follows the colour samples, one byte a pixel.
         let alpha_len = if *alpha > 0.0 { (w * h) as usize } else { 0 };
         let (Some(samples), opacity) = (data.get(..need), data.get(need..need.saturating_add(alpha_len))) else {
-            self.warn("an image whose data is cut short was left out");
+            self.image_left_out("an image whose data is cut short was left out");
             return Ok(());
         };
         let opacity = opacity.filter(|_| alpha_len > 0);
@@ -470,7 +467,10 @@ impl<'a> Reader<'a> {
             && *bits == 8.0
             && let Some(blob) = Inks::new(w as u32, h as u32, samples.to_vec()).and_then(|i| ImageBlob::cmyk_tiff(&i))
         {
-            return self.add_raster(blob, opacity, &m, (w as u32, h as u32));
+            return self.add_raster(blob, opacity, &m, (w as u32, h as u32), None);
+        }
+        if image_mask && channels == 1 && *bits == 1.0 {
+            return self.colorized_raster(samples, row, opacity, &m, (w as u32, h as u32));
         }
         let mut rgba = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h as usize {
@@ -498,46 +498,82 @@ impl<'a> Reader<'a> {
             }
         }
         let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
         let mut png = vec![];
         if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
-        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32))
+        self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
+    }
+
+    /// A 1-bit gray image whose ImageMask is 1 (`samples`, `row` bytes a row): a grayscale image
+    /// colorized with the fill color. Its 0 bits, which open black with ImageMask 0, take that color,
+    /// and its 1 bits are transparent. A fill that isn't a solid color colorizes it black.
+    fn colorized_raster(&mut self, samples: &[u8], row: usize, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+        let mut gray = Vec::with_capacity(w as usize * h as usize);
+        for y in 0..h as usize {
+            let line = samples.get(y * row..(y + 1) * row).unwrap_or_default();
+            for x in 0..w as usize {
+                let v = line.get(x / 8).map_or(0, |b| ((b >> (7 - x % 8)) & 1) * 255);
+                gray.push(v);
+            }
+        }
+        let mut png = vec![];
+        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
+        if !matches!(written, Some(Ok(()))) {
+            self.image_left_out("an image VectorCraft can't read was left out");
+            return Ok(());
+        }
+        let paint = self.mask_paint();
+        self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
+    }
+
+    /// The color that colorizes an image mask: the fill color, or black when the fill isn't a
+    /// solid color.
+    fn mask_paint(&self) -> Paint {
+        match &self.gs.fill {
+            p @ Paint::Solid { .. } => p.clone(),
+            _ => Paint::solid(vectorcraft_color::Color::BLACK),
+        }
     }
 
     /// `XF` (§8.2): an image whose pixels are in the file the `XG` before it names becomes a linked
     /// image of that file, of its `w` × `h` pixels placed as the matrix maps them, as `XI` places an
     /// image. The data keeps no pixels or preview of it, so a placeholder is spread over those pixels
-    /// until its file is found. One without that file name, or whose operands `XI` couldn't read (no
+    /// until its file is found. A 1-bit image mask is colorized as `XI` colorizes one. One without
+    /// that file name, or whose operands `XI` couldn't read (no
     /// matrix, too few numbers, no pixels, or samples of other than 1 or 8 bits), is left out with a
     /// warning. No pixels are read, so its size isn't held to the limit on `XI`'s samples.
     fn linked_image(&mut self, vals: Vec<V>, hidden: bool) -> Result<(), String> {
         let path = self.image_link.take();
         let operands = Self::image_operands(&vals);
         let (Some(path), Some((m, n))) = (path, operands) else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
         let (&[a, b, c, d, tx, ty], &[_, _, _, _, w, h, bits, ..]) = (m.as_slice(), n.as_slice()) else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
         if !(1.0..=MAX_SIDE).contains(&w) || !(1.0..=MAX_SIDE).contains(&h) || ![1.0, 8.0].contains(&bits) {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
         let (w, h) = (w as u32, h as u32);
-        let xf = self.space() * Affine::new([a, b, c, d, tx, ty]) * FLIP;
+        let Some(to_doc) = self.image_space() else {
+            self.image_left_out("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        let xf = to_doc * Affine::new([a, b, c, d, tx, ty]) * FLIP;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
         let Some(png) = missing_placeholder() else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
         // The placeholder is all the document has of the file: what a missing link shows.
@@ -552,30 +588,55 @@ impl<'a> Reader<'a> {
             self.placeholders.push(xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(w), f64::from(h))));
         }
         let im = ImageObject { key, width: w, height: h, xf, link: Some(LinkInfo::new(path)), placement: Default::default(), pixels: None };
-        self.add_image(im, hidden)
+        // A 1-bit image mask (ImageMask 1) keeps the color that colorizes it once its file is relinked.
+        let image_mask = bits == 1.0 && n.get(7) == Some(&1.0) && n.get(11) == Some(&1.0);
+        let colorize = image_mask.then(|| self.mask_paint());
+        self.add_image_colorized(im, None, colorize, hidden)
     }
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image.
-    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+    /// image, and `colorize` as the color that colorizes it.
+    fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
         // gives the same place only when the image isn't rotated (b = c = 0).
         let [a, b, c, d, tx, ty] = m else {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let to_doc = self.space();
+        let Some(to_doc) = self.image_space() else {
+            self.image_left_out("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
         let xf = to_doc * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
-            self.warn("an image VectorCraft can't read was left out");
+            self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
         let mask = alpha.and_then(|a| self.alpha_mask(a, w, h, xf));
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.add_image_masked(ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None }, mask, false)
+        let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
+        self.add_image_colorized(im, mask, colorize, false)
+    }
+
+    /// An image that isn't read is left out, with `warning`; in a symbol's art, the symbol isn't
+    /// read whole, so its instances come in as the page draws them.
+    fn image_left_out(&mut self, warning: &str) {
+        if self.symbol.is_some() {
+            self.left_out_of_symbol();
+        } else {
+            self.warn(warning);
+        }
+    }
+
+    /// Note art of a symbol's definition that is left out: the symbol isn't kept, and its
+    /// instances come in as the page draws them, within the box of the art that is read.
+    pub(super) fn left_out_of_symbol(&mut self) {
+        if let Some(head) = self.symbol.as_mut() {
+            head.left_out = true;
+        }
     }
 
     /// An image's alpha channel (`w` × `h` bytes) as a grayscale image over the image (`xf`): its
@@ -603,11 +664,19 @@ impl<'a> Reader<'a> {
 
     /// Add an image object with the state's transparency and `mask` as its opacity mask.
     fn add_image_masked(&mut self, im: ImageObject, mask: Option<OpacityMask>, hidden: bool) -> Result<(), String> {
+        self.add_image_colorized(im, mask, None, hidden)
+    }
+
+    /// Add an image object with the state's transparency, `mask` as its opacity mask and
+    /// `colorize` as the color that colorizes it.
+    fn add_image_colorized(&mut self, im: ImageObject, mask: Option<OpacityMask>, colorize: Option<Paint>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
         node.opacity = gs.opacity;
         node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
         node.extras_mut().mask = mask.map(Box::new);
+        node.extras_mut().colorize = colorize.map(Box::new);
         self.add(node, hidden)?;
         self.image_tail = self.after_object;
         Ok(())
@@ -617,6 +686,12 @@ impl<'a> Reader<'a> {
     /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
     /// without a preview, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
+        // Where a symbol's art puts a placed file's pixels isn't known.
+        if self.symbol.is_some() {
+            self.place = None;
+            self.left_out_of_symbol();
+            return Ok(());
+        }
         let (m, b, path, png, w, h, folder) = match self.place.take() {
             Some(Place { broken: true, .. }) => {
                 self.unreadable("placed files", hidden);
