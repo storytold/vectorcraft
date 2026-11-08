@@ -262,6 +262,7 @@ fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direct
         let r = p.bounds().unwrap();
         let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
         let m = revolve_mesh(&p, r, o).unwrap();
+        assert!(!m.is_empty(), "{from} to {to}: the revolve made no triangles");
         assert!(m.normals.iter().all(|n| (dot(*n, *n) - 1.0).abs() < 1e-9), "{from} to {to}: a normal is not unit length");
         assert!(closed(&m), "{from} to {to}");
         assert!(outward(&m), "{from} to {to}: a face turns inward");
