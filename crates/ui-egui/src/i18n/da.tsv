@@ -5713,6 +5713,16 @@ axis	Y Axis	Y-akse
 	The plug-in is computing…	Plug-in'en regner…
 	Inspect Plug-in	Undersøg plug-in
 	Cancel Plug-in Run	Annullér plug-in-kørsel
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installér »{name}«, som beder om disse rettigheder?
+	ID: {id}	ID: {id}
+	Version: {version}	Version: {version}
+	File SHA-256: {hash}	Filens SHA-256: {hash}
+	Read the objects it is given	Læse de objekter, den får
+	Change, add and delete objects in the document	Ændre, tilføje og slette objekter i dokumentet
+	Keep data of its own with the document	Gemme sine egne data med dokumentet
+	Change how the objects its effect is applied to are drawn	Ændre, hvordan de objekter, dens effekt er anvendt på, tegnes
+	Write the document as a file in its own format	Skrive dokumentet som en fil i sit eget format
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
 	New Set	Nyt sæt

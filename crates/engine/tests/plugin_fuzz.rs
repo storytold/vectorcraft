@@ -268,4 +268,56 @@ proptest! {
         }
         renders(&s, "after mutated modules")?;
     }
+
+    /// Manifests with hostile `permissions`, `api` and names (unknown, reserved and repeated
+    /// permissions, junk of every type, control and bidirectional override characters) parse to
+    /// an error or to a manifest whose permissions fit its kind, and installing one with a junk
+    /// `grant` ends as an error or an install, never a panic. A prompt never shows a hidden
+    /// character from the name.
+    #[test]
+    fn hostile_manifest_permissions_never_crash(
+        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        names in prop::collection::vec(
+            prop_oneof![
+                prop::sample::select(vec!["doc.read", "doc.write", "state", "effect.render", "export.write", "progress", "ui.panel", ""]),
+                Just("doc.read\u{202E}"),
+                Just("\u{0007}"),
+            ],
+            0..6,
+        ),
+        permissions in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
+        api in prop_oneof![3 => Just(json!(1)), 1 => arb_junk()],
+        name in prop_oneof![3 => "[a-z\u{202E}\u{2066}\u{200F} ]{1,64}", 1 => "[a-z\u{202E}\u{2066}\u{0007}\u{200F} ]{1,80}"],
+        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]))],
+    ) {
+        let mut m = json!({"id": "fuzz.permissions", "name": name, "kind": kind, "api": api});
+        if kind == "exporter" {
+            m["extensions"] = json!(["fz"]);
+        }
+        m["permissions"] = match permissions {
+            Some(Value::Null) | None => json!(names),
+            Some(junk) => junk,
+        };
+        let text = m.to_string();
+        let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
+        let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
+        if let Ok(man) = &parsed {
+            let implied = vectorcraft_plugins::permissions::Permission::implied(man.kind);
+            prop_assert!(man.permissions().iter().all(|p| implied.contains(p)), "{}", text);
+            let shown = vectorcraft_plugins::permissions::display_text(&man.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+            prop_assert!(!shown.chars().any(|c| c.is_control() || matches!(c, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
+            prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+        }
+        let mut s = rich_session();
+        let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
+        let data = vectorcraft_format::base64_encode(&module);
+        let r = catch_quiet(|| {
+            let _ = s.execute("plugin.inspect", &json!({"dataBase64": data}));
+            s.execute("plugin.install", &json!({"dataBase64": data, "grant": grant})).is_ok()
+        });
+        let installed = r.map_err(|msg| TestCaseError::fail(format!("panicked installing {text}: {msg}")))?;
+        prop_assert!(!installed || parsed.is_ok(), "a manifest that doesn't parse installed: {}", text);
+        vectorcraft_plugins::registry::remove("fuzz.permissions");
+        vectorcraft_plugins::registry::revoke("fuzz.permissions");
+    }
 }

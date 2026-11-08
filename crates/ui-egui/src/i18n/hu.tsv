@@ -5797,6 +5797,28 @@ axis	Y Axis	Y tengely
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): telepítsd az `allowHeavy: true` megadásával, miután a felhasználó beleegyezett
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
+	ID: {id}	Azonosító: {id}
+	Version: {version}	Verzió: {version}
+	File SHA-256: {hash}	A fájl SHA-256 értéke: {hash}
+	Read the objects it is given	Olvashatja a kapott objektumokat
+	Change, add and delete objects in the document	Módosíthat, hozzáadhat és törölhet objektumokat a dokumentumban
+	Keep data of its own with the document	Saját adatokat tárolhat a dokumentummal
+	Change how the objects its effect is applied to are drawn	Módosíthatja, hogyan rajzolódnak ki az objektumok, amelyekre az effektusa alkalmazva van
+	Write the document as a file in its own format	Saját formátumú fájlba írhatja a dokumentumot
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
+@msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
+@msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre
+@msg	at most {MAX_PERMISSIONS} `permissions`	legfeljebb {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a(z) `{shown}` engedély nem vonatkozik `{_1}` fajtájú bővítményre
+@msg	permission `{shown}` is listed twice	a(z) `{shown}` engedély kétszer szerepel
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
+@msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	a modul SHA-256 értéke nem az, amit a `hash` megad: semmi sem lett telepítve
 # Actions panel: action sets (#3712).
 	New Set…	Új készlet…
 	New Set	Új készlet

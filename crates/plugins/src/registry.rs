@@ -9,10 +9,41 @@ use std::sync::{Arc, Mutex, RwLock};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Error;
+use crate::permissions::Grant;
 use crate::{Limits, Plugin, Result};
 
 static PLUGINS: RwLock<BTreeMap<String, Arc<Plugin>>> = RwLock::new(BTreeMap::new());
 static REVISION: AtomicU64 = AtomicU64::new(0);
+/// What the user approved, by plug-in id.
+static GRANTS: RwLock<BTreeMap<String, Grant>> = RwLock::new(BTreeMap::new());
+
+/// Records what the user approved for a plug-in, replacing an earlier grant for its id.
+pub fn grant(g: Grant) {
+    GRANTS.write().unwrap_or_else(|e| e.into_inner()).insert(g.id.clone(), g);
+}
+
+/// What the user approved for plug-in `id`.
+pub fn granted(id: &str) -> Option<Grant> {
+    GRANTS.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+}
+
+/// Every grant, sorted by id.
+pub fn grants() -> Vec<Grant> {
+    GRANTS.read().unwrap_or_else(|e| e.into_inner()).values().cloned().collect()
+}
+
+/// Forgets what the user approved for `id`; false if nothing was.
+pub fn revoke(id: &str) -> bool {
+    GRANTS.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some()
+}
+
+/// May `plugin` be installed without asking the user: does it list no permissions, or did the user
+/// already grant its id every permission it lists? A module with other bytes but no new permission
+/// needs no new approval.
+pub fn approved(plugin: &Plugin) -> bool {
+    let m = plugin.manifest();
+    !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.permissions()))
+}
 
 /// Installs `plugin`, replacing one with the same id.
 pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
@@ -93,16 +124,21 @@ pub struct FolderReport {
 
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
 /// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
-/// which installs only once the user agrees.
+/// which installs only once the user agrees, and one that lists permissions the user has not
+/// granted its id ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
-    load_folder_where(dir, |_| Ok(()))
+    load_folder_where(dir, |_| Ok(()), approved)
 }
 
-/// [`load_folder`], loading only the files `allow` accepts; the others are reported as failed
-/// with its reason.
+/// [`load_folder`], loading only the files `allow` accepts, and of the plug-ins that list
+/// permissions only those `approve` accepts; the others are reported as failed with the reason.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn load_folder_where(dir: &std::path::Path, allow: impl Fn(&std::path::Path) -> std::result::Result<(), String>) -> Result<FolderReport> {
+pub fn load_folder_where(
+    dir: &std::path::Path,
+    allow: impl Fn(&std::path::Path) -> std::result::Result<(), String>,
+    approve: impl Fn(&Plugin) -> bool,
+) -> Result<FolderReport> {
     let rd = std::fs::read_dir(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
     let mut files: Vec<std::path::PathBuf> =
         rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm"))).collect();
@@ -118,6 +154,13 @@ pub fn load_folder_where(dir: &std::path::Path, allow: impl Fn(&std::path::Path)
             // A heavy plug-in installs once the user agrees, which loading a folder doesn't ask.
             Ok(p) if p.manifest().budget == crate::Budget::Heavy => {
                 report.failed.push((f.display().to_string(), "asks for a heavy budget, which the user allows when installing it on its own".into()));
+            }
+            Ok(p) if p.manifest().asks_permissions() && !approve(&p) => {
+                let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
+                report.failed.push((
+                    f.display().to_string(),
+                    format!("needs approval: it asks for {asked}, which the user grants when installing it on its own"),
+                ));
             }
             Ok(p) => report.loaded.push(install(p).id().to_string()),
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),

@@ -5759,6 +5759,16 @@ axis	Y Axis	Y-as
 	The plug-in is computing…	De plug-in is aan het rekenen…
 	Inspect Plug-in	Plug-in inspecteren
 	Cancel Plug-in Run	Plug-in-run annuleren
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	„{name}” installeren, dat om deze machtigingen vraagt?
+	ID: {id}	ID: {id}
+	Version: {version}	Versie: {version}
+	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
+	Read the objects it is given	De objecten lezen die het krijgt
+	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
+	Keep data of its own with the document	Eigen gegevens bij het document bewaren
+	Change how the objects its effect is applied to are drawn	Wijzigen hoe de objecten waarop het effect is toegepast worden getekend
+	Write the document as a file in its own format	Het document als bestand in een eigen indeling schrijven
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
 	New Set	Nieuwe set
