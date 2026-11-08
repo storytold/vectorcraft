@@ -82,7 +82,8 @@ pub struct Rgb(pub [u8; 3]);
 impl Rgb {
     /// `#rrggbb` or `rrggbb`.
     pub fn parse(s: &str) -> Option<Self> {
-        let h = s.trim().trim_start_matches('#');
+        let h = s.trim();
+        let h = h.strip_prefix('#').unwrap_or(h);
         if h.len() != 6 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
             return None;
         }
@@ -396,6 +397,15 @@ mod tests {
     use vectorcraft_geom::Point;
 
     const AB: Rect = Rect::new(0.0, 0.0, 800.0, 600.0);
+
+    #[test]
+    fn rgb_rejects_repeated_hash() {
+        assert!(Rgb::parse("##ff0000").is_none());
+        assert!(Rgb::parse("####00ff00").is_none());
+        assert!(Rgb::try_from(String::from("##ff0000")).is_err());
+        assert_eq!(Rgb::parse("#ff0000"), Some(Rgb([255, 0, 0])));
+        assert_eq!(Rgb::parse("ff0000"), Some(Rgb([255, 0, 0])));
+    }
 
     #[test]
     fn the_station_point_places_the_vanishing_points() {

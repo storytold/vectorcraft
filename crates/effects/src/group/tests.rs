@@ -103,6 +103,23 @@ fn shape_modes_follow_the_pathfinder_panel() {
     assert_eq!(div.len(), 3);
 }
 
+/// Divide and Outline draw no piece of a member without fill or stroke, the same as when such
+/// pieces are left out.
+#[test]
+fn divide_and_outline_draw_nothing_for_unpainted_members() {
+    let unpainted =
+        Arc::new(Node::path(NodeId(2), shapes::rectangle(Rect::new(5.0, 0.0, 15.0, 10.0)), Appearance::basic(Paint::None, Paint::None, 0.0)));
+    for effect in ["pathfinder.divide", "pathfinder.outline"] {
+        let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), unpainted.clone()]);
+        g.appearance.effects.push(Effect { id: effect.into(), params: serde_json::json!({}), visible: true });
+        let out = pathfinder_children(&g, None).unwrap();
+        assert!(out.iter().any(|n| n.id == NodeId(1)) && out.iter().any(|n| n.id == NodeId(2)), "{effect}: {out:#?}");
+        for n in out.iter().filter(|n| n.id == NodeId(2)) {
+            assert!(n.appearance.items.iter().all(|i| i.paint().is_none()), "{effect}: {n:#?}");
+        }
+    }
+}
+
 /// Returns an "H" in blue type at 100 pt on a baseline at y = 80, with its stems on either
 /// side of x = 100.
 fn type_h() -> Node {
@@ -231,7 +248,7 @@ fn hidden_effect_or_plain_group_is_untouched() {
 }
 
 #[test]
-fn a_transform_on_a_group_moves_the_gradients_of_its_type_and_not_those_placed_on_its_paths() {
+fn a_transform_on_a_group_moves_the_gradients_of_its_type_and_those_placed_on_its_paths() {
     if skip_without_craft_fonts() {
         return;
     }
@@ -256,7 +273,181 @@ fn a_transform_on_a_group_moves_the_gradients_of_its_type_and_not_those_placed_o
     let members = art.children().unwrap();
     let after = start(&members[1].children().unwrap()[0]);
     assert!((after - before - 30.0).abs() < 1e-6, "the type's gradient starts at {before}, then {after}");
-    assert_eq!(start(&members[0]), 0.0, "the square's gradient stays where it was placed");
+    assert!((start(&members[0]) - 30.0).abs() < 1e-6, "the square's gradient moves with it");
+}
+
+#[test]
+fn a_groups_transform_moves_the_gradient_of_its_own_fill() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (15.0, 5.0).into(), aspect: 1.0, focal: None };
+    let mut g = Node::group(NodeId(10), vec![sq(1, 0.0, Color::BLACK), sq(2, 5.0, Color::BLACK)]);
+    g.appearance
+        .items
+        .push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp })))));
+    g.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
+    let art = evaluate_container(None, &g).unwrap();
+    let mut starts = vec![];
+    art.walk(&mut |c: &Node| {
+        if let Paint::Gradient(p) = c.appearance.fill_paint() {
+            starts.push(p.geom.unwrap().start.x);
+        }
+    });
+    assert!(!starts.is_empty() && starts.iter().all(|s| (s - 30.0).abs() < 1e-6), "{starts:?}");
+}
+
+/// The art Pathfinder and compound shapes take (`shape_art`) paints as the canvas does: a path's
+/// gradient and a group's own fill move with a Transform effect.
+#[test]
+fn shape_art_moves_gradients_with_a_transform_effect() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let moved = || Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 40}), visible: true };
+    let starts = |art: &Node| {
+        let mut out = vec![];
+        art.walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let Paint::Gradient(p) = item.paint() {
+                    out.push(p.geom.unwrap().start.x);
+                }
+            }
+        });
+        out
+    };
+    let mut path = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(placed.clone(), Paint::None, 0.0));
+    path.appearance.effects.push(moved());
+    let got = starts(&shape_art(&path, None).unwrap());
+    assert!(got.len() == 1 && (got[0] - 40.0).abs() < 1e-6, "the path's gradient: {got:?}");
+    let mut g = Node::group(NodeId(10), vec![sq(2, 0.0, Color::BLACK)]);
+    g.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed)));
+    g.appearance.effects.push(moved());
+    let got = starts(&shape_art(&g, None).unwrap());
+    assert!(!got.is_empty() && got.iter().all(|s| (s - 40.0).abs() < 1e-6), "the group's own fill: {got:?}");
+}
+
+/// A symbol instance's Transform effect moves the gradient placed on its art's own fill in the
+/// art Pathfinder takes, as it moves its members.
+#[test]
+fn shape_art_moves_the_gradient_of_a_symbol_instances_art_with_its_transform() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let mut art = Node::group(NodeId(20), vec![sq(21, 0.0, Color::BLACK)]);
+    art.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed)));
+    let hook = move |_: &Node| Some(art.clone());
+    let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    instance.appearance.effects.push(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
+    let out = shape_art(&instance, Some(&hook)).unwrap();
+    let Paint::Gradient(g) = out.appearance.fill_paint() else { panic!("a gradient: {:?}", out.appearance) };
+    assert!((g.geom.unwrap().start.x - 30.0).abs() < 1e-6, "{:?}", g.geom);
+    assert!((out.geometric_bounds().unwrap().x0 - 30.0).abs() < 1e-6, "the art moves");
+}
+
+#[test]
+fn a_groups_transform_and_free_distort_move_the_gradients_placed_on_its_paths() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let ends = |e: Effect| {
+        let square =
+            Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(placed.clone(), Paint::None, 0.0)));
+        let mut g = Node::group(NodeId(10), vec![square, sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(e);
+        let art = evaluate_container(None, &g).unwrap();
+        match art.children().unwrap()[0].appearance.fill_paint() {
+            Paint::Gradient(g) => g.geom.map(|g| (g.start, g.end)).unwrap(),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // A quarter turn about the group's center (15, 5) takes (0, 5) to (15, 20) and (10, 5) to (15, 10).
+    let (s, e) = ends(Effect { id: "distort.transform".into(), params: serde_json::json!({"rotate": 90}), visible: true });
+    assert!(near(s, Point::new(15.0, 20.0)) && near(e, Point::new(15.0, 10.0)), "{s:?} {e:?}");
+    // Free Distort moving the group's top corners 10 pt right slants the square to 0..20 across:
+    // its gradient follows its own bounds (0..10 to 0..20), not the group's (0..30 to 0..40).
+    let corners = serde_json::json!({"corners": [[1.0 / 3.0, 0.0], [4.0 / 3.0, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    let (s, e) = ends(Effect { id: "distort.freeDistort".into(), params: corners, visible: true });
+    assert!(near(s, Point::new(0.0, 5.0)) && near(e, Point::new(20.0, 5.0)), "{s:?} {e:?}");
+}
+
+/// A group nested in a group with a Transform effect or Free Distort keeps its own placed gradient
+/// on its members: the Transform's map moves it, and Free Distort moves and scales it from the
+/// nested group's bounds before the effect to its bounds after it.
+#[test]
+fn a_nested_groups_own_gradient_follows_the_outer_groups_transform_and_free_distort() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let ends = |e: Effect| {
+        let mut inner = Node::group(NodeId(5), vec![sq(1, 0.0, Color::BLACK)]);
+        inner.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed.clone())));
+        let mut g = Node::group(NodeId(10), vec![Arc::new(inner), sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(e);
+        let art = evaluate_container(None, &g).unwrap();
+        match art.children().unwrap()[0].appearance.fill_paint() {
+            Paint::Gradient(g) => g.geom.map(|g| (g.start, g.end)).unwrap(),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    let (s, e) = ends(Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 30}), visible: true });
+    assert!(near(s, Point::new(30.0, 5.0)) && near(e, Point::new(40.0, 5.0)), "{s:?} {e:?}");
+    let corners = serde_json::json!({"corners": [[1.0 / 3.0, 0.0], [4.0 / 3.0, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    let (s, e) = ends(Effect { id: "distort.freeDistort".into(), params: corners, visible: true });
+    assert!(near(s, Point::new(0.0, 5.0)) && near(e, Point::new(20.0, 5.0)), "{s:?} {e:?}");
+}
+
+/// An image or a symbol instance that a group's Transform effect moves takes the placed gradients
+/// of its own fills along, as a path does, and each copy takes them as many times as it takes the
+/// transform.
+#[test]
+fn a_groups_transform_moves_the_gradients_placed_on_an_images_own_fills() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::ImageObject;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (0.0, 5.0).into(), end: (10.0, 5.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let image = || {
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 10,
+            height: 10,
+            xf: vectorcraft_geom::Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        }))
+    };
+    let instance = || NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY };
+    let starts = |kind: NodeKind, params: serde_json::Value| {
+        let mut object = Node::new(NodeId(1), kind);
+        object.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
+        let mut g = Node::group(NodeId(10), vec![Arc::new(object), sq(2, 20.0, Color::BLACK)]);
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        let mut out = vec![];
+        art.walk(&mut |c: &Node| {
+            if let (NodeKind::Image(_) | NodeKind::SymbolInstance { .. }, Paint::Gradient(p)) = (&c.kind, c.appearance.fill_paint()) {
+                out.push(p.geom.unwrap().start.x);
+            }
+        });
+        out
+    };
+    for kind in [image as fn() -> NodeKind, instance] {
+        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30})), [30.0], "{:?}", kind());
+        assert_eq!(starts(kind(), serde_json::json!({"moveH": 30, "copies": 2})), [0.0, 30.0, 60.0], "{:?}", kind());
+    }
 }
 
 #[test]

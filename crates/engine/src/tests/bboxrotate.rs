@@ -3,7 +3,7 @@
 //! the box to the page again.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::OrientedBox;
+use vectorcraft_doc::{Node, OrientedBox};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::bbox::Handle;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
@@ -139,6 +139,149 @@ fn reset_bounding_box_squares_the_box_in_one_step() {
     assert_eq!(undo_len(&s), n + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(near(angle(&s, a), 45.0));
+}
+
+/// The angles of every object in `n`'s subtree, opacity mask art included, layers left out.
+fn subtree_angles(n: &Node, out: &mut Vec<f64>) {
+    if !n.is_layer() {
+        out.push(n.bbox_angle);
+    }
+    for c in n.children().into_iter().flatten() {
+        subtree_angles(c, out);
+    }
+    if let Some(m) = &n.extras().mask {
+        subtree_angles(&m.art, out);
+    }
+}
+
+/// The angles of every object in the document, opacity mask art included, layers left out.
+fn object_angles(s: &Session) -> Vec<f64> {
+    let mut out = vec![];
+    for l in &s.doc().unwrap().doc.layers {
+        subtree_angles(l, &mut out);
+    }
+    out
+}
+
+#[test]
+fn reset_bounding_box_squares_the_objects_inside_a_group() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.rotate", &json!({"angle": 10})).unwrap();
+    assert!(near(angle(&s, g), 10.0) && near(angle(&s, a), 30.0) && near(angle(&s, b), 30.0));
+    let n = undo_len(&s);
+    // The group and both members, in one step.
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 3);
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(object_angles(&s).iter().all(|a| *a == 0.0), "{:?}", object_angles(&s));
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert_eq!(selection_box(&s).angle, 0.0);
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 0);
+    // Undo brings every angle back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(angle(&s, g), 10.0) && near(angle(&s, a), 30.0) && near(angle(&s, b), 30.0));
+}
+
+#[test]
+fn reset_bounding_box_squares_the_turned_members_of_a_square_group() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    assert_eq!(selection_box(&s).angle, 0.0);
+    let n = undo_len(&s);
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 2);
+    assert_eq!(undo_len(&s), n + 1);
+    s.execute("object.ungroup", &json!({})).unwrap();
+    assert_eq!(selection_box(&s).angle, 0.0);
+}
+
+/// Two rectangles turned 20°, put in a container by `make`, turned 10° with it and reset, then
+/// released by `release`: nothing stands at an angle before or after the release.
+fn reset_then_release(make: &str, release: &str) -> Session {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 120.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    s.execute(make, &json!({})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 10})).unwrap();
+    assert!(object_angles(&s).iter().any(|a| near(*a, 30.0)), "{make}: {:?}", object_angles(&s));
+    s.execute("object.resetBoundingBox", &json!({})).unwrap();
+    assert!(object_angles(&s).iter().all(|a| *a == 0.0), "{make}: {:?}", object_angles(&s));
+    s.execute(release, &json!({})).unwrap();
+    assert!(object_angles(&s).iter().all(|a| *a == 0.0), "{release}: {:?}", object_angles(&s));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 0, "{release}");
+    s
+}
+
+#[test]
+fn reset_bounding_box_then_release_clipping_mask() {
+    reset_then_release("object.clippingMask.make", "object.clippingMask.release");
+}
+
+#[test]
+fn reset_bounding_box_then_release_compound_path() {
+    reset_then_release("object.compoundPath.make", "object.compoundPath.release");
+}
+
+#[test]
+fn reset_bounding_box_then_expand_blend() {
+    reset_then_release("object.blend.make", "object.blend.expand");
+}
+
+#[test]
+fn reset_bounding_box_then_release_envelope() {
+    reset_then_release("object.envelope.makeWithWarp", "object.envelope.release");
+}
+
+#[test]
+fn reset_bounding_box_then_release_repeat() {
+    reset_then_release("object.repeat.grid", "object.repeat.release");
+}
+
+#[test]
+fn reset_bounding_box_then_release_intertwine() {
+    reset_then_release("object.intertwine.make", "object.intertwine.release");
+}
+
+#[test]
+fn reset_bounding_box_then_release_linked_opacity_mask() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 120.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let mask = s.doc().unwrap().doc.node(a).unwrap().extras().mask.clone().unwrap();
+    assert!(mask.linked && near(mask.art.bbox_angle, 20.0));
+    drop(s);
+    reset_then_release("transparency.makeOpacityMask", "transparency.releaseOpacityMask");
+}
+
+#[test]
+fn reset_bounding_box_leaves_the_art_of_an_unlinked_opacity_mask() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 120.0, 100.0, 50.0);
+    sel(&mut s, &[a, b]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+    let mask_angle = |s: &Session| s.doc().unwrap().doc.node(a).unwrap().extras().mask.as_ref().unwrap().art.bbox_angle;
+    assert!(near(angle(&s, a), 20.0) && near(mask_angle(&s), 20.0));
+    // Only the object: its mask's art no longer turns with it.
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!(angle(&s, a), 0.0);
+    assert!(near(mask_angle(&s), 20.0));
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use super::profile::{PressureProfile, WidthProfile};
+use super::profile::{AngleProfile, PressureProfile, WidthProfile};
 use super::stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 use super::{BlendMode, Deserialize, Paint, Serialize};
 
@@ -93,6 +93,21 @@ pub struct StrokeLayer {
     /// art leave it behind ([`Appearance::without_pressure`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pressure: Option<PressureProfile>,
+    /// How far the pen leaned from upright along the stroke (Paintbrush with a tablet that reads
+    /// tilt): 0 upright to 1 lying flat (90°). Brushes with Tilt variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tilt: Option<PressureProfile>,
+    /// Which way the pen leaned along the stroke, in degrees counter-clockwise on the page from the
+    /// x axis. Brushes with Bearing variation vary with it. Like the pressure, it stays with this
+    /// path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bearing: Option<AngleProfile>,
+    /// How far the pen's barrel was turned along the stroke, in degrees counter-clockwise (a pen
+    /// that reads barrel rotation). Brushes with Rotation variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<AngleProfile>,
 }
 
 /// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
@@ -167,6 +182,9 @@ impl StrokeLayer {
             overprint: false,
             gradient_mode: StrokeGradientMode::Within,
             pressure: None,
+            tilt: None,
+            bearing: None,
+            rotation: None,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least

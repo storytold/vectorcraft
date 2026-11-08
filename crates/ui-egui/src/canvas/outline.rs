@@ -184,7 +184,7 @@ pub(super) fn hit_with<T>(
     let prefs = &app.session.prefs;
     let opt = vectorcraft_doc::hit::HitOptions {
         tol: prefs.selection_tolerance / zoom,
-        outline: app.ui.view.outline,
+        outline: app.outline_view(),
         path_only: prefs.object_selection_by_path_only,
         type_path_only: prefs.type_selection_by_path_only,
         scope: app.session.active().and_then(|st| st.isolation),

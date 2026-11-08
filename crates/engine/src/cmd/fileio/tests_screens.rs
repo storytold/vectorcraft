@@ -148,6 +148,19 @@ fn device_names_and_trailing_periods_follow_windows_naming_rules() {
     assert_eq!(r["name"], "nul-.zip");
 }
 
+/// A dot in an artboard's name stays a dot (`example.artboard.png`, #6143); a name of only dots, or
+/// ending in one, still can't name another folder or end in a period, a leading dot is a dash (no
+/// hidden `.draft.png`), and `/` and `:` are dashes.
+#[test]
+fn an_artboard_name_keeps_its_dots() {
+    let mut s = session(7);
+    for (index, name) in ["example.artboard", "v1.2.final", "..", "a/b:c", "trail.", ".draft", "..x.y"].iter().enumerate() {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let r = export(&mut s, json!({"formats": [{"format": "png"}]}));
+    assert_eq!(names(&r), ["example.artboard.png", "v1.2.final.png", "Artboard-3.png", "a-b-c.png", "trail.png", "-draft.png", "--x.y.png"]);
+}
+
 /// `first_file` names the file the export writes first, for the same params: the item's file name,
 /// a prefix and a suffix with characters Windows does not allow, a range, a Windows device name,
 /// every kind of folder, presets, size suffixes, a name pattern with its counter and date, an
@@ -526,6 +539,20 @@ fn include_bleed_grows_each_artboard() {
     assert_eq!(size(&files(&r)[0].1), (40, 30), "without it, the artboard alone");
 }
 
+/// Include Bleed puts the bleed on a PDF/X row's page, so the row doesn't warn that it leaves the bleed out.
+#[test]
+fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
+    let mut s = session(1);
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    let warned = |r: &Value| r["warnings"].as_array().unwrap().iter().any(|w| w == super::pdf::BLEED_LEFT_OUT);
+    let row = json!([{"format": "pdf", "standard": "pdfX4"}]);
+    assert!(warned(&export(&mut s, json!({"formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    // A selection is written on a page of its own bounds, which Include Bleed doesn't grow.
+    s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
+}
+
 #[test]
 fn png_8_rows_write_indexed_colour() {
     let mut s = session(1);
@@ -533,11 +560,111 @@ fn png_8_rows_write_indexed_colour() {
     let f = files(&r);
     // The IHDR colour type: 3 (indexed) for PNG 8, 6 (RGBA) for PNG; both are .png, the PNG 8 row
     // written first.
-    assert_eq!(names(&r), ["Artboard-1.png"], "the same file name: the first row wins");
-    assert_eq!(f[0].1[25], 3);
+    assert_eq!(names(&r), ["Artboard-1.png", "Artboard-1-2.png"], "the same file name: the second row's file is numbered");
+    assert_eq!((f[0].1[25], f[1].1[25]), (3, 6));
     let r = export(&mut s, json!({"formats": [{"format": "png8", "suffix": "-8"}, {"format": "png"}]}));
     let f = files(&r);
     assert_eq!((f[0].1[25], f[1].1[25]), (3, 6));
+}
+
+/// Without a name pattern, a row that writes a different file under a name another row's file
+/// already has gets `-2`, `-3`… as a name pattern's files do, compared without case; the first
+/// file keeps its name, and two identical rows still write one file.
+#[test]
+fn a_second_file_with_a_taken_name_is_numbered() {
+    let mut s = session(1);
+    let px = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8().get_pixel(1, 1).0;
+    let rows = json!([{"format": "png", "background": "black"}, {"format": "png", "background": "white"}, {"format": "png", "background": "black"}]);
+    let r = export(&mut s, json!({ "formats": rows }));
+    assert_eq!(names(&r), ["Artboard-1.png", "Artboard-1-2.png"]);
+    let f = files(&r);
+    assert_eq!((px(&f[0].1), px(&f[1].1)), ([0, 0, 0, 255], [255, 255, 255, 255]));
+    // Row folders that differ only in case are one folder, spelled as the first row spells it.
+    let rows = json!([{"format": "png", "folder": "Print"}, {"format": "png", "folder": "print", "scale": 2, "suffix": ""}, {"format": "svg", "folder": "PRINT"}]);
+    let r = export(&mut s, json!({"subfolders": true, "formats": rows}));
+    assert_eq!(names(&r), ["Print/Artboard-1.png", "Print/Artboard-1-2.png", "Print/Artboard-1.svg"]);
+    assert_eq!(size(&files(&r)[1].1), (80, 60));
+}
+
+/// Names and folders that differ only in case match when a letter's lower case depends on where
+/// it stands: Greek `ΟΣ` lower-cases to `ος`, which a case-insensitive file system treats as `οσ`.
+#[test]
+fn names_that_differ_only_in_greek_sigmas_are_numbered() {
+    let mut s = session(2);
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "ΟΣ"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "οσ"})).unwrap();
+    let r = export(&mut s, json!({"name": "<name>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["ΟΣ.svg", "οσ-2.svg"]);
+    let rows = json!([{"format": "png", "folder": "ΟΣ"}, {"format": "svg", "folder": "οσ"}]);
+    let r = export(&mut s, json!({"range": "1", "subfolders": true, "formats": rows}));
+    assert_eq!(names(&r), ["ΟΣ/ΟΣ.png", "ΟΣ/ΟΣ.svg"]);
+    // Each item still gets a folder of its own.
+    let r = export(&mut s, json!({"folders": "item", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["ΟΣ/ΟΣ.svg", "οσ-2/οσ-2.svg"]);
+    // Letters whose full upper case is two characters still match their other case.
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "ᾀ"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "ᾈ"})).unwrap();
+    let r = export(&mut s, json!({"name": "<name>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["ᾀ.svg", "ᾈ-2.svg"]);
+    // So do names whose lower case is longer than the name: `İ` lower-cases to `i̇`.
+    s.execute("artboard.setProps", &json!({"index": 0, "name": "İ"})).unwrap();
+    s.execute("artboard.setProps", &json!({"index": 1, "name": "i\u{307}"})).unwrap();
+    let r = export(&mut s, json!({"name": "<name>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["İ.svg", "i\u{307}-2.svg"]);
+}
+
+/// Dotless `ı` and dotted `İ` are letters of their own, as on NTFS and in Unicode case folding
+/// outside Turkic languages: names and folders spelled with them keep their own files, while `i`
+/// and `I` still match.
+#[test]
+fn dotless_and_dotted_i_are_not_plain_i() {
+    let mut s = session(4);
+    for (index, name) in ["i", "ı", "İ", "I"].into_iter().enumerate() {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let r = export(&mut s, json!({"name": "<name>", "formats": [{"format": "svg"}]}));
+    assert_eq!(names(&r), ["i.svg", "ı.svg", "İ.svg", "I-2.svg"]);
+    let rows = json!([{"format": "svg", "folder": "i"}, {"format": "svg", "folder": "ı"}, {"format": "svg", "folder": "İ"}, {"format": "svg", "folder": "I"}]);
+    let r = export(&mut s, json!({"range": "1", "subfolders": true, "formats": rows}));
+    assert_eq!(names(&r), ["i/i.svg", "ı/i.svg", "İ/i.svg"]);
+}
+
+/// A fresh folder for one test, emptied first and removed when dropped (also when an assertion
+/// fails).
+#[cfg(not(target_arch = "wasm32"))]
+struct Folder(std::path::PathBuf);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Folder {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("vc-screens-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        Self(dir)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for Folder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The numbered file is written beside the first one, and the reply lists both paths.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_numbered_file_is_written_into_the_first_rows_folder() {
+    let mut s = session(1);
+    let tmp = Folder::new("taken");
+    let dir = &tmp.0;
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let rows = json!([{"format": "png", "folder": "Print"}, {"format": "png", "folder": "print", "background": "white"}]);
+    let r = export(&mut s, json!({"folder": folder, "subfolders": true, "formats": rows}));
+    let written: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
+    assert_eq!(written, [format!("{folder}/Print/Artboard-1.png"), format!("{folder}/Print/Artboard-1-2.png")]);
+    let entries: Vec<String> = std::fs::read_dir(dir.join("Print")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(std::fs::read_dir(dir).unwrap().count(), 1, "one sub-folder");
 }
 
 #[test]
@@ -810,4 +937,26 @@ fn the_document_remembers_its_export_settings() {
     let plain = String::from_utf8(vectorcraft_format::save(&vectorcraft_doc::Document::new(5.0, 5.0), false)).unwrap();
     assert!(!plain.contains("export_settings") && !plain.contains("exportSettings"), "not written when empty");
     assert!(vectorcraft_format::load(plain.as_bytes()).unwrap().export_settings.is_empty());
+}
+
+/// Export PDFs As › Single file: with several artboards, a PDF row writes them as the pages of one
+/// file named after the document (raster rows still write a file per artboard); with one artboard
+/// the PDF is that artboard's, as Multiple files writes it.
+#[test]
+fn single_file_pdfs_hold_every_chosen_artboard() {
+    let mut s = session(3);
+    let title = s.doc().unwrap().doc.title.clone();
+    let rows = json!([{"format": "png", "scale": "1x"}, {"format": "pdf"}]);
+    let r = export(&mut s, json!({"range": "1-2", "pdfs": "single", "formats": rows}));
+    let got = files(&r);
+    let pdf: Vec<&(String, Vec<u8>)> = got.iter().filter(|(n, _)| n.ends_with(".pdf")).collect();
+    assert_eq!(pdf.len(), 1, "{:?}", names(&r));
+    assert_eq!(pdf[0].0, format!("{title}.pdf"));
+    assert_eq!(vectorcraft_pdf::import(&pdf[0].1).unwrap().artboards.len(), 2, "one page per artboard");
+    assert_eq!(got.iter().filter(|(n, _)| n.ends_with(".png")).count(), 2);
+    let r = export(&mut s, json!({"range": "2", "pdfs": "single", "formats": [{"format": "pdf"}]}));
+    assert_eq!(names(&r), ["Artboard-2.pdf"]);
+    let r = export(&mut s, json!({"range": "1-2", "pdfs": "multiple", "formats": [{"format": "pdf"}]}));
+    assert_eq!(names(&r), ["Artboard-1.pdf", "Artboard-2.pdf"]);
+    assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
 }

@@ -107,15 +107,21 @@ fn nested_deeper(now: &[Arc<Node>], depth: usize) -> bool {
 /// an opacity mask too deep are left out); what it held stays hidden or locked as it was. Returns
 /// whether anything changed. Recurses no deeper than the cap.
 fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
-    let mut changed = false;
-    let mut i = 0;
-    while let Some(n) = nodes.get_mut(i) {
-        if !nested_deeper(std::slice::from_ref(n), depth) {
-            i += 1;
+    if !nested_deeper(nodes, depth) {
+        return false;
+    }
+    // The list is rebuilt in order rather than spliced in place: replacing one container of many
+    // by what it holds would move all the siblings after it each time.
+    let mut out = Vec::with_capacity(nodes.len());
+    // What is left to look at, the next one last.
+    let mut left: Vec<Arc<Node>> = std::mem::take(nodes);
+    left.reverse();
+    while let Some(mut a) = left.pop() {
+        if !nested_deeper(std::slice::from_ref(&a), depth) {
+            out.push(a);
             continue;
         }
-        changed = true;
-        let n = Arc::make_mut(n);
+        let n = Arc::make_mut(&mut a);
         if n.extras().mask.as_ref().is_some_and(|m| nested_deeper(std::slice::from_ref(&m.art), depth + 1)) {
             n.extras_mut().mask = None;
         }
@@ -123,7 +129,7 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             if let Some(ch) = n.children_mut() {
                 limit(ch, depth + 1);
             }
-            i += 1;
+            out.push(a);
             continue;
         }
         let clip = matches!(n.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
@@ -140,9 +146,10 @@ fn limit(nodes: &mut Vec<Arc<Node>>, depth: usize) -> bool {
             }
         }
         // What it held takes its place, and is looked at in its turn.
-        nodes.splice(i..=i, held);
+        left.extend(held.into_iter().rev());
     }
-    changed
+    *nodes = out;
+    true
 }
 
 /// A symbol (`false`) or a pattern (`true`) of the document, by name: what art draws by name, an
@@ -440,6 +447,24 @@ mod tests {
     }
 
     #[test]
+    fn many_containers_at_the_cap_are_merged_in_order() {
+        // A group just above the cap holding many groups of two paths each: every group is
+        // replaced by its two paths, in order (in time linear in their number).
+        const PAIRS: u64 = 50_000;
+        let path = |id| Arc::new(Node::path(NodeId(id), Default::default(), Default::default()));
+        let pairs = (0..PAIRS).map(|i| Arc::new(Node::group(NodeId(1_000_000 + i), vec![path(2 * i + 1), path(2 * i + 2)]))).collect();
+        let mut art = Arc::new(Node::group(NodeId(500_000), pairs));
+        for i in 0..MAX_DEPTH - 3 {
+            art = Arc::new(Node::group(NodeId(600_000 + i as u64), vec![art]));
+        }
+        let mut d = doc(art);
+        assert!(d.limit_depth());
+        assert!(!d.too_deep(None));
+        let holder = d.node(NodeId(500_000)).and_then(Node::children).map(|c| c.iter().map(|c| c.id.0).collect::<Vec<_>>());
+        assert_eq!(holder, Some((1..=2 * PAIRS).collect()));
+    }
+
+    #[test]
     fn a_clipping_path_and_a_mask_too_deep_are_left_out_and_hidden_art_stays_hidden() {
         let mut inner = Node::new(NodeId(9000), NodeKind::Group { children: vec![nested(0), nested(0)], clip: true });
         inner.visible = false;
@@ -485,7 +510,7 @@ mod tests {
     #[test]
     fn symbols_and_patterns_are_limited_too() {
         let mut d = Document::new(10.0, 10.0);
-        d.symbols.push(crate::Symbol { name: "s".into(), art: nested(MAX_DEPTH + 3) });
+        d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: nested(MAX_DEPTH + 3) });
         assert!(d.too_deep(None));
         assert!(d.limit_depth());
         assert!(!d.too_deep(None));
@@ -504,7 +529,7 @@ mod tests {
             for _ in 0..levels {
                 art = Arc::new(Node::group(NodeId(3), vec![art]));
             }
-            d.symbols.push(crate::Symbol { name: format!("s{i}"), art });
+            d.symbols.push(crate::Symbol { dynamic: false, name: format!("s{i}"), art });
         }
         d
     }
@@ -573,7 +598,7 @@ mod tests {
         };
         let through_a_symbol = |d: &mut Document| {
             d.patterns.push(crate::PatternDef::new("p", vec![instance(2, "s")]));
-            d.symbols.push(crate::Symbol { name: "s".into(), art: painted(3, "p") });
+            d.symbols.push(crate::Symbol { dynamic: false, name: "s".into(), art: painted(3, "p") });
         };
         for make in [&itself as &dyn Fn(&mut Document), &each_other, &through_a_symbol] {
             let mut d = doc(painted(1, "p"));

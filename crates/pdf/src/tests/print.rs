@@ -240,6 +240,14 @@ fn tiles_cover_the_artboard_with_overlap() {
 }
 
 #[test]
+fn a_job_of_too_many_artboards_is_refused_while_laying_out() {
+    let mut d = doc(100.0, 100.0, &[]);
+    d.artboards.extend((2..=MAX_PAGES as u32 + 2).map(|i| artboard(i, 0.0)));
+    let e = preview(&d, &settings(json!({}))).unwrap_err().to_string();
+    assert!(e.contains("more than 2000 pages"), "{e}");
+}
+
+#[test]
 fn artboard_range_skip_blank_and_ignore() {
     let mut d =
         doc(100.0, 100.0, &[(Rect::new(10.0, 10.0, 20.0, 20.0), rgb(1.0, 0.0, 0.0)), (Rect::new(410.0, 10.0, 420.0, 20.0), rgb(0.0, 0.0, 1.0))]);
@@ -265,7 +273,7 @@ fn a_symbol_instance_prints_by_its_art() {
     let mut d = doc(100.0, 100.0, &[]);
     let red = Appearance::basic(rgb(1.0, 0.0, 0.0), Paint::None, 0.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), red);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
     let xf = vectorcraft_geom::Affine::translate((-50.0, -50.0));
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf })).unwrap();
@@ -293,7 +301,7 @@ fn a_symbol_instances_brush_art_keeps_its_artboard_printed() {
     let mut stroke = Appearance::basic(Paint::None, rgb(1.0, 0.0, 0.0), 1.0);
     stroke.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
     let art = Node::path(d.alloc_id(), shapes::line((0.0, 40.0).into(), (0.0, 60.0).into()), stroke);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Nib".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Nib".into(), art: Arc::new(art) });
     let (layer, id) = (d.default_layer().unwrap(), d.alloc_id());
     let xf = vectorcraft_geom::Affine::translate((-5.0, 0.0));
     d.insert(Some(layer), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Nib".into(), xf })).unwrap();

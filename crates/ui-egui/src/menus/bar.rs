@@ -1,4 +1,4 @@
-use super::entries::{Row, entry, pretty_shortcut};
+use super::entries::{Row, entry, shown_shortcut};
 use super::invoke::{field_event, focused_text_field, invoke, to_field, with_held_keys};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Tokens, Value, VectorcraftApp, widgets};
@@ -42,6 +42,10 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    // Whether a top-level menu is open: the docking renderer lowers the floating panels' OS windows
+    // while one is, or the menu would open under them.
+    ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));
+
     let field = ctx.data(|d| d.get_temp::<Field>(field_key));
     if !open && focused_text_field(&ctx).is_none() {
         ctx.data_mut(|d| d.remove::<Field>(field_key));
@@ -56,6 +60,17 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         }
     }
     end
+}
+
+/// Where the menu bar keeps whether one of its top-level menus is open.
+fn menu_open_id() -> egui::Id {
+    egui::Id::unique("menu-bar-open")
+}
+
+/// Whether a menu of the in-window menu bar is open (`false` when no menu bar was drawn yet).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn menu_open(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(menu_open_id())).unwrap_or(false)
 }
 
 /// Whether the pointer at `p` is really over the menu title `title`: inside it, and with no
@@ -124,7 +139,7 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
 /// and Type › Font's samples.
 fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, clicked: &mut Option<(String, Value)>) {
-    let sc = row.shortcut.map(pretty_shortcut).unwrap_or_default();
+    let sc = row.shortcut.map(shown_shortcut).unwrap_or_default();
     let Some((id, p)) = row.command else {
         ui.add_enabled_ui(false, |ui| {
             ui.add(egui::Button::new(row.label.as_ref()).shortcut_text(sc));

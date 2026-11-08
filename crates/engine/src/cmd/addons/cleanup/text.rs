@@ -1,5 +1,5 @@
 //! Artwork Cleanup's text tools: Break Text into Lines / Paragraphs / Words / Glyphs, Combine Point
-//! Text, Split Text at Cursor, Remove Line / Paragraph Breaks, Set Alignment, Keep Position, Reset
+//! Text, Join Point Text, Split Text at Cursor, Remove Line / Paragraph Breaks, Set Alignment, Keep Position, Reset
 //! Text Transform and Replace Missing Fonts. Each is one undo step. Pieces keep their characters'
 //! styles and stay where the layout drew them: each is moved so the glyph of its first character
 //! lands where it was.
@@ -12,7 +12,8 @@ use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeId, NodeKind, Para
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::{FontDb, FontMatch, TextLayout, edit};
 
-use crate::cmd::textedit::editing_range;
+use crate::cmd::fonts::{edit_symbol_texts, symbol_texts};
+use crate::cmd::textedit::{editing_range, editing_story};
 use crate::cmd::typecmd::refresh_bounds;
 use crate::cmd::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
 use crate::{EngineError, Result, Session};
@@ -58,11 +59,20 @@ pub fn specs() -> Vec<CommandSpec> {
             combine_text
         ),
         cmd!(
+            "addon.cleanup.joinText",
+            "Join Point Text",
+            ["Object", "Plug-ins", "Artwork Cleanup"],
+            None,
+            "{ids?: [id…] (default: the selection)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
+            has_selection,
+            join_text
+        ),
+        cmd!(
             "addon.cleanup.removeBreaks",
             "Remove Breaks",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool, else in all the text of the selected type, as one undo step; a break between two words becomes a space → {ids, removed}",
+            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
             has_selection,
             remove_breaks
         ),
@@ -98,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Missing Fonts…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
+            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in the art of its symbols included) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
             has_doc,
             replace_fonts
         ),
@@ -641,12 +651,90 @@ fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids, "combined": combined }))
 }
 
-/// Remove the breaks `brk` in bytes `a..b` of `t`: one between two words becomes a space → how many
-/// went.
-fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
-    let text = t.plain_text();
-    let (a, b) = (edit::floor_char(&text, a), edit::floor_char(&text, b));
-    let Some(range) = text.get(a..b) else { return 0 };
+fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "addon.cleanup.joinText";
+    let d = &s.doc()?.doc;
+    let pieces: Vec<Piece> =
+        texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().filter_map(|id| Piece::of(d, id).map(|p| p.0)).collect();
+    // The piece top-left on the page sets the turn; the others turned like it are read in that frame.
+    let on_page = |p: &Piece| Affine::new([p.turn[0], p.turn[1], p.turn[2], p.turn[3], 0.0, 0.0]) * p.at;
+    let first = pieces.iter().min_by(|x, y| {
+        let (a, b) = (on_page(x), on_page(y));
+        a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
+    });
+    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| p.turned_like(f)).collect()).unwrap_or_default();
+    kept.sort_by(|x, y| x.at.y.total_cmp(&y.at.y).then(x.at.x.total_cmp(&y.at.x)));
+    // Lines, top to bottom, by baseline; each line's pieces left to right.
+    let mut lines: Vec<Vec<&Piece>> = vec![];
+    for piece in kept {
+        match lines.last_mut().filter(|l| l.first().is_some_and(|f| (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))) {
+            Some(l) => l.push(piece),
+            None => lines.push(vec![piece]),
+        }
+    }
+    for line in &mut lines {
+        line.sort_by(|x, y| x.at.x.total_cmp(&y.at.x));
+    }
+    let joined: usize = lines.iter().map(Vec::len).sum();
+    let (Some(top), true) = (lines.first().and_then(|l| l.first()).copied(), joined >= 2) else {
+        return Err(EngineError::Other("Select two or more one-line point type objects to join".into()));
+    };
+    let mut runs: Vec<vectorcraft_doc::TextRun> = vec![];
+    let mut prev_y = None;
+    for line in &lines {
+        let y = line.first().map_or(top.at.y, |p| p.at.y);
+        // The line keeps the distance from the baseline above as its leading.
+        let leading = prev_y.map(|above| y - above).filter(|l: &f64| l.is_finite() && *l > 0.0);
+        prev_y = Some(y);
+        let last = |runs: &[vectorcraft_doc::TextRun]| runs.iter().rev().find(|r| !r.text.is_empty()).map(|r| r.style.clone()).unwrap_or_default();
+        if !runs.is_empty() {
+            runs.push(vectorcraft_doc::TextRun::new("\n", last(&runs)));
+        }
+        let start = runs.len();
+        for (k, piece) in line.iter().enumerate() {
+            let blank = runs.last().is_some_and(|r| r.text.ends_with(char::is_whitespace)) || piece.t.plain_text().starts_with(char::is_whitespace);
+            if k > 0 && !blank {
+                runs.push(vectorcraft_doc::TextRun::new(" ", last(&runs)));
+            }
+            runs.extend(piece.t.runs.iter().cloned());
+        }
+        if let Some(l) = leading {
+            for r in runs.iter_mut().skip(start) {
+                r.style.leading = Some(l);
+            }
+        }
+    }
+    let mut m = top.t.clone();
+    m.set_all_paras(ParaStyle { justify: Justify::Left, ..top.t.para.clone() });
+    m.runs = runs;
+    edit::normalize(&mut m.runs);
+    m.ruby.clear();
+    // The top-left piece's first glyph stays where it was.
+    let [a, b, c, dd] = top.turn;
+    let base = Affine::new([a, b, c, dd, 0.0, 0.0]) * Affine::translate(top.at.to_vec2());
+    m.xf = base;
+    let x0 = glyph_starting(&layout(&m), 0).map_or(0.0, |g| g.x);
+    m.xf = base * Affine::translate((-x0, 0.0));
+    refresh_bounds(&mut m);
+    let id = top.id;
+    let gone: Vec<NodeId> = lines.iter().flatten().map(|p| p.id).filter(|g| *g != id).collect();
+    let count = lines.len();
+    s.edit("Join Point Text", |d, sel| {
+        if let Some(n) = d.node_mut(id) {
+            n.kind = NodeKind::Text(Box::new(m));
+        }
+        d.remove_many(&gone)?;
+        sel.set([id]);
+        Ok(())
+    })?;
+    Ok(json!({ "id": id.0, "joined": joined, "lines": count }))
+}
+
+/// The breaks `brk` in bytes `a..b` of `text`, each with whether it becomes a space (it is between
+/// two words).
+fn break_cuts(text: &str, a: usize, b: usize, brk: char) -> Vec<(usize, bool)> {
+    let (a, b) = (edit::floor_char(text, a), edit::floor_char(text, b));
+    let Some(range) = text.get(a..b) else { return vec![] };
     let mut prev = text.get(..a).and_then(|s| s.chars().next_back());
     let mut cuts = vec![];
     for (i, c) in range.char_indices() {
@@ -664,6 +752,12 @@ fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
         }
         cuts.push((at, space));
     }
+    cuts
+}
+
+/// Remove the breaks `brk` at the bytes of `cuts` from `t`, each one that `cuts` marks becoming a
+/// space → how many went.
+fn apply_cuts(t: &mut TextObject, cuts: &[(usize, bool)], brk: char) -> usize {
     for &(at, space) in cuts.iter().rev() {
         let insert = if space { " " } else { "" };
         let end = at + brk.len_utf8();
@@ -674,6 +768,30 @@ fn strip_breaks(t: &mut TextObject, a: usize, b: usize, brk: char) -> usize {
     cuts.len()
 }
 
+/// The breaks `brk` in the text of the frames of `story`, read as one text: a break at the end or
+/// start of a frame between words of the frames on either side becomes a space. Each editable frame
+/// comes with its own breaks, at its own bytes.
+fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(usize, bool)>)> {
+    let texts: Vec<(NodeId, String)> = story.iter().filter_map(|id| Some((*id, text_of(d, *id)?.plain_text()))).collect();
+    let joined: String = texts.iter().map(|(_, t)| t.as_str()).collect();
+    // The breaks in story order, handed to the frames in one pass.
+    let mut cuts = break_cuts(&joined, 0, joined.len(), brk).into_iter().peekable();
+    let mut out = vec![];
+    let mut start = 0;
+    for (id, text) in texts {
+        let end = start + text.len();
+        let mut own = vec![];
+        while let Some((at, space)) = cuts.next_if(|(at, _)| *at < end) {
+            own.push((at - start, space));
+        }
+        if d.is_editable(id) {
+            out.push((id, own));
+        }
+        start = end;
+    }
+    out
+}
+
 fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.removeBreaks";
     let (brk, label, none) = match text_param(p, "kind", C)? {
@@ -682,21 +800,41 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
         Some(other) => return Err(bad(C, format!("`kind` must be \"line\" or \"paragraph\", not {other:?}"))),
         None => return Err(bad(C, "missing `kind`")),
     };
-    // The characters a Type tool has selected, else all the text of the selected type.
+    // The characters a Type tool has selected (after Select All in threaded text, all the text of
+    // every frame of the story), else all the text of the selected type.
     let editing = if p.get("ids").is_some() { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
+    let story = if editing.is_some() { editing_story(s) } else { vec![] };
     let d = &s.doc()?.doc;
-    let targets: Vec<(NodeId, usize, usize)> = match editing {
-        Some((id, a, b)) => vec![(id, a.min(b), a.max(b))].into_iter().filter(|(id, ..)| d.is_editable(*id)).collect(),
-        None => texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().map(|id| (id, 0, usize::MAX)).collect(),
+    // Each type object with the breaks that go from it.
+    let targets: Vec<(NodeId, Vec<(usize, bool)>)> = match editing {
+        Some(_) if !story.is_empty() => story_cuts(d, &story, brk),
+        Some((id, a, b)) => vec![(id, a.min(b), a.max(b))]
+            .into_iter()
+            .filter(|(id, ..)| d.is_editable(*id))
+            .filter_map(|(id, a, b)| Some((id, break_cuts(&text_of(d, id)?.plain_text(), a, b, brk))))
+            .collect(),
+        None => {
+            let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
+            // A threaded story whose frames are all among them is read as one text, once.
+            let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+            let mut done = std::collections::HashSet::new();
+            let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
+            for &id in &ids {
+                if !done.insert(id) {
+                    continue;
+                }
+                let story = crate::cmd::threads::story_of(d, id);
+                if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
+                    done.extend(story.iter().copied());
+                    out.extend(story_cuts(d, &story, brk));
+                } else if let Some(t) = text_of(d, id) {
+                    out.push((id, break_cuts(&t.plain_text(), 0, usize::MAX, brk)));
+                }
+            }
+            out
+        }
     };
-    let count: usize = targets
-        .iter()
-        .filter_map(|(id, a, b)| {
-            let text = text_of(d, *id)?.plain_text();
-            let (a, b) = (edit::floor_char(&text, *a), edit::floor_char(&text, *b));
-            Some(text.get(a..b)?.matches(brk).count())
-        })
-        .sum();
+    let count: usize = targets.iter().map(|(_, cuts)| cuts.len()).sum();
     if count == 0 {
         return Err(EngineError::Other(none.into()));
     }
@@ -705,9 +843,9 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let (removed, ids) = s.edit(label, |d, _| {
         let (mut removed, mut ids) = (0, vec![]);
-        for (id, a, b) in targets {
+        for (id, cuts) in targets {
             let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { continue };
-            let n = strip_breaks(t, a, b, brk);
+            let n = apply_cuts(t, &cuts, brk);
             if n > 0 {
                 refresh_bounds(t);
                 removed += n;
@@ -824,33 +962,35 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
     let default = CharStyle::default().font_family;
     let wanted = text_param(p, "font", C)?.filter(|f| !f.trim().is_empty()).unwrap_or(&default);
     let db = FontDb::global();
-    // Any name of the family is stored as its own name.
-    let family = match db.resolve(wanted, "Regular") {
-        Some((f, m)) if m != FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, "the replacement font is not available")),
-    };
+    // Any name of the family is stored as its own name, and a composite font as its own name.
+    let composite = db.composite_font(wanted).is_some();
+    let family = db.stored_family(wanted, "Regular").ok_or_else(|| bad(C, "the replacement font is not available"))?;
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
+    let lacks = |t: &TextObject| t.runs.iter().any(|r| missing(&r.style));
     let d = &s.doc()?.doc;
     let mut ids = vec![];
     for l in &d.layers {
         l.walk(&mut |n| {
             if let NodeKind::Text(t) = &n.kind
-                && t.runs.iter().any(|r| missing(&r.style))
+                && lacks(t)
             {
                 ids.push(n.id);
             }
         });
     }
-    if ids.is_empty() {
+    // The type in the symbols' art too, which exports name when its font is missing.
+    if ids.is_empty() && !symbol_texts(d, None).into_iter().any(|(t, _)| lacks(t)) {
         return Err(EngineError::Other("No fonts are missing".into()));
     }
     let runs = s.edit("Replace Missing Fonts", |d, _| {
         let mut runs = 0;
-        for id in &ids {
-            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+        let mut replace = |t: &mut TextObject| {
             for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
-                // The style the font has closest to the one the character had.
-                r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                // The style the font has closest to the one the character had (a composite font's
+                // parts name their own styles: the character keeps its style).
+                if !composite {
+                    r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                }
                 r.style.font_family = family.clone();
                 r.style.font_version = None;
                 r.style.font_axes.clear();
@@ -858,7 +998,13 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
             }
             edit::normalize(&mut t.runs);
             refresh_bounds(t);
+        };
+        for id in &ids {
+            if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                replace(t);
+            }
         }
+        edit_symbol_texts(d, None, &|t, _| lacks(t), &mut replace);
         Ok(runs)
     })?;
     Ok(json!({ "runs": runs, "font": family }))

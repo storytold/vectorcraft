@@ -20,6 +20,13 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
+        // evaluated again when the fonts or the plug-ins change.
+        vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
+            vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
+        });
+        // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
+        vectorcraft_text::register_envelope_ink();
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
@@ -28,16 +35,20 @@ impl Session {
             docs: vec![],
             active: None,
             prefs: Prefs::default(),
+            caps_lock: false,
             paint: PaintDefaults::default(),
             fill_active: true,
             clipboard: Clipboard::default(),
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
+            replaying: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -71,8 +82,13 @@ impl Session {
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
+            batch_paint_docs: Vec::new(),
+            composite_names: Vec::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
+            place_queue_roots: None,
+            image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
@@ -84,6 +100,9 @@ impl Session {
             liquify_stroke: None,
             plane_widget_press: false,
             pointer_held: false,
+            press_options: None,
+            press_type_selection: None,
+            press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
             font_search: None,
@@ -94,6 +113,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
@@ -132,6 +152,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
@@ -148,12 +169,24 @@ impl Session {
         self.tool_set_since_reset = false;
     }
 
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
+    }
+
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
-            if self.active != Some(index) {
+            let switched = self.active != Some(index);
+            if switched {
                 self.reset_tool_for_doc_switch();
             }
             self.active = Some(index);
+            // Type is drawn in the composite fonts of the document now in front, and measured again
+            // when they differ from those of the document before.
+            if switched && cmd::compositefonts::sync(self) {
+                self.refresh_document_text_bounds(index);
+            }
             true
         } else {
             false
@@ -170,7 +203,7 @@ impl Session {
         format!("Untitled-{}", self.untitled_counter)
     }
 
-    /// Text layout bounds are a cache (not saved): compute them for a document just read, or
+    /// Text layout bounds are a cache (not saved): compute them after its fonts are registered, or
     /// selection boxes and hit testing would use the rough estimate until each text is edited, and
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
@@ -185,6 +218,14 @@ impl Session {
         }
     }
 
+    /// [`Session::refresh_text_bounds`] for open document `index`, as a change that is not an
+    /// edit: a saved document stays saved, and its undo history keeps its documents as they are.
+    fn refresh_document_text_bounds(&mut self, index: usize) {
+        if let Some(st) = self.docs.get_mut(index) {
+            st.change_unsaved(|doc| Self::refresh_text_bounds(Arc::make_mut(doc)));
+        }
+    }
+
     /// Add a document and make it active. Between `edit.undoGroup.begin` and `edit.undoGroup.end`,
     /// an undo group with the begun group's name opens in it: here outside a command, and after the
     /// command that adds it otherwise ([`Session::execute`]).
@@ -192,16 +233,19 @@ impl Session {
         // Every edit is checked against the document before it, so the first one is within the cap
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
         // Guides from files saved before guides had layers go on a layer.
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
+        st.opened_as_tab = self.prefs.open_documents_as_tabs;
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
+        cmd::compositefonts::sync(self);
+        self.refresh_document_text_bounds(i);
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -217,7 +261,7 @@ impl Session {
             return false;
         }
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
         if self.active == Some(index) {
@@ -229,6 +273,7 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
         st.save_options = old.save_options.clone();
@@ -252,6 +297,12 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
+        // Type in the composite fonts of a document in the back is measured again when it comes to
+        // the front.
+        if self.active == Some(index) {
+            cmd::compositefonts::sync(self);
+        }
+        self.refresh_document_text_bounds(index);
         true
     }
 
@@ -268,6 +319,28 @@ impl Session {
             stash.push(old);
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        cmd::compositefonts::sync(self);
+        true
+    }
+
+    /// Move the document in tab `from` to tab `to` (a document tab dragged along the strip,
+    /// `document.move`); the documents between them shift by one. The current document stays the
+    /// current one, wherever it moves to, and its tool keeps its state: no document is switched to.
+    /// False, changing nothing, when either index is past the last document.
+    pub fn move_document(&mut self, from: usize, to: usize) -> bool {
+        let n = self.docs.len();
+        if from >= n || to >= n {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(uid) = active {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+        }
         true
     }
 
@@ -292,7 +365,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

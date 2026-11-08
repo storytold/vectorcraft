@@ -233,7 +233,8 @@ impl RasterFormat {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Preserve {
     /// Type becomes glyph outlines; strokes a plain CAD line can't draw (aligned inside or
-    /// outside, width profiles, arrowheads, fitted dashes) become their filled outlines; brush
+    /// outside, width profiles, arrowheads, fitted dashes, dashes offset into their pattern)
+    /// become their filled outlines; brush
     /// strokes become their brush art.
     #[default]
     Appearance,
@@ -277,7 +278,9 @@ pub struct DxfOptions {
     pub colors: ColorDepth,
     pub raster: RasterFormat,
     pub preserve: Preserve,
-    /// Alter Paths for Appearance: every stroke is written as the filled area it paints.
+    /// Alter Paths for Appearance: a stroke a CAD line can't draw (one [`Preserve::Appearance`]
+    /// outlines, one wider than the widest lineweight, or any stroke in R13 and R14, which have
+    /// no lineweights) is written as the filled area it paints.
     pub alter_paths: bool,
     /// Type is written as glyph outlines (always with [`Preserve::Appearance`]).
     pub outline_text: bool,
@@ -302,6 +305,78 @@ impl Default for DxfOptions {
             region: Rect::ZERO,
             crop: false,
         }
+    }
+}
+
+/// A named set of DXF options (the `dxfPreset` param): the options it sets, and the ones a set of
+/// options matches.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DxfPreset {
+    /// The options as chosen (the export's defaults for those left out).
+    #[default]
+    Custom,
+    /// For CNC and CAM cutting software: version 2000 (the oldest version that has both lightweight
+    /// polylines and lineweights), 1 mm = 1 unit, 256 indexed colors (all version 2000 holds), Maximize
+    /// Editability with Alter Paths off (every stroke a center line), Outline Text (type as paths),
+    /// and placed images as PNG.
+    Cnc,
+}
+
+impl DxfPreset {
+    pub const ALL: [Self; 2] = [Self::Custom, Self::Cnc];
+
+    /// The `dxfPreset` param value.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Custom => "custom",
+            Self::Cnc => "cnc",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Custom => "Custom",
+            Self::Cnc => "CNC / CAM",
+        }
+    }
+
+    /// A preset by id (`custom`, `cnc`), any case.
+    pub fn from_id(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|p| s.trim().eq_ignore_ascii_case(p.id()))
+    }
+
+    /// The options the preset sets (Custom: the defaults); the region and crop are the defaults.
+    pub fn options(self) -> DxfOptions {
+        match self {
+            Self::Custom => DxfOptions::default(),
+            Self::Cnc => DxfOptions {
+                version: DxfVersion::R2000,
+                unit: Unit::Millimeters,
+                scale: 1.0,
+                scale_lineweights: false,
+                colors: ColorDepth::Aci256,
+                raster: RasterFormat::Png,
+                preserve: Preserve::Editability,
+                alter_paths: false,
+                outline_text: true,
+                ..DxfOptions::default()
+            },
+        }
+    }
+
+    /// The preset `o` matches: CNC / CAM when every option it sets is as it sets it, else Custom.
+    pub fn of(o: &DxfOptions) -> Self {
+        let c = Self::Cnc.options();
+        let same = o.version == c.version
+            && o.unit == c.unit
+            && o.scale == c.scale
+            && o.scale_lineweights == c.scale_lineweights
+            && o.colors == c.colors
+            && o.raster == c.raster
+            && o.preserve == c.preserve
+            && o.alter_paths == c.alter_paths
+            && o.outline_text == c.outline_text;
+        if same { Self::Cnc } else { Self::Custom }
     }
 }
 

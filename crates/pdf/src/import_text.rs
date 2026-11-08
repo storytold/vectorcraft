@@ -965,6 +965,12 @@ impl Families {
         Self(vectorcraft_text::FontDb::global().families().into_iter().map(|f| (norm(&f), f)).collect())
     }
 
+    /// Just the families `names`, for tests that mustn't depend on the fonts installed.
+    #[cfg(test)]
+    pub fn of(names: &[&str]) -> Self {
+        Self(names.iter().map(|f| (norm(f), f.to_string())).collect())
+    }
+
     /// The family and style of a font with base (PostScript) name `name`, or of weight `weight`
     /// and slant `italic` when the name has no style; whether the family is available.
     pub fn resolve(&self, name: &str, weight: Option<u32>, italic: bool) -> (String, String, bool) {
@@ -977,22 +983,74 @@ impl Families {
         if let Some((family, style)) = vectorcraft_text::FontDb::global().by_postscript_name(name) {
             return (family, style, true);
         }
-        let (fam, style) = name.split_once(['-', ',']).unwrap_or((name, ""));
-        let found = [fam, strip_ps(fam)].iter().find_map(|f| self.0.get(&norm(f)).cloned());
-        let style = match spaced(strip_ps(style)).as_str() {
-            "" | "Roman" | "Book" | "Normal" | "Plain" => match (weight.is_some_and(|w| w >= 600) || style.contains("Bold"), italic) {
-                (true, true) => "Bold Italic".to_string(),
-                (true, false) => "Bold".to_string(),
-                (false, true) => "Italic".to_string(),
-                (false, false) => "Regular".to_string(),
+        // The longest part of the name before a hyphen (or the comma of `Arial,Bold`, ISO 32000-1
+        // §9.6.3) that names an available family, the rest its style: a family can hold hyphens
+        // (`Noto-Sans-Bold` is Noto Sans, Bold). The name is the file's: a few cuts from its end are
+        // enough for any family, and each costs a pass over the name.
+        let cuts = std::iter::once(name.len()).chain(name.rmatch_indices(['-', ',']).map(|(i, _)| i).take(16));
+        for cut in cuts {
+            let (fam, style) = (name.get(..cut).unwrap_or(name), name.get(cut + 1..).unwrap_or(""));
+            if let Some(f) = [fam, strip_ps(fam)].iter().find_map(|f| self.0.get(&norm(f)).cloned()) {
+                return (f, style_of(style, weight, italic), true);
+            }
+        }
+        // Not available: split at a comma, or before the first part that is a style
+        // (`Helvetica-BoldOblique`, `Noto-Sans-Bold`, `AGaramondPro-Bold-SC700`); otherwise the
+        // whole name is the family (`Noto-Sans`, `MS-PGothic`).
+        let style_at = |i: usize| name.get(i + 1..).and_then(|rest| rest.split('-').next()).is_some_and(|part| is_style(strip_ps(part)));
+        let (fam, style) = match name.split_once(',') {
+            Some(split) => split,
+            None => match name.match_indices('-').map(|(i, _)| i).find(|&i| style_at(i)) {
+                Some(i) => (name.get(..i).unwrap_or(name), name.get(i + 1..).unwrap_or("")),
+                None => (name, ""),
             },
-            s => s.to_string(),
         };
-        match found {
-            Some(f) => (f, style, true),
-            None => (spaced(strip_ps(fam)).trim().to_string(), style, false),
+        let family = spaced(strip_ps(fam)).split(['-', ' ']).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+        (family, style_of(style, weight, italic), false)
+    }
+}
+
+/// The style a PostScript name's `style` part names, or the one of weight `weight` and slant
+/// `italic` when the part names none (`Roman`, `Book`…).
+fn style_of(style: &str, weight: Option<u32>, italic: bool) -> String {
+    match spaced(strip_ps(style)).as_str() {
+        "" | "Roman" | "Book" | "Normal" | "Plain" => match (weight.is_some_and(|w| w >= 600) || style.contains("Bold"), italic) {
+            (true, true) => "Bold Italic".to_string(),
+            (true, false) => "Bold".to_string(),
+            (false, true) => "Italic".to_string(),
+            (false, false) => "Regular".to_string(),
+        },
+        s => s.to_string(),
+    }
+}
+
+/// Whether `s` is made of style words and their usual abbreviations (`BoldOblique`, `SemiboldIt`,
+/// `XBold`, `W6`), any case: the last part of a font name that names its style.
+fn is_style(s: &str) -> bool {
+    const WORDS: &str = "bd bk black blk bold book cn cnd compressed con condensed demi ex expanded ext extended extra hairline heavy hv it ita italic light lt md \
+                         med medium narrow normal obl oblique plain reg regular rg roman sb semi slanted smb super th thin ul ultra w wide x xb xl";
+    let s = s.to_ascii_lowercase();
+    let s = s.as_bytes();
+    // Which starts of `s` the words and digit runs before them reach (a word break, so
+    // `XBold` is X, Bold even though `xb` also starts it).
+    let mut reached = vec![false; s.len() + 1];
+    if let Some(r) = reached.first_mut() {
+        *r = !s.is_empty();
+    }
+    for i in 0..s.len() {
+        if !reached.get(i).copied().unwrap_or(false) {
+            continue;
+        }
+        let rest = s.get(i..).unwrap_or_default();
+        let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+        let ends = WORDS.split_ascii_whitespace().filter(|w| rest.starts_with(w.as_bytes())).map(|w| i + w.len());
+        for end in ends.chain((digits > 0).then_some(i + digits)) {
+            if let Some(r) = reached.get_mut(end) {
+                *r = true;
+            }
         }
     }
+    reached.last().copied().unwrap_or(false)
 }
 
 /// Hebrew or Arabic comes from a PDF in visual order (each glyph where it is drawn): put `t`'s text

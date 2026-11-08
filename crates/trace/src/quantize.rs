@@ -34,8 +34,13 @@ pub(crate) fn luma(p: [u8; 4]) -> u8 {
     ((p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114 + 500) / 1000) as u8
 }
 
-/// Reduce `img` to a palette according to `params.mode`.
+/// Reduce `img` to a palette according to `params.mode`. A raster whose bytes are not
+/// `width * height * 4` (its fields are public) has no pixels to reduce: no labels, no palette.
 pub fn quantize(img: &Raster, params: &TraceParams) -> Quantized {
+    let want = (img.width as usize).checked_mul(img.height as usize).and_then(|n| n.checked_mul(4));
+    if want != Some(img.rgba.len()) {
+        return Quantized { labels: vec![], palette: vec![] };
+    }
     quantize_keeping(img, params).0
 }
 

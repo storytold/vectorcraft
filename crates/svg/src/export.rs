@@ -105,13 +105,21 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         instance_xf: Affine::IDENTITY,
         symbols: HashMap::new(),
         symbol_nest: 0,
+        symbol_nodes: 0,
+        inline_graphic: false,
         fonts: Vec::new(),
         shared_images: HashMap::new(),
+        colorized_counts: HashMap::new(),
+        colorized_hrefs: HashMap::new(),
+        shared_colorized: HashMap::new(),
         layer_nest: 0,
         non_latin1_names: false,
         foreign_ns: BTreeMap::new(),
     };
     w.assign_name_ids();
+    for layer in &doc.layers {
+        w.count_colorized_images(layer);
+    }
     // Page Isolated Blending / Page Knockout Group: the page content is one isolated group.
     let page_group = doc.page_isolate || doc.page_knockout;
     if page_group {
@@ -216,6 +224,8 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     Output { svg: out, linked: w.linked, warnings: w.warnings, encoding }
 }
 
+type ColorizedKey = (String, u32, u32, Option<[u8; 3]>);
+
 struct Writer<'a> {
     doc: &'a Document,
     opts: &'a ExportOptions,
@@ -263,11 +273,21 @@ struct Writer<'a> {
     /// Symbols being written inside one another (instances nested deeper are left out: a symbol
     /// can't contain itself).
     symbol_nest: u32,
+    /// The objects in the placed art of the 9-slice instances written so far (see
+    /// [`vectorcraft_doc::charge_symbol_art`]).
+    symbol_nodes: u64,
+    /// An inline graphic in type is being written: its symbol's 9-slice guides do not apply, as
+    /// on the canvas.
+    inline_graphic: bool,
     /// The characters type uses from each face ([`ExportOptions::embed_fonts`]).
     fonts: Vec<FontUse>,
     /// Images written once in the defs and drawn with `<use>`, by key and size: the pieces an
     /// envelope cuts a distorted image into share its pixels.
     shared_images: HashMap<(String, u32, u32), String>,
+    /// Counts and generated PNG hrefs for gray images, keyed by source, size and baked RGB.
+    colorized_counts: HashMap<ColorizedKey, usize>,
+    colorized_hrefs: HashMap<ColorizedKey, String>,
+    shared_colorized: HashMap<ColorizedKey, String>,
     /// Layers being written inside one another (more than one: a sublayer).
     layer_nest: usize,
     /// An emitted attribute name requires an encoding wider than Latin-1.
