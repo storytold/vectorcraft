@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Panels: the Artboards panel's list fills the panel, so it resizes with the window as the Layers panel does, #6085; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -36,6 +36,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-07 | minor | Panels: the Artboards panel's list fills the panel and the buttons stay at its bottom, so the panel resizes with the window like the Layers panel (#6085); scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |
 | 2026-11-05 | minor | Selection Tools add-on: Select Linked, Embedded, Missing and Modified select the images and placed documents with that link status (Object › Plug-ins › Selection Tools and the Links panel menu; Shift adds), and Select by Link Status… lists them by name, status and format to pick from, optionally zooming to them; what is hidden, locked, on a template layer or outside the isolated group is left out and the status bar says how many (#5526, a VectorCraft addition); scores and estimates unchanged (estimated). |

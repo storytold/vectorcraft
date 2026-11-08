@@ -2,6 +2,108 @@ use super::*;
 use crate::widgets::accessibility_tests::{named, tree};
 use vectorcraft_engine::Session;
 
+/// The list fills the panel's height less the bottom bar, so the bar sits at the bottom of the
+/// panel and follows the window's height, as the Layers panel's does (#6085). With 36 rows the
+/// list overflows a short panel and scrolls instead of pushing the bar out.
+#[test]
+fn the_list_fills_the_panel_and_the_bottom_bar_follows_its_height() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 36})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, Default::default());
+    let divider = crate::theme::Tokens::get(&ctx).divider;
+    // The bottom bar's divider across the panel, at the height of a panel `h` tall.
+    let bar_y = |app: &mut VectorcraftApp, h: f32| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, h));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.rect.height() == 1.0 && r.fill == divider => Some(r.rect.top()),
+                _ => None,
+            })
+            .expect("the bottom bar draws its divider")
+    };
+    // The bottom bar's buttons through the screen-reader tree, at the height of a panel `h` tall.
+    let buttons_end = |app: &mut VectorcraftApp, h: f32| {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, h));
+        let mut end = None;
+        for time in [0.0, 0.1] {
+            let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let nodes: Vec<egui::accesskit::Node> =
+                out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default();
+            if let Some(b) = nodes.iter().find(|n| n.label() == Some("New Artboard")).and_then(|n| n.bounds()) {
+                end = Some((b.y1 as f32, h));
+            }
+        }
+        end.expect("the bottom bar's New Artboard button is named")
+    };
+    // The 36th row's name: in a 300-point panel it lies below the bar's divider, so the list
+    // scrolls inside the panel and does not move the bar down.
+    let last_row = |app: &mut VectorcraftApp, h: f32| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, h));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == "Artboard 36" => Some(t.visual_bounding_rect()),
+                _ => None,
+            })
+            .expect("the 36th row is laid out")
+    };
+    let (short_buttons, _) = buttons_end(&mut app, 300.0);
+    let short = bar_y(&mut app, 300.0);
+    let last = last_row(&mut app, 300.0);
+    assert!(last.top() > short, "the 36 rows overflow a 300 px panel: row 36 at {last:?}, the bar at {short}");
+    let (tall_buttons, _) = buttons_end(&mut app, 700.0);
+    let tall = bar_y(&mut app, 700.0);
+    assert!(short_buttons <= 300.0 - 1.0, "the bar's buttons end inside a 300 px panel, not below it: {short_buttons}");
+    assert!(tall_buttons <= 700.0 - 1.0, "and inside a 700 px one: {tall_buttons}");
+    // A panel as short as the dock allows (80 points) still keeps its buttons inside.
+    let (tiny_buttons, _) = buttons_end(&mut app, 80.0);
+    assert!(tiny_buttons <= 80.0 - 1.0, "and inside an 80 px one: {tiny_buttons}");
+    assert!(short > 300.0 - 40.0, "the bar sits at the bottom of a 300 px panel: {short}");
+    assert!(tall - short > 350.0, "the bar follows the panel's height: {short} -> {tall}");
+}
+/// A panel at the dock's minimum height keeps one whole 24-point row in view, with the dock panel
+/// scrolling to the bottom bar below it; a roomier panel gives the list the rest of its height (#6085).
+#[test]
+fn a_panel_at_the_docks_minimum_height_shows_a_whole_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 36})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, Default::default());
+    let border = crate::theme::Tokens::get(&ctx).input_border;
+    // The list box frame drawn by a panel `h` points tall.
+    let list = |app: &mut VectorcraftApp, h: f32| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, h));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .find_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if r.stroke.width == 1.0 && r.stroke.color == border && r.rect.width() > 200.0 => Some(r.rect),
+                _ => None,
+            })
+            .expect("the list box's frame")
+    };
+    assert_eq!(list_height(0.0), ROW_H, "never below one row");
+    assert_eq!(list_height(60.0), ROW_H, "at the dock's minimum height one row still fits");
+    assert_eq!(list_height(200.0), 154.0, "and otherwise the bottom bar's 46 points are left");
+    assert!(list(&mut app, 60.0).height() >= ROW_H, "one whole row at the dock's minimum height");
+    let roomy = list(&mut app, 300.0);
+    assert!(roomy.height() >= 200.0 && roomy.height() < 300.0, "a roomier panel gives the list its height: {roomy:?}");
+}
 /// Clicking a row makes its artboard the active one (the navigator's, Fit Artboard in Window's).
 #[test]
 fn clicking_a_row_makes_its_artboard_active() {

@@ -506,6 +506,20 @@ fn select_copies(app: &mut VectorcraftApp, all: &[usize], r: &Value) {
     }
 }
 
+/// The height of one artboard row, its name and number drawn inside it.
+const ROW_H: f32 = 24.0;
+
+/// The list's height in a panel whose body has `available` points: the panel less the bottom bar's
+/// 46 points (its divider, the spacing around it and its 24-point buttons, which the test measures),
+/// but never below one row, so a panel at the dock's minimum height still shows a whole row and the
+/// dock panel scrolls to the bottom bar below it.
+fn list_height(available: f32) -> f32 {
+    (available - 46.0).max(ROW_H)
+}
+
+/// The Artboards panel: the artboard rows with their selection, rename, lock, reorder and double-click
+/// rules, the list filling the panel above the bottom bar, and the panel's buttons (`Rearrange All
+/// Artboards`, `Move Up`/`Move Down`, `New Artboard`, `Delete Artboard`) in that bar.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let abs: Vec<String> = app.session.active().map(|d| d.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
@@ -520,10 +534,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut row_clicked = false;
     // A row dropped on another row: (from, to), the index it lands at.
     let mut dropped = None;
+    // The list grows and shrinks with the panel, taking the height the bottom bar leaves, as the
+    // Layers panel's list does (#6085).
+    let list_h = list_height(ui.available_height());
     let list_rect = widgets::list_box(ui, |ui| {
-        ui.set_min_height(110.0);
         ui.spacing_mut().item_spacing.y = 0.0;
-        let scrolled = egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(220.0).show(ui, |ui| {
+        let list = egui::ScrollArea::vertical().id_salt("ab-scroll").max_height(list_h).min_scrolled_height(0.0);
+        let scrolled = list.auto_shrink([false, false]).show(ui, |ui| {
             for (i, name) in abs.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click_and_drag());
                 if resp.drag_started() {
