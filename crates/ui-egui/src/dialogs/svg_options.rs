@@ -69,11 +69,12 @@ const ENCODINGS: [(&str, &str); 3] = [("utf8", "Unicode (UTF-8)"), ("utf16", "Un
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
 
 /// The options a first SVG Options dialog starts from: the engine's defaults with Internal CSS
-/// and Responsive on (as the reference app's Export As starts). Hidden layers are left to the
-/// command (Save keeps them, Export leaves them out).
+/// and Responsive on (as the reference app's Export As starts). Hidden layers, units and guides
+/// are left to the command (Save keeps them, Export leaves them out).
 pub(super) fn first_use() -> Map<String, Value> {
     let mut m = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
     m.remove("hiddenLayers");
+    m.remove("guidesAndUnits");
     m.insert("styling".into(), json!("css"));
     m.insert("responsive".into(), json!(true));
     m.insert("useArtboards".into(), json!(true));
@@ -108,13 +109,14 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
     app.ui.dialog = Some(Dialog::new(KIND, Value::Object(fields)));
 }
 
-/// The SVG options the dialog's fields describe (artboards only when exporting, editing data
-/// only when saving).
+/// The SVG options the dialog's fields describe (artboards only when exporting, editing data,
+/// units and guides only when saving).
 fn options(d: &Dialog) -> Value {
     let mode = Mode::of(d);
     let mut o: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
     if mode == Mode::Export {
         o.remove("preserveEditing");
+        o.remove("guidesAndUnits");
         if d.bool("useArtboards") {
             let range = d.str("range");
             let range = range.trim();
@@ -415,6 +417,25 @@ mod tests {
         // A native Save As needs no options.
         app.run("file.saveAs", json!({"path": "/tmp/doc.vectorcraft"})).unwrap();
         assert!(vectorcraft_format::sniff(&written.borrow()[3].1));
+    }
+
+    /// #4646: Save As SVG through the dialog keeps the units and a ruler guide; Export As, even
+    /// after that save, writes a plain SVG.
+    #[test]
+    fn save_as_svg_keeps_units_and_guides_and_export_leaves_them_out() {
+        let (mut app, written) = app("/tmp/doc.svg");
+        app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+        app.run("guide.add", json!({"vertical": true, "pos": 50})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        let saved = text(&written, 0);
+        assert!(saved.contains("units=\"millimeters\"") && saved.contains("<vectorcraft:guide orientation=\"vertical\""), "{saved}");
+        app.run("file.export.svg", Value::Null).unwrap();
+        frame(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        let exported = written.borrow().iter().skip(1).map(|(_, b)| String::from_utf8(b.clone()).unwrap()).collect::<Vec<_>>();
+        assert!(!exported.is_empty() && exported.iter().all(|e| !e.contains("vectorcraft:settings")));
     }
 
     #[test]

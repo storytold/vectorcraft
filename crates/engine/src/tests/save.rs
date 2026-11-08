@@ -568,7 +568,8 @@ fn eps_save_bounds_large_page_preview_without_cropping_vector_or_editing_data() 
 #[test]
 fn units_and_ruler_guides_survive_save_and_reopen() {
     let d = dir("units-guides");
-    for ext in ["vectorcraft", "pdf", "ai", "eps"] {
+    // SVG keeps them in its <metadata> (#4646: an SVG reopened in pixels without its guides).
+    for ext in ["vectorcraft", "pdf", "ai", "eps", "svg", "svgz"] {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100, "units": "Millimeters"})).unwrap();
         s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
@@ -582,5 +583,28 @@ fn units_and_ruler_guides_survive_save_and_reopen() {
         let guides: Vec<_> = doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!((doc.units, guides), (vectorcraft_doc::Unit::Millimeters, vec![(true, 50.0), (false, 30.0)]), "{ext}");
     }
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// An export is a plain SVG: the units and guides are a save's (#4646), unless asked for.
+#[test]
+fn svg_export_leaves_out_units_and_guides_unless_asked() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 100, "units": "Centimeters"})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    rect(&mut s);
+    let svg = |s: &mut Session, p: Value| String::from_utf8(b64(&s.execute("document.export", &p).unwrap())).unwrap();
+    assert!(!svg(&mut s, json!({"format": "svg"})).contains("vectorcraft:settings"));
+    let asked = svg(&mut s, json!({"format": "svg", "guidesAndUnits": true}));
+    assert!(asked.contains("units=\"centimeters\"") && asked.contains("<vectorcraft:guide orientation=\"vertical\""), "{asked}");
+    // Turned off for a save, the SVG reopens as other apps see it.
+    let d = dir("svg-no-settings");
+    let p = path(&d, "a.svg");
+    s.execute("document.save", &json!({"path": p, "guidesAndUnits": false})).unwrap();
+    assert!(!std::fs::read_to_string(&p).unwrap().contains("vectorcraft:settings"));
+    s.execute("file.close", &json!({})).unwrap();
+    s.execute("document.open", &json!({"path": p})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!((doc.units, doc.guides.len()), (vectorcraft_doc::Unit::Pixels, 0));
     let _ = std::fs::remove_dir_all(d);
 }
