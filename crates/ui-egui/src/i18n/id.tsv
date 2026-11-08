@@ -821,6 +821,9 @@
 	Stained Glass…	Kaca patri…
 	Texturizer…	Texturizer…
 	System Title Bar	Bilah judul sistem
+	VectorCraft Title Bar on Every Desktop	Bilah judul VectorCraft di setiap desktop
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Selama ditetapkan, variabel lingkungan VECTORCRAFT_TITLEBAR memilih bilah judul.
+	System Title Bar takes precedence over this option while it is on.	Selama aktif, Bilah judul sistem lebih diutamakan daripada opsi ini.
 	Exit	Keluar
 	Distort	Distorsi
 	Diffuse Glow…	Pendar difusi…

@@ -4919,6 +4919,9 @@ effect	Soft	Morbido
 effect	Regular	Normale
 	Edge	Bordo
 	System Title Bar	Barra del titolo di sistema
+	VectorCraft Title Bar on Every Desktop	Barra del titolo di VectorCraft su ogni desktop
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Finché è impostata, la variabile d'ambiente VECTORCRAFT_TITLEBAR sceglie la barra del titolo.
+	System Title Bar takes precedence over this option while it is on.	Finché è attiva, Barra del titolo di sistema ha la precedenza su questa opzione.
 	Value Axis	Asse dei valori
 	On Left Side	Sul lato sinistro
 	On Right Side	Sul lato destro

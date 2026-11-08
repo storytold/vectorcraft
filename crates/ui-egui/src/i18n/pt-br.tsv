@@ -3272,6 +3272,9 @@ imageTrace	Outline	Contorno
 	Stained Glass…	Vitral…
 	Texturizer…	Texturizador…
 	System Title Bar	Barra de título do sistema
+	VectorCraft Title Bar on Every Desktop	Barra de título do VectorCraft em todas as áreas de trabalho
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Enquanto estiver definida, a variável de ambiente VECTORCRAFT_TITLEBAR escolhe a barra de título.
+	System Title Bar takes precedence over this option while it is on.	Enquanto estiver ativada, Barra de título do sistema tem prioridade sobre esta opção.
 	Exit	Sair
 	Distort	Distorcer
 	Diffuse Glow…	Brilho difuso…

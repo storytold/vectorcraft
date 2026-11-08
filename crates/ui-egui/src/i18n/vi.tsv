@@ -3799,6 +3799,9 @@ mark-style	Japanese	Kiểu Nhật
 	Symbols	Ký hiệu
 	System Layout	Bố cục hệ thống
 	System Title Bar	Thanh tiêu đề hệ thống
+	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
+	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng

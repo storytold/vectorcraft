@@ -4914,6 +4914,9 @@ axis	Both	Оба
 	Bottom Right	Снизу справа
 	Edge	Край
 	System Title Bar	Системная строка заголовка
+	VectorCraft Title Bar on Every Desktop	Строка заголовка VectorCraft на любом рабочем столе
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Пока переменная среды VECTORCRAFT_TITLEBAR задана, строку заголовка выбирает она.
+	System Title Bar takes precedence over this option while it is on.	Пока включена «Системная строка заголовка», она имеет приоритет над этим параметром.
 	Value Axis	Ось значений
 	On Left Side	Слева
 	On Right Side	Справа

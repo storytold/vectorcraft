@@ -4771,6 +4771,9 @@ theme	Appearance	Erscheinungsbild
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	{n} verknüpftes Bild wurde auf dem Datenträger geändert. Neue Version anzeigen?|{n} verknüpfte Bilder wurden auf dem Datenträger geändert. Neue Versionen anzeigen?
 # Window: the system's title bar (Windows, Linux).
 	System Title Bar	Systemtitelleiste
+	VectorCraft Title Bar on Every Desktop	VectorCraft-Titelleiste auf jedem Desktop
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Solange die Umgebungsvariable VECTORCRAFT_TITLEBAR gesetzt ist, bestimmt sie die Titelleiste.
+	System Title Bar takes precedence over this option while it is on.	Solange Systemtitelleiste eingeschaltet ist, hat sie Vorrang vor dieser Option.
 # Brush Options: Scatter, Art and Pattern brushes.
 	Scatter Brush Options	Optionen für Spezialpinsel
 	Art Brush Options	Optionen für Bildpinsel

@@ -331,6 +331,13 @@ instead: the OS title then shows the active document (`*name — VectorCraft` wi
 drops its brand mark. On Linux the app bar also drops its brand mark whenever the desktop draws the window's frame, with
 System Title Bar on or off. On macOS the window buttons are centred on the app bar; the web build is unchanged.
 
+On Linux and the BSDs, Preferences › User Interface › VectorCraft Title Bar on Every Desktop (`appTitleBar`, read
+when the app starts, off by default) turns off the desktop's frame and uses the app bar as the title bar in the
+sessions where the desktop would draw the frame: X11 sessions, Wayland compositors that draw server-side decorations
+such as KDE Plasma, and a window opened through XWayland. System Title Bar and `VECTORCRAFT_TITLEBAR` (`app`, or
+`system` or `desktop`) take precedence over it. The checkbox is dimmed while either applies, and a note under it names
+each one that applies.
+
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
 a swatch clicked there runs `paint.setFill` / `paint.setStroke`. The Properties panel has them with nothing selected

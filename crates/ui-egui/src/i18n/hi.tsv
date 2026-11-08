@@ -4658,6 +4658,9 @@
 	System	सिस्टम
 	System Layout	सिस्टम लेआउट
 	System Title Bar	सिस्टम टाइटल बार
+	VectorCraft Title Bar on Every Desktop	हर डेस्कटॉप पर VectorCraft टाइटल बार
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	जब तक एनवायरनमेंट वेरिएबल VECTORCRAFT_TITLEBAR सेट है, टाइटल बार वही चुनता है।
+	System Title Bar takes precedence over this option while it is on.	जब तक सिस्टम टाइटल बार चालू है, उसे इस विकल्प पर प्राथमिकता मिलती है।
 	Tab	Tab
 	Tab Stops	टैब स्टॉप्स
 	Table	तालिका

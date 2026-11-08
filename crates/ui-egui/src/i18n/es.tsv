@@ -4875,6 +4875,9 @@ axis	Both	Ambos
 	Bottom Right	Abajo a la derecha
 	Edge	Borde
 	System Title Bar	Barra de título del sistema
+	VectorCraft Title Bar on Every Desktop	Barra de título de VectorCraft en todos los escritorios
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mientras está definida, la variable de entorno VECTORCRAFT_TITLEBAR elige la barra de título.
+	System Title Bar takes precedence over this option while it is on.	Mientras está activada, Barra de título del sistema tiene prioridad sobre esta opción.
 	Value Axis	Eje de valores
 	On Left Side	En el lado izquierdo
 	On Right Side	En el lado derecho

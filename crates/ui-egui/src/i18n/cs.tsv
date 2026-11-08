@@ -894,6 +894,9 @@
 	Stained Glass…	Vitráž…
 	Texturizer…	Texturovač…
 	System Title Bar	Systémové záhlaví okna
+	VectorCraft Title Bar on Every Desktop	Záhlaví okna VectorCraftu v každém desktopovém prostředí
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dokud je proměnná prostředí VECTORCRAFT_TITLEBAR nastavena, záhlaví okna volí ona.
+	System Title Bar takes precedence over this option while it is on.	Dokud je Systémové záhlaví okna zapnuté, má přednost před touto volbou.
 	Exit	Ukončit
 	Distort	Zkreslení
 	Diffuse Glow…	Rozptýlená záře…

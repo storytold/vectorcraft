@@ -878,6 +878,9 @@
 	Stained Glass…	Lasimaalaus…
 	Texturizer…	Teksturoija…
 	System Title Bar	Järjestelmän otsikkorivi
+	VectorCraft Title Bar on Every Desktop	VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
+	System Title Bar takes precedence over this option while it is on.	Järjestelmän otsikkorivi ohittaa tämän asetuksen niin kauan kuin se on käytössä.
 	Exit	Lopeta
 	Distort	Vääristä
 	Diffuse Glow…	Hajautettu hehku…

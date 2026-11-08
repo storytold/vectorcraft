@@ -774,6 +774,9 @@
 	Stained Glass…	ვიტრაჟი…
 	Texturizer…	ტექსტურირება…
 	System Title Bar	სისტემის სათაურის ზოლი
+	VectorCraft Title Bar on Every Desktop	VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
+	System Title Bar takes precedence over this option while it is on.	სანამ სისტემის სათაურის ზოლი ჩართულია, მას ამ პარამეტრზე უპირატესობა აქვს.
 	Exit	გასვლა
 	Distort	დეფორმაცია
 	Diffuse Glow…	გაბნეული ნათება…
