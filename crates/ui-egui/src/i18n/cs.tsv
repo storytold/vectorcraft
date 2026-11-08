@@ -150,6 +150,7 @@
 	Report copied	Zpráva zkopírována
 	Line {line}	Řádek {line}
 	Line {line}: {name}: {status}	Řádek {line}: {name}: {status}
+	Read Action Set File	Přečíst soubor sady akcí
 	Read Shortcut Set File	Přečíst soubor sady klávesových zkratek
 	Import Matches	Přiřazení z importů
 	Remember Import Matches	Zapamatovat přiřazení z importů
@@ -4668,6 +4669,8 @@ imageTrace	Outline	Obrys
 @msg	no such action set	taková sada akcí neexistuje
 @msg	the action sets changed; nothing was deleted	sady akcí se změnily; nic nebylo odstraněno
 @msg	no action set to save	žádná sada akcí k uložení
+@msg	the action set file can't be read in full	soubor sady akcí nelze přečíst celý
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
 @msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí

@@ -157,6 +157,7 @@
 	Report copied	Raportti kopioitu
 	Line {line}	Rivi {line}
 	Line {line}: {name}: {status}	Rivi {line}: {name}: {status}
+	Read Action Set File	Lue toimintosarjatiedosto
 	Read Shortcut Set File	Lue pikanäppäinjoukkotiedosto
 	Import Matches	Tuonnin vastaavuudet
 	Remember Import Matches	Muista tuonnin vastaavuudet
@@ -4576,6 +4577,8 @@ imageTrace	Outline	Ääriviiva
 @msg	no such action set	toimintosarjaa ei ole
 @msg	the action sets changed; nothing was deleted	toimintosarjat muuttuivat; mitään ei poistettu
 @msg	no action set to save	ei tallennettavaa toimintosarjaa
+@msg	the action set file can't be read in full	toimintosarjatiedostoa ei voi lukea kokonaan
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
 @msg	the action set file holds more than 1,000 actions	toimintosarjatiedostossa on yli 1 000 toimintoa

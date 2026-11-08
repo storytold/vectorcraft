@@ -2156,6 +2156,7 @@ file-filter	Templates	Sablonok
 	Report copied	Jelentés másolva
 	Line {line}	{line}. sor
 	Line {line}: {name}: {status}	{line}. sor: {name}: {status}
+	Read Action Set File	Műveletkészlet beolvasása fájlból
 	Read Shortcut Set File	Billentyűparancs-készlet beolvasása fájlból
 	Import Matches	Importálási megfeleltetések
 	Remember Import Matches	Importálási megfeleltetések megjegyzése
@@ -5040,6 +5041,8 @@ imageTrace	Outline	Körvonal
 @msg	no such action set	nincs ilyen műveletkészlet
 @msg	the action sets changed; nothing was deleted	a műveletkészletek megváltoztak; semmi sem törlődött
 @msg	no action set to save	nincs menthető műveletkészlet
+@msg	the action set file can't be read in full	a műveletkészlet-fájl nem olvasható be teljesen
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
 @msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz

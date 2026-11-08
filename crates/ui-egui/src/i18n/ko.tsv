@@ -1954,6 +1954,7 @@ digits	Malayalam	말라얄람어
 	Line {line}	{line}행
 	Line {line}: {name}: {status}	{line}행: {name}: {status}
 	Imported. Press OK to keep the imported set.	가져왔습니다. 가져온 세트를 유지하려면 확인을 누르세요.
+	Read Action Set File	액션 세트 파일 읽기
 	Read Shortcut Set File	단축키 세트 파일 읽기
 	Import Matches	가져오기 대응
 	Remember Import Matches	가져오기 대응 기억
@@ -4662,6 +4663,8 @@ theme	Appearance	외관
 @msg	no such action set	해당 액션 세트가 없습니다
 @msg	the action sets changed; nothing was deleted	액션 세트가 바뀌어 아무것도 삭제하지 않았습니다
 @msg	no action set to save	저장할 액션 세트가 없습니다
+@msg	the action set file can't be read in full	액션 세트 파일을 전부 읽을 수 없습니다
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}”을(를) 불러왔습니다. 단계 {n}개를 제외했습니다
 @msg	not an action set file	액션 세트 파일이 아닙니다
 @msg	the action set file is larger than 8 MiB	액션 세트 파일이 8 MiB보다 큽니다
 @msg	the action set file holds more than 1,000 actions	액션 세트 파일의 액션이 1,000개를 넘습니다

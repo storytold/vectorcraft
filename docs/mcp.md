@@ -106,7 +106,7 @@ the suite) keep the agent to the folders you give it:
 
 - Every file a command reads must lie inside a **read root**: `open_file`, `file.place`, relinking and
   updating links, the images an SVG links to, swatch library, graphic style library, symbol library, brush library and colour-profile loads, plug-ins,
-  `file.newFromTemplate`, preset imports, shortcut sets (`shortcutSet.read`), the folders `text.findFontFiles` and `links.findFiles` search, the
+  `file.newFromTemplate`, preset imports, shortcut sets (`shortcutSet.read`), action sets (`actionSet.read`), the folders `text.findFontFiles` and `links.findFiles` search, the
   scripts `script.check` reads and the files they include.
 - Every file a command writes must lie inside a **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
@@ -1978,7 +1978,8 @@ already walks Image Trace. Short agent entry points:
   instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
   1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
-  disabled where there is no open dialog (the web).
+  disabled where there is no open dialog (the web). `ui.actionSet.load` also reads the action sets other apps save as
+  text (`.aia`); see "Action sets from other apps".
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
   the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
   `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed.
@@ -6868,6 +6869,40 @@ the entry names and decodes the codes that VectorCraft's default shortcuts agree
 ```json
 {"name":"run_command","arguments":{"command":"shortcutSet.read","params":{"path":"/Users/me/Studio.kys"}}}
 {"name":"run_command","arguments":{"command":"importMatches.set","params":{"matches":[{"kind":"name","name":"Group","target":"object.group"},{"kind":"key","name":"901","target":"G"}]}}}
+```
+
+## Action sets from other apps
+
+`actionSet.read {path? | data? | dataBase64?, name?}` reads an action set another app saved as text (an `.aia` file
+that starts with `/version`) without changing anything. Give exactly one of `path`, `data` and `dataBase64`. It returns
+the set's name (`set`, else the file's name, else empty), its `version`, and its `actions`, each with its `name` and
+`steps`. A step lists its `name` (the file's `/internalName`), its `label` (the `/localizedName` it is shown with, or
+null when it has none or it is blank), `on` (false when the file sets `/isOn 0`), `params` (how many recorded values it
+has) and its `line`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
+blocks, 1,000 actions, 10,000 steps in an action and 100,000 steps in the set, and cuts names at 1,024 bytes. It sets
+`truncated` when it reaches one of these limits, when the text ends inside a block or a value or after a field's name,
+when `/actionCount`, `/eventCount` or a step's `/parameterCount` differs from the actions, steps or recorded values read
+(a negative count, one too large for a number and one that is not a number always differ), or when a hexadecimal name,
+label or recorded `/value` is not as many bytes as its count says. Text that does not start with `/version` and a
+number is an error.
+
+`ui.actionSet.load` (the Actions panel menu's Load Actions…) reads such a file too, from `path`, a picked file or
+`data`, and adds its set after the other sets with all its actions. The set's name is the file's `/name`, else the
+file's name, else `Actions`. A step with a label and no recorded values comes in as the VectorCraft command with that
+label, in English or in the interface language, in any case and without a final `…`, when exactly one menu command has
+that label and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with
+no values and opens no dialog (Group, Ungroup). A submenu's items, file and document commands, Paste, Undo, Redo and
+add-on commands are never matched. The step runs with no params, and a step that is off in the file is excluded from
+playback. Other steps are left out, including every step with no label and every step recorded with values (recorded
+menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
+`leftOut` counts them, and the status bar says how many were left out. An action with no name is called `Action N`, by
+its place in the file. Function keys and colors are not read. A file marked `truncated` is refused, and no set is added.
+Text that starts `/version` and is not an action set gives "not an action set file". Tokens in `unread` do not stop a
+load.
+
+```json
+{"name":"run_command","arguments":{"command":"actionSet.read","params":{"path":"/Users/me/Prep.aia"}}}
+{"name":"run_command","arguments":{"command":"ui.actionSet.load","params":{"path":"/Users/me/Prep.aia"}}}
 ```
 
 ## Artwork Cleanup add-on

@@ -1891,6 +1891,7 @@ digits	Hindi	Hindi
 	Line {line}	Dòng {line}
 	Line {line}: {name}: {status}	Dòng {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Đã nhập. Nhấn OK để giữ bộ đã nhập.
+	Read Action Set File	Đọc tệp bộ hành động
 	Read Shortcut Set File	Đọc tệp bộ phím tắt
 	Import Matches	Cặp ghép khi nhập
 	Remember Import Matches	Ghi nhớ cặp ghép khi nhập
@@ -4692,6 +4693,8 @@ theme	Appearance	Giao diện
 @msg	no such action set	không có bộ hành động như vậy
 @msg	the action sets changed; nothing was deleted	các bộ hành động đã thay đổi; không có gì bị xóa
 @msg	no action set to save	không có bộ hành động nào để lưu
+@msg	the action set file can't be read in full	không thể đọc hết tệp bộ hành động
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
 @msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động

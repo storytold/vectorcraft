@@ -142,6 +142,7 @@
 	Report copied	Izvještaj kopiran
 	Line {line}	Red {line}
 	Line {line}: {name}: {status}	Red {line}: {name}: {status}
+	Read Action Set File	Pročitaj datoteku skupa akcija
 	Read Shortcut Set File	Pročitaj datoteku skupa prečica
 	Import Matches	Uparivanja uvoza
 	Remember Import Matches	Zapamti uparivanja uvoza
@@ -4616,6 +4617,8 @@ imageTrace	Outline	Obris
 @msg	no such action set	nema takvog skupa akcija
 @msg	the action sets changed; nothing was deleted	skupovi akcija su se promijenili; ništa nije izbrisano
 @msg	no action set to save	nema skupa akcija za čuvanje
+@msg	the action set file can't be read in full	datoteka skupa akcija ne može se pročitati u cijelosti
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Učitano „{name}”: {n} korak je izostavljen|Učitano „{name}”: {n} koraka su izostavljena|Učitano „{name}”: {n} koraka je izostavljeno
 @msg	not an action set file	nije datoteka skupa akcija
 @msg	the action set file is larger than 8 MiB	datoteka skupa akcija je veća od 8 MiB
 @msg	the action set file holds more than 1,000 actions	datoteka skupa akcija sadrži više od 1.000 akcija

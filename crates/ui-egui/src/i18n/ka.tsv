@@ -4127,6 +4127,8 @@ font-technology	Variable	ცვლადი
 @msg	no such action set	ასეთი მოქმედებების ნაკრები არ არის
 @msg	the action sets changed; nothing was deleted	მოქმედებების ნაკრებები შეიცვალა; არაფერი წაშლილა
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
+@msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	the action set file holds more than 1,000 actions	მოქმედებების ნაკრების ფაილი 1000-ზე მეტ მოქმედებას შეიცავს
@@ -5104,6 +5106,7 @@ imageTrace	Outline	კონტური
 	Precise Cursors	ზუსტი კურსორები
 	Image Trace Preview	გამოსახულების ვექტორიზაციის წინასწარი ნახვა
 	Press a key…	დააჭირეთ კლავიშს…
+	Read Action Set File	მოქმედებების ნაკრების ფაილის წაკითხვა
 	Read Shortcut Set File	მალსახმობების ნაკრების ფაილის წაკითხვა
 	Ready	მზადაა
 	Remember Import Matches	იმპორტის შესაბამისობების დამახსოვრება

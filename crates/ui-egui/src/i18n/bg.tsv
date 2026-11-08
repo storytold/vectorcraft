@@ -1666,6 +1666,7 @@ font-technology	Variable	Променливи
 	Report copied	Отчетът е копиран
 	Line {line}	Ред {line}
 	Line {line}: {name}: {status}	Ред {line}: {name}: {status}
+	Read Action Set File	Четене на файл с набор от действия
 	Read Shortcut Set File	Четене на файл с набор от клавишни комбинации
 	Import Matches	Импортиране на съответствия
 	Remember Import Matches	Запомняне на съответствията при импортиране
@@ -4222,6 +4223,8 @@ axis	Both	И двете
 @msg	no such action set	няма такъв набор от действия
 @msg	the action sets changed; nothing was deleted	наборите от действия се промениха; нищо не беше изтрито
 @msg	no action set to save	няма набор от действия за запазване
+@msg	the action set file can't be read in full	файлът с набор от действия не може да се прочете изцяло
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Зареден е „{name}“: {n} стъпка е пропусната|Зареден е „{name}“: {n} стъпки са пропуснати
 @msg	not an action set file	не е файл с набор от действия
 @msg	the action set file is larger than 8 MiB	файлът с набор от действия е по-голям от 8 MiB
 @msg	the action set file holds more than 1,000 actions	файлът с набор от действия съдържа повече от 1000 действия

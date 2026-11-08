@@ -1740,6 +1740,7 @@ file-filter	Templates	Шаблони
 	Line {line}	Рядок {line}
 	Line {line}: {name}: {status}	Рядок {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Імпортовано. Натисніть «ОК», щоб зберегти імпортований набір.
+	Read Action Set File	Прочитати файл набору дій
 	Read Shortcut Set File	Прочитати файл набору сполучень клавіш
 	Import Matches	Зіставлення імпорту
 	Remember Import Matches	Запам’ятати зіставлення імпорту
@@ -4384,6 +4385,8 @@ axis	Both	Обидві
 @msg	no such action set	такого набору дій немає
 @msg	the action sets changed; nothing was deleted	набори дій змінилися; нічого не видалено
 @msg	no action set to save	немає набору дій для збереження
+@msg	the action set file can't be read in full	файл набору дій неможливо прочитати повністю
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
 @msg	the action set file holds more than 1,000 actions	файл набору дій містить понад 1000 дій

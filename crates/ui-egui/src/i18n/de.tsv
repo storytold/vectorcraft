@@ -1714,6 +1714,7 @@ file-filter	Templates	Vorlagen
 	Line {line}	Zeile {line}
 	Line {line}: {name}: {status}	Zeile {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Importiert. Klicken Sie auf „OK“, um den importierten Satz zu behalten.
+	Read Action Set File	Aktionssatzdatei lesen
 	Read Shortcut Set File	Tastaturbefehlssatz-Datei lesen
 	Import Matches	Import-Zuordnungen
 	Remember Import Matches	Import-Zuordnungen merken
@@ -4274,6 +4275,8 @@ theme	Appearance	Erscheinungsbild
 @msg	no such action set	kein solcher Aktionssatz
 @msg	the action sets changed; nothing was deleted	die Aktionssätze haben sich geändert; nichts wurde gelöscht
 @msg	no action set to save	kein Aktionssatz zum Speichern
+@msg	the action set file can't be read in full	die Aktionssatzdatei kann nicht vollständig gelesen werden
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}“ geladen: {n} Schritt wurde ausgelassen|„{name}“ geladen: {n} Schritte wurden ausgelassen
 @msg	not an action set file	keine Aktionssatzdatei
 @msg	the action set file is larger than 8 MiB	die Aktionssatzdatei ist größer als 8 MiB
 @msg	the action set file holds more than 1,000 actions	die Aktionssatzdatei enthält mehr als 1.000 Aktionen

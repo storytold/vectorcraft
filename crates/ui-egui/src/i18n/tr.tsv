@@ -1553,6 +1553,7 @@ font-technology	Variable	Değişken
 	Report copied	Rapor kopyalandı
 	Line {line}	{line} Hattı
 	Line {line}: {name}: {status}	Hat {line}: {name}: {status}
+	Read Action Set File	Eylem Seti Dosyasını Oku
 	Read Shortcut Set File	Kısayol Seti Dosyasını Oku
 	Import Matches	Eşleşmeleri İçe Aktar
 	Remember Import Matches	İçe Aktarılan Eşleşmeleri Hatırla
@@ -4124,6 +4125,8 @@ axis	Both	Her İkisi
 @msg	no such action set	öyle bir eylem seti yok
 @msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
 @msg	no action set to save	kaydedilecek eylem seti yok
+@msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor

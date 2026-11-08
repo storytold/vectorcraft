@@ -3941,6 +3941,8 @@ axis	Both	Ambos
 @msg	no such action set	conjunto de ações inexistente
 @msg	the action sets changed; nothing was deleted	os conjuntos de ações mudaram; nada foi excluído
 @msg	no action set to save	nenhum conjunto de ações para salvar
+@msg	the action set file can't be read in full	o arquivo de conjunto de ações não pode ser lido por inteiro
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” carregado: {n} etapa foi omitida|“{name}” carregado: {n} etapas foram omitidas
 @msg	not an action set file	não é um arquivo de conjunto de ações
 @msg	the action set file is larger than 8 MiB	o arquivo de conjunto de ações tem mais de 8 MiB
 @msg	the action set file holds more than 1,000 actions	o arquivo de conjunto de ações contém mais de 1.000 ações
@@ -4698,6 +4700,7 @@ axis	Both	Ambos
 	Report copied	Relatório copiado
 	Line {line}	Linha {line}
 	Line {line}: {name}: {status}	Linha {line}: {name}: {status}
+	Read Action Set File	Ler Arquivo de Conjunto de Ações
 	Read Shortcut Set File	Ler Arquivo de Conjunto de Atalhos
 	Import Matches	Importar Correspondências
 	Remember Import Matches	Lembrar Correspondências de Importação

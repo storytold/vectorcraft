@@ -1674,9 +1674,10 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Copied the CSS of 1 object", "Copied the CSS of 2 objects"),
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
+    ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
 ];
 
-/// The link, font and export status messages name a count of 1 in the singular and other counts in
+/// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
 /// the plural, and every complete catalog translates both, in the form its plural rule picks.
 #[test]
 fn counted_status_messages_take_the_plural_form() {
