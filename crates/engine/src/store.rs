@@ -224,8 +224,8 @@ impl Session {
     }
 
     /// Keep the plug-ins this session installs in `dir`, and install the ones already there (a
-    /// module that doesn't load, and one that lists permissions the grants there don't grant it,
-    /// is skipped with a log record).
+    /// module that doesn't load, and one that lists permissions the grants there don't grant that
+    /// very module, is skipped with a log record, and stays in `dir` with its grant).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         let grants = stored_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
@@ -244,12 +244,12 @@ impl Session {
                 // module stored here load.
                 Ok(plugin) if plugin.manifest().asks_permissions() => {
                     let m = plugin.manifest();
-                    match grants.get(&m.id).filter(|g| g.covers(&m.permissions())) {
+                    match grants.get(&m.id).filter(|g| g.covers(&m.id, plugin.hash(), &m.permissions())) {
                         Some(g) => {
                             vectorcraft_plugins::registry::grant(g.clone());
                             vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
                         }
-                        None => log::warn!("skipping the stored plug-in {}: the user hasn't granted the permissions it lists", path.display()),
+                        None => log::warn!("skipping the stored plug-in {}: the user hasn't approved this module's permissions", path.display()),
                     }
                 }
                 Ok(plugin) => {
@@ -261,9 +261,10 @@ impl Session {
         self.plugin_dir = Some(dir);
     }
 
-    /// Whether `plugin` installs without asking the user: it lists no permissions, or its id was
-    /// granted every one it lists, in the grants of the attached plug-in store when there is one,
-    /// else in this process's ([`vectorcraft_plugins::registry::approved`]).
+    /// Whether `plugin` installs without asking the user: it lists no permissions, or this very
+    /// module (its id and SHA-256) was granted every one it lists, in the grants of the attached
+    /// plug-in store when there is one, else in this process's
+    /// ([`vectorcraft_plugins::registry::approved`]).
     pub(crate) fn plugin_approved(&self, plugin: &vectorcraft_plugins::Plugin) -> bool {
         self.plugin_approver()(plugin)
     }
@@ -275,7 +276,7 @@ impl Session {
         move |plugin| {
             let m = plugin.manifest();
             match &grants {
-                Some(grants) if m.asks_permissions() => grants.get(&m.id).is_some_and(|g| g.covers(&m.permissions())),
+                Some(grants) if m.asks_permissions() => grants.get(&m.id).is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions())),
                 _ => vectorcraft_plugins::registry::approved(plugin),
             }
         }

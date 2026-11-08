@@ -6097,8 +6097,10 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
 the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash; a module
-with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
+an error naming the permissions needed. The grant is kept with the module's hash and covers only that module: the
+same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
+`grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
+trusts the client that sends it. `plugin.remove` forgets the grant. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log

@@ -333,9 +333,10 @@ fn grant_param(c: &str, p: &Value) -> Result<Option<Vec<Permission>>> {
 }
 
 /// `plugin.install`: loads and checks the module, refuses one that asks for a heavy budget unless
-/// `allowHeavy` says the user agreed, and one that lists permissions the user hasn't granted its id
-/// unless `grant` lists them all, and one whose SHA-256 isn't the `hash` given; records the grant
-/// with the module's hash, keeps it for the next start and installs it → its `plugin.list` entry.
+/// `allowHeavy` says the user agreed, and one that lists permissions the user hasn't granted this
+/// very module unless `grant` lists them all, and one whose SHA-256 isn't the `hash` given; records
+/// the grant with the module's hash, keeps it for the next start and installs it → its
+/// `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
@@ -362,7 +363,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         ));
     }
     // A plug-in that lists permissions installs once the user grants them: whoever installs it
-    // asks them first, unless they already granted its id all of them.
+    // asks them first, unless they already granted this very module all of them.
     let m = plugin.manifest();
     let wanted = m.permissions();
     if !s.plugin_approved(&plugin) && !grant.as_ref().is_some_and(|g| wanted.iter().all(|w| g.contains(w))) {
@@ -526,7 +527,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash, and replacing the plug-in with one that lists no new permission needs none; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),
@@ -535,7 +536,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inspect Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions the user hasn't granted its id: plugin.install then needs grant)",
+            "{path: a .wasm file (desktop) | dataBase64: the module, name?: the file name shown as its source (with dataBase64)} validate a WebAssembly plug-in without installing it → the plugin.list entry it would have, plus needsApproval: bool (true when it lists permissions the user hasn't granted this very module, its bytes included: plugin.install then needs grant)",
             always,
             inspect
         ),
@@ -545,7 +546,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted its id) → {folder, loaded: [id], failed: [{file, error}]}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included) → {folder, loaded: [id], failed: [{file, error}]}",
             always,
             reload
         ),
