@@ -307,6 +307,8 @@ font-technology	Variable	Biến thiên
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
 	Video Ruler Pixel Aspect Ratio:	Tỷ lệ khung điểm ảnh của thước video:
+	Fade Region Outside Artboard	Làm tối vùng bên ngoài bảng vẽ
+	Update While Dragging	Cập nhật khi kéo
 	Hide Video Rulers	Ẩn thước video
 	Background Contents	Nội dung nền
 	Background Contents:	Nội dung nền:

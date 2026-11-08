@@ -243,6 +243,8 @@ font-technology	Variable	可變
 	Show Cross Hairs	顯示十字線
 	Show Video Safe Areas	顯示視訊安全區域
 	Video Ruler Pixel Aspect Ratio:	視訊尺標像素長寬比：
+	Fade Region Outside Artboard	調暗工作區域外的區域
+	Update While Dragging	拖曳時更新
 	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
 	Background Contents:	背景內容：

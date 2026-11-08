@@ -648,6 +648,11 @@ impl Tool for ArtboardTool {
         }
     }
 
+    /// A drag is moving or resizing artboards (Artboard Options › Update While Dragging reads it).
+    fn transforming(&self) -> bool {
+        matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }))
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         let busy = matches!(self.drag, Some(Drag::Move { began: true, .. } | Drag::Resize { began: true, .. }));
         self.end_drag();

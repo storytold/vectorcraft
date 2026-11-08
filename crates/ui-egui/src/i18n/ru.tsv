@@ -282,6 +282,8 @@ font-technology	Variable	Вариативные
 	Show Cross Hairs	Показать перекрестие
 	Show Video Safe Areas	Показать безопасные зоны видео
 	Video Ruler Pixel Aspect Ratio:	Соотношение сторон пикселя видео-линеек:
+	Fade Region Outside Artboard	Затемнять область вне монтажной области
+	Update While Dragging	Обновлять при перетаскивании
 	Hide Video Rulers	Скрыть видео-линейки
 	Background Contents	Содержимое фона
 	Background Contents:	Содержимое фона:

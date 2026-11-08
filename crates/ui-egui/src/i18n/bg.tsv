@@ -271,6 +271,8 @@ font-technology	Variable	Променливи
 	Show Cross Hairs	Показване на кръстосани линии
 	Show Video Safe Areas	Показване на безопасните видеозони
 	Video Ruler Pixel Aspect Ratio:	Пропорция на пиксела на видеолинийките:
+	Fade Region Outside Artboard	Затъмняване на областта извън работната област
+	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
 	Background Contents:	Съдържание на фона:
