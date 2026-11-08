@@ -2768,6 +2768,8 @@ mark-style	Japanese	日本式
 	Reset OpenType Features	OpenType 機能をリセット
 	Reset Panel	パネルをリセット
 	Reset Preferences	環境設定をリセット
+	Search Preferences	環境設定を検索
+	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す

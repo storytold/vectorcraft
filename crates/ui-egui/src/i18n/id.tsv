@@ -3403,6 +3403,8 @@ theme	Appearance	Tampilan
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
+	Search Preferences	Cari preferensi
+	No settings found	Tidak ada pengaturan yang ditemukan
 	Scale Corners	Skalakan sudut
 	Scale Cursor Proportional to UI	Skalakan kursor proporsional dengan UI
 	Scale Strokes & Effects	Skalakan guratan & efek

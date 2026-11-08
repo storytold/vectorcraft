@@ -3634,6 +3634,8 @@ theme	Appearance	Izgled
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
+	Search Preferences	Pretraga postavki
+	No settings found	Nema pronađenih postavki
 	Scale Corners	Skaliraj uglove
 	Scale Cursor Proportional to UI	Skaliraj kursor proporcionalno interfejsu
 	Scale Strokes & Effects	Skaliraj poteze i efekte

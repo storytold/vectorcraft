@@ -3599,6 +3599,8 @@ theme	Appearance	Ulkoasu
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
 	Render Threads (-1 = Automatic)	Renderöintisäikeet (-1 = automaattinen)
 	Reset Preferences	Palauta asetukset
+	Search Preferences	Hae asetuksista
+	No settings found	Asetuksia ei löytynyt
 	Scale Corners	Skaalaa kulmat
 	Scale Cursor Proportional to UI	Skaalaa kohdistin suhteessa käyttöliittymään
 	Scale Strokes & Effects	Skaalaa viivat ja tehosteet

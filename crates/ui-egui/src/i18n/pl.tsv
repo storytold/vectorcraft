@@ -3538,6 +3538,8 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Search Preferences	Szukaj w preferencjach
+	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
 	Scale Cursor Proportional to UI	Skaluj kursor proporcjonalnie do interfejsu
 	Scale Strokes & Effects	Skaluj obrysy i efekty
