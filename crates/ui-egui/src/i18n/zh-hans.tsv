@@ -1114,6 +1114,7 @@
 	Stroke When Editable	可编辑时的描边
 	Fill Color	填色
 	Fill New Type Objects With Placeholder Text	用占位文本填充新文字对象
+	Start Lists From Typed Markers	从键入的标记开始列表
 	Fill Rule	填充规则
 	Fill with Placeholder Text	用占位文本填充
 	Insert Inline Symbol	插入行内符号
@@ -1125,6 +1126,7 @@
 	Find Font…	查找字体…
 	Find Next	查找下一个
 	Find Objects	查找对象
+	Compare with Image	与图像比较
 	First Page	第一页
 	First-line Left Indent	首行左缩进
 	Fisheye…	鱼眼…
@@ -2932,6 +2934,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Selected Swatches	所选色板
 	Selected Swatches Only	仅限选择的色板
 	Selection	所选对象
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	框选
+	Touching	接触对象
+	Fully Enclosed	完全包含
+	Drag Direction	拖动方向
 	Selection & Anchor Display	选择和锚点显示
 	Selection Only	仅所选内容
 	Selection Tool	选择工具
@@ -3066,6 +3073,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Simulate Colored Paper	模拟有色纸张
 	Simulate Paper	模拟纸张
 	Double Column	双列
+	Keep Tools Beside the Canvas	工具置于画布旁
 	Single Left Quotation Mark	左单引号
 	Single Quotes:	单引号：
 	Single Right Quotation Mark	右单引号
@@ -3679,6 +3687,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Zoom to Selection	缩放到所选对象
 	Zoom Tool	缩放工具
 	Zoom with Mouse Wheel	使用鼠标滚轮缩放
+	Scroll Sideways with Cmd/Ctrl + Wheel	使用 Cmd/Ctrl + 滚轮水平滚动
 	Scrub Numeric Fields by Dragging	拖动以调整数值字段
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 个文件{note}。要显示打包文件夹吗？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 个链接文件
@@ -4595,6 +4604,9 @@ imageTrace	Outline	轮廓
 @msg	the Pixar file's image data is damaged	Pixar 文件的图像数据已损坏
 @msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
+@msg	the HEIC or HEIF file can't be read	无法读取 HEIC 或 HEIF 文件
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
+@msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件
@@ -5386,6 +5398,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 图像
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	图像为 {iw} × {ih} 像素，而画板在该宽度下为 {rw} × {rh} 像素：两者的比例不同
+@msg	`threshold` must be a number from 0 to 1	`threshold` 必须是 0 到 1 之间的数字
+@msg	background {v}: a color such as "#808080"	background {v}：颜色，例如 "#808080"
+@msg	comparing with an image file isn't available in the browser	浏览器中无法与图像文件进行比较
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的图像以缩小的尺寸显示
 	Fill and Stroke Controls	填色和描边控件
 	Coloring Controls	颜色控件
@@ -5536,6 +5553,9 @@ lighting	Light	光源
 @msg	too many library panels were opened in this session	本次会话中打开的库面板过多
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	图像为 {_1} × {_2} 像素，某一边超过 {LARGE_TRACE_SIDE}：会进行描摹，但速度较慢。使用保真度较低的预设或图像的较小副本会更快。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	图像已按 {_1} × {_2} 像素描摹，由 {_3} × {_4} 缩小而来（最多 {_5} 百万像素）。
+@msg	byColor must be true or false	byColor 必须是 true 或 false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor 无法拆分自动编组生成的编组：请在不使用自动编组的情况下描摹
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor 无法重新编组带有实时 Pathfinder 效果的描摹：请不使用 byColor 进行扩展
 	Snapping	对齐
 	Snap to Tangent	对齐切线
 	Snap to Perpendicular	对齐垂线
@@ -6107,6 +6127,8 @@ breakText	Glyphs	字形
 	File + Data Set Name	文件 + 数据集名称
 	Data Set Name	数据集名称
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必须是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	每个数据集都会存储到同一个文件并覆盖它，该文件只保留最后一个数据集。
+@msg	save the document with Save As before Save and Close	请先用“另存为”保存文档，再使用“保存并关闭”
 @msg	no free data set file name in destination folder	目标文件夹中没有可用的数据集文件名
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

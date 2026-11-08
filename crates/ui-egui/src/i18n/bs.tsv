@@ -179,6 +179,11 @@
 	Ungroup	Razgrupiši
 	Lock	Zaključaj
 	Selection	Odabir
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Pravougaoni odabir
+	Touching	Dodirnuti objekti
+	Fully Enclosed	Potpuno obuhvaćeni
+	Drag Direction	Smjer povlačenja
 	All Artwork Above	Sav crtež iznad
 	Other Layers	Ostali slojevi
 	Unlock All	Otključaj sve
@@ -665,6 +670,7 @@
 	Toolbars	Trake s alatima
 	Advanced	Napredno
 	Double Column	Dvostruka kolona
+	Keep Tools Beside the Canvas	Alati pored platna
 	Actions	Akcije
 	Asset Export	Izvoz resursa
 	Attributes	Atributi
@@ -3577,6 +3583,7 @@ theme	Appearance	Izgled
 	Feet	Stope
 	Files	Datoteke
 	Fill New Type Objects With Placeholder Text	Ispuni nove tekstualne objekte tekstom čuvara mjesta
+	Start Lists From Typed Markers	Započni liste iz otkucanih oznaka
 	Folder	Folder
 	Font Preview Size	Veličina pregleda fonta
 	Get Preferences	Preuzmi postavke
@@ -3699,6 +3706,7 @@ theme	Appearance	Izgled
 	Yards	Jardi
 	Zoom to Selection	Zumiraj na odabir
 	Zoom with Mouse Wheel	Zumiraj točkićem miša
+	Scroll Sideways with Cmd/Ctrl + Wheel	Pomjeraj vodoravno uz Cmd/Ctrl + točkić miša
 	Scrub Numeric Fields by Dragging	Mijenjaj numerička polja prevlačenjem
 	Linux Display Server	Linux server prikaza
 	Print Preview	Pregled štampanja
@@ -5021,6 +5029,9 @@ imageTrace	Outline	Obris
 @msg	the Pixar file's image data is damaged	slikovni podaci Pixar datoteke su oštećeni
 @msg	the JPEG 2000 file can't be read	datoteku JPEG 2000 nije moguće pročitati
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	datoteka JPEG 2000 ima nepodržan prostor boja ili JPX sadržaj
+@msg	the HEIC or HEIF file can't be read	datoteku HEIC ili HEIF nije moguće pročitati
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	datoteka HEIC ili HEIF sadrži vrstu slike koju nije moguće pročitati
+@msg	HEIC and HEIF images can't be opened in this build	HEIC i HEIF slike nije moguće otvoriti u ovoj verziji programa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD slika je prevelika za čitanje ({_1} × {_2} piksela)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zipovani 32-bitni PSD podaci slike s predviđanjem ne mogu se pročitati
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitne PSD datoteke u ovom načinu boja ne mogu se pročitati
@@ -6111,6 +6122,8 @@ shape	Open	Otvoren
 	File + Data Set Name	Datoteka + naziv skupa podataka
 	Data Set Name	Naziv skupa podataka
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` mora biti `fileNumber`, `fileDataSetName` ili `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Svaki skup podataka se sačuva preko iste datoteke, u kojoj ostaje samo posljednji skup podataka.
+@msg	save the document with Save As before Save and Close	sačuvajte dokument pomoću „Sačuvaj kao“ prije „Sačuvaj i zatvori“
 @msg	no free data set file name in destination folder	Nema slobodnog naziva datoteke skupa podataka u odredišnoj mapi
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

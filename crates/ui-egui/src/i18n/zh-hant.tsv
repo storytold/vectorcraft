@@ -1139,6 +1139,7 @@ font-technology	Variable	可變
 	Highlight:	強調顯示：
 	Stroke When Editable	可編輯時的筆畫
 	Fill New Type Objects With Placeholder Text	以預留位置文字填滿新文字物件
+	Start Lists From Typed Markers	從輸入的標記開始清單
 	Fill Rule	填色規則
 	Fill with Placeholder Text	以預留位置文字填滿
 	Insert Inline Symbol	插入行內符號
@@ -1150,6 +1151,7 @@ font-technology	Variable	可變
 	Find Font…	尋找字體…
 	Find Next	尋找下一個
 	Find Objects	尋找物件
+	Compare with Image	與影像比較
 	First Page	第一頁
 	First-line Left Indent	首行左縮排
 	Fisheye…	魚眼…
@@ -2452,6 +2454,9 @@ file-filter	Templates	範本
 @msg	the Pixar file's image data is damaged	Pixar 檔案的影像資料已損毀
 @msg	the JPEG 2000 file can't be read	無法讀取 JPEG 2000 檔案
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 檔案包含不支援的色彩空間或 JPX 內容
+@msg	the HEIC or HEIF file can't be read	無法讀取 HEIC 或 HEIF 檔案
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 檔案包含無法讀取的影像類型
+@msg	HEIC and HEIF images can't be opened in this build	此版本無法開啟 HEIC 和 HEIF 影像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 32 位元 PSD 影像資料
 @msg	{depth}-bit PSD files in this colour mode can't be read	無法讀取此色彩模式的 {depth} 位元 PSD 檔案
@@ -2552,6 +2557,9 @@ file-filter	Templates	範本
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` 需要 `mode: "color"`
 @msg	no color group `{name}` in the document (see swatch.list)	文件中沒有顏色群組 `{name}` (請參閱 swatch.list)
 @msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	「扁平標誌」模式已以 {_1} × {_2} 像素描圖，由 {_3} × {_4} 平均縮小而來。
+@msg	byColor must be true or false	byColor 必須是 true 或 false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor 無法拆分自動群組產生的群組：請不使用自動群組來描圖
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor 無法重新編組帶有即時 Pathfinder 效果的描圖：請不使用 byColor 進行擴充
 # Links and Attributes: files and URLs handed to other apps.
 @msg	Edit Original opens image and document files only; “{name}” is not one	「編輯原稿」只能開啟影像與文件檔案；「{name}」不屬於這兩類
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	只有 http、https 和 mailto URL 會在瀏覽器中開啟，「{url}」不會
@@ -3959,6 +3967,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Selected Swatches	選取的色票
 	Selected Swatches Only	僅限選取的色票
 	Selection	選取範圍
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	框選
+	Touching	接觸物件
+	Fully Enclosed	完全包含
+	Drag Direction	拖曳方向
 	Selection & Anchor Display	選取和錨點顯示
 	Selection Only	僅限選取範圍
 	Selection Tool	選取工具
@@ -4096,6 +4109,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Simulate Colored Paper	模擬有色紙張
 	Simulate Paper	模擬紙張
 	Double Column	雙欄
+	Keep Tools Beside the Canvas	工具置於畫布旁
 	Single Left Quotation Mark	左單引號
 	Single Quotes:	單引號：
 	Single Right Quotation Mark	右單引號
@@ -4712,6 +4726,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Zoom to Selection	縮放至選取範圍
 	Zoom Tool	縮放工具
 	Zoom with Mouse Wheel	使用滑鼠滾輪縮放
+	Scroll Sideways with Cmd/Ctrl + Wheel	使用 Cmd/Ctrl + 滾輪水平捲動
 	Scrub Numeric Fields by Dragging	拖曳以調整數值欄位
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} 中有 {n} 個檔案{note}。要顯示封裝資料夾嗎？
 @plural	{n} linked file not found|{n} linked files not found	找不到 {n} 個連結檔案
@@ -5200,6 +5215,11 @@ lighting	Light	光源
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 	Load EPS into Clipboard	將 EPS 載入剪貼簿
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的影像過大，無法繪製
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}：不是 PNG、JPEG、WebP、TIFF 或 BMP 影像
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	影像為 {iw} × {ih} 像素，而工作區域在該寬度下為 {rw} × {rh} 像素：兩者的比例不同
+@msg	`threshold` must be a number from 0 to 1	`threshold` 必須是 0 到 1 之間的數字
+@msg	background {v}: a color such as "#808080"	background {v}：顏色，例如 "#808080"
+@msg	comparing with an image file isn't available in the browser	瀏覽器中無法與影像檔案進行比較
 @msg	an image of {w} × {h} pixels is shown at reduced size	{w} × {h} 像素的影像以縮小的尺寸顯示
 	Basic	基本
 	Fill and Stroke Controls	填色和筆畫控制項
@@ -5903,6 +5923,8 @@ breakText	Glyphs	字符
 	File + Data Set Name	檔案 + 資料集名稱
 	Data Set Name	資料集名稱
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` 必須是 `fileNumber`、`fileDataSetName` 或 `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	每個資料集都會儲存到同一個檔案並覆寫它，該檔案只保留最後一個資料集。
+@msg	save the document with Save As before Save and Close	請先用「另存新檔」儲存文件，再使用「儲存並關閉」
 @msg	no free data set file name in destination folder	目的地資料夾中沒有可用的資料集檔案名稱
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

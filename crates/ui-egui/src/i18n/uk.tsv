@@ -1169,6 +1169,7 @@ font-technology	Variable	Варіативні
 	Stroke When Editable	Обведення, яке можна редагувати
 	Fill Color	Колір заливки
 	Fill New Type Objects With Placeholder Text	Заповнювати нові текстові об’єкти текстом-заповнювачем
+	Start Lists From Typed Markers	Починати списки з введених маркерів
 	Fill Rule	Правило заливки
 	Fill with Placeholder Text	Заповнити текстом-заповнювачем
 	Fill:	Заливка:
@@ -1179,6 +1180,7 @@ font-technology	Variable	Варіативні
 	Find Font…	Знайти шрифт…
 	Find Next	Знайти далі
 	Find Objects	Знайти об’єкти
+	Compare with Image	Порівняти із зображенням
 	First Page	Перша сторінка
 	First-line Left Indent	Відступ ліворуч у першому рядку
 	Fisheye…	Риб’яче око…
@@ -3088,6 +3090,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Вибрані зразки
 	Selected Swatches Only	Тільки вибрані зразки
 	Selection	Виділення
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Виділення рамкою
+	Touching	Перетнуті
+	Fully Enclosed	Повністю всередині
+	Drag Direction	Напрямок перетягування
 	Selection & Anchor Display	Відображення виділення та опорних точок
 	Selection Only	Тільки виділення
 	Selection Tool	Інструмент «Виділення»
@@ -3225,6 +3232,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Імітувати кольоровий папір
 	Simulate Paper	Імітувати папір
 	Double Column	Подвійний стовпець
+	Keep Tools Beside the Canvas	Інструменти поруч із полотном
 	Single Left Quotation Mark	Одинарна лапка, що відкриває
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
@@ -3822,6 +3830,7 @@ effect	Points	Точки
 	Zoom to Selection	Масштаб виділення
 	Zoom Tool	Інструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
+	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручувати по горизонталі колесом із Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?|файлів: {n} {folder} {note}. Показати папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}|не знайдено пов’язаних файлів: {n}
@@ -4828,6 +4837,9 @@ axis	Both	Обидві
 @msg	the Pixar file's image data is damaged	дані зображення у файлі Pixar пошкоджені
 @msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
+@msg	the HEIC or HEIF file can't be read	не вдається прочитати файл HEIC або HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
+@msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
@@ -5100,6 +5112,11 @@ lighting	Light	Світло
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 	Load EPS into Clipboard	Завантажити EPS у буфер обміну
 @msg	an image of {w} × {h} pixels is too large to draw	зображення розміром {w} × {h} пікселів завелике для відображення
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: це не зображення PNG, JPEG, WebP, TIFF чи BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	розмір зображення {iw} × {ih} пікселів, а монтажної області за цієї ширини {rw} × {rh} пікселів: їхні пропорції відрізняються
+@msg	`threshold` must be a number from 0 to 1	`threshold` має бути числом від 0 до 1
+@msg	background {v}: a color such as "#808080"	фон {v}: колір, наприклад "#808080"
+@msg	comparing with an image file isn't available in the browser	порівняння з файлом зображення недоступне в браузері
 @msg	an image of {w} × {h} pixels is shown at reduced size	зображення розміром {w} × {h} пікселів показано в зменшеному розмірі
 @msg	the image can't be read as a texture	зображення не вдається прочитати як текстуру
 	Basic	Базовий
@@ -5298,6 +5315,9 @@ lighting	Light	Світло
 @msg	too many library panels were opened in this session	у цьому сеансі відкрито забагато панелей бібліотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Зображення {_1} × {_2} пікселів, понад {LARGE_TRACE_SIDE} з одного боку: трасування виконується, але повільніше. Стиль із нижчою точністю або менша копія зображення трасуються швидше.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Зображення трасовано в розмірі {_1} × {_2} пікселів, зменшене з {_3} × {_4} (щонайбільше {_5} мегапікселів).
+@msg	byColor must be true or false	byColor має мати значення true або false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor не може розділити групи автогрупування: трасуйте без автогрупування
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor не може перегрупувати трасування з активним ефектом Pathfinder: розгорніть без byColor
 	Snapping	Прив’язка
 	Snap to Tangent	Прив’язати до дотичної
 	Snap to Perpendicular	Прив’язати до перпендикуляра
@@ -5865,6 +5885,8 @@ breakText	Glyphs	Гліфи
 	File + Data Set Name	Файл + назва набору даних
 	Data Set Name	Назва набору даних
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` має бути `fileNumber`, `fileDataSetName` або `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Кожен набір даних зберігається поверх того самого файлу, у якому лишається тільки останній набір даних.
+@msg	save the document with Save As before Save and Close	збережіть документ командою «Зберегти як» перед «Зберегти й закрити»
 @msg	no free data set file name in destination folder	У папці призначення немає вільного імені файлу набору даних
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

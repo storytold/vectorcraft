@@ -456,6 +456,11 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
         let mark = found_mark(ui, d, sp.key);
         match sp.kind {
+            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+            // is off: dimmed while it is on.
+            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
+                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             // Units › Numbers Without Units Are Points only tells points from picas: dimmed
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {

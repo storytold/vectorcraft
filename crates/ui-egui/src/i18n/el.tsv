@@ -1103,6 +1103,7 @@ font-technology	Variable	Μεταβλητές
 	Live curve fitting	Προσαρμογή καμπύλης σε πραγματικό χρόνο
 	Fill Color	Χρώμα γεμίσματος
 	Fill New Type Objects With Placeholder Text	Συμπλήρωση νέων αντικειμένων κειμένου με κείμενο υπόδειξης
+	Start Lists From Typed Markers	Έναρξη λιστών από πληκτρολογημένα σύμβολα
 	Fill Rule	Κανόνας γεμίσματος
 	Fill with Placeholder Text	Γέμισμα με κείμενο υπόδειξης
 	Fill:	Γέμισμα:
@@ -1113,6 +1114,7 @@ font-technology	Variable	Μεταβλητές
 	Find Font…	Εύρεση γραμματοσειράς…
 	Find Next	Εύρεση επόμενου
 	Find Objects	Εύρεση αντικειμένων
+	Compare with Image	Σύγκριση με εικόνα
 	First Page	Πρώτη σελίδα
 	First-line Left Indent	Αριστερή εσοχή πρώτης γραμμής
 	Fisheye…	Εφέ ματιού ψαριού…
@@ -1933,6 +1935,11 @@ font-technology	Variable	Μεταβλητές
 	Select All	Επιλογή όλων
 	Select:	Επιλογή:
 	Selection	Επιλογή
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Ορθογώνια επιλογή
+	Touching	Αντικείμενα που τέμνονται
+	Fully Enclosed	Πλήρως εντός
+	Drag Direction	Κατεύθυνση σύρσης
 	Selection Tool	Επιλογή (Selection Tool)
 	Send Backward	Μεταφορά ένα βήμα πίσω
 	Send to Back	Μεταφορά στο παρασκήνιο
@@ -3611,6 +3618,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Simulate Colored Paper	Προσομοίωση χρωματιστού χαρτιού
 	Simulate Paper	Προσομοίωση χαρτιού
 	Double Column	Διπλή στήλη
+	Keep Tools Beside the Canvas	Εργαλεία δίπλα στον καμβά
 	Single Left Quotation Mark	Μονό αριστερό εισαγωγικό
 	Single Quotes:	Μονά εισαγωγικά:
 	Single Right Quotation Mark	Μονό δεξί εισαγωγικό
@@ -4035,6 +4043,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Zig Zag…	Ζιγκ-ζαγκ…
 	Zoom to Selection	Ζουμ στην επιλογή
 	Zoom with Mouse Wheel	Ζουμ με τον τροχό του ποντικιού
+	Scroll Sideways with Cmd/Ctrl + Wheel	Οριζόντια κύλιση με Cmd/Ctrl + τροχό του ποντικιού
 	Scrub Numeric Fields by Dragging	Ρύθμιση αριθμητικών πεδίων με σύρσιμο
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} αρχείο στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;|{n} αρχεία στον φάκελο {folder} {note}. Να εμφανιστεί ο φάκελος συσκευασίας;
 @plural	{n} linked file not found|{n} linked files not found	Δεν βρέθηκε {n} συνδεδεμένο αρχείο|Δεν βρέθηκαν {n} συνδεδεμένα αρχεία
@@ -4763,6 +4772,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the Pixar file's image data is damaged	τα δεδομένα εικόνας του αρχείου Pixar είναι κατεστραμμένα
 @msg	the JPEG 2000 file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	το αρχείο JPEG 2000 έχει μη υποστηριζόμενο χρωματικό χώρο ή περιεχόμενο JPX
+@msg	the HEIC or HEIF file can't be read	δεν είναι δυνατή η ανάγνωση του αρχείου HEIC ή HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	το αρχείο HEIC ή HEIF περιέχει είδος εικόνας που δεν είναι δυνατό να διαβαστεί
+@msg	HEIC and HEIF images can't be opened in this build	οι εικόνες HEIC και HEIF δεν μπορούν να ανοίξουν σε αυτή την έκδοση
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	η εικόνα PSD είναι πολύ μεγάλη για ανάγνωση ({_1} × {_2} εικονοστοιχεία)
 @msg	zipped 32-bit PSD image data with prediction can't be read	τα συμπιεσμένα δεδομένα εικόνας PSD 32 bit με πρόβλεψη δεν διαβάζονται
 @msg	{depth}-bit PSD files in this colour mode can't be read	τα αρχεία PSD {depth} bit δεν διαβάζονται σε αυτήν τη λειτουργία χρώματος
@@ -5256,6 +5268,11 @@ effect	Points	Σημεία
 	Load EPS into Clipboard	Φόρτωση EPS στο πρόχειρο
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	Άγνωστο στοιχείο ελέγχου `{name}`: fillStroke, coloring, drawMode ή screenMode
 @msg	an image of {w} × {h} pixels is too large to draw	Η εικόνα {w} × {h} εικονοστοιχείων είναι υπερβολικά μεγάλη για σχεδίαση
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: δεν είναι εικόνα PNG, JPEG, WebP, TIFF ή BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	η εικόνα είναι {iw} × {ih} εικονοστοιχεία και ο πίνακας σχεδίασης σε αυτό το πλάτος είναι {rw} × {rh} εικονοστοιχεία: οι αναλογίες τους διαφέρουν
+@msg	`threshold` must be a number from 0 to 1	Το `threshold` πρέπει να είναι αριθμός από 0 έως 1
+@msg	background {v}: a color such as "#808080"	φόντο {v}: χρώμα όπως "#808080"
+@msg	comparing with an image file isn't available in the browser	η σύγκριση με αρχείο εικόνας δεν είναι διαθέσιμη στο πρόγραμμα περιήγησης
 @msg	an image of {w} × {h} pixels is shown at reduced size	Η εικόνα {w} × {h} εικονοστοιχείων εμφανίζεται σε μειωμένο μέγεθος
 	Open Recent File 1	Άνοιγμα πρόσφατου αρχείου 1
 	Open Recent File 2	Άνοιγμα πρόσφατου αρχείου 2
@@ -5656,6 +5673,9 @@ effect	Points	Σημεία
 @msg	too many library panels were opened in this session	άνοιξαν πάρα πολλοί πίνακες βιβλιοθηκών σε αυτή τη συνεδρία
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Η εικόνα είναι {_1} × {_2} εικονοστοιχεία, πάνω από {LARGE_TRACE_SIDE} σε μία πλευρά: ανιχνεύεται, αλλά πιο αργά. Μια προρύθμιση χαμηλότερης πιστότητας ή ένα μικρότερο αντίγραφο της εικόνας ανιχνεύεται γρηγορότερα.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Η εικόνα ανιχνεύτηκε σε {_1} × {_2} εικονοστοιχεία, σμικρυμένη από {_3} × {_4} (το πολύ {_5} megapixel).
+@msg	byColor must be true or false	το byColor πρέπει να είναι true ή false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	το byColor δεν μπορεί να χωρίσει τις ομάδες της Αυτόματης ομαδοποίησης: ανιχνεύστε χωρίς Αυτόματη ομαδοποίηση
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	το byColor δεν μπορεί να αναομαδοποιήσει μια ανίχνευση με ενεργό εφέ Pathfinder: επεκτείνετε χωρίς byColor
 	Snapping	Προσκόλληση
 	Snap to Tangent	Προσκόλληση σε εφαπτομένη
 	Snap to Perpendicular	Προσκόλληση σε κάθετο
@@ -6217,6 +6237,8 @@ breakText	Glyphs	Γλύφοι
 	File + Data Set Name	Αρχείο + όνομα συνόλου δεδομένων
 	Data Set Name	Όνομα συνόλου δεδομένων
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	Το `datasetFileNaming` πρέπει να είναι `fileNumber`, `fileDataSetName` ή `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Κάθε σύνολο δεδομένων αποθηκεύεται πάνω στο ίδιο αρχείο, το οποίο κρατά μόνο το τελευταίο σύνολο δεδομένων.
+@msg	save the document with Save As before Save and Close	αποθηκεύστε το έγγραφο με «Αποθήκευση ως» πριν από «Αποθήκευση και κλείσιμο»
 @msg	no free data set file name in destination folder	Δεν υπάρχει διαθέσιμο όνομα αρχείου συνόλου δεδομένων στον φάκελο προορισμού
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
