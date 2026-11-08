@@ -1111,6 +1111,7 @@ font-technology	Variable	Változó
 	Double Bar	Kettős vonal
 	Double Click To Isolate	Elkülönítés dupla kattintással
 	Double Column	Két oszlop
+	Keep Tools Beside the Canvas	Eszközök a vászon mellett
 	Double Left Quotation Marks	Bal oldali dupla idézőjel
 	Double Quotes:	Dupla idézőjelek:
 	Double Right Quotation Marks	Jobb oldali dupla idézőjel
@@ -1367,6 +1368,14 @@ font-technology	Variable	Változó
 	Export As SVG…	Exportálás SVG-ként…
 	Export Asset	Elem exportálása
 	Export Assets	Elemek exportálása
+	Export 3D Object	3D objektum exportálása
+	3D Export Format	3D exportálási formátum
+	Export 3D Assets	3D elemek exportálása
+@msg	{what} can't be exported in 3D: {e}	{what} nem exportálható 3D-ben: {e}
+@msg	asset {id} isn't a 3D asset	a(z) {id} elem nem 3D elem
+@msg	asset {id} is a 3D asset: assets.export3D writes it	a(z) {id} elem 3D elem: az assets.export3D írja ki
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	még nincs 3D elem: előbb gyűjtsön össze egy 3D effektussal rendelkező objektumot (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	jelöljön ki egy 3D effektussal rendelkező objektumot (vagy adja meg az azonosítóit)
 	Export As…	Exportálás másként…
 	Export CSS	CSS exportálása
 	Export CSS…	CSS exportálása…
@@ -1467,6 +1476,7 @@ digits	Malayalam	Malajálam
 	Highlight:	Kiemelés:
 	Stroke When Editable	Körvonal, ha szerkeszthető
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
+	Start Lists From Typed Markers	Listák indítása begépelt jelölőkből
 	Fill Rule	Kitöltési szabály
 	Fill with Placeholder Text	Kitöltés helykitöltő szöveggel
 	Fill:	Kitöltés:
@@ -1484,6 +1494,7 @@ digits	Malayalam	Malajálam
 	Find in Folder…	Keresés mappában…
 	Find Next	Következő keresése
 	Find Objects	Objektumok keresése
+	Compare with Image	Összehasonlítás képpel
 	Fine Dots	Finom pontok
 
 	Simple	Egyszerű
@@ -2153,6 +2164,7 @@ file-filter	Templates	Sablonok
 	Report copied	Jelentés másolva
 	Line {line}	{line}. sor
 	Line {line}: {name}: {status}	{line}. sor: {name}: {status}
+	Read Action Set File	Műveletkészlet beolvasása fájlból
 	Read Shortcut Set File	Billentyűparancs-készlet beolvasása fájlból
 	Import Matches	Importálási megfeleltetések
 	Remember Import Matches	Importálási megfeleltetések megjegyzése
@@ -3665,6 +3677,11 @@ mark-style	Japanese	Japán
 	Selected Swatches Only	Csak a kijelölt színminták
 	Selected Swatches Only (0)	Csak a kijelölt színminták (0)
 	Selection	Kijelölés
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Téglalapos kijelölés
+	Touching	Érintett objektumok
+	Fully Enclosed	Teljesen befoglalt
+	Drag Direction	Húzás iránya
 	Selection & Anchor Display	Kijelölés és horgonypontok megjelenítése
 	Selection Only	Csak a kijelölés
 	Selection Tool	Kijelölés
@@ -4073,6 +4090,9 @@ mark-style	Japanese	Japán
 	Symbols	Szimbólumok
 	System Layout	Rendszerszintű elrendezés
 	System Title Bar	Rendszer címsora
+	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
+	System Title Bar takes precedence over this option while it is on.	Amíg a Rendszer címsora be van kapcsolva, elsőbbséget élvez ezzel a beállítással szemben.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat
@@ -4525,6 +4545,7 @@ mark-style	Japanese	Japán
 	Zoom to Selection	Nagyítás a kijelölésre
 	Zoom Tool	Nagyító
 	Zoom with Mouse Wheel	Nagyítás egérgörgővel
+	Scroll Sideways with Cmd/Ctrl + Wheel	Vízszintes görgetés Cmd/Ctrl + görgővel
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Fájlok: {n}, mappa: {folder} {note}. Megnyitod a csomag mappáját?
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
@@ -4818,7 +4839,7 @@ imageTrace	Outline	Körvonal
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Az adat-helyreállításnak nincs hova mentenie a másolatokat: állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Az adat-helyreállítás nem tud másolatokat menteni ide: {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Innen nem tölthetők be bővítmények: {path}: {e}
-@msg	decimals must be {_1}–{_2} (got {_3})	a tizedesjegyek száma {_1}–{_2} lehet (kapott érték: {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	a decimals értéke {_1}–{_2} lehet (kapott érték: {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	jelöld ki közvetlen kijelöléssel a vágási horgonypontokat (nyitott útvonal végpontja nem lehet)
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
@@ -5028,6 +5049,8 @@ imageTrace	Outline	Körvonal
 @msg	no such action set	nincs ilyen műveletkészlet
 @msg	the action sets changed; nothing was deleted	a műveletkészletek megváltoztak; semmi sem törlődött
 @msg	no action set to save	nincs menthető műveletkészlet
+@msg	the action set file can't be read in full	a műveletkészlet-fájl nem olvasható be teljesen
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
 @msg	the action set file holds more than 1,000 actions	a műveletkészlet-fájl több mint 1000 műveletet tartalmaz
@@ -5189,8 +5212,8 @@ imageTrace	Outline	Körvonal
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
 @msg	Saving {_1}	Mentés: {_1}
-@msg	scale must be a number from {_1} to {_2}, not {_3}	a méretarány {_1} és {_2} közötti szám lehet, ez nem az: {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	a méretarány {_1} és {_2} közötti szám lehet, ez nem az: {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	a scale {_1} és {_2} közötti szám lehet, ez nem az: {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	a scale {_1} és {_2} közötti szám lehet, ez nem az: {s}
 @msg	searching a folder isn't available on the web	a webes változatban nem lehet mappában keresni
 @msg	select (or target) objects whose appearance isn't basic	jelölj ki (vagy célozz meg) olyan objektumokat, amelyeknek nem alapmegjelenésük van
 @msg	select a blend	jelölj ki egy összemosást
@@ -5222,7 +5245,7 @@ imageTrace	Outline	Körvonal
 @msg	select paths or anchor points	jelölj ki útvonalakat vagy horgonypontokat
 @msg	select paths to join	jelöld ki az összekapcsolandó útvonalakat
 @msg	select some type first	előbb jelölj ki szöveget
-@msg	kerning must be a number, "auto", or "optical"	Az alávágás szám, „auto” vagy „optical” lehet
+@msg	kerning must be a number, "auto", or "optical"	a kerning szám, „auto” vagy „optical” lehet
 @msg	the selection has no gradient fill	a kijelölésnek nincs színátmenetes kitöltése
 @msg	the selection has no gradient stroke	a kijelölésnek nincs színátmenetes körvonala
 @msg	the selection has no pattern fill	a kijelölésnek nincs mintázatos kitöltése
@@ -5326,6 +5349,9 @@ imageTrace	Outline	Körvonal
 @msg	the Pixar file's image data is damaged	a Pixar-fájl képadatai sérültek
 @msg	the JPEG 2000 file can't be read	a JPEG 2000 fájl nem olvasható
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	a JPEG 2000 fájl nem támogatott színteret vagy JPX-tartalmat tartalmaz
+@msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
+@msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
 @msg	the scale is not a usable number	a méretarány nem használható szám
@@ -5495,6 +5521,11 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	a kép {iw} × {ih} pixeles, a rajztábla ilyen szélességben {rw} × {rh} pixeles: az arányaik eltérnek
+@msg	`threshold` must be a number from 0 to 1	a `threshold` értéke 0 és 1 közötti szám lehet
+@msg	background {v}: a color such as "#808080"	background {v}: egy szín, például "#808080"
+@msg	comparing with an image file isn't available in the browser	a képfájllal való összehasonlítás a böngészőben nem érhető el
 @msg	an image of {w} × {h} pixels is shown at reduced size	egy {w} × {h} pixeles kép csökkentett méretben jelenik meg
 @msg	the image can't be read as a texture	a kép nem olvasható be textúraként
 	Fill and Stroke Controls	Kitöltés és körvonal vezérlői
@@ -5688,6 +5719,9 @@ imageTrace	Outline	Körvonal
 @msg	too many library panels were opened in this session	ebben a munkamenetben túl sok könyvtárpanel nyílt meg
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A kép {_1} × {_2} képpont, egyik oldalán több mint {LARGE_TRACE_SIDE}: a vektorizálás megtörténik, de lassabban. Kisebb hűségű előbeállítással vagy a kép kisebb másolatával gyorsabb.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A kép vektorizálása {_1} × {_2} képponton történt, {_3} × {_4} méretről kicsinyítve (legfeljebb {_5} megapixel).
+@msg	byColor must be true or false	a byColor értéke true vagy false lehet
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	a byColor nem bontja fel az Automatikus csoportosítás csoportjait: vektorizáljon Automatikus csoportosítás nélkül
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	a byColor nem csoportosíthatja át az élő Pathfinder-effektussal rendelkező vektorizálást: bővítse ki byColor nélkül
 	Snapping	Illesztés
 	Snap to Tangent	Illesztés érintőre
 	Snap to Perpendicular	Illesztés merőlegesre
@@ -6249,6 +6283,8 @@ breakText	Glyphs	Glifák
 	File + Data Set Name	Fájl + adatkészlet neve
 	Data Set Name	Adatkészlet neve
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	A `datasetFileNaming` értéke `fileNumber`, `fileDataSetName` vagy `dataSetName` lehet
+	Each data set saves over the same file, which keeps only the last data set.	Minden adatkészlet ugyanabba a fájlba mentődik, amely csak az utolsó adatkészletet őrzi meg.
+@msg	save the document with Save As before Save and Close	mentse a dokumentumot a „Mentés másként” paranccsal a „Mentés és bezárás” előtt
 @msg	no free data set file name in destination folder	Nincs szabad adatkészlet-fájlnév a célmappában
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6368,6 +6404,7 @@ breakText	Glyphs	Glifák
 	Reset Symbol Instance	Szimbólumpéldány visszaállítása
 @msg	type must be static or dynamic, not {v}	a type értéke static vagy dynamic lehet, nem {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statikus szimbólum: előbb állítsa a szimbólum típusát Dinamikusra
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Egy szimbólumpéldányban kijelölt útvonalnak, összetett útvonalnak vagy szövegnek csak a kitöltés és a körvonal egyszínű színe módosítható
 @msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
 @msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
 @msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét
@@ -6465,3 +6502,25 @@ breakText	Glyphs	Glifák
 # 3D Box add-on
 	3D Box	3D doboz
 	3D Box Tool	3D doboz eszköz
+
+# Safe Mode
+	Safe Mode…	Csökkentett mód…
+	Safe Mode	Csökkentett mód
+	Help › Safe Mode…	Súgó › Csökkentett mód…
+	Enable on Re-launch	Engedélyezés a következő indításkor
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	A VectorCraft legutóbbi indítása leállt, miközben a(z) {name} bővítmény betöltődött. Lehet, hogy nem ez okozta.
+	Disable and Continue	Letiltás és folytatás
+	Start Normally	Normál indítás
+	Start in Safe Mode	Indítás csökkentett módban
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	A VectorCraft csökkentett módban fut: a bővítmények nem töltődnek be és nem futnak, amíg normál módban el nem indul.
+	Disabled plug-ins	Letiltott bővítmények
+	No plug-ins are disabled.	Nincs letiltott bővítmény.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	A csökkentett mód be van kapcsolva: a bővítmények nem töltődnek be és nem futnak, amíg a VectorCraft normál módban el nem indul
+@msg	give `id` or `file` (see plugin.safeMode)	adja meg: `id` vagy `file` (lásd: plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	ez a bővítmény nincs letiltva (lásd: plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	A letiltott bővítményeket nem sikerült menteni a következő indításhoz
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Megjelenés kibontása: a kijelölésben lévő bővítményeffektus csökkentett módban nem bontható ki
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Igazítás a pixelrácshoz
+@msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz

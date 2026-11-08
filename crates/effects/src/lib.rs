@@ -7,7 +7,7 @@
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, Rasterize, and the
 //!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize, Halftone Pattern,
-//!   Unsharp Mask and Glowing Edges) are described by
+//!   Unsharp Mask and Glowing Edges, and the SVG filters of [`svg_filter`]) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
 //! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
@@ -52,6 +52,7 @@ mod revolve;
 mod solids;
 pub mod stroke;
 mod stylize;
+pub mod svg_filter;
 pub mod trap;
 mod util;
 mod warp;
@@ -84,11 +85,13 @@ pub use reshape::{
 };
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
-    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
-    three_d_params_as, validate_solid, validate_three_d, view_options,
+    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, SolidMesh, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
+    three_d_meshes, three_d_params_as, validate_solid, validate_three_d, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
+pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
+pub use vectorcraft_three_d::Mesh;
 pub use warp::{WarpStyle, warp_point};
 
 mod catalog;
@@ -97,7 +100,9 @@ mod params;
 
 pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
 pub(crate) use geometry::{Budget, apply_one};
-pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
+pub use geometry::{
+    Carry, GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_bez_carrying, apply_geometry_carrying, apply_geometry_with,
+};
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{

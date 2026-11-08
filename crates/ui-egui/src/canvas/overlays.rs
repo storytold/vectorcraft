@@ -275,6 +275,29 @@ pub(super) fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t:
         match o {
             // Where the tools select: the document rectangle, turned with the view.
             Overlay::Marquee(r) => marquee_through(p, &xf.quad(*r)),
+            Overlay::SelectionMarquee { rect, enclosed, pointer } => {
+                let quad = xf.quad(*rect);
+                if *enclosed {
+                    let points: Vec<Pos2> = quad.iter().chain(quad.first()).copied().collect();
+                    p.add(Shape::line(points.clone(), Stroke::new(3.0, Color32::from_white_alpha(230))));
+                    p.add(Shape::line(points, Stroke::new(1.0, Color32::from_gray(40))));
+                } else {
+                    marquee_through(p, &quad);
+                }
+                let (current, other) = if *enclosed { (tl!("Fully Enclosed"), tl!("Touching")) } else { (tl!("Touching"), tl!("Fully Enclosed")) };
+                let label = format!("{current} · E: {other}");
+                let galley = p.layout(label, egui::FontId::proportional(11.0), t.text, (p.clip_rect().width() - 12.0).max(1.0));
+                let size = galley.size() + vec2(12.0, 8.0);
+                let wanted = xf.to_screen(*pointer) + vec2(14.0, 14.0);
+                let clip = p.clip_rect();
+                let min = egui::pos2(
+                    wanted.x.clamp(clip.min.x, (clip.max.x - size.x).max(clip.min.x)),
+                    wanted.y.clamp(clip.min.y, (clip.max.y - size.y).max(clip.min.y)),
+                );
+                let badge = egui::Rect::from_min_size(min, size);
+                p.rect_filled(badge, CornerRadius::same(3), t.panel);
+                p.galley(badge.min + vec2(6.0, 4.0), galley, t.text);
+            }
             Overlay::Path { path, color, width, dashed } => {
                 let s = Stroke::new(*width, c32(*color));
                 if *dashed {

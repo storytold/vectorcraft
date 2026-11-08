@@ -12,6 +12,7 @@
 //! On a grid, F and V lower and raise
 //! the skew of the horizontal (rectangular) or radial (polar) dividers, and X and C lower and raise
 //! that of the vertical or concentric ones.
+//! Escape cancels the drag and puts back the options its keys and modifiers changed.
 
 use serde_json::{Value, json};
 use vectorcraft_geom::Point;
@@ -63,6 +64,22 @@ pub struct FamilyTool {
     /// its own). The Reference Point is `reference`.
     pub grid_size: (f64, f64),
     snap: DrawSnap,
+    /// The options a drag's keys and modifiers change, as they were when the drag began: Escape
+    /// puts them back.
+    before_drag: Option<DragOptions>,
+}
+
+/// The options that keys and modifiers change while a shape is dragged out.
+#[derive(Clone, Copy)]
+struct DragOptions {
+    slope: f64,
+    closed: bool,
+    base_along: &'static str,
+    decay: f64,
+    segments: u32,
+    rows: u32,
+    columns: u32,
+    skew: [f64; 2],
 }
 
 impl FamilyTool {
@@ -99,7 +116,33 @@ impl FamilyTool {
             fill: false,
             grid_size: (100.0, 100.0),
             snap: DrawSnap::default(),
+            before_drag: None,
         }
+    }
+
+    fn drag_options(&self) -> DragOptions {
+        DragOptions {
+            slope: self.slope,
+            closed: self.closed,
+            base_along: self.base_along,
+            decay: self.decay,
+            segments: self.segments,
+            rows: self.rows,
+            columns: self.columns,
+            skew: self.skew,
+        }
+    }
+
+    /// Put back the options a canceled drag changed.
+    fn restore_drag_options(&mut self, o: DragOptions) {
+        self.slope = o.slope;
+        self.closed = o.closed;
+        self.base_along = o.base_along;
+        self.decay = o.decay;
+        self.segments = o.segments;
+        self.rows = o.rows;
+        self.columns = o.columns;
+        self.skew = o.skew;
     }
 
     fn label(&self) -> &'static str {
@@ -264,6 +307,7 @@ impl Tool for FamilyTool {
                 self.began = false;
                 self.spiral_end = None;
                 self.spiral_alt_base = None;
+                self.before_drag = None;
                 vec![]
             }
             PointerKind::Drag => {
@@ -279,6 +323,7 @@ impl Tool for FamilyTool {
                         return out;
                     }
                     self.began = true;
+                    self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
                 }
                 if self.id == "spiral" {
@@ -293,6 +338,7 @@ impl Tool for FamilyTool {
                 self.snap.clear();
                 self.spiral_end = None;
                 self.spiral_alt_base = None;
+                self.before_drag = None;
                 if std::mem::take(&mut self.began) { vec![Action::Commit] } else { vec![Action::Dialog(self.id.into(), json!({"x": s.x, "y": s.y}))] }
             }
             _ => vec![],
@@ -364,6 +410,9 @@ impl Tool for FamilyTool {
             self.began = false;
             self.spiral_end = None;
             self.spiral_alt_base = None;
+            if let Some(o) = self.before_drag.take() {
+                self.restore_drag_options(o);
+            }
             self.snap.clear();
             vec![Action::Cancel]
         } else {
@@ -441,6 +490,23 @@ impl Tool for FamilyTool {
             "width" => self.grid_size.0 = grid_length(v, self.grid_size.0),
             "height" => self.grid_size.1 = grid_length(v, self.grid_size.1),
             _ => {}
+        }
+        // An option set while a shape is dragged out stays when Escape cancels the drag; a value
+        // the match above ignores leaves the drag's starting value as it was.
+        if let Some(b) = self.before_drag.as_mut() {
+            let finite = v.as_f64().is_some_and(f64::is_finite);
+            match key {
+                "slope" if finite => b.slope = self.slope,
+                "closed" if v.is_boolean() => b.closed = self.closed,
+                "baseAlong" if v.is_string() => b.base_along = self.base_along,
+                "decay" if v.as_f64().is_some() => b.decay = self.decay,
+                "segments" => b.segments = self.segments,
+                "rows" | "concentric" => b.rows = self.rows,
+                "columns" | "radial" => b.columns = self.columns,
+                "rowSkew" | "concentricSkew" if finite => b.skew[0] = self.skew[0],
+                "columnSkew" | "radialSkew" if finite => b.skew[1] = self.skew[1],
+                _ => {}
+            }
         }
     }
 }
@@ -672,7 +738,8 @@ mod tests {
     }
 
     /// Switching between Alt and Ctrl/Cmd keeps the held inner end and uses the current segment
-    /// count when Alt resumes. Escape clears the held end before the next drag.
+    /// count when Alt resumes. Escape clears the held end and puts back the segments and decay
+    /// from before the drag.
     #[test]
     fn spiral_drag_switches_between_alt_and_ctrl_and_escape_lets_go_of_the_inner_end() {
         let (d, _) = doc_with_rect();
@@ -699,9 +766,125 @@ mod tests {
         t.key(&cx, ToolKey::Escape, alt);
         assert_eq!(t.spiral_end, None);
         assert_eq!(t.spiral_alt_base, None);
+        assert_eq!((t.segments, t.decay), (10, 80.0), "the options from before the drag");
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
-        assert_eq!(t.segments, 18, "a new drag holds a new inner end");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        assert_eq!(t.segments, 14, "a new drag holds a new inner end");
+    }
+
+    /// Escape during a drag puts back every option the drag's keys changed, for the next drag and
+    /// the tool's options; a drag that is let go keeps them.
+    #[test]
+    fn escape_puts_back_the_options_a_drag_changed() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let keys = |id: &str| -> Vec<ToolKey> {
+            match id {
+                "arc" => vec![ToolKey::Up, ToolKey::Letter('c'), ToolKey::Letter('f')],
+                "spiral" => vec![ToolKey::Up],
+                _ => vec![ToolKey::Up, ToolKey::Right, ToolKey::Letter('v'), ToolKey::Letter('c')],
+            }
+        };
+        let arc_and_spiral = ["slope", "closed", "baseAlong", "segments", "decay"];
+        let grids = ["rows", "columns", "concentric", "radial", "rowSkew", "columnSkew", "concentricSkew", "radialSkew"];
+        let pick = |v: &Value| arc_and_spiral.iter().chain(&grids).filter_map(|f| v.get(*f).map(|x| (*f, x.clone()))).collect::<Vec<_>>();
+        for id in ["arc", "spiral", "rectangularGrid", "polarGrid"] {
+            let mut t = FamilyTool::new(id);
+            let preview = |a: Vec<Action>| match a.last() {
+                Some(Action::Preview(_, v)) => v.clone(),
+                _ => panic!("{id}: {a:?}"),
+            };
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let before = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            let options = t.options();
+            let mut changed = before.clone();
+            for k in keys(id) {
+                changed = pick(&preview(t.key(&cx, k, Mods::default())));
+            }
+            assert_ne!(changed, before, "{id}: the keys change the options");
+            assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{id}");
+            assert_eq!(t.options(), options, "{id}: the tool's options");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let next = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            assert_eq!(next, before, "{id}: the next drag");
+            // A drag that is let go keeps what its keys changed.
+            for k in keys(id) {
+                t.key(&cx, k, Mods::default());
+            }
+            assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+            let kept = pick(&preview(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))));
+            assert_eq!(kept, changed, "{id}: a finished drag keeps them");
+            t.key(&cx, ToolKey::Escape, Mods::default());
+            assert_eq!(pick(&t.options()), changed, "{id}: Escape puts back only what this drag changed");
+        }
+    }
+
+    /// Alt and Ctrl/Cmd change a spiral's segments and decay as it is dragged out; Escape puts
+    /// both back.
+    #[test]
+    fn escape_puts_back_the_spiral_decay_and_segments_alt_and_ctrl_changed() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let alt = Mods { alt: true, ..Mods::default() };
+        let ctrl = Mods { cmd: true, ..Mods::default() };
+        let mut t = FamilyTool::new("spiral");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 100.0).with_mods(ctrl));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 200.0, 100.0).with_mods(ctrl));
+        assert!(t.segments != 10 && t.decay != 80.0, "{} {}", t.segments, t.decay);
+        t.key(&cx, ToolKey::Escape, ctrl);
+        assert_eq!((t.segments, t.decay), (10, 80.0));
+    }
+
+    /// An option set while a shape is dragged out (`tool.setOption`) stays when Escape cancels
+    /// the drag; the options only the drag's keys changed go back.
+    #[test]
+    fn escape_keeps_an_option_set_during_the_drag() {
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let mut cx = cx(&d, &s, &p);
+        cx.smart_guides = false;
+        let mut t = FamilyTool::new("rectangularGrid");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Right, Mods::default());
+        t.set_option("columns", &json!(9));
+        t.set_option("rowSkew", &json!(30.0));
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["rows"].clone(), o["columns"].clone(), o["rowSkew"].clone()), (json!(5), json!(9), json!(30.0)));
+        let mut t = FamilyTool::new("arc");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Letter('c'), Mods::default());
+        t.set_option("slope", &json!(-20.0));
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["closed"].clone(), o["slope"].clone()), (json!(false), json!(-20.0)));
+        // A value the option ignores leaves the starting value for Escape.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Letter('c'), Mods::default());
+        t.key(&cx, ToolKey::Letter('f'), Mods::default());
+        for (k, v) in [("slope", json!("steep")), ("closed", json!(1)), ("baseAlong", json!(null))] {
+            t.set_option(k, &v);
+        }
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o["slope"].clone(), o["closed"].clone(), o["baseAlong"].clone()), (json!(-20.0), json!(false), json!("x")));
     }
 
     /// Alt adjusts the segment count in whole winds while keeping it within 2 to 1000.

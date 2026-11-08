@@ -974,6 +974,14 @@
 	Export As PNG…	Exportar Como PNG…
 	Export As SVG…	Exportar Como SVG…
 	Export Assets	Exportar Ativos
+	Export 3D Object	Exportar Objeto 3D
+	3D Export Format	Formato de Exportação 3D
+	Export 3D Assets	Exportar Ativos 3D
+@msg	{what} can't be exported in 3D: {e}	não é possível exportar {what} em 3D: {e}
+@msg	asset {id} isn't a 3D asset	o ativo {id} não é um ativo 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	o ativo {id} é um ativo 3D: assets.export3D o grava
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	ainda não há ativos 3D: colete primeiro um objeto com um efeito 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	selecione um objeto com um efeito 3D (ou informe seus ids)
 	Export As…	Exportar Como…
 	Export CSS	Exportar CSS
 	Export CSS…	Exportar CSS…
@@ -1045,6 +1053,7 @@
 	Fill & Stroke	Preenchimento e Traçado
 	Fill Color	Cor de Preenchimento
 	Fill New Type Objects With Placeholder Text	Preencher Novos Objetos de Texto com Texto de Placeholder
+	Start Lists From Typed Markers	Iniciar Listas a Partir de Marcadores Digitados
 	Fill Rule	Regra de Preenchimento
 	Fill and Stroke	Preenchimento e Traçado
 	Fill new strokes	Preencher novos traçados
@@ -2563,6 +2572,11 @@ digits	Malayalam	Malaiala
 	Selected Swatches	Amostras Selecionadas
 	Selected Swatches Only	Somente Amostras Selecionadas
 	Selection	Seleção
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Seleção retangular
+	Touching	Objetos tocados
+	Fully Enclosed	Totalmente contidos
+	Drag Direction	Direção do arrasto
 	Selection & Anchor Display	Exibição de Seleção e Âncora
 	Selection Only	Somente Seleção
 	Selection Tool	Ferramenta Seleção
@@ -2681,6 +2695,7 @@ digits	Malayalam	Malaiala
 	Simulate Colored Paper	Simular Papel Colorido
 	Simulate Paper	Simular Papel
 	Double Column	Coluna Dupla
+	Keep Tools Beside the Canvas	Ferramentas ao Lado da Tela
 	Single Left Quotation Mark	Aspa Esquerda Única
 	Single Quotes:	Aspas Simples:
 	Single Right Quotation Mark	Aspa Direita Única
@@ -3115,6 +3130,7 @@ digits	Malayalam	Malaiala
 	Zoom Tool	Ferramenta Zoom
 	Zoom to Selection	Ampliar para a Seleção
 	Zoom with Mouse Wheel	Zoom com a Roda do Mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rolar na Horizontal com Cmd/Ctrl + Roda
 	Scrub Numeric Fields by Dragging	Ajustar Campos Numéricos Arrastando
 	[Default] is protected: New… starts an editable copy.	[Padrão] é protegido: Novo… inicia uma cópia editável.
 	[Unnamed]	[Sem Nome]
@@ -3264,6 +3280,9 @@ imageTrace	Outline	Contorno
 	Stained Glass…	Vitral…
 	Texturizer…	Texturizador…
 	System Title Bar	Barra de título do sistema
+	VectorCraft Title Bar on Every Desktop	Barra de título do VectorCraft em todas as áreas de trabalho
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Enquanto estiver definida, a variável de ambiente VECTORCRAFT_TITLEBAR escolhe a barra de título.
+	System Title Bar takes precedence over this option while it is on.	Enquanto estiver ativada, Barra de título do sistema tem prioridade sobre esta opção.
 	Exit	Sair
 	Distort	Distorcer
 	Diffuse Glow…	Brilho difuso…
@@ -3343,6 +3362,7 @@ font-technology	Variable	Variáveis
 	Favorites	Favoritos
 	Fill (X), double-click for the Color Picker	Preenchimento (X), clique duas vezes para o seletor de cores
 	Find Objects	Localizar objetos
+	Compare with Image	Comparar com imagem
 	Flare Tool Options	Opções da ferramenta Reflexo
 	Halo	Halo
 	Rays	Raios
@@ -3778,7 +3798,7 @@ axis	Both	Ambos
 @msg	bad shortcut	atalho inválido
 @msg	bad stream length	comprimento de fluxo inválido
 @msg	bad trailer	trailer inválido
-@msg	balance must be between 0 and 100	o equilíbrio deve estar entre 0 e 100
+@msg	balance must be between 0 and 100	balance deve estar entre 0 e 100
 @msg	batch step {_1} (`{id}`) failed: {e}	a etapa {_1} do lote (`{id}`) falhou: {e}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness deve ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	não foi possível codificar o documento: {0}
@@ -3805,7 +3825,7 @@ axis	Both	Ambos
 @msg	compound paths can only contain paths	traçados compostos só podem conter traçados
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado
-@msg	decimals must be {_1}–{_2} (got {_3})	as casas decimais devem estar entre {_1} e {_2} (recebido {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals deve estar entre {_1} e {_2} (recebido {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	divida em 1 a {MAX_PIECES} fatias
 @msg	effect {k} is `{_1}`, not `{id}`	o efeito {k} é `{_1}`, não `{id}`
 @msg	empty brush stroke	traço de pincel vazio
@@ -3929,6 +3949,8 @@ axis	Both	Ambos
 @msg	no such action set	conjunto de ações inexistente
 @msg	the action sets changed; nothing was deleted	os conjuntos de ações mudaram; nada foi excluído
 @msg	no action set to save	nenhum conjunto de ações para salvar
+@msg	the action set file can't be read in full	o arquivo de conjunto de ações não pode ser lido por inteiro
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” carregado: {n} etapa foi omitida|“{name}” carregado: {n} etapas foram omitidas
 @msg	not an action set file	não é um arquivo de conjunto de ações
 @msg	the action set file is larger than 8 MiB	o arquivo de conjunto de ações tem mais de 8 MiB
 @msg	the action set file holds more than 1,000 actions	o arquivo de conjunto de ações contém mais de 1.000 ações
@@ -4001,7 +4023,7 @@ axis	Both	Ambos
 @msg	replace: the object to replace was changed or deleted	replace: o objeto a ser substituído foi alterado ou excluído
 @msg	pattern missing	padrão ausente
 @msg	patterns nested too deeply are filled with mid-grey	padrões aninhados com profundidade excessiva são preenchidos com cinza médio
-@msg	percent must be above 0 and at most 6400, not {p}	a porcentagem deve ser maior que 0 e no máximo 6400, não {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent deve ser maior que 0 e no máximo 6400, não {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	escolha uma cor, gradiente ou padrão para salvar como amostra
 @msg	plane must be left, right or ground	plane deve ser left, right ou ground
 @msg	plug-in ABI: {0}	ABI do plug-in: {0}
@@ -4022,8 +4044,8 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	o resultado excederia a tela (coordenadas fora do intervalo)
 @msg	objects can't be nested more than 32 deep	os objetos não podem ser aninhados em mais de 32 níveis
 @msg	the SVG's elements are nested more than {0} deep	os elementos do SVG estão aninhados em mais de {0} níveis
-@msg	scale must be a number from {_1} to {_2}, not {_3}	a escala deve ser um número de {_1} a {_2}, não {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	a escala deve ser um número de {_1} a {_2}, não {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale deve ser um número de {_1} a {_2}, não {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale deve ser um número de {_1} a {_2}, não {s}
 @msg	select (or target) objects whose appearance isn't basic	selecione (ou direcione) objetos cuja aparência não seja básica
 @msg	select a Live Paint group	selecione um grupo de Pintura dinâmica
 @msg	select a blend	selecione uma mesclagem
@@ -4346,6 +4368,9 @@ axis	Both	Ambos
 @msg	the Pixar file's image data is damaged	os dados de imagem do arquivo Pixar estão danificados
 @msg	the JPEG 2000 file can't be read	não é possível ler o arquivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	o arquivo JPEG 2000 contém um espaço de cores ou conteúdo JPX sem suporte
+@msg	the HEIC or HEIF file can't be read	não é possível ler o arquivo HEIC ou HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	o arquivo HEIC ou HEIF contém um tipo de imagem que não pode ser lido
+@msg	HEIC and HEIF images can't be opened in this build	imagens HEIC e HEIF não podem ser abertas nesta versão
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)
 @msg	zipped 32-bit PSD image data with prediction can't be read	dados de imagem PSD de 32 bits compactados em zip com previsão não podem ser lidos
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos
@@ -4362,7 +4387,7 @@ axis	Both	Ambos
 @msg	before must name a panel	before deve nomear um painel
 @msg	docking action contains an unknown panel or an excessive split path	a ação de encaixe contém um painel desconhecido ou um caminho de divisão excessivo
 @msg	group must be true or false	group deve ser true ou false
-@msg	panel is not in a dock group	o painel não está em um grupo do encaixe
+@msg	panel is not in a dock group	panel não está em um grupo do encaixe
 @msg	only a dock group above or below others collapses, not one beside another	só um grupo do encaixe acima ou abaixo de outros é recolhido, não um ao lado
 @msg	icon must be true or false	icon deve ser true ou false
 @msg	icon only docks a panel in the icon column, with no anchor	icon apenas encaixa um painel na coluna de ícones, sem anchor
@@ -4683,6 +4708,7 @@ axis	Both	Ambos
 	Report copied	Relatório copiado
 	Line {line}	Linha {line}
 	Line {line}: {name}: {status}	Linha {line}: {name}: {status}
+	Read Action Set File	Ler Arquivo de Conjunto de Ações
 	Read Shortcut Set File	Ler Arquivo de Conjunto de Atalhos
 	Import Matches	Importar Correspondências
 	Remember Import Matches	Lembrar Correspondências de Importação
@@ -5447,6 +5473,11 @@ mark-style	Japanese	Japonesas
 @msg	The shape is too complex for a 3D effect	A forma é complexa demais para um efeito 3D
 @msg	The 3D surface is too complex; simplify the shape	A superfície 3D é complexa demais; simplifique a forma
 @msg	an image of {w} × {h} pixels is too large to draw	uma imagem de {w} × {h} pixels é grande demais para ser desenhada
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: não é uma imagem PNG, JPEG, WebP, TIFF ou BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	a imagem tem {iw} × {ih} pixels e a prancheta nessa largura tem {rw} × {rh} pixels: as proporções são diferentes
+@msg	`threshold` must be a number from 0 to 1	`threshold` deve ser um número de 0 a 1
+@msg	background {v}: a color such as "#808080"	plano de fundo {v}: uma cor como "#808080"
+@msg	comparing with an image file isn't available in the browser	a comparação com um arquivo de imagem não está disponível no navegador
 @msg	an image of {w} × {h} pixels is shown at reduced size	uma imagem de {w} × {h} pixels é exibida em tamanho reduzido
 	Fill and Stroke Controls	Controles de Preenchimento e Traçado
 	Coloring Controls	Controles de Coloração
@@ -5620,6 +5651,9 @@ mark-style	Japanese	Japonesas
 @msg	too many library panels were opened in this session	foram abertos painéis de biblioteca demais nesta sessão
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A imagem tem {_1} × {_2} pixels, mais de {LARGE_TRACE_SIDE} em um lado: ela é traçada, mas mais devagar. Uma predefinição de menor fidelidade ou uma cópia menor da imagem traça mais rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A imagem foi traçada em {_1} × {_2} pixels, reduzida de {_3} × {_4} (no máximo {_5} megapixels).
+@msg	byColor must be true or false	byColor deve ser true ou false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor não pode dividir os grupos de Agrupamento Automático: trace sem Agrupamento Automático
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor não pode reagrupar um traçado com um efeito Pathfinder ativo: expanda sem byColor
 	Snapping	Ajuste
 	Snap to Tangent	Ajustar à Tangente
 	Snap to Perpendicular	Ajustar à Perpendicular
@@ -6181,6 +6215,8 @@ breakText	Glyphs	Glifos
 	File + Data Set Name	Arquivo + nome do conjunto de dados
 	Data Set Name	Nome do conjunto de dados
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` deve ser `fileNumber`, `fileDataSetName` ou `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunto de dados é salvo sobre o mesmo arquivo, que mantém apenas o último conjunto de dados.
+@msg	save the document with Save As before Save and Close	salve o documento com Salvar Como antes de Salvar e fechar
 @msg	no free data set file name in destination folder	Não há nome de arquivo livre para o conjunto de dados na pasta de destino
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6302,6 +6338,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Redefinir instância de símbolo
 @msg	type must be static or dynamic, not {v}	type deve ser static ou dynamic, não {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` é um símbolo estático: defina primeiro o tipo de símbolo como Dinâmico
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De um caminho, caminho composto ou texto selecionado em uma instância de símbolo só é possível alterar a cor sólida do preenchimento e do traçado
 @msg	path must be a list of child indices	path deve ser uma lista de índices de filhos
 @msg	no object at path {shown} in the symbol's art	nenhum objeto no caminho {shown} na arte do símbolo
 @msg	give fill, stroke, opacity and/or blend	informe fill, stroke, opacity e/ou blend
@@ -6554,3 +6591,25 @@ swatch	Yellow Green	Verde-amarelado
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
+
+# Safe Mode
+	Safe Mode…	Modo de Segurança…
+	Safe Mode	Modo de Segurança
+	Help › Safe Mode…	Ajuda › Modo de Segurança…
+	Enable on Re-launch	Ativar na Próxima Inicialização
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	A última inicialização do VectorCraft parou enquanto o plug-in {name} era carregado. Ele pode não ser a causa.
+	Disable and Continue	Desativar e Continuar
+	Start Normally	Iniciar Normalmente
+	Start in Safe Mode	Iniciar no Modo de Segurança
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	O VectorCraft está no Modo de Segurança: nenhum plug-in é carregado ou executado até que ele seja iniciado normalmente.
+	Disabled plug-ins	Plug-ins desativados
+	No plug-ins are disabled.	Nenhum plug-in está desativado.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	O Modo de Segurança está ativado: os plug-ins não são carregados nem executados até que o VectorCraft seja iniciado normalmente
+@msg	give `id` or `file` (see plugin.safeMode)	informe `id` ou `file` (veja plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	esse plug-in não está desativado (veja plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Não foi possível salvar os plug-ins desativados para a próxima inicialização
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandir aparência: um efeito de plug-in na seleção não pode ser expandido no Modo de Segurança
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Alinhar à Grade de Pixels
+@msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels

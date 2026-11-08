@@ -466,6 +466,9 @@ struct Style {
     caps: u8,
     /// Key 35 at 3: Tate-chu-yoko, the characters set across the column as one block.
     tate_chu_yoko: bool,
+    /// Key 35 at 1 (Standard): Standard Vertical Roman Alignment, half-width characters upright in
+    /// a column. Any other value, or no key in the run, its character style or the defaults, is off.
+    standard_vertical_roman: bool,
 }
 
 /// The text document of an editing copy.
@@ -751,6 +754,7 @@ impl Texts {
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
             caps: num("12").filter(|v| *v == 1.0 || *v == 2.0).map_or(0, |v| v as u8),
             tate_chu_yoko: num("35") == Some(3.0),
+            standard_vertical_roman: num("35") == Some(1.0),
         }
     }
 }
@@ -1293,6 +1297,7 @@ fn char_style(s: &Style, scale: f64) -> CharStyle {
         // At the default Small Caps size of Document Setup: the file's own isn't read.
         small_caps: (s.caps == 1).then(|| vectorcraft_doc::DocSetup::default().small_caps_size),
         tate_chu_yoko: s.tate_chu_yoko,
+        standard_vertical_roman: s.standard_vertical_roman,
         ..CharStyle::default()
     }
 }
@@ -1537,6 +1542,35 @@ mod tests {
         for other in [&b"/6 << >>"[..], b"/6 << /35 2 >>", b"/6 << /35 3.5 >>", b"/6 << /35 (3) >>", b"/6 << /35 -3 >>", b"/6 << /35 1e308 >>"] {
             assert!(!tcy(other), "{}", String::from_utf8_lossy(other));
         }
+    }
+
+    /// Key 35 of a character style at 1 (Standard) is Standard Vertical Roman Alignment, from the
+    /// run, its character style or the document's defaults; at 2 (rotated), 3 (Tate-chu-yoko), a
+    /// value that isn't one of those numbers, or with no key anywhere it is off.
+    #[test]
+    fn baseline_direction_one_is_standard_vertical_roman_alignment() {
+        let texts = |defaults: &[u8]| Texts {
+            stories: vec![],
+            fonts: vec![],
+            defaults: read(defaults).unwrap(),
+            para_defaults: Val::Dict(BTreeMap::new()),
+            char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rotated) /6 << /35 2 >>").unwrap()],
+            para_sheets: vec![],
+            frames: vec![],
+        };
+        let roman = |defaults: &[u8], run: &[u8]| texts(defaults).style(Some(&read(run).unwrap())).standard_vertical_roman;
+        assert!(roman(b"/35 1", b"/6 << >>"), "the document's defaults");
+        assert!(roman(b"/35 2", b"/6 << /35 1 >>"), "the run's own");
+        assert!(!roman(b"/35 1", b"/6 << /35 2 >>"), "the run's own rotated");
+        assert!(!roman(b"/35 1", b"/5 1 /6 << >>"), "its character style's");
+        assert!(roman(b"/35 2", b"/5 1 /6 << /35 1 >>"), "the run's own wins over its style");
+        assert!(!roman(b"/0 0", b"/6 << >>"), "no key: off");
+        for other in
+            [&b"/6 << /35 3 >>"[..], b"/6 << /35 1.5 >>", b"/6 << /35 (1) >>", b"/6 << /35 -1 >>", b"/6 << /35 true >>", b"/6 << /35 [ 1 ] >>"]
+        {
+            assert!(!roman(b"/0 0", other), "{}", String::from_utf8_lossy(other));
+        }
+        assert!(texts(b"/35 3").style(None).tate_chu_yoko && !texts(b"/35 3").style(None).standard_vertical_roman);
     }
 
     /// A right-to-left paragraph is laid out right to left even when it has no right-to-left
@@ -1808,6 +1842,7 @@ mod tests {
                     stroke_width: 1.0,
                     caps: 0,
                     tate_chu_yoko: false,
+                    standard_vertical_roman: false,
                 },
             )],
             path_spacing: 0.0,

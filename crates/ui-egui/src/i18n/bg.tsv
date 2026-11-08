@@ -1057,6 +1057,9 @@ font-technology	Variable	Променливи
 	Export As SVG…	Експортиране като SVG…
 	Export Asset	Експортиране на актив
 	Export Assets	Експортиране на активи
+	Export 3D Object	Експортиране на 3D обект
+	3D Export Format	Формат на 3D експортиране
+	Export 3D Assets	Експортиране на 3D активи
 	Export As…	Експортиране като…
 	Export CSS	Експортиране на CSS
 	Export CSS…	Експортиране на CSS…
@@ -1130,6 +1133,7 @@ font-technology	Variable	Променливи
 	Live curve fitting	Напасване на кривата в реално време
 	Fill Color	Цвят на запълване
 	Fill New Type Objects With Placeholder Text	Запълване на нови текстови обекти с примесен текст
+	Start Lists From Typed Markers	Започване на списъци от въведени маркери
 	Fill Rule	Правило за запълване
 	Fill with Placeholder Text	Запълване с примесен текст
 	Fill:	Запълване:
@@ -1140,6 +1144,7 @@ font-technology	Variable	Променливи
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ
 	Find Objects	Търсене на обекти
+	Compare with Image	Сравняване с изображение
 	First Page	Първа страница
 	First-line Left Indent	Ляв отстъп на първи ред
 	Fisheye…	Рибено око…
@@ -1664,6 +1669,7 @@ font-technology	Variable	Променливи
 	Report copied	Отчетът е копиран
 	Line {line}	Ред {line}
 	Line {line}: {name}: {status}	Ред {line}: {name}: {status}
+	Read Action Set File	Четене на файл с набор от действия
 	Read Shortcut Set File	Четене на файл с набор от клавишни комбинации
 	Import Matches	Импортиране на съответствия
 	Remember Import Matches	Запомняне на съответствията при импортиране
@@ -2978,6 +2984,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Избрани образци
 	Selected Swatches Only	Само избрани образци
 	Selection	Селекция
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Избор с рамка
+	Touching	Докоснати обекти
+	Fully Enclosed	Изцяло вътре
+	Drag Direction	Посока на плъзгане
 	Selection & Anchor Display	Показване на селекция и опорни точки
 	Selection Only	Само селекция
 	Selection Tool	Инструмент „Селекция“
@@ -3113,6 +3124,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Симулиране на цветна хартия
 	Simulate Paper	Симулиране на хартия
 	Double Column	Две колони
+	Keep Tools Beside the Canvas	Инструментите до платното
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка
@@ -3709,6 +3721,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Приближаване до селекцията
 	Zoom Tool	Инструмент „Мащаб“
 	Zoom with Mouse Wheel	Мащабиране с колелцето на мишката
+	Scroll Sideways with Cmd/Ctrl + Wheel	Хоризонтално превъртане с Cmd/Ctrl + колелцето
 	Scrub Numeric Fields by Dragging	Плъзгане на числени полета чрез влачене
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} файл в {folder} {note}. Показване на папката на пакета?|{n} файла в {folder} {note}. Показване на папката на пакета?
 @plural	{n} linked file not found|{n} linked files not found	{n} свързан файл не е намерен|{n} свързани файла не са намерени
@@ -3877,7 +3890,7 @@ axis	Both	И двете
 	Float Tool Group	Плаваща група инструменти
 @msg	no library `{id}`	няма библиотека `{id}`
 @msg	select some type first	първо изберете текст
-@msg	kerning must be a number, "auto", or "optical"	Кернингът трябва да е число, „auto“ или „optical“
+@msg	kerning must be a number, "auto", or "optical"	kerning трябва да е число, „auto“ или „optical“
 @msg	{_1} has no {_2} style	{_1} няма стил {_2}
 @msg	a layer couldn't be read	слой не можа да бъде прочетен
 @msg	it has more than one artboard	има повече от една работна област
@@ -4054,10 +4067,10 @@ axis	Both	И двете
 @msg	already editing a pattern	мострата вече се редактира
 @msg	an object can't be read	обектът не може да бъде прочетен
 @msg	an object in perspective would leave the edited grid	обект в перспектива би напуснал редактираната мрежа
-@msg	antiAlias `{id}`: none, art or type	заглаждане `{id}`: няма, художествено или текстово
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art или type
 @msg	artboard {0} does not exist	работна област {0} не съществува
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	при този мащаб чертежът е {w} × {h} pt, повече отколкото платното побира: изберете по-малък мащаб или го вгонесете в работната област
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	оста трябва да бъде "vertical", "horizontal" или ъгъл в градуси, а не `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis трябва да бъде "vertical", "horizontal" или ъгъл в градуси, а не `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	фон {other}: прозрачен, бял, черен или цвят като "#ff8800"
 @msg	bad color {v}	грешен цвят {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio трябва да бъде число от 0,1 до 10
@@ -4066,9 +4079,9 @@ axis	Both	И двете
 @msg	bad shortcut	грешен клавишен бърз път
 @msg	bad stream length	грешна дължина на потока
 @msg	bad trailer	грешен край (trailer)
-@msg	balance must be between 0 and 100	балансът трябва да бъде между 0 и 100
+@msg	balance must be between 0 and 100	balance трябва да бъде между 0 и 100
 @msg	batch step {_1} (`{id}`) failed: {e}	стъпка от пакет {_1} (`{id}`) неуспешна: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яркостта трябва да бъде dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness трябва да бъде dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	документът не може да бъде кодиран: {0}
 @msg	can't parse shortcut `{c}`	клавишният бърз път `{c}` не може да бъде разпознат
 @msg	can't parse shortcut `{s}` for `{k}`	клавишният бърз път `{s}` за `{k}` не може да бъде разпознат
@@ -4093,7 +4106,7 @@ axis	Both	И двете
 @msg	compound paths can only contain paths	съставните пътища могат да съдържат само пътища
 @msg	compressed (RLE) bitmaps can't be read yet	компресираните (RLE) битови карти все още не могат да бъдат четени
 @msg	damaged	повреден
-@msg	decimals must be {_1}–{_2} (got {_3})	десетичните знаци трябва да бъдат {_1}–{_2} (получени {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals трябва да бъде {_1}–{_2} (получено {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	разделяне на 1 до {MAX_PIECES} парчета
 @msg	effect {k} is `{_1}`, not `{id}`	ефектът {k} е `{_1}`, а не `{id}`
 @msg	empty brush stroke	празен щрих с четка
@@ -4111,9 +4124,9 @@ axis	Both	И двете
 @msg	an image has no pixels and was left out	изображение без пиксели беше пропуснато
 @msg	image data `{_1}` is missing	данните за изображение `{_1}` липсват
 @msg	image would be too large; lower the resolution	изображението ще бъде твърде голямо; намалете разделителната способност
-@msg	index must be a number or first, previous, next or last	индексът трябва да е число или first, previous, next или last
-@msg	index must be a number or first, previous, next or last, not `{other}`	индексът трябва да е число или first, previous, next или last, а не `{other}`
-@msg	index must be ≥ 0	индексът не може да е отрицателен
+@msg	index must be a number or first, previous, next or last	index трябва да е число или first, previous, next или last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index трябва да е число или first, previous, next или last, а не `{other}`
+@msg	index must be ≥ 0	index трябва да е ≥ 0
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	инсталирането от път не е налично в уеб; предайте модула като `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	вътрешна грешка в `{cmd}`: {msg} (документът беше оставен в състоянието си отпреди; моля, докладвайте тази грешка)
 @msg	internal error: {msg} (please report this bug)	вътрешна грешка: {msg} (моля, докладвайте тази грешка)
@@ -4213,6 +4226,8 @@ axis	Both	И двете
 @msg	no such action set	няма такъв набор от действия
 @msg	the action sets changed; nothing was deleted	наборите от действия се промениха; нищо не беше изтрито
 @msg	no action set to save	няма набор от действия за запазване
+@msg	the action set file can't be read in full	файлът с набор от действия не може да се прочете изцяло
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Зареден е „{name}“: {n} стъпка е пропусната|Зареден е „{name}“: {n} стъпки са пропуснати
 @msg	not an action set file	не е файл с набор от действия
 @msg	the action set file is larger than 8 MiB	файлът с набор от действия е по-голям от 8 MiB
 @msg	the action set file holds more than 1,000 actions	файлът с набор от действия съдържа повече от 1000 действия
@@ -4285,9 +4300,9 @@ axis	Both	И двете
 @msg	replace: the object to replace was changed or deleted	замяна: обектът за замяна е променен или изтрит
 @msg	pattern missing	липсва мостра
 @msg	patterns nested too deeply are filled with mid-grey	мострите, вложени прекалено дълбоко, се запълват със средно сиво
-@msg	percent must be above 0 and at most 6400, not {p}	процентът трябва да е над 0 и най-много 6400, а не {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent трябва да е над 0 и най-много 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	изберете цвят, градиент или мостра за запазване като образец
-@msg	plane must be left, right or ground	равнината трябва да е лява, дясна или земна
+@msg	plane must be left, right or ground	plane трябва да е left, right или ground
 @msg	plug-in ABI: {0}	ABI на плъгин: {0}
 @msg	plug-in exceeded its {0}	плъгинът надвиши своя {0}
 @msg	plug-in failed: {0}	плъгинът се провали: {0}
@@ -4306,8 +4321,8 @@ axis	Both	И двете
 @msg	result would exceed the canvas (coordinates out of range)	резултатът ще надвиши платното (координатите са извън обхвата)
 @msg	objects can't be nested more than 32 deep	 обектите не могат да бъдат вложени на повече от 32 нива
 @msg	the SVG's elements are nested more than {0} deep	 елементите на SVG са вложени на повече от {0} нива
-@msg	scale must be a number from {_1} to {_2}, not {_3}	мащабът трябва да е число от {_1} до {_2}, а не {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	мащабът трябва да е число от {_1} до {_2}, а не {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale трябва да е число от {_1} до {_2}, а не {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale трябва да е число от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	изберете (или насочете към) обекти, чийто изглед не е основен
 @msg	select a Live Paint group	изберете група за интерактивно оцветяване (Live Paint)
 @msg	select a blend	изберете преход (blend)
@@ -4718,6 +4733,9 @@ axis	Both	И двете
 effect	Soft	Меко
 	Edge	Роб
 	System Title Bar	Заглавна лента на системата
+	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
+	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -4758,24 +4776,24 @@ effect	Soft	Меко
 	Resize panels	Преоразмеряване на панели
 	Resize panel window	Преоразмеряване на прозореца на панела
 @msg	Invalid panel layout; restored the default dock	Невалидно оформление на панела; възстановено е подразбиращото се разположение
-@msg	action is required	необходимо е действие
-@msg	anchor must name a registered panel	опорната точка трябва да указва регистриран панел
-@msg	before must name a panel	параметърът „преди“ трябва да указва панел
+@msg	action is required	action е задължителен
+@msg	anchor must name a registered panel	anchor трябва да указва регистриран панел
+@msg	before must name a panel	before трябва да указва панел
 @msg	docking action contains an unknown panel or an excessive split path	действието по закачане съдържа непознат панел или прекомерен път на разделяне
 @msg	group must be true or false	group трябва да е true или false
-@msg	panel is not in a dock group	панелът не е в група на дока
+@msg	panel is not in a dock group	panel не е в група на дока
 @msg	only a dock group above or below others collapses, not one beside another	свива се само група на дока над или под други, не и такава до друга
 @msg	icon must be true or false	icon трябва да е true или false
 @msg	icon only docks a panel in the icon column, with no anchor	icon закачва панел само в колоната с икони, без anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column закачва набор като колона на дока, без anchor или icon
 @msg	move requires a destination panel	преместването изисква целеви панел
 @msg	move requires an existing destination panel	преместването изисква съществуващ целеви панел
-@msg	onto must name a floating panel	параметърът „върху“ трябва да указва плаващ панел
+@msg	onto must name a floating panel	onto трябва да указва плаващ панел
 @msg	panel group is empty	групата от панели е празна
-@msg	panel must name a registered panel	панелът трябва да указва регистриран панел
+@msg	panel must name a registered panel	panel трябва да указва регистриран панел
 @msg	saved panel layout is invalid; reset the workspace first	запазеното оформление на панелите е невалидно; нулирайте работното пространство първо
-@msg	zone must be a string	зоната трябва да е низ
-@msg	zone must be tab, center, left, right, top or bottom	зоната трябва да бъде tab, center, left, right, top или bottom
+@msg	zone must be a string	zone трябва да е низ
+@msg	zone must be tab, center, left, right, top or bottom	zone трябва да бъде tab, center, left, right, top или bottom
 @msg	{key} must be a finite coordinate	{key} трябва да е крайна координата
 @msg	x and y must be provided together	x и y трябва да бъдат подадени заедно
 @msg	invalid restored panel group	невалидна възстановена група от панели
@@ -5357,7 +5375,7 @@ theme	Appearance	Външен вид
 	Screen Mode Controls	Контроли за режим на екран
 	Drawer menu	Меню на чекмеджето
 	Toolbar: Show Controls	Лента с инструменти: Показване на контроли
-@msg	control must be fillStroke, coloring, drawMode or screenMode	 контролът трябва да бъде fillStroke, coloring, drawMode или screenMode
+@msg	control must be fillStroke, coloring, drawMode or screenMode	control трябва да бъде fillStroke, coloring, drawMode или screenMode
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	 неизвестен контрол `{name}`: fillStroke, coloring, drawMode или screenMode
 @msg	give a fraction `t` from 0 to 1	 въведете дробно число `t` от 0 до 1
 @msg	give the path `id`	 въведете `id` на пътя
@@ -6098,6 +6116,8 @@ breakText	Glyphs	Глифи
 	File + Data Set Name	Файл + име на набора от данни
 	Data Set Name	Име на набора от данни
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` трябва да е `fileNumber`, `fileDataSetName` или `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Всеки набор от данни се записва върху същия файл, в който остава само последният набор от данни.
+@msg	save the document with Save As before Save and Close	запазете документа със „Запази като“ преди „Запази и затвори“
 @msg	no free data set file name in destination folder	Няма свободно име за файл на набор от данни в целевата папка
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6218,6 +6238,7 @@ breakText	Glyphs	Глифи
 	Reset Symbol Instance	Нулиране на екземпляра на символ
 @msg	type must be static or dynamic, not {v}	type трябва да е static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` е статичен символ: първо задайте типа на символа на „Динамичен“
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	На път, съставен път или текст, избран в екземпляр на символ, могат да се променят само плътните цветове на запълването и контура
 @msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
 @msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
 @msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
@@ -6315,3 +6336,24 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+
+# Safe Mode
+	Safe Mode…	Безопасен режим…
+	Safe Mode	Безопасен режим
+	Help › Safe Mode…	Помощ › Безопасен режим…
+	Enable on Re-launch	Включване при следващо стартиране
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Последното стартиране на VectorCraft спря, докато се зареждаше добавката {name}. Възможно е тя да не е причината.
+	Disable and Continue	Изключване и продължаване
+	Start Normally	Нормално стартиране
+	Start in Safe Mode	Стартиране в безопасен режим
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft е в безопасен режим: добавките не се зареждат и не се изпълняват, докато не стартира нормално.
+	Disabled plug-ins	Изключени добавки
+	No plug-ins are disabled.	Няма изключени добавки.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Безопасният режим е включен: добавките не се зареждат и не се изпълняват, докато VectorCraft не стартира нормално
+@msg	give `id` or `file` (see plugin.safeMode)	задайте `id` или `file` (вижте plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	тази добавка не е изключена (вижте plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Изключените добавки не можаха да бъдат запазени за следващото стартиране
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Разширяване на облика: ефект на добавка в селекцията не може да бъде разширен в безопасен режим
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Подравняване към пикселната мрежа
