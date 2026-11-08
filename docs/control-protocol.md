@@ -518,9 +518,12 @@ Align to Glyph Bounds: the Align panel flyout's Align to Glyph Bounds submenu sh
 `alignGlyphBoundsPoint` (Point Text) and `alignGlyphBoundsArea` (Area Text) preferences (`prefs.set`), checked while on.
 
 Align To: the Align panel's Align To choice is saved with the preferences, and `ui.inspect` reports it as
-`ui.align_to` (`"selection"` or `"artboard"`; Align to Key Object stores no choice). The align buttons of the Align
-panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object is selected,
-else with `"key"` while the selection has a key object, else with that choice. The Object → Align items send the same
+`ui.align_to` (`"selection"`, `"key"` or `"artboard"`), kept until another choice is made (#3718). The align buttons
+of the Align panel, the Control bar and the Properties panel run `object.align` with `to: "artboard"` when one object
+is selected, else with `"key"` while the selection has a key object, else with that choice. With `"key"` chosen and no
+key set, they (and the Object → Align items) first make the topmost of two or more selected objects the key
+(`select.key`), or a ruler guide selected with one object; Cancel Key Object clears the key and sets the choice back
+to `"selection"`. The Object → Align items send the same
 `to` while every selected object is selected whole. With direct-selected anchor points or segments they send no `to`,
 and the points align to their own bounds. `object.align` from `engine.execute` or `ui.menu.invoke` without `to` keeps
 the engine's default: the key object while there is one, else the selection.
