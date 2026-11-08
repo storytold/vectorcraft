@@ -1073,6 +1073,11 @@ impl Interp {
             if !o.extensible {
                 return self.reject_bool(throw, &k, "the object is not extensible");
             }
+            // The object and the descriptor's values stay rooted while the heap is checked.
+            let mut roots = vec![Value::Object(id)];
+            roots.extend(desc.value.iter().cloned());
+            roots.extend(desc.get.flatten().into_iter().chain(desc.set.flatten()).map(Value::Object));
+            self.rooted(&roots, |i| i.reserve_heap(binding_bytes(k.len())))?;
             let flags = desc.flags_or(0);
             let prop = if desc.is_accessor() {
                 Prop::Accessor { get: desc.get.flatten(), set: desc.set.flatten(), flags: flags & !WRITABLE }

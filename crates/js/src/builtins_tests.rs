@@ -307,6 +307,21 @@ fn keys_built_ins_make_count_toward_the_heap_limit() {
 }
 
 #[test]
+fn define_properties_checks_the_heap_before_each_new_property() {
+    // `src` takes most of the heap; copying its 20,000 names onto a new object does not fit, and
+    // the run ends before the heap estimate passes the limit.
+    let setup = "var d = {value: 1}; var src = {}; for (var i = 0; i < 20000; i++) src['k' + i] = d; 0";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (1 << 20);
+    let mut realm = small(Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(limit(&mut realm, "var o = Object.defineProperties({}, src); 0"), LimitKind::Heap);
+    assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
+}
+
+#[test]
 fn values_built_ins_hold_survive_collections() {
     // A small heap makes the callbacks' garbage start collections while the results are built.
     let mut realm = small(Limits { heap_bytes: 2 << 20, ..Limits::default() });
