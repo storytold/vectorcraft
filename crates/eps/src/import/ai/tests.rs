@@ -8371,6 +8371,172 @@ fn a_brushs_art_places_a_version_7_patterns_tiles_with_its_operands() {
     assert!(!vectorcraft_brush::library(&r.doc).iter().any(|b| b.name == "Spray"), "{:?}", r.warnings);
 }
 
+/// A Scatter brush whose 15 numbers start with 1 colors its art with Tints of the stroke, and one
+/// whose 15 numbers start with 0 keeps the art's colors. The field before the art's name doesn't
+/// count: a brush whose first field is 1 is read by its 15 numbers, and one with 8 numbers, as older
+/// files write their brushes, isn't read as a Scatter brush.
+#[test]
+fn a_scatter_brush_in_tints_comes_in_tinted() {
+    use vectorcraft_brush::{BrushKind, Colorization};
+    let read = |params: &str| {
+        let r = read_ok(&format!("{}{}{}", brush_art("Dot art", 4.0), plugin_object(SCATTER, "Spray", params), layer("")));
+        vectorcraft_brush::library(&r.doc).into_iter().find(|b| b.name == "Spray")
+    };
+    for (field, first, colorization) in
+        [("2", "1", Colorization::Tints), ("2", "0", Colorization::None), ("1", "1", Colorization::Tints), ("1", "0", Colorization::None)]
+    {
+        let params = format!("{field} /Dot art/ 5 0 0 0 / {first} 1 1 0 1 1 0 0 0 0 0 0 0 0 0");
+        let Some(b) = read(&params) else { panic!("{params}: not read") };
+        let BrushKind::Scatter(s) = b.kind else { panic!("scatter") };
+        assert_eq!(s.colorization, colorization, "{params}");
+    }
+    let older = "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0";
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", older), Err(brush::BrushError::Values));
+    assert!(read(older).is_none(), "8 numbers aren't a Scatter brush's");
+}
+
+/// A brush's art section `name`: in a group, a frame (a rectangle from `frame.0` to `frame.1` on
+/// both axes, painted by `op` and followed by `after`) and a filled square from 0 to 4.
+fn framed_art(name: &str, frame: (f64, f64), op: &str, after: &str) -> String {
+    format!(
+        "%AI8_BeginBrushPattern\n({name})\n0 A\n0 Xw\nu\n0 XR\n{}{op}\n{after}0 g\n{}f\nU\n%AI8_EndBrushPattern\n",
+        rect_path(frame.0, frame.0, frame.1, frame.1),
+        rect_path(0.0, 0.0, 4.0, 4.0)
+    )
+}
+
+/// The frame of a brush's art, an unnamed, unpainted rectangle at the art's bounds, isn't part of
+/// the art, closed or open with its first corner again at the end. A frame wider than the art is
+/// part of it, and so are a painted rectangle and a named one, which aren't frames.
+#[test]
+fn a_brushs_frame_is_left_out_only_at_the_arts_bounds() {
+    use vectorcraft_brush::BrushKind;
+    let named = "%_/ArtDictionary :\n%_/XMLUID : (Edge) ; (AI10_ArtUID) ,\n%_;\n%_\n";
+    for (why, frame, op, after, kept) in [
+        ("exact", (0.0, 4.0), "n", "", false),
+        ("open", (0.0, 4.0), "N", "", false),
+        ("wider", (-1.0, 5.0), "n", "", true),
+        ("filled", (0.0, 4.0), "f", "", true),
+        ("named", (0.0, 4.0), "n", named, true),
+    ] {
+        let params = "2 /Dot art/ 5 0 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+        let r = read_ok(&format!("{}{}{}", framed_art("Dot art", frame, op, after), plugin_object(SCATTER, "Spray", params), layer("")));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter") };
+        if kept {
+            assert!(matches!(s.art.kind, NodeKind::Group { .. }), "{why}: {:#?}", s.art);
+            assert_eq!(s.art.children().map(|c| c.len()), Some(2), "{why}");
+        } else {
+            assert_eq!(s.art.geometric_bounds().map(|b| b.width()), Some(4.0), "{why}: {:#?}", s.art);
+            assert!(matches!(s.art.kind, NodeKind::Path { .. }), "{why}: the square alone: {:#?}", s.art);
+        }
+    }
+}
+
+/// A brush's art group that is hidden, locked, isolated or has a note keeps that state when its
+/// frame is left out: the group stays, without the frame, rather than becoming its one other object.
+#[test]
+fn a_brushs_frame_leaves_the_groups_own_state() {
+    use vectorcraft_doc::{Appearance, FillLayer, NodeId};
+    let square = Rect::new(0.0, 0.0, 4.0, 4.0);
+    let paint = FillLayer::new(Paint::solid(Color::BLACK));
+    let ap = Appearance { items: vec![AppearanceItem::Fill(paint)], effects: vec![], contents_index: None };
+    let dot = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(square), ap);
+    let frame = Node::path(NodeId(1), vectorcraft_geom::shapes::rectangle(square), Default::default());
+    let group = Node::group(NodeId(3), vec![Arc::new(frame), Arc::new(dot)]);
+    assert!(matches!(super::brush::without_frame(group.clone()).kind, NodeKind::Path { .. }), "a plain group is its one object");
+    // A closed path through the four corners across the square, not along its sides, isn't a frame.
+    let corners = [Point::new(0.0, 0.0), Point::new(4.0, 4.0), Point::new(4.0, 0.0), Point::new(0.0, 4.0)];
+    let crossing = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&corners, true));
+    let bowtie = Node::path(NodeId(4), crossing, Default::default());
+    let dot = group.children().and_then(|c| c.last().cloned()).unwrap();
+    let crossed = Node::group(NodeId(5), vec![Arc::new(bowtie), dot]);
+    assert_eq!(super::brush::without_frame(crossed).children().map(|c| c.len()), Some(2), "a path across the corners stays");
+    // An open path along three sides isn't a frame; one that comes back to its first corner is.
+    let sides = [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 4.0), Point::new(0.0, 4.0)];
+    let around = [sides.as_slice(), &sides[..1]].concat();
+    for (why, anchors, frame) in [("three sides", sides.as_slice(), false), ("back to the first corner", around.as_slice(), true)] {
+        let open = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(anchors, false));
+        let dot = group.children().and_then(|c| c.last().cloned()).unwrap();
+        let g = Node::group(NodeId(6), vec![Arc::new(Node::path(NodeId(7), open, Default::default())), dot]);
+        let left = if frame { None } else { Some(2) };
+        assert_eq!(super::brush::without_frame(g).children().map(|c| c.len()), left, "{why}");
+    }
+    // A rectangle with settings of its own (a note, Show Center, hidden) isn't a frame.
+    for why in ["note", "show center", "hidden"] {
+        let mut g = group.clone();
+        if let Some(Some(first)) = g.children_mut().map(|c| c.first_mut()) {
+            let first = Arc::make_mut(first);
+            match why {
+                "note" => first.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { note: "edge".into(), ..Default::default() })),
+                "show center" => {
+                    first.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { show_center: Some(true), ..Default::default() }))
+                }
+                _ => first.visible = false,
+            }
+        }
+        assert_eq!(super::brush::without_frame(g).children().map(|c| c.len()), Some(2), "{why}: the rectangle stays");
+    }
+    for why in ["hidden", "locked", "isolated", "note"] {
+        let mut g = group.clone();
+        (g.visible, g.locked, g.isolate) = (why != "hidden", why == "locked", why == "isolated");
+        if why == "note" {
+            g.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { note: "edge".into(), ..Default::default() }));
+        }
+        let out = super::brush::without_frame(g);
+        assert!(matches!(out.kind, NodeKind::Group { .. }), "{why}: {out:#?}");
+        assert_eq!(out.children().map(|c| c.len()), Some(1), "{why}: the frame left out");
+        assert_eq!((out.visible, out.locked, out.isolate), (why != "hidden", why == "locked", why == "isolated"), "{why}");
+        assert_eq!(out.extras().attrs.as_ref().map(|a| a.note.as_str()), (why == "note").then_some("edge"), "{why}");
+    }
+}
+
+/// Leaving out a frame that is exactly the art's bounds doesn't move what a Scatter or Art brush
+/// draws: the pieces along a path are where they are with the frame kept.
+#[test]
+fn a_brushs_frame_at_the_arts_bounds_draws_the_same_without_it() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Scatter};
+    let scatter = ("Spray", "Dot art", SCATTER, "2 /Dot art/ 5 0 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0");
+    for (name, art_name, tool, params) in [scatter, ("Ribbon", "Ribbon art", ART_BRUSH, RIBBON)] {
+        let r = read_ok(&format!("{}{}{}", framed_art(art_name, (0.0, 4.0), "n", ""), plugin_object(tool, name, params), layer("")));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let read = lib.iter().find(|b| b.name == name).cloned().unwrap();
+        let art = match &read.kind {
+            BrushKind::Scatter(s) => s.art.clone(),
+            BrushKind::Art(a) => a.art.clone(),
+            k => panic!("{name}: {k:?}"),
+        };
+        let bounds = art.geometric_bounds().unwrap();
+        assert_eq!((bounds.width(), bounds.height()), (4.0, 4.0), "{name}");
+        assert!(matches!(art.kind, NodeKind::Path { .. }), "{name}: the frame left out: {art:#?}");
+        let frame = Node::path(vectorcraft_doc::NodeId(90), vectorcraft_geom::shapes::rectangle(bounds), Default::default());
+        let framed_art = Node::group(vectorcraft_doc::NodeId(91), vec![Arc::new(frame), Arc::new(art)]);
+        let kind = match &read.kind {
+            BrushKind::Scatter(s) => BrushKind::Scatter(Scatter { art: framed_art, ..s.clone() }),
+            BrushKind::Art(a) => BrushKind::Art(ArtBrush { art: framed_art, ..a.clone() }),
+            k => panic!("{name}: {k:?}"),
+        };
+        let framed = Brush { kind, ..read.clone() };
+        let mut line = kurbo::BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((100.0, 30.0));
+        let stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0);
+        let at = |b: &Brush| -> Vec<[i64; 4]> {
+            vectorcraft_brush::stroke_pieces(&r.doc, b, &line, &stroke)
+                .iter()
+                .filter_map(|n| n.geometric_bounds())
+                .map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| (v * 1000.0).round() as i64))
+                .collect()
+        };
+        let (without, with) = (at(&read), at(&framed));
+        assert!(!without.is_empty(), "{name}");
+        if name == "Spray" {
+            assert!(without.len() > 10, "{without:?}");
+        }
+        assert_eq!(without, with, "{name}");
+    }
+}
+
 /// A file without brush objects keeps the default brushes.
 #[test]
 fn a_file_without_brushes_keeps_the_default_ones() {
