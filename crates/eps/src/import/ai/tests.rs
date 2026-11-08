@@ -6069,6 +6069,96 @@ fn an_object_with_a_distort_effect_drawn_another_way_keeps_its_drawn_look() {
     }
 }
 
+#[test]
+fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
+    // GUARDS: Zig Zag on a path came in as its drawn look even where the live effect draws the same outline.
+    let keys = "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n2 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let zig = vectorcraft_doc::Effect {
+        id: "distort.zigZag".into(),
+        params: serde_json::json!({"size": 3.0, "relative": false, "ridges": 2, "points": "corner"}),
+        visible: true,
+    };
+    // The square as the document has it (y up in the file, down in the document).
+    let plain = read_ok(&layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 60.0, 50.0))));
+    let square = art(&plain.doc)[0].path_data().unwrap().clone();
+    let to_file = |p: Point| {
+        let start = square.subpaths[0].anchors[0].p;
+        Point::new(p.x - start.x + 20.0, start.y - p.y + 20.0)
+    };
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &square, square.bounds().unwrap());
+    // The look: the outline the effect draws, as straight segments.
+    let ops = |shift: f64| -> String {
+        let mut out = String::new();
+        for sp in &outline.subpaths {
+            for (i, a) in sp.anchors.iter().enumerate() {
+                let p = to_file(a.p);
+                out.push_str(&format!("{:.4} {:.4} {}\n", p.x + shift, p.y, if i == 0 { "m" } else { "L" }));
+            }
+        }
+        out
+    };
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}f\nU\n%_{hidden_rect}f\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(0.0)))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let e = &a[0].appearance.effects;
+    assert_eq!(e.len(), 1, "{e:?}");
+    assert_eq!(
+        (e[0].id.as_str(), &e[0].params),
+        ("distort.zigZag", &serde_json::json!({"size": 3.0, "relative": false, "ridges": 2, "points": "corner"}))
+    );
+    // A look whose ridges lie elsewhere (here 1 pt to the right) keeps the drawn look.
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(1.0)))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Group { .. }));
+    // An open path (filled without closing it, `F`): its look's outline matches, and a look whose
+    // last point lies 3 pt away from where the effect ends it keeps the drawn look.
+    let open_path = "20 20 m\n60 20 L\n60 50 L\n";
+    let plain = read_ok(&layer(&format!("{RED}{open_path}F\n")));
+    let open = art(&plain.doc)[0].path_data().unwrap().clone();
+    assert!(!open.subpaths[0].closed);
+    let start = open.subpaths[0].anchors[0].p;
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &open, open.bounds().unwrap());
+    let ops = |last_shift: f64| -> String {
+        let mut out = String::new();
+        for sp in &outline.subpaths {
+            for (i, a) in sp.anchors.iter().enumerate() {
+                let shift = if i + 1 == sp.anchors.len() { last_shift } else { 0.0 };
+                let p = Point::new(a.p.x - start.x + 20.0 + shift, start.y - a.p.y + 20.0);
+                out.push_str(&format!("{:.4} {:.4} {}\n", p.x, p.y, if i == 0 { "m" } else { "L" }));
+            }
+        }
+        out
+    };
+    let hidden_open = open_path.replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{hidden_open}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(0.0)))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(3.0)))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A Zig Zag of no size on an open path through the corners of its look's square, joined
+    // across it: the vertices match, the segments between them don't, so the drawn look stays.
+    let flat = "0 /Real (amount) ,\n1 /Real (absoluteness) ,\n0 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let bowtie = "%_20 20 m\n%_60 50 L\n%_60 20 L\n%_20 50 L\n%_F\n";
+    let crossed = format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{}f\nU\n{bowtie}1 (Bent) XW\n", rect_path(20.0, 20.0, 60.0, 50.0));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", flat, BLUE_FILL), layer(&crossed)));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A look worked out by hand rather than by the effect: Zig Zag of 3 pt with one ridge per
+    // segment and corner points, on a line from (20, 20) to (60, 20), puts the line's ends 3 pt up
+    // the page and its middle 3 pt down. The same look mirrored keeps the drawn look.
+    let one = "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n1 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let line = "20 20 m\n60 20 L\n".replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{line}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 23 m\n40 17 L\n60 23 L\n"))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Path { .. }), "{:#?}", art(&r.doc));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 17 m\n40 23 L\n60 17 L\n"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
 /// The gradient `G`, white to black, defined for a document.
 const GRADIENT_G: &str = "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
 

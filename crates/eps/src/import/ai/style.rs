@@ -1361,8 +1361,9 @@ impl Builder<'_> {
 
 /// Is `e`, on the whole object, an effect any object is read with? Of the Distort & Transform
 /// effects: Transform without copies (Random is never read), Twist, a Tweak that moves nothing,
-/// Pucker & Bloat at 0, and Free Distort when its corners make a parallelogram (an affine map).
-/// Zig Zag is left to type. Which objects Transform, Twist and Free Distort are read on is
+/// Pucker & Bloat at 0, Free Distort when its corners make a parallelogram (an affine map), and Zig
+/// Zag (on objects other than type only where it draws its drawn look's outline: `read::ops`'
+/// `styled`). Which objects Transform, Twist and Free Distort are read on is
 /// `read::ops`' `moves_with`.
 fn any_object_takes(e: &Effect) -> bool {
     match e.id.as_str() {
@@ -1379,7 +1380,8 @@ fn any_object_takes(e: &Effect) -> bool {
         | "path.outlineObject"
         | "path.outlineStroke"
         | "distort.twist"
-        | "distort.tweak" => true,
+        | "distort.tweak"
+        | "distort.zigZag" => true,
         // Copies are drawn as one path, its fills under all its strokes, where the file paints each
         // copy's fill and stroke in turn.
         "distort.transform" => e.params["copies"].as_i64() == Some(0),
