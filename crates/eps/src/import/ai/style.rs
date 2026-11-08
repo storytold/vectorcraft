@@ -44,7 +44,9 @@
 //! known and the style isn't plain (its objects keep their drawn look).
 //!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too; strokes with a gradient, a Calligraphic or Art brush or aligned inside or outside too), each with its own
+//! with a pattern or gradient too; strokes with a gradient, a Calligraphic or Art brush or aligned inside or outside too; a gradient
+//! stroke is read on an object only where its drawn look paints that swatch and no other fill or
+//! stroke of the style uses it, `read::ops`' `styled`), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
 //! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
