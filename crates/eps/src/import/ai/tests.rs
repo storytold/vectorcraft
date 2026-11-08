@@ -5868,7 +5868,8 @@ fn a_stroke_offset_filter_keeps_its_strokes_style() {
 }
 
 /// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
-/// written as another kind, dashes aligned to corners and path ends, a gradient.
+/// written as another kind, dashes aligned to corners and path ends, a gradient whose swatch the
+/// look doesn't paint (where it lies isn't known).
 #[test]
 fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
     let outside = "0 /Bool (StrokeOffsetInside) ,\n";
@@ -5904,6 +5905,55 @@ fn a_default_style_with_a_stroke_aligned_outside_comes_in() {
     let a = art(&r.doc);
     assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
     assert_eq!(a[0].extras().graphic_style, Some(1));
+}
+
+#[test]
+fn a_gradient_stroke_paints_its_swatch_where_its_look_places_it() {
+    // GUARDS: an art style's stroke painting with a gradient left the object as its drawn look.
+    let defs =
+        "%AI5_BeginGradient: (B)\n(B) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let style = offset_stroke_style("Edge", Some(1)).replace("0 1 1 0 1 0 0 XA\n", "1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n");
+    let rect = rect_path(0.0, 0.0, 10.0, 10.0);
+    let hidden_rect = rect.replace('\n', "\n%_");
+    // The look: the blue fill, then the stroke's outline filled with the gradient where the app placed it.
+    let square = |stroke: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{rect}f\n{stroke}U\n%_{hidden_rect}f\n1 (Edge) XW\n");
+    let placed = format!("{}Bb\n1 (B) 2 5 0 6 1 0 0 1 0 0 Bg\nf\n0 BB\n", rect_path(1.0, 1.0, 9.0, 9.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{defs}{}", layer(&square(&placed))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let stroke = a[0].appearance.stroke().unwrap();
+    assert_eq!((stroke.align, stroke.width), (vectorcraft_doc::StrokeAlign::Inside, 2.0));
+    match &stroke.paint {
+        Paint::Gradient(g) => {
+            assert_eq!(g.swatch.as_deref(), Some("B"));
+            assert_eq!(g.geom.map(|g| g.start.x), Some(2.0), "placed as the look has it");
+        }
+        p => panic!("{p:?}"),
+    }
+    assert_eq!(stroke.gradient_mode, vectorcraft_doc::StrokeGradientMode::Within);
+    assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    // A look that doesn't paint the gradient: where it lies isn't known, so the drawn look stays.
+    let flat = format!("{RED}{}f\n", rect_path(1.0, 1.0, 9.0, 9.0));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{defs}{}", layer(&square(&flat))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A plain stroke (a Stroke Style Filter) with the gradient: centred, placed the same way.
+    let plain = offset_stroke_style_with("Edge", "", "0 R\n1 (B) 0 0 0 1 1 0 0 1 0 0 Bg\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd")
+        .replace("(Adobe Stroke Offset) 1 0 /Filter", "(Stroke Style Filter) 0 0 /Filter")
+        .replace("(Side) /String (DisplayString) ,\n", "");
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{plain}%AI9_EndArtStyles\n{defs}{}", layer(&square(&placed))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let stroke = a[0].appearance.stroke().unwrap();
+    assert_eq!((stroke.align, stroke.width), (vectorcraft_doc::StrokeAlign::Center, 2.0));
+    assert!(
+        matches!(&stroke.paint, Paint::Gradient(g) if g.swatch.as_deref() == Some("B") && g.geom.map(|g| g.start.x) == Some(2.0)),
+        "{:?}",
+        stroke.paint
+    );
+    assert_eq!(stroke.gradient_mode, vectorcraft_doc::StrokeGradientMode::Within);
 }
 
 #[test]
