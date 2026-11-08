@@ -28,10 +28,11 @@
 //!   [`vectorcraft_brush::ArtBrush`]'s `overlap: false`).
 //! - A Scatter, Art or Pattern brush's parameters are fields split by `/`: a number, the art's
 //!   section names (one for Scatter, five for Art and Pattern, empty where there is none, each
-//!   after a space for Art and Pattern), more fields, and last 15 numbers. Brushes whose first
-//!   number is 1, as older files write them, have one field fewer before the numbers and 8 numbers;
-//!   an Art brush in that form is read from its art's name alone (its numbers aren't known, so it
-//!   keeps the defaults and its paths their drawn look).
+//!   after a space for Art and Pattern), more fields, and last 15 numbers. Older files write
+//!   brushes with first number 1, one field fewer before the numbers and 8 numbers; an Art brush
+//!   with 8 numbers, whatever its first number, is read from its art's name alone (its numbers
+//!   aren't known, so it keeps the defaults and its paths their drawn look). A Pattern brush needs
+//!   only its first 3 numbers (its scale is the third).
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14), and 1 Tints (1).
@@ -339,7 +340,8 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 }
                 Tool::Art => {
                     // The older form's 8 numbers aren't known: its brush keeps the defaults and its
-                    // paths their drawn look. Any other count isn't a form this reads.
+                    // paths their drawn look. The count tells the form, not the first number.
+                    // Any other count isn't a form this reads.
                     let (colorization, plain) = if let Ok(n15) = <&[f64; 15]>::try_from(n.as_slice()) {
                         (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15))
                     } else if n.len() == 8 {
