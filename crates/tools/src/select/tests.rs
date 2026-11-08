@@ -721,6 +721,35 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     assert!(moved_by(m, (133.0, 0.0)), "{m:?}");
 }
 
+/// #4312: a ruler guide that is hidden (View → Guides off, or its layer hidden) pulls the edges and
+/// centre of a moved selection no more than it pulls a point; shown, it does.
+#[test]
+fn a_hidden_ruler_guide_pulls_no_edge_of_a_move() {
+    let (mut d, id) = doc_with_rect();
+    // The guide is on a layer of its own, so hiding that layer doesn't hide the rectangle too.
+    let layer = d.add_layer(Some("Guides"));
+    let mut guide = vectorcraft_doc::Guide::new(true, 333.0);
+    guide.layer = Some(layer);
+    d.guides = vec![guide];
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    // Grabbed far from the guide; the left edge (100) ends 2 short of it.
+    let by = 333.0 - 2.0 - 100.0;
+    let dx = |c: &ToolContext| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 120.0, 120.0));
+        let a = t.pointer(c, &ev(PointerKind::Drag, 120.0 + by, 120.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        v["matrix"][4].as_f64().unwrap()
+    };
+    assert!((dx(&cx(&d, &s, &p)) - (by + 2.0)).abs() < 1e-9, "shown: pulled onto the guide");
+    let off = ToolContext { guides: false, ..cx(&d, &s, &p) };
+    assert!((dx(&off) - by).abs() < 1e-9, "View → Guides off: nothing pulls");
+    d.node_mut(layer).unwrap().visible = false;
+    assert!((dx(&cx(&d, &s, &p)) - by).abs() < 1e-9, "its layer hidden: nothing pulls");
+}
+
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
 /// gathered before the previews moved it); released, the move doesn't.
 #[test]
