@@ -267,7 +267,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         fit(app, "view.fitArtboard");
     }
     app.canvas.presented = presenting.then_some(rect);
-    app.canvas.opening_fit = if following { app.view().map(|v| view_key(v, rect)) } else { None };
+    app.canvas.opening_fit = following.then(|| app.view().map(|v| view_key(v, rect))).flatten();
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {
         scroll_bars(app, ui, rect, outer, &t);
