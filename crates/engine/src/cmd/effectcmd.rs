@@ -222,6 +222,16 @@ pub(crate) const ONE_3D: &str = "An object takes one 3D effect. Edit the existin
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
     let id = str_param(p, "effect").or_else(|| str_param(p, "id")).ok_or_else(|| bad(C, "missing `effect` id"))?;
+    // An effect given as `id` names no objects: the targets are read with that `id` as null.
+    let effect_as_id;
+    let p = if str_param(p, "effect").is_none() {
+        let mut q = p.clone();
+        q["id"] = Value::Null;
+        effect_as_id = q;
+        &effect_as_id
+    } else {
+        p
+    };
     let mut params = p.get("params").cloned().unwrap_or(Value::Null);
     if !params.is_null() && !params.is_object() {
         return Err(bad(C, "`params` must be an object"));
