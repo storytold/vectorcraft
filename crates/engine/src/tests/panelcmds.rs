@@ -119,6 +119,60 @@ fn artboards_reorder_and_duplicate() {
     assert_eq!(s.doc().unwrap().doc.artboards[0].name, "Second");
 }
 
+/// `artboard.new {beside, side}` adds an empty artboard the size of artboard `beside`, 20 pt from
+/// that side of it, and `artboard.duplicate {index, side}` puts the copy and its art there; each is
+/// one undo step. An unknown side, `beside` without `side`, and `side` with a size or place are
+/// refused and change nothing.
+#[test]
+fn artboards_are_added_and_duplicated_on_a_side() {
+    let mut s = session();
+    let id = rect(&mut s);
+    let board = |s: &Session, i: usize| s.doc().unwrap().doc.artboards[i].rect;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let src = board(&s, 0);
+    let before = undo(&s);
+    assert_eq!(s.execute("artboard.new", &json!({"beside": 0, "side": "bottom"})).unwrap()["index"], 1);
+    assert_eq!(board(&s, 1), src + vectorcraft_geom::Vec2::new(0.0, src.height() + 20.0), "same size, 20 pt below");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    assert!(!s.doc().unwrap().doc.artboard_has_art(board(&s, 1)), "the new artboard is empty");
+    s.execute("artboard.new", &json!({"beside": 0, "side": "left"})).unwrap();
+    assert_eq!(board(&s, 2), src + vectorcraft_geom::Vec2::new(-(src.width() + 20.0), 0.0));
+    s.execute("artboard.new", &json!({"side": "top"})).unwrap();
+    assert_eq!(board(&s, 3), board(&s, 2) + vectorcraft_geom::Vec2::new(0.0, -(src.height() + 20.0)), "by default beside the last");
+    s.execute("artboard.new", &json!({"side": "top", "beside": null, "x": null})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    let before = undo(&s);
+    let out = s.execute("artboard.duplicate", &json!({"index": 0, "side": "right", "art": true})).unwrap();
+    assert_eq!(out["index"], 4);
+    let dv = vectorcraft_geom::Vec2::new(src.width() + 20.0, 0.0);
+    assert_eq!(board(&s, 4), src + dv, "the copy sits 20 pt right of the artboard it copies");
+    let copies: Vec<NodeId> = out["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(copies.len(), 1);
+    let bounds = |s: &Session, id: NodeId| s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    assert_eq!(bounds(&s, copies[0]), bounds(&s, id) + dv, "its art goes with it");
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4, "undo takes the copy and its art away together");
+    assert!(s.doc().unwrap().doc.node(copies[0]).is_none());
+
+    let before = s.doc().unwrap().doc.clone();
+    let steps = undo(&s);
+    for (cmd, p, msg) in [
+        ("artboard.new", json!({"beside": 0, "side": "middle"}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0, "side": 3}), "`side` must be"),
+        ("artboard.new", json!({"beside": 0}), "`beside` needs `side`"),
+        ("artboard.new", json!({"side": "left", "width": 100}), "leave out x, y, width and height"),
+        ("artboard.new", json!({"beside": 9, "side": "left"}), "no such artboard"),
+        ("artboard.duplicate", json!({"index": 0, "side": "inside"}), "`side` must be"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err().to_string();
+        assert!(e.contains(msg), "{cmd} {p}: {e}");
+        assert_eq!(*s.doc().unwrap().doc, *before, "{cmd} {p} changes nothing");
+        assert_eq!(undo(&s), steps, "{cmd} {p}");
+    }
+}
+
 /// An artboard's background color (Properties › Artboards › Fill): `artboard.setProps {color}` sets
 /// it and `{color: null}` clears it, each in one undo step. A change without `color` leaves it, a
 /// duplicate keeps it, `inspect_document` reports it, `artboard.new {color}` starts with it, an

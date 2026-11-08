@@ -160,8 +160,8 @@ pub(super) struct ArtStyle {
     pub plain: bool,
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
-    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke)
-    /// and some Distort & Transform effects ([`any_object_takes`]) on the object
+    /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
+    /// Bas Relief read from its settings block and some Distort & Transform effects ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,
@@ -277,6 +277,8 @@ struct Filter {
     xy: Option<(usize, f32)>,
     /// `… isolate knockout … Xy`.
     xy_group: Option<(bool, Knockout)>,
+    /// Its settings block's bytes (`/Binary : /ASCII85Decode ,`), `Err` when it isn't read.
+    data: Option<Result<Vec<u8>, ()>>,
 }
 
 impl Default for Filter {
@@ -304,6 +306,7 @@ impl Default for Filter {
             plugin_object: None,
             xy: None,
             xy_group: None,
+            data: None,
         }
     }
 }
@@ -383,11 +386,17 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     let mut style_entry: Option<Kind> = None;
     // A name of a basic filter's that may be an entry's type, with the string that follows it.
     let mut other_entry: Option<Option<String>> = None;
+    // The last name was `/Binary`.
+    let mut binary = false;
     let mut lex = Lexer::new(data);
     while let Some(t) = lex.next_token() {
         if let (Some(a), Tok::Num(v)) = (array.as_mut(), &t.tok) {
             a.push(V::Num(*v));
             continue;
+        }
+        let after_binary = binary;
+        if let Tok::Name(n) = &t.tok {
+            binary = *n == b"Binary";
         }
         match t.tok {
             Tok::Num(v) => operands.push(V::Num(v)),
@@ -396,6 +405,11 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                     *key = Some(String::from_utf8_lossy(&s).into_owned());
                 }
                 operands.push(V::Str(s));
+            }
+            // A basic filter's settings block: its bytes are on the comment lines the lexer skips.
+            Tok::Name(b"ASCII85Decode") if after_binary && in_basic => {
+                keep_block(&mut lex, data.len(), filters.last_mut());
+                operands.clear();
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
@@ -518,6 +532,62 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
     }
     finish(name, &mut filters);
     styles
+}
+
+/// Reads the settings block that `lex` (over `data_len` bytes) has just reached into `filter`'s
+/// `data`; a second block on one filter, or a block that isn't read, leaves it `Err`.
+fn keep_block(lex: &mut Lexer, data_len: usize, filter: Option<&mut Filter>) {
+    let block = binary_block(lex, data_len).ok_or(());
+    if let Some(f) = filter {
+        f.data = Some(if f.data.is_some() { Err(()) } else { block });
+    }
+}
+
+/// The bytes of the settings block whose `/Binary : /ASCII85Decode` `lex` (over `data_len` bytes)
+/// has just read: the rest of that line is its `,`, each line after it holds ASCII85 after a `%`
+/// until `~>`, and `; (data) ,` follows. `lex` is moved past the `~>` when the lines up to it are
+/// the block's and fit in [`adapter::MAX_ENCODED`] bytes, and past `; (data)` when they follow.
+/// `None` when the block is malformed or decodes to more than [`adapter::MAX_DECODED`] bytes.
+fn binary_block(lex: &mut Lexer, data_len: usize) -> Option<Vec<u8>> {
+    let from = lex.offset();
+    let text = lex.slice(from, from.saturating_add(adapter::MAX_ENCODED).min(data_len));
+    let mut lines = text.split(|b| matches!(b, b'\r' | b'\n'));
+    let first = lines.next()?;
+    if first.trim_ascii() != b"," {
+        return None;
+    }
+    // Where the line being read starts in `text`.
+    let mut at = first.len() + 1;
+    let mut encoded = vec![];
+    for line in lines {
+        let start = at;
+        at += line.len() + 1;
+        if line.is_empty() {
+            continue;
+        }
+        // A line that isn't the block's ends it unread, the lexer left before it.
+        let digits = line.strip_prefix(b"%")?;
+        if let Some(i) = super::super::lex::find(digits, b"~>") {
+            encoded.extend_from_slice(digits.get(..i + 2)?);
+            lex.seek(from + start + 1 + i + 2);
+            return block_data(lex, &encoded);
+        }
+        encoded.extend_from_slice(digits);
+    }
+    None
+}
+
+/// The bytes of a settings block's ASCII85 `encoded`, when `; (data)` follows it in `lex`. When it
+/// doesn't, `lex` is left before those tokens, so the next style's `/KnownStyle` is still read.
+fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
+    let at = lex.offset();
+    let data = crate::ps::ascii85_decode_within(std::str::from_utf8(encoded).ok()?, adapter::MAX_DECODED)?;
+    let (close, key) = (lex.next_token().map(|t| t.tok), lex.next_token().map(|t| t.tok));
+    if close == Some(Tok::Word(b";")) && key == Some(Tok::Str(b"data".to_vec())) {
+        return Some(data);
+    }
+    lex.seek(at);
+    None
 }
 
 /// A paint operator of a fill's or stroke's style.
@@ -1068,13 +1138,31 @@ fn effect(f: &Filter, under: Under) -> Option<Effect> {
         TWIST => ("distort.twist", json!({"angle": real(f, "angle", 0.0, -3600.0..=3600.0)?})),
         ZIG_ZAG => ("distort.zigZag", zig_zag(f)?),
         GAUSSIAN => ("blur.gaussian", json!({"radius": param("blur").unwrap_or(5.0).clamp(0.0, 1000.0)})),
-        // Its settings are in a Photoshop plug-in's binary block: the effect's defaults stand in.
-        BAS_RELIEF => ("sketch.basRelief", json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"})),
+        BAS_RELIEF => (
+            "sketch.basRelief",
+            match &f.data {
+                // Without a settings block, the effect's defaults stand in.
+                None => json!({"detail": 13.0, "smoothness": 3.0, "lightDirection": "bottom"}),
+                Some(data) => adapter::bas_relief(&descriptor(f, data)?)?,
+            },
+        ),
         SHAPE_EFFECTS => return shape_effect(f),
         PATHFINDER => return pathfinder_effect(f),
         _ => return None,
     };
     Some(Effect { id: id.into(), params, visible: f.visible })
+}
+
+/// The fields of filter `f`'s settings block `data`, when it was read and its `dataSize`, written
+/// as `/Int`, is its length.
+fn descriptor(f: &Filter, data: &Result<Vec<u8>, ()>) -> Option<Vec<(adapter::Key, adapter::Value)>> {
+    let data = data.as_ref().ok()?;
+    (f.kinds.get("dataSize") == Some(&Kind::Int)).then_some(())?;
+    let size = f.params.get("dataSize").copied()?;
+    if size != data.len() as f64 {
+        return None;
+    }
+    adapter::decode(data)
 }
 
 /// The Effect › Pathfinder effect of [`PATHFINDER_COMMANDS`] that an integer `Command` names, when
@@ -1389,6 +1477,21 @@ fn any_object_takes(e: &Effect) -> bool {
     }
 }
 
+/// Does every Bas Relief filter in `filters` have a settings block, so that it reads from its
+/// settings and not from its defaults standing in?
+fn bas_relief_read(filters: &[Filter]) -> bool {
+    filters.iter().all(|f| f.name != BAS_RELIEF || f.data.is_some())
+}
+
+/// Is `e` read on the whole object: Bas Relief when `bas_relief` says its settings were read, and
+/// otherwise what [`any_object_takes`] says?
+fn object_takes(e: &Effect, bas_relief: bool) -> bool {
+    if e.id == "sketch.basRelief" {
+        return bas_relief;
+    }
+    any_object_takes(e)
+}
+
 /// Do Free Distort params `p`'s corners (top left, top right, bottom right, bottom left) make a
 /// parallelogram, so that the bilinear map is affine?
 fn affine(p: &serde_json::Value) -> bool {
@@ -1443,13 +1546,14 @@ fn style(filters: &[Filter]) -> ArtStyle {
         b.plain = false;
     }
     st.plain = b.plain;
+    let bas_relief = bas_relief_read(filters);
     let count = |stroke: bool| st.items.iter().filter(|i| matches!(i, StyleItem::Stroke { .. }) == stroke).count();
     st.simple = st.plain
         && count(true) <= 1
         && count(false) <= 1
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Stroke { .. } | StyleItem::Gradient { .. }))
         && st.looks.iter().all(|l| l.visible && l.opacity >= 1.0 && l.blend == BlendMode::Normal && l.effects.is_empty())
-        && st.effects.iter().all(any_object_takes)
+        && st.effects.iter().all(|e| object_takes(e, bas_relief))
         // An effect that moves the outline is drawn on its own: with others, their order and what
         // scales with it aren't kept.
         && (!st.moves_outline() || st.effects.len() == 1)
@@ -1458,5 +1562,6 @@ fn style(filters: &[Filter]) -> ArtStyle {
     st
 }
 
+mod adapter;
 #[cfg(test)]
 mod tests;

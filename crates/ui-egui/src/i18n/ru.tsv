@@ -1084,6 +1084,14 @@ font-technology	Variable	Вариативные
 	Export As SVG…	Экспортировать как SVG…
 	Export Asset	Экспортировать ресурс
 	Export Assets	Экспортировать ресурсы
+	Export 3D Object	Экспортировать 3D-объект
+	3D Export Format	Формат 3D-экспорта
+	Export 3D Assets	Экспортировать 3D-ресурсы
+@msg	{what} can't be exported in 3D: {e}	{what} невозможно экспортировать в 3D: {e}
+@msg	asset {id} isn't a 3D asset	ресурс {id} не является 3D-ресурсом
+@msg	asset {id} is a 3D asset: assets.export3D writes it	ресурс {id} является 3D-ресурсом: его записывает assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D-ресурсов пока нет: сначала соберите объект с 3D-эффектом (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	выберите объект с 3D-эффектом (или укажите его идентификаторы)
 	Export As…	Экспортировать как…
 	Export CSS	Экспортировать CSS
 	Export CSS…	Экспортировать CSS…
@@ -1743,6 +1751,7 @@ file-filter	Templates	Шаблоны
 	Line {line}	Строка {line}
 	Line {line}: {name}: {status}	Строка {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Импортировано. Нажмите «ОК», чтобы сохранить импортированный набор.
+	Read Action Set File	Прочитать файл набора действий
 	Read Shortcut Set File	Прочитать файл набора сочетаний клавиш
 	Import Matches	Сопоставления импорта
 	Remember Import Matches	Запомнить сопоставления импорта
@@ -4016,7 +4025,7 @@ axis	Both	Оба
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	нет библиотеки `{id}`
 @msg	select some type first	сначала выделите текст
-@msg	kerning must be a number, "auto", or "optical"	Кернинг должен быть числом, «auto» или «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning должен быть числом, «auto» или «optical»
 @msg	the selection has no gradient fill	у выделения нет градиентной заливки
 @msg	the selection has no gradient stroke	у выделения нет градиентной обводки
 @msg	the selection has no pattern fill	у выделения нет узорной заливки
@@ -4243,9 +4252,9 @@ axis	Both	Оба
 @msg	bad shortcut	недопустимое сочетание клавиш
 @msg	bad stream length	недопустимая длина потока
 @msg	bad trailer	недопустимый трейлер
-@msg	balance must be between 0 and 100	баланс должен быть от 0 до 100
+@msg	balance must be between 0 and 100	balance должен быть от 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	шаг пакета {_1} (`{id}`) не выполнен: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яркость должна быть dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness должен быть dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не удалось закодировать документ: {0}
 @msg	can't parse shortcut `{c}`	не удалось разобрать сочетание `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не удалось разобрать сочетание `{s}` для `{k}`
@@ -4270,7 +4279,7 @@ axis	Both	Оба
 @msg	compound paths can only contain paths	составные контуры могут содержать только контуры
 @msg	compressed (RLE) bitmaps can't be read yet	сжатые (RLE) растровые изображения пока не читаются
 @msg	damaged	повреждено
-@msg	decimals must be {_1}–{_2} (got {_3})	число десятичных знаков должно быть {_1}–{_2} (получено {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals должен быть {_1}–{_2} (получено {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	разделите на 1–{MAX_PIECES} фрагментов
 @msg	effect {k} is `{_1}`, not `{id}`	эффект {k} — это `{_1}`, а не `{id}`
 @msg	empty brush stroke	пустой мазок кисти
@@ -4395,6 +4404,8 @@ axis	Both	Оба
 @msg	no such action set	такого набора действий нет
 @msg	the action sets changed; nothing was deleted	наборы действий изменились; ничего не удалено
 @msg	no action set to save	нет набора действий для сохранения
+@msg	the action set file can't be read in full	файл набора действий невозможно прочитать целиком
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Загружено «{name}»: пропущен {n} шаг|Загружено «{name}»: пропущено {n} шага|Загружено «{name}»: пропущено {n} шагов
 @msg	not an action set file	это не файл набора действий
 @msg	the action set file is larger than 8 MiB	файл набора действий больше 8 MiB
 @msg	the action set file holds more than 1,000 actions	файл набора действий содержит более 1000 действий
@@ -4469,9 +4480,9 @@ axis	Both	Оба
 @msg	replace: the object to replace was changed or deleted	replace: заменяемый объект был изменён или удалён
 @msg	pattern missing	узор отсутствует
 @msg	patterns nested too deeply are filled with mid-grey	слишком глубоко вложенные узоры заполняются серым
-@msg	percent must be above 0 and at most 6400, not {p}	процент должен быть больше 0 и не более 6400, а не {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent должен быть больше 0 и не более 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	выберите цвет, градиент или узор для сохранения в качестве образца
-@msg	plane must be left, right or ground	плоскость должна быть left, right или ground
+@msg	plane must be left, right or ground	plane должен быть left, right или ground
 @msg	plug-in ABI: {0}	ABI модуля: {0}
 @msg	plug-in exceeded its {0}	модуль превысил свой {0}
 @msg	plug-in failed: {0}	модуль завершился с ошибкой: {0}
@@ -4490,8 +4501,8 @@ axis	Both	Оба
 @msg	result would exceed the canvas (coordinates out of range)	результат превысил бы холст (координаты вне диапазона)
 @msg	objects can't be nested more than 32 deep	объекты нельзя вкладывать глубже 32 уровней
 @msg	the SVG's elements are nested more than {0} deep	элементы SVG вложены глубже {0} уровней
-@msg	scale must be a number from {_1} to {_2}, not {_3}	масштаб должен быть числом от {_1} до {_2}, а не {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	масштаб должен быть числом от {_1} до {_2}, а не {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale должен быть числом от {_1} до {_2}, а не {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale должен быть числом от {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	выделите (или укажите как объект) объекты, оформление которых не является основным
 @msg	select a Live Paint group	выделите группу быстрой заливки
 @msg	select a blend	выделите переход
@@ -4914,6 +4925,9 @@ axis	Both	Оба
 	Bottom Right	Снизу справа
 	Edge	Край
 	System Title Bar	Системная строка заголовка
+	VectorCraft Title Bar on Every Desktop	Строка заголовка VectorCraft на любом рабочем столе
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Пока переменная среды VECTORCRAFT_TITLEBAR задана, строку заголовка выбирает она.
+	System Title Bar takes precedence over this option while it is on.	Пока включена «Системная строка заголовка», она имеет приоритет над этим параметром.
 	Value Axis	Ось значений
 	On Left Side	Слева
 	On Right Side	Справа
@@ -4960,7 +4974,7 @@ axis	Both	Оба
 @msg	before must name a panel	before должен указывать панель
 @msg	docking action contains an unknown panel or an excessive split path	Действие прикрепления содержит неизвестную панель или слишком длинный путь разделений
 @msg	group must be true or false	group должен иметь значение true или false
-@msg	panel is not in a dock group	панель не находится в группе дока
+@msg	panel is not in a dock group	panel не находится в группе дока
 @msg	only a dock group above or below others collapses, not one beside another	свернуть можно только группу дока над или под другими, а не рядом с ними
 @msg	icon must be true or false	icon должен быть true или false
 @msg	icon only docks a panel in the icon column, with no anchor	icon только закрепляет панель в столбце значков, без anchor
@@ -6385,6 +6399,7 @@ breakText	Glyphs	Глифы
 	Reset Symbol Instance	Сбросить экземпляр символа
 @msg	type must be static or dynamic, not {v}	type должен быть static или dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статический символ: сначала задайте для него тип символа «Динамический»
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контура, составного контура или текста, выделенного в экземпляре символа, можно изменить только сплошной цвет заливки и обводки
 @msg	path must be a list of child indices	path должен быть списком индексов дочерних объектов
 @msg	no object at path {shown} in the symbol's art	в графике символа нет объекта по пути {shown}
 @msg	give fill, stroke, opacity and/or blend	укажите fill, stroke, opacity и/или blend
@@ -6594,3 +6609,25 @@ shape	Open	Открытый
 # 3D Box add-on
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
+
+# Safe Mode
+	Safe Mode…	Безопасный режим…
+	Safe Mode	Безопасный режим
+	Help › Safe Mode…	Справка › Безопасный режим…
+	Enable on Re-launch	Включить при следующем запуске
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Последний запуск VectorCraft остановился во время загрузки модуля {name}. Возможно, причина не в нём.
+	Disable and Continue	Отключить и продолжить
+	Start Normally	Запустить в обычном режиме
+	Start in Safe Mode	Запустить в безопасном режиме
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft работает в безопасном режиме: модули не загружаются и не выполняются, пока программа не будет запущена в обычном режиме.
+	Disabled plug-ins	Отключённые модули
+	No plug-ins are disabled.	Нет отключённых модулей.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Безопасный режим включён: модули не загружаются и не выполняются, пока VectorCraft не будет запущен в обычном режиме
+@msg	give `id` or `file` (see plugin.safeMode)	укажите `id` или `file` (см. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	этот модуль не отключён (см. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Не удалось сохранить отключённые модули для следующего запуска
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Разбор оформления: эффект модуля в выделении нельзя разобрать в безопасном режиме
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Выровнять по пиксельной сетке
+@msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры

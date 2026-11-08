@@ -1051,6 +1051,14 @@ font-technology	Variable	可變
 	Export As SVG…	匯出為 SVG…
 	Export Asset	匯出資產
 	Export Assets	匯出資產
+	Export 3D Object	匯出 3D 物件
+	3D Export Format	3D 匯出格式
+	Export 3D Assets	匯出 3D 資產
+@msg	{what} can't be exported in 3D: {e}	無法將 {what} 匯出為 3D：{e}
+@msg	asset {id} isn't a 3D asset	資產 {id} 不是 3D 資產
+@msg	asset {id} is a 3D asset: assets.export3D writes it	資產 {id} 是 3D 資產：由 assets.export3D 寫入
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	尚無 3D 資產：請先收集具有 3D 效果的物件 (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	請選取具有 3D 效果的物件 (或提供其 ID)
 	Export As…	匯出為…
 	Export CSS	匯出 CSS
 	Export CSS…	匯出 CSS…
@@ -1713,14 +1721,14 @@ file-filter	Templates	範本
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次啟動時在 {name} 上於視窗出現前結束，因此這次在 {summary} 上啟動。若要再次嘗試該圖形處理器，請變更「偏好設定 › 效能 › 圖形處理器」，或設定 WGPU_BACKEND 後再啟動
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次啟動時在列出圖形處理器期間結束，因此這次只以 OpenGL 在 {summary} 上啟動。若要再次嘗試其他圖形後端，請變更「偏好設定 › 效能 › 圖形處理器」，或設定 WGPU_BACKEND 後再啟動
 @msg	not a DXF drawing	不是 DXF 圖面
-@msg	scale must be a number from {_1} to {_2}, not {s}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {s}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale 必須是 {_1} 到 {_2} 之間的數字，而非 {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	要符合的工作區域尺寸必須為正數，且不超過 {_1} pt
 @msg	the drawing has no layout `{_1}` (it has {_2})	圖面中沒有配置 `{_1}` (它有 {_2})
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	這是 DWG 圖面，無法讀取：請在 CAD 應用程式中將其儲存為 ASCII DXF，再開啟該檔案
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	以此比例，圖面為 {w} × {h} pt，超過畫布所能容納：請選擇較小的比例，或使其符合工作區域
 @msg	the scale is not a usable number	比例不是可用的數字
 @msg	the drawing is too large to open	圖面過大，無法開啟
-@msg	scale must be a number from {_1} to {_2}, not {_3}	比例必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale 必須是 {_1} 到 {_2} 之間的數字，而非 {_3}
 @msg	an image has no pixels and was left out	已略過沒有像素的影像
 @msg	object {0} cannot have children	物件 {0} 不能有子物件
 @msg	range `{s}` is empty	範圍 `{s}` 是空的
@@ -1823,7 +1831,7 @@ file-filter	Templates	範本
 @msg	{name}: no local header	{name}：沒有區域檔頭
 @msg	Flatten Transparency: select objects to flatten	透明度平面化：請選取要平面化的物件
 @msg	Flatten Transparency: {e}	透明度平面化：{e}
-@msg	balance must be between 0 and 100	平衡必須介於 0 到 100 之間
+@msg	balance must be between 0 and 100	balance 必須介於 0 到 100 之間
 @msg	resolutions must be between 1 and 2400 ppi	解析度必須介於 1 到 2400 ppi 之間
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	未知的預設集 `{name}` (high、medium、low 或已儲存的預設集：請參閱 flattener.presets.list)
 @msg	`at` must be [x, y]	`at` 必須是 [x, y]
@@ -1987,7 +1995,7 @@ file-filter	Templates	範本
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)
 @msg	no selected slice in the image: select slices, or save all of them	影像中沒有已選取的切片：請選取切片，或全部儲存
 @msg	nothing to save: the document has no visible art	沒有可儲存的內容：文件中沒有可見的圖稿
-@msg	percent must be above 0 and at most 6400, not {p}	百分比必須大於 0 且不超過 6400，而非 {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent 必須大於 0 且不超過 6400，而非 {p}
 @msg	unknown preset `{name}` (see webExport.presets.list)	未知的預設集 `{name}` (請參閱 webExport.presets.list)
 @msg	width and height are at least 1 pixel	寬度和高度至少為 1 像素
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 必須是 1、3 或 5
@@ -2147,7 +2155,7 @@ file-filter	Templates	範本
 @msg	is not an image VectorCraft reads	不是 VectorCraft 可讀取的影像
 @msg	not found	找不到
 @msg	SVG parse error: {0}	SVG 剖析錯誤：{0}
-@msg	decimals must be {_1}–{_2} (got {_3})	小數位數必須為 {_1}–{_2} (收到 {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals 必須為 {_1}–{_2} (收到 {_3})
 @msg	Exporting {_1}	正在匯出 {_1}
 @msg	Packaging {_1}	正在封裝 {_1}
 @msg	Placing {_1}	正在置入 {_1}
@@ -2303,6 +2311,8 @@ file-filter	Templates	範本
 @msg	no such action set	沒有這個動作組
 @msg	the action sets changed; nothing was deleted	動作組已變更；未刪除任何內容
 @msg	no action set to save	沒有要儲存的動作組
+@msg	the action set file can't be read in full	無法完整讀取動作組檔案
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
 @msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
@@ -2311,7 +2321,7 @@ file-filter	Templates	範本
 @msg	choose a folder to export to	請選擇要匯出至的資料夾
 @msg	the selection has no URL (or they differ)	選取範圍沒有 URL (或其 URL 各不相同)
 @msg	select some type first	請先選取一些文字
-@msg	kerning must be a number, "auto", or "optical"	字距微調必須是數字、「auto」或「optical」
+@msg	kerning must be a number, "auto", or "optical"	kerning 必須是數字、「auto」或「optical」
 @msg	the selection has no gradient fill	選取範圍沒有漸層填色
 @msg	the selection has no gradient stroke	選取範圍沒有漸層筆畫
 @msg	the selection has no pattern fill	選取範圍沒有圖樣填色
@@ -2471,7 +2481,7 @@ file-filter	Templates	範本
 @msg	before must name a panel	before 必須指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停駐動作包含未知的面板或過長的分割路徑
 @msg	group must be true or false	group 必須是 true 或 false
-@msg	panel is not in a dock group	面板不在停駐群組中
+@msg	panel is not in a dock group	panel 不在停駐群組中
 @msg	only a dock group above or below others collapses, not one beside another	只有位於其他群組上方或下方的停駐群組可以摺疊，並排的不行
 @msg	icon must be true or false	icon 必須為 true 或 false
 @msg	icon only docks a panel in the icon column, with no anchor	icon 只會將面板停駐到圖示欄中，不能帶 anchor
@@ -2597,6 +2607,7 @@ file-filter	Templates	範本
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
 	Imported. Press OK to keep the imported set.	已匯入。按一下「確定」以保留匯入的快速鍵組。
+	Read Action Set File	讀取動作組檔案
 	Read Shortcut Set File	讀取快速鍵組檔案
 	Import Matches	匯入對應
 	Remember Import Matches	記住匯入對應
@@ -5030,6 +5041,9 @@ axis	Both	兩者
 effect	Soft	柔和
 	Edge	邊緣
 	System Title Bar	系統標題列
+	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 標題列
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	設定了環境變數 VECTORCRAFT_TITLEBAR 時，由它選擇標題列。
+	System Title Bar takes precedence over this option while it is on.	開啟系統標題列時，它優先於此選項。
 	Value Axis	數值軸
 	On Left Side	左側
 	On Right Side	右側
@@ -6046,6 +6060,7 @@ breakText	Glyphs	字符
 	Reset Symbol Instance	重設符號實體
 @msg	type must be static or dynamic, not {v}	type 必須是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是靜態符號:請先將其符號類型設為動態
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符號實體中選取的路徑、複合路徑或文字只能變更填色和筆畫的純色
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend
@@ -6143,3 +6158,25 @@ breakText	Glyphs	字符
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Safe Mode
+	Safe Mode…	安全模式…
+	Safe Mode	安全模式
+	Help › Safe Mode…	說明 › 安全模式…
+	Enable on Re-launch	下次啟動時啟用
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft 上次啟動時在載入增效模組 {name} 期間停止。該增效模組不一定是原因。
+	Disable and Continue	停用並繼續
+	Start Normally	正常啟動
+	Start in Safe Mode	以安全模式啟動
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft 處於安全模式：在正常啟動之前，不會載入或執行任何增效模組。
+	Disabled plug-ins	已停用的增效模組
+	No plug-ins are disabled.	沒有停用的增效模組。
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	安全模式已開啟：在 VectorCraft 正常啟動之前，增效模組不會載入或執行
+@msg	give `id` or `file` (see plugin.safeMode)	請提供 `id` 或 `file` (請參閱 plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	該增效模組未停用 (請參閱 plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	無法為下次啟動儲存已停用的增效模組
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	展開外觀：在安全模式下無法展開選取範圍中的增效模組效果
+
+# Align to Pixel Grid
+	Align to Pixel Grid	對齊像素格點
+@msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點

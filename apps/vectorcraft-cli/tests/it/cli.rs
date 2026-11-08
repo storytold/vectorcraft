@@ -308,6 +308,22 @@ fn mcp_headless_over_stdio() {
     assert_eq!(replies[3]["result"]["content"][0]["type"], "image");
 }
 
+/// `--safe-mode mcp` serves a headless session without plug-ins: it refuses `--connect`, and by
+/// default it does not connect to an app listening on the default address, which loads its own
+/// plug-ins.
+#[test]
+fn safe_mode_mcp_does_not_connect_to_a_running_app() {
+    let out = Command::new(BIN).args(["--safe-mode", "mcp", "--connect", "127.0.0.1:9"]).env("VECTORCRAFT_NO_PREFS", "1").output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success() && err.contains("--safe-mode runs a headless session"), "{err}");
+    // Something listening on the default address, as a running app does; a running app or another
+    // program already holding it serves as well.
+    let _app = std::net::TcpListener::bind(vectorcraft_mcp::DEFAULT_ADDR);
+    let out = Command::new(BIN).args(["--safe-mode", "mcp"]).env("VECTORCRAFT_NO_PREFS", "1").stdin(Stdio::null()).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success() && err.contains("MCP server on stdio (headless)"), "{err}");
+}
+
 /// `mcp --automation-read-root` / `--automation-write-root` (#832): the flags are checked before the
 /// server starts, and the process then reads and writes only inside its roots.
 #[test]

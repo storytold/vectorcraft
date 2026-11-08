@@ -453,8 +453,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Commands whose params are all optional that do nothing, or fail, when a key press runs them
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
-/// and the library, data set and text style loaders a file, which their panel menu items ask for.
-const NEEDS_A_PARAM: [&str; 19] = [
+/// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
+/// for.
+const NEEDS_A_PARAM: [&str; 20] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -474,6 +475,7 @@ const NEEDS_A_PARAM: [&str; 19] = [
     "charStyle.load",
     "paraStyle.load",
     "textStyle.loadAll",
+    "svgFilter.import",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
@@ -537,6 +539,17 @@ fn needs_a_value(key: &str) -> bool {
             .collect()
     })
     .contains(key)
+}
+
+/// Does a menu bar item run the command with no params, so that it does what its label says and opens
+/// no dialog? A command no menu bar item runs (the Crop Image item runs `ui.cropImage`), a menu item
+/// that gives it params, a [`NEEDS_A_PARAM`] command and a field a call must give each rule it out.
+pub(crate) fn runs_with_no_values(c: &vectorcraft_engine::CommandSpec) -> bool {
+    menu_bar_items().contains_key(c.id)
+        && menu_target(c.id).is_none()
+        && !NEEDS_A_PARAM.contains(&c.id)
+        && !crate::dialogs::variables::opens(c.id)
+        && !names_a_required_field(c.params)
 }
 
 /// Does a params doc name a field a call must give? Its fields are the top-level parts of its
