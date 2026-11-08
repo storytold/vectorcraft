@@ -463,6 +463,39 @@ fn dialogs_do_not_stretch_to_the_screen() {
     assert!(checked >= 10, "only {checked} dialogs drew in the shared frame");
 }
 
+#[test]
+fn workspace_and_toolbar_dialogs_end_at_their_buttons() {
+    // New Workspace, Manage Workspaces, New Toolbar and Manage Toolbars draw their own windows: each
+    // ends just below its OK button, with no empty band above or below the buttons.
+    for (kind, fields, window) in [
+        ("newWorkspace", json!({"name": "Mine"}), "dialog-workspace"),
+        ("manageWorkspaces", json!({"selected": "", "name": ""}), "dialog-workspace"),
+        (crate::custom_toolbars::KIND, json!({"name": "Toolbar 1"}), "dialog-new-toolbar"),
+        (crate::custom_toolbars::MANAGE, json!({"selected": "", "name": ""}), "dialog-manage-toolbars"),
+    ] {
+        let mut app = app();
+        open(&mut app, kind, fields);
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        theme::apply(&ctx, Default::default());
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let mut ok = None;
+        for _ in 0..4 {
+            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            ok = out.shapes.iter().find_map(|c| match &c.shape {
+                egui::Shape::Text(t) if t.galley.text() == "OK" => Some(t.visual_bounding_rect()),
+                _ => None,
+            });
+        }
+        let ok = ok.unwrap_or_else(|| panic!("{kind} draws no OK button"));
+        let outer = ctx.memory(|m| m.area_rect(egui::Id::unique(window))).unwrap();
+        let below = outer.bottom() - ok.bottom();
+        assert!(below < 40.0, "{kind}: {below} pt between OK and the bottom of its {} pt window", outer.height());
+    }
+}
+
 /// The dialog window of `app`'s open dialog after a few frames in a `w` × 900 window.
 fn dialog_rect(app: &mut VectorcraftApp, w: f32) -> egui::Rect {
     let ctx = egui::Context::default();
@@ -592,6 +625,8 @@ impl PluginIntField {
             kind: vectorcraft_plugins::Kind::Filter,
             description: String::new(),
             author: String::new(),
+            api: 1,
+            permissions: None,
             params: vec![("seed".into(), vectorcraft_plugins::ParamSpec::Int { min, max, default: 0 }.into())],
             extensions: Vec::new(),
             budget: Default::default(),

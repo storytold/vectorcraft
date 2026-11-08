@@ -2514,6 +2514,14 @@ digits	Malayalam	Malayalam
 	Relink	Yeniden bağla
 	Relink Linked Files to the Document	Bağlantılı Dosyaları Belgeye Yeniden Bağlama
 	Relink to Folder…	Klasöre Yeniden Bağlan…
+	Each Link Separately	Her Bağlantıyı Ayrı Ayrı
+	Selected Instances	Seçili Örnekler
+	All Instances	Tüm Örnekler
+	Missing Links from This Folder	Bu Klasördeki Eksik Bağlantılar
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v}, each|selected|all|missingInFolder değerlerinden biri değil
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each ve paths birlikte kullanılır: paths, ids, path ve folder yerine ids ve path içeren girdileri listeler
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths girdisi {i} için path ve ids gerekir (başka hiçbir girdide olmayan nesne kimlikleri)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder path alır: diğer eksik bağlantılar o dosyanın klasöründe aranır
 	Relink…	Yeniden bağla…
 	Find Linked Files	Bağlantılı Dosyaları Bul
 	Find Linked Files in Folder…	Klasördeki Bağlantılı Dosyaları Bul…
@@ -5440,6 +5448,7 @@ theme	Appearance	Görünüm
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	Kayıt panelindeki ad “{typed}” idi; VectorCraft dosya türünün uzantısını ekledi. Dosyayı değiştirmek içeriğinin üzerine yazar.
 	Thread Text	Metni Bağla
 	Trackpad Gesture to Rotate View	Görünümü Döndürmek İçin İzleme Dörtgeni Hareketi
+	Hold a Tool Shortcut to Use the Tool Temporarily	Aracı Geçici Olarak Kullanmak İçin Kısayolunu Basılı Tutma
 	Typing	Yazma
 	Uniformly Scaled	Tekdüze Ölçeklenmiş
 	Unlock Variables	Değişkenlerin Kilidini Aç
@@ -5770,6 +5779,33 @@ axis	Y Axis	Y ekseni
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
+	ID: {id}	Kimlik: {id}
+	Version: {version}	Sürüm: {version}
+	File SHA-256: {hash}	Dosya SHA-256: {hash}
+	Read the objects it is given	Kendisine verilen nesneleri okuma
+	Change, add and delete objects in the document	Belgedeki nesneleri değiştirme, ekleme ve silme
+	Keep data of its own with the document	Kendi verilerini belgeyle birlikte saklama
+	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
+	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
+	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modül `env.{name}` öğesini ana bilgisayarınkinden farklı bir türle içe aktarıyor: ana bilgisayarın türü {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `progress` izniyle kullanabilir
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca `env.vc_progress`, `env.vc_cancelled` ve `env.vc_log` öğelerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
+@msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır
+@msg	at most {MAX_PERMISSIONS} `permissions`	en fazla {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	`{shown}` izni `{_1}` türündeki bir eklentiye uygulanmaz
+@msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
+@msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).
 	New Set…	Yeni Set…
 	New Set	Yeni Set

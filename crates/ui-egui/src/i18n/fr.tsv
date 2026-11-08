@@ -2700,6 +2700,14 @@ digits	Malayalam	Malayalam
 	Relink	Lier à nouveau
 	Relink Linked Files to the Document	Lier à nouveau les fichiers liés au document
 	Relink to Folder…	Lier à nouveau à un dossier…
+	Each Link Separately	Chaque lien séparément
+	Selected Instances	Occurrences sélectionnées
+	All Instances	Toutes les occurrences
+	Missing Links from This Folder	Liens manquants de ce dossier
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} n’est pas each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each et paths vont ensemble : paths liste des entrées avec ids et path, à la place de ids, path et folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	l’entrée {i} de paths nécessite path et ids (des identifiants d’objet qu’aucune autre entrée n’a)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder prend path : les autres liens manquants sont cherchés dans le dossier de ce fichier
 	Relink…	Lier à nouveau…
 	Find Linked Files	Rechercher des fichiers liés
 	Find Linked Files in Folder…	Rechercher des fichiers liés dans un dossier…
@@ -2817,6 +2825,7 @@ digits	Malayalam	Malayalam
 	Rotate Tool	Outil Rotation
 	Rotate View Tool	Outil Faire pivoter l’affichage
 	Trackpad Gesture to Rotate View	Faire pivoter l’affichage avec un geste du trackpad
+	Hold a Tool Shortcut to Use the Tool Temporarily	Maintenir le raccourci d’un outil pour l’utiliser temporairement
 	Rotate…	Rotation…
 	Rotation	Rotation
 	Roughen…	Rugosité…
@@ -5808,6 +5817,33 @@ axis	Y Axis	Axe Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
+	ID: {id}	ID : {id}
+	Version: {version}	Version : {version}
+	File SHA-256: {hash}	SHA-256 du fichier : {hash}
+	Read the objects it is given	Lire les objets qui lui sont transmis
+	Change, add and delete objects in the document	Modifier, ajouter et supprimer des objets du document
+	Keep data of its own with the document	Conserver ses propres données avec le document
+	Change how the objects its effect is applied to are drawn	Modifier le rendu des objets auxquels son effet est appliqué
+	Write the document as a file in its own format	Écrire le document dans un fichier à son propre format
+	Show its progress, see Cancel and write log lines	Afficher sa progression, détecter l’annulation et écrire des lignes de journal
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `progress` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	le module importe `env.{name}` avec un autre type que celui de l’hôte : celui de l’hôte est {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que `env.vc_progress`, `env.vc_cancelled` et `env.vc_log` (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
+@msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	au plus {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
+@msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…
 	New Set	Nouveau jeu

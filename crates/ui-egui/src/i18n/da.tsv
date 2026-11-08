@@ -1232,6 +1232,7 @@ lighting	Light	Lys
 	Rotate Tool	Roteringsværktøj
 	Rotate View Tool	Visningsroteringsværktøj
 	Trackpad Gesture to Rotate View	Rotér visning med bevægelse på pegefeltet
+	Hold a Tool Shortcut to Use the Tool Temporarily	Hold et værktøjs genvejstast nede for at bruge værktøjet midlertidigt
 	Rotate View	Rotér visning
 	Rounded Rectangle Tool	Afrundet rektangelværktøj
 	Scale Tool	Skaleringsværktøj
@@ -1898,6 +1899,14 @@ digits	Malayalam	Malayalam
 	Location	Placering
 	No images	Ingen billeder
 	Relink to Folder…	Genopret link til mappe…
+	Each Link Separately	Hvert link for sig
+	Selected Instances	Valgte forekomster
+	All Instances	Alle forekomster
+	Missing Links from This Folder	Manglende links fra denne mappe
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} er ikke each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each og paths hører sammen: paths angiver poster med ids og path i stedet for ids, path og folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths skal have path og ids (objekt-id'er, som ingen anden post har)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tager path: der søges efter de andre manglende links i den fils mappe
 	Show Missing	Vis manglende
 	Sort by Status	Sortér efter status
 	Clear Overrides	Ryd tilsidesættelser
@@ -5712,6 +5721,17 @@ axis	Y Axis	Y-akse
 	The plug-in is computing…	Plug-in'en regner…
 	Inspect Plug-in	Undersøg plug-in
 	Cancel Plug-in Run	Annullér plug-in-kørsel
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installér »{name}«, som beder om disse rettigheder?
+	ID: {id}	ID: {id}
+	Version: {version}	Version: {version}
+	File SHA-256: {hash}	Filens SHA-256: {hash}
+	Read the objects it is given	Læse de objekter, den får
+	Change, add and delete objects in the document	Ændre, tilføje og slette objekter i dokumentet
+	Keep data of its own with the document	Gemme sine egne data med dokumentet
+	Change how the objects its effect is applied to are drawn	Ændre, hvordan de objekter, dens effekt er anvendt på, tegnes
+	Write the document as a file in its own format	Skrive dokumentet som en fil i sit eget format
+	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
 	New Set	Nyt sæt

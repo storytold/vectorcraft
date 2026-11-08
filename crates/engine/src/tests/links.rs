@@ -480,6 +480,151 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
 }
 
+/// The path of the file image `id` links to.
+fn link_path(s: &Session, id: NodeId) -> String {
+    image(s, id).link.map(|l| l.path).unwrap_or_default()
+}
+
+/// Replace: All Instances relinks every image linked to the same file as the one given, in one
+/// undo step; Selected Instances (the default) only the one given.
+#[test]
+fn relink_all_instances_takes_every_image_of_the_same_file() {
+    let dir = Folder::new("relink-all");
+    let (pic, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&pic, &png(60, 30, RED));
+    write(&other, &png(60, 30, RED));
+    let mut s = session();
+    let (a, b, c) = (place(&mut s, &pic), place(&mut s, &pic), place(&mut s, &other));
+    let blue = dir.file("new/blue.png");
+    write(&blue, &png(60, 30, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [a.0], "path": blue, "scope": "selected"})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0], "notFound": []}));
+    assert_eq!(link_path(&s, b), pic, "selected instances: the other copy keeps its file");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("links.relink", &json!({"ids": [a.0], "path": blue, "scope": "all"})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0, b.0], "notFound": []}));
+    assert_eq!((link_path(&s, a), link_path(&s, b), link_path(&s, c)), (blue.clone(), blue.clone(), other.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((link_path(&s, a), link_path(&s, b)), (pic.clone(), pic.clone()), "one undo step");
+    // The selection stands in for ids.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let r = s.execute("links.relink", &json!({"path": blue, "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([b.0, a.0]));
+}
+
+/// Replace: Missing Links from This Folder relinks the given links to the chosen file, then every
+/// other missing link to the file of its name in that file's folder, in one undo step; names not
+/// there are listed in notFound and stay missing.
+#[test]
+fn relink_missing_links_from_this_folder_finds_the_others_by_name() {
+    let dir = Folder::new("relink-missing-folder");
+    let names = ["a.png", "b.png", "c.png", "d.png"];
+    let mut s = session();
+    let ids: Vec<NodeId> = names
+        .iter()
+        .map(|n| {
+            write(&dir.file(n), &png(60, 30, RED));
+            place(&mut s, &dir.file(n))
+        })
+        .collect();
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    // d.png stays where it was: it isn't missing.
+    for n in &names[..3] {
+        std::fs::remove_file(dir.file(n)).unwrap();
+    }
+    open(&mut s, &doc_path);
+    let found = dir.file("found/a new name.png");
+    write(&found, &png(60, 30, BLUE));
+    write(&dir.file("found/b.png"), &png(60, 30, BLUE));
+    write(&dir.file("found/d.png"), &png(60, 30, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [ids[0].0], "path": found, "scope": "missingInFolder"})).unwrap();
+    assert_eq!(r, json!({"relinked": [ids[0].0, ids[1].0], "notFound": ["c.png"]}));
+    let b_found = dir.0.join("found").join("b.png").to_string_lossy().into_owned();
+    assert_eq!((link_path(&s, ids[0]), link_path(&s, ids[1])), (found.clone(), b_found));
+    assert_eq!((link_path(&s, ids[2]), link_path(&s, ids[3])), (dir.file("c.png"), dir.file("d.png")));
+    let c = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(c["missing"], 1, "{c}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["missing"], 3, "one undo step");
+}
+
+/// Replace: Each Link Separately takes one file for each link, in one undo step.
+#[test]
+fn relink_each_link_separately_takes_a_file_for_each() {
+    let dir = Folder::new("relink-each");
+    let (one, two) = (dir.file("one.png"), dir.file("two.png"));
+    write(&one, &png(60, 30, RED));
+    write(&two, &png(60, 30, RED));
+    let mut s = session();
+    let (a, b, c) = (place(&mut s, &one), place(&mut s, &one), place(&mut s, &two));
+    let (x, y) = (dir.file("new/x.png"), dir.file("new/y.png"));
+    write(&x, &png(60, 30, BLUE));
+    write(&y, &png(30, 30, BLUE));
+    let paths = json!([{"ids": [a.0, b.0], "path": x}, {"ids": [c.0], "path": y}]);
+    let r = s.execute("links.relink", &json!({"scope": "each", "paths": paths})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0, b.0, c.0], "notFound": []}));
+    assert_eq!((link_path(&s, a), link_path(&s, b), link_path(&s, c)), (x.clone(), x.clone(), y.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((link_path(&s, a), link_path(&s, c)), (one.clone(), two.clone()), "one undo step");
+    // Two entries naming the same file read it once.
+    let paths = json!([{"ids": [a.0], "path": y}, {"ids": [c.0], "path": y}]);
+    let r = s.execute("links.relink", &json!({"scope": "each", "paths": paths})).unwrap();
+    assert_eq!(r["relinked"], json!([a.0, c.0]));
+}
+
+/// With copy, a file that can't be shown stops the call before any file is copied into the
+/// document's folder.
+#[test]
+fn relink_each_with_copy_copies_nothing_when_a_file_cant_be_read() {
+    let dir = Folder::new("relink-each-copy");
+    let (one, two) = (dir.file("doc/one.png"), dir.file("doc/two.png"));
+    write(&one, &png(60, 30, RED));
+    write(&two, &png(60, 30, RED));
+    let mut s = session();
+    let (a, c) = (place(&mut s, &one), place(&mut s, &two));
+    save(&mut s, &dir.file("doc/poster.vectorcraft"));
+    let (x, bad) = (dir.file("new/x.png"), dir.file("new/broken.png"));
+    write(&x, &png(60, 30, BLUE));
+    write(&bad, b"not an image");
+    let paths = json!([{"ids": [a.0], "path": x}, {"ids": [c.0], "path": bad}]);
+    assert!(s.execute("links.relink", &json!({"scope": "each", "paths": paths, "copy": true})).is_err());
+    assert!(!Path::new(&dir.file("doc/x.png")).exists(), "no copy is left behind");
+    assert_eq!(link_path(&s, a), one);
+}
+
+/// A scope or paths that doesn't fit is refused, and nothing is relinked.
+#[test]
+fn relink_refuses_scopes_and_paths_that_dont_fit() {
+    let dir = Folder::new("relink-bad-scope");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &pic);
+    let blue = dir.file("blue.png");
+    write(&blue, &png(60, 30, BLUE));
+    let bad = [
+        json!({"ids": [a.0], "path": blue, "scope": "everything"}),
+        json!({"ids": [a.0], "path": blue, "scope": 3}),
+        json!({"scope": "each"}),
+        json!({"scope": "each", "paths": []}),
+        json!({"scope": "each", "paths": [{"ids": [a.0]}]}),
+        json!({"scope": "each", "paths": [{"path": blue}]}),
+        json!({"scope": "each", "paths": [{"ids": ["one"], "path": blue}]}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}, {"ids": [a.0], "path": pic}]}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}], "path": blue}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}], "ids": [a.0]}),
+        json!({"scope": "all", "paths": [{"ids": [a.0], "path": blue}]}),
+        json!({"ids": [a.0], "paths": [{"ids": [a.0], "path": blue}]}),
+        json!({"ids": [a.0], "folder": dir.0.to_string_lossy(), "scope": "missingInFolder"}),
+        json!({"ids": [a.0], "scope": "missingInFolder"}),
+    ];
+    for p in bad {
+        assert!(s.execute("links.relink", &p).is_err(), "{p}");
+        assert_eq!(link_path(&s, a), pic, "{p} relinks nothing");
+    }
+}
+
 /// A link stored as a classic Mac OS path (`Disk:Folder:file`, as older `.ai` files keep them) is
 /// named by its last component: the Links panel shows that name and its folder, Relink to Folder
 /// looks for that name, and the document's own folder is searched for it. The stored path is kept.

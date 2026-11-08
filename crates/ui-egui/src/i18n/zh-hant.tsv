@@ -3606,6 +3606,14 @@ digits	Malayalam	馬來亞拉姆數字
 	Relink	重新連結
 	Relink Linked Files to the Document	將連結檔案重新連結至文件
 	Relink to Folder…	重新連結至資料夾…
+	Each Link Separately	逐一連結
+	Selected Instances	所選實例
+	All Instances	所有實例
+	Missing Links from This Folder	此資料夾中遺失的連結
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} 不是 each|selected|all|missingInFolder 其中之一
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each 與 paths 須一起使用：paths 列出含 ids 與 path 的項目，用來取代 ids、path 與 folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths 項目 {i} 需要 path 與 ids（其他項目沒有的物件 ID）
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder 需要 path：會在該檔案所在的資料夾中尋找其他遺失的連結
 	Relink…	重新連結…
 	Find Linked Files	尋找連結檔案
 	Find Linked Files in Folder…	在資料夾中尋找連結檔案…
@@ -3724,6 +3732,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Rotate Tool	旋轉工具
 	Rotate View Tool	旋轉檢視工具
 	Trackpad Gesture to Rotate View	使用觸控式軌跡板手勢旋轉檢視
+	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快速鍵以暫時使用該工具
 	Rotate…	旋轉…
 	Rotation	旋轉
 	Roughen…	粗糙效果…
@@ -5447,6 +5456,33 @@ axis	Y Axis	Y 軸
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
+	ID: {id}	ID：{id}
+	Version: {version}	版本：{version}
+	File SHA-256: {hash}	檔案 SHA-256：{hash}
+	Read the objects it is given	讀取交給它的物件
+	Change, add and delete objects in the document	變更、新增和刪除文件中的物件
+	Keep data of its own with the document	在文件中保存自己的資料
+	Change how the objects its effect is applied to are drawn	變更套用其效果的物件的繪製方式
+	Write the document as a file in its own format	將文件寫成其自有格式的檔案
+	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `progress` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `progress` 時才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效模組 API 層級 2），不能使用 WASI、檔案或網路
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
+@msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 個 `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	權限 `{shown}` 不適用於 `{_1}` 類型的增效模組
+@msg	permission `{shown}` is listed twice	權限 `{shown}` 列出了兩次
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
+@msg	unknown permission `{shown}`	未知權限 `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
 # Actions panel: action sets (#3712).
 	New Set…	新增組…
 	New Set	新增組
