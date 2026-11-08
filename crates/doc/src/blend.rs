@@ -908,6 +908,8 @@ pub struct Spine {
 }
 
 impl Spine {
+    /// Build a spine from the first subpath of `path`: flatten it to a polyline, record cumulative
+    /// arc lengths, and the arc length at each anchor.
     pub fn new(path: &PathData) -> Option<Self> {
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();
@@ -946,6 +948,7 @@ impl Spine {
         }
         Some(Self { pts, cum, anchors, closed: sp.closed, path: path.clone() })
     }
+    /// The spine's flattened length in arc length.
     pub fn length(&self) -> f64 {
         *self.cum.last().unwrap_or(&0.0)
     }
