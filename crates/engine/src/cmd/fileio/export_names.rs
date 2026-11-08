@@ -31,12 +31,17 @@ fn unique_file_names<'a>(names: impl IntoIterator<Item = (&'a str, String)>) -> 
 
 /// [`unique_file_names`] keeping `.` in a name (an artboard called `example.artboard` exports as
 /// `example.artboard.png`, #6143). A name of only dots (`.` and `..` name other folders) takes the
-/// fallback; the caller still runs each stem through `safe_file_name`, which drops trailing periods
-/// and guards Windows device names.
+/// fallback, and leading dots are dashes (`.draft` would be a hidden file); the caller still runs
+/// each stem through `safe_file_name`, which drops trailing periods and guards Windows device names.
 pub(crate) fn unique_file_names_keeping_dots<'a>(names: impl IntoIterator<Item = (&'a str, String)>) -> Vec<String> {
     distinct_names(names.into_iter().map(|(name, fallback)| {
         let base: String = name.chars().map(|c| if c.is_alphanumeric() || matches!(c, '-' | '_' | '.') { c } else { '-' }).collect();
-        if base.trim_matches('.').is_empty() { fallback } else { base }
+        if base.trim_matches('.').is_empty() {
+            return fallback;
+        }
+        // A leading dot would hide the file or folder on Unix-like systems: it is a dash, as before.
+        let rest = base.trim_start_matches('.');
+        format!("{}{rest}", "-".repeat(base.len() - rest.len()))
     }))
 }
 
