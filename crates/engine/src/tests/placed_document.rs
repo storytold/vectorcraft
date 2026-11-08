@@ -489,7 +489,7 @@ fn a_placed_document_without_its_bytes_or_a_hash_is_reported_not_read() {
     let Some(NodeKind::PlacedDocument(p)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("a placed document") };
     p.link.hash = None;
     p.link.size = None;
-    let r = crate::cmd::links::resolve(&mut d, None, false, false).to_json();
+    let r = crate::cmd::links::resolve(&mut d, crate::cmd::links::LinkBase::file(None), false, false).to_json();
     assert_eq!(r["modifiedLinks"].as_array().map(Vec::len), Some(1), "{r}");
     assert!(!d.images.contains_key(&key), "not read");
 }
