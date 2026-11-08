@@ -566,14 +566,15 @@ pub(crate) fn keep_mesh(out: &mut Vec<SolidMesh>, total: &mut usize, mesh: Solid
 
 /// The solids effect `fx` builds from `shapes`, as [`art_for`] draws them, as meshes: Rotate turns
 /// every fill and stroke; Extrude & Bevel and Inflate build one from each shape's top fill and one
-/// from the outline of each stroke. A stroke whose solid is past the limits is left out.
-fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize) -> Result<Vec<SolidMesh>, String> {
+/// from the outline of each stroke. A stroke whose solid is past the limits is left out. Each mesh
+/// is counted against `limit` ([`keep_mesh`]) before the next is built.
+fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) -> Result<Vec<SolidMesh>, String> {
     let label = crate::effect_info(&fx.id).map_or("This effect", |e| e.label.trim_end_matches('…'));
     let b = union_bounds(shapes).ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
     let p = crate::merged_params(&fx.id, &fx.params);
     let view = view_options(&p);
     let mut out = vec![];
-    let mut keep = |out: &mut Vec<SolidMesh>, mesh: Mesh, color: [f32; 4]| keep_mesh(out, total, SolidMesh { mesh, color }, MAX_MESH_TRIANGLES);
+    let mut keep = |out: &mut Vec<SolidMesh>, mesh: Mesh, color: [f32; 4]| keep_mesh(out, total, SolidMesh { mesh, color }, limit);
     if fx.id == ROTATE {
         for s in shapes {
             for item in &s.items {
@@ -585,8 +586,8 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize) -> Result<Vec<
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    // Inflate lays out every puff at once (they share one eye); each mesh, and each Extrude &
-    // Bevel solid, is built as it is reached.
+    // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
+    // solid and its mesh are built as the loop reaches them.
     let mut inflated = (fx.id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule)| (area, *rule)).collect();
         vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
@@ -614,16 +615,33 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize) -> Result<Vec<
 /// colors they are painted ([`SolidMesh`]), faces turned away from the viewer included; meshes
 /// with no triangles are left out. On a group or layer, the effect's solids of its members
 /// ([`members`]). The object's opacity multiplies every color's. An error when `n` carries no
-/// such effect, its solids can't be built, or none has a triangle.
+/// such effect, its solids can't be built, none has a triangle, or together they have more than
+/// [`MAX_MESH_TRIANGLES`].
 pub fn three_d_meshes(n: &Node) -> Result<Vec<SolidMesh>, String> {
-    // Triangles of every solid together, against [`MAX_MESH_TRIANGLES`].
+    meshes_within(n, &mut 0, MAX_MESH_TRIANGLES)
+}
+
+/// The meshes of every object in `nodes` ([`three_d_meshes`]), in order, as one 3D asset exports
+/// them: the objects share one budget of [`MAX_MESH_TRIANGLES`].
+pub fn three_d_meshes_of<'a>(nodes: impl IntoIterator<Item = &'a Node>) -> Result<Vec<SolidMesh>, String> {
+    meshes_of_within(nodes, MAX_MESH_TRIANGLES)
+}
+
+/// [`three_d_meshes_of`] with a budget of `limit` triangles.
+fn meshes_of_within<'a>(nodes: impl IntoIterator<Item = &'a Node>, limit: usize) -> Result<Vec<SolidMesh>, String> {
     let mut total = 0usize;
+    let mut out = vec![];
+    for n in nodes {
+        out.extend(meshes_within(n, &mut total, limit)?);
+    }
+    Ok(out)
+}
+
+/// [`three_d_meshes`], with the triangles of every solid added to `total` as it is built and an
+/// error as soon as `total` passes `limit`.
+fn meshes_within(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<SolidMesh>, String> {
     let meshes = if crate::has_revolve(n) {
-        let mut out = vec![];
-        for m in crate::revolve::revolve_meshes(n)? {
-            keep_mesh(&mut out, &mut total, m, MAX_MESH_TRIANGLES)?;
-        }
-        out
+        crate::revolve::revolve_meshes(n, total, limit)?
     } else if !has_solid(n) {
         return Err("the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)".into());
     } else if is_container(n) {
@@ -631,21 +649,21 @@ pub fn three_d_meshes(n: &Node) -> Result<Vec<SolidMesh>, String> {
         let label = crate::effect_info(&fx.id).map_or("This effect", |e| e.label.trim_end_matches('…'));
         let mut shapes = members(n, label)?;
         reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
-        meshes_for(fx, &shapes, &mut total)?
+        meshes_for(fx, &shapes, total, limit)?
     } else {
         let (path, rule) = profile(n).ok_or("3D export needs a path, compound path, type or group")?;
         let ctx = GeomContext::of(n);
         let paints = solid_paints(n);
         if let Some((index, fx)) = solid(&n.appearance.effects) {
             let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
-            meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0 }], &mut total)?
+            meshes_for(fx, &[Profile { path, rule, items: paints, opacity: 1.0 }], total, limit)?
         } else {
             let path = geometry(&path, &n.appearance.effects, &ctx);
             let mut out = vec![];
             for item in &paints {
                 if let Some((index, fx)) = solid(item.effects()) {
                     let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
-                    out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0 }], &mut total)?);
+                    out.extend(meshes_for(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0 }], total, limit)?);
                 }
             }
             out

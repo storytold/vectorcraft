@@ -252,6 +252,24 @@ fn a_partial_revolve_caps_its_ends_with_sectors() {
 }
 
 #[test]
+fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direction() {
+    // A wall 100 pt tall and one 0.5 pt tall, each drawn up and down the page.
+    for (from, to) in [(0.0, 100.0), (100.0, 0.0), (0.0, 0.5), (0.5, 0.0)] {
+        let mut b = BezPath::new();
+        b.move_to((20.0, from));
+        b.line_to((20.0, to));
+        let p = PathData::from_bezpath(&b);
+        let r = p.bounds().unwrap();
+        let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
+        let m = revolve_mesh(&p, r, o).unwrap();
+        assert!(!m.is_empty(), "{from} to {to}: the revolve made no triangles");
+        assert!(m.normals.iter().all(|n| (dot(*n, *n) - 1.0).abs() < 1e-9), "{from} to {to}: a normal is not unit length");
+        assert!(closed(&m), "{from} to {to}");
+        assert!(outward(&m), "{from} to {to}: a face turns inward");
+    }
+}
+
+#[test]
 fn inflate_puffs_the_front_toward_the_viewer() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);
@@ -260,6 +278,23 @@ fn inflate_puffs_the_front_toward_the_viewer() {
     assert!(!m.is_empty());
     let (lo, hi) = m.bounds().unwrap();
     assert!(hi[2] > 0.0 && lo[2] < hi[2], "the front puffs toward the viewer: {lo:?} {hi:?}");
+}
+
+#[test]
+fn inflate_builds_each_solid_as_it_is_reached() {
+    let (mut a, mut b) = (BezPath::new(), BezPath::new());
+    square(&mut a, 0.0, 0.0, 100.0, false);
+    square(&mut b, 120.0, 0.0, 100.0, false);
+    let ((pa, _), (pb, _)) = (shape(&a), shape(&b));
+    let built = || crate::solid::INFLATED.with(|n| n.get());
+    let start = built();
+    let mut meshes =
+        inflate_meshes(&[(&pa, FillRule::NonZero), (&pb, FillRule::NonZero)], Rect::new(0.0, 0.0, 220.0, 100.0), Inflate::default(), front());
+    assert_eq!(built(), start, "no solid is built before the first mesh is asked for");
+    assert!(meshes.next().is_some_and(|m| m.is_ok_and(|m| !m.is_empty())));
+    assert_eq!(built(), start + 1, "the second solid waits until it is reached");
+    assert!(meshes.next().is_some_and(|m| m.is_ok_and(|m| !m.is_empty())));
+    assert_eq!(built(), start + 2);
 }
 
 #[test]

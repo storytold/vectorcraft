@@ -355,6 +355,13 @@ digits	Malayalam	マラヤーラム数字
 	Apply Bullets	箇条書きを適用
 	Numbered List	番号付きリスト
 	Apply Numbers	番号付けを適用
+	Bullets and Numbering…	箇条書きと番号付け…
+	Numbers	番号
+	Level:	レベル:
+	Bullet Character:	箇条書き記号:
+	Number Style:	番号の形式:
+	Left Indent:	左インデント:
+	First Line Indent:	1 行目インデント:
 	Convert to Text	テキストに変換
 	Filled Dot	黒丸
 	Dash	ダッシュ
@@ -2793,6 +2800,7 @@ mark-style	Japanese	日本式
 	Reset Transformation	変形をリセット
 	Replace With Font	置換するフォント
 	Replace With Font From	置換するフォントの一覧
+	Find In	検索範囲
 	System	システム
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	別のファイルに置き換えるか、無視してください。無視した場合、画像にはドキュメントに保存されたプレビューが表示され続けます。
 	Replaces the saved preset of that name.	同じ名前の保存済みプリセットを置き換えます。
@@ -3822,6 +3830,15 @@ file-filter	Templates	テンプレート
 	Tate-chu-yoko	縦中横
 	Tate-chu-yoko Settings…	縦中横の設定…
 	Tate-chu-yoko Settings	縦中横の設定
+	Composite Fonts…	合成フォント…
+	Composite Fonts	合成フォント
+	Export Composite Fonts	合成フォントを書き出し
+	Import Composite Fonts	合成フォントを読み込み
+	Delete Font	フォントを削除
+	Kanji	漢字
+	Kana	かな
+	Numerals	数字
+	Scale at Center	中心から拡大・縮小
 	Up/Down:	上下:
 	Left/Right:	左右:
 	Temperature	色温度
@@ -4461,6 +4478,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
 @msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
@@ -4879,6 +4897,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
 @msg	{key} must be an array of non-negative integer object ids	{key} にはオブジェクト ID (0 以上の整数) の配列を指定してください
 @msg	invalid object id {value}: expected a non-negative integer	オブジェクト ID {value} は正しくありません: 0 以上の整数を指定してください
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` の要素 {index} は {value} で、オブジェクト ID (0 以上の整数) ではありません
 @msg	no such object id {value}	ID が {value} のオブジェクトは見つかりません
 @msg	id {value} is a layer, not an object	ID {value} はオブジェクトではなくレイヤーです
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} はオブジェクトではなくレイヤーです。レイヤーは layer.move で移動してください
@@ -5541,6 +5560,9 @@ axis	Y Axis	Y 軸
 	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
 	ID: {id}	ID: {id}
 	Version: {version}	バージョン: {version}
+	Install “{name}” in place of the plug-in with the same ID?	同じ ID のプラグインの代わりに「{name}」をインストールしますか？
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	このファイルは、以前にこの ID でインストールされていたプラグインではありません。この ID 用に保持されている設定とキャッシュを引き継ぎます。
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」は ID {_1} のプラグインとは別のモジュールで、そのプラグイン用に保持されている設定とキャッシュを引き継ぐことになります。ユーザーが同意したら `replace: true` を指定してインストールしてください
 	File SHA-256: {hash}	ファイルの SHA-256: {hash}
 	Read the objects it is given	渡されたオブジェクトの読み取り
 	Change, add and delete objects in the document	ドキュメント内のオブジェクトの変更、追加、削除
@@ -5548,10 +5570,13 @@ axis	Y Axis	Y 軸
 	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
 	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
 	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `progress` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
+	Keep settings of its own	独自の設定の保持
+	Keep a cache of its own, which you can clear	消去できる独自のキャッシュの保持
+	Clear Plug-in Cache	プラグインのキャッシュを消去
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `{permission}` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `progress` がある場合だけです
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは `env.vc_progress`、`env.vc_cancelled`、`env.vc_log` (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
@@ -6109,6 +6134,16 @@ breakText	Glyphs	字形
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
+@msg	{key} cannot be set on a guide	ガイドには {key} を設定できません
+@msg	{key} cannot be set on a blend	ブレンドには {key} を設定できません
+@msg	{key} cannot be set on an envelope	エンベロープには {key} を設定できません
+@msg	{key} cannot be set on a gradient mesh	グラデーションメッシュには {key} を設定できません
+@msg	{key} cannot be set on a Repeat	リピートには {key} を設定できません
+@msg	{key} cannot be set on a placed document	配置したドキュメントには {key} を設定できません
+@msg	{key} cannot be set on an Intertwine group	織り交ぜグループには {key} を設定できません
+@msg	stroke cannot be set on a symbol instance	シンボルインスタンスには stroke を設定できません
+@msg	fill on a symbol instance must be a solid color or none	シンボルインスタンスの fill は単色または none にしてください
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	「シェイプに変換」または「オブジェクトのアウトライン」効果のない画像には {key} を設定できません
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
 	Text Flow	テキストの流れ
 	By Rows	行方向

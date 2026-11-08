@@ -133,7 +133,13 @@ fn gives_shape(e: &Effect) -> bool {
 /// Does `item`, a fill or stroke of an image, paint something: does it paint and carry an effect
 /// that gives it a shape ([`gives_shape`])?
 fn shapes_image(item: &AppearanceItem) -> bool {
-    crate::paints(item) && item.effects().iter().any(gives_shape)
+    crate::paints(item) && gives_image_shape(item.effects())
+}
+
+/// Do `effects`, those of an image's fill or stroke, give that fill or stroke a shape to paint
+/// ([`gives_shape`])?
+pub fn gives_image_shape(effects: &[Effect]) -> bool {
+    effects.iter().any(gives_shape)
 }
 
 /// The fills and strokes of `items` (an image's own) that paint something ([`shapes_image`]), each
@@ -670,8 +676,7 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
         if follows {
             group_marks(art, &mut vec![], &HashSet::new(), &mut groups);
         }
-        // Whether a path kept its shape (past the budget), and the ids of those that did.
-        let mut kept = false;
+        // The ids of the paths that kept their shape (past the budget).
         let mut kept_ids = HashSet::new();
         let transform = (e.id == "distort.transform").then(|| {
             let (m, copies) = crate::distort::transform_map(bounds, &params, seed);
@@ -697,7 +702,6 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                     let (made, moved) = transform_leaf(leaf, &path, map, copies, options, room);
                     used = used.minus(before).plus(made);
                     if !moved {
-                        kept = true;
                         kept_ids.insert(leaf.id);
                     }
                     return;
@@ -709,12 +713,11 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                 }
             }
             let Some(out) = apply_one(&e.id, &params, &path, bounds, &GeomContext { seed, ..GeomContext::of(leaf) }, room) else {
-                kept = true;
                 kept_ids.insert(leaf.id);
                 return;
             };
             used = used.minus(before).plus(Budget::of(&out));
-            if follows && !boxes && leaf.appearance.has_placed_gradient() {
+            if follows && !boxes && leaf.appearance.has_positioned_gradient() {
                 crate::Carry::of(&e.id, &params, bounds, None, None, seed).apply(&mut leaf.appearance);
             }
             set_geometry(leaf, out, rule);
@@ -732,13 +735,13 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
         }
         // What paints the art as a whole, and the own fills and strokes of the groups inside it,
         // follow their bounds under Free Distort (they stay when no path changed them). Each stays
-        // when a path under it kept its shape (past the budget).
+        // when a path under it that its bounds measure kept its shape (past the budget).
+        let mut after = vec![];
+        let held = (!groups.is_empty() || !kept_ids.is_empty()) && group_marks(art, &mut vec![], &kept_ids, &mut after).1;
         if !groups.is_empty() {
-            let mut after = vec![];
-            group_marks(art, &mut vec![], &kept_ids, &mut after);
             carry_groups(art, groups, after, &|from, to| crate::Carry::of(&e.id, &params, bounds, from, to, seed));
         }
-        if follows && !kept {
+        if follows && !held {
             whole.push(crate::Carry::of(&e.id, &params, bounds, Some(bounds), art.geometric_bounds(), seed));
         }
     }
@@ -1020,7 +1023,7 @@ fn rebase_type_outlines(n: &mut Node, before: &mut std::vec::IntoIter<Option<Rec
         && from != to
     {
         for_each_leaf(n, &mut |leaf| {
-            if leaf.appearance.has_placed_gradient() {
+            if leaf.appearance.has_positioned_gradient() {
                 follow_boxes(&mut leaf.appearance, from, to);
             }
         });
@@ -1049,11 +1052,11 @@ fn is_member_group(n: &Node) -> bool {
 
 /// A group below the art that [`is_member_group`] takes and whose own fills or strokes hold a
 /// placed gradient: the child indices that lead to it from the art, its geometric bounds, and
-/// whether a path below it kept its shape.
+/// whether a path below it that its bounds measure kept its shape.
 type GroupMark = (Vec<usize>, Option<Rect>, bool);
 
 /// The geometric bounds of `n` (as [`Node::geometric_bounds`] gives them) and whether a path or
-/// compound path below it is in `kept`, measured in one walk. Each group below `n` that
+/// compound path below it that those bounds measure is in `kept`, measured in one walk. Each group below `n` that
 /// [`GroupMark`] describes goes into `out`, reached from `n` through `at`.
 fn group_marks(n: &Node, at: &mut Vec<usize>, kept: &HashSet<NodeId>, out: &mut Vec<GroupMark>) -> (Option<Rect>, bool) {
     match &n.kind {
@@ -1065,14 +1068,15 @@ fn group_marks(n: &Node, at: &mut Vec<usize>, kept: &HashSet<NodeId>, out: &mut 
             for (i, c) in children.iter().enumerate() {
                 at.push(i);
                 let (b, h) = group_marks(c, at, kept, out);
-                if is_member_group(c) && c.appearance.has_placed_gradient() {
+                if is_member_group(c) && c.appearance.has_positioned_gradient() {
                     out.push((at.clone(), b, h));
                 }
                 at.pop();
-                held |= h;
+                // Only members measured in the bounds hold the group's gradients in place.
                 let counts = if *clip { i == 0 } else { i >= skip && (c.visible || !layer) };
                 if counts {
                     bounds = vectorcraft_geom::union_opt(bounds, b);
+                    held |= h;
                 }
             }
             (bounds, held)
@@ -1126,7 +1130,7 @@ fn rebase_leaves(n: &mut Node, before: &mut std::vec::IntoIter<Option<Rect>>) {
         if let Some(Some(from)) = before.next()
             && let Some(to) = n.geometric_bounds()
             && from != to
-            && n.appearance.has_placed_gradient()
+            && n.appearance.has_positioned_gradient()
         {
             follow_boxes(&mut n.appearance, from, to);
         }
@@ -1224,7 +1228,7 @@ fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
                 _ => {}
             }
             // The placed gradients of its own fills and strokes move with it, as a path's do.
-            if xf != Affine::IDENTITY && one.appearance.has_placed_gradient() {
+            if xf != Affine::IDENTITY && one.appearance.has_positioned_gradient() {
                 one.appearance.transform_gradients(xf);
             }
             one

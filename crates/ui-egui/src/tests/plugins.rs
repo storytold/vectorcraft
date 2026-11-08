@@ -130,8 +130,9 @@ fn asking(id: &str, name: &str, permissions: &str) -> Vec<u8> {
 
 /// Installing a plug-in that lists permissions asks first, showing its name, id, version, file hash
 /// and each permission in plain words, with hidden characters from the manifest escaped. Cancel
-/// installs nothing, OK installs it; installing the same module again doesn't ask, and one with
-/// other bytes does, even when it lists the same permissions, as does one that asks for another.
+/// installs nothing, OK installs it; installing the same module again doesn't ask, one with other
+/// bytes asks again, even when it lists the same permissions, and then whether to take the
+/// installed one's place, as does one that asks for another permission.
 #[test]
 fn installing_a_plugin_that_lists_permissions_asks_first() {
     let mut app = app();
@@ -168,15 +169,35 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     // The same module again: installed without asking.
     app.run("ui.installPlugin", json!({"dataBase64": data})).unwrap();
     assert!(app.ui.dialog.is_none(), "the same bytes don't ask again");
-    // Other bytes with the same permissions ask, from both ways in; Cancel keeps the one installed.
+    // Other bytes with the same permissions ask for them, from both ways in; Cancel keeps the one
+    // installed.
     let again = asking(id, "Tidy 2", r#"["doc.write","doc.read"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
     assert_eq!(r["pending"], dialogs::confirm::KIND, "other bytes ask again");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), "Install “Tidy 2”, which asks for these permissions?");
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
     io::open_bytes(&mut app, "tidy2.wasm", &again, None).unwrap();
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "File › Open asks too");
     dialogs::confirm(&mut app).unwrap();
+    // OK on the permissions goes on to ask before it takes the installed one's place, showing its
+    // id and file hash; Cancel there keeps the one installed and records no grant.
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.str("message"), "Install “Tidy 2” in place of the plug-in with the same ID?");
+    let again_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
+    assert_eq!(
+        d.str("detail"),
+        format!(
+            "ID: {id}\nFile SHA-256: {again_hash}\n\nThis file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID."
+        )
+    );
+    dialogs::cancel(&mut app);
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
+    assert_ne!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(again_hash), "Cancel records no grant");
+    app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
+    dialogs::confirm(&mut app).unwrap();
+    dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "both questions are answered");
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
     let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(new_hash), "OK records the new module's hash");

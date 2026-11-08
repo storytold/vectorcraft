@@ -210,7 +210,7 @@ fn make(s: &mut Session, p: &Value) -> Result<Value> {
         Some(id) => Err(bad(C, format!("object {} is hidden or locked, or on a locked artboard", id.0))),
         None => Ok(()),
     };
-    let mut ids = match ids_param(p, "ids") {
+    let mut ids = match ids_param(p, "ids", C)? {
         Some(ids) => {
             if let Some(id) = ids.iter().find(|id| d.node(**id).is_none()) {
                 return Err(EngineError::NoNode(*id));

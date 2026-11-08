@@ -422,6 +422,13 @@ font-technology	Variable	Biến thiên
 	Apply Bullets	Áp dụng dấu đầu dòng
 	Numbered List	Danh sách đánh số
 	Apply Numbers	Áp dụng đánh số
+	Bullets and Numbering…	Dấu đầu dòng và đánh số…
+	Numbers	Số
+	Level:	Cấp độ:
+	Bullet Character:	Ký tự đầu dòng:
+	Number Style:	Kiểu đánh số:
+	Left Indent:	Lề trái:
+	First Line Indent:	Thụt lề dòng đầu:
 	Convert to Text	Chuyển thành văn bản
 	Filled Dot	Chấm đặc
 	Dash	Gạch ngang
@@ -3074,6 +3081,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
 	Replace With Font From	Thay thế bằng phông chữ từ
+	Find In	Tìm trong
 	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
@@ -3825,6 +3833,15 @@ mark-style	Japanese	Kiểu Nhật
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
 	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Composite Fonts…	Phông chữ tổ hợp…
+	Composite Fonts	Phông chữ tổ hợp
+	Export Composite Fonts	Xuất phông chữ tổ hợp
+	Import Composite Fonts	Nhập phông chữ tổ hợp
+	Delete Font	Xóa phông chữ
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Chữ số
+	Scale at Center	Co giãn từ tâm
 	Up/Down:	Lên/Xuống:
 	Left/Right:	Trái/Phải:
 	Temperature	Nhiệt độ màu
@@ -4399,6 +4416,7 @@ theme	Appearance	Giao diện
 @msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
 @msg	graphs come in as plain art, without their data or settings	biểu đồ được nhập dưới dạng hình vẽ thường, không kèm dữ liệu và thiết lập của chúng
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	một ảnh nhúng {_1} × {_2} điểm ảnh đã được thu nhỏ còn {_3} × {_4} điểm ảnh để giữ các lớp
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Một đối tượng chỉ nhận một hiệu ứng 3D. Hãy chỉnh sửa tùy chọn của hiệu ứng hiện có hoặc xóa nó trước.
@@ -4771,6 +4789,7 @@ theme	Appearance	Giao diện
 @msg	object ids are non-negative integers, not {v}	id đối tượng là số nguyên không âm, không phải {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} phải là một mảng id đối tượng là số nguyên không âm
 @msg	invalid object id {value}: expected a non-negative integer	id đối tượng {value} không hợp lệ: cần một số nguyên không âm
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	mục {index} của `{key}` là {value}, không phải id đối tượng (số nguyên không âm)
 @msg	no such object id {value}	không có đối tượng nào có id {value}
 @msg	id {value} is a layer, not an object	id {value} là một lớp, không phải đối tượng
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} là một lớp, không phải đối tượng; hãy di chuyển lớp bằng layer.move
@@ -5457,6 +5476,9 @@ axis	Y Axis	Trục Y
 	Install “{name}”, which asks for these permissions?	Cài đặt “{name}”, plug-in yêu cầu các quyền này?
 	ID: {id}	ID: {id}
 	Version: {version}	Phiên bản: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó
 	Change, add and delete objects in the document	Thay đổi, thêm và xóa đối tượng trong tài liệu
@@ -5464,10 +5486,13 @@ axis	Y Axis	Trục Y
 	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
 	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `progress` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
+	Keep settings of its own	Lưu cài đặt riêng
+	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Clear Plug-in Cache	Xóa bộ nhớ đệm của plug-in
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `{permission}` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập `env.vc_progress`, `env.vc_cancelled` và `env.vc_log` (API plug-in cấp 2), không có WASI, tệp hay mạng
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập các hàm `env.vc_*` mà docs/plugins.md liệt kê (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
@@ -6025,6 +6050,16 @@ breakText	Glyphs	Glyph
 @msg	path must be a list of child indices	path phải là danh sách chỉ số con
 @msg	no object at path {shown} in the symbol's art	không có đối tượng tại đường dẫn {shown} trong hình của ký hiệu
 @msg	give fill, stroke, opacity and/or blend	hãy cung cấp fill, stroke, opacity và/hoặc blend
+@msg	{key} cannot be set on a guide	không thể đặt {key} cho đường căn
+@msg	{key} cannot be set on a blend	không thể đặt {key} cho hòa trộn
+@msg	{key} cannot be set on an envelope	không thể đặt {key} cho envelope
+@msg	{key} cannot be set on a gradient mesh	không thể đặt {key} cho lưới chuyển sắc
+@msg	{key} cannot be set on a Repeat	không thể đặt {key} cho lặp lại
+@msg	{key} cannot be set on a placed document	không thể đặt {key} cho tài liệu đã đặt
+@msg	{key} cannot be set on an Intertwine group	không thể đặt {key} cho nhóm đan xen
+@msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
+@msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
 @msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
