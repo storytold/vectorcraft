@@ -109,7 +109,7 @@ fn lengths_of(id: &str) -> Lengths {
     }
 }
 
-const WARP_DOC: &str = "{bend: % (-100..100, 50; placed gradients move and scale from each path's bounds to its warped bounds), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\"}";
+const WARP_DOC: &str = "{bend: % (-100..100, 50; with a bend or a distortion, placed gradients move and scale from the object's bounds to its warped bounds), horizontal: % distortion (0), vertical: % distortion (0), orientation: \"horizontal\"|\"vertical\"}";
 
 const DT: &[&str] = &["Effect", "Distort & Transform"];
 

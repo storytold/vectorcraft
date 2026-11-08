@@ -194,10 +194,14 @@ fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
         let want = b.x0 + (115.0 - 40.0) / 120.0 * b.width();
         assert!((want - 115.0).abs() > 2.0, "{effect} {params}: the warp moves the midpoint ({b:?})");
         let red = |x: usize| f64::from(after.pixels[(100 * 200 + x) * 4]);
-        let half = (b.x0.ceil() as usize + 1..b.x1.floor() as usize - 1)
-            .find(|&x| red(x) >= 127.5 && red(x + 1) < 127.5)
-            .map(|x| x as f64 + 0.5 + (red(x) - 127.5) / (red(x) - red(x + 1)))
-            .unwrap();
+        // White turns dark once on row 100, and gradually, so the crossing is the ramp's midpoint
+        // and not an edge of the outline.
+        let crossings: Vec<usize> =
+            (b.x0.ceil() as usize + 3..b.x1.floor() as usize - 4).filter(|&x| red(x) >= 127.5 && red(x + 1) < 127.5).collect();
+        assert_eq!(crossings.len(), 1, "{effect} {params}: white turns dark once on row 100: {crossings:?}");
+        let x = crossings[0];
+        assert!(red(x - 2) - red(x + 3) < 100.0, "{effect} {params}: the ramp, not an edge: {} to {}", red(x - 2), red(x + 3));
+        let half = x as f64 + 0.5 + (red(x) - 127.5) / (red(x) - red(x + 1));
         assert!((half - want).abs() < 1.0, "{effect} {params} on item {item}: the midpoint is at {half}, want {want}");
     }
 }

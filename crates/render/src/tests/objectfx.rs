@@ -874,9 +874,20 @@ fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
         geom: Some(GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(60.0, 50.0), aspect: 1.0, focal: None }),
         ..ramp.clone()
     };
-    for (style, params) in [("arc", json!({"bend": 50})), ("fisheye", json!({"bend": 60})), ("rise", json!({"bend": 40, "horizontal": 50}))] {
-        let e = fx(&format!("warp.{style}"), params);
+    let styles = [
+        ("arc", json!({"bend": 50})),
+        ("bulge", json!({"bend": 60, "orientation": "vertical"})),
+        ("rise", json!({"bend": 40, "vertical": 50, "orientation": "vertical"})),
+    ];
+    for (style, params) in styles.clone() {
+        let e = fx(&format!("warp.{style}"), params.clone());
         let (got, want) = (draw(&placed, e.clone()), draw(&ramp, e));
+        // The warp moves the outline's left or right edge, so a gradient left in place would not
+        // run from edge to edge.
+        let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+        let path = shapes::rectangle(square);
+        let b = vectorcraft_effects::apply_geometry(&[fx(&format!("warp.{style}"), params.clone())], &path, square).bounds().unwrap();
+        assert!((b.x0 - 30.0).abs() > 0.5 || (b.x1 - 60.0).abs() > 0.5, "warp.{style}: the outline spans {b:?}");
         let mut worst = 0;
         for y in 0..100 {
             for x in 0..100 {
@@ -885,6 +896,52 @@ fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
             }
         }
         assert!(worst <= 3, "warp.{style}: worst channel difference {worst}");
+    }
+    // A stroke's own Warp: the canvas draws its gradient moved and scaled from the stroke-inflated
+    // bounds before the warp to those after it, as on the warped path with that gradient.
+    let geom = GradientGeom { start: Point::new(35.0, 50.0), end: Point::new(55.0, 50.0), aspect: 1.0, focal: None };
+    let stroked = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp.clone() }));
+    let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+    let follow = |p: Point, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    for (style, params) in styles {
+        let mut n = Node::path(NodeId(0), shapes::rectangle(square), Appearance::basic(Paint::None, stroked.clone(), 6.0));
+        let Some(AppearanceItem::Stroke(layer)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).cloned() else {
+            panic!("a stroke")
+        };
+        let Some(item) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        item.effects_mut().push(fx(&format!("warp.{style}"), params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let baked = vectorcraft_effects::bake_document(&d).unwrap();
+        let mut warped = None;
+        for l in &baked.layers {
+            l.walk(&mut |c: &Node| {
+                if let (Some(path), true) = (c.path_data(), c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_)))) {
+                    warped.get_or_insert_with(|| path.clone());
+                }
+            });
+        }
+        let path = warped.unwrap();
+        let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        assert_ne!(b, square, "warp.{style}: the warp changes the bounds");
+        let (from, to) = (layer.paint_bounds(square), layer.paint_bounds(b));
+        let moved = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+        let want_node = Node::path(
+            NodeId(0),
+            path,
+            Appearance::basic(Paint::None, Paint::Gradient(Box::new(GradientPaint { geom: Some(moved), ..ramp.clone() })), 6.0),
+        );
+        let want = render(&doc_with(Document::new(100.0, 100.0), want_node));
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (live.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style} on the stroke: worst channel difference {worst}");
     }
 }
 

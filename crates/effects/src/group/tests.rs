@@ -349,6 +349,42 @@ fn shape_art_moves_the_gradient_of_a_symbol_instances_art_with_its_transform() {
     assert!((out.geometric_bounds().unwrap().x0 - 30.0).abs() < 1e-6, "the art moves");
 }
 
+/// Under a Warp effect, the gradient placed on a symbol instance's art's own fill follows the art's
+/// bounds, and the gradient placed on a compound shape follows its area's bounds, each from before
+/// the warp to after it, in the art Pathfinder takes.
+#[test]
+fn shape_art_moves_the_gradients_of_a_symbol_instances_art_and_a_compound_shape_with_a_warp() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (2.0, 3.0).into(), end: (9.0, 3.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let follow = |p: Point, from: Rect, to: Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    let check = |out: &Node, from: Rect, what: &str| {
+        let to = out.geometric_bounds().unwrap();
+        assert_ne!(from, to, "{what}: the warp changes the bounds");
+        let Paint::Gradient(g) = out.appearance.fill_paint() else { panic!("{what}: a gradient: {:?}", out.appearance) };
+        let got = g.geom.unwrap();
+        let (s, e) = (follow(geom.start, from, to), follow(geom.end, from, to));
+        assert!(got.start.distance(s) < 1e-6 && got.end.distance(e) < 1e-6, "{what}: {got:?}, want {s:?} {e:?}");
+    };
+    for style in ["arc", "rise", "bulge"] {
+        let warp = || Effect { id: format!("warp.{style}"), params: serde_json::json!({"bend": 40.0}), visible: true };
+        let mut art = Node::group(NodeId(20), vec![sq(21, 0.0, Color::BLACK)]);
+        art.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed.clone())));
+        let hook = move |_: &Node| Some(art.clone());
+        let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+        instance.appearance.effects.push(warp());
+        check(&shape_art(&instance, Some(&hook)).unwrap(), Rect::new(0.0, 0.0, 10.0, 10.0), &format!("warp.{style} on a symbol instance"));
+        let mut shape = compound_shape(ShapeMode::Add);
+        shape.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
+        shape.appearance.effects.push(warp());
+        check(&shape_art(&shape, None).unwrap(), Rect::new(0.0, 0.0, 15.0, 10.0), &format!("warp.{style} on a compound shape"));
+    }
+}
+
 #[test]
 fn a_groups_transform_and_free_distort_move_the_gradients_placed_on_its_paths() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
@@ -412,9 +448,10 @@ fn a_groups_warp_moves_the_gradients_placed_on_its_paths_by_each_paths_bounds() 
     }
 }
 
-/// Under a group's Warp effect, the group's own placed gradient follows the group's bounds, a
-/// nested group's own placed gradient follows the nested group's bounds, and a compound path's
-/// placed gradient follows the compound path's bounds, each from before the warp to after it.
+/// Under a group's Warp effect, the group's own placed gradients follow the group's bounds, a
+/// nested group's own placed gradients follow the nested group's bounds, and a compound path's
+/// placed gradients follow the compound path's bounds, each from before the warp to after it (a
+/// stroke's: those bounds inflated by the stroke).
 #[test]
 fn a_groups_warp_moves_its_own_a_nested_groups_and_a_compound_paths_gradients_by_their_bounds() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
@@ -422,7 +459,10 @@ fn a_groups_warp_moves_its_own_a_nested_groups_and_a_compound_paths_gradients_by
     let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
     let geom = GradientGeom { start: (12.0, 4.0).into(), end: (26.0, 4.0).into(), aspect: 1.0, focal: None };
     let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
-    let own_fill = |n: &mut Node| n.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed.clone())));
+    let own_fill = |n: &mut Node| {
+        n.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed.clone())));
+        n.appearance.items.push(AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(placed.clone(), 3.0)));
+    };
     let follow = |p: Point, from: Rect, to: Rect| {
         Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
     };
@@ -434,7 +474,7 @@ fn a_groups_warp_moves_its_own_a_nested_groups_and_a_compound_paths_gradients_by
             Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(23.0, 3.0, 27.0, 7.0)), Appearance::default())),
         ];
         let mut compound = Node::new(NodeId(3), NodeKind::Compound { children: ring, rule: FillRule::EvenOdd });
-        compound.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
+        compound.appearance = Appearance::basic(placed.clone(), placed.clone(), 2.0).into();
         let mut g = Node::group(NodeId(10), vec![Arc::new(inner), Arc::new(compound), sq(2, 40.0, Color::BLACK)]);
         own_fill(&mut g);
         let mut before = std::collections::HashMap::new();
@@ -460,19 +500,29 @@ fn a_groups_warp_moves_its_own_a_nested_groups_and_a_compound_paths_gradients_by
                 let Paint::Gradient(gp) = item.paint() else { continue };
                 let (from, to) = (before[&c.id], after[&c.id]);
                 assert_ne!(from, to, "warp.{style} {:?}: the warp changes the bounds", c.id);
+                let stroke = match item {
+                    AppearanceItem::Stroke(s) => Some(s),
+                    AppearanceItem::Fill(_) => None,
+                };
+                let (from, to) = match stroke {
+                    Some(s) => (s.paint_bounds(from), s.paint_bounds(to)),
+                    None => (from, to),
+                };
                 let got = gp.geom.unwrap();
                 let (s, e) = (follow(geom.start, from, to), follow(geom.end, from, to));
                 assert!(
                     got.start.distance(s) < 1e-6 && got.end.distance(e) < 1e-6,
-                    "warp.{style} {:?}: {got:?}, want {s:?} {e:?} ({from:?} to {to:?})",
-                    c.id
+                    "warp.{style} {:?} (stroke: {}): {got:?}, want {s:?} {e:?} ({from:?} to {to:?})",
+                    c.id,
+                    stroke.is_some()
                 );
-                checked.push(c.id);
+                checked.push((c.id, stroke.is_some()));
             }
         });
         checked.sort();
         checked.dedup();
-        assert_eq!(checked, vec![NodeId(3), NodeId(5), NodeId(10)], "warp.{style}");
+        let want: Vec<_> = [NodeId(3), NodeId(5), NodeId(10)].into_iter().flat_map(|id| [(id, false), (id, true)]).collect();
+        assert_eq!(checked, want, "warp.{style}");
     }
 }
 

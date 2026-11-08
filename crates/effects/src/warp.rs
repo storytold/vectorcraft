@@ -34,7 +34,9 @@ pub fn warp(path: &PathData, b: Rect, style: WarpStyle, p: &Value, max: usize) -
 }
 
 /// Does warp effect `id` with params `p` move any point? Every style leaves the box as it is with
-/// no bend and no distortion, and Arc (`warp.arc`) takes a bend under 0.0001 % as none.
+/// no bend and no distortion, and Arc (`warp.arc`) takes a bend under 0.0001 % as none: the
+/// threshold must match the one in [`warp_point`]'s Arc case (`warp_bends_when_the_warp_moves_the_outline`
+/// tests both sides of it).
 pub(crate) fn bends(id: &str, p: &Value) -> bool {
     let share = |key: &str, default: f64| num(p, key, default).clamp(-100.0, 100.0) / 100.0;
     let bend = share("bend", 50.0);

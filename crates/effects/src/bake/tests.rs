@@ -284,7 +284,7 @@ fn a_warp_with_no_bend_leaves_a_placed_gradient_exactly_in_place() {
     let geom = GradientGeom { start: Point::new(13.7, 31.3), end: Point::new(91.1, 47.9), aspect: 1.0, focal: None };
     let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
     let mut drift = 0;
-    let cases = ["arc", "bulge", "flag", "wave", "rise", "fisheye", "inflate", "squeeze", "twist"].map(|s| (s, 0.0));
+    let cases = crate::WARP_STYLES.map(|(s, _)| (s, 0.0));
     for (k, (style, bend)) in cases.into_iter().chain([("arc", 1e-5), ("arc", -1e-5)]).enumerate() {
         let k = k as f64;
         let oval = Rect::new(10.1 + k * 0.37, 20.3 - k * 1.13, 97.7 + k * 3.31, 71.9 + k * 0.71);
