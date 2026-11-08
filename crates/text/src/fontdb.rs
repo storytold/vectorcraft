@@ -49,6 +49,7 @@ pub use dirs::{
 use face::Instances;
 #[cfg(test)]
 pub(crate) use face::MAX_LIVE_INSTANCES;
+pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
 #[cfg(not(target_arch = "wasm32"))]

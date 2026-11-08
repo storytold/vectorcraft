@@ -4498,6 +4498,56 @@ fn aligned_type_round_a_circle_runs_along_its_path_as_the_file_lays_it_out() {
     }
 }
 
+/// Type aligned to a circle by its ascender, center or descender, in the default face at 12 pt: the
+/// file's baselines lie inside the path by the top of the face's em box (its `BASE` table's
+/// `ideo` -170 plus one em), half the height of its H's top (656 units) or the bottom of its
+/// bounding box (-295), and laid out, the type's baselines lie where the file has them.
+#[test]
+fn aligned_type_lies_as_far_from_its_path_as_the_file_lays_it_out() {
+    let k = 40.0 * 0.552_284_75;
+    let points = [
+        (90.0, 50.0),
+        (90.0, 50.0 - k),
+        (50.0 + k, 10.0),
+        (50.0, 10.0),
+        (50.0 - k, 10.0),
+        (10.0, 50.0 - k),
+        (10.0, 50.0),
+        (10.0, 50.0 + k),
+        (50.0 - k, 90.0),
+        (50.0, 90.0),
+        (50.0 + k, 90.0),
+        (90.0, 50.0 + k),
+        (90.0, 50.0),
+    ];
+    let all: Vec<(f64, f64)> = points.iter().map(|(x, y)| canvas(*x, *y)).collect();
+    let segment = |i: usize| (0..4).map(|j| format!("{} {}", all[i * 3 + j].0, all[i * 3 + j].1)).collect::<Vec<_>>().join(" ");
+    for (key, align, inside) in [
+        (0, vectorcraft_doc::PathAlign::Ascender, 0.83 * 12.0),
+        (2, vectorcraft_doc::PathAlign::Center, 0.328 * 12.0),
+        (1, vectorcraft_doc::PathAlign::Descender, -0.295 * 12.0),
+    ] {
+        let frame = format!(
+            "<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 2 /6 [ 2.0 5.99 ] /11 << /2 {key} >> >> >> >>",
+            (0..4).map(segment).collect::<Vec<_>>().join(" ")
+        );
+        let radius = 40.0 - inside;
+        let doc = document_of(&[frame], &[round_story_with("abcdefgh", 5.0, radius, radius / 48.0, &format!("/0 << /0 [ 0 {inside:.3} ] >>"))]);
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts = text_of(&r.document.layers[1]);
+        assert_eq!(texts.len(), 1, "{align:?}: {:?}", r.warnings);
+        assert_eq!(texts[0].path_align, align);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), texts[0]);
+        assert_eq!(layout.glyphs.len(), 8);
+        // The four cubics stray up to 0.011 from the circle.
+        for g in &layout.glyphs {
+            let (x, y) = (g.origin.x + g.angle.cos() * g.advance * 0.5 - 50.0, g.origin.y + g.angle.sin() * g.advance * 0.5 - 50.0);
+            assert!((x.hypot(y) - radius).abs() < 0.02, "{align:?}: {} from the center, want {radius}", x.hypot(y));
+        }
+    }
+}
+
 #[test]
 fn threaded_area_type_flows_through_its_frames() {
     let frames = [
