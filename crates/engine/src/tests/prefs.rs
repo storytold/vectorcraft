@@ -1959,6 +1959,21 @@ fn dragged_feedback_boxes(s: &mut Session, x: f64, y: f64) -> Vec<(f64, f64, f64
     boxes
 }
 
+/// The number of subpaths in each path of the Real-time Drawing off feedback the session shows now.
+fn feedback_subpaths(s: &mut Session) -> Vec<usize> {
+    use vectorcraft_tools::Overlay;
+    use vectorcraft_tools::draw2::FEEDBACK;
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Path { path, color, .. } if color == FEEDBACK => {
+                Some(path.elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// With Real-time Drawing off, a dragged group draws the outline of each member, nested groups'
 /// members included, at the dragged position instead of one union of them all.
 #[test]
@@ -2129,12 +2144,8 @@ fn real_time_drawing_off_outlines_each_mesh_of_a_dragged_repeat_once() {
     let boxes = dragged_feedback_boxes(&mut s, 120.0, 120.0);
     assert_eq!(boxes.len(), 2, "one outline per copy: {boxes:?}");
     assert_eq!(boxes[0], (130.0, 140.0, 100.0), "the first copy's mesh lines, moved");
-    let lines = s.overlays(ViewInfo::default()).into_iter().find_map(|o| match o {
-        vectorcraft_tools::Overlay::Path { path, color, .. } if color == vectorcraft_tools::draw2::FEEDBACK => Some(path),
-        _ => None,
-    });
-    let subpaths = lines.map_or(0, |path| path.elements().iter().filter(|el| matches!(el, kurbo::PathEl::MoveTo(_))).count());
-    assert!(subpaths > 1, "the mesh's lines, not one boundary: {subpaths}");
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(subpaths.len() == 2 && subpaths.iter().all(|&n| n > 1), "each copy's mesh lines, not one boundary: {subpaths:?}");
 }
 
 /// With Real-time Drawing off, a dragged gradient mesh with a Drop Shadow draws its mesh lines as one
@@ -2148,6 +2159,8 @@ fn real_time_drawing_off_outlines_a_dragged_mesh_with_an_effect_by_its_lines() {
     s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "item": null})).unwrap();
     assert_eq!(dragged_feedback_boxes(&mut s, 120.0, 120.0), [(130.0, 140.0, 100.0)]);
+    let subpaths = feedback_subpaths(&mut s);
+    assert!(matches!(subpaths.as_slice(), [n] if *n > 1), "the mesh's lines, not one boundary: {subpaths:?}");
 }
 
 /// With Real-time Drawing off, a dragged group with a Vector Halftone keeps its own fill, which is what
