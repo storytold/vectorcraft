@@ -426,6 +426,42 @@ fn use_registration_point_for_symbol_follows_a_transformed_instance() {
     }
 }
 
+/// The reference point locator is one tab stop: from the widget before it, two presses of Tab reach
+/// X, the first stopping on the whole locator; → on the locator moves the shared reference point to
+/// the middle of the right side.
+#[test]
+fn the_reference_point_locator_is_one_tab_stop_and_arrows_move_it() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 30, "width": 100, "height": 50})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "70 pt").center(), show);
+    let x = ctx.memory(|m| m.focused());
+    assert!(x.is_some(), "the click put the focus in X");
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    let mut press = |key| {
+        frame_events(&ctx, &mut app, vec![key], show);
+        frame_events(&ctx, &mut app, vec![], show);
+        ctx.memory(|m| m.focused())
+    };
+    let locator = press(key(egui::Key::Tab, egui::Modifiers::SHIFT));
+    let rect = |id: Option<egui::Id>| id.and_then(|id| ctx.read_response(id)).map(|r| r.rect);
+    let grid = rect(locator).unwrap_or(egui::Rect::NOTHING);
+    assert_eq!(grid.size(), egui::Vec2::splat(23.0), "Shift+Tab from X reaches the whole locator, not one of its squares");
+    let before = press(key(egui::Key::Tab, egui::Modifiers::SHIFT));
+    assert!(before.is_some() && rect(before).is_some_and(|r| !grid.contains_rect(r)), "a second Shift+Tab leaves the locator");
+    assert_eq!(press(key(egui::Key::Tab, egui::Modifiers::NONE)), locator, "Tab from the widget before the locator reaches it");
+    assert_eq!(press(key(egui::Key::Tab, egui::Modifiers::NONE)), x, "a second Tab reaches X");
+    press(key(egui::Key::ArrowRight, egui::Modifiers::NONE));
+    assert_eq!(ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt"))), None, "→ in X leaves the reference point alone");
+    press(key(egui::Key::Tab, egui::Modifiers::SHIFT));
+    press(key(egui::Key::ArrowRight, egui::Modifiers::NONE));
+    assert_eq!(ctx.data(|d| d.get_temp::<usize>(egui::Id::unique("refpt"))), Some(5), "→ on the locator chose the middle of the right side");
+}
+
 #[test]
 fn artboard_fields_keep_the_reference_point() {
     let r = Rect::new(0.0, 0.0, 300.0, 200.0);

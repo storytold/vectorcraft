@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify, TextRun};
 use vectorcraft_geom::{Rect, Vec2};
 
-use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, point_indices};
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, point_indices, switch_or};
 use crate::{Clipboard, EngineError};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -16,7 +16,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), selectedArtboards?: [n…] (the journal records that default here, for a replay), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
+            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), selectedArtboards?: [n…] (the journal records that default here, for a replay), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (locked and hidden art goes too; default: prefs moveLockedWithArtboard)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art`, in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -25,7 +25,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy Artboard",
             [],
             None,
-            "{index? | indices?, selectedArtboards?, art?} (as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?, lockedAndHidden?} (defaults as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
             |s, p| {
                 boards_and_art_noted(s, p, "artboard.copy")?;
@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut Artboard",
             [],
             None,
-            "{index? | indices?, selectedArtboards?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?, lockedAndHidden?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless lockedAndHidden); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
             |s, p| {
                 boards_and_art_noted(s, p, "artboard.cut")?;
@@ -253,14 +253,24 @@ pub(crate) fn refuse_locked(d: &vectorcraft_doc::Document, indices: &[usize]) ->
     }
 }
 
+/// Does locked and hidden art go with an artboard (`lockedAndHidden` param, else prefs
+/// moveLockedWithArtboard)? Noted in the journal when `art` goes along, so a replay takes the same
+/// art whatever the preference is then.
+pub(crate) fn locked_and_hidden(s: &mut Session, p: &Value, art: bool, cmd: &str) -> Result<bool> {
+    let all = switch_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard, cmd)?;
+    if art {
+        s.note_journal("lockedAndHidden", json!(all));
+    }
+    Ok(all)
+}
+
 /// The art that goes with artboard `i` when `art`: the objects fully inside it (locked and hidden
-/// ones only with prefs moveLockedWithArtboard), in paint order. With `moving` (a move or a cut),
-/// the art also on another locked artboard stays unless prefs moveLockedWithArtboard
-/// ([`vectorcraft_doc::Document::art_moving_with`]); a copy takes it.
-pub(crate) fn artboard_art(s: &Session, i: usize, art: bool, moving: bool) -> Result<Vec<NodeId>> {
+/// ones only when `all`), in paint order. With `moving` (a move or a cut), the art also on another
+/// locked artboard stays unless `all` ([`vectorcraft_doc::Document::art_moving_with`]); a copy
+/// takes it.
+pub(crate) fn artboard_art(s: &Session, i: usize, art: bool, all: bool, moving: bool) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
     let rect = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-    let all = s.prefs.move_locked_with_artboard;
     Ok(match (art, moving) {
         (false, _) => vec![],
         (true, false) => d.art_on_artboard(rect, all),
@@ -270,11 +280,11 @@ pub(crate) fn artboard_art(s: &Session, i: usize, art: bool, moving: bool) -> Re
 
 /// Each of `indices` with the art that goes with it when `art` ([`artboard_art`]), an object
 /// counted once, with the first of them it is on (artboards can overlap).
-pub(crate) fn artboards_art(s: &Session, indices: &[usize], art: bool, moving: bool) -> Result<Vec<(usize, Vec<NodeId>)>> {
+pub(crate) fn artboards_art(s: &Session, indices: &[usize], art: bool, all: bool, moving: bool) -> Result<Vec<(usize, Vec<NodeId>)>> {
     let mut seen = std::collections::HashSet::new();
     let mut arts = vec![];
     for &i in indices {
-        let art = artboard_art(s, i, art, moving)?.into_iter().filter(|id| seen.insert(*id)).collect();
+        let art = artboard_art(s, i, art, all, moving)?.into_iter().filter(|id| seen.insert(*id)).collect();
         arts.push((i, art));
     }
     Ok(arts)
@@ -291,7 +301,8 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["patterns"], "artboard.duplicate")?;
     let (indices, art) = boards_and_art_noted(s, p, "artboard.duplicate")?;
-    let arts = artboards_art(s, &indices, art, false)?;
+    let locked_art = locked_and_hidden(s, p, art, "artboard.duplicate")?;
+    let arts = artboards_art(s, &indices, art, locked_art, false)?;
     let all: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &all)?, ..Scaling::default() };
     let (index, ids) = s.edit("Duplicate Artboard", |d, _| {
@@ -316,8 +327,10 @@ fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Artboard Copy / Cut: the artboards and their art onto the clipboard (pasting brings them all);
 /// a cut then deletes them.
 pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
-    let (indices, art) = boards_and_art(s, p, if cut { "artboard.cut" } else { "artboard.copy" })?;
-    let arts = artboards_art(s, &indices, art, cut)?;
+    let cmd = if cut { "artboard.cut" } else { "artboard.copy" };
+    let (indices, art) = boards_and_art(s, p, cmd)?;
+    let locked_art = locked_and_hidden(s, p, art, cmd)?;
+    let arts = artboards_art(s, &indices, art, locked_art, cut)?;
     let st = s.doc()?;
     if cut && st.doc.artboards.len() <= indices.len() {
         return Err(EngineError::Other("a document needs at least one artboard".into()));

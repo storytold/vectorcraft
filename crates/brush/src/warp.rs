@@ -879,12 +879,16 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             };
             trims.push(None);
             corner_half = corner_half.max(bb.width() * k / 2.0);
-            let bis = a + b;
-            let bis = if bis.hypot() < 1e-9 { a } else { bis / bis.hypot() };
-            let xf = Affine::translate(t.verts[i].to_vec2())
-                * Affine::rotate(bis.y.atan2(bis.x))
-                * Affine::scale(k)
-                * Affine::translate(-bb.center().to_vec2());
+            // Inner and outer corner art is the corner that joins a side tile on its right to one
+            // below it, so its arms point along +x and +y (as the flips leave them). The tile is
+            // turned so that the line halving its arms lies on the line halving the sides at the
+            // corner, back along the incoming side and on along the outgoing one: at a right angle
+            // the arms meet the side tiles, and at other angles the difference is split between
+            // the two sides (#6110).
+            let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
+            let sides = b - a;
+            let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(k) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));

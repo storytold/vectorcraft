@@ -20,7 +20,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind};
 use vectorcraft_geom::Rect;
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, id_param, index, ok, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, object_param, ok, str_param, unique_name};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -290,7 +290,7 @@ fn style_index(d: &Document, name: &str) -> Result<usize> {
 
 /// The object a style is made from: `id`, else the first selected object.
 fn source<'a>(s: &'a Session, p: &Value, cmd: &str) -> Result<(NodeId, &'a Node)> {
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", cmd)? {
         Some(id) => id,
         None => super::edit::selected_roots(s)?.first().copied().ok_or_else(|| bad(cmd, "select an object (or pass `id`)"))?,
     };

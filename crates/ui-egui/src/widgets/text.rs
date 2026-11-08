@@ -1,6 +1,8 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::numeric::mixed_field_named;
-use super::panel_chrome::chevron_cell;
+use super::panel_chrome::{
+    alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
+};
 use super::{CornerRadius, Rect, Response, Stroke, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
@@ -399,16 +401,30 @@ pub fn text_presets_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&s
     ui.scope(|ui| {
         // The field and the chevron share a border: one box, square where they meet.
         ui.spacing_mut().item_spacing.x = -1.0;
+        let at = ui.cursor().min;
+        let keyed = alt_down_in_field(ui, Rect::from_min_size(at, vec2(width - 19.0, super::FIELD_HEIGHT)));
         out = text_field_with_named(ui, &id, name, Some(value), width - 19.0, 1, super::group_start(&t));
         let resp = chevron_cell(ui, super::FIELD_HEIGHT);
+        let keyed = open_presets_from_keys(ui, &resp, keyed);
+        let was_open = presets_open(ui, &resp);
         egui::Popup::menu(&resp).show(|ui| {
             ui.set_min_width(width - 10.0);
-            for p in presets {
-                if ui.selectable_label(*p == value, *p).clicked() {
+            let focus = entry_to_focus(keyed, presets.iter().map(|p| *p == value));
+            for (i, p) in presets.iter().enumerate() {
+                let r = ui.selectable_label(*p == value, *p);
+                if focus == Some(i) {
+                    r.request_focus();
+                }
+                if r.clicked() {
                     out = Some((*p).to_string());
+                    // Enter or Space on the focused entry is a click too, which the menu does not
+                    // close on by itself.
+                    ui.close();
                 }
             }
         });
+        keep_enter_in_presets(ui, was_open);
+        return_focus_from_presets(ui, &resp);
     });
     out
 }
