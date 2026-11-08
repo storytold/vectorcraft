@@ -1080,10 +1080,12 @@ PDF 1.3 export.
 
 ### Parameter keys
 
-`command_run`, each step of `command_batch`, `run --cmd … --params` and the control channel's `engine.execute` check
-the keys of `params` against the command's params description (the `params` text `command_list` returns): the object
-it starts with, `{x, width?: pt, name?|title?: …}`, names the keys; `?` marks an optional one. A key it doesn't name
-is refused before the command runs:
+The engine checks the keys of `params` of every command it runs against the command's params description (the
+`params` text `command_list` returns): `command_run`, each step of `command_batch` and of the `command.batch` and
+`action.batch` commands, `run --cmd … --params`, the control channel's `engine.execute`, and the app's own calls. A
+batch with such a step fails before its first step runs. The object the description
+starts with, `{x, width?: pt, name?|title?: …}`, names the keys; `?` marks an optional one. A key it doesn't name is
+refused before the command runs:
 
 ```json
 {"id": "file.new", "params": {"widht": 300}}
@@ -1126,13 +1128,17 @@ one opens as before and draws it as `rgb`:
 ```
 
 A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
-plug-in effect's parameters are resolved against its manifest instead, and `effect.setParams` as a step of
-`command.batch` isn't checked before the batch runs (the effect it edits may only exist once the steps before it ran);
-the command still refuses an effect `color` it can't read. A description with a `…` entry takes more keys than it lists: those of the command it names
+plug-in effect's parameters are resolved against its manifest instead. `effect.setParams` as a step of
+`command.batch` is checked when the step runs, against the effects the steps before it added, and the batch then
+fails with no change. A description with a `…` entry takes more keys than it lists: those of the command it names
 (`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
 of the format they write (one object can carry several formats' options). A command that takes its own reply back
-(`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
-journal recorded by an older version replays as it did, except for an effect `color` that the effect can't read.
+(`document.setup`, `text.areaOptions`) says so the same way.
+
+Saved actions aren't checked this way. When the Actions panel plays an action (Play at any speed, an action's function
+key, the Batch dialog or `ui.action.play`), a key a command no longer reads, recorded by an older version, is ignored
+and the action still plays. `Session::replay` plays a journal the same way. The command still refuses an effect
+`color` or `channel` it can't read.
 
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
