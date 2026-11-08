@@ -100,14 +100,15 @@ fn up(v: V3) -> [f64; 3] {
     [v.0, -v.1, v.2]
 }
 
-/// `faces` (view space) as one mesh, each cut into triangles turned to its normal (a face given no
-/// normal takes its corners' own).
+/// `faces` (view space) as one mesh, each cut into triangles turned to its normal, which is written
+/// at unit length whatever length it is given (a face given no normal takes its corners' own).
 fn mesh(faces: &[Face3]) -> Result<Mesh, String> {
     let mut out = Mesh::default();
     let mut work = 0usize;
     for (contours, normal) in faces {
         let geometric = newell(contours);
-        let n = if normal.dot(*normal) > 0.5 { *normal } else { geometric.unit() };
+        let given = normal.unit();
+        let n = if given.dot(given) > 0.5 { given } else { geometric.unit() };
         if n.dot(n) < 0.5 {
             continue;
         }
