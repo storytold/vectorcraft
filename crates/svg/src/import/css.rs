@@ -18,7 +18,8 @@ pub(super) type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 /// `name: value` declarations of a block or `style` attribute, with their `!important` flag. The
 /// `font` shorthand becomes its longhands, as usvg reads it for the rest of the drawing (#1557).
 pub(super) fn parse_decls(s: &str) -> Vec<(String, String, bool)> {
-    split_decls(s)
+    let s = strip_comments(s);
+    split_decls(&s)
         .into_iter()
         .filter_map(|d| {
             let (k, v) = d.split_once(':')?;
@@ -354,9 +355,8 @@ fn top_level_commas(list: &str) -> impl Iterator<Item = &str> {
     })
 }
 
-/// Rules from every `<style>` element, in source order.
-fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
-    // Drop comments outside strings.
+/// `css` without its `/* … */` comments (those inside quoted strings stay).
+fn strip_comments(css: &str) -> String {
     let mut text = String::with_capacity(css.len());
     let mut chars = css.chars().peekable();
     let mut quote = None;
@@ -387,6 +387,12 @@ fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
             text.push(c);
         }
     }
+    text
+}
+
+/// Rules from every `<style>` element, in source order.
+fn parse_sheet(css: &str, out: &mut Vec<Rule>) {
+    let text = strip_comments(css);
     let mut s = text.as_str();
     loop {
         s = s.trim_start();
