@@ -117,6 +117,12 @@ fn source_units(pattern: &[u16], mut emit: impl FnMut(&[u16])) {
     while let Some(&u) = pattern.get(i) {
         match u {
             0x5C => {
+                // A backslash before a line terminator escapes the terminator as itself (section
+                // 15.10.2.10); the terminator's escape written below matches the same unit.
+                if pattern.get(i + 1).is_some_and(|&n| crate::chars::is_line_terminator(u32::from(n))) {
+                    i += 1;
+                    continue;
+                }
                 emit(pattern.get(i..i + 2).unwrap_or(&[BACKSLASH]));
                 i += 2;
                 continue;

@@ -346,28 +346,22 @@ fn parse_iso(s: &[u8]) -> Option<f64> {
 /// year, an optional `HH:mm[:ss]` time and an optional `GMT[±hhmm]` offset, in either order of
 /// day and month. Without an offset the time is local.
 fn parse_text(interp: &Interp, s: &str) -> Option<f64> {
-    let mut words: Vec<&str> = Vec::new();
-    for w in s.split(|c: char| c.is_whitespace() || c == ',') {
-        if w.starts_with('(') {
-            break;
-        }
-        if !w.is_empty() {
-            words.push(w);
-        }
-    }
+    let starts = |w: &str, prefix: &str| w.get(..prefix.len()).is_some_and(|head| head.eq_ignore_ascii_case(prefix));
     let (mut month, mut date, mut year) = (None, None, None);
     let (mut h, mut m, mut sec) = (0.0, 0.0, 0.0);
     let mut offset: Option<f64> = None;
+    // The words are read one at a time, and none is copied.
+    let words = s.split(|c: char| c.is_whitespace() || c == ',').take_while(|w| !w.starts_with('(')).filter(|w| !w.is_empty());
     for w in words {
-        let lower = w.to_ascii_lowercase();
-        if DAYS.iter().any(|d| lower.starts_with(&d.to_ascii_lowercase())) && month.is_none() && date.is_none() && w.len() >= 3 && !w.contains(':') {
+        if DAYS.iter().any(|d| starts(w, d)) && month.is_none() && date.is_none() && w.len() >= 3 && !w.contains(':') {
             continue;
         }
-        if let Some(mi) = MONTHS.iter().position(|mo| lower.starts_with(&mo.to_ascii_lowercase())) {
+        if let Some(mi) = MONTHS.iter().position(|mo| starts(w, mo)) {
             month = Some(mi as f64);
             continue;
         }
-        if let Some(rest) = lower.strip_prefix("gmt").or_else(|| lower.strip_prefix("utc")).or_else(|| (lower == "z").then_some("")) {
+        let zone = if starts(w, "gmt") || starts(w, "utc") { w.get(3..) } else { w.eq_ignore_ascii_case("z").then_some("") };
+        if let Some(rest) = zone {
             if rest.is_empty() {
                 offset = Some(0.0);
                 continue;
@@ -377,7 +371,8 @@ fn parse_text(interp: &Interp, s: &str) -> Option<f64> {
                 Some(b'-') => (-1.0, rest.get(1..)?),
                 _ => return None,
             };
-            let digits = digits.replace(':', "");
+            // Five units are enough to tell whether four digits remain without the colons.
+            let digits: String = digits.chars().filter(|&c| c != ':').take(5).collect();
             if digits.len() != 4 || !digits.bytes().all(|b| b.is_ascii_digit()) {
                 return None;
             }
@@ -386,6 +381,9 @@ fn parse_text(interp: &Interp, s: &str) -> Option<f64> {
             continue;
         }
         if w.contains(':') {
+            if w.split(':').count() > 3 {
+                return None;
+            }
             let parts: Vec<&str> = w.split(':').collect();
             let field = |i: usize| -> Option<f64> { parts.get(i).map(|p| p.parse::<f64>().ok()).unwrap_or(Some(0.0)) };
             if parts.len() < 2 || parts.len() > 3 || !parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())) {

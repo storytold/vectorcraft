@@ -411,6 +411,12 @@ fn a_constructed_source_counts_against_the_heap_before_it_is_built() {
     let Ok(source) = crate::regexp_builtins::source_text(interp, &pattern) else { panic!("the source fits") };
     assert_eq!(source.flat().len(), 60_000);
     assert_eq!(string("String(new RegExp('a/\\\\/[/]\\n\\r\\u2028\\u2029'))"), "/a\\/\\/[/]\\n\\r\\u2028\\u2029/");
+    // A backslash before a line terminator reads back as the terminator's escape.
+    let escaped = "var r = new RegExp(String.fromCharCode(92, 10, 124, 92, 0x2028)); var back = eval(String(r));";
+    assert_eq!(
+        string(&format!("{escaped} String(r) + ' ' + r.test('\\n') + back.test('\\n') + back.test('\\u2028') + back.test('x')")),
+        "/\\n|\\u2028/ truetruetruefalse"
+    );
 }
 
 #[test]
@@ -600,6 +606,8 @@ fn dates_round_trip_through_their_strings() {
         "Object.prototype.toString.call(Date.prototype) === '[object Date]' && isNaN_(Date.prototype.getTime())",
         "var d = new Date(0); d + d === d.toString() + d.toString() && d - d === 0 && d == d.toString()",
         "isNaN_(Date.parse('1970-00-01')) && isNaN_(Date.parse('1970-13-01')) && isNaN_(Date.parse('1970-02-30'))",
+        "Date.parse('thu, 01 JAN 1970 00:00:00 gmt') === 0 && Date.parse('jan 2 1970 utc+01:00') === 82800000",
+        "isNaN_(Date.parse('Jan 1 1970 1:2:3:4 GMT')) && isNaN_(Date.parse('Jan 1 1970 GMT+01000')) && isNaN_(Date.parse('Jan 1 1970 x'))",
     ] {
         let full = format!("function Math_floor(t) {{ return t - t % 1000; }} function isNaN_(n) {{ return n !== n; }} {src}");
         assert_eq!(run_in(&mut realm, &full), JsValue::Bool(true), "{src}");
