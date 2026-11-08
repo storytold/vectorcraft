@@ -154,6 +154,7 @@ mod simplify_part;
 mod slices;
 mod smartguides;
 mod smooth_path;
+mod spelling;
 mod store;
 mod strokegeom;
 mod strokegradient;

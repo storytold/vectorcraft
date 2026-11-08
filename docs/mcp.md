@@ -5464,6 +5464,24 @@ returns the new value.
 ```
 
 
+## Spelling
+
+`text.spelling.check {ids?}` lists the words of the document's type that its dictionaries don't know: every
+visible, unlocked type object in paint order, or those in `ids` (and in the groups `ids` names). Each run is checked
+in its Character panel Language (English when it has none) by craft-proof; a language without a spelling dictionary
+marks nothing. Words in capitals, words with digits and web addresses are taken as correct. The result is
+`{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
+ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
+10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
+the words the dictionary of `lang` (default English) suggests instead of `word`, best first, at most `max` (1 to 20,
+default 5). Both only read the document.
+
+```json
+{"name":"run_command","arguments":{"command":"text.spelling.check","params":{}}}
+{"name":"run_command","arguments":{"command":"text.spelling.suggest","params":{"word":"drawng","lang":"en"}}}
+```
+
+
 ## Justification options
 
 `text.setFormat` sets the Paragraph panel menu's Justification… options of the selected type (or `ids`, or the

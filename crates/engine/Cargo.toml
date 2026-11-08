@@ -17,6 +17,7 @@ bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 [dependencies]
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
+craft-proof = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

@@ -713,7 +713,9 @@ fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool,
 
 /// The text objects Find and Replace and Find Next reach: on visible, unlocked layers, and not
 /// inside a hidden or locked group, which hides or locks what it holds as a layer does (#5900).
-fn all_texts(d: &Document) -> Vec<NodeId> {
+/// The visible, unlocked type objects of visible, unlocked layers, off locked artboards, in paint
+/// order: the text Find and Replace and Check Spelling go through.
+pub(crate) fn all_texts(d: &Document) -> Vec<NodeId> {
     fn visit(n: &Node, locks: &LockedArtboards<'_>, v: &mut Vec<NodeId>) {
         if !n.visible || n.locked {
             return;
