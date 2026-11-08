@@ -19,8 +19,11 @@ another.
 
 Each solid follows its shape as it is filled. Separate and nested contours are built as drawn. Contours that cross,
 touch or run along each other or themselves, as type often draws a glyph, are first merged into one outline by
-[`vectorcraft-pathops`](../crates/pathops/README.md), keeping contours however narrow. All three effects then share
-its [limits](../crates/pathops/README.md#limits): a shape it refuses is built from its contours as drawn, where it can be.
+[`vectorcraft-pathops`](../crates/pathops/README.md), keeping every contour but the numerical debris a boolean leaves.
+Whether contours meet is judged on the outline as it is followed (see the curve tolerance below), so curves that
+overlap by less than that are built as drawn. All three effects share pathops'
+[limits](../crates/pathops/README.md#limits): a shape it refuses is built from its contours as drawn, where it can be.
+An open subpath is closed by a straight line either way.
 
 ## 3D and Materials panel
 
@@ -234,8 +237,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
   counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
-  when its contours meet, again on the merged outline, which can have more points: bars crossing in a grid trace
-  every hole between them.
+  when its contours meet, again on the merged outline, which can have more points (bars crossing in a grid trace
+  every hole between them); past it, the shape is too complex for the effect.
 - **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
   unbuilt items.
 

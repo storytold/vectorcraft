@@ -89,18 +89,24 @@ pub fn split_into_grid(rect: Rect, rows: usize, cols: usize, gutter: f64) -> Vec
 
 ## Limits
 
-Every boolean, Pathfinder operation, region map and normalization goes through one sweep, and refuses input it can't
-sweep with a [`PathOpsError`](src/lib.rs) rather than answering with part of the art missing:
+Every boolean, Pathfinder operation, region map and normalization goes through one sweep. The `try_` functions
+(`try_boolean`, `try_normalize`, `try_unite_all`, …) refuse input it can't sweep with a [`PathOpsError`](src/lib.rs)
+rather than answering with part of the art missing. The others have no error to return: `boolean`, `normalize` and
+`area` answer an empty path or 0, and `unite_all` leaves a refused input out of the union, or answers an empty path
+when the inputs together are refused.
 
 - `NonFinite`: a coordinate is NaN or infinite.
 - `Degenerate`: the coordinates are so large that the sweep's tolerance would pass one unit (`MAX_SWEEP_EPS`), so
-  features thinner than it would collapse.
+  features thinner than it would collapse. A panic inside the sweep on rare near-degenerate input is caught and
+  reported as `Degenerate` too (on native builds; on the web a panic aborts).
+- `OpenPath`: the sweep could not form closed contours from what it was given (open subpaths are closed before it).
 - `TooComplex`: more than [`MAX_SEGMENT_PAIRS`](src/budget.rs) pairs of segments have overlapping bounds. They
   are counted exactly before the sweep, in O(n log n). This bounds what the sweep is given, not how many times the
   segments cross: a compact path that crosses itself many times can stay under it and still take seconds.
 
-Results are refitted within the precision (`DEFAULT_PRECISION` unless a `_with` variant is given) and contours
-thinner than it on average are dropped as slivers (see Booleans above).
+Results are refitted within the precision (`DEFAULT_PRECISION`, unless `try_boolean`, `unite_all_with`,
+`try_unite_all_with` or `pathfinder_with` is given one) and contours thinner than it on average are dropped as slivers
+(see Booleans above).
 
 ## Caveats
 
