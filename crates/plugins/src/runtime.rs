@@ -154,7 +154,7 @@ impl Plugin {
         let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
         let deadline = Deadline::new(p.limits.wall_time_ms);
         // The manifest isn't read yet: every host import is linked, and what it reports is dropped.
-        let mut live = p.instantiate(Run::new("", false, false, deadline), true)?;
+        let mut live = p.instantiate(Run::new("", false, false, deadline), true, &mut Report::default())?;
         let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
         let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
         if v != ABI_VERSION {
@@ -214,8 +214,9 @@ impl Plugin {
         self.serial = serial;
     }
 
-    /// A new instance for `run`, with the host imports linked when `granted`.
-    fn instantiate(&self, run: Run, granted: bool) -> Result<Live> {
+    /// A new instance for `run`, with the host imports linked when `granted`. When the module's
+    /// start function fails, what it reported through the host imports goes to `report`.
+    fn instantiate(&self, run: Run, granted: bool, report: &mut Report) -> Result<Live> {
         let limits =
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
         let mut store = Store::new(&self.engine, Host { limits, run });
@@ -224,7 +225,13 @@ impl Plugin {
         // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
         store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
         let linker = host::linker(&self.engine, granted);
-        let instance = linker.instantiate_and_start(&mut store, &self.module).map_err(wasm_err)?;
+        let instance = match linker.instantiate_and_start(&mut store, &self.module) {
+            Ok(instance) => instance,
+            Err(e) => {
+                *report = std::mem::take(&mut store.data_mut().run.report);
+                return Err(wasm_err(e));
+            }
+        };
         let memory =
             instance.get_memory(&store, "memory").ok_or_else(|| Error::Abi("the module must export its linear memory as `memory`".into()))?;
         Ok(Live { store, instance, memory })
@@ -287,7 +294,7 @@ impl Plugin {
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline);
-        let mut live = self.instantiate(run, m.permissions().contains(&Permission::Progress))?;
+        let mut live = self.instantiate(run, m.permissions().contains(&Permission::Progress), report)?;
         let out = self.run_live(&mut live, input, params, limits, &deadline);
         *report = std::mem::take(&mut live.store.data_mut().run.report);
         out

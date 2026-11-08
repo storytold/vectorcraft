@@ -442,6 +442,27 @@ fn log_lines_are_capped_and_bad_text_is_an_error_the_plugin_sees() {
     assert_eq!(report.lines.iter().filter(|l| l.text == host::LOG_TRUNCATED).count(), 1);
 }
 
+/// What a module's start function reports through the host imports before it fails is kept in the
+/// run's report. This start function logs, reports progress and traps only when the run was
+/// cancelled, so the module loads.
+#[test]
+fn what_a_start_function_reports_before_it_fails_is_kept() {
+    let start = r#"(data (i32.const 0x2000) "hi")
+  (func $start (if (call $vc_cancelled) (then
+    (drop (call $vc_log (i32.const 2) (i32.const 0x2000) (i32.const 2)))
+    (call $vc_progress (i64.const 1) (i64.const 4))
+    unreachable)))
+  (start $start)"#;
+    let imports = format!("{} {start}", tpl::HOST_IMPORTS);
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, "", INPUT)), Limits::default()).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, None, || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert!(out.is_err(), "{out:?}");
+    assert_eq!(report.lines, [vectorcraft_plugins::LogLine { level: vectorcraft_plugins::LogLevel::Info, text: "hi".into() }]);
+    assert_eq!(report.progress, Some((1, 4)));
+}
+
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped
 /// and reported.
 #[test]
