@@ -354,7 +354,10 @@ const CORNER_END_SNAP: f64 = 0.005;
 /// Is the anchor at `a`, reached by handle `h_in` and left by handle `h_out` on an outline that
 /// runs clockwise on screen, a corner of a top object? A handle of [`SHORT_HANDLE`] or shorter
 /// makes it one. Otherwise its tangent directions must differ by [`SMOOTH_TURN`] or more and turn
-/// clockwise, so it points out of the outline.
+/// clockwise, so it points out of the outline. A straight segment's handles here are the ones
+/// [`Coons::from_top_object`] gives it, a third of the way along, so an anchor between two
+/// straight segments longer than three times [`SHORT_HANDLE`] is a corner only when it turns out
+/// of the outline.
 fn top_object_corner_anchor(h_in: Point, a: Point, h_out: Point) -> bool {
     let (vin, vout) = (a - h_in, h_out - a);
     let (len_in, len_out) = (vin.hypot(), vout.hypot());

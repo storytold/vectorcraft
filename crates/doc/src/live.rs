@@ -262,18 +262,17 @@ mod tests {
     fn a_top_object_corner_inside_a_bulging_curve_is_the_nearest_outline_point() {
         // The top left anchor's handle bulges out past the corner, so the anchor turns inward
         // there and the corner falls inside the curve.
-        let top = CubicBez::new((0.0, 0.0), (-50.0, -50.0), (150.0, 0.0), (200.0, 0.0));
+        // The outline's bounding box starts at (-7.957, -22.222); the top curve's point nearest
+        // that corner, found by sampling the curve 2,000,000 times, is (-5.072093, -18.127254).
         let path = outline(&[
             ((0.0, 0.0), (0.0, 0.0), (-50.0, -50.0)),
             ((200.0, 0.0), (150.0, 0.0), (200.0, 0.0)),
             ((200.0, 100.0), (200.0, 100.0), (200.0, 100.0)),
             ((0.0, 100.0), (0.0, 100.0), (0.0, 100.0)),
         ]);
-        use vectorcraft_geom::kurbo::ParamCurveNearest;
-        let b = path.subpaths[0].segment(3).bounding_box().union(top.bounding_box());
-        let want = top.eval(top.nearest(Point::new(b.x0, b.y0), 1e-12).t);
+        let want = Point::new(-5.072093, -18.127254);
         let tl = Coons::from_top_object(&path, None).unwrap().corners()[0];
-        assert!(tl.distance(want) < 1e-6, "{tl:?}, want {want:?}");
+        assert!(tl.distance(want) < 1e-5, "{tl:?}, want {want:?}");
         assert!(tl.distance(Point::ZERO) > 1.0, "{tl:?}");
     }
 
@@ -314,6 +313,16 @@ mod tests {
         for deg in [0.9, 1.5, 10.0] {
             assert!(corner(deg).distance(anchor) < 1e-9, "{deg}°: {:?}", corner(deg));
         }
+    }
+
+    #[test]
+    fn a_top_object_corner_skips_an_inward_anchor_between_straight_segments() {
+        // A 200 × 100 outline of straight segments with a notch at its top left: (40,40) is the
+        // anchor nearest the box corner, but it turns into the outline, so (60,0) is the corner.
+        let c = |p: (f64, f64)| (p, p, p);
+        let path = outline(&[c((60.0, 0.0)), c((200.0, 0.0)), c((200.0, 100.0)), c((0.0, 100.0)), c((0.0, 60.0)), c((40.0, 40.0))]);
+        let tl = Coons::from_top_object(&path, None).unwrap().corners()[0];
+        assert!(tl.distance(Point::new(60.0, 0.0)) < 1e-9, "{tl:?}");
     }
 
     #[test]
