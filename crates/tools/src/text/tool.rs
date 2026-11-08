@@ -231,7 +231,8 @@ impl Tool for TypeTool {
             // tool shortcuts again (#1686).
             ToolKey::Escape => self.end_editing(cx),
             ToolKey::Enter => self.enter(cx, mods),
-            ToolKey::Tab => self.replace(cx, "\t", None),
+            ToolKey::Tab if story => self.replace(cx, "\t", None),
+            ToolKey::Tab => self.tab(cx, &t, &text, (a, b), mods.shift),
             ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
