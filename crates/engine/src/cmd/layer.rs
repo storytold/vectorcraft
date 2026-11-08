@@ -601,7 +601,7 @@ fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn highlight(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.highlight";
-    let mut ids = ids_param(p, "ids").ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = ids_param(p, "ids", C)?.ok_or_else(|| bad(C, "missing ids"))?;
     ids.truncate(MAX_ROWS);
     let mode = str_param(p, "mode").unwrap_or("set");
     let st = s.doc_mut()?;
@@ -740,7 +740,7 @@ enum Place {
 /// Drag rows in the Layers panel.
 fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.move";
-    let mut ids = ids_param(p, "ids").or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
+    let mut ids = ids_param(p, "ids", C)?.or_else(|| id_param(p, "id").map(|i| vec![i])).ok_or_else(|| bad(C, "missing ids"))?;
     ids.truncate(MAX_ROWS);
     let target = id_param(p, "target").ok_or_else(|| bad(C, "missing target"))?;
     let place = match str_param(p, "place").unwrap_or("inside") {

@@ -952,11 +952,12 @@ fn a_freeform_gradient_expands_with_the_inks_of_its_points() {
     for c in expanded(&mut s, 1.0) {
         assert!(close_inks(inks(c), [0.5, 0.2, 0.0, 0.1]), "{c:?}");
     }
-    // Cyan and black points mix as inks: cyan and black only, adding up to one.
+    // Cyan and black points mix as inks: cyan and black only, adding up to one. The gradient blends
+    // the points' display colors and the mesh blends their inks, so the two draw a little apart in between.
     let mut s = session();
     let (cyan, black) = (ink(1.0, 0.0, 0.0, 0.0), ink(0.0, 0.0, 0.0, 1.0));
     freeform_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 180.0), [cyan.clone(), cyan.clone(), black.clone(), black]);
-    for c in expanded(&mut s, 5.0) {
+    for c in expanded(&mut s, 7.5) {
         let [c, m, y, k] = inks(c);
         assert!(m.abs() < 1e-5 && y.abs() < 1e-5 && (c + k - 1.0).abs() < 1e-5, "C{c} M{m} Y{y} K{k}");
     }

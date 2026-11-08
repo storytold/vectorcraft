@@ -3492,6 +3492,15 @@ effect	Points	Точки
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметри Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметри Tate-chu-yoko
+	Composite Fonts…	Складені шрифти…
+	Composite Fonts	Складені шрифти
+	Export Composite Fonts	Експорт складених шрифтів
+	Import Composite Fonts	Імпорт складених шрифтів
+	Delete Font	Видалити шрифт
+	Kanji	Кандзі
+	Kana	Кана
+	Numerals	Цифри
+	Scale at Center	Масштабувати від центру
 	Up/Down:	Вгору/вниз:
 	Left/Right:	Ліворуч/праворуч:
 	Temperature	Температура
@@ -4762,6 +4771,7 @@ axis	Both	Обидві
 @msg	an image VectorCraft can't read was left out	зображення, яке VectorCraft не може прочитати, пропущено
 @msg	graphs come in as plain art, without their data or settings	діаграми імпортуються як звичайна графіка, без їхніх даних і налаштувань
 @msg	an image whose data is cut short was left out	зображення з обрізаними даними пропущено
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вбудоване зображення {_1} × {_2} пікселів зменшено до {_3} × {_4} пікселів, щоб зберегти шари
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	linked type areas past VectorCraft's limits were left out	пов’язані текстові області понад обмеження VectorCraft пропущено
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, що змінює напрямок письма всередині текстового об’єкта, відкривається в напрямку свого першого символу
@@ -4823,6 +4833,7 @@ axis	Both	Обидві
 @msg	object ids are non-negative integers, not {v}	ідентифікатори об’єктів — невід’ємні цілі числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} має бути масивом ідентифікаторів об’єктів, які є невід’ємними цілими числами
 @msg	invalid object id {value}: expected a non-negative integer	неприпустимий ідентифікатор об’єкта {value}: очікується невід’ємне ціле число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} у `{key}` дорівнює {value}, а не ідентифікатору об’єкта (невід’ємному цілому числу)
 @msg	no such object id {value}	об’єкт з ідентифікатором {value} не існує
 @msg	id {value} is a layer, not an object	ідентифікатор {value} належить шару, а не об’єкту
 @msg	id {value} is a layer, not an object; move layers with layer.move	ідентифікатор {value} належить шару, а не об’єкту; переміщуйте шари за допомогою layer.move
@@ -5457,6 +5468,9 @@ axis	Y Axis	Вісь Y
 	Install “{name}”, which asks for these permissions?	Встановити «{name}», якому потрібні ці дозволи?
 	ID: {id}	ID: {id}
 	Version: {version}	Версія: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Встановити «{name}» замість модуля з тим самим ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Цей файл не є модулем, установленим раніше з цим ID. Він отримає налаштування й кеш, збережені для цього ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» відрізняється від модуля з ID {_1} і отримав би збережені для нього налаштування й кеш: встановіть його з `replace: true`, коли користувач погодиться
 	File SHA-256: {hash}	SHA-256 файлу: {hash}
 	Read the objects it is given	Читати передані йому об’єкти
 	Change, add and delete objects in the document	Змінювати, додавати й видаляти об’єкти в документі
@@ -5464,10 +5478,13 @@ axis	Y Axis	Вісь Y
 	Change how the objects its effect is applied to are drawn	Змінювати те, як малюються об’єкти, до яких застосовано його ефект
 	Write the document as a file in its own format	Записувати документ у файл власного формату
 	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `progress` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
+	Keep settings of its own	Зберігати власні налаштування
+	Keep a cache of its own, which you can clear	Зберігати власний кеш, який можна очистити
+	Clear Plug-in Cache	Очистити кеш модуля
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `{permission}` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль імпортує `env.{name}` з іншим типом, ніж у хоста: у хоста тип {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише `env.vc_progress`, `env.vc_cancelled` і `env.vc_log` (рівень API модулів 2), без WASI, файлів і мережі
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише функції `env.vc_*`, перелічені в docs/plugins.md (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`

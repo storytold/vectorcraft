@@ -4318,6 +4318,15 @@ digits	Malayalam	Malaiàlam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configuració de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configuració de Tate-chu-yoko
+	Composite Fonts…	Tipus de lletra compostos…
+	Composite Fonts	Tipus de lletra compostos
+	Export Composite Fonts	Exporta tipus de lletra compostos
+	Import Composite Fonts	Importa tipus de lletra compostos
+	Delete Font	Suprimeix el tipus de lletra
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Xifres
+	Scale at Center	Escala des del centre
 	Up/Down:	Amunt/avall:
 	Left/Right:	Esquerra/dreta:
 	Technical Drawing	Dibuix tècnic
@@ -5036,6 +5045,7 @@ digits	Malayalam	Malaiàlam
 @msg	an image VectorCraft can't read was left out	s’ha omès una imatge que VectorCraft no pot llegir
 @msg	graphs come in as plain art, without their data or settings	els gràfics s’importen com a il·lustració normal, sense les seves dades ni la seva configuració
 @msg	an image whose data is cut short was left out	s’ha omès una imatge les dades de la qual estan tallades
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imatge incrustada de {_1} × {_2} píxels s’ha reduït a {_3} × {_4} píxels per conservar les capes
 @msg	an object can't be read	no es pot llegir un objecte
 @msg	an object in perspective would leave the edited grid	un objecte en perspectiva sortiria de la quadrícula editada
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Un objecte admet un efecte 3D. Editeu les opcions de l’efecte existent o suprimiu-lo primer.
@@ -5206,6 +5216,7 @@ digits	Malayalam	Malaiàlam
 @msg	invalid image data for `{0}`	dades d’imatge no vàlides per a `{0}`
 @msg	invalid native panel set	conjunt de panells natius no vàlid
 @msg	invalid object id {value}: expected a non-negative integer	id d’objecte {value} no vàlid: s’esperava un enter no negatiu
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrada {index} de `{key}` és {value}, no un id d’objecte (un enter no negatiu)
 @msg	Invalid panel layout; restored the default dock	Disposició de panells no vàlida; s’ha restaurat l’acoblament per defecte
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}
@@ -5875,6 +5886,9 @@ digits	Malayalam	Malaiàlam
 	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
 	ID: {id}	ID: {id}
 	Version: {version}	Versió: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Instal·la «{name}» en lloc del complement amb el mateix ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Aquest fitxer no és el complement instal·lat abans amb aquest ID. Rep la configuració i la memòria cau desades per a aquest ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» és un mòdul diferent del complement amb l’ID {_1} i rebria la configuració i la memòria cau desades per a aquest: instal·la’l amb `replace: true` quan l’usuari hi estigui d’acord
 	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
 	Read the objects it is given	Llegir els objectes que rep
 	Change, add and delete objects in the document	Canviar, afegir i suprimir objectes del document
@@ -5882,10 +5896,13 @@ digits	Malayalam	Malaiàlam
 	Change how the objects its effect is applied to are drawn	Canviar com es dibuixen els objectes als quals s’aplica el seu efecte
 	Write the document as a file in its own format	Escriure el document com un fitxer en un format propi
 	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `progress` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
+	Keep settings of its own	Desar una configuració pròpia
+	Keep a cache of its own, which you can clear	Desar una memòria cau pròpia, que podeu buidar
+	Clear Plug-in Cache	Buida la memòria cau del complement
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `{permission}` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el mòdul importa `env.{name}` amb un tipus diferent del de l’amfitrió: el de l’amfitrió és {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar les funcions `env.vc_*` que enumera docs/plugins.md (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
