@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use super::super::brush;
 use super::art::{four, sane, two};
 use super::ops::Dictionaries;
+use super::raster::{end_hex, push_hex};
 use super::types::{
-    FLIP, GState, Kind, MAX_DEPTH, MAX_HEX, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
+    FLIP, GState, Kind, MAX_DEPTH, MAX_LISTED, MAX_NODES, MAX_NOTE, MAX_PATTERNS, MAX_PLACED_FOLDER, MAX_STACK, MAX_SUBREADERS, MAX_SYMBOLS,
     PatternHead, Place, Raster, SKIPPED, SymbolHead, VERSIONED_UNENDED,
 };
 use super::{Arc, BrushArtColors, Global, Lexer, Node, NodeKind, PatternDef, Reader, Rect, Tok, V, marker, obj};
@@ -52,9 +53,7 @@ impl<'a> Reader<'a> {
             && !line.is_empty()
             && line.bytes().all(|b| b.is_ascii_hexdigit())
         {
-            if r.hex.len() < MAX_HEX {
-                r.hex.extend_from_slice(line.as_bytes());
-            }
+            push_hex(&mut r.samples, &mut r.half, line.as_bytes(), r.max);
             return Ok(());
         }
         // The header's comments (AI7 specification §2.1.1; DSC 3.0).
@@ -182,8 +181,9 @@ impl<'a> Reader<'a> {
         } else if line.starts_with("AI5_EndRaster") {
             // A file `XG` named in this raster object is no later one's.
             self.image_link = None;
-            if let Some(Raster { operands: Some(vals), hex, .. }) = self.raster.take() {
-                return self.image_from(vals, &hex);
+            if let Some(Raster { operands: Some(vals), mut samples, half, max, .. }) = self.raster.take() {
+                end_hex(&mut samples, half, max);
+                return self.image_from(vals, &samples, true);
             }
         } else if line.starts_with("AI5_BeginPlace") {
             // One that is still open (no `~` ended it) isn't read.
