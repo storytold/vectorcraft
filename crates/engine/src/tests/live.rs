@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind};
+use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind, PreserveShape};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
@@ -85,6 +85,12 @@ fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &Value, key: &str) {
     let r = s.execute(cmd, p);
     let want = format!("`{key}` must be true or false");
     assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// `cmd` with `p` fails with the error `want`.
+fn refuses_with(s: &mut Session, cmd: &str, p: &Value, want: &str) {
+    let r = s.execute(cmd, p);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{cmd} {p}: {r:?}");
 }
 
 // ---------- Blend ----------
@@ -231,13 +237,13 @@ fn blend_smooth_colour_steps_from_colour_distance() {
     let mut s = session();
     let (_, _, g) = blend(&mut s, json!({}));
     let n = steps_of(&s, g).len() - 2;
-    assert_eq!(n, 128, "black→white: one step per two levels");
-    // Consecutive steps differ by at most ~2 levels.
+    assert_eq!(n, 254, "black→white: one step per level");
+    // Consecutive steps differ by about a level.
     let st = steps_of(&s, g);
     for w in st.windows(2) {
         let x = w[0].appearance.fill_paint().color().unwrap().to_rgb()[0];
         let y = w[1].appearance.fill_paint().color().unwrap().to_rgb()[0];
-        assert!((x - y).abs() <= 2.5 / 255.0);
+        assert!((x - y).abs() <= 1.5 / 255.0);
     }
 }
 
@@ -248,7 +254,9 @@ fn blend_smooth_colour_same_colours_uses_distance() {
     let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
     sel(&mut s, &[a, b]);
     let g = id_of(&s.execute("object.blend.make", &json!({"smooth": true})).unwrap());
-    assert_eq!(steps_of(&s, g).len() - 2, 20);
+    // The edges are 40 pt apart, 3.6 times the keys' 11 pt visible width (their 1 pt strokes
+    // included): rounded, less one.
+    assert_eq!(steps_of(&s, g).len() - 2, 3);
 }
 
 #[test]
@@ -743,6 +751,73 @@ fn envelope_options_refuse_a_boolean_given_as_text() {
     sel(&mut s, &[warp]);
     s.execute("object.envelope.options", &json!({"antiAlias": false, "distortAppearance": null, "horizontal": null})).unwrap();
     assert!(matches!(&node(&s, warp).kind, NodeKind::Envelope { options, .. } if !options.anti_alias && options.distort_appearance));
+}
+
+/// Make with Warp, Reset with Warp and Envelope Options refuse a warp `style` that is not text or
+/// names no warp, and an `orientation` other than horizontal or vertical: no envelope is made, a
+/// warp envelope keeps its warp, and no undo step is added. Null is read as the key left out.
+#[test]
+fn envelope_warps_refuse_an_invalid_style_or_orientation() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    let calls = [
+        (json!({"style": 5}), "`style` must be a string"),
+        (json!({"style": ["arch"], "bend": 40}), "`style` must be a string"),
+        (json!({"style": "foo"}), "unknown warp style `foo`"),
+        (json!({"orientation": 1}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": true, "horizontal": true}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": "diagonal"}), "`orientation` must be one of horizontal, vertical"),
+    ];
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.makeWithWarp", p, want);
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "not enveloped");
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": null, "orientation": null, "bend": 30})).unwrap());
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: true, .. } if style == "arc")));
+    let (before, n) = (node(&s, e), undo_len(&s));
+    for cmd in ["object.envelope.resetWithWarp", "object.envelope.options"] {
+        for (p, want) in &calls {
+            refuses_with(&mut s, cmd, p, want);
+        }
+    }
+    assert_eq!((node(&s, e), undo_len(&s)), (before, n), "nothing changed");
+    s.execute("select.none", &json!({})).unwrap();
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.options", p, want);
+    }
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.resetWithWarp", &json!({"style": "warp.flag", "orientation": "vertical"})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: false, .. } if style == "flag")));
+}
+
+/// Envelope Options refuses a `preserveShape` that is not text, for the selected envelope and for
+/// the options new envelopes get, and changes neither; null keeps the current value.
+#[test]
+fn envelope_options_refuse_a_preserve_shape_that_is_not_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let e = id_of(&s.execute("object.envelope.makeWithMesh", &json!({"rows": 2, "cols": 2})).unwrap());
+    let calls = [json!({"preserveShape": 1}), json!({"preserveShape": true, "antiAlias": false}), json!({"preserveShape": ["transparency"]})];
+    for ids in [vec![e], vec![]] {
+        sel(&mut s, &ids);
+        let before = (node(&s, e), undo_len(&s));
+        for p in &calls {
+            refuses_with(&mut s, "object.envelope.options", p, "`preserveShape` must be a string");
+        }
+        assert_eq!((node(&s, e), undo_len(&s)), before, "nothing changed with {ids:?} selected");
+    }
+    assert_eq!(s.envelope_defaults, None, "the options new envelopes get stayed");
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.options", &json!({"preserveShape": "transparency"})).unwrap();
+    s.execute("object.envelope.options", &json!({"preserveShape": null, "antiAlias": false})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { options, .. }
+        if options.preserve_shape == PreserveShape::Transparency && !options.anti_alias));
 }
 
 #[test]
