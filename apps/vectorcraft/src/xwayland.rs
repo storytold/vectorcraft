@@ -1,6 +1,7 @@
 //! Linux: Preferences › Performance › Linux Display Server › X11 opens the window through XWayland
-//! on a Wayland session, where dropped files arrive (winit 0.30 has no Wayland drag and drop,
-//! #1151). Automatic and X11 (XWayland) When a Pen Is Attached do so only when a pen is attached
+//! on a Wayland session. This remains an explicit fallback; the pinned Storytold winit fork
+//! implements Wayland file drops too. Automatic and X11 (XWayland) When a Pen Is Attached
+//! do so only when a pen is attached
 //! as the app starts, as PhotoCraft does: winit 0.30 doesn't bind the Wayland tablet protocol, so
 //! on native Wayland the pen moves only the compositor's cursor, and XWayland hands the pen to X11
 //! windows as a pointer (#2028, #4967). `VECTORCRAFT_NATIVE_WAYLAND=1` keeps a pen's window on

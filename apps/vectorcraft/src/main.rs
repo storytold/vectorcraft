@@ -18,6 +18,7 @@
 //! keyboard isn't confined.
 #![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
+mod appearance;
 mod automation_args;
 mod caps_lock;
 mod clipboard;
@@ -96,6 +97,10 @@ use titlebar::{custom_titlebar, native_options};
 
 struct App {
     app: VectorcraftApp,
+    #[cfg(target_os = "linux")]
+    menu: Option<craft_desktop::appmenu::Bridge>,
+    #[cfg(target_os = "linux")]
+    menu_state: Option<u64>,
     host_caps_lock: caps_lock::HostCapsLock,
     /// Reported by wgpu when the window's graphics device is lost (a driver reset).
     graphics_loss: GraphicsLoss,
@@ -495,9 +500,24 @@ fn main() -> std::process::ExitCode {
                 created.ready();
                 // The content and the pointer stay aligned on Windows (#1758).
                 let window_frame = window_frame::service(cc, custom_titlebar);
+                #[cfg(target_os = "linux")]
+                let menu = cc.winit_window().and_then(|window| {
+                    let ctx = cc.egui_ctx.clone();
+                    craft_desktop::appmenu::Bridge::start(
+                        window.clone(),
+                        "ai.storyteller.vectorcraft",
+                        "VECTORCRAFT",
+                        vectorcraft_ui_egui::desktop_menu::snapshot(&app),
+                        move || ctx.request_repaint(),
+                    )
+                });
                 Ok(Box::new(App {
                     host_caps_lock: caps_lock::HostCapsLock::new(winit_window.as_deref()),
                     app,
+                    #[cfg(target_os = "linux")]
+                    menu,
+                    #[cfg(target_os = "linux")]
+                    menu_state: None,
                     graphics_loss,
                     graphics_lost: false,
                     frames: 0,
