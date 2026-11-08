@@ -4531,7 +4531,8 @@ tab-separated rows with the same number of cells, become a group `Table` of poin
 `Gridlines`, unless `table: false`), each centred on `center`
 (default: the first artboard); then any `edit.paste*` command pastes it. The desktop app does this itself: Copy and
 Cut publish the formats to the system clipboard, and a Paste outside text editing first reads what another app
-copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG). A background thread makes the
+copied (SVG, then PDF, then text, then a bitmap; SVG markup in text counts as SVG; a spreadsheet's tab-separated
+cells go ahead of the PDF, EPS or EMF picture of them). A background thread makes the
 formats and they are published when they are ready. While that thread has a save, an export, a print or a recovery
 copy to finish, Copy and Cut make and publish them at once. When another Copy or Cut, or a copy of text in
 VectorCraft, comes first, they are dropped. Pasting what VectorCraft copied keeps the lossless internal clipboard,
