@@ -1026,8 +1026,9 @@ fn a_malformed_ids_is_refused_not_read_as_the_selection() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
-/// A live effect's commands are listed under Effect › Plug-ins, run under its permissions (it may
-/// not change the document), and labels show bidirectional characters escaped. A malformed
+/// A live effect's commands are listed under Effect › Plug-ins and run under its permissions (with
+/// commands it gets `doc.write` unless its list leaves it out), and labels show bidirectional
+/// characters escaped. A malformed
 /// `commands` entry is refused at install, and the error names it.
 #[test]
 fn effect_commands_labels_and_malformed_entries() {
@@ -1038,10 +1039,28 @@ fn effect_commands_labels_and_malformed_entries() {
     let c = listed(&s, &crate::cmd::plugin::command_id(id, "flip")).expect("listed");
     assert_eq!((c.label, c.menu.as_slice()), ("Flip\\u{202E}txt", &["Effect", "Plug-ins", "Cmd Test"][..]));
     run(&mut s, "select.none", json!({}));
-    let before = s.doc().unwrap().doc.clone();
+    // Without `permissions`, a live effect with commands may change the document: its command adds
+    // the triangle, as one undo step.
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let out = run(&mut s, &crate::cmd::plugin::command_id(id, "flip"), json!({}));
+    assert_eq!(out["ids"].as_array().map(Vec::len), Some(1), "{out}");
+    assert_ne!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    // One that lists its permissions without `doc.write` is refused the change, and the document
+    // stays as it was.
+    let listed = format!(
+        r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"effect","permissions":["doc.read","effect.render"],"commands":[{{"id":"flip","label":"Flip"}}]}}"#
+    );
+    let wasm = wat::parse_str(tpl::returning(&listed, triangle)).unwrap();
+    let hash = vectorcraft_plugins::permissions::sha256_hex(&wasm);
+    let grant = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read", "effect.render"], "hash": hash});
+    run(&mut s, "plugin.install", grant);
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
     let e = s.execute(&crate::cmd::plugin::command_id(id, "flip"), &json!({})).unwrap_err().to_string();
     assert!(e.contains("wasn't granted `doc.write`"), "{e}");
     assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
     run(&mut s, "plugin.remove", json!({"id": id}));
 
     let bad = id.replace("effect", "bad");

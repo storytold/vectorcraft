@@ -90,6 +90,17 @@ impl Permission {
         }
     }
 
+    /// The permissions a plug-in of `kind` that declares `commands` or not may list, which are also
+    /// the ones its manifest gets without `permissions`: those `kind` implies, and for a live effect
+    /// with commands also `doc.write` and `state`, which only its commands use (drawing the effect
+    /// changes no object and keeps no data).
+    pub fn allowed(kind: Kind, commands: bool) -> &'static [Permission] {
+        match kind {
+            Kind::Effect if commands => &[Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender],
+            _ => Permission::implied(kind),
+        }
+    }
+
     /// The permissions a plug-in of `kind` can't work without, which its list must hold: a live
     /// effect and an exporter are always handed objects, and only draw or write. A filter may
     /// leave any of its permissions out.
@@ -101,10 +112,11 @@ impl Permission {
     }
 }
 
-/// Checks the `permissions` a manifest of `kind` lists → them, in the order [`ALL`] has. A name
-/// that is not a permission, a reserved one, one that doesn't apply to the kind, one listed twice
-/// and a list without what the kind needs are errors that name it.
-pub(crate) fn validate(kind: Kind, names: &[String]) -> Result<Vec<Permission>> {
+/// Checks the `permissions` a manifest of `kind` lists → them, in the order [`ALL`] has; `commands`
+/// is whether it declares commands ([`Permission::allowed`]). A name that is not a permission, a
+/// reserved one, one that doesn't apply to the kind, one listed twice and a list without what the
+/// kind needs are errors that name it.
+pub(crate) fn validate(kind: Kind, commands: bool, names: &[String]) -> Result<Vec<Permission>> {
     if names.len() > MAX_PERMISSIONS {
         return Err(Error::Manifest(format!("at most {MAX_PERMISSIONS} `permissions`")));
     }
@@ -117,7 +129,7 @@ pub(crate) fn validate(kind: Kind, names: &[String]) -> Result<Vec<Permission>> 
             }
             return Err(Error::Manifest(format!("unknown permission `{shown}`")));
         };
-        if !Permission::implied(kind).contains(&p) {
+        if !Permission::allowed(kind, commands).contains(&p) {
             return Err(Error::Manifest(format!("permission `{shown}` doesn't apply to a plug-in of kind `{}`", kind.name())));
         }
         if out.contains(&p) {
@@ -214,23 +226,34 @@ mod tests {
     #[test]
     fn lists_are_checked_against_the_kind() {
         let list = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(validate(Kind::Filter, &list(&["doc.write", "doc.read"])).unwrap(), [Permission::DocRead, Permission::DocWrite]);
-        assert_eq!(validate(Kind::Filter, &[]).unwrap(), []);
-        assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render"])).is_ok());
-        assert!(validate(Kind::Exporter, &list(&["export.write", "doc.read"])).is_ok());
-        for (kind, names, says) in [
-            (Kind::Filter, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
-            (Kind::Filter, &["progress"], "`progress` is reserved"),
-            (Kind::Filter, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),
-            (Kind::Exporter, &["doc.read", "export.write", "doc.read"], "`doc.read` is listed twice"),
-            (Kind::Effect, &["doc.read"], "needs the permission `effect.render`"),
-            (Kind::Exporter, &["export.write"], "needs the permission `doc.read`"),
+        assert_eq!(validate(Kind::Filter, false, &list(&["doc.write", "doc.read"])).unwrap(), [Permission::DocRead, Permission::DocWrite]);
+        assert_eq!(validate(Kind::Filter, false, &[]).unwrap(), []);
+        assert!(validate(Kind::Effect, false, &list(&["doc.read", "effect.render"])).is_ok());
+        assert!(validate(Kind::Exporter, false, &list(&["export.write", "doc.read"])).is_ok());
+        // A live effect with commands may also change the document and keep data with it.
+        assert_eq!(
+            validate(Kind::Effect, true, &list(&["state", "effect.render", "doc.write", "doc.read"])).unwrap(),
+            [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender]
+        );
+        assert_eq!(Permission::allowed(Kind::Effect, false), Permission::implied(Kind::Effect));
+        assert_eq!(Permission::allowed(Kind::Filter, true), Permission::implied(Kind::Filter));
+        for (kind, commands, names, says) in [
+            (Kind::Filter, false, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
+            (Kind::Filter, false, &["progress"], "`progress` is reserved"),
+            (Kind::Filter, false, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),
+            (Kind::Exporter, false, &["doc.read", "export.write", "doc.read"], "`doc.read` is listed twice"),
+            (Kind::Effect, false, &["doc.read"], "needs the permission `effect.render`"),
+            (Kind::Effect, false, &["doc.read", "effect.render", "doc.write"], "`doc.write` doesn't apply to a plug-in of kind `effect`"),
+            (Kind::Effect, true, &["doc.read", "doc.write"], "needs the permission `effect.render`"),
+            (Kind::Effect, true, &["doc.read", "effect.render", "export.write"], "`export.write` doesn't apply"),
+            (Kind::Exporter, true, &["doc.read", "export.write", "doc.write"], "`doc.write` doesn't apply"),
+            (Kind::Exporter, false, &["export.write"], "needs the permission `doc.read`"),
         ] {
-            let e = validate(kind, &list(names)).unwrap_err().to_string();
+            let e = validate(kind, commands, &list(names)).unwrap_err().to_string();
             assert!(e.contains(says), "{names:?}: {e}");
         }
         let many = list(&["doc.read"; MAX_PERMISSIONS + 1]);
-        assert!(validate(Kind::Filter, &many).unwrap_err().to_string().contains("at most"));
+        assert!(validate(Kind::Filter, false, &many).unwrap_err().to_string().contains("at most"));
     }
 
     /// Control, bidirectional override and separator characters show as escapes, so a name can't

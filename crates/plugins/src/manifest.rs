@@ -351,7 +351,7 @@ impl Manifest {
             return Err(Error::Manifest(format!("`api` is {}; this host implements plug-in API levels 1 to {API_LEVEL}", self.api)));
         }
         if let Some(names) = &self.permissions {
-            permissions::validate(self.kind, names)?;
+            permissions::validate(self.kind, !self.commands.is_empty(), names)?;
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -475,11 +475,14 @@ impl Manifest {
         self.params.iter().map(|(k, p)| (k.clone(), p.spec.default_value())).collect()
     }
 
-    /// What the plug-in may do: the permissions it lists, else the ones its kind implies.
+    /// What the plug-in may do: the permissions it lists, else every one its kind may list
+    /// ([`Permission::allowed`]: a live effect with commands also changes the document and keeps
+    /// data with it).
     pub fn permissions(&self) -> Vec<Permission> {
+        let commands = !self.commands.is_empty();
         match &self.permissions {
-            Some(names) => permissions::validate(self.kind, names).unwrap_or_default(),
-            None => Permission::implied(self.kind).to_vec(),
+            Some(names) => permissions::validate(self.kind, commands, names).unwrap_or_default(),
+            None => Permission::allowed(self.kind, commands).to_vec(),
         }
     }
 
@@ -849,6 +852,16 @@ mod tests {
         assert!(serde_json::to_value(&plain).unwrap().get("permissions").is_none());
         let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect"}"#).unwrap();
         assert_eq!(effect.permissions(), [Permission::DocRead, Permission::EffectRender]);
+        // A live effect's commands may change the document: one with commands gets `doc.write`
+        // and `state` too, and may list them.
+        let commands = br#"{"id":"a","name":"x","kind":"effect","commands":[{"id":"c","label":"C"}]}"#;
+        let with_commands = Manifest::parse(commands).unwrap();
+        assert_eq!(with_commands.permissions(), [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender]);
+        let listing =
+            br#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read","effect.render","doc.write"],"commands":[{"id":"c","label":"C"}]}"#;
+        assert_eq!(Manifest::parse(listing).unwrap().permissions(), [Permission::DocRead, Permission::DocWrite, Permission::EffectRender]);
+        let without = br#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read","effect.render","doc.write"]}"#;
+        assert!(Manifest::parse(without).unwrap_err().to_string().contains("`doc.write` doesn't apply"));
         let exporter = Manifest::parse(br#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"]}"#).unwrap();
         assert_eq!(exporter.permissions(), [Permission::DocRead, Permission::ExportWrite]);
         assert!(!Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","permissions":[]}"#).unwrap().asks_permissions());

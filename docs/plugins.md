@@ -69,8 +69,8 @@ replaced by a module without it.
 - **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
   through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
   `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
-  [permissions](#permissions): a live effect's command has no `doc.write`, so an output that changes the document is
-  refused. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
+  [permissions](#permissions): a live effect with commands may also hold `doc.write` and `state`, which only its
+  commands use. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
   is one undo step named after the command. A run that traps, runs out of its instruction budget or fails leaves the
   document and the undo history as they were, and the error starts with the plug-in's name and the command's label
   (`“Cmd Test” › Grow: …`).
@@ -136,16 +136,18 @@ capability model proposed for PhotoCraft plug-ins
 | Permission | Kinds | What it allows |
 |---|---|---|
 | `doc.read` | all | Read the objects it is given. |
-| `doc.write` | filter | Change, add and delete objects in the document. |
-| `state` | filter | Keep data of its own with the document (`documentData`). |
+| `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
+| `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
 | `export.write` | exporter | Write the document as a file in its own format. |
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
-  `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`; an exporter `doc.read` and
-  `export.write`. Such a plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is
-  empty may do none of these, and also installs without a prompt.
-- An effect or an exporter that lists permissions lists both of its implied ones. A filter may list any of its three.
+  `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
+  when it declares [commands](#commands); an exporter `doc.read` and `export.write`. Such a plug-in installs without
+  a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of these, and also installs
+  without a prompt.
+- An effect or an exporter that lists permissions lists `doc.read` and its own (`effect.render`, `export.write`). An
+  effect with commands may add `doc.write` and `state`, which only its commands use. A filter may list any of its three.
   An unknown name, a name listed twice, a name that doesn't apply to the kind, more than 16 names, or one of the names
   kept for a later plug-in API (`progress`, `ui.panel`, `ui.tool`) is refused when the module is installed, and the
   error names it.
@@ -162,7 +164,7 @@ capability model proposed for PhotoCraft plug-ins
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in whose permissions are not granted is skipped. The Additional Plug-ins Folder and `plugin.reload`
   install only plug-ins whose permissions were granted, and report the others.
-- The host enforces the grant on a filter run: without `doc.read` the filter is given no objects; without `state` its
+- The host enforces the grant on a filter run and a command run: without `doc.read` the filter is given no objects; without `state` its
   `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
   document is refused. A refused output leaves the document as it was.
 - `api` is the plug-in API level the manifest is written for: `1` (the default) is the only level this host
