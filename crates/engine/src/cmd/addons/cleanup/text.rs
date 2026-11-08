@@ -1004,7 +1004,6 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         edit_symbol_texts(d, None, &|t, _| lacks(t), &mut replace);
-        drop(replace);
         Ok(runs)
     })?;
     Ok(json!({ "runs": runs, "font": family }))
