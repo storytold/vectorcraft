@@ -166,6 +166,50 @@ pub(crate) struct Interp {
     pub(crate) last_thrown: Value,
     /// The clock and time zone `Date` reads.
     pub(crate) date_host: crate::date_builtins::DateHost,
+    /// The bytes native code holds outside the heap's cells through [`HeldBytes`].
+    pub(crate) held: Rc<HeldCount>,
+}
+
+/// The bytes all live [`HeldBytes`] hold.
+#[derive(Default)]
+pub(crate) struct HeldCount {
+    now: std::cell::Cell<usize>,
+}
+
+/// Bytes that native code holds in Rust memory while it works (a matcher's state and stack, a
+/// replacement being built, a pattern being compiled), counted against the heap limit. A
+/// collection adds them to the live total until the holder is dropped.
+pub(crate) struct HeldBytes {
+    count: Rc<HeldCount>,
+    bytes: usize,
+}
+
+impl HeldBytes {
+    pub(crate) fn new(interp: &Interp) -> Self {
+        Self { count: interp.held.clone(), bytes: 0 }
+    }
+
+    /// The bytes this holder holds.
+    #[cfg(test)]
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    /// Holds `n` more bytes, ending the run with the heap limit when they would not fit after a
+    /// collection. Everything the caller still needs must be reachable from the roots.
+    pub(crate) fn add(&mut self, interp: &mut Interp, n: usize) -> JsResult<()> {
+        interp.reserve_heap(n)?;
+        interp.heap.bytes = interp.heap.bytes.saturating_add(n);
+        self.bytes = self.bytes.saturating_add(n);
+        self.count.now.set(self.count.now.get().saturating_add(n));
+        Ok(())
+    }
+}
+
+impl Drop for HeldBytes {
+    fn drop(&mut self) {
+        self.count.now.set(self.count.now.get().saturating_sub(self.bytes));
+    }
 }
 
 /// The least heap size a collection waits for.
@@ -292,6 +336,7 @@ impl Interp {
             throw_site: None,
             last_thrown: Value::Undefined,
             date_host: crate::date_builtins::DateHost::default(),
+            held: Rc::default(),
         };
         crate::builtins::install(&mut interp);
         interp.gc_threshold = interp.next_threshold();
@@ -418,8 +463,8 @@ impl Interp {
         Ok(())
     }
 
-    /// Collects garbage now, for a caller whose work ran out of heap room, and sets when the
-    /// next collection runs.
+    /// Collects garbage now and sets when the next collection runs.
+    #[cfg(test)]
     pub(crate) fn collect_for_room(&mut self) {
         self.collect_garbage();
         self.gc_threshold = self.next_threshold();
@@ -452,6 +497,7 @@ impl Interp {
         roots.objects.extend(self.intrinsics.all());
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
+        self.heap.bytes = self.heap.bytes.saturating_add(self.held.now.get());
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.

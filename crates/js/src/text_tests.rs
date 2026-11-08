@@ -226,7 +226,7 @@ fn a_catastrophic_regular_expression_ends_by_fuel() {
 #[test]
 fn trim_and_date_parsing_take_fuel_for_the_units_they_scan() {
     let limits = Limits { fuel: 40_000, ..Limits::default() };
-    let build = "var s = ' '; for (var i = 0; i < 20; i++) s = s + s; s.charAt(0)";
+    let build = "var s = ' '; for (var i = 0; i < 20; i++) s = s + s; s.length";
     assert!(Realm::with_options(Options::default(), limits.clone()).run(build).is_ok());
     for scan in ["s.trim()", "Date.parse(s)", "new Date(s)"] {
         let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &format!("{build}; {scan}"));
@@ -243,31 +243,105 @@ fn global_replace_counts_its_matches_against_the_heap() {
 }
 
 #[test]
+fn replace_holds_its_pieces_and_checks_the_result_as_it_grows() {
+    // Each `$&` gives a piece for every match: the pieces count against the heap, so the run ends
+    // with the heap limit long before the 4,194,304 pieces would take the fuel.
+    let limits = Limits { heap_bytes: 4 << 20, fuel: 500_000, ..Limits::default() };
+    let src = "var s = 'a'; for (var i = 0; i < 12; i++) s += s; var t = '$&'; for (var i = 0; i < 10; i++) t += t; s.replace(/a/g, t).length";
+    let e = fail_with(Realm::with_options(Options::default(), limits), src);
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    // A long literal pattern is not copied for each match, and the result's length is checked as
+    // the pieces are added, so the run ends with the heap limit before the fuel for 16,384
+    // copies of the pattern is spent.
+    let limits = Limits { heap_bytes: 4 << 20, fuel: 1_000_000, ..Limits::default() };
+    let src = "var s = 'a'; for (var i = 0; i < 14; i++) s += s; var t = 'x'; for (var i = 0; i < 11; i++) t += t; s.replace(/a/g, t).length";
+    let e = fail_with(Realm::with_options(Options::default(), limits), src);
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    // The parts of the pattern give the same result as before.
+    shows("'abcabc'.replace(/(b)(c)/g, '[$$|$&|$`|$\\'|$2$1|$3|$0|$10]')", "a[$|bc|a|abc|cb|$3|$0|b0]a[$|bc|abca||cb|$3|$0|b0]");
+}
+
+#[test]
+fn flattening_a_rope_counts_against_the_heap() {
+    // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
+    let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    let built = Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} s.length + t.length + u.length"));
+    assert_eq!(built, Ok(JsValue::Number(1_572_866.0)));
+    for read in [
+        "charAt(0)",
+        "charCodeAt(0)",
+        "indexOf('q')",
+        "lastIndexOf('q')",
+        "localeCompare('a')",
+        "slice(0, 1)",
+        "substring(0, 1)",
+        "substr(0, 1)",
+        "trim()",
+        "match(/q/)",
+        "search(/q/)",
+        "replace(/q/, '')",
+        "replace('q', '')",
+    ] {
+        let src = format!("{build} s.{read}; t.{read}; u.{read}; 0");
+        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &src);
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{read}: {e:?}");
+    }
+    for call in ["/q/.exec(X)", "/q/.test(X)", "Date.parse(X)", "new RegExp(X)"] {
+        let src = format!("{build} {}; {}; {}; 0", call.replace('X', "s"), call.replace('X', "t"), call.replace('X', "u"));
+        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &src);
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{call}: {e:?}");
+    }
+}
+
+#[test]
 fn compiling_a_pattern_counts_against_the_heap() {
     let src = "var s = '[\\\\s\\\\S]a*'; for (var i = 0; i < 14; i++) s = s + s; new RegExp(s).source.length";
     let e = fail_with(Realm::with_options(Options::default(), Limits { heap_bytes: 2 << 20, ..Limits::default() }), src);
     assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
     assert_eq!(run(src), JsValue::Number(131_072.0));
     // The compiler stops while it reads the pattern, before the code it builds passes the room.
-    let pattern: Vec<u16> = "[\\s\\S]a*".repeat(1000).encode_utf16().collect();
-    let flags = crate::regexp_vm::parse_flags(&[]).unwrap();
-    let room = crate::regexp_vm::compile_bytes(400, 0, 0);
-    let result = crate::regexp_vm::compile(&pattern, flags, 200, room, &mut |_| Ok(()));
-    assert!(matches!(result, Err(crate::regexp_vm::CompileFail::Abrupt(crate::interp::Abrupt::Limit(LimitKind::Heap)))));
-    assert!(crate::regexp_vm::compile(&pattern, flags, 200, usize::MAX, &mut |_| Ok(())).is_ok());
+    let pattern = "[\\s\\S]a*".repeat(1000);
+    assert!(stopped_by(&compile_within(&pattern, crate::regexp_vm::compile_bytes(400, 0, 0), u64::MAX).0, LimitKind::Heap));
+    assert!(compile_within(&pattern, usize::MAX, u64::MAX).0.is_ok());
     // A literal pattern takes what its instructions hold, not the most a unit can take.
-    let literal: Vec<u16> = "a".repeat(10_000).encode_utf16().collect();
-    let room = crate::regexp_vm::compile_bytes(20_000, 0, 0);
-    assert!(crate::regexp_vm::compile(&literal, flags, 200, room, &mut |_| Ok(())).is_ok());
+    assert!(compile_within(&"a".repeat(10_000), crate::regexp_vm::compile_bytes(20_000, 0, 0), u64::MAX).0.is_ok());
     // A class's ranges count while they are read, even when they collapse into one range.
-    let class: Vec<u16> = format!("[{}]", "a".repeat(10_000)).encode_utf16().collect();
-    let result = crate::regexp_vm::compile(&class, flags, 200, 1000, &mut |_| Ok(()));
-    assert!(matches!(result, Err(crate::regexp_vm::CompileFail::Abrupt(crate::interp::Abrupt::Limit(LimitKind::Heap)))));
+    assert!(stopped_by(&compile_within(&format!("[{}]", "a".repeat(10_000)), 1000, u64::MAX).0, LimitKind::Heap));
+    // So do the ranges of class escapes, and each atom and range read takes fuel.
+    let escapes = format!("[{}]", "\\w".repeat(10_000));
+    assert!(stopped_by(&compile_within(&escapes, 64 << 10, u64::MAX).0, LimitKind::Heap));
+    assert!(stopped_by(&compile_within(&escapes, usize::MAX, 20_000).0, LimitKind::Fuel));
     // The joining and flattening after the last unit count too.
-    let ab: Vec<u16> = "ab".encode_utf16().collect();
-    let room = crate::regexp_vm::compile_bytes(1, 0, 0);
-    let result = crate::regexp_vm::compile(&ab, flags, 200, room, &mut |_| Ok(()));
-    assert!(matches!(result, Err(crate::regexp_vm::CompileFail::Abrupt(crate::interp::Abrupt::Limit(LimitKind::Heap)))));
+    assert!(stopped_by(&compile_within("ab", crate::regexp_vm::compile_bytes(1, 0, 0), u64::MAX).0, LimitKind::Heap));
+}
+
+/// Compiles `pattern` with no flags through a charge that allows `heap` bytes and `fuel` units,
+/// and returns the result with the bytes and fuel the compiler asked for.
+fn compile_within(pattern: &str, heap: usize, fuel: u64) -> (Result<crate::regexp_vm::Regex, crate::regexp_vm::CompileFail>, usize, u64) {
+    use crate::regexp_vm::Cost;
+    let units: Vec<u16> = pattern.encode_utf16().collect();
+    let flags = crate::regexp_vm::parse_flags(&[]).unwrap();
+    let (mut bytes, mut used) = (0usize, 0u64);
+    let result = crate::regexp_vm::compile(&units, flags, 200, &mut |cost| {
+        match cost {
+            Cost::Heap(n) => bytes = bytes.saturating_add(n),
+            Cost::Fuel(n) => used = used.saturating_add(n),
+        }
+        if bytes > heap {
+            return Err(crate::interp::Abrupt::Limit(LimitKind::Heap));
+        }
+        if used > fuel {
+            return Err(crate::interp::Abrupt::Limit(LimitKind::Fuel));
+        }
+        Ok(())
+    });
+    (result, bytes, used)
+}
+
+/// Whether compiling stopped with the limit `kind`.
+fn stopped_by(result: &Result<crate::regexp_vm::Regex, crate::regexp_vm::CompileFail>, kind: LimitKind) -> bool {
+    matches!(result, Err(crate::regexp_vm::CompileFail::Abrupt(crate::interp::Abrupt::Limit(k))) if *k == kind)
 }
 
 #[test]
@@ -295,9 +369,7 @@ fn a_constructed_source_counts_against_the_heap_before_it_is_built() {
 #[test]
 fn the_matcher_state_counts_against_the_heap() {
     let mut realm = Realm::with_options(Options::default(), Limits { heap_bytes: 1 << 20, ..Limits::default() });
-    let pattern: Vec<u16> = "(a)".repeat(1000).encode_utf16().collect();
-    let flags = crate::regexp_vm::parse_flags(&[]).unwrap();
-    let Ok(re) = crate::regexp_vm::compile(&pattern, flags, 200, usize::MAX, &mut |_| Ok(())) else { panic!("the pattern compiles") };
+    let Ok(re) = compile_within(&"(a)".repeat(1000), usize::MAX, u64::MAX).0 else { panic!("the pattern compiles") };
     let interp = realm.interp();
     interp.collect_for_room();
     let live = interp.heap.bytes;
@@ -307,15 +379,39 @@ fn the_matcher_state_counts_against_the_heap() {
     assert!(crate::regexp_vm::Matcher::new(&re, interp).is_ok());
     // The stack takes only the room left: with room for the state and no more, backtracking ends
     // with the heap limit.
-    let pattern: Vec<u16> = "a*b".encode_utf16().collect();
-    let Ok(re) = crate::regexp_vm::compile(&pattern, flags, 200, usize::MAX, &mut |_| Ok(())) else { panic!("the pattern compiles") };
+    let Ok(re) = compile_within("a*b", usize::MAX, u64::MAX).0 else { panic!("the pattern compiles") };
     let input: Vec<u16> = "aaaaaaaaaa".encode_utf16().collect();
     interp.limits.heap_bytes = live + 64;
     let Ok(mut m) = crate::regexp_vm::Matcher::new(&re, interp) else { panic!("the state fits") };
     assert!(matches!(m.search(interp, &input, 0), Err(crate::interp::Abrupt::Limit(LimitKind::Heap))));
+    drop(m);
     interp.limits.heap_bytes = 1 << 20;
     let Ok(mut m) = crate::regexp_vm::Matcher::new(&re, interp) else { panic!("the state fits") };
     assert!(matches!(m.search(interp, &input, 0), Ok(false)));
+    // What the matcher holds is on the heap while it lives, so other allocations cannot use the
+    // same room, and a collection after it is dropped takes it off again.
+    let held = m.held_bytes();
+    assert!(held > 0);
+    assert!(interp.heap.bytes >= live + held, "{} < {live} + {held}", interp.heap.bytes);
+    interp.collect_for_room();
+    assert!(interp.heap.bytes >= live + held, "{} < {live} + {held}", interp.heap.bytes);
+    drop(m);
+    interp.collect_for_room();
+    assert_eq!(interp.heap.bytes, live);
+}
+
+#[test]
+fn clearing_matcher_state_takes_fuel() {
+    let limits = Limits { fuel: 500_000, ..Limits::default() };
+    let groups = "var p = ''; for (var i = 0; i < 1000; i++) p += '(x)'; var s = ''; for (var i = 0; i < 2000; i++) s += 'a';";
+    // Each iteration of the `*` clears the 1000 groups inside it, though only `a` runs.
+    let src = format!("{groups} new RegExp('(?:a|' + p + ')*').test(s)");
+    let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &src);
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{e:?}");
+    // Each attempt at a new position clears the state of all 1001 groups.
+    let src = format!("{groups} new RegExp(p + 'z').test(s.replace(/a/g, 'b'))");
+    let e = fail_with(Realm::with_options(Options::default(), limits), &src);
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{e:?}");
 }
 
 #[test]

@@ -5,14 +5,15 @@
 //! pattern with a loop and a stack of open groups, and the matcher keeps its choice points and the
 //! values it must restore on its own stack, so neither recurses however deeply the groups nest.
 //! Quantifiers count their iterations in registers instead of repeating their atom's code. Every
-//! instruction run and every choice point taken back costs fuel, and the matcher's stack is
-//! charged against the heap limit, so a pattern that backtracks without end stops at a limit.
+//! instruction run, every capture slot cleared and every choice point taken back costs fuel, and
+//! the compiler's work, the matcher's state and its stack are held against the heap limit, so a
+//! pattern that backtracks without end stops at a limit.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use crate::LimitKind;
-use crate::interp::{Abrupt, Interp, JsResult};
+use crate::interp::{Abrupt, HeldBytes, Interp, JsResult};
 
 /// A capture position that is not set.
 pub(crate) const NONE: usize = usize::MAX;
@@ -131,10 +132,21 @@ impl From<&str> for CompileFail {
     }
 }
 
+/// What compiling takes as it goes: fuel for the work done, or heap bytes for what it holds.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Cost {
+    Fuel(u64),
+    Heap(usize),
+}
+
 impl Regex {
-    /// The estimated bytes the compiled form holds.
+    /// The bytes the compiled form holds, counting the capacity of each list.
     pub(crate) fn heap_bytes(&self) -> usize {
-        64 + size_of::<Inst>() * self.insts.len() + self.sets.iter().map(set_bytes).sum::<usize>()
+        let sets = self.sets.iter().map(set_bytes).fold(0usize, usize::saturating_add);
+        size_of::<Regex>()
+            .saturating_add(size_of::<Inst>().saturating_mul(self.insts.capacity()))
+            .saturating_add(size_of::<CharSet>().saturating_mul(self.sets.capacity()))
+            .saturating_add(sets)
     }
 
     fn canon(&self, u: u16) -> u16 {
@@ -239,6 +251,7 @@ fn complement(ranges: &[(u16, u16)]) -> Vec<(u16, u16)> {
     if next <= 0xFFFF {
         out.push((next as u16, 0xFFFF));
     }
+    out.shrink_to_fit();
     out
 }
 
@@ -252,6 +265,7 @@ fn normalize(mut ranges: Vec<(u16, u16)>) -> Vec<(u16, u16)> {
             _ => out.push((lo, hi)),
         }
     }
+    out.shrink_to_fit();
     out
 }
 
@@ -313,9 +327,10 @@ impl Frags {
         Item::Frag(self.items.len() - 1)
     }
 
-    /// The instructions of `top` with every fragment in place, written with a loop.
+    /// The instructions of `top` with every fragment in place, written with a loop, with room for
+    /// one more.
     fn flatten(&self, top: &[Item]) -> Vec<Inst> {
-        let mut out = Vec::with_capacity(self.len_of(top));
+        let mut out = Vec::with_capacity(self.len_of(top).saturating_add(1));
         let mut stack: Vec<(&[Item], usize)> = vec![(top, 0)];
         while let Some((items, i)) = stack.pop() {
             let Some(item) = items.get(i) else { continue };
@@ -493,22 +508,64 @@ fn class_atom(pattern: &[u16], i: usize) -> Result<(ClassAtom, usize), CompileFa
     }
 }
 
-/// The character class whose `[` is at `i`, and the position after its `]`.
-fn class(pattern: &[u16], mut i: usize, room: usize) -> Result<(CharSet, usize), CompileFail> {
+/// Counts `n` units of work in `work`, taking them from the fuel once a batch is full.
+fn add_work(work: &mut u64, n: u64, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(), CompileFail> {
+    *work = work.saturating_add(n);
+    if *work >= FUEL_BATCH {
+        charge(Cost::Fuel(std::mem::take(work))).map_err(CompileFail::Abrupt)?;
+    }
+    Ok(())
+}
+
+/// The ranges of a class being read, with the bytes charged for them so far.
+struct ClassRanges {
+    ranges: Vec<(u16, u16)>,
+    held: usize,
+}
+
+impl ClassRanges {
+    /// Adds the ranges of an atom.
+    fn add_atom(&mut self, atom: &ClassAtom, work: &mut u64, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(), CompileFail> {
+        match atom {
+            ClassAtom::Unit(u) => self.add(&[(*u, *u)], work, charge),
+            ClassAtom::Ranges(r) => self.add(r, work, charge),
+        }
+    }
+
+    /// Adds `part`. Each range counts as work, and when the list must grow, the bytes of its new
+    /// capacity and of the copy `normalize` makes of it are charged first.
+    fn add(&mut self, part: &[(u16, u16)], work: &mut u64, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(), CompileFail> {
+        let extra = part.len();
+        add_work(work, extra as u64, charge)?;
+        let len = self.ranges.len().saturating_add(extra);
+        if len > self.ranges.capacity() {
+            let cap = len.max(self.ranges.capacity().saturating_mul(2));
+            let need = cap.saturating_mul(2 * size_of::<(u16, u16)>());
+            if need > self.held {
+                charge(Cost::Heap(need - self.held)).map_err(CompileFail::Abrupt)?;
+                self.held = need;
+            }
+            self.ranges.reserve_exact(cap - self.ranges.len());
+        }
+        self.ranges.extend_from_slice(part);
+        Ok(())
+    }
+}
+
+/// The character class whose `[` is at `i`, and the position after its `]`. Each atom read and
+/// each range added counts as work in `work`, and the class's ranges are charged as they grow.
+fn class(pattern: &[u16], mut i: usize, work: &mut u64, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(CharSet, usize), CompileFail> {
     i += 1;
     let negated = pattern.get(i) == Some(&0x5E);
     if negated {
         i += 1;
     }
-    let mut ranges = Vec::new();
+    let mut list = ClassRanges { ranges: Vec::new(), held: 0 };
     loop {
-        // The ranges and the copy `normalize` makes of them stay within `room`.
-        if ranges.len().saturating_mul(2 * size_of::<(u16, u16)>()) > room {
-            return Err(CompileFail::Abrupt(Abrupt::Limit(LimitKind::Heap)));
-        }
+        add_work(work, 1, charge)?;
         let u = *pattern.get(i).ok_or("unterminated character class")?;
         if u == 0x5D {
-            return Ok((CharSet { ranges: normalize(ranges), negated }, i + 1));
+            return Ok((CharSet { ranges: normalize(list.ranges), negated }, i + 1));
         }
         let (atom, next) = class_atom(pattern, i)?;
         i = next;
@@ -520,31 +577,28 @@ fn class(pattern: &[u16], mut i: usize, room: usize) -> Result<(CharSet, usize),
                     if lo > hi {
                         return Err("range out of order in character class".into());
                     }
-                    ranges.push((lo, hi));
+                    list.add(&[(lo, hi)], work, charge)?;
                 }
                 // Annex B: a range with a class escape at one end is its atoms and a `-`.
                 (lo, hi) => {
                     for a in [lo, ClassAtom::Unit(0x2D), hi] {
-                        match a {
-                            ClassAtom::Unit(u) => ranges.push((u, u)),
-                            ClassAtom::Ranges(r) => ranges.extend(r),
-                        }
+                        list.add_atom(&a, work, charge)?;
                     }
                 }
             }
             i = after;
         } else {
-            match atom {
-                ClassAtom::Unit(u) => ranges.push((u, u)),
-                ClassAtom::Ranges(r) => ranges.extend(r),
-            }
+            list.add_atom(&atom, work, charge)?;
         }
     }
 }
 
-/// The bytes a character class holds.
+/// At least the bytes a class escape's set (`\d`, `\S`, ...) holds.
+const ESCAPE_SET_BYTES: usize = size_of::<CharSet>() + 16 * size_of::<(u16, u16)>();
+
+/// The bytes a character class's ranges hold.
 fn set_bytes(set: &CharSet) -> usize {
-    32 + size_of::<(u16, u16)>() * set.ranges.len()
+    size_of::<(u16, u16)>().saturating_mul(set.ranges.capacity())
 }
 
 /// The bytes compiling holds: each instruction as an item and in the flattened code, each
@@ -556,16 +610,11 @@ pub(crate) fn compile_bytes(instructions: usize, fragments: usize, sets_size: us
         .saturating_add(sets_size)
 }
 
-/// Compiles `pattern`. Groups may nest `max_depth` deep; `charge` takes fuel for the work done.
-/// Compiling stops with the heap limit when what it holds (instructions, fragments and classes
-/// made so far, with the two instructions each `|` adds) would pass `room` bytes.
-pub(crate) fn compile(
-    pattern: &[u16],
-    flags: Flags,
-    max_depth: usize,
-    room: usize,
-    charge: &mut dyn FnMut(u64) -> JsResult<()>,
-) -> Result<Regex, CompileFail> {
+/// Compiles `pattern`. Groups may nest `max_depth` deep. `charge` takes fuel for the work done, and
+/// heap bytes for what compiling holds before it grows: the instructions, fragments and classes
+/// made so far (with the two instructions each `|` adds), the groups still open and the ranges of
+/// the class being read. An error from `charge` stops compiling.
+pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<Regex, CompileFail> {
     let total_groups = count_groups(pattern);
     let mut sets: Vec<CharSet> = Vec::new();
     let mut sets_size = 0usize;
@@ -579,15 +628,19 @@ pub(crate) fn compile(
     let mut emitted = 0usize;
     // The fragments the joins of the groups still open will add, one for each `|` read in them.
     let mut joined = 0usize;
+    // The heap bytes charged so far.
+    let mut held = 0usize;
     let canon = |u: u16| if flags.ignore_case { canonicalize(u) } else { u };
     while let Some(&u) = pattern.get(i) {
-        work += 1;
-        if work >= FUEL_BATCH {
-            charge(work).map_err(CompileFail::Abrupt)?;
-            work = 0;
-        }
-        if compile_bytes(emitted, frags.items.len() + joined, sets_size) > room {
-            return Err(CompileFail::Abrupt(Abrupt::Limit(LimitKind::Heap)));
+        add_work(&mut work, 1, charge)?;
+        // One step adds at most three instructions, two fragments, one open group and one class
+        // escape's set (a class charges its own ranges), so their bytes are charged before the
+        // step makes them.
+        let now = compile_bytes(emitted + 3, frags.items.len() + joined + 2, sets_size.saturating_add(ESCAPE_SET_BYTES))
+            .saturating_add(size_of::<Ctx>().saturating_mul(stack.len() + 1));
+        if now > held {
+            charge(Cost::Heap(now - held)).map_err(CompileFail::Abrupt)?;
+            held = now;
         }
         let ctx = stack.last_mut().ok_or("unmatched ')'")?;
         let start = ctx.cur.len();
@@ -612,9 +665,9 @@ pub(crate) fn compile(
                 i += 1;
             }
             0x5B => {
-                let (set, next) = class(pattern, i, room.saturating_sub(compile_bytes(emitted, frags.items.len() + joined, sets_size)))?;
+                let (set, next) = class(pattern, i, &mut work, charge)?;
                 emit(&mut emitted, ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
-                sets_size = sets_size.saturating_add(set_bytes(&set));
+                sets_size = sets_size.saturating_add(size_of::<CharSet>() + set_bytes(&set));
                 sets.push(set);
                 ctx.atom = Some((start, before));
                 i = next;
@@ -746,7 +799,7 @@ pub(crate) fn compile(
                         if let Some(r) = escape_ranges(next) {
                             emit(&mut emitted, ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
                             let set = CharSet { ranges: r, negated: false };
-                            sets_size = sets_size.saturating_add(set_bytes(&set));
+                            sets_size = sets_size.saturating_add(size_of::<CharSet>() + set_bytes(&set));
                             sets.push(set);
                             i += 2;
                         } else {
@@ -775,13 +828,15 @@ pub(crate) fn compile(
     let cur = std::mem::take(&mut top.cur);
     top.alts.push(cur);
     // Joining adds a fragment for each alternative, and flattening writes every instruction.
-    if compile_bytes(emitted + 1, frags.items.len() + joined + 1, sets_size) > room {
-        return Err(CompileFail::Abrupt(Abrupt::Limit(LimitKind::Heap)));
+    let now = compile_bytes(emitted + 1, frags.items.len() + joined + 1, sets_size);
+    if now > held {
+        charge(Cost::Heap(now - held)).map_err(CompileFail::Abrupt)?;
     }
     let top = join(top.alts, &mut frags)?;
     let mut insts = frags.flatten(&top);
     insts.push(Inst::Match);
-    charge(work + insts.len() as u64 / 16).map_err(CompileFail::Abrupt)?;
+    sets.shrink_to_fit();
+    charge(Cost::Fuel(work + insts.len() as u64 / 16)).map_err(CompileFail::Abrupt)?;
     Ok(Regex { insts, sets, groups: groups as usize, loops: loops as usize, ignore_case: flags.ignore_case, multiline: flags.multiline })
 }
 
@@ -830,7 +885,12 @@ pub(crate) fn use_fuel_n(interp: &mut Interp, n: u64) -> JsResult<()> {
     interp.use_fuel()
 }
 
-/// The state of one match attempt, kept between attempts to reuse its buffers.
+/// The stack entries a matcher's stack first grows by.
+const STACK_CHUNK: usize = 64;
+
+/// The state of one match attempt, kept between attempts to reuse its buffers. Its capture and
+/// quantifier state, and its stack's capacity, are held against the heap limit until it is
+/// dropped.
 pub(crate) struct Matcher<'r> {
     re: &'r Regex,
     /// Two positions per group, group 0 first: [`NONE`] where a group did not take part.
@@ -839,25 +899,20 @@ pub(crate) struct Matcher<'r> {
     counts: Vec<u64>,
     marks: Vec<usize>,
     stack: Vec<Bt>,
-    max_stack: usize,
+    /// The stack entries held.
+    stack_room: usize,
+    held: HeldBytes,
     steps: u64,
 }
 
 impl<'r> Matcher<'r> {
-    /// A matcher for `re`. Its capture and quantifier state, and its stack, fit in the heap room
-    /// left under the limit; a run without room for the state ends with the heap limit. When the
-    /// room would not hold the state and 64 stack entries, a collection runs first, so everything
-    /// the caller still needs must be reachable from the roots.
+    /// A matcher for `re`, ending the run with the heap limit when its state does not fit. Holding
+    /// the state, and later the stack, can run a collection, so everything the caller still needs
+    /// must be reachable from the roots while the matcher works.
     pub(crate) fn new(re: &'r Regex, interp: &mut Interp) -> JsResult<Self> {
         let state = 8usize.saturating_mul(re.groups.saturating_add(1).saturating_mul(3).saturating_add(re.loops.saturating_mul(2)));
-        let wanted = state.saturating_add(64 * size_of::<Bt>());
-        if interp.heap.bytes.saturating_add(wanted) > interp.limits.heap_bytes {
-            interp.collect_for_room();
-        }
-        let room = interp.limits.heap_bytes.saturating_sub(interp.heap.bytes);
-        if state > room {
-            return Err(Abrupt::Limit(LimitKind::Heap));
-        }
+        let mut held = HeldBytes::new(interp);
+        held.add(interp, state)?;
         Ok(Self {
             re,
             caps: vec![NONE; 2 * (re.groups + 1)],
@@ -865,16 +920,40 @@ impl<'r> Matcher<'r> {
             counts: vec![0; re.loops],
             marks: vec![NONE; re.loops],
             stack: Vec::new(),
-            max_stack: (room - state) / size_of::<Bt>(),
+            stack_room: 0,
+            held,
             steps: 0,
         })
     }
 
-    fn push(&mut self, b: Bt) -> JsResult<()> {
-        if self.stack.len() >= self.max_stack {
-            return Err(Abrupt::Limit(LimitKind::Heap));
+    /// The bytes the matcher holds.
+    #[cfg(test)]
+    pub(crate) fn held_bytes(&self) -> usize {
+        self.held.bytes()
+    }
+
+    fn push(&mut self, interp: &mut Interp, b: Bt) -> JsResult<()> {
+        if self.stack.len() >= self.stack_room {
+            self.grow(interp)?;
         }
         self.stack.push(b);
+        Ok(())
+    }
+
+    /// Holds more stack entries: as many as the stack has, at least [`STACK_CHUNK`], or when those
+    /// do not fit, what the heap room left holds.
+    fn grow(&mut self, interp: &mut Interp) -> JsResult<()> {
+        let size = size_of::<Bt>();
+        let mut more = self.stack_room.max(STACK_CHUNK);
+        if self.held.add(interp, more.saturating_mul(size)).is_err() {
+            more = interp.limits.heap_bytes.saturating_sub(interp.heap.bytes) / size;
+            if more == 0 {
+                return Err(Abrupt::Limit(LimitKind::Heap));
+            }
+            self.held.add(interp, more * size)?;
+        }
+        self.stack_room = self.stack_room.saturating_add(more);
+        self.stack.reserve_exact(self.stack_room - self.stack.len());
         Ok(())
     }
 
@@ -893,10 +972,10 @@ impl<'r> Matcher<'r> {
         use_fuel_n(interp, n)
     }
 
-    fn set_cap(&mut self, slot: usize, v: usize) -> JsResult<()> {
+    fn set_cap(&mut self, interp: &mut Interp, slot: usize, v: usize) -> JsResult<()> {
         let Some(old) = self.caps.get(slot).copied() else { return Ok(()) };
         if old != v {
-            self.push(Bt::Cap(slot, old))?;
+            self.push(interp, Bt::Cap(slot, old))?;
             if let Some(c) = self.caps.get_mut(slot) {
                 *c = v;
             }
@@ -904,17 +983,20 @@ impl<'r> Matcher<'r> {
         Ok(())
     }
 
-    fn enter_rep(&mut self, pc: usize, pos: usize) -> JsResult<()> {
+    /// Starts an iteration of the quantifier at `pc`, clearing the groups inside its atom. Each
+    /// group cleared counts as a step.
+    fn enter_rep(&mut self, interp: &mut Interp, pc: usize, pos: usize) -> JsResult<()> {
         let Some(Inst::Rep { reg, caps: (lo, hi), .. }) = self.re.insts.get(pc).copied() else { return Ok(()) };
         let reg = reg as usize;
         let old = self.marks.get(reg).copied().unwrap_or(NONE);
-        self.push(Bt::Mark(reg, old))?;
+        self.push(interp, Bt::Mark(reg, old))?;
         if let Some(m) = self.marks.get_mut(reg) {
             *m = pos;
         }
         for g in lo as usize..hi as usize {
-            self.set_cap(2 * g, NONE)?;
-            self.set_cap(2 * g + 1, NONE)?;
+            self.step(interp)?;
+            self.set_cap(interp, 2 * g, NONE)?;
+            self.set_cap(interp, 2 * g + 1, NONE)?;
         }
         Ok(())
     }
@@ -950,7 +1032,7 @@ impl<'r> Matcher<'r> {
                 }
                 Bt::EnterRep { pc: p, pos: q } => {
                     *pos = q;
-                    self.enter_rep(p, q)?;
+                    self.enter_rep(interp, p, q)?;
                     *pc = p + 1;
                     return Ok(true);
                 }
@@ -985,7 +1067,10 @@ impl<'r> Matcher<'r> {
         Ok(false)
     }
 
+    /// Clears the state for a new attempt. Each slot cleared counts as a step.
     fn reset(&mut self) {
+        let slots = self.caps.len() + self.open.len() + self.counts.len() + self.marks.len();
+        self.steps = self.steps.saturating_add(slots as u64);
         self.caps.fill(NONE);
         self.open.fill(NONE);
         self.counts.fill(0);
@@ -1047,7 +1132,7 @@ impl<'r> Matcher<'r> {
                     (a != b) == want
                 }
                 Inst::Split(first, second) => {
-                    self.push(Bt::Retry { pc: at(pc, second), pos })?;
+                    self.push(interp, Bt::Retry { pc: at(pc, second), pos })?;
                     pc = at(pc, first);
                     true
                 }
@@ -1058,7 +1143,7 @@ impl<'r> Matcher<'r> {
                 Inst::GroupStart(g) => {
                     let g = g as usize;
                     let old = self.open.get(g).copied().unwrap_or(NONE);
-                    self.push(Bt::Open(g, old))?;
+                    self.push(interp, Bt::Open(g, old))?;
                     if let Some(o) = self.open.get_mut(g) {
                         *o = pos;
                     }
@@ -1068,15 +1153,15 @@ impl<'r> Matcher<'r> {
                 Inst::GroupEnd(g) => {
                     let g = g as usize;
                     let s = self.open.get(g).copied().unwrap_or(NONE);
-                    self.set_cap(2 * g, s)?;
-                    self.set_cap(2 * g + 1, pos)?;
+                    self.set_cap(interp, 2 * g, s)?;
+                    self.set_cap(interp, 2 * g + 1, pos)?;
                     pc += 1;
                     true
                 }
                 Inst::RepInit(r) => {
                     let r = r as usize;
                     let old = self.counts.get(r).copied().unwrap_or(0);
-                    self.push(Bt::Count(r, old))?;
+                    self.push(interp, Bt::Count(r, old))?;
                     if let Some(c) = self.counts.get_mut(r) {
                         *c = 0;
                     }
@@ -1089,14 +1174,14 @@ impl<'r> Matcher<'r> {
                     if count >= max {
                         pc = exit_pc;
                     } else if count < min {
-                        self.enter_rep(pc, pos)?;
+                        self.enter_rep(interp, pc, pos)?;
                         pc += 1;
                     } else if greedy {
-                        self.push(Bt::Retry { pc: exit_pc, pos })?;
-                        self.enter_rep(pc, pos)?;
+                        self.push(interp, Bt::Retry { pc: exit_pc, pos })?;
+                        self.enter_rep(interp, pc, pos)?;
                         pc += 1;
                     } else {
-                        self.push(Bt::EnterRep { pc, pos })?;
+                        self.push(interp, Bt::EnterRep { pc, pos })?;
                         pc = exit_pc;
                     }
                     true
@@ -1114,7 +1199,7 @@ impl<'r> Matcher<'r> {
                     if count >= min && self.marks.get(r).copied() == Some(pos) {
                         false
                     } else {
-                        self.push(Bt::Count(r, count))?;
+                        self.push(interp, Bt::Count(r, count))?;
                         if let Some(c) = self.counts.get_mut(r) {
                             *c = count + 1;
                         }
@@ -1123,7 +1208,7 @@ impl<'r> Matcher<'r> {
                     }
                 }
                 Inst::Look { negative, end } => {
-                    self.push(Bt::Look { pos, negative, resume: at(pc, end) })?;
+                    self.push(interp, Bt::Look { pos, negative, resume: at(pc, end) })?;
                     pc += 1;
                     true
                 }
@@ -1131,6 +1216,8 @@ impl<'r> Matcher<'r> {
                     let Some(b) = self.stack.iter().rposition(|e| matches!(e, Bt::Look { .. })) else {
                         return Err(Abrupt::Internal("lookahead end without its start".into()));
                     };
+                    // Each entry read above, and below, counts as a step.
+                    self.steps = self.steps.saturating_add((self.stack.len() - b) as u64);
                     let Some(Bt::Look { pos: q, negative, resume }) = self.stack.get(b).copied() else {
                         return Err(Abrupt::Internal("lookahead end without its start".into()));
                     };
@@ -1146,9 +1233,17 @@ impl<'r> Matcher<'r> {
                         false
                     } else {
                         // A lookahead is atomic: its choice points are dropped, and what it set is
-                        // kept, with the entries that restore it.
-                        let kept: Vec<Bt> = self.stack.drain(b..).skip(1).filter(Bt::is_undo).collect();
-                        self.stack.extend(kept);
+                        // kept, with the entries that restore it, moved down in place.
+                        let mut kept = b;
+                        for r in b + 1..self.stack.len() {
+                            if let Some(e) = self.stack.get(r).copied().filter(Bt::is_undo) {
+                                if let Some(slot) = self.stack.get_mut(kept) {
+                                    *slot = e;
+                                }
+                                kept += 1;
+                            }
+                        }
+                        self.stack.truncate(kept);
                         pos = q;
                         pc = resume;
                         true
@@ -1175,8 +1270,8 @@ impl<'r> Matcher<'r> {
                     }
                 }
                 Inst::Match => {
-                    self.set_cap(0, start)?;
-                    self.set_cap(1, pos)?;
+                    self.set_cap(interp, 0, start)?;
+                    self.set_cap(interp, 1, pos)?;
                     return Ok(true);
                 }
             };

@@ -13,8 +13,8 @@ use chrono::{Datelike, NaiveDate};
 
 use crate::builtins::{arg, constructor, data, method, native};
 use crate::heap::{Class, NativeFn, NativeKind, Object, key};
-use crate::interp::{ErrorType, Hint, Interp, JsResult};
-use crate::string_builtins::{charge_units, reserve_units, to_integer};
+use crate::interp::{ErrorType, HeldBytes, Hint, Interp, JsResult};
+use crate::string_builtins::{charge_units, flat_charged, reserve_units, to_integer};
 use crate::value::{Str, Value};
 
 /// The clock and time zone a realm's `Date` reads.
@@ -425,10 +425,15 @@ fn parse_text(interp: &Interp, s: &str) -> Option<f64> {
     Some(time_clip(t))
 }
 
-/// Takes fuel for the units of `s` the parsers read.
+/// Takes fuel for the units of `s` the parsers read. The text the parsers read is held against
+/// the heap limit while they read it.
 fn parse_date(interp: &mut Interp, s: &Str) -> JsResult<f64> {
-    charge_units(interp, s.len())?;
-    let text = s.to_rust_string();
+    let units = flat_charged(interp, s)?;
+    charge_units(interp, units.len())?;
+    let mut held = HeldBytes::new(interp);
+    // Each code unit becomes at most three UTF-8 bytes.
+    held.add(interp, units.len().saturating_mul(3))?;
+    let text = String::from_utf16_lossy(&units);
     let trimmed = text.trim();
     Ok(parse_iso(trimmed.as_bytes()).or_else(|| parse_text(interp, trimmed)).unwrap_or(f64::NAN))
 }

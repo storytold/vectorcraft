@@ -3,18 +3,17 @@
 
 use std::rc::Rc;
 
-use crate::LimitKind;
 use crate::builtins::{arg, constructor, method, native};
 use crate::heap::{Class, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, WRITABLE, key, string_bytes};
-use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
-use crate::regexp_vm::{CompileFail, Flags, Matcher, Regex, compile, parse_flags, use_fuel_n};
-use crate::string_builtins::{new_array, reserve_units, rooted, set_element, substring_value, to_integer};
+use crate::interp::{ErrorType, HeldBytes, Interp, JsResult};
+use crate::regexp_vm::{CompileFail, Cost, Flags, Matcher, Regex, compile, parse_flags, use_fuel_n};
+use crate::string_builtins::{flat_charged, new_array, reserve_units, rooted, set_element, substring_value, to_integer};
 use crate::value::{Str, Value};
 
 pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     let proto = interp.intrinsics.regexp_proto;
     // The prototype is itself a regular expression object, matching the empty string.
-    let empty = compile_regex(interp, &[], &[])?;
+    let empty = compile_regex(interp, &[], &[], 0)?;
     if let Some(p) = interp.heap.object_mut(proto) {
         p.class = Class::RegExp(empty);
     }
@@ -36,8 +35,10 @@ pub(crate) fn regexp_of(interp: &Interp, v: &Value) -> Option<(ObjId, Rc<Regex>)
 }
 
 /// Checks and compiles a pattern, throwing a `SyntaxError` for a pattern or flags that are not
-/// valid. The compiled form's bytes are reserved on the heap.
-fn compile_regex(interp: &mut Interp, pattern: &[u16], flags: &[u16]) -> JsResult<Rc<Regex>> {
+/// valid. What compiling holds is held against the heap limit as it grows. The compiled form's
+/// bytes are then reserved together with `extra` more and added to the heap, so a caller that
+/// stores the result in an object it allocates next reserves that object here.
+fn compile_regex(interp: &mut Interp, pattern: &[u16], flags: &[u16], extra: usize) -> JsResult<Rc<Regex>> {
     let flags: Flags = match parse_flags(flags) {
         Ok(f) => f,
         Err(m) => return Err(interp.throw(ErrorType::Syntax, &m)),
@@ -46,30 +47,26 @@ fn compile_regex(interp: &mut Interp, pattern: &[u16], flags: &[u16]) -> JsResul
     if let Err(m) = crate::regexp::check(pattern, depth) {
         return Err(interp.throw(ErrorType::Syntax, &format!("invalid regular expression: {m}")));
     }
-    // A compile that runs out of room collects garbage and tries once more with the room it frees.
-    let mut collected = false;
-    let re = loop {
-        let room = interp.limits.heap_bytes.saturating_sub(interp.heap.bytes);
-        match compile(pattern, flags, depth, room, &mut |n| use_fuel_n(interp, n)) {
-            Ok(re) => break re,
-            Err(CompileFail::Abrupt(Abrupt::Limit(LimitKind::Heap))) if !collected => {
-                interp.collect_for_room();
-                collected = true;
-            }
-            Err(CompileFail::Syntax(m)) => return Err(interp.throw(ErrorType::Syntax, &format!("invalid regular expression: {m}"))),
-            Err(CompileFail::Abrupt(a)) => return Err(a),
-        }
+    let mut held = HeldBytes::new(interp);
+    let compiled = compile(pattern, flags, depth, &mut |cost| match cost {
+        Cost::Fuel(n) => use_fuel_n(interp, n),
+        Cost::Heap(n) => held.add(interp, n),
+    });
+    drop(held);
+    let re = match compiled {
+        Ok(re) => re,
+        Err(CompileFail::Syntax(m)) => return Err(interp.throw(ErrorType::Syntax, &format!("invalid regular expression: {m}"))),
+        Err(CompileFail::Abrupt(a)) => return Err(a),
     };
     let bytes = re.heap_bytes();
-    interp.reserve_heap(bytes)?;
+    interp.reserve_heap(bytes.saturating_add(extra))?;
     interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
     Ok(Rc::new(re))
 }
 
 /// A new RegExp object whose `source` property is `source` (section 15.10.4.1, steps 7 to 12).
 fn make(interp: &mut Interp, source: Str, pattern: &[u16], flags: &[u16]) -> JsResult<ObjId> {
-    let re = compile_regex(interp, pattern, flags)?;
-    interp.reserve_heap(OBJECT_BYTES + 5 * (PROP_BYTES + string_bytes(10)))?;
+    let re = compile_regex(interp, pattern, flags, OBJECT_BYTES + 5 * (PROP_BYTES + string_bytes(10)))?;
     let (g, i, m) = (parse_flags(flags).unwrap_or_default().global, re.ignore_case, re.multiline);
     let proto = interp.intrinsics.regexp_proto;
     let r = interp.heap.alloc_object(Object::new(Class::RegExp(re), Some(proto)));
@@ -91,8 +88,9 @@ fn define_flags(interp: &mut Interp, r: ObjId, source: Str, g: bool, i: bool, m:
 /// The object a regular expression literal evaluates to (section 7.8.5): a new RegExp object
 /// each time.
 pub(crate) fn new_regexp(interp: &mut Interp, source: &Str, flags: &Str) -> JsResult<ObjId> {
-    let pattern = source.flat();
-    make(interp, source.clone(), &pattern, &flags.flat())
+    let pattern = flat_charged(interp, source)?;
+    let flags = flat_charged(interp, flags)?;
+    make(interp, source.clone(), &pattern, &flags)
 }
 
 /// The `source` text for a pattern given to the constructor: `(?:)` for the empty pattern, and
@@ -153,15 +151,16 @@ pub(crate) fn new_regexp_from(interp: &mut Interp, pattern: &Value, flags: &Valu
                 f.push(c);
             }
         }
-        let units = source.flat();
+        let units = flat_charged(interp, &source)?;
         let pattern: &[u16] = if is_empty_group(&units) { &[] } else { &units };
         return make(interp, source.clone(), pattern, &f.encode_utf16().collect::<Vec<u16>>());
     }
     let p = if matches!(pattern, Value::Undefined) { Str::from("") } else { interp.to_str(pattern)? };
     let f = if matches!(flags, Value::Undefined) { Str::from("") } else { interp.to_str(flags)? };
-    let units = p.flat();
+    let units = flat_charged(interp, &p)?;
+    let flags = flat_charged(interp, &f)?;
     let source = source_text(interp, &units)?;
-    make(interp, source, &units, &f.flat())
+    make(interp, source, &units, &flags)
 }
 
 fn is_empty_group(units: &[u16]) -> bool {
@@ -194,7 +193,7 @@ pub(crate) fn exec_raw(interp: &mut Interp, rx: ObjId, s: &Str) -> JsResult<Opti
     let li = interp.get_value(&rv, &last_index)?;
     let li = to_integer(interp.to_number(&li)?);
     let global = interp.get_value(&rv, &key("global"))?.truthy();
-    let units = s.flat();
+    let units = flat_charged(interp, s)?;
     let i = if global { li } else { 0.0 };
     let found = if i < 0.0 || i > units.len() as f64 {
         None
@@ -221,7 +220,7 @@ pub(crate) fn exec_raw(interp: &mut Interp, rx: ObjId, s: &Str) -> JsResult<Opti
 pub(crate) fn exec_value(interp: &mut Interp, rx: ObjId, s: &Str) -> JsResult<Value> {
     rooted(interp, |interp| {
         let Some(caps) = exec_raw(interp, rx, s)? else { return Ok(Value::Null) };
-        let units = s.flat();
+        let units = flat_charged(interp, s)?;
         let a = new_array(interp);
         interp.reserve_heap(2 * (PROP_BYTES + string_bytes(5)))?;
         let index = caps.first().copied().unwrap_or(0);

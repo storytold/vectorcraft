@@ -1,17 +1,17 @@
 //! `String` (ECMA-262 5.1 section 15.5): the constructor, `String.fromCharCode` and the methods of
 //! `String.prototype`, with `substr` from Annex B.
 //!
-//! The methods read a string's code units once (flattening a rope), take a unit of fuel for every
-//! [`UNITS_PER_FUEL`] code units they read or write, and reserve each new string's bytes on the
-//! heap before building it, so a method that would make a string past the heap limit ends the
-//! run instead of allocating it.
+//! The methods read a string's code units once (flattening a rope, whose flat copy counts as a new
+//! string), take a unit of fuel for every [`UNITS_PER_FUEL`] code units they read or write, and
+//! reserve each new string's bytes on the heap before building it, so a method that would make a
+//! string past the heap limit ends the run instead of allocating it.
 
 use std::rc::Rc;
 
 use crate::LimitKind;
 use crate::builtins::{arg, constructor, method, native};
 use crate::heap::{Class, NativeKind, OPEN, ObjId, Object, PROP_BYTES, Prop, string_bytes};
-use crate::interp::{Abrupt, Interp, JsResult};
+use crate::interp::{Abrupt, HeldBytes, Interp, JsResult};
 use crate::regexp_builtins::{exec_raw, new_regexp_from, regexp_of};
 use crate::regexp_vm::{Matcher, NONE, use_fuel_n};
 use crate::value::{Str, Value, index_key, is_str_space, to_uint32};
@@ -74,13 +74,47 @@ pub(crate) fn charge_units(interp: &mut Interp, n: usize) -> JsResult<()> {
 /// run with the heap limit when it would not fit. Everything the caller still needs must be
 /// reachable from the roots.
 pub(crate) fn reserve_units(interp: &mut Interp, len: usize) -> JsResult<()> {
+    reserve_string(interp, len)?;
+    charge_units(interp, len)
+}
+
+/// [`reserve_units`] without the fuel, for a caller that took it as it read the units.
+fn reserve_string(interp: &mut Interp, len: usize) -> JsResult<()> {
+    check_string_room(interp, len)?;
+    let bytes = string_bytes(len);
+    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    Ok(())
+}
+
+/// Ends the run with the heap limit when a new string of `len` code units would not fit, after
+/// a collection if one is needed. Everything the caller still needs must be reachable from the
+/// roots.
+fn check_string_room(interp: &mut Interp, len: usize) -> JsResult<()> {
     if len > interp.limits.heap_bytes / 4 {
         return Err(Abrupt::Limit(LimitKind::Heap));
     }
-    let bytes = string_bytes(len);
-    interp.reserve_heap(bytes)?;
-    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
-    charge_units(interp, len)
+    interp.reserve_heap(string_bytes(len))
+}
+
+/// Pushes `item` onto `list`, first holding the bytes of the list's new capacity when it must
+/// grow.
+fn push_held<T>(interp: &mut Interp, held: &mut HeldBytes, list: &mut Vec<T>, item: T) -> JsResult<()> {
+    if list.len() == list.capacity() {
+        let more = list.capacity().max(4);
+        held.add(interp, more.saturating_mul(size_of::<T>()))?;
+        list.reserve_exact(more);
+    }
+    list.push(item);
+    Ok(())
+}
+
+/// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that copy's
+/// bytes are reserved and added to the heap, and its units charged as fuel, first.
+pub(crate) fn flat_charged(interp: &mut Interp, s: &Str) -> JsResult<Rc<[u16]>> {
+    if s.is_rope() {
+        reserve_units(interp, s.len())?;
+    }
+    Ok(s.flat())
 }
 
 /// A new string holding `units[start..end]`.
@@ -215,7 +249,7 @@ fn char_at(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
     if pos < 0.0 || pos >= s.len() as f64 {
         return Ok(Value::str(""));
     }
-    let unit = s.flat().get(pos as usize).copied().unwrap_or(0);
+    let unit = flat_charged(interp, &s)?.get(pos as usize).copied().unwrap_or(0);
     Ok(Value::String(Str::from_units(vec![unit])))
 }
 
@@ -225,7 +259,7 @@ fn char_code_at(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> Js
     if pos < 0.0 || pos >= s.len() as f64 {
         return Ok(Value::Number(f64::NAN));
     }
-    Ok(Value::Number(f64::from(s.flat().get(pos as usize).copied().unwrap_or(0))))
+    Ok(Value::Number(f64::from(flat_charged(interp, &s)?.get(pos as usize).copied().unwrap_or(0))))
 }
 
 fn concat(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -241,7 +275,7 @@ fn index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResu
     let s = this_str(interp, &this, "indexOf")?;
     let search = interp.to_str(&arg(args, 0))?;
     let pos = int_arg(interp, args, 1)?;
-    let (hay, needle) = (s.flat(), search.flat());
+    let (hay, needle) = (flat_charged(interp, &s)?, flat_charged(interp, &search)?);
     let start = clamp(pos, hay.len());
     let found = find(interp, &hay, &needle, start)?;
     Ok(Value::Number(found.map_or(-1.0, |i| i as f64)))
@@ -252,7 +286,7 @@ fn last_index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let search = interp.to_str(&arg(args, 0))?;
     let n = interp.to_number(&arg(args, 1))?;
     let pos = if n.is_nan() { f64::INFINITY } else { to_integer(n) };
-    let (hay, needle) = (s.flat(), search.flat());
+    let (hay, needle) = (flat_charged(interp, &s)?, flat_charged(interp, &search)?);
     let start = clamp(pos, hay.len());
     if needle.len() > hay.len() {
         return Ok(Value::Number(-1.0));
@@ -275,7 +309,7 @@ fn last_index_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
 fn locale_compare(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let s = this_str(interp, &this, "localeCompare")?;
     let that = interp.to_str(&arg(args, 0))?;
-    let (a, b) = (s.flat(), that.flat());
+    let (a, b) = (flat_charged(interp, &s)?, flat_charged(interp, &that)?);
     charge_units(interp, a.len().min(b.len()))?;
     Ok(Value::Number(match a.cmp(&b) {
         std::cmp::Ordering::Less => -1.0,
@@ -294,7 +328,8 @@ fn slice(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
     if to <= from {
         return Ok(Value::str(""));
     }
-    substring_value(interp, &s.flat(), from as usize, to as usize)
+    let units = flat_charged(interp, &s)?;
+    substring_value(interp, &units, from as usize, to as usize)
 }
 
 fn substring(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -303,7 +338,8 @@ fn substring(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
     let start = int_arg(interp, args, 0)?;
     let end = if matches!(arg(args, 1), Value::Undefined) { len as f64 } else { int_arg(interp, args, 1)? };
     let (a, b) = (clamp(start, len), clamp(end, len));
-    substring_value(interp, &s.flat(), a.min(b), a.max(b))
+    let units = flat_charged(interp, &s)?;
+    substring_value(interp, &units, a.min(b), a.max(b))
 }
 
 /// `substr` (Annex B.2.3). Its first step applies ToString to `this` with no object-coercible
@@ -318,7 +354,8 @@ fn substr(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
     if count <= 0.0 {
         return Ok(Value::str(""));
     }
-    substring_value(interp, &s.flat(), start as usize, (start + count) as usize)
+    let units = flat_charged(interp, &s)?;
+    substring_value(interp, &units, start as usize, (start + count) as usize)
 }
 
 /// The UTF-16 length of `c` mapped to lower or upper case.
@@ -353,19 +390,21 @@ fn map_case(interp: &mut Interp, units: &[u16], upper: bool) -> JsResult<Vec<u16
 
 fn to_lower_case(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let s = this_str(interp, &this, "toLowerCase")?;
-    let out = map_case(interp, &s.flat(), false)?;
+    let units = flat_charged(interp, &s)?;
+    let out = map_case(interp, &units, false)?;
     Ok(Value::String(Str::from_units(out)))
 }
 
 fn to_upper_case(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let s = this_str(interp, &this, "toUpperCase")?;
-    let out = map_case(interp, &s.flat(), true)?;
+    let units = flat_charged(interp, &s)?;
+    let out = map_case(interp, &units, true)?;
     Ok(Value::String(Str::from_units(out)))
 }
 
 fn trim(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let s = this_str(interp, &this, "trim")?;
-    let units = s.flat();
+    let units = flat_charged(interp, &s)?;
     // The scan reads every unit once at most.
     charge_units(interp, units.len())?;
     let start = units.iter().position(|&u| !is_str_space(u)).unwrap_or(units.len());
@@ -403,7 +442,7 @@ fn match_(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
         let a = new_array(interp);
         let mut n = 0usize;
         let mut previous = 0.0;
-        let units = s.flat();
+        let units = flat_charged(interp, &s)?;
         while let Some(caps) = exec_raw(interp, rx, &s)? {
             let this_index = interp.get_value(&Value::Object(rx), &last_index)?;
             let this_index = interp.to_number(&this_index)?;
@@ -428,54 +467,106 @@ fn search(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult
         let s = this_str(interp, &this, "search")?;
         let rx = regexp_arg(interp, &arg(args, 0))?;
         let Some((_, re)) = regexp_of(interp, &Value::Object(rx)) else { return Err(interp.type_error("not a regular expression")) };
-        let units = s.flat();
+        let units = flat_charged(interp, &s)?;
         let mut m = Matcher::new(&re, interp)?;
         let found = m.search(interp, &units, 0)?;
         Ok(Value::Number(if found { m.caps.first().copied().unwrap_or(0) as f64 } else { -1.0 }))
     })
 }
 
-/// A piece of a result string: a range of the input, or other text.
+/// A piece of a result string: a range of the input, a range of the replacement pattern, or the
+/// units of a string a replacement function returned.
 enum Piece {
     Range(usize, usize),
-    Text(Str),
+    Template(usize, usize),
+    Units(Rc<[u16]>),
 }
 
 impl Piece {
     fn len(&self) -> usize {
         match self {
-            Piece::Range(a, b) => b.saturating_sub(*a),
-            Piece::Text(s) => s.len(),
+            Piece::Range(a, b) | Piece::Template(a, b) => b.saturating_sub(*a),
+            Piece::Units(u) => u.len(),
         }
     }
 }
 
-/// Joins pieces into a new string, reserving its length first.
-fn build(interp: &mut Interp, units: &[u16], pieces: &[Piece]) -> JsResult<Value> {
-    let total = pieces.iter().map(Piece::len).fold(0usize, usize::saturating_add);
-    reserve_units(interp, total)?;
-    let mut out = Vec::with_capacity(total);
-    for p in pieces {
-        match p {
-            Piece::Range(a, b) => out.extend_from_slice(units.get(*a..*b).unwrap_or_default()),
-            Piece::Text(s) => out.extend_from_slice(&s.flat()),
-        }
-    }
-    Ok(Value::String(Str::from_units(out)))
+/// The pieces of a result string and the length they add up to.
+#[derive(Default)]
+struct Pieces {
+    list: Vec<Piece>,
+    len: usize,
 }
 
-/// The pieces a replacement pattern (section 15.5.4.11, Table 22) gives for one match: `caps`
-/// holds the match and its groups as pairs of positions in `units`.
-fn expand(template: &[u16], units: &[u16], caps: &[usize], out: &mut Vec<Piece>) {
-    let groups = caps.len() / 2 - 1;
-    let (start, end) = (caps.first().copied().unwrap_or(0), caps.get(1).copied().unwrap_or(0));
+impl Pieces {
+    /// Adds `piece`, holding its bytes and taking fuel for its units, and ends the run with the
+    /// heap limit once the result would not fit.
+    fn add(&mut self, interp: &mut Interp, held: &mut HeldBytes, piece: Piece) -> JsResult<()> {
+        let n = piece.len();
+        if n == 0 {
+            return Ok(());
+        }
+        push_held(interp, held, &mut self.list, piece)?;
+        self.len = self.len.saturating_add(n);
+        charge_units(interp, n)?;
+        check_string_room(interp, self.len)
+    }
+
+    /// Joins the pieces into a new string, reserving its length first. `units` is the input and
+    /// `template` the replacement pattern.
+    fn build(&self, interp: &mut Interp, units: &[u16], template: &[u16]) -> JsResult<Value> {
+        reserve_string(interp, self.len)?;
+        let mut out = Vec::with_capacity(self.len);
+        for p in &self.list {
+            match p {
+                Piece::Range(a, b) => out.extend_from_slice(units.get(*a..*b).unwrap_or_default()),
+                Piece::Template(a, b) => out.extend_from_slice(template.get(*a..*b).unwrap_or_default()),
+                Piece::Units(u) => out.extend_from_slice(u),
+            }
+        }
+        Ok(Value::String(Str::from_units(out)))
+    }
+}
+
+/// A part of a replacement pattern (section 15.5.4.11, Table 22).
+#[derive(Clone, Copy)]
+enum Part {
+    /// The pattern's own text in a range.
+    Text(usize, usize),
+    /// `$&`
+    Matched,
+    /// `` $` ``
+    Before,
+    /// `$'`
+    After,
+    /// `$n` or `$nn`
+    Group(usize),
+}
+
+impl Part {
+    /// The piece this part gives for one match: `caps` holds the match and its groups as pairs of
+    /// positions in an input of `len` units.
+    fn piece(self, caps: &[usize], len: usize) -> Option<Piece> {
+        let (start, end) = (caps.first().copied().unwrap_or(0), caps.get(1).copied().unwrap_or(0));
+        match self {
+            Part::Text(a, b) => Some(Piece::Template(a, b)),
+            Part::Matched => Some(Piece::Range(start, end)),
+            Part::Before => Some(Piece::Range(0, start)),
+            Part::After => Some(Piece::Range(end, len)),
+            Part::Group(n) => {
+                let (s, e) = (caps.get(2 * n).copied().unwrap_or(NONE), caps.get(2 * n + 1).copied().unwrap_or(NONE));
+                (s != NONE && e != NONE).then_some(Piece::Range(s, e))
+            }
+        }
+    }
+}
+
+/// Reads a replacement pattern once into its parts, for a regular expression with `groups`
+/// groups. The parts are held against the heap limit, and the units read take fuel.
+fn parse_template(interp: &mut Interp, held: &mut HeldBytes, template: &[u16], groups: usize) -> JsResult<Vec<Part>> {
+    charge_units(interp, template.len())?;
     let digit = |i: usize| template.get(i).filter(|&&u| (0x30..=0x39).contains(&u)).map(|&u| usize::from(u - 0x30));
-    let group = |n: usize, out: &mut Vec<Piece>| {
-        let (s, e) = (caps.get(2 * n).copied().unwrap_or(NONE), caps.get(2 * n + 1).copied().unwrap_or(NONE));
-        if s != NONE && e != NONE {
-            out.push(Piece::Range(s, e));
-        }
-    };
+    let mut parts = Vec::new();
     let mut lit = 0;
     let mut i = 0;
     while let Some(&u) = template.get(i) {
@@ -483,65 +574,49 @@ fn expand(template: &[u16], units: &[u16], caps: &[usize], out: &mut Vec<Piece>)
             i += 1;
             continue;
         }
-        let flush = |out: &mut Vec<Piece>, to: usize| {
-            if to > lit {
-                out.push(Piece::Text(Str::from_units(template.get(lit..to).unwrap_or_default().to_vec())));
-            }
-        };
-        let taken = match template.get(i + 1) {
+        let (part, taken) = match template.get(i + 1) {
+            // `$$` gives one `$`: the text up to and including the first.
             Some(0x24) => {
-                flush(out, i + 1);
+                push_held(interp, held, &mut parts, Part::Text(lit, i + 1))?;
                 lit = i + 2;
                 i += 2;
                 continue;
             }
-            Some(0x26) => {
-                flush(out, i);
-                out.push(Piece::Range(start, end));
-                2
-            }
-            Some(0x60) => {
-                flush(out, i);
-                out.push(Piece::Range(0, start));
-                2
-            }
-            Some(0x27) => {
-                flush(out, i);
-                out.push(Piece::Range(end, units.len()));
-                2
-            }
+            Some(0x26) => (Part::Matched, 2),
+            Some(0x60) => (Part::Before, 2),
+            Some(0x27) => (Part::After, 2),
             _ => match (digit(i + 1), digit(i + 2)) {
-                (Some(a), Some(b)) if (1..=groups).contains(&(a * 10 + b)) => {
-                    flush(out, i);
-                    group(a * 10 + b, out);
-                    3
-                }
-                (Some(a), _) if (1..=groups).contains(&a) => {
-                    flush(out, i);
-                    group(a, out);
-                    2
-                }
+                (Some(a), Some(b)) if (1..=groups).contains(&(a * 10 + b)) => (Part::Group(a * 10 + b), 3),
+                (Some(a), _) if (1..=groups).contains(&a) => (Part::Group(a), 2),
                 _ => {
                     i += 1;
                     continue;
                 }
             },
         };
+        if i > lit {
+            push_held(interp, held, &mut parts, Part::Text(lit, i))?;
+        }
+        push_held(interp, held, &mut parts, part)?;
         i += taken;
         lit = i;
     }
     if template.len() > lit {
-        out.push(Piece::Text(Str::from_units(template.get(lit..).unwrap_or_default().to_vec())));
+        push_held(interp, held, &mut parts, Part::Text(lit, template.len()))?;
     }
+    Ok(parts)
 }
 
-/// `replace` (section 15.5.4.11).
+/// `replace` (section 15.5.4.11). The matches, the parsed replacement pattern and the pieces of
+/// the result are held against the heap limit while the result is put together, and the
+/// result's length is checked against the heap as each piece is added.
 fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     rooted(interp, |interp| {
         let s = this_str(interp, &this, "replace")?;
         let search_value = arg(args, 0);
         let replace_value = arg(args, 1);
-        let units = s.flat();
+        let units = flat_charged(interp, &s)?;
+        let mut held = HeldBytes::new(interp);
         // Each match as the positions of the match and its groups.
         let mut matches: Vec<Vec<usize>> = Vec::new();
         if let Some((rx, _)) = regexp_of(interp, &search_value) {
@@ -550,12 +625,9 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
                 let last_index = crate::heap::key("lastIndex");
                 interp.put(rx, last_index.clone(), Value::Number(0.0), true)?;
                 let mut previous = 0.0;
-                // The bytes the stored matches and the pieces of the result made from them hold,
-                // kept within the heap room left.
-                let mut stored = 0usize;
                 while let Some(caps) = exec_raw(interp, rx, &s)? {
-                    stored = stored.saturating_add(24 + size_of::<usize>() * caps.len() + 2 * size_of::<Piece>());
-                    interp.reserve_heap(stored)?;
+                    held.add(interp, size_of::<usize>().saturating_mul(caps.capacity()))?;
+                    push_held(interp, &mut held, &mut matches, caps)?;
                     let this_index = interp.get_value(&search_value, &last_index)?;
                     let this_index = interp.to_number(&this_index)?;
                     if this_index == previous {
@@ -564,14 +636,13 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
                     } else {
                         previous = this_index;
                     }
-                    matches.push(caps);
                 }
             } else if let Some(caps) = exec_raw(interp, rx, &s)? {
                 matches.push(caps);
             }
         } else {
             let search = interp.to_str(&search_value)?;
-            let needle = search.flat();
+            let needle = flat_charged(interp, &search)?;
             if let Some(i) = find(interp, &units, &needle, 0)? {
                 matches.push(vec![i, i + needle.len()]);
             }
@@ -579,18 +650,25 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
         let replacer = interp.is_callable(&replace_value).then(|| replace_value.clone());
         let template = match &replacer {
             Some(_) => None,
-            None => Some(interp.to_str(&replace_value)?.flat()),
+            None => {
+                let t = interp.to_str(&replace_value)?;
+                Some(flat_charged(interp, &t)?)
+            }
         };
         if matches.is_empty() {
             return Ok(Value::String(s));
         }
-        let mut pieces = Vec::new();
+        let template: &[u16] = template.as_deref().unwrap_or_default();
+        // Every match has the same number of groups.
+        let groups = matches.first().map_or(0, |caps| (caps.len() / 2).saturating_sub(1));
+        let parts = if replacer.is_none() { parse_template(interp, &mut held, template, groups)? } else { Vec::new() };
+        let mut pieces = Pieces::default();
         let mut last = 0usize;
         for caps in &matches {
             let (start, end) = (caps.first().copied().unwrap_or(0), caps.get(1).copied().unwrap_or(0));
-            pieces.push(Piece::Range(last, start));
-            match (&replacer, &template) {
-                (Some(f), _) => {
+            pieces.add(interp, &mut held, Piece::Range(last, start))?;
+            match &replacer {
+                Some(f) => {
                     let mut call_args = Vec::with_capacity(caps.len() / 2 + 2);
                     for pair in caps.chunks(2) {
                         let v = match pair {
@@ -603,16 +681,24 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
                     call_args.push(Value::String(s.clone()));
                     let r = interp.call(f, &Value::Undefined, &call_args)?;
                     let text = interp.to_str(&r)?;
-                    pieces.push(Piece::Text(text));
+                    let text = flat_charged(interp, &text)?;
+                    pieces.add(interp, &mut held, Piece::Units(text))?;
                 }
-                (None, Some(t)) => expand(t, &units, caps, &mut pieces),
-                (None, None) => {}
+                None => {
+                    // Reading the parts takes fuel even when they give empty pieces.
+                    use_fuel_n(interp, (parts.len() / UNITS_PER_FUEL) as u64)?;
+                    for part in &parts {
+                        if let Some(p) = part.piece(caps, units.len()) {
+                            pieces.add(interp, &mut held, p)?;
+                        }
+                    }
+                }
             }
             use_fuel_n(interp, 1)?;
             last = end;
         }
-        pieces.push(Piece::Range(last, units.len()));
-        build(interp, &units, &pieces)
+        pieces.add(interp, &mut held, Piece::Range(last, units.len()))?;
+        pieces.build(interp, &units, template)
     })
 }
 
@@ -627,7 +713,10 @@ fn split(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
         let rx = regexp_of(interp, &separator);
         let sep = match &rx {
             Some(_) => None,
-            None => Some(interp.to_str(&separator)?.flat()),
+            None => {
+                let sep = interp.to_str(&separator)?;
+                Some(flat_charged(interp, &sep)?)
+            }
         };
         if lim == 0 {
             return Ok(Value::Object(a));
@@ -636,7 +725,7 @@ fn split(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
             set_element(interp, a, 0, Value::String(s))?;
             return Ok(Value::Object(a));
         }
-        let units = s.flat();
+        let units = flat_charged(interp, &s)?;
         let size = units.len();
         let re: Option<Rc<crate::regexp_vm::Regex>> = rx.map(|(_, re)| re);
         let mut matcher = re.as_deref().map(|re| Matcher::new(re, interp)).transpose()?;
