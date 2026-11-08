@@ -1609,6 +1609,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Askel taaksepäin
 	Step Forward	Askel eteenpäin
 	Clear History	Tyhjennä historia
+	New Document from State	Uusi asiakirja tilasta
 	Set History Limit…	Aseta historian raja…
 	Open a document to see its history.	Avaa asiakirja, niin näet sen historian.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -4592,6 +4593,7 @@ imageTrace	Outline	Ääriviiva
 @msg	nothing to save: the document has no visible art	ei tallennettavaa: asiakirjassa ei ole näkyvää kuvitusta
 @msg	nothing to undo	ei kumottavaa
 @msg	no history to clear	ei tyhjennettävää historiaa
+@msg	no history state {v}	ei historiatilaa {v}
 @msg	nothing to warp	ei taivutettavaa
 @msg	nothing to wrap	ei rivitettävää
 @msg	object {0} cannot have children	objektilla {0} ei voi olla alikohteita

@@ -1428,6 +1428,7 @@ file-filter	Templates	範本
 	Step Backward	後退一步
 	Step Forward	前進一步
 	Clear History	清除步驟記錄
+	New Document from State	從步驟新增文件
 	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1779,6 +1780,7 @@ file-filter	Templates	範本
 @msg	nothing to redo	沒有可重做的動作
 @msg	nothing to undo	沒有可復原的動作
 @msg	no history to clear	沒有可清除的步驟記錄
+@msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果

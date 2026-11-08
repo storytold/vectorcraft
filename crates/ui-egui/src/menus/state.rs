@@ -157,13 +157,13 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 /// Commands that would act on the text being typed, held back while an IME composes in the Type
 /// tool (its marked text isn't committed yet): Undo/Redo — the native menu takes ⌘Z ahead of the
 /// IME —, the clipboard and the selection.
-/// Clear History also waits: it ends the typing session as Undo does.
+/// Clear History and New Document from State also wait: they end the typing session as Undo does.
 pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
     app.session.tool_composing()
         && (matches!(
             id,
             "edit.undo" | "edit.redo" | "edit.cut" | "edit.copy" | "edit.clear" | "edit.duplicate" | "select.all" | "select.none" | "select.inverse"
-        ) || id == "edit.clearHistory"
+        ) || matches!(id, "edit.clearHistory" | "edit.newDocumentFromState")
             || id.starts_with("edit.paste"))
 }
 
