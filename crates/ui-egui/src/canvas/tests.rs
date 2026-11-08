@@ -10092,6 +10092,7 @@ fn direct_selection_shows_the_bounding_box_while_cmd_is_held() {
     assert!(handle_drawn(&mut app, egui::Modifiers::COMMAND), "Cmd held shows the Selection tool's box");
     assert!(!handle_drawn(&mut app, egui::Modifiers::NONE), "gone once Cmd is released");
     assert!(app.ui.view.bounding_box, "View › Show Bounding Box is unchanged");
+}
 
 /// #5239: a double-click on a ruler adds a guide at the pointer: a vertical one on the top ruler
 /// at its x, a horizontal one on the left ruler at its y, as one undo step, shown even when
