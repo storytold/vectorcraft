@@ -508,7 +508,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         shortcut_editor::open(app);
     }
     if let Some(k) = app.ui.dialog.as_mut() {
-        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(km.overrides()));
+        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(&shortcut_editor::saved_overrides(km.overrides(), &ov)));
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }

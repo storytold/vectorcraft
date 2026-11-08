@@ -47,6 +47,7 @@ impl Document {
             patterns,
             pattern_edit,
             mask_edit,
+            symbol_edit,
             next_id: _,
             unknown,
             page_isolate,
@@ -67,10 +68,12 @@ impl Document {
             print_setup,
             assets,
             svg_scripts,
+            svg_filters,
             puppet,
             new_art,
             dimensions,
             retired_artboard_id: _,
+            opened_artboard: _,
             index: _,
         } = self;
         *version == other.version
@@ -113,6 +116,7 @@ impl Document {
                 (a, b) => a.is_none() && b.is_none(),
             }
             && *mask_edit == other.mask_edit
+            && *symbol_edit == other.symbol_edit
             && *unknown == other.unknown
             && *page_isolate == other.page_isolate
             && *page_knockout == other.page_knockout
@@ -132,6 +136,7 @@ impl Document {
             && *print_setup == other.print_setup
             && *assets == other.assets
             && *svg_scripts == other.svg_scripts
+            && *svg_filters == other.svg_filters
             && match (puppet, &other.puppet) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (a, b) => a.is_none() && b.is_none(),
@@ -221,6 +226,7 @@ impl Document {
             patterns: vec![],
             pattern_edit: None,
             mask_edit: None,
+            symbol_edit: None,
             next_id: 1,
             unknown: Default::default(),
             page_isolate: false,
@@ -241,10 +247,12 @@ impl Document {
             print_setup: None,
             assets: vec![],
             svg_scripts: vec![],
+            svg_filters: vec![],
             puppet: None,
             new_art: Default::default(),
             dimensions: false,
             retired_artboard_id: Default::default(),
+            opened_artboard: None,
             index: Default::default(),
         };
         let id = d.alloc_id();
@@ -347,6 +355,7 @@ impl Document {
             }
             false
         }
+        crate::id_index::note_tree_walk();
         let mut p = vec![];
         find(&self.layers, id, &mut p).then_some(p)
     }
@@ -388,6 +397,7 @@ impl Document {
             });
         }
         if !want.is_empty() {
+            crate::id_index::note_tree_walk();
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);

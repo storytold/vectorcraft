@@ -36,7 +36,7 @@ mod doc;
 pub(crate) mod document;
 pub(crate) mod docx;
 mod rtf;
-mod text;
+pub(super) mod text;
 
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, id_param, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, object_param, str_param, unique_name};
 use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns and swatches they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set), platform?: \"windows\" (Windows-1252) | \"mac\" (Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect; refused while an object of a symbol instance's art is selected), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at)} → {ids, name, format, linked, width, height, warnings}. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, PDF/.ai, EMF/WMF (clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns, swatches and brushes they use. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
             has_doc,
             place
         ),
@@ -270,7 +270,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
         (art_of(layer_art(&layers)), frame)
     } else {
         let n = doc.artboards.len();
-        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+        let pages = if n == 1 { "page" } else { "pages" };
+        let board = doc.artboards.get(page - 1).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
         // An EPS file's art is whatever lies on the artboard.
         (on_artboard(&symbols, &layers, board), crop.then_some(board))
     };
@@ -283,7 +284,8 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
 /// one) as art to place: clipped to the box `opts.crop` names, or (`bounding`) the bounds of its
 /// art; read with `opts.password`. Only the page placed is read. A .ai saved without PDF
 /// compatibility is read from its editing data, as it opens, and placed as an EPS is: the art on
-/// artboard `page`, its linked images found from its folder.
+/// artboard `page`, its linked images found from its folder. So is page 1 of a .ai or PDF whose
+/// PDF part can't be read.
 pub(crate) fn pdf_art(
     src: &str,
     bytes: &[u8],
@@ -305,10 +307,11 @@ pub(crate) fn pdf_art(
     {
         read = Err(e);
     }
-    let (mut doc, warnings, alone) =
-        fileio::page_or_editing_data(src, bytes, o.password.as_deref(), read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
-    if alone {
-        // Linked images show their files, found from its folder.
+    let (mut doc, warnings, alone) = fileio::page_or_editing_data(src, bytes, &o, index, read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
+    // Linked images show their files, found from its folder. Its placed documents can place this
+    // file again: one already being read further up, or past the most nested reads, keeps its links
+    // as stored, as a VectorCraft document's do.
+    if alone && let Some(_reading) = document::Reading::enter(bytes) {
         super::links::resolve(&mut doc, path, false, false);
     }
     doc.drop_edit_modes();
@@ -318,7 +321,8 @@ pub(crate) fn pdf_art(
     // whatever lies on the artboard.
     let index = if alone { index } else { 0 };
     let n = doc.artboards.len();
-    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} page(s)")))?;
+    let pages = if n == 1 { "page" } else { "pages" };
+    let board = doc.artboards.get(index).map(|a| a.rect).ok_or_else(|| bad(cmd, format!("page {page}: `{name}` has {n} {pages}")))?;
     let pages = if alone { &layers[..] } else { layers.get(index..=index).unwrap_or_default() };
     let nodes = on_artboard(&symbols, pages, board);
     let clip = (!bounding).then_some(board);
@@ -532,7 +536,7 @@ impl Session {
             if st.doc.node(old) != read.job.replaced.as_ref() {
                 return Err(bad(PLACE, "replace: the object to replace was changed or deleted"));
             }
-            if st.selection.objects != [old] {
+            if st.selection.objects != [old] || st.selection.symbol_part.is_some() {
                 self.execute("select.set", &json!({ "ids": [old.0] }))?;
             }
         }
@@ -562,6 +566,10 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
     let corners = [at, rect.map(|r| r.origin()), rect.map(|r| Point::new(r.x1, r.y1))];
     if corners.iter().flatten().any(|c| !(c.x.abs() <= MAX_COORD && c.y.abs() <= MAX_COORD)) {
         return Err(bad(PLACE, "at/rect lie outside the canvas"));
+    }
+    // An object selected in a symbol instance's art can't be swapped, and its instance stays.
+    if replace {
+        super::edit::refuse_symbol_part(s)?;
     }
     let st = s.doc()?;
     let old = match (replace, &st.selection.objects[..]) {
@@ -864,7 +872,7 @@ pub fn read_info(p: &Value) -> Result<Value> {
 pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "image.info";
     let st = s.doc()?;
-    let id = match (id_param(p, "id"), &st.selection.objects[..]) {
+    let id = match (object_param(p, "id", C)?, &st.selection.objects[..]) {
         (Some(id), _) => id,
         (None, [id]) => *id,
         _ => return Err(bad(C, "select one image or pass id")),

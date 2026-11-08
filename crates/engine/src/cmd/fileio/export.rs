@@ -72,6 +72,17 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     write_encoded(path, &default_name(doc, f.extensions[0]), doc, &enc, json!({ "format": f.id, "warnings": enc.warnings }))
 }
 
+/// The document an export of `st` in format `f` writes ([`export_source`]): a `.ai` or `.ait`
+/// file names the view's active artboard ([`DocState::active_artboard`]) as its active one, as a
+/// save does. The open document is unchanged.
+pub fn export_doc<'a>(st: &'a DocState, f: &Format, p: &Value) -> Result<Cow<'a, Document>> {
+    let mut doc = export_source(st, p)?;
+    if let Some(id) = super::save::moved_active_artboard(st, &doc, f) {
+        doc.to_mut().opened_artboard = Some(id);
+    }
+    Ok(doc)
+}
+
 /// The document an export of `st` writes: the whole document, or with `selectedOnly` just the
 /// selected objects, each in its layers and groups (a clipping group keeps its clipping path).
 pub fn export_source<'a>(st: &'a DocState, p: &Value) -> Result<Cow<'a, Document>> {
@@ -190,7 +201,7 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
         return Ok((Cow::Owned(doc), display_doc_title));
     }
     let st = s.doc()?;
-    let doc = export_source(st, p)?;
+    let doc = export_doc(st, f, p)?;
     let display_doc_title = super::has_own_title(&doc);
     Ok((super::titled_for_export(&doc, st.path.as_deref(), f.id).map_or(doc, Cow::Owned), display_doc_title))
 }
@@ -203,10 +214,11 @@ fn selection(s: &mut Session, cmd: &str) -> Result<(Document, vectorcraft_geom::
 }
 
 /// The selected objects (their top-most selected ancestors) that are artwork: those on template
-/// layers are guides and are left out.
+/// layers are guides and are left out. With an object of a dynamic symbol instance's art selected,
+/// the instance is exported whole.
 pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
-    let ids = edit::selected_roots(s)?;
     let st = s.doc()?;
+    let ids = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc));
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));

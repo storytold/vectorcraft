@@ -1,5 +1,5 @@
 //! Symbols panel: the document's symbols as rendered thumbnails or a list. Click selects a symbol
-//! (it becomes the Symbol Sprayer's current symbol); double-click places an instance. Symbol
+//! (it becomes the Symbol Sprayer's current symbol); double-click opens it in symbol editing mode. Symbol
 //! libraries open in library panels ([`SymbolLibraries`]).
 
 use std::cell::RefCell;
@@ -160,6 +160,13 @@ pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
     instance_selected(app, |c| !c.extras().symbol_overrides.is_empty())
 }
 
+/// Does the selection hold a symbol instance whose scale, rotation or shear differs from its
+/// symbol's, which Reset Transformation restores?
+fn transformed_instances_selected(app: &VectorcraftApp) -> bool {
+    let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
+    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c))
+}
+
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
 fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
     let st = app.session.active()?;
@@ -178,17 +185,34 @@ fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
 /// The Control bar's Replace menu while symbol instances alone are selected: the document's
 /// symbols, showing the one the instances share (blank when they differ); picking another
 /// replaces them all, as "Select a new symbol from the Replace dropdown in the Control panel"
-/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>).
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>),
+/// and the Reset button, which gives them their symbol's scale, rotation and shear again
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/transform-symbols.html>).
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(symbols) = selected_instance_symbols(app) else { return };
     let Some(st) = app.session.active() else { return };
     let names: Vec<String> = st.doc.symbols.iter().map(|s| s.name.clone()).collect();
     let shared = symbols.first().filter(|first| symbols.iter().all(|s| s == *first)).cloned().unwrap_or_default();
+    // Edit Symbol: the instances' symbol in symbol editing mode, when they share one.
+    if !shared.is_empty()
+        && widgets::icon_button(ui, "dc-place-symbol", tl!("Edit Symbol"), false, 24.0).clicked()
+        && let Err(e) = app.run("symbol.edit", json!({}))
+    {
+        app.status(e);
+    }
     ui.label(egui::RichText::new(tl!("Replace:")).size(12.0).color(Tokens::get(ui.ctx()).text));
     let options: Vec<&str> = names.iter().map(String::as_str).collect();
     if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
         && *name != shared
         && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
+    {
+        app.status(e);
+    }
+    // Reset: Reset Transformation, enabled while an instance's scale, rotation or shear differs
+    // from its symbol's.
+    let reset = transformed_instances_selected(app);
+    if ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
+        && let Err(e) = app.run("symbol.instance.resetTransform", json!({}))
     {
         app.status(e);
     }
@@ -261,12 +285,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     {
         app.status(e);
     }
-    if let Some((n, place)) = clicked {
+    // A double-click edits the symbol in symbol editing mode.
+    if let Some((n, edit)) = clicked {
         // A click picks one symbol again.
         set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
         app.run("symbol.setCurrent", json!({"name": n})).ok();
-        if place {
-            app.run("symbol.place", json!({"name": n})).ok();
+        if edit && let Err(e) = app.run("symbol.edit", json!({"name": n})) {
+            app.status(e);
         }
     }
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
@@ -320,13 +345,15 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Delete Symbol"), sel.is_some() || !marked.is_empty(), false) {
         delete(app, &marked, sel.as_deref(), false);
     }
-    let items: [(&str, bool, &str, Value); 7] = [
+    let items: [(&str, bool, &str, Value); 8] = [
         (tl!("Symbol Options…"), sel.is_some(), "ui.symbolOptions", json!({"edit": true, "name": sel})),
-        (tl!("Edit Symbol"), inst, "symbol.edit", json!({})),
+        // The selected instance, else the symbol selected in the panel.
+        (tl!("Edit Symbol"), inst || sel.is_some(), "symbol.edit", if inst { json!({}) } else { name.clone() }),
         (tl!("Place Symbol Instance"), sel.is_some(), "symbol.place", name.clone()),
         (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
         (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
         (tl!("Reset Symbol Instance"), changed_instances_selected(app), "symbol.instance.reset", json!({})),
+        (tl!("Reset Transformation"), transformed_instances_selected(app), "symbol.instance.resetTransform", json!({})),
         (tl!("Select All Instances"), sel.is_some(), "symbol.selectInstances", name),
     ];
     for (label, enabled, cmd, params) in items {
@@ -925,6 +952,151 @@ mod tests {
         (instances, paths)
     }
 
+    /// The bounds of the art on the symbol editing layer, rounded to 0.001 pt.
+    fn editing_art(app: &VectorcraftApp) -> Option<[f64; 4]> {
+        let d = &app.session.active()?.doc;
+        let layer = d.node(d.symbol_edit.as_ref()?.layer)?;
+        let ids: Vec<NodeId> = layer.children()?.iter().map(|n| n.id).collect();
+        let r = d.bounds_of(&ids, false)?;
+        Some([r.x0, r.y0, r.x1, r.y1].map(|v| (v * 1000.0).round() / 1000.0))
+    }
+
+    /// Edit Symbol without an instance centers the symbol's art on the active artboard, and in a
+    /// document without artboards on the view's center, in a batch too.
+    #[test]
+    fn edit_symbol_from_the_panel_centers_the_art_on_the_active_artboard_or_the_view() {
+        let mut app = leaf_and_dot();
+        app.run("artboard.new", json!({"x": 500, "y": 0, "width": 200, "height": 100})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        crate::panels::artboards::select(&mut app, 1);
+        app.run("symbol.edit", json!({"name": "Dot"})).unwrap();
+        assert_eq!(editing_art(&app), Some([585.0, 35.0, 615.0, 65.0]));
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).artboards.clear();
+        // A view with no artboard to fit to is never fitted.
+        if let Some(v) = app.view_mut() {
+            (v.fitted, v.center) = (false, vectorcraft_geom::Point::new(1000.0, 1000.0));
+        }
+        app.run("symbol.edit", json!({"name": "Dot"})).unwrap();
+        assert_eq!(editing_art(&app), Some([985.0, 985.0, 1015.0, 1015.0]));
+        // A coordinate the call gives stays; the other is the view's.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        app.run("symbol.edit", json!({"name": "Dot", "x": 2000})).unwrap();
+        assert_eq!(editing_art(&app), Some([1985.0, 985.0, 2015.0, 1015.0]));
+        // A batch's symbol.edit step gets the view's center as well.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "symbol.edit", "params": {"name": "Dot"}}]})).unwrap();
+        assert_eq!(editing_art(&app), Some([985.0, 985.0, 1015.0, 1015.0]));
+        // An artboard an earlier step makes is there when the symbol.edit step runs.
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        let steps = json!([
+            {"command": "artboard.new", "params": {"x": 500, "y": 0, "width": 200, "height": 100}},
+            {"command": "symbol.edit", "params": {"name": "Dot"}},
+        ]);
+        app.run("command.batch", json!({ "commands": steps })).unwrap();
+        assert_eq!(editing_art(&app), Some([585.0, 35.0, 615.0, 65.0]));
+    }
+
+    /// The symbol in symbol editing mode, if any.
+    fn editing(app: &VectorcraftApp) -> Option<String> {
+        app.session.active()?.doc.symbol_edit.as_ref().map(|e| e.symbol.clone())
+    }
+
+    /// The first instance of symbol `name` in the active document.
+    fn instance_of(app: &VectorcraftApp, name: &str) -> Option<NodeId> {
+        let mut found = None;
+        for l in &app.session.active()?.doc.layers {
+            l.walk(&mut |n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                    && symbol == name
+                    && found.is_none()
+                {
+                    found = Some(n.id);
+                }
+            });
+        }
+        found
+    }
+
+    fn double_click(at: Pos2) -> Vec<egui::Event> {
+        vec![egui::Event::PointerMoved(at), button(at, true), button(at, false), button(at, true), button(at, false)]
+    }
+
+    /// A double-click on a symbol in the panel, in Thumbnail View and in List View, opens it in
+    /// symbol editing mode and places no instance; a single click only makes it current.
+    #[test]
+    fn double_clicking_a_symbol_in_the_panel_edits_it_in_either_view() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // Thumbnail View: the first tile is Leaf's.
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true), button(tile, false)]);
+        assert_eq!((editing(&app), current(&mut app)), (None, Some("Leaf".into())), "a click makes it current");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        frame(&ctx, &mut app, vec![]);
+        frame(&ctx, &mut app, double_click(tile));
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"));
+        assert_eq!(art(&app, "Leaf").0, 1, "no instance is placed");
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        // List View: the row named Dot.
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        set_pstate(&ctx, "sym-list", true);
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        let labels = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        let row = labels.iter().find(|(t, _)| t.trim() == "Dot").map(|(_, r)| r.center()).expect("a row named Dot");
+        frame(&ctx, &mut app, double_click(row));
+        assert_eq!(editing(&app).as_deref(), Some("Dot"));
+        assert_eq!(art(&app, "Dot").0, 0, "no instance is placed");
+    }
+
+    /// The panel menu's Edit Symbol edits the selected instance's symbol, and with no instance
+    /// selected the symbol current in the panel.
+    #[test]
+    fn the_panel_menus_edit_symbol_edits_the_instances_symbol_or_the_panels() {
+        let mut app = leaf_and_dot();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu(&ctx, &mut app, "Edit Symbol");
+        assert_eq!(editing(&app).as_deref(), Some("Dot"), "no instance selected: the panel's symbol");
+        app.run("symbol.exitEditing", json!({})).unwrap();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        click_menu(&ctx, &mut app, "Edit Symbol");
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"), "the selected instance's symbol");
+        assert_eq!(instance_of(&app, "Leaf"), Some(leaf), "the instance keeps its link");
+    }
+
+    /// With instances of one symbol selected, the Control bar's Edit Symbol opens that symbol in
+    /// symbol editing mode and keeps the instance linked.
+    #[test]
+    fn the_control_bars_edit_symbol_edits_the_selected_instances_symbol() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.enable_accesskit();
+        let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                ui.horizontal(|ui| control_bar(app, ui));
+            });
+            out.textures_delta.clear();
+            out
+        };
+        let out = bar(&mut app, vec![]);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "Edit Symbol").expect("an Edit Symbol button").1;
+        bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
+        assert_eq!(editing(&app).as_deref(), Some("Leaf"));
+        assert_eq!(instance_of(&app, "Leaf"), Some(leaf), "the instance keeps its link");
+    }
+
     fn dialog_kind(app: &VectorcraftApp) -> Option<&str> {
         app.ui.dialog.as_ref().map(|d| d.kind.as_str())
     }
@@ -1145,5 +1317,65 @@ mod tests {
         click(&mut app, &ctx, star);
         let doc = &app.session.active().unwrap().doc;
         assert!(matches!(&doc.node(leaf).unwrap().kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"), "the instance is replaced");
+    }
+
+    /// The panel menu's Reset Transformation and the Control bar's Reset are enabled only while a
+    /// selected instance's scale, rotation or shear differs from its symbol's, and give the
+    /// instance its symbol's again.
+    #[test]
+    fn reset_transformation_is_enabled_for_a_transformed_instance_and_resets_it() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        let xf = |app: &VectorcraftApp| match app.session.active().unwrap().doc.node(leaf).map(|n| &n.kind) {
+            Some(NodeKind::SymbolInstance { xf, .. }) => *xf,
+            _ => panic!("the Leaf instance"),
+        };
+        let master = xf(&app);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.enable_accesskit();
+        let item_disabled = |app: &mut VectorcraftApp| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            nodes
+                .iter()
+                .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Reset Transformation"))
+                .map(|(_, n)| n.is_disabled())
+                .expect("the menu item")
+        };
+        // At its symbol's scale the menu item is disabled and a click changes nothing.
+        assert!(item_disabled(&mut app), "the item is disabled at the symbol's scale");
+        let before = app.session.active().unwrap().doc.clone();
+        click_menu(&ctx, &mut app, "Reset Transformation");
+        assert!(Arc::ptr_eq(&before, &app.session.active().unwrap().doc), "the item is disabled");
+        app.run("object.rotate", json!({"angle": 30})).unwrap();
+        assert!(!item_disabled(&mut app), "a turned instance enables it");
+        click_menu(&ctx, &mut app, "Reset Transformation");
+        let close =
+            |a: vectorcraft_geom::Affine, b: vectorcraft_geom::Affine| a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9);
+        assert!(close(xf(&app), master), "the menu item resets the instance: {:?} vs {master:?}", xf(&app));
+        // The Control bar's Reset.
+        let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                ui.horizontal(|ui| control_bar(app, ui));
+            });
+            out.textures_delta.clear();
+            out
+        };
+        let reset_disabled = |out: &egui::FullOutput| {
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Reset")).map(|(_, n)| n.is_disabled()).expect("a Reset button")
+        };
+        assert!(reset_disabled(&bar(&mut app, vec![])), "Reset is disabled at the symbol's scale");
+        app.run("object.scale", json!({"sx": 150, "sy": 50})).unwrap();
+        let out = bar(&mut app, vec![]);
+        assert!(!reset_disabled(&out));
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "Reset").expect("a Reset button").1;
+        bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
+        assert!(close(xf(&app), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&app));
     }
 }

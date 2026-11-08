@@ -352,6 +352,16 @@ fn gradients_mixing_spot_inks_with_other_inks_are_device_n_shadings() {
     assert!(page.contains("/C0 [0 0 1] /C1 [0.6 0 0]") && page.contains("/C0 [0.6 0 0] /C1 [0 0.4 0]"), "{page}");
     assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
 
+    // Gold Ink 0% to 100% over a constant 30% cyan plate (a DeviceN gradient read from a PDF,
+    // #3235): Cyan and Gold Ink.
+    let mut over = spot_stop(1.0, "Gold Ink", GOLD, 1.0);
+    over.plates = Some([0.3, 0.0, 0.0, 0.0]);
+    let plated = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), over]);
+    let out = export(&plated, &opts(&plated), None, None).unwrap();
+    let ps = text(&out);
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK {2 array astore"), "{ps}");
+    assert!(checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 1]"), "{ps}");
+
     // Read back as bands, the tint transforms give each ink's CMYK equivalent.
     for (d, end) in [(&two, [0.5, 0.0, 0.5, 0.0]), (&mixed, [0.0, 0.0, 0.0, 0.4])] {
         let out = export(d, &EpsOptions { compatible_gradients: true, ..opts(d) }, None, None).unwrap();
@@ -381,8 +391,50 @@ fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
 }
 
 #[test]
-fn spot_inks_named_like_process_inks_all_or_none_are_not_device_n_colorants() {
-    for name in ["Cyan", "Black", "All", "None"] {
+fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
+    let rect = |d: &mut Document, fill: &str, stroke: &str| {
+        let solid = |name: &str| Paint::Solid { color: GOLD, swatch: Some(name.into()), tint: 1.0 };
+        path(d, shapes::rectangle(Rect::new(50.0, 60.0, 150.0, 100.0)), solid(fill), solid(stroke), 2.0)
+    };
+    for (name, colorant) in [("All", "All Spot"), ("None", "None Spot")] {
+        // A fill of the spot ink and a Registration stroke.
+        let mut d = doc_with(|_| vec![]);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(GOLD), global: true, spot: true });
+        let n = rect(&mut d, name, vectorcraft_color::swatch::REGISTRATION);
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), Some(format!("({colorant})")), "{ps}");
+        assert_eq!(dsc(&ps, "CMYKCustomColor"), Some(format!("0 0.2 0.8 0.1 ({colorant})")), "{ps}");
+        assert!(ps.contains(&format!("[/Separation ({colorant}) cvn /DeviceCMYK {{dup 0 mul")), "{name}: {ps}");
+        assert!(ps.contains("[/Separation /All /DeviceCMYK {dup dup dup}]"), "Registration prints on every plate: {ps}");
+        assert!(!ps.contains(&format!("({name}) cvn")), "{name}: {ps}");
+        checked_page(&ps);
+
+        // In a gradient with another spot ink, the DeviceN space has the same colorant.
+        let mut d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, name, LEAF, 1.0)]);
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(LEAF), global: true, spot: true });
+        let out = export(&d, &opts(&d), None, None).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains(&format!("/VCdn0 [/DeviceN [(Gold Ink) cvn ({colorant}) cvn ] /DeviceCMYK")), "{name}: {ps}");
+        assert!(ps.contains(&format!("%%DocumentCustomColors: (Gold Ink)\n%%+ ({colorant})\n")), "{name}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{:?}", out.warnings);
+    }
+
+    // A spot swatch already named All Spot keeps its name, and All is numbered past it.
+    let mut d = doc_with(|_| vec![]);
+    for name in ["All", "All Spot"] {
+        d.swatches.push(Swatch { name: name.into(), paint: Paint::solid(GOLD), global: true, spot: true });
+    }
+    let n = rect(&mut d, "All", "All Spot");
+    d.insert(Some(d.layers[0].id), 0, n).unwrap();
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert!(ps.contains("[/Separation (All Spot 2) cvn ") && ps.contains("[/Separation (All Spot) cvn "), "{ps}");
+    assert!(ps.contains("%%DocumentCustomColors: (All Spot 2)\n%%+ (All Spot)\n"), "{ps}");
+}
+
+#[test]
+fn spot_inks_named_like_process_inks_are_not_device_n_colorants() {
+    for name in ["Cyan", "Black"] {
         // Gold Ink to the spot ink, with no process ink in the stops.
         let mut d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 1.0), spot_stop(1.0, name, LEAF, 1.0)]);
         d.swatches.retain(|s| s.name != name);

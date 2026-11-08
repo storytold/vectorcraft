@@ -114,6 +114,149 @@ fn swatch_links_survive_mode_conversion() {
     assert_eq!(color, sw, "object and swatch converted identically");
 }
 
+/// The process color the active color settings give `c` in CMYK (the default intent).
+fn to_cmyk(c: Color) -> Color {
+    let cms = cms::active();
+    cms.convert(&c, cms::Model::Cmyk, cms.settings().intent)
+}
+
+/// A document with colors that no 8-bit hex value holds: a plain fill, a three-stop gradient, a
+/// pattern fill, a global swatch on one object's fill and at a 50% tint on another's stroke, and a
+/// spot swatch on a third object → (session, plain, gradient, patterned, the swatch's two users,
+/// the spot user).
+fn reusable_paints_document() -> (Session, [NodeId; 6]) {
+    let mut s = session();
+    let plain = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(Color::rgb(0.123_457, 0.765_432, 0.333_333)));
+    let grad = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!("#000000"));
+    let stops = json!([
+        {"offset": 0, "color": Color::rgb(0.912_345, 0.1, 0.2)},
+        {"offset": 0.37, "color": Color::rgb(0.2, 0.876_543, 0.3)},
+        {"offset": 1, "color": Color::rgb(0.3, 0.4, 0.654_321)},
+    ]);
+    s.execute("paint.setFill", &json!({"ids": [grad.0], "gradient": {"kind": "linear", "stops": stops}})).unwrap();
+    let tile = rect(&mut s, 40.0, 0.0, 10.0, 10.0, json!(Color::rgb(0.6, 0.111_111, 0.9)));
+    s.execute("object.pattern.make", &json!({"ids": [tile.0], "name": "Odd Tile", "edit": false})).unwrap();
+    let patterned = rect(&mut s, 60.0, 0.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setFill", &json!({"ids": [patterned.0], "swatch": "Odd Tile"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Shared", "color": Color::rgb(0.271_937, 0.314_773, 0.583_119), "global": true})).unwrap();
+    let filled = rect(&mut s, 0.0, 20.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Shared"})).unwrap();
+    let stroked = rect(&mut s, 20.0, 20.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "swatch": "Shared", "tint": 50})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Spot Lab", "color": Color::Lab { l: 61.5, a: 42.25, b: -17.75 }, "global": true})).unwrap();
+    s.execute("swatch.setSpot", &json!({"name": "Spot Lab"})).unwrap();
+    let spot = rect(&mut s, 40.0, 20.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setFill", &json!({"ids": [spot.0], "swatch": "Spot Lab"})).unwrap();
+    (s, [plain, grad, patterned, filled, stroked, spot])
+}
+
+/// RGB → CMYK → Undo gives back the document bit for bit (no conversion back through the
+/// profile), and Redo gives back the converted one.
+#[test]
+fn rgb_cmyk_undo_restores_every_color_exactly() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, _) = reusable_paints_document();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let converted = s.doc().unwrap().doc.clone();
+    assert_ne!(*converted, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one Undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *converted);
+}
+
+/// Each stop of a gradient converts on its own and keeps its offset.
+#[test]
+fn rgb_cmyk_converts_each_gradient_stop() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, [_, grad, ..]) = reusable_paints_document();
+    let Paint::Gradient(old) = fill_of(&s, grad) else { panic!("not a gradient") };
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let Paint::Gradient(new) = fill_of(&s, grad) else { panic!("not a gradient") };
+    assert_eq!(new.gradient.stops.len(), 3);
+    for (o, n) in old.gradient.stops.iter().zip(&new.gradient.stops) {
+        assert_eq!(n.offset, o.offset);
+        assert!(matches!(n.color, Color::Cmyk { .. }), "{:?}", n.color);
+        assert_eq!(n.color, to_cmyk(o.color));
+    }
+}
+
+/// A pattern's tile art converts, and the art filled with the pattern keeps it.
+#[test]
+fn rgb_cmyk_converts_a_pattern_tile() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, [_, _, patterned, ..]) = reusable_paints_document();
+    let tile = |s: &Session| s.doc().unwrap().doc.pattern("Odd Tile").unwrap().art[0].appearance.fill_paint().color().unwrap();
+    let old = tile(&s);
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert!(matches!(tile(&s), Color::Cmyk { .. }), "{:?}", tile(&s));
+    assert_eq!(tile(&s), to_cmyk(old));
+    assert!(matches!(fill_of(&s, patterned), Paint::Pattern { ref pattern, .. } if pattern == "Odd Tile"), "{:?}", fill_of(&s, patterned));
+}
+
+/// A global swatch used in two places converts once: both uses keep the link and take the
+/// converted swatch color (the 50% tint at that tint), not a conversion of their own.
+#[test]
+fn rgb_cmyk_converts_a_shared_swatch_once() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, [.., filled, stroked, _]) = reusable_paints_document();
+    let shared = |s: &Session| s.doc().unwrap().doc.swatch("Shared").unwrap().paint.color().unwrap();
+    let old = shared(&s);
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let new = shared(&s);
+    assert_eq!(new, to_cmyk(old));
+    assert_eq!(fill_of(&s, filled), Paint::Solid { color: new, swatch: Some("Shared".into()), tint: 1.0 });
+    let stroke = s.doc().unwrap().doc.node(stroked).unwrap().appearance.stroke_paint();
+    assert_eq!(stroke, Paint::Solid { color: new.tinted(0.5), swatch: Some("Shared".into()), tint: 0.5 });
+}
+
+/// A spot color defined in Lab stays a spot color: its Lab definition, its link and its own
+/// plate are kept.
+#[test]
+fn rgb_cmyk_keeps_a_spot_color() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut s, [.., spot]) = reusable_paints_document();
+    let swatch = |s: &Session| s.doc().unwrap().doc.swatch("Spot Lab").unwrap().clone();
+    let (old_swatch, old_fill) = (swatch(&s), fill_of(&s, spot));
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(swatch(&s), old_swatch);
+    assert!(swatch(&s).spot);
+    assert_eq!(fill_of(&s, spot), old_fill);
+    let plates = s.execute("color.plates", &json!({})).unwrap();
+    assert!(plates["plates"].as_array().unwrap().iter().any(|p| p["name"] == "Spot Lab"), "{plates}");
+}
+
+/// A spot color defined in RGB stays a spot color with its own plate, and its definition
+/// converts like any other swatch: the fill that uses it and a 40% tint stroke both take the
+/// converted definition.
+#[test]
+fn rgb_cmyk_converts_an_rgb_spot_definition() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Spot RGB", "color": Color::rgb(0.812_345, 0.234_567, 0.456_789), "global": true})).unwrap();
+    s.execute("swatch.setSpot", &json!({"name": "Spot RGB"})).unwrap();
+    let filled = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setFill", &json!({"ids": [filled.0], "swatch": "Spot RGB"})).unwrap();
+    let stroked = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!("#000000"));
+    s.execute("paint.setStroke", &json!({"ids": [stroked.0], "swatch": "Spot RGB", "tint": 40})).unwrap();
+    let swatch = |s: &Session| s.doc().unwrap().doc.swatch("Spot RGB").unwrap().clone();
+    let old = swatch(&s).paint.color().unwrap();
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    let sw = swatch(&s);
+    assert!(sw.spot);
+    let new = sw.paint.color().unwrap();
+    assert!(matches!(new, Color::Cmyk { .. }), "{new:?}");
+    assert_eq!(new, to_cmyk(old));
+    assert_eq!(fill_of(&s, filled), Paint::Solid { color: new, swatch: Some("Spot RGB".into()), tint: 1.0 });
+    let stroke = s.doc().unwrap().doc.node(stroked).unwrap().appearance.stroke_paint();
+    assert_eq!(stroke, Paint::Solid { color: new.tinted(0.4), swatch: Some("Spot RGB".into()), tint: 0.4 });
+    let plates = s.execute("color.plates", &json!({})).unwrap();
+    assert!(plates["plates"].as_array().unwrap().iter().any(|p| p["name"] == "Spot RGB" && p["spot"] == true), "{plates}");
+}
+
 #[test]
 fn gamut_check_flags_unprintable_colours() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -128,6 +271,10 @@ fn gamut_check_flags_unprintable_colours() {
     let r = s.execute("color.gamutCheck", &json!({"colors": ["#00ff00", {"c": 100, "m": 0, "y": 0, "k": 0}]})).unwrap();
     assert_eq!(r["checked"], 2);
     assert_eq!(r["outOfGamut"].as_array().unwrap().len(), 1);
+    // A color it can't read, a hex color with an alpha part included, is an error, not skipped.
+    for bad in ["#0000ff80", "nope"] {
+        assert!(s.execute("color.gamutCheck", &json!({"colors": ["#00ff00", bad]})).is_err(), "{bad}");
+    }
 }
 
 #[test]
@@ -394,4 +541,113 @@ fn intents_reach_the_document_conversion() {
     };
     assert_ne!(first(&a), first(&b));
     let _ = Intent::Perceptual;
+}
+
+/// The error `cmd` gives for `params`: it must name `msg`.
+fn refused(s: &mut Session, cmd: &str, params: Value, msg: &str) {
+    let e = match s.execute(cmd, &params) {
+        Ok(r) => panic!("{cmd} {params} gave {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains(msg), "{cmd} {params}: {e}");
+}
+
+#[test]
+fn color_settings_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let before = cms::active_settings();
+    let rev = s.doc().unwrap().revision;
+    let c = "edit.colorSettings";
+    refused(&mut s, c, json!({"bpc": "no"}), "`bpc` must be true or false");
+    refused(&mut s, c, json!({"rgb": 5}), "`rgb` must be a string");
+    refused(&mut s, c, json!({"cmyk": true}), "`cmyk` must be a string");
+    refused(&mut s, c, json!({"intent": 2}), "`intent` must be a string");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // Omitted and null params keep the settings.
+    s.execute(c, &json!({"bpc": null, "rgb": null})).unwrap();
+    assert_eq!(cms::active_settings(), before);
+    refused(&mut s, "color.convert", json!({"color": "#808080", "to": 1}), "`to` must be a string");
+    refused(&mut s, "color.convert", json!({"color": "#808080", "intent": ["relative"]}), "`intent` must be a string");
+    assert_eq!(s.execute("color.convert", &json!({"color": "#808080", "to": null})).unwrap()["model"], "rgb");
+    let profiles = || cms::profiles().into_iter().map(|i| i.name).collect::<Vec<_>>();
+    let listed = profiles();
+    refused(&mut s, "color.loadProfile", json!({"path": 7}), "`path` must be a string");
+    refused(&mut s, "color.removeProfile", json!({"name": 7}), "`name` must be a string");
+    assert_eq!(profiles(), listed, "no profile is loaded or removed");
+    assert_eq!(cms::active_settings(), before, "the settings are unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+}
+
+#[test]
+fn document_color_mode_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#ff0000"));
+    let fill = fill_of(&s, a);
+    let undo = s.doc().unwrap().history.undo.len();
+    for c in ["file.documentColorMode", "object.convertDocumentColorMode"] {
+        refused(&mut s, c, json!({"mode": "cmyk", "convert": "no"}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "rgb", "convert": 0}), "`convert` must be true or false");
+        refused(&mut s, c, json!({"mode": "cmyk", "grays": 1}), "`grays` must be a string");
+        refused(&mut s, c, json!({"mode": "cmyk", "intent": false}), "`intent` must be a string");
+    }
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.color_mode, ColorMode::Rgb);
+    assert_eq!(st.history.undo.len(), undo, "no undo step");
+    assert_eq!(fill_of(&s, a), fill, "the colors are unchanged");
+}
+
+#[test]
+fn proof_views_refuse_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let view = vectorcraft_render::proof::view();
+    let rev = s.doc().unwrap().revision;
+    refused(&mut s, "view.proofSetup", json!({"simulatePaper": "yes"}), "`simulatePaper` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"proof": 1}), "`proof` must be true or false");
+    refused(&mut s, "view.proofSetup", json!({"target": 3}), "`target` must be a string");
+    refused(&mut s, "view.proofColors", json!({"on": "true"}), "`on` must be true or false");
+    refused(&mut s, "view.overprintPreview", json!({"on": 1}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"on": "false"}), "`on` must be true or false");
+    refused(&mut s, "view.separationsPreview", json!({"plates": "Cyan"}), "`plates` must be an array of these names: Cyan, Magenta");
+    refused(&mut s, "view.separationsPreview", json!({"plates": ["Cyan", 2]}), "`plates` must be an array of these names");
+    refused(&mut s, "view.separationsPreview", json!({"only": 0}), "`only` must be a string");
+    refused(&mut s, "view.separationsPreview", json!({"toggle": ["Cyan"]}), "`toggle` must be a string");
+    assert_eq!(vectorcraft_render::proof::view(), view, "the proof view is unchanged");
+    assert_eq!(s.doc().unwrap().revision, rev, "nothing redraws");
+    // A null `on` toggles, as an omitted one does.
+    let r = s.execute("view.proofColors", &json!({"on": null})).unwrap();
+    assert_eq!(r["proofColors"], !view.proof_colors);
+    s.execute("view.proofColors", &json!({"on": view.proof_colors})).unwrap();
+}
+
+#[test]
+fn set_spot_refuses_a_param_of_the_wrong_type() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 0, "m": 60, "y": 100, "k": 0}, "global": true})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    refused(&mut s, "swatch.setSpot", json!({"name": "Ink", "spot": "true"}), "`spot` must be true or false");
+    refused(&mut s, "swatch.setSpot", json!({"name": 1}), "`name` must be a string");
+    assert!(!s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "the swatch stays a process color");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    s.execute("swatch.setSpot", &json!({"name": "Ink", "spot": null})).unwrap();
+    assert!(s.doc().unwrap().doc.swatch("Ink").unwrap().spot, "a null `spot` is the default, true");
+}
+
+#[test]
+fn gamut_check_refuses_colors_that_are_not_a_list() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#0000ff"));
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    refused(&mut s, "color.gamutCheck", json!({"colors": "#00ff00"}), "`colors` must be an array of colors, not \"#00ff00\"");
+    refused(&mut s, "color.gamutCheck", json!({"colors": 5}), "`colors` must be an array of colors, not 5");
+    refused(&mut s, "color.gamutCheck", json!({"colors": {"c": 100, "m": 0, "y": 0, "k": 0}}), "`colors` must be an array of colors");
+    // A null list checks the document, as an omitted one does.
+    let r = s.execute("color.gamutCheck", &json!({"colors": null})).unwrap();
+    assert_eq!(r, s.execute("color.gamutCheck", &json!({})).unwrap());
+    assert!(r["outOfGamut"].as_array().unwrap().iter().any(|v| v["hex"] == "#0000ff"), "{r}");
 }

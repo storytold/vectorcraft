@@ -134,6 +134,37 @@ fn white_black() -> Value {
 }
 
 #[test]
+fn a_placed_gradient_moved_by_a_transform_or_free_distort_expands_as_the_canvas_draws_it() {
+    // The object's own effect, and the fill's (the first appearance item).
+    let slant = json!({"corners": [[0.25, 0.0], [1.25, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+    for (effect, params, item) in [
+        ("distort.transform", json!({"rotate": 90}), json!(null)),
+        ("distort.transform", json!({"rotate": 30, "scaleH": 60}), json!(null)),
+        ("distort.transform", json!({"rotate": 90}), json!(0)),
+        ("distort.freeDistort", slant.clone(), json!(null)),
+        ("distort.freeDistort", slant, json!(0)),
+    ] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(40.0, 70.0, 160.0, 130.0), white_black(), false);
+        // Placed from a quarter of the way across to the right edge.
+        run(&mut s, "paint.setGradientGeom", json!({"start": [70, 100], "end": [160, 100], "stroke": false}));
+        let placed = s.doc().unwrap().doc.node(id).and_then(|n| match n.appearance.fill_paint() {
+            vectorcraft_color::Paint::Gradient(g) => g.geom,
+            _ => None,
+        });
+        assert!(placed.is_some(), "the fill's gradient is placed");
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        let before = render(&s);
+        // Fill alone: the gradient becomes strips inside the outline the effect makes.
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        // The gradient moves with the rectangle on the canvas, and the strips follow it.
+        let diff = mean_diff(&before, &after);
+        assert!(diff < 1.0, "{effect} {params} on item {item}: mean difference {diff}");
+    }
+}
+
+#[test]
 fn eight_strips_match_the_gradient_samples() {
     let mut s = session();
     gradient_rect(&mut s, Rect::new(20.0, 20.0, 180.0, 120.0), white_black(), false);

@@ -141,6 +141,10 @@ pub struct AreaOptions {
     pub columns: usize,
     /// Gutter between rows/columns in points.
     pub gutter: f64,
+    /// Gutter between rows in points when it differs from [`Self::gutter`], which is then the
+    /// gutter between columns (left out when saved while unset).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row_gutter: Option<f64>,
     /// Inset from the frame edges in points.
     pub inset: f64,
     pub first_baseline: FirstBaseline,
@@ -162,6 +166,7 @@ impl Default for AreaOptions {
             rows: 1,
             columns: 1,
             gutter: 18.0,
+            row_gutter: None,
             inset: 0.0,
             first_baseline: FirstBaseline::Ascent,
             first_baseline_min: 0.0,

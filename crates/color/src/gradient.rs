@@ -79,13 +79,16 @@ const PERCEPTUAL_TOLERANCE: f32 = 0.4 / 255.0;
 /// halved to keep within [`PERCEPTUAL_TOLERANCE`].
 const PERCEPTUAL_DEPTH: u32 = 10;
 /// How many times [`Gradient::ink_tints`] halves the range of tints it searches: to within
-/// 1/65536 of a tint, finer than the 1/255 steps PDF writes.
+/// 1/65536 of a tint.
 const TINT_STEPS: u32 = 16;
 /// The least OKLab lightness by which an ink at 100% must differ from paper white for
 /// [`Gradient::ink_tints`] to tell its tints apart by lightness.
 const MIN_INK_LIGHTNESS_SPAN: f64 = 1.0 / 255.0;
 /// Most stops on a gradient's curve that [`Gradient::ink_tints`] finds tints for.
 const MAX_INK_TINTS: usize = 4096;
+/// How many even steps [`Gradient::ink_mixes`] checks the lightness of two stops' display RGB mix
+/// at, to tell whether it moves steadily from one stop's lightness to the other's.
+const INK_MIX_STEPS: u32 = 64;
 
 /// The mix positions (0..1, after `v0`, before `v1`) between which display RGB mixed linearly
 /// stays within [`PERCEPTUAL_TOLERANCE`] of the perceptual mix of `a` and `b`: the span halved
@@ -108,6 +111,30 @@ fn perceptual_steps(a: &Color, b: &Color, (v0, v1): (f32, f32), depth: u32, out:
     }
 }
 
+/// The mix positions (`v`, 0..1) of the stops a Perceptual gradient's curve has between stops `a`
+/// and `b`, in order: [`perceptual_steps`] on either side of the midpoint, and the midpoint (½).
+fn perceptual_mixes(a: &GradientStop, b: &GradientStop) -> Vec<f32> {
+    let mut vs = Vec::new();
+    perceptual_steps(&a.color, &b.color, (0.0, 0.5), 1, &mut vs);
+    vs.push(0.5);
+    perceptual_steps(&a.color, &b.color, (0.5, 1.0), 1, &mut vs);
+    vs
+}
+
+/// The offset of mix position `v` between stops `a` and `b`, placed through `a`'s midpoint
+/// (`v` = ½ at the midpoint) as [`Gradient::sample`] maps it.
+fn curve_offset(a: &GradientStop, b: &GradientStop, v: f32) -> f32 {
+    let m = a.midpoint.clamp(0.01, 0.99);
+    let u = if v == 0.5 {
+        a.midpoint
+    } else if v < 0.5 {
+        2.0 * v * m
+    } else {
+        m + (v - 0.5) * 2.0 * (1.0 - m)
+    };
+    a.offset + (b.offset - a.offset) * u
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GradientStop {
     /// 0..=1 along the gradient.
@@ -124,16 +151,23 @@ pub struct GradientStop {
     /// Tint of the linked swatch (0..1; 1 without a link), as on a solid paint.
     #[serde(default = "crate::full_tint", skip_serializing_if = "crate::is_full_tint")]
     pub tint: f32,
+    /// Process inks (C, M, Y, K, 0..1) printed together with the linked spot swatch's tint: a
+    /// DeviceN colour of a file that mixes a spot ink with process plates. `color` is how the mix
+    /// looks; separations print the spot ink at `tint` and these plates. `None`: the ink alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plates: Option<[f32; 4]>,
 }
 
 impl GradientStop {
     /// An opaque, unlinked stop of `color` at `offset` with a centred midpoint.
     pub fn new(offset: f32, color: Color) -> Self {
-        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0 }
+        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0, plates: None }
     }
-    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked.
+    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked, without
+    /// process plates.
     pub fn set_color(&mut self, color: Color, link: Option<(String, f32)>) {
         self.color = color;
+        self.plates = None;
         (self.swatch, self.tint) = match link {
             Some((n, t)) => (Some(n), t),
             None => (None, 1.0),
@@ -149,6 +183,40 @@ fn between(a: &GradientStop, b: &GradientStop, t: f32, mix: &impl Fn(&Color, &Co
     let m = a.midpoint.clamp(0.01, 0.99);
     let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
     (mix(&a.color, &b.color, v), a.opacity + (b.opacity - a.opacity) * v)
+}
+
+/// For each pair of neighbouring stops (`k`, `k + 1`), the largest offset among stops `1..=k + 1`.
+/// [`Gradient::sample_with`] picks the first pair whose end offset `t` doesn't pass; that is the
+/// first pair whose reach `t` doesn't pass, and the reaches never decrease, so the pair is found by
+/// binary search whether or not the stops are in order.
+struct StopReach(Vec<f32>);
+
+impl StopReach {
+    fn new(stops: &[GradientStop]) -> Self {
+        // `f32::max` skips a NaN offset, which `t <= offset` never chooses either.
+        let reach = stops.iter().skip(1).scan(f32::NEG_INFINITY, |m, s| {
+            *m = m.max(s.offset);
+            Some(*m)
+        });
+        Self(reach.collect())
+    }
+
+    /// What [`Gradient::sample_with`] gives at `t` for `stops`, the stops this was built from.
+    fn sample_with(&self, stops: &[GradientStop], t: f32, mix: &impl Fn(&Color, &Color, f32) -> Color) -> (Color, f32) {
+        let Some(first) = stops.first() else { return (Color::BLACK, 1.0) };
+        if t <= first.offset {
+            return (first.color, first.opacity);
+        }
+        let last = || stops.last().map_or((Color::BLACK, 1.0), |l| (l.color, l.opacity));
+        if t.is_nan() {
+            return last();
+        }
+        let k = self.0.partition_point(|r| *r < t);
+        match (stops.get(k), stops.get(k + 1)) {
+            (Some(a), Some(b)) => between(a, b, t, mix),
+            _ => last(),
+        }
+    }
 }
 
 fn one() -> f32 {
@@ -187,6 +255,12 @@ impl Gradient {
     pub fn sample(&self, t: f32) -> (Color, f32) {
         self.sample_with(t, |a, b, v| self.method.mix(a, b, v))
     }
+    /// [`Self::sample`] for many points in no order (a gradient drawn pixel by pixel): the stops
+    /// are prepared once, so each sample costs a binary search rather than a scan of the stops.
+    pub fn sampler(&self) -> impl Fn(f32) -> (Color, f32) + '_ {
+        let reach = StopReach::new(&self.stops);
+        move |t| reach.sample_with(&self.stops, t, &|a, b, v| self.method.mix(a, b, v))
+    }
     /// [`Self::sample`], a Classic gradient's neighbouring stop colours of one model mixed in it
     /// (CMYK stays CMYK; [`Color::lerp_keep_model`]) rather than in display RGB, a Perceptual
     /// gradient's as [`Self::sample`] mixes them.
@@ -221,9 +295,11 @@ impl Gradient {
     /// the one before it stopped, so the work is the samples plus the stops, not their product.
     pub fn sample_increasing_with(&self, ts: impl IntoIterator<Item = f32>, mix: impl Fn(&Color, &Color, f32) -> Color) -> Vec<(Color, f32)> {
         let stops = &self.stops;
-        // The shared index assumes ordered stops; others (a file's, unsorted) sample one by one.
+        // The shared cursor assumes ordered stops; others (a file's, unsorted) look each sample up
+        // in a [`StopReach`], so they cost a binary search each rather than a scan of the stops.
         if stops.windows(2).any(|w| w[1].offset < w[0].offset) {
-            return ts.into_iter().map(|t| self.sample_with(t, &mix)).collect();
+            let reach = StopReach::new(stops);
+            return ts.into_iter().map(|t| reach.sample_with(stops, t, &mix)).collect();
         }
         let mut j = 0;
         ts.into_iter()
@@ -253,8 +329,16 @@ impl Gradient {
     /// [`Self::expanded_stops`], each stop that stands for a midpoint with that midpoint (`None`
     /// on the gradient's own stops and a Perceptual gradient's other in-between stops).
     pub fn expanded(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>)> + '_ {
+        self.expanded_with_stops().map(|(t, c, o, mid, _)| (t, c, o, mid))
+    }
+    /// [`Self::expanded`], each of the gradient's own stops with its index in [`Self::stops`]
+    /// (`None` on the stops in between).
+    fn expanded_with_stops(&self) -> impl Iterator<Item = (f32, Color, f32, Option<f32>, Option<usize>)> + '_ {
         // Direct interpolation matches `sample` only for strictly increasing offsets.
         let increasing = self.stops.windows(2).all(|w| w[0].offset < w[1].offset);
+        // Otherwise (repeated or unsorted offsets) each midpoint is looked up as `sample` would
+        // find it, but by binary search: a scan of all the stops per midpoint cost their square.
+        let reach = if increasing || !self.method.is_classic() { None } else { Some(StopReach::new(&self.stops)) };
         self.stops.iter().enumerate().flat_map(move |(i, s)| {
             let next = self.stops.get(i + 1);
             let off_centre = (s.midpoint - 0.5).abs() > 1e-3;
@@ -264,48 +348,40 @@ impl Gradient {
                 // Mixed from the two stops it lies between, as `sample` would: searching all the
                 // stops again for each midpoint made many stops cost their square.
                 let mix = |a: &Color, b: &Color, v| self.method.mix(a, b, v);
-                let (c, o) = if increasing { between(s, n, t, &mix) } else { self.sample_with(t, mix) };
-                (t, c, o, Some(s.midpoint))
+                let (c, o) = match &reach {
+                    Some(reach) => reach.sample_with(&self.stops, t, &mix),
+                    None => between(s, n, t, &mix),
+                };
+                (t, c, o, Some(s.midpoint), None)
             });
             // Perceptual: stops along the mix (`v`) where a straight line would stray from it, the
             // midpoint (v = ½) among them, placed through the midpoint as [`Self::sample`] maps them.
             let perceptual = next.filter(|_| !self.method.is_classic()).map(|n| {
-                let mut vs = Vec::new();
-                perceptual_steps(&s.color, &n.color, (0.0, 0.5), 1, &mut vs);
-                vs.push(0.5);
-                perceptual_steps(&s.color, &n.color, (0.5, 1.0), 1, &mut vs);
-                let m = s.midpoint.clamp(0.01, 0.99);
-                vs.into_iter().map(move |v| {
+                perceptual_mixes(s, n).into_iter().map(move |v| {
                     let mid = v == 0.5;
-                    let u = if mid {
-                        s.midpoint
-                    } else if v < 0.5 {
-                        2.0 * v * m
-                    } else {
-                        m + (v - 0.5) * 2.0 * (1.0 - m)
-                    };
-                    let t = s.offset + (n.offset - s.offset) * u;
+                    let t = curve_offset(s, n, v);
                     let o = s.opacity + (n.opacity - s.opacity) * v;
-                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint))
+                    (t, self.method.mix(&s.color, &n.color, v), o, (mid && off_centre).then_some(s.midpoint), None)
                 })
             });
-            std::iter::once((s.offset, s.color, s.opacity, None)).chain(classic).chain(perceptual.into_iter().flatten())
+            std::iter::once((s.offset, s.color, s.opacity, None, Some(i))).chain(classic).chain(perceptual.into_iter().flatten())
         })
     }
     /// A gradient of tints of one ink `ink` (its color at 100%; paper white is 0% of it) as
     /// (offset, tint, opacity) at each of [`Self::expanded_stops`]: the tint (0..1) whose OKLab
-    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings. Mixed
-    /// linearly between them, the tints follow a Perceptual gradient's curve. `None` when the
-    /// ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of paper white's (a white or nearly
-    /// white ink), so lightness does not tell its tints apart, and when the curve has more than
-    /// [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
-    pub fn ink_tints(&self, ink: &Color) -> Option<Vec<(f32, f32, f32)>> {
+    /// lightness is the lightness of the color there, found to [`TINT_STEPS`] halvings, except at
+    /// the gradient's own stops, which take their tints from `stop_tints` (one per stop, in
+    /// order) where it has one. Mixed linearly between them, the tints follow a Perceptual
+    /// gradient's curve. `None` when the ink's lightness is within [`MIN_INK_LIGHTNESS_SPAN`] of
+    /// paper white's (a white or nearly white ink), so lightness does not tell its tints apart,
+    /// and when the curve has more than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_tints(&self, ink: &Color, stop_tints: &[f32]) -> Option<Vec<(f32, f32, f32)>> {
         use crate::libraries::srgb_to_oklab;
         let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
         if lightness(&ink.tinted(0.0)) - lightness(ink) < MIN_INK_LIGHTNESS_SPAN {
             return None;
         }
-        let curve: Vec<_> = self.expanded().take(MAX_INK_TINTS + 1).collect();
+        let curve: Vec<_> = self.expanded_with_stops().take(MAX_INK_TINTS + 1).collect();
         if curve.len() > MAX_INK_TINTS {
             return None;
         }
@@ -322,12 +398,63 @@ impl Gradient {
             }
             (lo + hi) / 2.0
         };
-        Some(curve.into_iter().map(|(t, c, o, _)| (t, tint(&c), o)).collect())
+        Some(curve.into_iter().map(|(t, c, o, _, i)| (t, i.and_then(|i| stop_tints.get(i).copied()).unwrap_or_else(|| tint(&c)), o)).collect())
     }
     /// Does the gradient's curve ([`Self::expanded`]) have at most [`MAX_INK_TINTS`] stops, so
     /// [`Self::ink_tints`] finds tints for it?
     pub fn fits_ink_tints(&self) -> bool {
         self.expanded().nth(MAX_INK_TINTS).is_none()
+    }
+    /// A Perceptual gradient's curve ([`Self::expanded_stops`]) as mixes of its stops' inks:
+    /// (offset, `i`, weight, opacity) at each stop on it, where the inks there are those of stop
+    /// `i` and stop `i + 1` mixed linearly at the weight (0..1; 0 on the gradient's own stops).
+    /// The weight is the one at which the two stops' colors mixed in display RGB have the OKLab
+    /// lightness of the color on the curve there, found to [`TINT_STEPS`] halvings, or the mix
+    /// position itself when the two colors' lightness differs by less than
+    /// [`MIN_INK_LIGHTNESS_SPAN`], or when the display RGB mix's lightness turns back somewhere
+    /// on the way from one color's lightness to the other's (checked at [`INK_MIX_STEPS`] even
+    /// steps), as from red to blue. `None` for a Classic gradient, and when the curve has more
+    /// than [`MAX_INK_TINTS`] stops ([`Self::fits_ink_tints`]).
+    pub fn ink_mixes(&self) -> Option<Vec<(f32, usize, f32, f32)>> {
+        use crate::libraries::srgb_to_oklab;
+        if self.method.is_classic() || !self.fits_ink_tints() {
+            return None;
+        }
+        let lightness = |c: &Color| srgb_to_oklab(c.to_rgb())[0];
+        let mut out = Vec::new();
+        for (i, s) in self.stops.iter().enumerate() {
+            out.push((s.offset, i, 0.0, s.opacity));
+            let Some(n) = self.stops.get(i + 1) else { continue };
+            let (l0, l1) = (lightness(&s.color), lightness(&n.color));
+            let mixed_lightness = |w: f32| lightness(&GradientMethod::Classic.mix(&s.color, &n.color, w));
+            // The mix position itself when the lightness doesn't tell the mixes apart.
+            let by_position = (l1 - l0).abs() < MIN_INK_LIGHTNESS_SPAN
+                || !(0..=INK_MIX_STEPS)
+                    .map(|k| mixed_lightness(k as f32 / INK_MIX_STEPS as f32))
+                    .collect::<Vec<_>>()
+                    .windows(2)
+                    .all(|w| (w[1] - w[0]) * (l1 - l0) >= 0.0);
+            for v in perceptual_mixes(s, n) {
+                let weight = if by_position {
+                    v
+                } else {
+                    let want = lightness(&self.method.mix(&s.color, &n.color, v));
+                    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+                    for _ in 0..TINT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        // The mix at `mid` has not yet gone from stop `i`'s lightness to the wanted one.
+                        if (mixed_lightness(mid) - want) * (l1 - l0) < 0.0 {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    (lo + hi) / 2.0
+                };
+                out.push((curve_offset(s, n, v), i, weight, s.opacity + (n.opacity - s.opacity) * v));
+            }
+        }
+        Some(out)
     }
     /// The same ramp the other way round: the stops in reverse order at mirrored offsets, each
     /// segment's midpoint mirrored with it.

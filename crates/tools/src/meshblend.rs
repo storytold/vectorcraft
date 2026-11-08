@@ -48,6 +48,9 @@ pub struct BlendTool {
     first: Option<Pick>,
     /// A blend was just made: the next click adds to it (the selected blend).
     chained: bool,
+    /// `first` and `chained` when the button went down: a dropped press puts them back, unless
+    /// the press picked an object or made a blend.
+    before_press: Option<(Option<Pick>, bool)>,
 }
 
 /// The anchor of the first subpath of path or compound path `id` (its first member's) nearest
@@ -87,7 +90,7 @@ impl Tool for BlendTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let options = |t: &mut Self| {
-            (t.first, t.chained) = (None, false);
+            (t.first, t.chained, t.before_press) = (None, false, None);
             vec![Action::Dialog(BLEND_OPTIONS.into(), json!({}))]
         };
         // A first pick whose object is no longer in the document (deleted, or undone away) is
@@ -98,25 +101,32 @@ impl Tool for BlendTool {
         match ev.kind {
             PointerKind::DoubleClick => options(self),
             PointerKind::Down if ev.mods.alt => options(self),
-            PointerKind::Down => match (self.first(cx), pick(cx, ev.pos)) {
-                (_, None) => {
-                    (self.first, self.chained) = (None, false);
-                    vec![]
-                }
-                (None, Some((top, start))) => {
-                    self.first = Some((top, start));
-                    vec![Action::Exec("select.set".into(), json!({"ids": [top.0]}))]
-                }
-                (Some((a, sa)), Some((b, sb))) if a != b && cx.doc.node(a).is_some() => {
-                    (self.first, self.chained) = (None, true);
-                    let mut p = json!({"ids": [a.0, b.0]});
-                    if sa.is_some() || sb.is_some() {
-                        p["starts"] = json!([sa, sb]);
+            PointerKind::Down => {
+                self.before_press = Some((self.first, self.chained));
+                match (self.first(cx), pick(cx, ev.pos)) {
+                    (_, None) => {
+                        (self.first, self.chained) = (None, false);
+                        vec![]
                     }
-                    vec![Action::Exec("object.blend.make".into(), p)]
+                    (None, Some((top, start))) => {
+                        (self.first, self.before_press) = (Some((top, start)), None);
+                        vec![Action::Exec("select.set".into(), json!({"ids": [top.0]}))]
+                    }
+                    (Some((a, sa)), Some((b, sb))) if a != b && cx.doc.node(a).is_some() => {
+                        (self.first, self.chained, self.before_press) = (None, true, None);
+                        let mut p = json!({"ids": [a.0, b.0]});
+                        if sa.is_some() || sb.is_some() {
+                            p["starts"] = json!([sa, sb]);
+                        }
+                        vec![Action::Exec("object.blend.make".into(), p)]
+                    }
+                    (Some(_), Some(_)) => vec![],
                 }
-                (Some(_), Some(_)) => vec![],
-            },
+            }
+            PointerKind::Up => {
+                self.before_press = None;
+                vec![]
+            }
             _ => vec![],
         }
     }
@@ -147,12 +157,21 @@ impl Tool for BlendTool {
     /// click picks a new first object. The document and the selection stay as they are.
     fn key(&mut self, _cx: &ToolContext, key: crate::ToolKey, _mods: Mods) -> Vec<Action> {
         if key == crate::ToolKey::Escape {
-            (self.first, self.chained) = (None, false);
+            (self.first, self.chained, self.before_press) = (None, false, None);
+        }
+        vec![]
+    }
+    /// A dropped press puts back the object picked first and the blend being added to as they
+    /// were when the button went down, so the picks of earlier clicks stay. An object the press
+    /// picked stays picked and selected, and a blend the press made stays made.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        if let Some((first, chained)) = self.before_press.take() {
+            (self.first, self.chained) = (first, chained);
         }
         vec![]
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        (self.first, self.chained) = (None, false);
+        (self.first, self.chained, self.before_press) = (None, false, None);
         vec![]
     }
     /// Choosing the Blend tool again finishes the blend: it drops the object picked first and
@@ -354,13 +373,35 @@ mod tests {
         let mut s = Selection::default();
         s.set([g]);
         let c = cx(&d, &s, &p);
-        let mut t = BlendTool { first: None, chained: true };
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         assert!(t.first(&c).is_some());
         assert!(t.chosen_again(&c).is_empty());
         assert!(t.first(&c).is_none(), "choosing the tool again ends adding to the blend just made");
         assert_eq!(t.pointer(&c, &down(150.0, 150.0)), picks(a));
         // Other tools keep their state: the default does nothing.
         assert!(create("mesh").unwrap().chosen_again(&c).is_empty());
+    }
+
+    #[test]
+    fn resetting_blend_during_a_press_survives_its_drop() {
+        let (d, a) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        for reset in 0..3 {
+            let mut t = BlendTool { first: Some((a, None)), chained: true, ..Default::default() };
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 450.0, 450.0)).is_empty());
+            match reset {
+                0 => assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty()),
+                1 => assert!(t.chosen_again(&c).is_empty()),
+                _ => assert_eq!(
+                    t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, 450.0, 450.0)),
+                    vec![Action::Dialog(BLEND_OPTIONS.into(), json!({}))],
+                ),
+            }
+            assert!(t.drop_press(&c).is_empty());
+            assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 450.0, 450.0)).is_empty());
+            assert_eq!((t.first, t.chained), (None, false));
+        }
     }
 
     #[test]
@@ -385,7 +426,7 @@ mod tests {
         // After a blend is made, a click while the selected blend is gone picks the object it hits.
         let mut s = Selection::default();
         s.set([NodeId(9999)]);
-        let mut t = BlendTool { first: None, chained: true };
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         let acts = t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 320.0, 120.0));
         assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({"ids": [b.0]}))]);
     }
@@ -432,7 +473,7 @@ mod tests {
         d.insert(Some(l), 1, blend).unwrap();
         let mut s = Selection::default();
         let p = paint();
-        let mut t = BlendTool { first: None, chained: true };
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         s.set([g]);
         let c = cx(&d, &s, &p);
         let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
@@ -477,12 +518,57 @@ mod tests {
         let mut s = Selection::default();
         s.set([g]);
         let c = cx(&d, &s, &p);
-        let mut t = BlendTool { first: None, chained: true };
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         assert!(t.first(&c).is_some());
         assert!(t.key(&c, crate::ToolKey::Escape, Mods::default()).is_empty());
         assert!(t.first(&c).is_none(), "Escape ends adding to the blend just made");
         assert_eq!(t.pointer(&c, &down(150.0, 150.0)), picks(a));
         assert!(esc(&mut BlendTool::default()).is_empty(), "nothing to drop");
+    }
+
+    /// A dropped press (a long touch, a canceled touch) keeps the pick an earlier click made and
+    /// keeps adding to the blend just made: the next click blends with them. A dropped press
+    /// that picked an object keeps that pick, as the object stays selected.
+    #[test]
+    fn a_dropped_press_keeps_the_blend_tools_first_pick() {
+        let (mut d, a) = doc_with_rect();
+        let l = d.layers[0].id;
+        let (b, g) = (d.alloc_id(), d.alloc_id());
+        let r = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(300.0, 100.0, 350.0, 150.0));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(b, r, vectorcraft_doc::Appearance::default_art())).unwrap();
+        let (k1, k2) = (d.alloc_id(), d.alloc_id());
+        let key = |id: NodeId, x: f64| {
+            let r = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
+            std::sync::Arc::new(vectorcraft_doc::Node::path(id, r, vectorcraft_doc::Appearance::default_art()))
+        };
+        let blend = vectorcraft_doc::Node::new(g, NodeKind::Blend { children: vec![key(k1, 0.0), key(k2, 100.0)], spec: Default::default() });
+        d.insert(Some(l), 2, blend).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        // The engine sends the release after the drop.
+        let dropped = |t: &mut BlendTool, c: &ToolContext, x: f64, y: f64| {
+            t.pointer(c, &ev(PointerKind::Down, x, y));
+            assert!(t.drop_press(c).is_empty());
+            assert!(t.pointer(c, &ev(PointerKind::Up, x, y)).is_empty());
+        };
+        let mut t = BlendTool::default();
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0)), vec![Action::Exec("select.set".into(), json!({"ids": [a.0]}))]);
+        assert!(t.drop_press(&c).is_empty());
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 150.0));
+        assert_eq!(t.first(&c), Some((a, None)), "a dropped first press keeps the object it picked and selected");
+        // A second press on a, and a press on empty canvas, each dropped.
+        dropped(&mut t, &c, 151.0, 151.0);
+        dropped(&mut t, &c, 450.0, 450.0);
+        assert_eq!(t.first(&c), Some((a, None)), "the pick stays");
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 320.0, 120.0)), vec![Action::Exec("object.blend.make".into(), json!({"ids": [a.0, b.0]}))]);
+        // After a blend is made, a dropped press on empty canvas keeps adding to it.
+        let mut s = Selection::default();
+        s.set([g]);
+        let c = cx(&d, &s, &p);
+        let mut t = BlendTool { first: None, chained: true, ..Default::default() };
+        dropped(&mut t, &c, 450.0, 450.0);
+        assert_eq!(t.first(&c), Some((g, None)), "the blend just made is still added to");
     }
 
     #[test]

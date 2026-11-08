@@ -429,6 +429,29 @@ fn a_cut_out_edge_leaves_the_color_of_the_art_inside_it_alone() {
 }
 
 #[test]
+fn a_library_of_many_repeated_swatches_is_read_once_per_color() {
+    let img = Raster::from_fn(2, 1, |x, _| if x == 0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] });
+    // 200,000 swatches of 50,000 distinct colours: compared against those kept so far, billions of steps.
+    let swatches: Vec<[u8; 3]> = (0..200_000u32)
+        .map(|i| {
+            let c = i % 50_000;
+            [(c >> 16) as u8, (c >> 8) as u8, c as u8]
+        })
+        .collect();
+    let params = TraceParams { mode: Mode::Color, palette: Palette::DocumentLibrary, swatches, colors: 2, ..TraceParams::default() };
+    let start = std::time::Instant::now();
+    let q = quantize(&img, &params);
+    assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", start.elapsed());
+    assert_eq!(q.labels.len(), 2);
+}
+
+#[test]
+fn a_raster_whose_bytes_are_not_its_size_quantizes_to_nothing() {
+    let short = Raster { width: 60_000, height: 60_000, rgba: vec![0; 4] };
+    assert_eq!(quantize(&short, &TraceParams::default()), Quantized { labels: vec![], palette: vec![] });
+}
+
+#[test]
 fn a_semi_transparent_stripe_beside_a_cut_out_edge_keeps_its_own_color() {
     // Columns: transparent, a half-opaque gray edge (white blended with the background), a
     // semi-transparent yellow stripe, then opaque white. The gray chooses no color; the yellow,
@@ -583,6 +606,32 @@ fn a_trace_past_its_anchor_budget_is_refused() {
     let anchors = full.anchor_count();
     assert!(anchors > 100, "{anchors} anchors");
     assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
+}
+
+/// Components of a layer are fitted in parallel, a chunk at a time, and added in the order they were found (top to
+/// bottom, left to right), also across the chunks. The anchor budget still refuses a trace with many components.
+#[test]
+fn many_components_come_out_in_scan_order_and_still_meet_the_budget() {
+    // 20 x 20 black dots, more than one chunk of components.
+    let img = Raster::from_fn(120, 120, |x, y| if x % 6 < 3 && y % 6 < 3 { BLACK } else { WHITE });
+    let p = TraceParams { noise: 1, ..bw() };
+    let full = trace(&img, &p);
+    assert_eq!(full.paths.len(), 400);
+    let tops: Vec<(i64, i64)> = full
+        .paths
+        .iter()
+        .map(|t| {
+            let b = t.path.bounds().unwrap();
+            (b.y0.round() as i64, b.x0.round() as i64)
+        })
+        .collect();
+    assert!(tops.windows(2).all(|w| w[0] < w[1]), "not in scan order: {tops:?}");
+    assert_eq!(trace(&img, &p), full, "tracing twice differs");
+    let anchors = full.anchor_count();
+    assert!(matches!(trace_within(&img, &p, anchors / 2), Err(TraceError::TooComplex { max }) if max == anchors / 2));
+    // The last component alone is over the budget: a refusal in a later chunk.
+    assert!(matches!(trace_within(&img, &p, anchors - 1), Err(TraceError::TooComplex { .. })));
     assert_eq!(trace_within(&img, &p, anchors).unwrap(), full);
 }
 
@@ -1508,7 +1557,7 @@ fn a_traced_pixel_that_straightens_to_no_area_is_left_out_of_fills_and_kept_as_a
         mode: Mode::Color,
         palette: Palette::Limited,
         colors: 6,
-        paths: 90.0,
+        paths: 80.0,
         corners: 60.0,
         noise: 1,
         method: Method::Abutting,

@@ -1,6 +1,6 @@
-use super::build::{Builder, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
+use super::build::{Builder, Built, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
-use super::rings::{MAX_SOLID_POINTS, rings, signed_area};
+use super::rings::{MAX_SOLID_POINTS, signed_area, solid_rings};
 use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
@@ -18,7 +18,7 @@ struct Puff {
 
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     if rings.is_empty() {
         return Ok(None);
     }
@@ -28,7 +28,13 @@ fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Op
     }
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
-    let (nx, ny) = (((bounds.width() / cell).ceil() as usize).max(1), ((bounds.height() / cell).ceil() as usize).max(1));
+    // A subnormal size gives cells of no size (the grid would be `usize::MAX` cells wide), and a
+    // subnormal cell underflows the solver's stencil products.
+    if !cell.is_normal() {
+        return Ok(None);
+    }
+    let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
+    let (nx, ny) = (side(bounds.width()), side(bounds.height()));
     let edges = Edges::new(&rings);
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
@@ -45,6 +51,11 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
 /// on its own over the grid of `bounds`, and one eye sees them all, as far away as the highest
 /// puff needs with Perspective. One result for each shape, in order.
 pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View) -> Vec<Result<Vec<Facet>, String>> {
+    inflate_faces(shapes, bounds, options, view, false).into_iter().map(|r| r.map(|(facets, _)| facets)).collect()
+}
+
+/// [`inflate_together`], or with `mesh` each solid's faces before projection instead of its facets.
+pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View, mesh: bool) -> Vec<Result<Built, String>> {
     let o = options.sanitized();
     let puffs: Vec<Result<Option<Puff>, String>> =
         shapes.iter().map(|(path, rule)| check_bounds(bounds).and_then(|()| puff(path, *rule, bounds, &o))).collect();
@@ -52,16 +63,17 @@ pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options:
     puffs
         .into_iter()
         .map(|p| match p {
-            Ok(Some(p)) => inflated(p, bounds, o, view, reach),
-            Ok(None) => Ok(vec![]),
+            Ok(Some(p)) => inflated(p, bounds, o, view, reach, mesh),
+            Ok(None) => Ok((vec![], vec![])),
             Err(e) => Err(e),
         })
         .collect()
 }
 
 /// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
-/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together.
-fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result<Vec<Facet>, String> {
+/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together. With `mesh`,
+/// its faces before projection instead.
+fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, mesh: bool) -> Result<Built, String> {
     let Puff { rings, edges, cell, nx, ny, m, height } = p;
     let outline: Vec<(Rect, vectorcraft_geom::SubPath)> = rings
         .iter()
@@ -100,7 +112,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     let smooth = view.shade && view.has_colored_lights();
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
     // Without its back cap the object is a shell open behind, its inside showing.
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
+    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![], mesh: mesh.then(Vec::new) };
     let half = o.depth / 2.0;
     // The back: turned and scaled by the twist and taper, its puff too.
     let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);
@@ -294,7 +306,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
             ring.iter().map(|p| camera.place(turn.apply(*p), half - o.depth * t)).collect()
         };
         let mut pieces: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
-        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.facets.len()));
+        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.len()));
         for (ring, pieces) in rings.iter().zip(&pieces) {
             for k in 0..slices {
                 b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;

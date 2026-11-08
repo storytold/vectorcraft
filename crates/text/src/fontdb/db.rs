@@ -83,6 +83,18 @@ impl FontDb {
         let _ = on;
     }
 
+    /// Is the lazy system-font fallback on ([`Self::set_system_fallback`])?
+    pub(crate) fn system_fallback_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+
     /// Process-wide database: the bundled fonts, then the installed system fonts, cataloged the
     /// first time a lookup by family name needs them (or ahead of time by
     /// [`FontDb::scan_in_background`]).
@@ -152,6 +164,32 @@ impl FontDb {
         list
     }
 
+    /// Whether the installed fonts are cataloged, so lookups by family name no longer wait for
+    /// the scan. Always true on wasm, which has no installed fonts.
+    pub fn installed_fonts_ready(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.cataloged.get().is_some()
+        }
+        #[cfg(target_arch = "wasm32")]
+        true
+    }
+
+    /// [`FontDb::menu_family_list`] without waiting for the installed fonts' scan: until it ends,
+    /// the families already loaded (the bundled fonts and any loaded meanwhile), sorted, without
+    /// the hidden ones. For what is built every frame, such as the menu bar's Type › Font, so the
+    /// window's first frame doesn't wait for the scan of a large font library (#5483).
+    /// [`FontDb::generation`] changes when the scan ends.
+    pub fn menu_family_list_now(&self) -> Arc<[String]> {
+        if self.installed_fonts_ready() {
+            return self.menu_family_list();
+        }
+        let mut v: Vec<String> = self.read_faces().iter().map(|f| f.family.clone()).filter(|f| !f.starts_with('.')).collect();
+        v.sort_by_key(|a| a.to_lowercase());
+        v.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        v.into()
+    }
+
     /// How a font menu labels `family`: the English name when `english` is on (Preferences › Type ›
     /// Show Font Names in English, the default), else the font's native-language name when it has
     /// one. The document and commands still use the English family ([`Self::canonical`]).
@@ -190,6 +228,30 @@ impl FontDb {
         v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
         v.dedup_by(|a, b| a.2 == b.2);
         v.into_iter().map(|t| t.2).collect()
+    }
+
+    /// The style a style-less request gets for `family`: its face nearest Regular upright, by the
+    /// catalog's or the loaded faces' metadata. Unlike [`FontDb::face`] it reads no font files, so
+    /// the closest styles of many families cost little.
+    pub fn closest_style(&self, family: &str) -> Option<String> {
+        let (family, _) = self.canonical(family, "");
+        let family = family.as_str();
+        let mut best: Option<(f32, String)> = None;
+        let consider = |best: &mut Option<(f32, String)>, weight: f32, italic: bool, style: &str| {
+            let d = super::build::weight_distance(weight, italic, 400.0, false);
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                *best = Some((d, style.to_string()));
+            }
+        };
+        for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+            consider(&mut best, f.weight, f.italic, &f.style);
+        }
+        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            for cf in &c.faces {
+                consider(&mut best, cf.weight, cf.italic, &cf.style);
+            }
+        }
+        best.map(|(_, style)| style)
     }
 
     /// Add a user font (TTF/OTF/TTC bytes). Returns the number of faces added (0 if unparseable or

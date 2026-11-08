@@ -32,22 +32,41 @@ impl Exporter<'_> {
     /// options use CMYK values); `None` when `name` isn't a spot colour.
     fn separation(&mut self, name: &str) -> Option<SeparationSpace> {
         let (ink, full) = self.spot_ink(name)?;
-        let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(q(full[0]), q(full[1]), q(full[2]), q(full[3])));
+        let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new_f32(full[0], full[1], full[2], full[3]));
         Some(SeparationSpace::new(SeparationColorant::Custom(ink), alt))
     }
 
-    /// The ink name of spot swatch `name` and its CMYK equivalent at 100% (a Lab spot color is
-    /// noted for [`crate::lab_spot`]); `None` when `name` isn't a spot color.
+    /// The ink name of spot swatch `name` ([`Self::colorant_name`]) and its CMYK equivalent at
+    /// 100% (a Lab spot color is noted for [`crate::lab_spot`]); `None` when `name` isn't a spot
+    /// color.
     pub(super) fn spot_ink(&mut self, name: &str) -> Option<(String, [f32; 4])> {
         let doc = self.doc;
         let sw = doc.swatch(name).filter(|s| s.spot)?;
         let color = doc.linked_color(sw.paint.color()?, true);
+        let ink = self.colorant_name(&sw.name);
         if let Color::Lab { l, a, b } = color
-            && !self.lab_spots.iter().any(|(n, _)| n == name)
+            && !self.lab_spots.iter().any(|(n, _)| *n == ink)
         {
-            self.lab_spots.push((name.to_string(), vectorcraft_color::cms::Lab::new(l, a, b)));
+            self.lab_spots.push((ink.clone(), vectorcraft_color::cms::Lab::new(l, a, b)));
         }
-        Some((sw.name.clone(), self.out.cmyk(&color, self.intent)))
+        Some((ink, self.out.cmyk(&color, self.intent)))
+    }
+
+    /// The colorant name spot swatch `name` is written under: its own name, except that `All`
+    /// (every plate in PDF) and `None` (no plate) become `All Spot` and `None Spot`, numbered
+    /// `All Spot 2`, `All Spot 3`, … past the names of the document's spot swatches.
+    fn colorant_name(&self, name: &str) -> String {
+        if name != "All" && name != "None" {
+            return name.to_string();
+        }
+        let taken = |c: &str| self.doc.swatches_iter().any(|s| s.spot && s.name == c);
+        let mut colorant = format!("{name} Spot");
+        let mut n = 2;
+        while taken(&colorant) {
+            colorant = format!("{name} Spot {n}");
+            n += 1;
+        }
+        colorant
     }
 
     /// A solid paint, in the Separation colour space at its tint when it's linked to a spot swatch
@@ -55,10 +74,10 @@ impl Exporter<'_> {
     fn solid(&mut self, c: &Color, link: Option<&str>, tint: f32) -> krilla::color::Color {
         if link == Some(vectorcraft_color::swatch::REGISTRATION) {
             let alt = krilla::color::RegularColor::Cmyk(cmyk::Color::new(255, 255, 255, 255));
-            return SepColor::new(q(tint), SeparationSpace::new(SeparationColorant::AllColorants, alt)).into();
+            return SepColor::new_f32(tint, SeparationSpace::new(SeparationColorant::AllColorants, alt)).into();
         }
         match link.and_then(|n| self.separation(n)) {
-            Some(space) => SepColor::new(q(tint), space).into(),
+            Some(space) => SepColor::new_f32(tint, space).into(),
             None => self.col(c),
         }
     }
@@ -69,13 +88,13 @@ impl Exporter<'_> {
     /// gets [`Self::device_n_stops`]. `None` for gradients without a spot ink.
     fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let tints: Option<Vec<f32>> = g
             .stops
             .iter()
             .map(|s| match s.swatch.as_deref() {
-                Some(n) if n == ink => Some(s.tint),
-                None if paper(&s.color) => Some(0.0),
+                // A stop that also prints process plates needs a DeviceN space.
+                Some(n) if n == ink && s.plates.is_none() => Some(s.tint),
+                _ if self.paper_stop(s) => Some(0.0),
                 _ => None,
             })
             .collect();
@@ -83,7 +102,7 @@ impl Exporter<'_> {
             return self.device_n_stops(g);
         };
         let space = self.separation(ink)?;
-        let tint = |t: f32| -> krilla::color::Color { SepColor::new(q(t), space.clone()).into() };
+        let tint = |t: f32| -> krilla::color::Color { SepColor::new_f32(t, space.clone()).into() };
         let mut out = vec![];
         for (i, s) in g.stops.iter().enumerate() {
             out.push((s.offset, tint(tints[i]), s.opacity));
@@ -100,22 +119,24 @@ impl Exporter<'_> {
     /// The stops of a gradient that mixes spot inks with process colors or with each other, in
     /// a DeviceN space of the process inks the stops use (in CMYK order) and the spot inks (in
     /// the order the stops name them), with midpoints as explicit stops (the tints and opacity
-    /// there are halfway). Paper white adds no ink. `None`, with a warning, when a stop is
-    /// written in RGB or Lab or the spot inks can't share a DeviceN space; the gradient is then
-    /// written in the colors of its stops.
+    /// there are halfway), or for a Perceptual gradient the stops on its curve
+    /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink; a spot stop with
+    /// process plates ([`vectorcraft_color::GradientStop::plates`]) prints them too. `None`, with a
+    /// warning, when a stop is written in RGB or Lab or the spot inks can't share a DeviceN space;
+    /// the gradient is then written in the colors of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         use krilla::color::device_n::{Color as DnColor, Colorant, DeviceNSpace, Process};
-        let paper = |c: &Color| c.to_rgba8(1.0)[..3] == [255; 3];
         let doc = self.doc;
         fn spot_of<'s>(doc: &vectorcraft_doc::Document, s: &'s vectorcraft_color::GradientStop) -> Option<&'s str> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot))
         }
-        let mut spots: Vec<(String, [f32; 4])> = Vec::new();
+        // Each spot ink: its swatch's name, then its colorant name and CMYK equivalent.
+        let mut spots: Vec<(&str, (String, [f32; 4]))> = Vec::new();
         for s in &g.stops {
             if let Some(n) = spot_of(doc, s)
-                && !spots.iter().any(|(m, _)| m == n)
+                && !spots.iter().any(|(m, _)| *m == n)
             {
-                spots.push(self.spot_ink(n)?);
+                spots.push((n, self.spot_ink(n)?));
             }
         }
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
@@ -124,10 +145,13 @@ impl Exporter<'_> {
             let mut v = vec![0.0; 4 + spots.len()];
             match spot_of(doc, s) {
                 Some(n) => {
-                    let i = spots.iter().position(|(m, _)| m == n)?;
+                    let i = spots.iter().position(|(m, _)| *m == n)?;
                     v[4 + i] = s.tint;
+                    if let Some(p) = s.plates {
+                        v[..4].copy_from_slice(&p.map(|t| t.clamp(0.0, 1.0)));
+                    }
                 }
-                None if s.swatch.is_none() && paper(&s.color) => {}
+                None if self.paper_stop(s) => {}
                 None => match self.page_color(&s.color) {
                     Color::Cmyk { c, m, y, k } => v[..4].copy_from_slice(&[c, m, y, k]),
                     Color::Gray { k } => v[3] = k,
@@ -139,18 +163,30 @@ impl Exporter<'_> {
             }
             inks.push(v);
         }
-        let process: Vec<usize> = (0..4).filter(|&i| inks.iter().any(|v| q(v[i]) > 0)).collect();
-        let colorants = process.iter().map(|&i| Colorant::Process(Process::ALL[i])).chain(
-            spots.iter().map(|(name, f)| Colorant::Spot { name: name.clone(), alternate: cmyk::Color::new(q(f[0]), q(f[1]), q(f[2]), q(f[3])) }),
-        );
+        let process: Vec<usize> = (0..4).filter(|&i| inks.iter().any(|v| v[i] > 0.0)).collect();
+        let colorants = process
+            .iter()
+            .map(|&i| Colorant::Process(Process::ALL[i]))
+            .chain(spots.iter().map(|(_, (name, f))| Colorant::Spot { name: name.clone(), alternate: cmyk::Color::new_f32(f[0], f[1], f[2], f[3]) }));
         let Some(space) = DeviceNSpace::new(colorants) else {
             self.warn("gradients whose spot inks can't share a DeviceN color space are exported without the spot inks");
             return None;
         };
         let color = |v: &[f32]| -> Option<krilla::color::Color> {
-            let tints = process.iter().map(|&i| q(v[i])).chain(v[4..].iter().map(|&t| q(t))).collect();
-            Some(DnColor::new(tints, space.clone())?.into())
+            let tints = process.iter().map(|&i| v[i]).chain(v[4..].iter().copied()).collect();
+            Some(DnColor::new_f32(tints, space.clone())?.into())
         };
+        // A Perceptual gradient: the stops on its curve, each a mix of two stops' inks.
+        if let Some(curve) = g.ink_mixes() {
+            return curve
+                .into_iter()
+                .map(|(o, i, w, opacity)| {
+                    let next = inks.get(i + 1).unwrap_or(&inks[i]);
+                    let mixed: Vec<f32> = inks[i].iter().zip(next).map(|(a, b)| a + (b - a) * w).collect();
+                    Some((o, color(&mixed)?, opacity))
+                })
+                .collect();
+        }
         let mut out = vec![];
         for (i, s) in g.stops.iter().enumerate() {
             out.push((s.offset, color(&inks[i])?, s.opacity));
@@ -336,22 +372,46 @@ impl Exporter<'_> {
         Some(krilla::paint::Pattern { stream: sb.finish(), transform: xf(at), width: pw as f32, height: ph as f32 }.into())
     }
 
-    /// The spot swatch whose tints are every stop of `g` that isn't paper white, unlinked; `None`
-    /// when no stop is linked to a spot swatch or a stop has another color.
+    /// Is stop `s` paper white ([`paper`]), unlinked or linked to a swatch that isn't a spot color
+    /// (a white spot color is an ink of its own)? It adds no ink to a Separation or DeviceN shading.
+    fn paper_stop(&self, s: &vectorcraft_color::GradientStop) -> bool {
+        !s.swatch.as_deref().is_some_and(|n| self.doc.swatch(n).is_some_and(|w| w.spot)) && paper(&s.color)
+    }
+
+    /// The spot swatch whose tints are every stop of `g` that isn't paper white
+    /// ([`Self::paper_stop`]); `None` when no stop is linked to a spot swatch or a stop has
+    /// another color.
     fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
         let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
         let ink = g.stops.iter().find_map(spot)?;
-        let paper = |s: &vectorcraft_color::GradientStop| s.swatch.is_none() && s.color.to_rgba8(1.0)[..3] == [255; 3];
-        g.stops.iter().all(|s| spot(s) == Some(ink) || paper(s)).then_some(ink)
+        g.stops.iter().all(|s| (spot(s) == Some(ink) && s.plates.is_none()) || self.paper_stop(s)).then_some(ink)
     }
 
-    /// Is `g` a Perceptual linear or radial gradient of tints of one spot ink that paints a fill
-    /// (`fill`) without dither or a stroke, with a curve short enough for
-    /// [`vectorcraft_color::Gradient::fits_ink_tints`], which [`Self::perceptual_spot_stops`]
-    /// writes as a Separation shading rather than an image?
+    /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
+    /// linked to a spot swatch, and is every other stop paper white ([`Self::paper_stop`]) or
+    /// written in CMYK or gray?
+    fn device_n_inks_only(&self, g: &vectorcraft_color::Gradient) -> bool {
+        let doc = self.doc;
+        let cmyk_doc = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
+        let spot = |s: &vectorcraft_color::GradientStop| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot));
+        let inks = |s: &vectorcraft_color::GradientStop| {
+            self.paper_stop(s) || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
+        };
+        g.stops.iter().any(spot) && g.stops.iter().all(|s| spot(s) || inks(s))
+    }
+
+    /// Is `g` a Perceptual linear or radial gradient of spot inks, alone or mixed with process
+    /// inks, that paints a fill (`fill`) without dither or a stroke, with a curve short enough for
+    /// [`vectorcraft_color::Gradient::fits_ink_tints`]: one that [`Self::perceptual_spot_stops`]
+    /// writes as a Separation shading, or [`Self::device_n_stops`] as a DeviceN shading, rather
+    /// than an image?
     pub(super) fn perceptual_spot(&self, g: &vectorcraft_color::GradientPaint, fill: bool) -> bool {
         let gr = &g.gradient;
-        !gr.method.is_classic() && gr.kind != GradientKind::Freeform && !(fill && gr.dither) && self.one_spot_ink(gr).is_some() && gr.fits_ink_tints()
+        !gr.method.is_classic()
+            && gr.kind != GradientKind::Freeform
+            && !(fill && gr.dither)
+            && (self.one_spot_ink(gr).is_some() || self.device_n_inks_only(gr))
+            && gr.fits_ink_tints()
     }
 
     /// The stops of a Perceptual gradient of tints of one spot ink (or paper white, 0% of it) as
@@ -367,16 +427,20 @@ impl Exporter<'_> {
         let doc = self.doc;
         let full = doc.linked_color(doc.swatch(ink)?.paint.color()?, true);
         let space = self.separation(ink)?;
-        Some(g.ink_tints(&full)?.into_iter().map(|(o, t, a)| (o, SepColor::new(q(t), space.clone()).into(), a)).collect())
+        // The stops keep their own tints; paper white is 0% of the ink.
+        let own: Vec<f32> = g.stops.iter().map(|s| if s.swatch.as_deref() == Some(ink) { s.tint } else { 0.0 }).collect();
+        Some(g.ink_tints(&full, &own)?.into_iter().map(|(o, t, a)| (o, SepColor::new_f32(t, space.clone()).into(), a)).collect())
     }
 
     /// Warn when gradient `g`, drawn as an image, has stops linked to a spot swatch: the image is
     /// in process colors, so the spot inks have no plate of their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
         let doc = self.doc;
-        let from_stops = g.gradient.kind != GradientKind::Freeform || g.freeform.is_none();
+        let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
         if from_stops && g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
-            self.warn("spot colors in gradients exported as images (freeform, dithered or Perceptual gradients that mix inks) are written in process colors");
+            self.warn(
+                "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
+            );
         }
     }
 
@@ -419,5 +483,14 @@ impl Exporter<'_> {
         s.push_transform(&xf(Affine::translate(area.origin().to_vec2())));
         s.draw_image(img, size);
         s.pop();
+    }
+}
+
+/// Is `c` paper white: no ink in CMYK or gray, white in RGB or Lab?
+fn paper(c: &Color) -> bool {
+    match *c {
+        Color::Cmyk { c, m, y, k } => c <= 0.0 && m <= 0.0 && y <= 0.0 && k <= 0.0,
+        Color::Gray { k } => k <= 0.0,
+        _ => c.to_rgba8(1.0)[..3] == [255; 3],
     }
 }

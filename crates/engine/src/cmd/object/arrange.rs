@@ -1,5 +1,5 @@
 use super::align::choice;
-use super::{Document, EngineError, Node, NodeId, NodeKind, Result, Session, Value, bad, id_param, json, ok, selected_roots};
+use super::{Document, EngineError, Node, NodeId, NodeKind, Result, Session, Value, bad, json, object_param, ok, selected_roots};
 
 pub(super) enum Arrange {
     Front,
@@ -293,7 +293,7 @@ pub(super) fn show_all(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id")
+    let id = object_param(p, "id", "object.isolate")?
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let guides_locked = s.menu.guides_locked;
@@ -315,6 +315,12 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
         if guides_locked && crate::is_guide_path(&st.doc, isolation) {
             return Err(EngineError::Other("guides are locked".into()));
         }
+        // While a symbol is edited, only its art on the editing layer is isolated.
+        if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
+            && !st.doc.ancestry(isolation).is_some_and(|a| a.contains(&layer))
+        {
+            return Err(bad("object.isolate", "the object is outside the isolated group"));
+        }
         (isolation, st.isolation)
     };
     if let Some(prev) = prev
@@ -334,13 +340,27 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
-    // Opacity mask editing and pattern editing isolate their editing layer. Leaving isolation mode
-    // then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's Done do.
+    // Opacity mask editing, pattern editing and symbol editing isolate their editing layer. Leaving
+    // isolation mode then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's
+    // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
     let st = s.doc()?;
+    if let Some(layer) = st.doc.symbol_edit.as_ref().map(|e| e.layer)
+        && let Some(inner) = st.isolation.filter(|i| *i != layer && st.doc.ancestry(*i).is_some_and(|a| a.contains(&layer)))
+    {
+        crate::cmd::settle_interaction(s)?;
+        let st = s.doc_mut()?;
+        crate::cmd::distortcmds::finish_edit_text(st, inner);
+        st.isolation = Some(layer);
+        st.selection.set([inner]);
+        st.revision += 1;
+        return ok();
+    }
     let leave_mode: Option<fn(&mut Session, &Value) -> Result<Value>> = if st.doc.mask_edit.is_some() {
         Some(crate::cmd::maskedit::leave)
     } else if st.doc.pattern_edit.is_some() {
         Some(crate::cmd::patterncmds::pattern_done)
+    } else if st.doc.symbol_edit.is_some() {
+        Some(crate::cmd::symboledit::leave)
     } else {
         None
     };
