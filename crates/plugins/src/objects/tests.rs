@@ -151,6 +151,46 @@ fn geometry_type_and_strokes_change() {
     assert!(n.appearance.stroke().is_none());
 }
 
+/// A compound path made a guide is left out of a later filter's inputs, as guide paths are; a
+/// plain compound path is still one of them.
+#[test]
+fn compound_guides_are_not_filter_targets() {
+    let (mut d, _, layer) = doc();
+    let two = PathData::new(square(0.0).subpaths.into_iter().chain(square(2.0).subpaths).collect());
+    let out = json!({"objects": [{"type": "compound", "path": two.clone(), "guide": true}, {"type": "compound", "path": two}]});
+    let made = apply_output(&mut d, &[], decode_json(out).unwrap(), Some(layer), &keep).unwrap();
+    let targets = filter_targets(&d, &[layer]);
+    assert!(!targets.contains(&made[0]), "the compound guide");
+    assert!(targets.contains(&made[1]), "the plain compound path");
+}
+
+/// `guide` and `locked` make objects guides (a compound path's members too) and lock them, or undo
+/// both; locked objects and guides are not [`selectable`]. Other values are refused.
+#[test]
+fn objects_become_guides_and_lock() {
+    let (mut d, ids, layer) = doc();
+    let two = PathData::new(square(0.0).subpaths.into_iter().chain(square(2.0).subpaths).collect());
+    let out = json!({"objects": [
+        {"id": ids[0].0, "guide": true},
+        {"id": ids[1].0, "locked": true},
+        {"name": "G", "type": "compound", "path": two, "guide": true, "locked": true}]});
+    let made = apply_output(&mut d, &ids[..2], decode_json(out).unwrap(), Some(layer), &keep).unwrap();
+    let a = d.node(ids[0]).unwrap();
+    assert!(matches!(a.kind, NodeKind::Path { guide: true, .. }) && !a.locked && !selectable(a));
+    let b = d.node(ids[1]).unwrap();
+    assert!(b.locked && matches!(b.kind, NodeKind::Path { guide: false, .. }) && !selectable(b));
+    let g = d.node(made[2]).unwrap();
+    let NodeKind::Compound { children, .. } = &g.kind else { panic!("not a compound: {:?}", g.kind) };
+    assert!(g.locked && children.iter().all(|c| matches!(c.kind, NodeKind::Path { guide: true, .. })));
+    // And back: a plain, unlocked, selectable path.
+    let out = json!({"objects": [{"id": ids[0].0, "guide": false, "locked": false}]});
+    apply_output(&mut d, &ids[..1], decode_json(out).unwrap(), None, &keep).unwrap();
+    assert!(selectable(d.node(ids[0]).unwrap()));
+    for bad in [json!({"guide": 1}), json!({"locked": "yes"})] {
+        assert!(decode_json(json!({"objects": [bad]})).is_err(), "{bad}");
+    }
+}
+
 /// A paint handed back as it was keeps its swatch link and any other is unlinked; a pattern paint
 /// must name a pattern the document has.
 #[test]

@@ -51,6 +51,8 @@ pub(crate) struct Sheet<'a> {
     pub marks: Option<&'a Node>,
     /// Invert the page: paper black, ink clear (a film negative).
     pub negative: bool,
+    /// The objects' URLs are written as links over them ([`super::links`]).
+    pub links: bool,
 }
 
 impl Writer {
@@ -190,6 +192,15 @@ impl Writer {
             s.pop();
         }
         s.finish();
+        if fits && sheet.links {
+            let (links, more) = ex.links(r, sheet.view * sheet.place);
+            for annotation in links.into_iter().filter_map(super::links::annotation) {
+                page.add_annotation(annotation);
+            }
+            if more {
+                ex.warn(super::links::TOO_MANY_LINKS);
+            }
+        }
         page.finish();
         Ok(())
     }

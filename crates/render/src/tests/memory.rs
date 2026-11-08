@@ -2378,3 +2378,169 @@ fn text_runs_draw_their_own_glyphs_from_the_shared_outlines() {
     }
     assert!(g.run(7).elements().is_empty());
 }
+
+/// A compound path is drawn from the path the renderer keeps for it, as a plain path is: the next
+/// frame draws the same path, and draws what a new renderer draws.
+/// Once the compound path changes (each frame of a drag makes a new one), the entries of the old
+/// one, which keep it alive, go after a few frames, however few entries the renderer holds.
+#[test]
+fn compound_paths_draw_from_kept_paths_and_let_old_ones_go() {
+    let _fonts = fonts_steady();
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let members: Vec<Arc<Node>> = (0..30)
+        .map(|i| {
+            let x = f64::from(i % 6) * 15.0;
+            let y = f64::from(i / 6) * 15.0;
+            let p = vectorcraft_geom::shapes::ellipse(Rect::new(x, y, x + 10.0, y + 10.0));
+            Arc::new(Node::path(d.alloc_id(), p, vectorcraft_doc::Appearance::default()))
+        })
+        .collect();
+    let id = d.alloc_id();
+    let mut compound = Node::new(id, NodeKind::Compound { children: members, rule: vectorcraft_geom::FillRule::EvenOdd });
+    compound.appearance = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
+    d.insert(Some(layer), 0, compound).unwrap();
+    let opts = RenderOptions::default();
+    let kept = |r: &Renderer, d: &Document| {
+        let n = d.layers[0].children().unwrap()[0].clone();
+        r.geom.get(&(Arc::as_ptr(&n) as usize)).and_then(|e| e.path.clone())
+    };
+    let mut r = Renderer::new();
+    let first = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
+    let path = kept(&r, &d).expect("the compound path's path is kept");
+    assert!(r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels == first);
+    assert!(kept(&r, &d).is_some_and(|p| Arc::ptr_eq(&p, &path)), "the second frame draws the kept path");
+    assert!(first == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels);
+    // Moved: a new compound path (and layer) in each frame.
+    let old = d.layers[0].children().unwrap()[0].clone();
+    let mut moved = d.clone();
+    for _ in 0..5 {
+        moved.node_mut(id).unwrap().transform(Affine::translate((1.0, 0.0)), false);
+        r.render(&moved, 100, 100, Affine::IDENTITY, &opts);
+    }
+    drop(d);
+    assert!(r.geom.len() < 1024);
+    assert_eq!(Arc::strong_count(&old), 1, "the renderer no longer keeps the compound path drawn before the move");
+}
+
+/// A `w`×`h` CMYK document showing `blob` as image `key` of `w`×`h` pixels, one point a pixel.
+fn cmyk_doc_with(key: &str, blob: ImageBlob, w: u32, h: u32) -> Document {
+    let mut d = Document::new_with_mode(w as f64, h as f64, vectorcraft_doc::ColorMode::Cmyk);
+    d.images.insert(key.into(), blob);
+    let (id, layer) = (d.alloc_id(), d.layers[0].id);
+    let im = ImageObject { key: key.into(), width: w, height: h, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+    d
+}
+
+/// #4155: an image drawn reduced on the ink planes is separated from the mip it draws, never at
+/// its full size. Separating a 141-megapixel image for each plane before shrinking it took
+/// seconds a frame, and its full-size planes overflowed the store, so every frame did it again.
+#[test]
+fn a_reduced_image_is_separated_from_its_mip_not_its_full_pixels() {
+    let _fonts = fonts_steady();
+    let d = cmyk_doc_with("img", ImageBlob::new("image/png", png(64, 64, 111)), 64, 64);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 64.0, 64.0), 0.25, &on);
+    let full = blob_key(&d.images["img"]).0;
+    let quarter = images::ImageKey { mip: 2, ..full.clone() };
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the {plane:?} plane was made at full size");
+        let made = s.peek(&ink::ink_key(&quarter, plane)).unwrap_or_else(|| panic!("no {plane:?} plane of the quarter mip"));
+        assert_eq!((made.width(), made.height()), (16, 16));
+    }
+}
+
+/// A CMYK image drawn reduced paints its own inks, averaged, as at full size: not its displayed
+/// colours separated again, which would change how much of its dark is black ink.
+#[test]
+fn a_reduced_cmyk_image_paints_its_own_inks() {
+    let _fonts = fonts_steady();
+    // Inks a separation of their displayed colour would not give back: rich in black.
+    let ink = [0u8, 102, 255, 140];
+    let blob = ImageBlob::cmyk_tiff(&vectorcraft_doc::cmyk::Inks::new(8, 8, ink.repeat(64)).unwrap()).unwrap();
+    let d = cmyk_doc_with("inks", blob, 8, 8);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 8.0, 8.0), 0.25, &on);
+    for px in inks.as_chunks::<4>().0 {
+        assert!(px.iter().zip(ink).all(|(a, b)| a.abs_diff(b) <= 1), "{px:?} vs {ink:?}");
+    }
+}
+
+/// On the ink planes, a reduced image shows the average of its pixels as they show at full size:
+/// 1-pixel black and white lines show as the mid grey they make. Separating the full pixels and
+/// averaging the planes made that grey a dark brown, 44 levels off.
+#[test]
+fn a_reduced_image_on_the_ink_planes_shows_its_average() {
+    let _fonts = fonts_steady();
+    let lines = image::RgbaImage::from_fn(64, 64, |x, _| image::Rgba(if x % 2 == 0 { [0, 0, 0, 255] } else { [255; 4] }));
+    let mut bytes = vec![];
+    lines.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let mut d = cmyk_doc_with("lines", ImageBlob::new("image/png", bytes), 64, 64);
+    // Transparency beside the image: the document blends in CMYK, drawing on its ink planes.
+    let shape = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 0.0, 110.0, 10.0));
+    let mut veil = Node::path(d.alloc_id(), shape, vectorcraft_doc::Appearance::basic(Paint::solid(Color::gray(0.5)), Paint::None, 0.0));
+    veil.opacity = 0.5;
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, veil).unwrap();
+    let full = Renderer::new().render(&d, 64, 64, Affine::IDENTITY, &RenderOptions::default()).pixels;
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let reduced = Renderer::new().render(&d, 16, 16, Affine::scale(0.25), &on).pixels;
+    for (i, px) in reduced.as_chunks::<4>().0.iter().enumerate() {
+        let (bx, by) = (i % 16 * 4, i / 16 * 4);
+        let block = |c: usize| (0..16).map(|j| u32::from(full[((by + j / 4) * 64 + bx + j % 4) * 4 + c])).sum::<u32>().div_ceil(16) as u8;
+        let want = [block(0), block(1), block(2)];
+        assert!(px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 2), "pixel {i}: {px:?}, the full frame averages {want:?}");
+    }
+}
+
+/// A `w`×`h` PNG with a different colour in every pixel, so a pixel drawn from the wrong place
+/// shows; its pixels depend on `seed` (each test its own image: the store is shared).
+fn varied_png(w: u32, h: u32, seed: u8) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 5 + y) as u8, (x / 3 + y * 7) as u8, (x ^ y) as u8 ^ seed, 255]));
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// #4155: an image drawn larger than a tile with its colours made again (here separated into ink
+/// planes) has them made only for the tiles in view. Zoomed in on a 141-megapixel photo, the whole
+/// photo was separated for every view, taking seconds each time.
+#[test]
+fn a_zoomed_in_image_is_separated_only_where_it_shows() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("wide", ImageBlob::new("image/png", varied_png(w, h, 1)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    let _ = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 300.0, 40.0), 1.0, &on);
+    let full = blob_key(&d.images["wide"]).0;
+    let s = images::store();
+    for plane in [Ink::Cmy, Ink::K] {
+        assert!(s.peek(&ink::ink_key(&full, plane)).is_none(), "the whole {plane:?} plane was made");
+        let tile = |col: u16| ink::ink_key(&images::ImageKey { tile: Some((col, 0)), ..full.clone() }, plane);
+        assert!(s.peek(&tile(0)).is_some(), "the {plane:?} plane of the tile in view was made");
+        assert!(s.peek(&tile(1)).is_none() && s.peek(&tile(2)).is_none(), "tiles out of view were made");
+    }
+}
+
+/// An image drawn from tiles draws the pixels it draws whole, across the tiles' edges too.
+#[test]
+fn a_tiled_image_draws_what_the_whole_image_draws() {
+    let _fonts = fonts_steady();
+    let (w, h) = (2 * images::TILE + 100, 40);
+    let d = cmyk_doc_with("seams", ImageBlob::new("image/png", varied_png(w, h, 2)), w, h);
+    let on = RenderOptions { image_mips: true, ..Default::default() };
+    // Across the edge between the first two tiles.
+    let (x0, x1) = (f64::from(images::TILE) - 150.0, f64::from(images::TILE) + 150.0);
+    let drawn = Renderer::new().render_region_inks(&d, Rect::new(x0, 0.0, x1, 40.0), 1.0, &on);
+    let (key, full) = crate::blobs::blob_pixmap(&d.images["seams"], false).unwrap();
+    let plane = |ink| ink::ink_image(&key, &full, ink, d.images.get("seams"), false).1;
+    let bytes = |pm: &Pixmap| pm.data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect::<Vec<u8>>();
+    let whole = ink::amounts(&bytes(&plane(Ink::Cmy)), &bytes(&plane(Ink::K)));
+    for (i, got) in drawn.as_chunks::<4>().0.iter().enumerate() {
+        let (x, y) = (x0 as usize + i % 300, i / 300);
+        let want = &whole[(y * w as usize + x) * 4..][..4];
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 1), "pixel ({x}, {y}): {got:?}, whole {want:?}");
+    }
+}

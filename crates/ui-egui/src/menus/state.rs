@@ -59,8 +59,12 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
+        "window.control.dock" => {
+            p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
+        }
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
             Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
@@ -79,6 +83,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::toolbar::strips(&app.ui, toolbar).iter().any(|f| f.tools.iter().any(|id| id == tool))
         }
         "window.taskBar" => app.ui.task_bar,
+        "window.pathfinder.compoundShapes" => app.ui.shape_modes_compound,
         "window.taskBar.pin" => app.ui.task_bar_place.pinned,
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
@@ -134,7 +139,7 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
 /// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
 /// another stands in for ([`swapped_out`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
-    let en = enabled(app, id);
+    let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
     if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
         return None;
     }
@@ -156,13 +161,13 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 /// Commands that would act on the text being typed, held back while an IME composes in the Type
 /// tool (its marked text isn't committed yet): Undo/Redo — the native menu takes ⌘Z ahead of the
 /// IME —, the clipboard and the selection.
-/// Clear History also waits: it ends the typing session as Undo does.
+/// Clear History and New Document from State also wait: they end the typing session as Undo does.
 pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
     app.session.tool_composing()
         && (matches!(
             id,
             "edit.undo" | "edit.redo" | "edit.cut" | "edit.copy" | "edit.clear" | "edit.duplicate" | "select.all" | "select.none" | "select.inverse"
-        ) || id == "edit.clearHistory"
+        ) || matches!(id, "edit.clearHistory" | "edit.newDocumentFromState")
             || id.starts_with("edit.paste"))
 }
 
@@ -170,7 +175,7 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 /// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
 /// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
 /// on their keys.
-pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
+pub(super) const SUBJECT_COMMANDS: [&str; 3] = ["appearance.addFill", "appearance.addStroke", "svgFilter.apply"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
 pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
@@ -185,6 +190,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     }
     if SUBJECT_COMMANDS.contains(&id) {
         return has_subject(app);
+    }
+    // The Artboard tool's canvas menu measured this when it opened.
+    if id == "artboard.deleteEmpty"
+        && let Some(facts) = crate::panels::artboards::open_menu_facts(app)
+    {
+        return facts.any_empty;
     }
     if let Some(c) = vectorcraft_engine::find_command(id) {
         // The system clipboard's contents can be pasted with an empty internal clipboard.
@@ -201,6 +212,8 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelOpen" => !app.opening.pending.is_empty(),
+        "file.openInBackground" => crate::opening::any_shown(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
@@ -233,7 +246,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             let min = crate::panels::pathfinder::minimum_operands(op);
             crate::panels::pathfinder::operands(app) >= min
         }),
-        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
+            app.session.active().is_some()
+        }
+        "ui.importSvgFilter" => {
+            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
+        }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
@@ -242,7 +260,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             (d.kind == crate::dialogs::char_style_options::KIND || (d.kind == crate::dialogs::new_text_style::KIND && !d.bool("__para")))
                 && crate::dialogs::char_style_options::can_reset(d)
         }),
-        "ui.newArtboard" => app.session.active().is_some(),
+        "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
@@ -269,6 +287,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
+        "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
@@ -283,11 +302,17 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             app.session.active().is_some() && crate::dialogs::perspective_presets::slot_preset(app, id).is_some()
         }
         "ui.perspectivePlane" => app.session.active().is_some(),
-        // Only one window per document so far: greyed out, as Cascade and Float in Window are (#3724).
-        "window.newWindow" => false,
-        // Tile with two documents or more; Consolidate All Windows while they are tiled.
-        "window.arrange.tile" => app.session.documents().len() > 1,
-        "window.arrange.consolidateAllWindows" => app.ui.tiled && !app.session.documents().is_empty(),
+        "window.newWindow" => app.session.active().is_some(),
+        // Tile and Cascade with two windows or more (documents, or views of one from New Window);
+        // Float in Window for a current window under the tabs; Float All in Windows while a window
+        // is under the tabs; Consolidate All Windows while windows are tiled or floating.
+        "window.arrange.tile" | "window.arrange.cascade" => crate::doc_windows::windows(app).len() > 1,
+        "window.arrange.floatInWindow" => crate::doc_windows::current(app).is_some_and(|w| !crate::doc_windows::floats(app, w)),
+        "window.arrange.floatAllInWindows" => !crate::doc_windows::docked_windows(app).is_empty(),
+        "window.arrange.consolidateAllWindows" => {
+            let n = crate::doc_windows::windows(app).len();
+            n > 0 && (app.ui.tiled || crate::doc_windows::docked_windows(app).len() < n)
+        }
         "window.nextDocument" | "window.previousDocument" => !app.session.documents().is_empty(),
         _ => true,
     }

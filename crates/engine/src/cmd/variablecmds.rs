@@ -4,11 +4,11 @@
 //! variable, anything to a `visibility` variable, a linked image to an `image`
 //! variable, or a graph root to a `graph` variable (CSV data), put a row of values in
 //! each dataset, and `dataset.select` swaps the whole document to that row in one undo
-//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: `name`
-//! then variable names, which export writes with `#` before a visibility variable and `@`
-//! before an image variable); import also reads tab-separated files, files without the
-//! `name` column, and header cells that define new variables (`#` for visibility, `@` for
-//! image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
+//! step. `dataset.import` / `dataset.export` move those rows as CSV (header: one
+//! variable name per column, which export writes with `#` before a visibility variable and `@`
+//! before an image variable); import replaces the datasets, names the rows Data Set 1, 2…,
+//! also reads tab-separated files, and reads header cells that define new variables (`#` for
+//! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! text variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the text variables and data sets as one.
 //! Agents reach every command through `run_command`, like all engine commands.
@@ -181,6 +181,21 @@ fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
     }
 }
 
+/// Refuse to bind the text variable `name` to type that already has a different text variable:
+/// a type object holds one text variable. The error names the one it has (the first defined, in
+/// a document that holds two). An object already bound to `name` is not refused, and variables
+/// of other kinds are not counted.
+fn check_one_text_variable(doc: &vectorcraft_doc::Document, ids: &[NodeId], name: &str, cmd: &str) -> Result<()> {
+    for id in ids {
+        let Some(bound) = doc.variables.bindings.get(id).filter(|b| !b.contains(name)) else { continue };
+        let held = doc.variables.variables.iter().find(|v| v.kind == VariableKind::Text && bound.contains(&v.name));
+        if let Some(v) = held {
+            return Err(bad(cmd, format!("node {} already has the text variable `{}`", id.0, v.name)));
+        }
+    }
+    Ok(())
+}
+
 fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<DataValue> {
     match kind {
         VariableKind::Text => v.as_str().map(|t| DataValue::Text(t.to_string())),
@@ -284,6 +299,9 @@ fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value
         name = format!("{base} {n}");
         n += 1;
     }
+    if kind == VariableKind::Text {
+        check_one_text_variable(doc, &ids, &name, c)?;
+    }
     s.edit("Make Dynamic", |d, _| {
         d.variables.variables.push(Variable { name: name.clone(), kind });
         for id in &ids {
@@ -345,6 +363,9 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let kind = doc.variables.variable(&name).map(|v| v.kind).ok_or_else(|| bad(C, format!("no variable named `{name}`")))?;
     check_bindable(doc, &ids, kind, C)?;
+    if kind == VariableKind::Text {
+        check_one_text_variable(doc, &ids, &name, C)?;
+    }
     // Binding again is not a second binding, and says so rather than counting as a change.
     let already: Vec<u64> = ids.iter().filter(|id| doc.variables.objects_of(&name).contains(id)).map(|id| id.0).collect();
     let n = edit_variables(s, "Bind Variable", |v| Ok(ids.iter().filter(|id| v.bind(**id, &name)).count()))?;
@@ -738,7 +759,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bind Variable",
             ["Window", "Variables"],
             None,
-            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art is refused. An object may hold several variables, and binding it to one it already has changes nothing → {bound, already}",
+            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art is refused. A type object holds one text variable: binding it to another text variable is refused, and the error names the one it has. Variables of other kinds can share an object, and binding an object to a variable it already has changes nothing → {bound, already}",
             has_doc,
             bind
         ),
@@ -838,7 +859,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path? | data? | dataBase64? | csv?} load datasets from CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: name, then variable names; one row per dataset; without the name column every header is a variable and the rows take the first free names Data Set 1, 2…). A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. Rows whose name already exists are replaced → {imported, updated, names, defined}",
+            "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 with a byte-order mark, UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
         ),
@@ -847,7 +868,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Data Sets…",
             ["Window", "Variables"],
             None,
-            "{path?} write every dataset as CSV (header: name, then one column per variable: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
+            "{path?} write every dataset as CSV (header: one column per variable and no dataset names: `#Name` for a visibility variable, `@Name` for an image variable, and the name alone for a text or graph variable, as dataset.import reads them). Refused when the document has more than 1000 data sets or 256 variables, the most dataset.import reads, or when a variable's header is another variable's name (a visibility variable `Show` next to a text variable `#Show`) → {path, datasets, warning?}; without path → {csv, datasets, warning?}. `warning` names the variables whose header or values make a document without them refuse the file (a % header, a # header whose values aren't true or false); otherwise it names the variables such a document doesn't read back with their kind (text variables whose names start with # or @, graph variables)",
             has_doc,
             dataset_export
         ),
@@ -856,7 +877,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every variable of the document is deleted with its bindings and values, and every data set is deleted; then variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
+            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a text variable the library also declares, which keeps its bindings; then the library's other variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
             has_doc,
             load_library
         ),

@@ -442,6 +442,94 @@ fn empty_images_get_the_size_note_and_undecodable_ones_the_decode_note() {
     assert_eq!(notes(b"not an image".to_vec()), [UNDECODED]);
 }
 
+/// A gray image of `doc`, `w` × `h` pixels of `gray`, colorized `paint`, placed 10 pt a pixel
+/// at (`x`, `y`).
+fn colorized_image(doc: &mut Document, (w, h): (u32, u32), gray: Vec<u8>, paint: &Paint, (x, y): (f64, f64)) -> Node {
+    let mut png = vec![];
+    image::GrayImage::from_raw(w, h, gray).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let xf = Affine::new([10.0, 0.0, 0.0, 10.0, x, y]);
+    let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im)));
+    n.extras_mut().colorize = Some(Box::new(paint.clone()));
+    n
+}
+
+/// A colorized image whose pixels are black or white is written as a 1-bit image mask
+/// (ImageMask 1) after its color as the fill: its black pixels are 0 bits, which take the color, and its
+/// white pixels 1 bits, which are clear. It prints in its color over the square behind it and
+/// reads back colorized with that color and with the same clear pixels. A colorized image with
+/// gray pixels is written with its color in its pixels, over white, with the note for
+/// transparent pixels.
+#[test]
+fn colorized_images_keep_their_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let square = shape(&mut doc, shapes::rectangle(Rect::new(5.0, 5.0, 45.0, 30.0)), red(), Paint::None);
+    doc.insert(Some(layer), usize::MAX, square).unwrap();
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    // 1 0 0 1 0 1 1 0 / 0 1 1 0 1 0 0 1 in black (1) and white (0).
+    let mask: Vec<u8> = "1001011001101001".bytes().map(|b| if b == b'1' { 0 } else { 255 }).collect();
+    let bitmap = colorized_image(&mut doc, (8, 2), mask.clone(), &paint, (10.0, 10.0));
+    doc.insert(Some(layer), usize::MAX, bitmap).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 1, "{text}");
+    let [_, _, xi, data @ .., _, _] = images[0].as_slice() else { panic!("{:?}", images[0]) };
+    assert!(xi.ends_with(" ] 0 0 8 2 8 2 1 1 0 0 0 1 XI"), "{xi}");
+    // Each row is a byte: the black pixels are 0 bits.
+    assert_eq!(data, &["%6996"], "{text}");
+    let at = text.find("%AI5_File:\n").unwrap();
+    assert!(text[..at].ends_with("0 0.5 1 0 k\n"), "{text}");
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut found = vec![];
+    read.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            found.push((read.image_blob(im).and_then(ImageBlob::coverage), n.extras().colorize.as_deref().cloned()));
+        }
+    });
+    let want: Vec<u8> = mask.iter().map(|&v| 255 - v).collect();
+    assert_eq!(found, [(Some((8, 2, want)), Some(paint.clone()))]);
+
+    // Gray pixels: the color at each pixel's strength, over white.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.layers.clear();
+    let layer = doc.add_layer(Some("Art"));
+    let tint = colorized_image(&mut doc, (2, 1), vec![0, 128], &Paint::solid(Color::rgb(1.0, 0.0, 0.0)), (10.0, 10.0));
+    doc.insert(Some(layer), usize::MAX, tint).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    let images = rasters(&text);
+    let [_, _, xi, data @ .., _, _] = images[0].as_slice() else { panic!("{:?}", images[0]) };
+    assert!(xi.ends_with(" ] 0 0 2 1 2 1 8 3 0 0 0 0 XI"), "{xi}");
+    assert_eq!(data, &["%FF0000FF8080"], "{text}");
+    assert_eq!(out.warnings, [IMAGE_ALPHA]);
+}
+
+/// An image mask is only for a colorized image the writer draws as the document does: not one
+/// with an opacity mask turned on, and not one with more pixels than the writer writes.
+#[test]
+fn image_masks_are_for_images_the_writer_draws_as_they_are() {
+    let mut doc = Document::new(200.0, 100.0);
+    let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+    let mut n = colorized_image(&mut doc, (2, 1), vec![0, 255], &paint, (10.0, 10.0));
+    assert!(writes_image_mask(&doc, &n));
+    let art = shape(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Paint::solid(Color::gray(1.0)), Paint::None);
+    n.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(art, false)));
+    assert!(!writes_image_mask(&doc, &n));
+    if let Some(m) = n.extras_mut().mask.as_mut() {
+        m.disabled = true;
+    }
+    assert!(writes_image_mask(&doc, &n));
+    let big = colorized_image(&mut doc, (8193, 8193), vec![255; 8193 * 8193], &paint, (10.0, 10.0));
+    assert!(!writes_image_mask(&doc, &big));
+}
+
 #[test]
 fn a_gradient_fill_and_its_stroke_are_one_object() {
     let mut doc = Document::new(100.0, 100.0);
@@ -1015,6 +1103,85 @@ fn variable_font_settings_are_warned_as_left_out() {
     let out = write(&doc);
     assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+}
+
+/// A legacy `.ai` text path holds the path and where the type starts on it, and no Align to Path
+/// or end bracket: type on a path with either is written as text, with the warning that they are
+/// left out. An end bracket at the end of an open path, or once around a closed one, is kept. A
+/// path with a second subpath is written with its first one only, with the same warning.
+#[test]
+fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
+    use vectorcraft_doc::{PathAlign, TextKind, TextObject};
+    let along = |closed: bool| {
+        let pts = [(150.0, 150.0).into(), (250.0, 150.0).into(), (250.0, 190.0).into()];
+        PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, closed)])
+    };
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: None };
+        t.xf = Affine::IDENTITY;
+        edit(&mut t);
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(Along) Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    for align in [PathAlign::Ascender, PathAlign::Descender, PathAlign::Center] {
+        assert!(warned(&|t| t.path_align = align), "{align:?}");
+    }
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(0.6) }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.25, end: Some(0.9) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(1.0) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.1, end: Some(0.1) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: None }));
+    // A closed path's span that wraps past the path's start and stops short of a full turn.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: Some(0.5) }));
+    // An open path's end bracket before its start bracket.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.5, end: Some(0.3) }));
+    let two = |first_closed: bool| {
+        let mut path = along(first_closed);
+        let pts = [(150.0, 100.0).into(), (250.0, 100.0).into()];
+        path.subpaths.push(vectorcraft_geom::SubPath::polyline(&pts, false));
+        path
+    };
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(true), start: 0.25, end: None }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(false), start: 0.25, end: None }));
+}
+
+/// Kerning other than Auto or 0, optical kerning, Optical Margin Alignment, System Layout,
+/// fractional widths off and an area type frame with a second subpath are not held by a legacy
+/// `.ai` text object: type with any of them is written as text, with the warning that they are
+/// left out.
+#[test]
+fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            edit(t);
+        }
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains(") Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(0.0)));
+    assert!(warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(warned(&|t| t.runs[0].style.optical_kerning = true));
+    assert!(warned(&|t| t.optical_margin = true));
+    assert!(warned(&|t| t.system_layout = true));
+    assert!(warned(&|t| t.fractional_widths = false));
+    let square = |x: f64| {
+        let pts = [(x, 10.0).into(), (x + 80.0, 10.0).into(), (x + 80.0, 90.0).into(), (x, 90.0).into()];
+        vectorcraft_geom::SubPath::polyline(&pts, true)
+    };
+    assert!(!warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0)]) }));
+    assert!(warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0), square(120.0)]) }));
 }
 
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with

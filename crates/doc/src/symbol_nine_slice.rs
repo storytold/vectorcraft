@@ -71,6 +71,79 @@ impl SymbolNineSlice {
     }
 }
 
+/// One of the four 9-slice guides.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NineSliceGuide {
+    Left,
+    Top,
+    Right,
+    Bottom,
+}
+
+impl NineSliceGuide {
+    pub const ALL: [Self; 4] = [Self::Left, Self::Top, Self::Right, Self::Bottom];
+}
+
+/// The narrowest center band a guide dragged toward the opposite guide leaves, as a fraction of
+/// the art's width or height (VectorCraft's own rule).
+pub const MIN_CENTER_BAND: f64 = 0.001;
+
+/// The 9-slice guides of the symbol edited in symbol editing mode, over its art on the editing
+/// layer ([`Document::edited_nine_slice`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditedNineSlice {
+    /// The symbol's name.
+    pub symbol: String,
+    pub guides: SymbolNineSlice,
+    /// The art's geometric box at its natural size.
+    art: Rect,
+    /// The art at its natural size → the document.
+    to_doc: Affine,
+}
+
+impl EditedNineSlice {
+    /// Guide `g` as a line across the art's box, from one edge to the other, in the document.
+    pub fn line(&self, g: NineSliceGuide) -> (Point, Point) {
+        let (b, s) = (self.art, self.guides);
+        let (a, c) = match g {
+            NineSliceGuide::Left | NineSliceGuide::Right => {
+                let x = if g == NineSliceGuide::Left { b.x0 + s.left * b.width() } else { b.x1 - s.right * b.width() };
+                (Point::new(x, b.y0), Point::new(x, b.y1))
+            }
+            NineSliceGuide::Top | NineSliceGuide::Bottom => {
+                let y = if g == NineSliceGuide::Top { b.y0 + s.top * b.height() } else { b.y1 - s.bottom * b.height() };
+                (Point::new(b.x0, y), Point::new(b.x1, y))
+            }
+        };
+        (self.to_doc * a, self.to_doc * c)
+    }
+
+    /// The four guides' lines: left, top, right, bottom.
+    pub fn lines(&self) -> [(NineSliceGuide, Point, Point); 4] {
+        NineSliceGuide::ALL.map(|g| {
+            let (a, b) = self.line(g);
+            (g, a, b)
+        })
+    }
+
+    /// The guides with guide `g` moved across its axis to document point `p`. The guide stays
+    /// within the art's box, and [`MIN_CENTER_BAND`] short of the opposite guide, or where it is
+    /// when the guides are already closer than that. A point that is not finite leaves the guides
+    /// as they are.
+    pub fn moved(&self, g: NineSliceGuide, p: Point) -> SymbolNineSlice {
+        let (b, mut out) = (self.art, self.guides);
+        let q = self.to_doc.inverse() * p;
+        let fit = |v: f64, other: f64, now: f64| if v.is_finite() { v.clamp(0.0, (1.0 - other - MIN_CENTER_BAND).max(now)) } else { now };
+        match g {
+            NineSliceGuide::Left => out.left = fit((q.x - b.x0) / b.width(), out.right, out.left),
+            NineSliceGuide::Right => out.right = fit((b.x1 - q.x) / b.width(), out.left, out.right),
+            NineSliceGuide::Top => out.top = fit((q.y - b.y0) / b.height(), out.bottom, out.top),
+            NineSliceGuide::Bottom => out.bottom = fit((b.y1 - q.y) / b.height(), out.top, out.bottom),
+        }
+        out
+    }
+}
+
 /// The most objects [`NineSliceMap::place`] makes for each object of the art it places: an
 /// object drawn in nine cells becomes a group of nine clip groups, each a clip path and a copy.
 pub const MAX_SLICE_GROWTH: u64 = 28;
@@ -270,6 +343,20 @@ impl NineSliceMap {
         self.cell_xf(self.x.cell(q.x), self.y.cell(q.y))
     }
 
+    /// A box that holds everything [`Self::place`] draws of art whose geometric box in symbol space
+    /// is `art`, before strokes and effects: `art` placed by each of the nine cells' maps. An object
+    /// that crosses a guide and draws symbol art is placed by the map of the cell its center is in,
+    /// so it can draw outside the box the corner cells place `art` in.
+    pub fn placement_bounds(&self, art: Rect) -> Rect {
+        let mut b = self.cell_xf(0, 0).transform_rect_bbox(art);
+        for j in 0..3 {
+            for i in 0..3 {
+                b = b.union(self.cell_xf(i, j).transform_rect_bbox(art));
+            }
+        }
+        b
+    }
+
     /// The guides in symbol space: the two x values and the two y values.
     fn cuts(&self) -> ([f64; 2], [f64; 2]) {
         let inv = self.natural.inverse();
@@ -362,6 +449,23 @@ impl NineSliceMap {
     pub fn most_placed(&self, art: &Node, doc: &Document) -> u64 {
         let boxes = doc.symbol_boxes().quick();
         self.most_at(art, &boxes, 0)
+    }
+
+    /// The affine map that [`Self::place`] and [`Self::place_unclipped`] move object `n` by as one
+    /// piece, with everything in it: the map of the cell its box lies in, or of the cell at the
+    /// origin when it has no box. `None` when its box crosses a guide.
+    pub fn one_cell(&self, n: &Node, doc: &Document) -> Option<Affine> {
+        let boxes = doc.symbol_boxes().quick();
+        let Some(b) = n.geometric(Some(&boxes)).map(|b| self.natural.transform_rect_bbox(b)).filter(|b| finite(*b)) else {
+            return Some(self.cell_at(Point::ZERO));
+        };
+        let (cols, rows) = (self.x.cells(b.x0, b.x1), self.y.cells(b.y0, b.y1));
+        (cols[0] == cols[1] && rows[0] == rows[1]).then(|| self.cell_xf(cols[0], rows[0]))
+    }
+
+    /// [`Self::most_placed`] for [`Self::place_unclipped`]: the most objects it makes of `art`.
+    pub fn most_placed_unclipped(&self, art: &Node, doc: &Document) -> u64 {
+        Self { clips: false, ..*self }.most_placed(art, doc)
     }
 
     /// [`Self::most_placed`] for `n` at nesting depth `depth`, following [`Self::place_at`].
@@ -626,6 +730,12 @@ impl Document {
         NineSliceMap::new(guides, art, self.symbol_natural_xf(name), xf)
     }
 
+    /// [`Self::symbol_slice_map`] with the guides cutting `art`, the symbol's art box already
+    /// measured.
+    pub(crate) fn symbol_slice_map_of(&self, name: &str, art: Rect, xf: Affine) -> Option<NineSliceMap> {
+        NineSliceMap::new(self.symbol_nine_slice(name)?, art, self.symbol_natural_xf(name), xf)
+    }
+
     /// Art `art` of symbol `name` (stained as the caller draws it) placed by an instance's
     /// transform `xf`, with strokes at their own weight: through the symbol's 9-slice guides when
     /// it has them ([`NineSliceMap::place`]), otherwise by `xf`. `None` when placing it through
@@ -638,14 +748,30 @@ impl Document {
         }
     }
 
+    /// The 9-slice guides of the symbol being edited in symbol editing mode, over its art on the
+    /// editing layer: `None` outside the mode, when the symbol has no guides, or when its art has
+    /// no width or height.
+    pub fn edited_nine_slice(&self) -> Option<EditedNineSlice> {
+        let se = self.symbol_edit.as_ref()?;
+        let guides = self.symbol_nine_slice(&se.symbol)?;
+        let sym = self.symbols.iter().find(|s| s.name == se.symbol)?;
+        let art = self.symbol_boxes().quick().art_bounds(&se.symbol).or_else(|| sym.art.geometric_bounds())?;
+        let natural = self.symbol_natural_xf(&se.symbol);
+        let b = natural.transform_rect_bbox(art);
+        if !finite(b) || b.width() <= 1e-9 || b.height() <= 1e-9 || natural.determinant().abs() < 1e-18 {
+            return None;
+        }
+        let to_doc = se.xf * natural.inverse();
+        let det = to_doc.determinant();
+        let usable = to_doc.as_coeffs().into_iter().all(f64::is_finite) && det.is_finite() && det.abs() > 1e-18;
+        usable.then(|| EditedNineSlice { symbol: se.symbol.clone(), guides, art: b, to_doc })
+    }
+
     /// [`Self::place_symbol_art`] for writers that do not apply clipping
     /// ([`NineSliceMap::place_unclipped`]).
     pub fn place_symbol_art_unclipped(&self, name: &str, art: &Node, xf: Affine) -> Option<Node> {
         match self.symbol_slice_map(name, xf) {
-            Some(m) => {
-                let m = NineSliceMap { clips: false, ..m };
-                (m.most_placed(art, self) <= MAX_SYMBOL_NODES).then(|| m.place(art, self))
-            }
+            Some(m) => (m.most_placed_unclipped(art, self) <= MAX_SYMBOL_NODES).then(|| m.place_unclipped(art, self)),
             None => Some(transformed(art, xf)),
         }
     }
@@ -1072,6 +1198,9 @@ mod tests {
         let bar = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 40.0, 100.0, 60.0)), Appearance::basic(gradient, Paint::None, 0.0));
         assert_eq!(m.most_placed(&bar, &d), 10);
         assert_eq!(m.place(&bar, &d).count(), 10);
+        // Unclipped, as DXF writes it, the bar is cut at the guides and stays one path.
+        assert_eq!(m.most_placed_unclipped(&bar, &d), 1);
+        assert_eq!(m.place_unclipped(&bar, &d).count(), 1);
         // Art nested past the depth limit, clipped in all nine cells.
         let mut deep = square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), 0.0);
         for _ in 0..=MAX_SLICE_DEPTH {
@@ -1278,5 +1407,77 @@ mod tests {
         let inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "S".into(), xf });
         let v = inst.visual_bounds_with(&d.symbol_boxes());
         assert!(v.is_some_and(|b| near(b, whole)), "{v:?}");
+    }
+
+    /// Symbol "S" of [`markers`] edited in symbol editing mode, its art placed by `xf`.
+    fn editing(guides: Option<SymbolNineSlice>, xf: Affine) -> Document {
+        let mut d = markers(guides);
+        let layer = d.layers[0].id;
+        d.symbol_edit = Some(crate::SymbolEdit {
+            symbol: "S".into(),
+            layer,
+            instance: None,
+            xf,
+            group: true,
+            changed: false,
+            back_isolation: None,
+            back_layer: None,
+        });
+        d
+    }
+
+    fn near_point(a: Point, b: Point) -> bool {
+        (a - b).hypot() < 1e-9
+    }
+
+    /// While a symbol with guides is edited, its four guides cross its art's box from edge to edge
+    /// where the art shows on the editing layer: here at 25 % in, the art doubled and moved.
+    #[test]
+    fn the_edited_symbols_guides_cross_its_art_where_the_editing_layer_shows_it() {
+        let xf = Affine::translate((10.0, 20.0)) * Affine::scale(2.0);
+        let e = editing(Some(SymbolNineSlice::default()), xf).edited_nine_slice().unwrap();
+        assert_eq!(e.symbol, "S");
+        let want = [
+            (NineSliceGuide::Left, Point::new(60.0, 20.0), Point::new(60.0, 220.0)),
+            (NineSliceGuide::Top, Point::new(10.0, 70.0), Point::new(210.0, 70.0)),
+            (NineSliceGuide::Right, Point::new(160.0, 20.0), Point::new(160.0, 220.0)),
+            (NineSliceGuide::Bottom, Point::new(10.0, 170.0), Point::new(210.0, 170.0)),
+        ];
+        for ((g, a, b), (wg, wa, wb)) in e.lines().into_iter().zip(want) {
+            assert!(g == wg && near_point(a, wa) && near_point(b, wb), "{g:?} {a:?} {b:?}");
+        }
+        // Outside the mode, without guides, or for a symbol that is gone: no guides.
+        assert!(markers(Some(SymbolNineSlice::default())).edited_nine_slice().is_none());
+        assert!(editing(None, xf).edited_nine_slice().is_none());
+        let mut d = editing(Some(SymbolNineSlice::default()), xf);
+        d.symbols.clear();
+        assert!(d.edited_nine_slice().is_none());
+    }
+
+    /// Moving a guide changes that guide alone, follows the pointer across its axis only, stays
+    /// within the art's box and stops short of the opposite guide.
+    #[test]
+    fn a_moved_guide_stays_in_the_art_and_short_of_the_opposite_guide() {
+        let xf = Affine::translate((10.0, 20.0)) * Affine::scale(2.0);
+        let e = editing(Some(SymbolNineSlice::default()), xf).edited_nine_slice().unwrap();
+        let q = SymbolNineSlice { left: 0.25, top: 0.25, right: 0.25, bottom: 0.25 };
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(30.0, 999.0)), SymbolNineSlice { left: 0.1, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Bottom, Point::new(-50.0, 180.0)), SymbolNineSlice { bottom: 0.2, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Top, Point::new(0.0, -500.0)), SymbolNineSlice { top: 0.0, ..q });
+        assert_eq!(e.moved(NineSliceGuide::Right, Point::new(1e6, 0.0)), SymbolNineSlice { right: 0.0, ..q });
+        let crossed = e.moved(NineSliceGuide::Left, Point::new(200.0, 50.0));
+        assert!((crossed.left - (0.75 - MIN_CENTER_BAND)).abs() < 1e-12, "{crossed:?}");
+        assert!(SymbolNineSlice::new(crossed.left, crossed.top, crossed.right, crossed.bottom).is_some());
+        assert_eq!(e.moved(NineSliceGuide::Top, Point::new(f64::NAN, f64::NAN)), q);
+        // Saved guides closer than the minimum center band keep their place when a drag does not
+        // move them closer.
+        let narrow = SymbolNineSlice::new(0.00005, 0.25, 0.9999, 0.25).unwrap();
+        let e = editing(Some(narrow), xf).edited_nine_slice().unwrap();
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(200.0, 50.0)), narrow);
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(0.0, 50.0)), SymbolNineSlice { left: 0.0, ..narrow });
+        // A mirrored placement measures along the symbol's own axes.
+        let e = editing(Some(SymbolNineSlice::default()), Affine::scale_non_uniform(-1.0, 1.0)).edited_nine_slice().unwrap();
+        assert!(near_point(e.line(NineSliceGuide::Left).0, Point::new(-25.0, 0.0)));
+        assert_eq!(e.moved(NineSliceGuide::Left, Point::new(-10.0, 0.0)), SymbolNineSlice { left: 0.1, ..q });
     }
 }

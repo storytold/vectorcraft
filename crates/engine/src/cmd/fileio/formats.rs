@@ -76,7 +76,12 @@ pub(super) const RANGE: FormatOption = FormatOption {
     description: "1-based artboards such as \"1-3, 5\", or \"all\" (wins over artboards and artboard)",
 };
 
-const SCALE: FormatOption = FormatOption { name: "scale", ty: "number", default: "1", description: "pixels per point (0.01–64)" };
+const SCALE: FormatOption = FormatOption {
+    name: "scale",
+    ty: "number",
+    default: "null",
+    description: "pixels per point (0.01–64); without ppi or scale, uses the document's raster effects resolution",
+};
 
 const WIDTH: FormatOption = FormatOption {
     name: "width",
@@ -112,8 +117,8 @@ const RECT: FormatOption = FormatOption {
 const PPI: FormatOption = FormatOption {
     name: "ppi",
     ty: "number",
-    default: "72",
-    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file except in GIF, WebP and Targa; wins over scale",
+    default: "null",
+    description: "resolution in pixels per inch (72 = one pixel per point; 150, 300…), stored in the file except in GIF, WebP and Targa; wins over scale; without either, uses the document's raster effects resolution",
 };
 
 const BACKGROUND: FormatOption = FormatOption {
@@ -498,6 +503,8 @@ pub const FORMATS: &[Format] = &[
     reader("pxr", "Pixar", &["pxr"], "image/x-pixar", true),
     // JP2 and raw codestreams are decoded to PNG; JPX composition is not supported.
     reader("jpeg2000", "JPEG 2000", &["jpf", "jpx", "jp2", "j2k", "j2c", "jpc"], "image/jp2", true),
+    // HEVC-coded HEIF still images, decoded to PNG; image sequences are not read.
+    reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -532,6 +539,8 @@ pub const OPEN_EXTS: &[&str] = &[
     "j2k",
     "j2c",
     "jpc",
+    "heic",
+    "heif",
     "psd",
     "pdd",
     "psb",
@@ -549,11 +558,13 @@ pub const OPEN_EXTS: &[&str] = &[
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar or JPEG 2000 type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000 or HEIC/HEIF type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
-pub const UNASSOCIATED_EXTS: &[&str] =
-    &["psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc"];
+pub const UNASSOCIATED_EXTS: &[&str] = &[
+    "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
+    "heic", "heif",
+];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
 /// `.png` with PNG, so `.png` comes once), in [`FORMATS`] order.
@@ -616,6 +627,8 @@ pub const PLACE_EXTS: &[&str] = &[
     "j2k",
     "j2c",
     "jpc",
+    "heic",
+    "heif",
     "psd",
     "pdd",
     "psb",

@@ -318,6 +318,21 @@ fn the_web_downloads_and_has_no_browser_preview() {
 }
 
 #[test]
+fn preview_in_browser_stays_in_its_folder_and_is_the_persons_to_open() {
+    for (title, name) in
+        [("Poster", "Poster"), ("../..", "Untitled"), ("..", "Untitled"), ("a/..", "Untitled"), ("..\\x", "Untitled"), (" ", "Untitled")]
+    {
+        assert_eq!(save_for_web::preview_name(title), name, "{title}");
+    }
+    let dir = vectorcraft_testkit::temp_dir("sfw-browser-automation");
+    let (mut app, log) = app(&dir, false);
+    app.ui.answering_control = true;
+    assert!(app.run("file.saveForWeb.browser", json!({"format": "jpg"})).unwrap_err().contains("opens another app"));
+    app.ui.answering_control = false;
+    assert!(!log.borrow().iter().any(|l| l.starts_with("open ")), "{:?}", log.borrow());
+}
+
+#[test]
 fn preview_in_browser_opens_the_page() {
     let dir = vectorcraft_testkit::temp_dir("sfw-browser");
     let (mut app, log) = app(&dir, false);

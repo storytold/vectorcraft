@@ -212,22 +212,23 @@ fn number_styles_write_their_numbers_and_roll_over() {
 }
 
 /// Typed list detection: "1.", "1)", "A." and "A)" and a space at the start of a paragraph
-/// start a numbered list, and "*", "#", ">" and "+" and a space start a bulleted list with the
-/// filled dot. Other text, the same characters later in a paragraph or without the space, and
-/// a paragraph already in a list start nothing.
+/// start a numbered list, and "*", "+", "#" and ">" and a space start a bulleted list with the
+/// filled dot, the hollow circle, the filled square and the dash. Other text, the same characters
+/// later in a paragraph or without the space, and a paragraph already in a list start nothing.
 #[test]
 fn typed_list_starts_are_found_at_a_paragraphs_start() {
     let (arabic, letters, dot) =
         (ParaList::numbered(NumberStyle::Arabic), ParaList::numbered(NumberStyle::UpperLetters), ParaList::bulleted(Bullet::Dot));
-    let typed = ["1.", "1)", "A.", "A)", "*", "#", ">", "+"].map(ParaList::typed);
-    assert_eq!(typed, [arabic, arabic, letters, letters, dot, dot, dot, dot].map(Some));
+    let (circle, square, dash) = (ParaList::bulleted(Bullet::Circle), ParaList::bulleted(Bullet::Square), ParaList::bulleted(Bullet::Dash));
+    let typed = ["1.", "1)", "A.", "A)", "*", "+", "#", ">"].map(ParaList::typed);
+    assert_eq!(typed, [arabic, arabic, letters, letters, dot, circle, square, dash].map(Some));
     for other in ["", "2.", "a.", "a)", "I.", "1", "A", "1:", "-", "•", "1.)", " 1.", "*1", "１."] {
         assert_eq!(ParaList::typed(other), None, "{other:?}");
     }
     let mut t = TextObject::point(Point::ZERO, "Fruit\n1. Apples\nA) x * y\n+ ", CharStyle::default());
     assert_eq!(t.typed_list_at(9), Some((6, arabic)));
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
-    assert_eq!(t.typed_list_at(27), Some((25, dot)));
+    assert_eq!(t.typed_list_at(27), Some((25, circle)));
     // Not at the paragraph's start, not right after the space, or past the end.
     for at in [0, 5, 8, 10, 15, 23, 25, 26, 99] {
         assert_eq!(t.typed_list_at(at), None, "{at}");
@@ -237,6 +238,19 @@ fn typed_list_starts_are_found_at_a_paragraphs_start() {
     t.set_paragraph_styles(styles);
     assert_eq!(t.typed_list_at(9), None, "a list paragraph stays as it is");
     assert_eq!(t.typed_list_at(19), Some((16, letters)));
+}
+
+/// In a threaded frame whose first paragraph continues from the frame before, the text at the
+/// frame's start is not the start of a paragraph, so typing a list's start there starts nothing.
+/// The paragraphs after it still start lists.
+#[test]
+fn typed_list_starts_skip_a_continued_paragraph() {
+    let dot = ParaList::bulleted(Bullet::Dot);
+    let mut t = TextObject::point(Point::ZERO, "* Pears\n* ", CharStyle::default());
+    assert_eq!(t.typed_list_at(2), Some((0, dot)));
+    t.first_para_continues = true;
+    assert_eq!(t.typed_list_at(2), None, "a continued paragraph starts no list");
+    assert_eq!(t.typed_list_at(10), Some((8, dot)));
 }
 
 #[test]

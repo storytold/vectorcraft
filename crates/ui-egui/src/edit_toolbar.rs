@@ -481,15 +481,16 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let removing = dragged.is_some_and(|d| d.from_toolbar) && ctx.memory(|m| m.area_rect(id)).is_some_and(over);
     let mut picked = None;
     let mut reset = false;
-    let mut new_toolbar = false;
+    // New Toolbar… or Manage Toolbars… in the drawer's menu.
+    let mut toolbars_cmd = None;
     let mut advanced = None;
     let mut show_toggle = None;
     let resp = egui::Area::new(id).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).show(ctx, |ui| {
         crate::toolbar::flyout_frame(&t, removing).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
             let width = WIDTH.min(screen.width() - 2.0 * GAP - 16.0).max(160.0);
             ui.set_width(width);
-            // All Tools, and the drawer's flyout menu: Reset, the Basic or Advanced toolbar, and New
-            // Toolbar.
+            // All Tools, and the drawer's flyout menu: Reset, the Basic or Advanced toolbar, New
+            // Toolbar and Manage Toolbars.
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!("All Tools")).size(13.0).color(t.text_strong));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -510,7 +511,10 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         }
                         ui.separator();
                         if widgets::menu_item(ui, "New Toolbar…", true, false) {
-                            new_toolbar = true;
+                            toolbars_cmd = Some("window.toolbar.new");
+                        }
+                        if widgets::menu_item(ui, "Manage Toolbars…", true, false) {
+                            toolbars_cmd = Some("window.toolbar.manage");
                         }
                     });
                 });
@@ -571,7 +575,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if reset && let Err(e) = app.run("toolbar.reset", json!({ "toolbar": target })) {
         app.ui.status = e;
     }
-    if new_toolbar && let Err(e) = app.run("window.toolbar.new", json!({})) {
+    if let Some(id) = toolbars_cmd
+        && let Err(e) = app.run(id, json!({}))
+    {
         app.ui.status = e;
     }
     if let Some(advanced) = advanced
@@ -591,6 +597,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // A click in the toolbar (picking a tool, or the ••• button that toggles the drawer) leaves
         // it open.
         app.ui.tools_drawer = false;
+    }
+    if app.ui.tools_drawer {
+        crate::toolbar::mark_flyout_open(ctx);
     }
     ghost(ctx, &t);
 }

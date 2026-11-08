@@ -106,6 +106,12 @@ impl IccProfile {
         if !localized_text_fits(bytes) {
             return Err(CmsError::BadProfile(format!("its localized names take more than {} KB", MAX_LOCALIZED_TEXT >> 10)));
         }
+        if let Some(tag) = repeated_tag(bytes) {
+            return Err(CmsError::BadProfile(format!(
+                "its tag table lists the `{}` tag more than once",
+                String::from_utf8_lossy(&tag.to_be_bytes())
+            )));
+        }
         let p = ColorProfile::new_from_slice(bytes).map_err(|e| CmsError::BadProfile(format!("{e:?}")))?;
         Ok(Self { source: bytes.to_vec(), ..Self::from_profile(name, p)? })
     }
@@ -415,6 +421,23 @@ pub(super) fn gray_profile(name: &str) -> ColorProfile {
     let mut p = ColorProfile::new_gray_with_gamma(2.2);
     p.gray_trc = ColorProfile::new_srgb().red_trc;
     labelled(p, name)
+}
+
+/// The first tag signature the tag table of ICC `bytes` lists twice, which the ICC
+/// specification forbids. moxcms parses every entry of the table, so a profile listing one
+/// description, copyright or table tag thousands of times, each pointing at the same large data,
+/// would decode and copy that data once per entry. A table it can't read is left to moxcms.
+pub(crate) fn repeated_tag(bytes: &[u8]) -> Option<u32> {
+    let be32 = |at: usize| bytes.get(at..at.checked_add(4)?).map(|v| u32::from_be_bytes([v[0], v[1], v[2], v[3]]));
+    let tags = be32(128)? as usize;
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..tags {
+        let sig = be32(i.checked_mul(12)?.checked_add(132)?)?;
+        if !seen.insert(sig) {
+            return Some(sig);
+        }
+    }
+    None
 }
 
 /// Most bytes of UTF-16 the localized names (`mluc` tags) of a profile may take together.

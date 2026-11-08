@@ -157,11 +157,11 @@ std::thread_local! {
 }
 
 /// A document's links being resolved ([`READING`]): the entry goes when this does.
-struct Reading;
+pub(super) struct Reading;
 
 impl Reading {
     /// `None` when the document of `bytes` is already being read, or [`MAX_NESTED_READS`] are.
-    fn enter(bytes: &[u8]) -> Option<Self> {
+    pub(super) fn enter(bytes: &[u8]) -> Option<Self> {
         let hash = hash_bytes(bytes);
         READING.with_borrow_mut(|r| (r.len() < MAX_NESTED_READS && !r.contains(&hash)).then(|| r.push(hash))).map(|()| Reading)
     }
@@ -338,8 +338,9 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         Cow::Owned(doc) => doc,
     };
     let mut need: Vec<PlacedDocument> = vec![];
+    let mut seen = std::collections::HashSet::new();
     doc.visit_placed(|_, p| {
-        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && !need.iter().any(|n| n.key == p.key) {
+        if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
     });

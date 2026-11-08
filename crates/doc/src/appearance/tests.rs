@@ -192,11 +192,14 @@ fn strokes_without_pressure_round_trip_unchanged() {
     assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation), (None, None, None, None));
 }
 
+/// The Lens profile's widths at its middle, a quarter of the way along and past its end.
 #[test]
 fn profile_interp() {
     let p = WidthProfile::lens();
     assert_eq!(p.at(0.5), (1.0, 1.0));
-    assert_eq!(p.at(0.25), (0.5, 0.5));
+    // Half way up the lens the width curves above the straight ramp (0.5), flattening into its
+    // widest point (#5714).
+    assert_eq!(p.at(0.25), (0.625, 0.625));
     assert_eq!(p.at(2.0), (0.0, 0.0));
 }
 

@@ -77,6 +77,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !app.ui.palette_open {
         return;
     }
+    crate::shortcuts::hold_back_keys(app, ctx);
     let t = Tokens::get(ctx);
     let q = app.ui.palette_query.to_lowercase();
     let entries = entries(ctx, crate::i18n::current());
@@ -221,7 +222,7 @@ mod tests {
     /// Asset Export panel instead of failing on the missing params or exporting nowhere.
     #[test]
     fn a_pick_of_an_asset_export_command_opens_its_panel() {
-        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set"];
+        let ids = ["assets.export", "assets.remove", "assets.rename", "assets.settings.set", "assets.export3D", "assets.set3DFormat"];
         for id in ids {
             assert!(items().iter().any(|(_, item, _)| item == id), "{id} is in the palette");
             let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
