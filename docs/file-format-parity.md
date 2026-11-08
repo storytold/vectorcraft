@@ -141,7 +141,17 @@ private editing data. VectorCraft:
   stops. Paragraphs and frames past either limit take the default stops, with a warning. Its special characters
   (`TS`) join the story, and end render (`Te`) and pop text matrix (`TM`) are read and ignored. Its type in a
   font re-encoded with encoding pairs of its own (`TZ`) is decoded with those pairs, and with the file's encoding
-  (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0.
+  (`TE`) for the codes they leave out unless the `TZ` sets `useDefault` to 0. Its type in a CJK composite font,
+  whose name ends in a predefined CMap (`HeiseiMin-W3-83pv-RKSJ-H`) and which no `TZ` gives encoding pairs, opens
+  with the font named without the CMap. Its codes are read by the CMap's code space, mapped to CIDs and then to
+  Unicode by the character collection's CID-to-Unicode CMap, and codes the CMap does not map are dropped. A `-V`
+  CMap is read with its `-H` form's codes, and a 0x0D byte ends a paragraph. The Unicode CMaps `Uni*-UCS2`, `-UTF8`,
+  `-UTF16` and `-UTF32` are read as Unicode. VectorCraft reads the predefined CMaps that craft-pdf does not carry
+  (`RKSJ`, `78-RKSJ`, `78ms-RKSJ`, `78-EUC`, `78`, `Add`, `Ext`, `NWP`, `GB`, `CNS1`, `KSC`, `B5` and the Hong Kong
+  `-B5` sets other than `HKscs-B5`) with its own choice of the nearest carried CMap, which can give a different
+  character for some codes, and decodes `GBT`, `GBT-EUC`, `GBTpc-EUC`, `CNS2` and `KSC-Johab` type byte by byte with
+  the CMap removed from the font name. A font whose name ends in `-H` or `-V` without a `TZ` that gives encoding pairs
+  is read with the `H` or `V` CMap.
   Its area type with several linked areas opens as threaded frames, one for each area with its own matrix,
   and the story flows through them.
   Its writing direction (`TV`) opens as vertical type. VectorCraft keeps one direction for each text object, the
