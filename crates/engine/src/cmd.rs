@@ -1,5 +1,6 @@
 //! The command registry. Ids follow Illustrator's menu structure.
 
+pub mod actionset;
 mod addons;
 pub(crate) mod appearance;
 mod assets;
@@ -83,6 +84,7 @@ pub(crate) mod slices;
 mod stroke;
 mod style;
 pub mod stylelib;
+mod svgfilter;
 mod swatch;
 pub mod swatchlib;
 pub(crate) mod symboledit;
@@ -317,6 +319,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(interactivity::specs());
+        v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
         v.extend(fileio::pdf::specs());
@@ -344,6 +347,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(halftone::specs());
         v.extend(perspgrid::specs());
         v.extend(shortcutset::specs());
+        v.extend(actionset::specs());
         v.extend(importmatches::specs());
         v.extend(addons::specs());
         v
@@ -590,11 +594,16 @@ pub(crate) fn object_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Nod
 }
 
 /// Objects a command targets: its `ids`, else its `id` as `ids` of one ([`named_ids`]), else the
-/// selection. An `ids` or `id` that isn't an object id is an error, never the selection.
+/// selection. An `ids` or `id` that isn't an object id is an error, never the selection. The
+/// selection is refused while an object of a dynamic symbol instance's art is selected, as by
+/// [`edit::selected_roots`].
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match named_ids(p)? {
         Some(ids) => Ok(ids),
-        None => Ok(s.doc()?.selection.objects.clone()),
+        None => {
+            edit::refuse_symbol_part(s)?;
+            Ok(s.doc()?.selection.objects.clone())
+        }
     }
 }
 
@@ -667,6 +676,7 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
+pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 pub(crate) use vectorcraft_doc::range::parse_range;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see

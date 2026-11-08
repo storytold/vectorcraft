@@ -812,6 +812,52 @@ fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
 }
 
 #[test]
+fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    // Placed across the square from its left edge (red) to its right edge (blue).
+    let geom = GradientGeom { start: Point::new(10.0, 50.0), end: Point::new(40.0, 50.0), aspect: 1.0, focal: None };
+    let draw = |paint: &GradientPaint, e: Option<Effect>| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = e.into_iter().collect();
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let placed = GradientPaint { geom: Some(geom), ..ramp.clone() };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    // Moved 40 pt right by Transform, and 30 pt (one width) right by a Free Distort that moves
+    // every corner.
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    for e in [fx("distort.transform", json!({"moveH": 40})), fx("distort.freeDistort", corners)] {
+        let img = draw(&placed, Some(e.clone()));
+        let moved = if e.id == "distort.transform" { 40 } else { 30 };
+        let (left, right) = (11 + moved, 38 + moved);
+        assert!(red(rb(&img, left, 50)) && blue(rb(&img, right, 50)), "{}: {:?} {:?}", e.id, rb(&img, left, 50), rb(&img, right, 50));
+    }
+    // Turned a quarter: the gradient runs from top to bottom (or bottom to top).
+    let turn = fx("distort.transform", json!({"rotate": 90}));
+    let img = draw(&placed, Some(turn));
+    let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+    assert!((red(top) && blue(bottom)) || (blue(top) && red(bottom)), "{top:?} {bottom:?}");
+    assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "the same color across");
+    // Scaled to half its width about its center: the gradient spans the narrower square.
+    let img = draw(&placed, Some(fx("distort.transform", json!({"scaleH": 50}))));
+    assert!(red(rb(&img, 18, 50)) && blue(rb(&img, 31, 50)), "{:?} {:?}", rb(&img, 18, 50), rb(&img, 31, 50));
+    // The fill's own Transform moves its gradient too.
+    let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+    let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(placed.clone())), Paint::None, 0.0));
+    n.appearance.items[0].effects_mut().push(fx("distort.transform", json!({"moveH": 40})));
+    let img = render(&doc_with(Document::new(100.0, 100.0), n));
+    assert!(red(rb(&img, 51, 50)) && blue(rb(&img, 78, 50)), "{:?} {:?}", rb(&img, 51, 50), rb(&img, 78, 50));
+}
+
+#[test]
 fn darkness_subtracts_from_rgb_before_shadow_opacity() {
     for opacity in [50.0, 100.0] {
         let mut n = Node::path(

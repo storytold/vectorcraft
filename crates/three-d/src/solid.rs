@@ -20,7 +20,9 @@ mod rings;
 
 #[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
+pub(crate) use build::{Face3, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
+pub(crate) use inflate::inflate_faces;
 pub use inflate::{inflate, inflate_together};
 #[cfg(test)]
 use membrane::{Edges, Membrane, cell_triangles};

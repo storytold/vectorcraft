@@ -501,6 +501,32 @@ fn text_on_path_options_svg_cannot_express_are_outlined() {
     }
 }
 
+/// Type on a path with Skew, 3D Ribbon, Stair Step or Gravity, whose glyphs a `<textPath>` would
+/// turn with the path as Rainbow does, keeps its look as outlines, with spacing or without it;
+/// Rainbow stays a `<textPath>`.
+#[test]
+fn text_on_path_effects_svg_cannot_express_are_outlined() {
+    use vectorcraft_doc::PathEffect;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    for effect in PathEffect::ALL {
+        for spacing in [0.0, 4.0] {
+            let mut d = Document::new(200.0, 200.0);
+            let mut t = TextObject::point(Point::ZERO, "On a curve", CharStyle { size: 14.0, ..CharStyle::default() });
+            t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+            t.path_effect = effect;
+            t.path_spacing = spacing;
+            let id = d.alloc_id();
+            let (svg, warnings) =
+                vectorcraft_svg::export_with_report(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+            let live = effect == PathEffect::Rainbow && spacing == 0.0;
+            assert_eq!(svg.contains("<textPath"), live, "{effect:?} {spacing}: {svg}");
+            assert_eq!(warnings.iter().any(|w| w.contains("outlined")), !live, "{effect:?} {spacing}: {warnings:?}");
+        }
+    }
+}
+
 /// Type on a path whose punctuation hangs outside its brackets (Optical Margin Alignment or Roman
 /// Hanging Punctuation) keeps its look as outlines; with the option on and nothing at its ends to
 /// hang, it stays a `<textPath>`.

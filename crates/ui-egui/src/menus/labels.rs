@@ -123,7 +123,7 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface
 /// label: a recent file, a saved view, a font, a user library or preset, a custom workspace, a
-/// plug-in? Such names are shown as they are, never translated (a workspace the user calls
+/// plug-in, an SVG filter? Such names are shown as they are, never translated (a workspace the user calls
 /// "Layers" stays "Layers").
 pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     const SLOTS: [&str; 8] = [
@@ -138,7 +138,7 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     ];
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
-        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
+        || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom" | "svgFilter.apply")
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
