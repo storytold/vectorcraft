@@ -130,9 +130,9 @@ pub(crate) use export_names::{default_name, merge, unique_file_names, with_black
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
-    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, export_extensions, extension,
-    file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions, open_filters, place_filters,
-    plugin_formats, read_extensions, readable_format, readable_format_for_name, titled_for_export, writable_format,
+    DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
+    export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
+    open_filters, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]

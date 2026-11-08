@@ -109,6 +109,21 @@ fn a_file_an_importer_reads_opens_as_editable_art() {
     open(&mut s, "Line.tso", LINE.as_bytes(), json!({})).unwrap();
     assert_eq!(artboard(&s), (0.0, 4.5, 50.0, 5.5));
 
+    // Art at the edge of the canvas keeps its artboard within ±4,000,000 pt, so the document can
+    // still be edited: a vertical line at x = 4,000,000 (its 1 pt moves inward) and a stroked line
+    // along y = -4,000,000 (its stroke passes the edge).
+    let edge = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[4000000,0]},{"p":[4000000,50]}]}]}}]}"#;
+    open(&mut s, "Edge.tso", edge.as_bytes(), json!({})).unwrap();
+    assert_eq!(artboard(&s), (3_999_999.0, 0.0, 4_000_000.0, 50.0));
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.move", &json!({"dx": -5, "dy": 0})).unwrap();
+    let stroked = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,-4000000]},{"p":[50,-4000000]}]}]},"strokes":[{"paint":{"type":"solid","color":{"model":"rgb","r":0,"g":0,"b":0}},"width":10}]}]}"#;
+    open(&mut s, "Stroked.tso", stroked.as_bytes(), json!({})).unwrap();
+    let (x0, y0, x1, y1) = artboard(&s);
+    assert!(x0 < 0.0 && x1 > 50.0 && y0 == -4_000_000.0 && y1 > y0 + 1.0, "{:?}", artboard(&s));
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.move", &json!({"dx": 0, "dy": 5})).unwrap();
+
     // From a path: the document keeps no path, so Save asks for a name.
     let path = dir.join("Shapes.tso");
     std::fs::write(&path, RECT).unwrap();

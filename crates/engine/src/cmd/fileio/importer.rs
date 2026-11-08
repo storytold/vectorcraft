@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::Document;
+use vectorcraft_doc::{Document, MAX_COORD};
 use vectorcraft_geom::Rect;
 use vectorcraft_plugins::{Plugin, export, import, objects};
 
@@ -101,15 +101,24 @@ pub(super) fn load(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value) -> Resu
     let ids =
         objects::apply_output(&mut doc, &[], imported.objects, layer, &admit).map_err(|e| err(format!("can't open `{}`: {e}", file_name(name))))?;
     if let (Some(bounds), Some(board)) = (doc.bounds_of(&ids, true), doc.artboards.first_mut()) {
-        board.rect = at_least_a_point(bounds);
+        board.rect = artboard_rect(bounds);
     }
     doc.title = file_name(name);
     Ok(Loaded { doc, format, warnings: imported.warnings, restored: false, converted: false, preview_only: false, editing_data: false })
 }
 
-/// `r` at least 1 pt wide and high, about its center: the artboard of a single line or point.
-fn at_least_a_point(r: Rect) -> Rect {
-    let grow = |lo: f64, hi: f64| if hi - lo >= 1.0 { (lo, hi) } else { ((lo + hi) / 2.0 - 0.5, (lo + hi) / 2.0 + 0.5) };
-    let ((x0, x1), (y0, y1)) = (grow(r.x0, r.x1), grow(r.y0, r.y1));
+/// The artboard of art with bounds `r`: `r` within ±[`MAX_COORD`], at least 1 pt wide and high
+/// about its center (the artboard of a single line or point). A side that would pass the edge
+/// moves inward, so art at the edge keeps an artboard the document's edits accept.
+fn artboard_rect(r: Rect) -> Rect {
+    let side = |lo: f64, hi: f64| {
+        let (lo, hi) = (lo.max(-MAX_COORD), hi.min(MAX_COORD));
+        if hi - lo >= 1.0 {
+            return (lo, hi);
+        }
+        let mid = ((lo + hi) / 2.0).clamp(-MAX_COORD + 0.5, MAX_COORD - 0.5);
+        (mid - 0.5, mid + 0.5)
+    };
+    let ((x0, x1), (y0, y1)) = (side(r.x0, r.x1), side(r.y0, r.y1));
     Rect::new(x0, y0, x1, y1)
 }

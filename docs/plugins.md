@@ -47,8 +47,8 @@ reads the file, by its content or by its extension, and the importer lists the f
 one whose id sorts first opens it. `document.open {"importer": "plugin.<id>", "params"?: {…}}` names the importer,
 which must list the file's extension, also one a built-in format reads (an importer that lists `svg` opens an `.svg`
 only this way). A damaged file of a built-in format reports that format's error, and the file is not handed to an
-importer. The importer's objects become a new document whose artboard is their bounds (at least 1 pt wide and high);
-the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats. These rules are
+importer. The importer's objects become a new document whose artboard is their bounds (at least 1 pt wide and high,
+and within ±4,000,000 pt); the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats. These rules are
 VectorCraft's own.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload
@@ -59,7 +59,8 @@ parameters it runs at once. Parameters too many for the window's height scroll i
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›
-Open's "All readable files" and under a filter of their own, named after the importer; **File › Open With** lists the
+Open's "All readable files" and under a filter of their own, named after the importer (other open dialogs, such as New
+from Template and Load Styles, list only the files the built-in formats read); **File › Open With** lists the
 installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
 extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. An importer
 with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open

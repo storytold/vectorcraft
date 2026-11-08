@@ -693,7 +693,7 @@ pub fn open_extensions() -> &'static [&'static str] {
     exts
 }
 
-/// Open-dialog filters: "All readable files" first, then one per readable format, then one per
+/// File › Open's filters: "All readable files" first, then one per readable format, then one per
 /// importer plug-in (under its name), then swatch libraries (which open in the library panel),
 /// Libraries panel libraries, flattener, PDF, print and export presets (imported), scripts (checked
 /// without running them) and plug-ins (installed).
@@ -701,7 +701,20 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
     std::iter::once(("All readable files", open_extensions()))
         .chain(format_filters())
         .chain(importer_formats().into_iter().map(|f| (f.label, f.extensions)))
-        .chain(std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS)))
+        .chain(other_open_filters())
+}
+
+/// [`open_filters`] without the importer plug-ins: "All readable files" lists [`OPEN_EXTS`]. For
+/// open dialogs whose files the built-in readers read (New from Template, Load Styles, a document
+/// picked for its swatches, symbols, brushes or graphic styles).
+pub fn builtin_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    std::iter::once(("All readable files", OPEN_EXTS)).chain(format_filters()).chain(other_open_filters())
+}
+
+/// The open-dialog filters after the document formats: swatch libraries, Libraries panel
+/// libraries, presets, shortcut sets, scripts and plug-ins.
+fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
+    std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
@@ -715,12 +728,13 @@ pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static 
 /// Open-dialog filters for Swatch Libraries and Graphic Style Libraries Other Library… and Locate
 /// Library…. The library formats come first so Linux file portals (which grey out files that don't
 /// match the default filter) still list `.ase` and the other library extensions; then the same
-/// filters as [`open_filters`] so a document can be picked for its swatches or graphic styles.
+/// filters as [`builtin_open_filters`] so a document can be picked for its swatches or graphic
+/// styles.
 pub fn library_open_filters(
     library_label: &'static str,
     library_exts: &'static [&'static str],
 ) -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once((library_label, library_exts)).chain(open_filters())
+    std::iter::once((library_label, library_exts)).chain(builtin_open_filters())
 }
 
 /// File → Place dialog filters: "All placeable files", then one per placeable format, then text,

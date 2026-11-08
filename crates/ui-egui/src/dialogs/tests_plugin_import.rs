@@ -135,6 +135,35 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// File › Open's dialog lists an importer's files; the open dialogs whose files only the built-in
+/// readers read (New from Template, Load Styles, the library panels' Other Library…) don't.
+#[test]
+fn only_file_open_s_dialog_lists_an_importer_s_files() {
+    let mut app = app();
+    install(&mut app, &tpl::module(&tpl::importer("test.ui.filters", r#"["tuf"]"#, "{}"), tpl::ECHO, "", 1));
+    let asked: std::rc::Rc<std::cell::RefCell<Vec<crate::FilePick>>> = Default::default();
+    let seen = asked.clone();
+    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
+        seen.borrow_mut().push(pick.clone());
+        None
+    }));
+    let lists = |filters: &[(String, Vec<String>)]| filters.iter().any(|(_, exts)| exts.iter().any(|e| e == "tuf"));
+    let shown = |app: &mut VectorcraftApp, cmd: &str| {
+        let _ = app.run(cmd, json!({}));
+        let pick = asked.borrow_mut().pop().unwrap_or_else(|| panic!("{cmd} showed no open dialog"));
+        lists(&pick.filters)
+    };
+    assert!(shown(&mut app, "file.open"), "File › Open");
+    for cmd in ["file.newFromTemplate", "ui.loadCharStyles", "ui.loadParaStyles", "ui.loadAllStyles"] {
+        assert!(!shown(&mut app, cmd), "{cmd}");
+    }
+    for kind in ["swatches", "graphicStyles", "symbols"] {
+        let filters = crate::FilePick::filters(crate::panels::library_panel::library_pick_filters(kind));
+        assert!(!lists(&filters), "{kind}");
+    }
+    app.run("plugin.remove", json!({"id": "test.ui.filters"})).unwrap();
+}
+
 /// File › Open reads a file of an extension only an importer lists, and refuses one past the
 /// importer's input limit before reading it, as Open With does.
 #[test]
