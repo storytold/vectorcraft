@@ -224,7 +224,7 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, effect_bounds, painted_bounds};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds};
 pub use frame::FrameStats;
 use frame::{ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey};
 #[cfg(test)]

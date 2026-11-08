@@ -20,7 +20,7 @@ mod tabs;
 
 #[cfg(test)]
 use control_bar::ISOLATION_BUTTON;
-pub use control_bar::{AnchorControls, anchor_buttons, anchor_controls, control_bar};
+pub use control_bar::{AnchorControls, CONTROL_BAR_EDGES, anchor_buttons, anchor_controls, control_bar};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
