@@ -253,9 +253,13 @@ pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a,
 /// time of writing. On the web, which has no clock, the creation date is the modification date too,
 /// and a document without one gets neither.
 pub fn options(cmd: &str, doc: &Document, p: &Value) -> Result<PdfOptions> {
+    options_at(cmd, doc, p, vectorcraft_doc::metadata::output_time())
+}
+
+/// [`options`] modified at `now` (Unix seconds) instead of the time of writing.
+fn options_at(cmd: &str, doc: &Document, p: &Value, now: Option<i64>) -> Result<PdfOptions> {
     let pick = if p.is_object() { ArtboardPick::deserialize(p).map_err(|e| bad(cmd, format!("PDF options: {e}")))? } else { ArtboardPick::default() };
     let artboards = pick.resolve(doc.artboards.len()).map_err(|e| bad(cmd, e))?;
-    let now = vectorcraft_doc::metadata::output_time();
     Ok(PdfOptions {
         settings: settings(cmd, p)?,
         artboards,
@@ -278,9 +282,14 @@ pub const BLEED_LEFT_OUT: &str = "the document sets a bleed that this PDF/X file
 /// to images at the document's raster effects resolution. Preserve Editing embeds `doc` itself
 /// when the PDF has every artboard (a PDF of some reopens as just those).
 pub fn encode(cmd: &str, doc: &Document, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
+    encode_at(cmd, doc, p, None)
+}
+
+/// [`encode`] modified at `modified` (Unix seconds) when given, instead of the time of writing.
+pub(super) fn encode_at(cmd: &str, doc: &Document, p: &Value, modified: Option<i64>) -> Result<(Vec<u8>, Vec<String>)> {
     // Keep the editable object tree independent of preview fallbacks used by the drawn pages.
     let (full, mut warnings) = crate::cmd::place::document::full_documents(doc);
-    let (bytes, drawn_warnings) = encode_carrying(cmd, &full, p, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
+    let (bytes, drawn_warnings) = encode_carrying_at(cmd, &full, p, modified, || Ok(vectorcraft_format::save(doc, false)), || Ok(None))?;
     warnings.extend(drawn_warnings);
     warnings.extend(overflow_warning(cmd, &full, p)?);
     Ok((bytes, warnings))
@@ -307,7 +316,20 @@ pub(super) fn encode_carrying(
     native: impl FnOnce() -> Result<Vec<u8>>,
     private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
 ) -> Result<(Vec<u8>, Vec<String>)> {
-    let mut opts = options(cmd, doc, p)?;
+    encode_carrying_at(cmd, doc, p, None, native, private)
+}
+
+/// [`encode_carrying`] modified at `modified` (Unix seconds) when given, instead of the time of
+/// writing.
+fn encode_carrying_at(
+    cmd: &str,
+    doc: &Document,
+    p: &Value,
+    modified: Option<i64>,
+    native: impl FnOnce() -> Result<Vec<u8>>,
+    private: impl FnOnce() -> Result<Option<(vectorcraft_pdf::PrivateData, Vec<String>)>>,
+) -> Result<(Vec<u8>, Vec<String>)> {
+    let mut opts = options_at(cmd, doc, p, modified.or_else(vectorcraft_doc::metadata::output_time))?;
     // The pages' background colors, behind the art (the editing data keeps them as colors).
     let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
     let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
