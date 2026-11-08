@@ -1267,6 +1267,29 @@ fn escape_returns_to_previous_tool_when_set() {
     assert_eq!(acts2.last(), Some(&Action::SwitchTool("selection".into())));
 }
 
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing as Escape does and types no line
+/// break. Ctrl+Enter on macOS, Shift and Alt with it still type one.
+#[test]
+fn cmd_enter_ends_editing_like_escape() {
+    let (d, _id, mut tool) = editing("Hello");
+    tool.set_option("prevTool", &json!("directSelection"));
+    let acts = key(&mut tool, &d, ToolKey::Enter, CMD);
+    assert!(acts.iter().all(|a| !matches!(a, Action::Preview(..))), "no line break: {acts:?}");
+    assert_eq!(acts.last(), Some(&Action::SwitchTool("directSelection".into())));
+    assert!(!tool.wants_text(), "editing ended");
+    // Ctrl+Enter on Windows and Linux, and Cmd+Ctrl+Enter on macOS.
+    let cmd_ctrl = Mods { ctrl: true, ..CMD };
+    let (d, _id, mut tool) = editing("Hello");
+    assert_eq!(key(&mut tool, &d, ToolKey::Enter, cmd_ctrl).last(), Some(&Action::SwitchTool("selection".into())));
+    let mac_ctrl = Mods { ctrl: true, ..Mods::default() };
+    for mods in [mac_ctrl, Mods { shift: true, ..CMD }, Mods { alt: true, ..CMD }] {
+        let (d, _id, mut tool) = editing("Hello");
+        let acts = key(&mut tool, &d, ToolKey::Enter, mods);
+        assert!(acts.iter().any(|a| matches!(a, Action::Preview(..))), "{mods:?} types a line break: {acts:?}");
+        assert!(tool.wants_text(), "{mods:?} keeps editing");
+    }
+}
+
 /// A click from `tool` at (x, y) → the actions of the press and the release.
 fn click(tool: &mut TypeTool, c: &ToolContext, x: f64, y: f64) -> Vec<Action> {
     let mut acts = tool.pointer(c, &PointerEvent::new(PointerKind::Down, x, y));

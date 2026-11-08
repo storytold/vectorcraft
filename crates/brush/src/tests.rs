@@ -1,6 +1,6 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{Affine, BezPath, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2, shapes};
 
 use super::*;
 
@@ -296,6 +296,101 @@ fn pattern_places_corner_tiles() {
     for n in out.iter().filter(|n| !curved(n)) {
         let NodeKind::Path { path, .. } = &n.kind else { continue };
         assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
+}
+
+/// A pattern brush whose corner tiles have a 4 × 4 pt frame and, as art, a 2 × 2 pt square in the
+/// top-left quarter of the frame. Corner art joins a side tile on its right to one below it, so
+/// that quarter is on the outside of the turn. `inner` and `outer` say which kinds of corner have
+/// art; `flips` are the brush's Flip Along and Flip Across.
+fn marked_corner_brush(inner: bool, outer: bool, (flip_along, flip_across): (bool, bool)) -> Brush {
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -2.0, 2.0, 0.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        let frame = Some(Rect::new(0.0, -2.0, 4.0, 2.0));
+        if inner {
+            (p.inner_corner, p.inner_corner_frame) = (Some(marker.clone()), frame);
+        }
+        if outer {
+            (p.outer_corner, p.outer_corner_frame) = (Some(marker), frame);
+        }
+        (p.flip_along, p.flip_across) = (flip_along, flip_across);
+    }
+    b
+}
+
+/// Each combination of corner art (both kinds, inner only, outer only) and of the two flips.
+fn marked_corner_brushes() -> Vec<(String, Brush)> {
+    let mut v = vec![];
+    for (inner, outer) in [(true, true), (true, false), (false, true)] {
+        for flips in [(false, false), (true, false), (false, true), (true, true)] {
+            v.push((format!("inner {inner}, outer {outer}, flips {flips:?}"), marked_corner_brush(inner, outer, flips)));
+        }
+    }
+    v
+}
+
+/// The bounds of the 2 × 2 pt corner markers among `out`, turned or not.
+fn marker_bounds(out: &[Node]) -> Vec<Rect> {
+    out.iter().filter_map(Node::geometric_bounds).filter(|r| r.width() < 3.0 && r.height() < 3.0).collect()
+}
+
+/// Corner tiles are square to the sides at a right angle and turn 90° with each turn of the path:
+/// on a square drawn either way round, each corner's marker fills the quarter of the band's corner
+/// outside the turn, with the brush flipped or not and with art for one kind of corner only
+/// (#6110).
+#[test]
+fn pattern_corner_tiles_are_square_to_the_sides() {
+    let doc = Document::new(1.0, 1.0);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut reversed = BezPath::new();
+    reversed.move_to((0.0, 0.0));
+    for (x, y) in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+        reversed.line_to((x, y));
+    }
+    reversed.close_path();
+    // The square turns the same way at all four corners, and the reversed square the other way,
+    // so one draws only inner corner tiles and the other only outer ones.
+    for (name, brush) in marked_corner_brushes() {
+        for path in [&sq, &reversed] {
+            let out = stroke_pieces(&doc, &brush, path, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 4, "{name}: one marker a corner");
+            for (corner, outside) in SQUARE_CORNERS {
+                let want = Rect::from_points(corner, outside);
+                assert!(
+                    marks
+                        .iter()
+                        .any(|r| near(r.x0, want.x0, 1e-6) && near(r.y0, want.y0, 1e-6) && near(r.x1, want.x1, 1e-6) && near(r.y1, want.y1, 1e-6)),
+                    "{name}: the marker at {corner:?} fills {want:?}: {marks:?}"
+                );
+            }
+        }
+    }
+}
+
+/// At a corner that is not a right angle, a corner tile splits the difference between the two
+/// sides: its marker lies on the line that halves the angle, outside the turn, for sharp and
+/// shallow turns either way. Near a hairpin the marker moves smoothly towards the line the path
+/// arrives on.
+#[test]
+fn pattern_corner_tiles_sit_on_the_corners_diagonal() {
+    let doc = Document::new(1.0, 1.0);
+    for (name, brush) in marked_corner_brushes() {
+        for turn in [-179.9_f64, -170.0, -135.0, -60.0, -45.0, 45.0, 60.0, 135.0, 170.0, 179.9] {
+            let (a, b) = (Vec2::new(1.0, 0.0), Vec2::new(turn.to_radians().cos(), turn.to_radians().sin()));
+            let mut bp = BezPath::new();
+            bp.move_to((0.0, 0.0));
+            bp.line_to((50.0, 0.0));
+            bp.line_to(Point::new(50.0, 0.0) + b * 50.0);
+            let out = stroke_pieces(&doc, &brush, &bp, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 1, "{name}, {turn}°: one corner marker");
+            let away = a - b;
+            let want = Point::new(50.0, 0.0) + away / away.hypot() * 2.0_f64.sqrt();
+            assert!(marks[0].center().distance(want) < 1e-6, "{name}, {turn}°: the marker is at {:?}, not {want:?}", marks[0].center());
+        }
     }
 }
 

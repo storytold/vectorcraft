@@ -169,6 +169,11 @@ pub struct Services {
     /// bar's open menu) for floating panels in OS windows of their own: eframe runs the host's
     /// `raw_input_hook` for the main window only.
     pub native_input_hook: Option<NativeInputHook>,
+    /// The connected monitors, kept current by the desktop host: floating panels in OS windows of
+    /// their own store the monitor they are on and reopen on it. The rects are in the points egui
+    /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
+    /// window by these points, which sends floating panels to the main window's monitor.
+    pub dock_monitors: Vec<craft_ui::docking::Monitor>,
 }
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).

@@ -415,6 +415,68 @@ impl Document {
         }
     }
 
+    /// [`Self::update_links`] for the links `pick` holds for only, in one pass; only the nodes on the
+    /// way to one are copied.
+    pub fn update_links_where(&mut self, pick: impl Fn(&LinkInfo) -> bool, mut f: impl FnMut(&mut LinkInfo)) {
+        fn link_of(n: &Node) -> Option<&LinkInfo> {
+            match &n.kind {
+                NodeKind::Image(image) => image.link.as_ref(),
+                NodeKind::PlacedDocument(placed) => Some(&placed.link),
+                _ => None,
+            }
+        }
+        /// `n` updated in place, a copy of it when shared; left as it is when it holds no picked link.
+        fn update(n: &mut Arc<Node>, pick: &dyn Fn(&LinkInfo) -> bool, f: &mut dyn FnMut(&mut LinkInfo)) {
+            // Each child is updated through a second handle, so an updated child is a new node and a new
+            // pointer marks a change.
+            let mask = n.extras().mask.as_ref().and_then(|m| {
+                let mut art = Arc::clone(&m.art);
+                update(&mut art, pick, f);
+                (!Arc::ptr_eq(&art, &m.art)).then_some(art)
+            });
+            let mut children = vec![];
+            for (i, c) in n.children().into_iter().flatten().enumerate() {
+                let mut new = Arc::clone(c);
+                update(&mut new, pick, f);
+                if !Arc::ptr_eq(&new, c) {
+                    children.push((i, new));
+                }
+            }
+            let own = link_of(n).is_some_and(pick);
+            if !own && mask.is_none() && children.is_empty() {
+                return;
+            }
+            let n = Arc::make_mut(n);
+            let link = match &mut n.kind {
+                NodeKind::Image(image) => image.link.as_mut(),
+                NodeKind::PlacedDocument(placed) => Some(&mut placed.link),
+                _ => None,
+            };
+            if let Some(link) = link.filter(|_| own) {
+                f(link);
+            }
+            if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
+                m.art = art;
+            }
+            if let Some(slots) = n.children_mut() {
+                for (i, c) in children {
+                    if let Some(slot) = slots.get_mut(i) {
+                        *slot = c;
+                    }
+                }
+            }
+        }
+        let roots = self
+            .layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+        for root in roots {
+            update(root, &pick, &mut f);
+        }
+    }
+
     /// Change every image object (in the layers, symbol definitions and pattern swatches, opacity-mask
     /// art included) for which `pick` holds; only the subtrees holding one are copied.
     pub fn update_images(&mut self, pick: impl Fn(&ImageObject) -> bool, mut f: impl FnMut(&mut ImageObject)) {
@@ -484,6 +546,40 @@ mod tests {
             ),
         )
         .unwrap()
+    }
+
+    /// `update_links_where` changes only the picked links, in a copy of the nodes on the way to them;
+    /// the other nodes stay shared with the document it was cloned from.
+    #[test]
+    fn update_links_where_copies_only_the_nodes_it_changes() {
+        let mut d = Document::new(10.0, 10.0);
+        image(&mut d, "a", Some(LinkInfo::new("/art/a.png")));
+        image(&mut d, "b", Some(LinkInfo::new("/art/b.png")));
+        image(&mut d, "c", None);
+        let mut copy = d.clone();
+        let mut calls = 0;
+        copy.update_links_where(
+            |l| l.path == "/art/a.png",
+            |l| {
+                calls += 1;
+                l.relative = Some("art/a.png".into());
+            },
+        );
+        assert_eq!(calls, 1);
+        let node = |d: &Document, key: &str| {
+            d.layers[0].children().unwrap().iter().find(|n| matches!(&n.kind, NodeKind::Image(im) if im.key == key)).unwrap().clone()
+        };
+        let relative = |n: &Node| match &n.kind {
+            NodeKind::Image(im) => im.link.as_ref().and_then(|l| l.relative.clone()),
+            _ => None,
+        };
+        assert_eq!((relative(&node(&copy, "a")), relative(&node(&d, "a"))), (Some("art/a.png".into()), None));
+        assert!(Arc::ptr_eq(&node(&copy, "b"), &node(&d, "b")) && Arc::ptr_eq(&node(&copy, "c"), &node(&d, "c")));
+        assert!(!Arc::ptr_eq(&copy.layers[0], &d.layers[0]));
+        // Nothing picked: nothing is copied.
+        let mut same = d.clone();
+        same.update_links_where(|_| false, |_| {});
+        assert!(Arc::ptr_eq(&same.layers[0], &d.layers[0]));
     }
 
     #[test]

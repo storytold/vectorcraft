@@ -185,14 +185,51 @@ fn recent_colors_are_fed_by_every_paint_command() {
     s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
     assert_eq!(hexes(&s).len(), 3);
     // The list holds the newest `RECENT_MAX` colours.
-    for i in 0..20u8 {
+    for i in 0..40u8 {
         s.execute("paint.setFill", &json!({"color": Color::rgb8(i, 0, 0).to_hex()})).unwrap();
     }
     assert_eq!(s.recent_colors.len(), Session::RECENT_MAX);
-    assert_eq!(s.recent_colors[0].to_hex(), "#130000");
+    assert_eq!(s.recent_colors[0].to_hex(), "#270000");
     let r = s.execute("paint.recent", &json!({})).unwrap();
-    assert_eq!(r["colors"][0]["hex"], "#130000");
+    assert_eq!(r["colors"][0]["hex"], "#270000");
     let _ = id;
+}
+
+#[test]
+fn recent_colors_keep_thirty_colors_across_documents() {
+    let mut s = session();
+    rect(&mut s);
+    let red = |i: u8| Color::rgb8(i, 0, 0).to_hex();
+    for i in 1..=30u8 {
+        s.execute("paint.setFill", &json!({"color": red(i)})).unwrap();
+    }
+    assert_eq!(Session::RECENT_MAX, 30);
+    let all: Vec<String> = (1..=30u8).rev().map(red).collect();
+    assert_eq!(hexes(&s), all, "30 colors are kept, newest first");
+    // The 31st drops the oldest.
+    s.execute("paint.setFill", &json!({"color": red(31)})).unwrap();
+    assert_eq!(hexes(&s).len(), 30);
+    assert_eq!(hexes(&s)[0], red(31));
+    assert_eq!(hexes(&s)[29], red(2));
+    assert!(!hexes(&s).contains(&red(1)), "the oldest color is dropped");
+    // Applying a color already in the list moves it to the front, once.
+    s.execute("paint.setStroke", &json!({"color": red(10)})).unwrap();
+    assert_eq!(hexes(&s).len(), 30);
+    assert_eq!(hexes(&s)[0], red(10));
+    assert_eq!(hexes(&s).iter().filter(|h| **h == red(10)).count(), 1);
+    let before = hexes(&s);
+    // A new document, and going back to the first one, keep the list.
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    assert_eq!(hexes(&s), before);
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(hexes(&s), before);
+    // A color applied in the second document joins the same list.
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    rect(&mut s);
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    assert_eq!(hexes(&s)[0], "#00ff00");
+    assert_eq!(hexes(&s)[1..], before[..29]);
 }
 
 #[test]
