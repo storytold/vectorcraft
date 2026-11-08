@@ -161,7 +161,9 @@ pub(super) struct ArtStyle {
     /// It is one fill and one stroke at most, in solid colours or the object's own gradient, with
     /// no transparency or effects of their own, and only Drop Shadow, Inner Glow, Outer Glow,
     /// Feather, Round Corners, Scribble, Convert to Shape, the Path effects (Offset Path, Outline Object, Outline Stroke),
-    /// Gaussian Blur and some Distort & Transform effects ([`any_object_takes`]) on the object
+    /// Gaussian Blur (but an object other than type whose style paints a gradient that isn't its
+    /// own keeps its drawn look: `read::ops`' `styled`) and some Distort & Transform effects
+    /// ([`any_object_takes`]) on the object
     /// (and Pathfinder effects when it has no fills or strokes): what any object is read with. Type takes the other plain styles too (its drawn look
     /// can't be retyped); other objects keep their drawn look, which is the app's own rendering.
     pub simple: bool,

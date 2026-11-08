@@ -5704,6 +5704,16 @@ fn objects_with_a_gaussian_blur_come_in_as_themselves_unless_a_style_gradient_ne
     assert!(matches!(path.kind, NodeKind::Path { .. }) && !drawn, "{path:#?}");
     assert!(matches!(fill(&path), Paint::Gradient(g) if g.geom.is_some()));
     assert_eq!(effects(&path), [("blur.gaussian".to_string(), Some(4.0))]);
+    // Type takes the style's gradient fitted to it, blurred: its drawn look can't be retyped.
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let type_look = format!(
+        "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let (slot, drawn) = read_with(&format!("{type_look}{own}1 (SoftG) XW\n"));
+    assert!(slot_of(slot.name.as_deref()).is_some() && !drawn, "the type, not its look: {slot:#?}");
+    assert!(matches!(fill(&slot), Paint::Gradient(g) if g.geom.is_none() && g.angle == 30.0), "{slot:#?}");
+    assert_eq!(effects(&slot), [("blur.gaussian".to_string(), Some(4.0))]);
 }
 
 #[test]
