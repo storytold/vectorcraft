@@ -360,8 +360,28 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
     Ok(Value::str(&format!("[object {class}]")))
 }
 
+/// The string form of a Number, String or Boolean object's [[PrimitiveValue]] (sections 8.6.2 and
+/// 9.9), when `toString` is not found on the object or on its prototype chain up to and including
+/// its standard prototype. Returns `None` otherwise, and for any other object.
+fn boxed_primitive_string(interp: &mut Interp, o: ObjId) -> JsResult<Option<Value>> {
+    let (primitive, proto) = match interp.heap.object(o).map(|x| &x.class) {
+        Some(Class::Number(n)) => (Value::Number(*n), interp.intrinsics.number_proto),
+        Some(Class::String(s)) => (Value::String(s.clone()), interp.intrinsics.string_proto),
+        Some(Class::Boolean(b)) => (Value::Bool(*b), interp.intrinsics.boolean_proto),
+        _ => return Ok(None),
+    };
+    if !json::reaches_prototype(interp, o, proto, "toString")? {
+        return Ok(None);
+    }
+    Ok(Some(Value::String(interp.primitive_to_str(&primitive))))
+}
+
+/// `Object.prototype.toLocaleString` (section 15.2.4.3).
 fn object_to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let o = interp.to_object(&this)?;
+    if let Some(s) = boxed_primitive_string(interp, o)? {
+        return Ok(s);
+    }
     let receiver = Value::Object(o);
     let f = interp.get_from(o, &key("toString"), &receiver)?;
     if !interp.is_callable(&f) {

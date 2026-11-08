@@ -381,6 +381,21 @@ fn to_locale_string_calls_to_string_on_the_boxed_value() {
 }
 
 #[test]
+fn to_locale_string_writes_the_primitive_of_a_boxed_value() {
+    assert_eq!(string("[1, 'x', true, false, 1.5].toLocaleString()"), "1,x,true,false,1.5");
+    assert_eq!(string("Object.prototype.toLocaleString.call(5)"), "5");
+    assert_eq!(string("Object.prototype.toLocaleString.call(Object('s'))"), "s");
+    // Object.prototype.toString comes after the standard prototypes on the chain.
+    assert_eq!(string("Object.prototype.toString = function () { return 'z'; }; [1, 'x', true].toLocaleString()"), "1,x,true");
+    // A toString on the object or on its standard prototype is called.
+    assert_eq!(string("var n = Object(1); n.toString = function () { return 'own'; }; [n].toLocaleString()"), "own");
+    assert_eq!(string("Object.getPrototypeOf(true).toString = function () { return 'p'; }; [true].toLocaleString()"), "p");
+    assert_eq!(string("Object.getPrototypeOf(1).toString = Object.prototype.toString; [1].toLocaleString()"), "[object Number]");
+    // Other objects still reach Object.prototype.toString.
+    assert_eq!(string("Object.prototype.toLocaleString.call({})"), "[object Object]");
+}
+
+#[test]
 fn array_methods_overwriting_elements_need_no_heap_for_new_ones() {
     // With the heap exactly at its limit, an array method's write over an existing element
     // succeeds, and a write that adds an element stops with the heap limit.

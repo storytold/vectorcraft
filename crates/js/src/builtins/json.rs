@@ -574,7 +574,7 @@ fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult
 
 /// Whether looking up `name` from `o` reaches the object `proto` on the prototype chain before
 /// any object on the way, `proto` included, has its own property `name`.
-fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
+pub(super) fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
     let k = key(name);
     let mut cur = Some(o);
     while let Some(id) = cur {
