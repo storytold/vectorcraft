@@ -372,6 +372,29 @@ impl Session {
         self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
     }
 
+    /// The module the store holds for the plug-in `id`: `None` without a folder or such a file, and
+    /// an error, with a log record, when the file can't be read or is larger than the module limit.
+    pub(crate) fn stored_plugin_bytes(&self, id: &str) -> Result<Option<Vec<u8>>, String> {
+        let Some(dir) = self.plugin_dir.as_deref() else { return Ok(None) };
+        let path = dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id)));
+        if !path.exists() {
+            return Ok(None);
+        }
+        let max = vectorcraft_plugins::Limits::default().max_module_bytes as u64;
+        read_capped(&path, max).map(Some).inspect_err(|e| log::warn!("can't read the stored plug-in {}: {e}", path.display()))
+    }
+
+    /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
+    /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed.
+    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) {
+        match previous {
+            Some(bytes) => {
+                self.store_plugin(id, bytes);
+            }
+            None => self.unstore_plugin(id),
+        }
+    }
+
     /// The file the plug-in `id` is stored in, spelled as [`Session::load_stored_plugins`] names it
     /// (`None` without a plug-in folder).
     pub(crate) fn stored_plugin_file(&self, id: &str) -> Option<String> {
@@ -382,14 +405,15 @@ impl Session {
     /// other grants as they are; with none left, remove the file. Entries this version can't use
     /// are written back as they were, except one for `id`. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
-    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`.
-    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) {
-        let Some(dir) = &self.plugin_dir else { return };
+    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
+    /// holds what was asked (`false` without a folder).
+    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        let Some(dir) = &self.plugin_dir else { return false };
         let mut file = match read_grants(dir) {
             Ok(file) => file,
             Err(e) => {
                 log::warn!("not updating the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
-                return;
+                return false;
             }
         };
         let others = file.other.len();
@@ -399,22 +423,23 @@ impl Session {
             None => file.grants.remove(id).is_some(),
         } || file.other.len() != others;
         if !changed {
-            return;
+            return true;
         }
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
         if entries.is_empty() {
             take(dir, GRANTS_FILE);
-            return;
+            return true;
         }
         // The file is read back only up to its cap: written compactly when pretty-printed is larger,
         // and not at all when that is too.
         let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
         match serde_json::to_vec_pretty(&entries).ok().filter(fits).or_else(|| serde_json::to_vec(&entries).ok().filter(fits)) {
-            Some(bytes) => {
-                put(dir, GRANTS_FILE, &bytes);
+            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+            None => {
+                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE));
+                false
             }
-            None => log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE)),
         }
     }
 

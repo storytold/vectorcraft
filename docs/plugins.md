@@ -136,7 +136,9 @@ capability model proposed for PhotoCraft plug-ins
 - The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
   `Plug-ins` folder, and covers only that module. Installing the same bytes again needs no new approval. A module with
   other bytes asks again, even when it lists the same permissions. Until it is approved, the installed module and its
-  grant stay as they are; once it is, the grant records the new hash. A grant whose hash is not 64 lower-case
+  grant stay as they are; once it is, the grant records the new hash. When the new module or its grant can't be
+  written to the `Plug-ins` folder, the folder keeps the old module and its grant, and the old module loads at the
+  next start. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
   permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
   removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
