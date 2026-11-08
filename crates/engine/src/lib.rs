@@ -255,6 +255,9 @@ pub struct Session {
     /// The Global Edit Options Start Global Edit matches with (`select.globalEditOptions`); not
     /// saved.
     pub global_edit_options: cmd::globaledit::Options,
+    /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
+    /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
+    keyboard_text: bool,
 }
 
 impl Default for Session {

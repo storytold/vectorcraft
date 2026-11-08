@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
@@ -328,11 +328,26 @@ impl TypeTool {
             return None;
         }
         // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
-        // opening or closing quote, by the character before it.
+        // opening or closing quote, by the character before it. A `”` typed alone (the macOS Serbian
+        // Cyrillic layout's only double quote) becomes the opening quote where one opens, and stays
+        // `”` where one closes.
         let setup = &cx.doc.setup;
-        if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
-            let mut prev = self.char_before(cx, self.caret.min(self.anchor));
-            return Some(setup.quotes.apply(&s, &mut prev));
+        if setup.typographers_quotes {
+            let mut chars = s.chars();
+            if let (Some(c), None) = (chars.next(), chars.next()) {
+                if matches!(c, '"' | '\'') {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    return Some(setup.quotes.apply(&s, &mut prev));
+                }
+                if cx.typed_from_keyboard
+                    && let Some(q) = Quotes::typed_as_straight(c)
+                {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    if setup.quotes.opens_after(prev) {
+                        return Some(setup.quotes.apply(&q.to_string(), &mut prev));
+                    }
+                }
+            }
         }
         Some(s)
     }

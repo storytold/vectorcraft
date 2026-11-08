@@ -689,7 +689,6 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             edit_symbol_texts(d, symbols.as_ref(), &|t, open| open && changes(t), &mut replace_in);
-            drop(replace_in);
             Ok(n)
         })?
     };

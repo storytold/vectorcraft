@@ -15,8 +15,11 @@ use super::graphics::{GState, Out};
 use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
-/// Most operations one file may run.
+/// Most operations one file may run, whatever its length.
 const MAX_OPS: u64 = 50_000_000;
+/// More operations a file may run for each byte of its program: a large file that draws a lot
+/// runs proportionally more, and stays bounded by its length.
+const OPS_PER_BYTE: u64 = 64;
 /// Deepest procedure nesting.
 const MAX_DEPTH: u32 = 400;
 /// Most operands on the stack.
@@ -55,6 +58,8 @@ pub(crate) struct Interp<'a> {
     resources: DictRef,
     depth: u32,
     ops: u64,
+    /// Most operations this program may run: [`MAX_OPS`] and [`OPS_PER_BYTE`] for each byte.
+    max_ops: u64,
     /// Bytes asked for so far (see [`MAX_MEMORY`]).
     allocated: usize,
     seed: u32,
@@ -177,6 +182,7 @@ impl<'a> Interp<'a> {
             resources,
             depth: 0,
             ops: 0,
+            max_ops: MAX_OPS.saturating_add((src.len() as u64).saturating_mul(OPS_PER_BYTE)),
             allocated: 0,
             seed: 1,
             saves: vec![],
@@ -360,11 +366,11 @@ impl<'a> Interp<'a> {
         self.spend((n / 256) as u64)
     }
 
-    /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
+    /// Count `ops` operations' worth of work against the budget (`max_ops`): what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
         self.ops = self.ops.saturating_add(ops);
-        if self.ops > MAX_OPS {
+        if self.ops > self.max_ops {
             return Err(PsError::Limit("the program runs too long"));
         }
         Ok(())

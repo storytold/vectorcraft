@@ -262,7 +262,8 @@ impl Session {
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
     /// disabled (matched by file name, which is made from the id). The launch marker names each
     /// file while it loads. A module that doesn't load, and one that lists permissions the grants
-    /// there don't grant it, is skipped with a log record.
+    /// there don't grant that very module, is skipped with a log record, and stays in the folder
+    /// with its grant.
     pub fn load_stored_plugins(&mut self) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
