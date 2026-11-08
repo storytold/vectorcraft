@@ -172,6 +172,11 @@
 	Ungroup	Afgruppér
 	Lock	Lås
 	Selection	Markering
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rektangelmarkering
+	Touching	Berørte objekter
+	Fully Enclosed	Helt omsluttet
+	Drag Direction	Trækretning
 	All Artwork Above	Al grafik ovenfor
 	Other Layers	Andre lag
 	Unlock All	Lås alle op

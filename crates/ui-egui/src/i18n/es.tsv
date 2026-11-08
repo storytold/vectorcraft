@@ -3062,6 +3062,11 @@ digits	Malayalam	Malayálam
 	Selected Swatches	Muestras seleccionadas
 	Selected Swatches Only	Solo muestras seleccionadas
 	Selection	Selección
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Selección rectangular
+	Touching	Objetos tocados
+	Fully Enclosed	Totalmente incluidos
+	Drag Direction	Dirección de arrastre
 	Selection & Anchor Display	Visualización de selección y anclas
 	Selection Only	Solo la selección
 	Selection Tool	Herramienta Selección

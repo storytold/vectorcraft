@@ -3054,6 +3054,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Nuances sélectionnées
 	Selected Swatches Only	Nuances sélectionnées uniquement
 	Selection	Sélection
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Sélection rectangulaire
+	Touching	Objets touchés
+	Fully Enclosed	Entièrement inclus
+	Drag Direction	Sens du glissement
 	Selection & Anchor Display	Affichage de la sélection et des points d’ancrage
 	Selection Only	Sélection uniquement
 	Selection Tool	Outil Sélection

@@ -146,6 +146,11 @@
 	Ungroup	დაჯგუფების მოხსნა
 	Lock	ჩაკეტვა
 	Selection	მონიშნული
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	მართკუთხა მონიშვნა
+	Touching	შეხებული ობიექტები
+	Fully Enclosed	სრულად მოქცეული
+	Drag Direction	გადათრევის მიმართულება
 	All Artwork Above	ზემოთ მდებარე მთელი ნახატი
 	Other Layers	სხვა შრეები
 	Unlock All	ყველაფრის განბლოკვა

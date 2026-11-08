@@ -3798,6 +3798,11 @@ digits	Malayalam	Malaiàlam
 	Selected Swatches Only (0)	Només les mostres seleccionades (0)
 	Selected Symbols Only	Només els símbols seleccionats
 	Selection	Selecció
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Selecció rectangular
+	Touching	Objectes tocats
+	Fully Enclosed	Totalment inclosos
+	Drag Direction	Direcció de l’arrossegament
 	Selection & Anchor Display	Selecció i visualització d’ancoratges
 	Selection Only	Només la selecció
 	Selection Tool	Eina de selecció

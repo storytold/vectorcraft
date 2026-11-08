@@ -187,6 +187,11 @@
 	Ungroup	Oddělit
 	Lock	Zamknout
 	Selection	Výběr
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Obdélníkový výběr
+	Touching	Dotčené objekty
+	Fully Enclosed	Zcela uvnitř
+	Drag Direction	Směr tažení
 	All Artwork Above	Veškerou kresbu výše
 	Other Layers	Ostatní vrstvy
 	Unlock All	Odemknout vše

@@ -213,6 +213,11 @@ digits	Malayalam	マラヤーラム数字
 	Ungroup	グループ解除
 	Lock	ロック
 	Selection	選択
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	矩形選択
+	Touching	接触するオブジェクト
+	Fully Enclosed	完全に囲まれたオブジェクト
+	Drag Direction	ドラッグ方向
 	All Artwork Above	前面のすべてのアートワーク
 	Other Layers	その他のレイヤー
 	Unlock All	すべてをロック解除

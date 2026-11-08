@@ -206,6 +206,11 @@ digits	Malayalam	말라얄람어
 	Ungroup	그룹 해제
 	Lock	잠그기
 	Selection	선택 영역
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	사각형 선택
+	Touching	닿는 개체
+	Fully Enclosed	완전히 포함된 개체
+	Drag Direction	드래그 방향
 	All Artwork Above	위의 모든 아트워크
 	Other Layers	다른 레이어
 	Unlock All	모두 잠금 해제

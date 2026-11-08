@@ -2934,6 +2934,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Selected Swatches	所选色板
 	Selected Swatches Only	仅限选择的色板
 	Selection	所选对象
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	框选
+	Touching	接触对象
+	Fully Enclosed	完全包含
+	Drag Direction	拖动方向
 	Selection & Anchor Display	选择和锚点显示
 	Selection Only	仅所选内容
 	Selection Tool	选择工具
