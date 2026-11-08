@@ -330,6 +330,33 @@ fn define_properties_checks_the_heap_before_each_new_property() {
 }
 
 #[test]
+fn number_parsing_counts_its_copy_toward_the_heap_limit() {
+    // `s` is 1 Mi digits, so parsing it in base 10 copies 1 MiB, which does not fit in the
+    // 512 KiB left. Bases 16 and 36 read the digits where they are and still fit, but
+    // flattening a concatenation of `s` makes a 2 MiB buffer, which does not.
+    let setup = "var s = new Array((1 << 20) + 1).join('1'); var pad = new Array(800000).join('2'); 0";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (512 << 10);
+    assert!(heap_bytes >= 4 << 20, "{heap_bytes}");
+    let limits = Limits { heap_bytes, ..Limits::default() };
+    let mut realm = small(limits.clone());
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(
+        realm.run("parseInt(s, 16) > 0 && parseInt(s, 36) > 0 && parseInt('12') === 12 && parseFloat('1.5') === 1.5"),
+        Ok(JsValue::Bool(true))
+    );
+    assert_eq!(limit(&mut realm, "parseInt(s)"), LimitKind::Heap);
+    let mut realm = small(limits.clone());
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(limit(&mut realm, "parseInt(s + '1', 16)"), LimitKind::Heap);
+    let mut realm = small(limits);
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(limit(&mut realm, "parseFloat(s)"), LimitKind::Heap);
+}
+
+#[test]
 fn values_built_ins_hold_survive_collections() {
     // A small heap makes the callbacks' garbage start collections while the results are built.
     let mut realm = small(Limits { heap_bytes: 2 << 20, ..Limits::default() });

@@ -33,13 +33,27 @@ fn trim_start(s: &[u16]) -> &[u16] {
     s.get(s.iter().position(|&u| !is_str_space(u)).unwrap_or(s.len())..).unwrap_or_default()
 }
 
-/// ToString of the first argument, as code units, with each one taking a unit of fuel.
+/// ToString of the first argument, as code units, with each one taking a unit of fuel. A
+/// concatenation is flattened into a new buffer, which is charged to the heap.
 fn units_of(interp: &mut Interp, args: &[Value]) -> JsResult<std::rc::Rc<[u16]>> {
-    let s = interp.to_str(&arg(args, 0))?.flat();
+    let s = interp.to_str(&arg(args, 0))?;
     for _ in 0..s.len() {
         interp.use_fuel()?;
     }
-    Ok(s)
+    let rope = s.buffer_addr().is_none();
+    let bytes = crate::heap::string_bytes(s.len());
+    if rope {
+        let mark = interp.temp_roots.len();
+        interp.temp_roots.push(Value::String(s.clone()));
+        let reserved = interp.reserve_heap(bytes);
+        interp.temp_roots.truncate(mark);
+        reserved?;
+    }
+    let units = s.flat();
+    if rope {
+        interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    }
+    Ok(units)
 }
 
 fn digit_value(u: u16) -> Option<u32> {
@@ -76,17 +90,29 @@ fn parse_int(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult
         rest = rest.get(2..).unwrap_or_default();
         r = 16;
     }
-    let digits: Vec<u32> = rest.iter().map_while(|&u| digit_value(u).filter(|&d| d < r)).collect();
-    if digits.is_empty() {
+    let n = rest.iter().map_while(|&u| digit_value(u).filter(|&d| d < r)).count();
+    let prefix = rest.get(..n).unwrap_or_default();
+    if prefix.is_empty() {
         return Ok(Value::Number(f64::NAN));
     }
+    let digits = prefix.iter().filter_map(|&u| digit_value(u));
     let value = match r {
-        10 => digits.iter().filter_map(|&d| char::from_digit(d, 10)).collect::<String>().parse::<f64>().unwrap_or(f64::NAN),
-        2 | 4 | 8 | 16 | 32 => crate::chars::radix_value(digits.iter().copied(), r).unwrap_or(f64::NAN),
+        10 => parse_decimal(interp, prefix)?,
+        2 | 4 | 8 | 16 | 32 => crate::chars::radix_value(digits, r).unwrap_or(f64::NAN),
         // Other radices may be approximated (section 15.1.2.2, step 13).
-        _ => digits.iter().fold(0.0, |n, &d| n * f64::from(r) + f64::from(d)),
+        _ => digits.fold(0.0, |n, d| n * f64::from(r) + f64::from(d)),
     };
     Ok(Value::Number(sign * value))
+}
+
+/// The number that `text`, ASCII decimal digits with an optional fraction and exponent, stands
+/// for. The text is copied into a string of one byte per code unit for parsing, and that copy is
+/// checked against the heap limit first.
+fn parse_decimal(interp: &mut Interp, text: &[u16]) -> JsResult<f64> {
+    interp.reserve_heap(text.len())?;
+    let mut ascii = String::with_capacity(text.len());
+    ascii.extend(text.iter().filter_map(|&u| char::from_u32(u32::from(u))));
+    Ok(ascii.parse::<f64>().unwrap_or(f64::NAN))
 }
 
 /// The length of the longest prefix of `s` that is a StrDecimalLiteral without its sign and
@@ -148,8 +174,7 @@ fn parse_float(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResu
     if n == 0 {
         return Ok(Value::Number(f64::NAN));
     }
-    let text = String::from_utf16_lossy(rest.get(..n).unwrap_or_default());
-    Ok(Value::Number(sign * text.parse::<f64>().unwrap_or(f64::NAN)))
+    Ok(Value::Number(sign * parse_decimal(interp, rest.get(..n).unwrap_or_default())?))
 }
 
 /// `isNaN` (section 15.1.2.4).
