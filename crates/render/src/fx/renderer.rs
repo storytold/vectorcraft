@@ -1,5 +1,5 @@
-use super::bounds::{cull_bounds, effected_path};
-use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, Kept, Made, Reads, Shadow, ShadowEntry};
+use super::bounds::{cull_bounds, effected_path_carrying};
+use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
@@ -314,29 +314,39 @@ impl Renderer {
             let stamp = self.stamp;
             let e = match self.fx_geom.remove(&key) {
                 Some(e) if Arc::ptr_eq(&e.node, &o) => e,
-                _ => FxGeom { g: Arc::new(effected_path(n, bp)), items: vec![None; n.appearance.items.len()], node: o, stamp },
+                _ => {
+                    let (g, carry) = effected_path_carrying(n, bp);
+                    FxGeom { g: Arc::new(g), carried: carried(n, &carry), items: vec![None; n.appearance.items.len()], node: o, stamp }
+                }
             };
             (key, FxGeom { stamp, ..e })
         });
-        let g = match &cached {
-            Some((_, e)) => e.g.clone(),
-            None => Arc::new(effected_path(n, bp)),
+        let (g, carried) = match &cached {
+            Some((_, e)) => (e.g.clone(), e.carried.clone()),
+            None => {
+                let (g, carry) = effected_path_carrying(n, bp);
+                (Arc::new(g), carried(n, &carry))
+            }
         };
-        self.draw_shape_fx_geom(ctx, f, n, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
+        let paints = carried.as_deref().unwrap_or(n);
+        self.draw_shape_fx_geom(ctx, f, n, paints, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
         if let Some((key, e)) = cached {
             self.fx_geom.insert(key, e);
         }
     }
 
-    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry.
+    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
+    /// `paints` is `n` with the fills and strokes it paints.
+    #[allow(clippy::too_many_arguments)]
     fn draw_shape_fx_geom(
         &mut self,
         ctx: &mut RenderContext,
         f: &Frame,
         n: &Node,
+        paints: &Node,
         g: &BezPath,
         rule: FillRule,
-        items: Option<&mut Vec<Option<Arc<BezPath>>>>,
+        items: Option<&mut Vec<Option<ItemGeom>>>,
     ) {
         if g.elements().is_empty() {
             return;
@@ -345,7 +355,7 @@ impl Renderer {
             self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = GeomContext::of(n);
+        let gctx = GeomContext::of(paints);
         let rfx = effects::raster_effects(&n.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
@@ -355,7 +365,7 @@ impl Renderer {
         let reach = bounds.map_or(reach, |b| reach.union(b));
         let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
-        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, g, rule, &gctx, items.as_deref_mut()));
+        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
     }
 
@@ -770,6 +780,16 @@ impl Renderer {
             });
         }
     }
+}
+
+/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, or
+/// `None` when they stay where they are.
+fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+    carry.moves(&n.appearance).then(|| {
+        let mut m = n.clone();
+        carry.apply(&mut m.appearance);
+        Arc::new(m)
+    })
 }
 
 #[cfg(test)]
