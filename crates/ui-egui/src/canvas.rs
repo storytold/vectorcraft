@@ -186,6 +186,22 @@ fn view_rects(app: &VectorcraftApp, outer: egui::Rect, ppp: f32) -> (egui::Rect,
     (full, rect.round_to_pixels(ppp))
 }
 
+/// Whether the user pressed a button or a key, typed, scrolled or zoomed in this frame: the
+/// opening fit stops following the canvas then ([`crate::caches::CanvasCache::opening_fit`]).
+fn acted(i: &egui::InputState) -> bool {
+    i.pointer.any_pressed()
+        || i.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key { pressed: true, .. }
+                    | egui::Event::Text(_)
+                    | egui::Event::MouseWheel { .. }
+                    | egui::Event::Zoom(_)
+                    | egui::Event::Touch { .. }
+            )
+        })
+}
+
 /// Paint the document canvas, complete or cached artwork, navigation and tool overlays.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -225,13 +241,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (full, rect) = view_rects(app, outer, ui.ctx().pixels_per_point());
     app.canvas_rect = Some(rect);
     let fitted = app.view().is_some_and(|v| v.fitted);
+    // A document's opening view is fitted to the canvas of the first frame that shows it, and the
+    // window's layout can still move the canvas's edges over the next frames. Until the view is
+    // moved or the user acts, the opening fit follows the canvas, so that the document opens at the
+    // zoom of the settled window.
+    let key = |v: &View| ViewKey { rect, zoom: v.zoom, center: v.center, rotation: v.rotation };
+    let following =
+        !fitted || (!ui.input(acted) && app.canvas.opening_fit.zip(app.view()).is_some_and(|(was, v)| ViewKey { rect: was.rect, ..key(v) } == was));
+    let settling = fitted && following && app.canvas.opening_fit.is_some_and(|was| was.rect != rect);
     // Presentation Mode shows the active artboard on the whole screen and nothing but the art:
     // no selection, guides, grids or artboard edges (#4365).
     let presenting = app.ui.screen_mode == 3;
-    if !fitted || (presenting && app.canvas.presented != Some(rect)) {
+    if !fitted || settling || (presenting && app.canvas.presented != Some(rect)) {
         fit(app, "view.fitArtboard");
     }
     app.canvas.presented = presenting.then_some(rect);
+    app.canvas.opening_fit = if following { app.view().map(key) } else { None };
     // Before the canvas's own interaction, so the view the canvas draws is the one they moved to.
     if bars {
         scroll_bars(app, ui, rect, outer, &t);
