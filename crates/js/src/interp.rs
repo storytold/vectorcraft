@@ -1173,27 +1173,31 @@ impl Interp {
     }
 
     /// The names of an object's own properties (section 15.2.3.4): a String object's indices and
-    /// an array's or String object's `length` first, then the rest in the order they were added,
-    /// which is the order `for-in` visits them. Each name takes a unit of fuel, and the heap for
-    /// the list is checked first.
+    /// `length` first, then the rest in the order they were added, which is the order `for-in`
+    /// visits them, then an array's `length`. Each name takes a unit of fuel, and the heap for the
+    /// list is checked first.
     pub(crate) fn own_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
         let o = self.object(id)?;
         let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
-        let has_length = matches!(o.class, Class::Array { .. } | Class::String(_));
-        let count = o.props.len().saturating_add(string_len).saturating_add(usize::from(has_length));
+        let is_string = matches!(o.class, Class::String(_));
+        let is_array = matches!(o.class, Class::Array { .. });
+        let count = o.props.len().saturating_add(string_len).saturating_add(usize::from(is_string || is_array));
         self.reserve_heap(index_keys_bytes(string_len).saturating_add(count.saturating_mul(KEY_ENTRY_BYTES)))?;
         let mut out = Vec::with_capacity(count);
         for i in 0..string_len {
             self.use_fuel()?;
             out.push(index_key(u32::try_from(i).unwrap_or(u32::MAX)));
         }
-        if has_length {
+        if is_string {
             out.push(key("length"));
         }
         for _ in 0..self.object(id)?.props.len() {
             self.use_fuel()?;
         }
         out.extend(self.object(id)?.props.keys());
+        if is_array {
+            out.push(key("length"));
+        }
         Ok(out)
     }
 

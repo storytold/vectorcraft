@@ -100,7 +100,8 @@ fn object_functions_list_create_and_lock_objects() {
     );
     truth("Object.getPrototypeOf(Object.create(null)) === null && Object.getPrototypeOf([]) === Array.prototype");
     assert_eq!(string("Object.getOwnPropertyNames(Object('ab')).join()"), "0,1,length");
-    assert_eq!(string("var a = [5]; a.k = 1; Object.getOwnPropertyNames(a).join()"), "length,0,k");
+    assert_eq!(string("Object.getOwnPropertyNames([0, 1, 2]).join()"), "0,1,2,length");
+    assert_eq!(string("var a = [5]; a.k = 1; Object.getOwnPropertyNames(a).join()"), "0,k,length");
     // Object.keys lists names in the order for-in visits them (section 15.2.3.14).
     assert_eq!(string("var o = {b: 1, a: 2, 3: 3}, s = ''; for (var k in o) s += k; Object.keys(o).join('') === s ? s : 'differs'"), "ba3");
     truth("var o = Object.seal({x: 1}); o.x = 2; delete o.x; o.y = 1; o.x === 2 && o.y === undefined && Object.isSealed(o) && !Object.isFrozen(o)");
