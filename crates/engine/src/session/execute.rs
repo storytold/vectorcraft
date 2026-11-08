@@ -76,9 +76,13 @@ impl Session {
             cmd::ids_param(params, "ids", id)?;
         }
         // Clear's menu needs a selection; an agent supplying explicit targets only needs a
-        // document. The command validates those targets before making any edit.
+        // document. The command validates those targets before making any edit. Cut and Copy given
+        // the artboards the journal recorded need only a document too, whatever is selected and
+        // whichever tool is chosen.
         let given = given_ids(spec.params, params);
-        let enabled = if id == "edit.clear" && params.get("ids").is_some() {
+        let enabled = if (id == "edit.clear" && params.get("ids").is_some())
+            || (matches!(id, "edit.copy" | "edit.cut") && params.get("selectedArtboards").is_some())
+        {
             cmd::has_doc(self)
         } else if let Some(ids) = given.clone() {
             // Objects given as `ids` (or `id`) stand in for the selection: the command is enabled

@@ -111,9 +111,8 @@ fn boards_and_art(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool
 }
 
 /// [`boards_and_art`], with both values added to the running command's journal entry, so a replay
-/// acts on the same artboards and art whatever the Artboard tool's state is then. `edit.cut` and
-/// `edit.copy` call [`artboard_copy`] without this and take no such params.
-fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
+/// acts on the same artboards and art whatever the Artboard tool's state is then.
+pub(crate) fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
     let (indices, art) = boards_and_art(s, p, cmd)?;
     note_artboards(s, p, &indices);
     s.note_journal("art", json!(art));

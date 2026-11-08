@@ -4403,6 +4403,13 @@ When a call to `artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.
 names no artboard, its journal entry records the artboards it acted on as `selectedArtboards`. A replay of the journal
 acts on those artboards, and a recorded action leaves the value out and acts on the selection when it plays.
 
+`edit.copy` and `edit.cut` with the Artboard tool chosen record the same `selectedArtboards`, and `art` beside it.
+`edit.copy {selectedArtboards: [n…], art?}` and `edit.cut {selectedArtboards: [n…], art?}` run `artboard.copy` and
+`artboard.cut` on those artboards whichever tool is chosen and whatever is selected, so a replay of the journal in a new
+session takes the same artboards. A value of `selectedArtboards` that names no artboard fails as `indices` does, and `art`
+that is not true or false fails. A recorded action leaves both values out: when it plays, `edit.copy` and `edit.cut` take
+artboards when the Artboard tool is chosen then, and the selection otherwise.
+
 `artboard.selectAll {}` chooses the Artboard tool when another tool is in use and selects every artboard. The active
 artboard stays active, the art's selection stays as it is, and no undo step is recorded → `{selected: [index…]}`, the
 active artboard first.
