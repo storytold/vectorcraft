@@ -68,6 +68,7 @@ pub(crate) struct Intrinsics {
     pub(crate) number_proto: ObjId,
     pub(crate) boolean_proto: ObjId,
     pub(crate) regexp_proto: ObjId,
+    pub(crate) date_proto: ObjId,
     pub(crate) error_protos: [ObjId; 7],
     pub(crate) eval: ObjId,
     pub(crate) throw_type_error: ObjId,
@@ -84,6 +85,7 @@ impl Intrinsics {
             number_proto: o,
             boolean_proto: o,
             regexp_proto: o,
+            date_proto: o,
             error_protos: [o; 7],
             eval: o,
             throw_type_error: o,
@@ -112,6 +114,7 @@ impl Intrinsics {
             self.number_proto,
             self.boolean_proto,
             self.regexp_proto,
+            self.date_proto,
             self.eval,
             self.throw_type_error,
         ];
@@ -161,6 +164,8 @@ pub(crate) struct Interp {
     pub(crate) throw_site: Option<ThrowSite>,
     /// The last exception a run did not catch.
     pub(crate) last_thrown: Value,
+    /// The clock and time zone `Date` reads.
+    pub(crate) date_host: crate::date_builtins::DateHost,
 }
 
 /// The least heap size a collection waits for.
@@ -286,6 +291,7 @@ impl Interp {
             source_units: 0,
             throw_site: None,
             last_thrown: Value::Undefined,
+            date_host: crate::date_builtins::DateHost::default(),
         };
         crate::builtins::install(&mut interp);
         interp.gc_threshold = interp.next_threshold();
@@ -410,6 +416,13 @@ impl Interp {
             return Err(Abrupt::Limit(LimitKind::Heap));
         }
         Ok(())
+    }
+
+    /// Collects garbage now, for a caller whose work ran out of heap room, and sets when the
+    /// next collection runs.
+    pub(crate) fn collect_for_room(&mut self) {
+        self.collect_garbage();
+        self.gc_threshold = self.next_threshold();
     }
 
     /// Charges code compiled at run time to the heap, reserving its estimated size and `extra`
@@ -1334,16 +1347,7 @@ impl Interp {
 
     fn op_regexp(&mut self, i: u32) -> JsResult<()> {
         let Some((source, flags)) = self.frame()?.code.regexps.get(i as usize).cloned() else { return internal("regular expression out of range") };
-        let proto = self.intrinsics.regexp_proto;
-        let r = self.heap.alloc_object(Object::new(Class::RegExp, Some(proto)));
-        let flag_units = flags.flat();
-        let has = |c: u8| flag_units.contains(&u16::from(c));
-        let (g, i_, m) = (has(b'g'), has(b'i'), has(b'm'));
-        self.define(r, key("source"), Prop::Data { value: Value::String(source), flags: 0 })?;
-        self.define(r, key("global"), Prop::Data { value: Value::Bool(g), flags: 0 })?;
-        self.define(r, key("ignoreCase"), Prop::Data { value: Value::Bool(i_), flags: 0 })?;
-        self.define(r, key("multiline"), Prop::Data { value: Value::Bool(m), flags: 0 })?;
-        self.define(r, key("lastIndex"), Prop::Data { value: Value::Number(0.0), flags: WRITABLE })?;
+        let r = crate::regexp_builtins::new_regexp(self, &source, &flags)?;
         self.push(Value::Object(r))
     }
 
@@ -1928,7 +1932,9 @@ impl Interp {
     #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_primitive(&mut self, v: &Value, hint: Hint) -> JsResult<Value> {
         let Value::Object(o) = v else { return Ok(v.clone()) };
-        let order = if hint == Hint::String { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
+        // Without a hint, a Date object converts as with the String hint.
+        let date = hint == Hint::Default && matches!(self.heap.object(*o).map(|ob| &ob.class), Some(Class::Date(_)));
+        let order = if hint == Hint::String || date { ["toString", "valueOf"] } else { ["valueOf", "toString"] };
         for name in order {
             let f = self.get_from(*o, &key(name), v)?;
             if self.is_callable(&f) {
@@ -2002,7 +2008,7 @@ impl Interp {
             Value::Object(o) => return Ok(*o),
             Value::Undefined | Value::Null => return Err(self.type_error("cannot convert undefined or null to an object")),
             Value::Bool(_) => (Class::Boolean, self.intrinsics.boolean_proto),
-            Value::Number(_) => (Class::Number, self.intrinsics.number_proto),
+            Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
             Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
         };
         Ok(self.heap.alloc_object(Object::new(class, Some(proto))))

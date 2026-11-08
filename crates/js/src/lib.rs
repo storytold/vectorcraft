@@ -23,9 +23,13 @@
 //! verifier, and runs it on an interpreter that keeps JavaScript calls on its own frame stack, so
 //! deep recursion in a script does not use the native stack. Objects and environments live in an
 //! arena with a mark-and-sweep collector; strings built by repeated `+` are flattened and dropped
-//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and a minimal
-//! set of built-ins: `Object` and `Object.prototype`'s basic methods, `Function` with
-//! `Function.prototype.call` and `apply`, `eval`, and the error constructors. Every run is bounded
+//! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and these
+//! built-ins: `Object` and `Object.prototype`'s basic methods, `Function` with
+//! `Function.prototype.call` and `apply`, `eval`, the error constructors, and `String`, `Number`,
+//! `RegExp` and `Date` (sections 15.5, 15.7, 15.9 and 15.10). Regular expressions run on a
+//! backtracking matcher that keeps its choice points on its own stack and takes fuel for every
+//! step; `Date` reads the clock and time zone the host sets with [`Realm::set_clock`] and
+//! [`Realm::set_time_zone`]. Every run is bounded
 //! by [`Limits`]: instructions run (fuel), heap bytes, frames, nested host calls, and an
 //! [`Interrupt`] flag another thread can set. A run that reaches a limit ends with
 //! [`RunErrorKind::Limit`], which a script's `try` cannot catch.
@@ -36,14 +40,19 @@ mod builtins;
 mod bytecode;
 mod chars;
 mod compiler;
+mod date_builtins;
 mod error;
 mod heap;
 mod interp;
 mod lexer;
 mod number;
+mod number_builtins;
 mod parser;
 mod realm;
 mod regexp;
+mod regexp_builtins;
+mod regexp_vm;
+mod string_builtins;
 mod token;
 mod value;
 
@@ -173,3 +182,5 @@ impl LineTable {
 mod interp_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_tests;

@@ -206,10 +206,12 @@ pub(crate) enum Class {
     Arguments(Box<ArgMap>),
     /// A `Boolean` object made by ToObject.
     Boolean,
-    /// A `Number` object made by ToObject.
-    Number,
+    /// A `Number` object and its number.
+    Number(f64),
     String(Str),
-    RegExp,
+    RegExp(Rc<crate::regexp_vm::Regex>),
+    /// A `Date` object and its time value.
+    Date(f64),
     ForIn(Box<ForIn>),
 }
 
@@ -223,9 +225,10 @@ impl Class {
             Class::Error => "Error",
             Class::Arguments(_) => "Arguments",
             Class::Boolean => "Boolean",
-            Class::Number => "Number",
+            Class::Number(_) => "Number",
             Class::String(_) => "String",
-            Class::RegExp => "RegExp",
+            Class::RegExp(_) => "RegExp",
+            Class::Date(_) => "Date",
         }
     }
 }
@@ -528,6 +531,11 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         }
         Class::Arguments(map) => work.push(map.env.0),
         Class::String(s) => strings.add(s),
+        Class::RegExp(re) => {
+            if strings.seen.insert(Rc::as_ptr(re) as *const () as usize) {
+                strings.bytes += re.heap_bytes();
+            }
+        }
         Class::ForIn(state) => {
             work.extend(state.object.iter().map(|o| o.0));
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();

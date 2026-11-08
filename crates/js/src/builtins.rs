@@ -1,7 +1,8 @@
 //! The built-in objects the interpreter itself needs (ECMA-262 5.1 section 15): `Object` and the
 //! basic methods of `Object.prototype`, `Function` with `Function.prototype.call`, `apply` and
 //! `toString`, `eval`, the error constructors and `Error.prototype.toString`, and the prototypes
-//! primitive values look properties up on. The rest of the standard library is not here yet.
+//! primitive values look properties up on. `String`, `Number`, `RegExp` and `Date` are in their
+//! own modules; the rest of the standard library is not here yet.
 
 use std::rc::Rc;
 
@@ -16,24 +17,24 @@ fn alloc(interp: &mut Interp, class: Class, proto: Option<ObjId>) -> ObjId {
 }
 
 /// A built-in function object.
-fn native(interp: &mut Interp, name: &'static str, f: NativeFn, length: u32, kind: NativeKind, constructor: bool) -> JsResult<ObjId> {
+pub(crate) fn native(interp: &mut Interp, name: &'static str, f: NativeFn, length: u32, kind: NativeKind, constructor: bool) -> JsResult<ObjId> {
     let proto = interp.intrinsics.function_proto;
     let o = alloc(interp, Class::Function(Func::Native { f, kind, constructor, name }), Some(proto));
     interp.define(o, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
     Ok(o)
 }
 
-fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
+pub(crate) fn method(interp: &mut Interp, on: ObjId, name: &'static str, f: NativeFn, length: u32) -> JsResult<()> {
     let m = native(interp, name, f, length, NativeKind::Plain, false)?;
     interp.define(on, key(name), Prop::Data { value: Value::Object(m), flags: HIDDEN })
 }
 
-fn data(interp: &mut Interp, on: ObjId, name: &str, value: Value, flags: u8) -> JsResult<()> {
+pub(crate) fn data(interp: &mut Interp, on: ObjId, name: &str, value: Value, flags: u8) -> JsResult<()> {
     interp.define(on, key(name), Prop::Data { value, flags })
 }
 
 /// Links a constructor and its prototype and makes the constructor a global.
-fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, proto: ObjId) -> JsResult<()> {
+pub(crate) fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     data(interp, ctor, "prototype", Value::Object(proto), 0)?;
     data(interp, proto, "constructor", Value::Object(ctor), HIDDEN)?;
     let global = interp.global;
@@ -65,7 +66,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     }
     interp.intrinsics.array_proto = alloc(interp, Class::Array { length: 0, length_writable: true }, Some(object_proto));
     interp.intrinsics.string_proto = alloc(interp, Class::String(Str::from("")), Some(object_proto));
-    interp.intrinsics.number_proto = alloc(interp, Class::Number, Some(object_proto));
+    interp.intrinsics.number_proto = alloc(interp, Class::Number(0.0), Some(object_proto));
     interp.intrinsics.boolean_proto = alloc(interp, Class::Boolean, Some(object_proto));
     interp.intrinsics.regexp_proto = alloc(interp, Class::Ordinary, Some(object_proto));
     let thrower = native(interp, "", throw_type_error, 0, NativeKind::Plain, false)?;
@@ -98,7 +99,11 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     data(interp, function_proto, "apply", Value::Object(apply), HIDDEN)?;
     method(interp, function_proto, "toString", function_to_string, 0)?;
 
-    install_errors(interp, object_proto)
+    install_errors(interp, object_proto)?;
+    crate::string_builtins::install(interp)?;
+    crate::number_builtins::install(interp)?;
+    crate::regexp_builtins::install(interp)?;
+    crate::date_builtins::install(interp)
 }
 
 fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
@@ -132,7 +137,7 @@ fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
     Ok(())
 }
 
-fn arg(args: &[Value], i: usize) -> Value {
+pub(crate) fn arg(args: &[Value], i: usize) -> Value {
     args.get(i).cloned().unwrap_or(Value::Undefined)
 }
 
