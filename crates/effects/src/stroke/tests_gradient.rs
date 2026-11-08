@@ -286,3 +286,64 @@ fn a_narrow_pass_beside_a_wide_one_leaves_its_edge_alone() {
     assert!((t - 50.0 / total).abs() < 1e-6, "painted with {t}, not the first leg's {}", 50.0 / total);
     assert_covered(&hairpin, &st);
 }
+
+/// #5960: with dashes, the ribs reach as far as the stroke gets wide within a cap's length along
+/// the path, however many points lie that far: not as far as it is wide anywhere when more than
+/// 256 do.
+#[test]
+fn a_densely_flattened_dashed_pass_beside_a_wide_one_leaves_its_edge_alone() {
+    // The hairpin above, the way back in 0.01 pt steps: 500 points within a round cap's 5 pt.
+    let mut pts = vec![(0.0, 0.0), (100.0, 0.0)];
+    pts.extend((0..=10_000).map(|i| (100.0 - i as f64 * 0.01, 7.0)));
+    let hairpin = poly(&pts, false);
+    let total = 207.0;
+    let mut st = stroke(10.0, StrokeGradientMode::Along);
+    st.profile = Some(WidthProfile::taper_end());
+    st.cap = LineCap::Round;
+    st.dash = Some(Dash { pattern: vec![12.0, 6.0], ..Default::default() });
+    let sl = slices(&hairpin, &st);
+    let p = Point::new(50.0, 3.0);
+    let t = param(&sl, p).expect("in a slice");
+    assert!((t - 50.0 / total).abs() < 1e-6, "painted with {t}, not the first leg's {}", 50.0 / total);
+}
+
+/// The widest the ribs ahead reach is the widest over the points out to the first one more than
+/// the window along, as a walk along the subpath finds it, open and closed.
+#[test]
+fn widest_ahead_is_the_widest_within_the_window() {
+    let mut seed = 0x9e37_79b9_u64;
+    let mut rnd = move || {
+        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for _ in 0..200 {
+        let n = 1 + (rnd() * 40.0) as usize;
+        let cover: Vec<f64> = (0..n).map(|_| rnd() * 10.0).collect();
+        // Some points on top of each other.
+        let seg: Vec<f64> = (0..n).map(|_| if rnd() < 0.2 { 0.0 } else { rnd() * 3.0 }).collect();
+        let window = [0.0, rnd() * 5.0, rnd() * 200.0][(rnd() * 3.0) as usize];
+        for closed in [false, true] {
+            let got = super::gradient::widest_ahead(&cover, &seg, closed, window);
+            assert_eq!(got.len(), n);
+            for (i, &got) in got.iter().enumerate() {
+                let (mut j, mut d, mut want) = (i, 0.0, 0.0_f64);
+                for _ in 0..n {
+                    let k = if closed {
+                        (j + 1) % n
+                    } else if j + 1 < n {
+                        j + 1
+                    } else {
+                        break;
+                    };
+                    want = want.max(cover[k]);
+                    d += seg[j];
+                    j = k;
+                    if d > window {
+                        break;
+                    }
+                }
+                assert_eq!(got, want, "n {n}, closed {closed}, window {window}, point {i}");
+            }
+        }
+    }
+}

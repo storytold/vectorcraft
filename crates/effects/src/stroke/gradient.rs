@@ -13,6 +13,8 @@
 //! fill them ([`gradient_slices`]); Outline Stroke turns the strip into a gradient mesh
 //! ([`gradient_meshes`]).
 
+use std::collections::VecDeque;
+
 use kurbo::{BezPath, Point, Shape, Vec2};
 use vectorcraft_doc::color::{Gradient, GradientGeom, GradientPaint, Paint};
 use vectorcraft_doc::live::{H_DOWN, H_LEFT, H_RIGHT, H_UP};
@@ -34,8 +36,6 @@ const MESH_ROWS: usize = 16;
 const MESH_STEP: f64 = 1.0 / 32.0;
 /// The most of a subpath one slice spans while a width profile shapes the across gradient.
 const PROFILE_STEP: f64 = 1.0 / 64.0;
-/// The most points either way a rib looks along the path for how wide the stroke gets near it.
-const WINDOW_POINTS: usize = 256;
 /// Flattening tolerance, cover margin and growth (see [`gradient_slices`]) of meshes and written
 /// slices (document points).
 const SLICE_TOL: f64 = 0.05;
@@ -231,13 +231,16 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     let n = pts.len();
     let seg_count = if closed { n } else { n - 1 };
     let dir: Vec<Vec2> = (0..seg_count).map(|i| unit(pts[(i + 1) % n] - pts[i])).collect();
-    // How far along the subpath each point is.
-    let mut along = Vec::with_capacity(n);
-    let mut s = 0.0;
-    for i in 0..n {
-        along.push(s);
-        s += pts[i].distance(pts[(i + 1) % n]);
-    }
+    // How far each point is from the next, and along the subpath.
+    let seg: Vec<f64> = (0..n).map(|i| pts[i].distance(pts[(i + 1) % n])).collect();
+    let along: Vec<f64> = seg
+        .iter()
+        .scan(0.0, |s, l| {
+            let at = *s;
+            *s += l;
+            Some(at)
+        })
+        .collect();
     // How far the ribs at point `i` reach: past the stroke there and on its way to the points
     // either side, where it is no wider than at one of the two (each side of a width profile
     // stays between its widths at the points of a span, and its points have points here). The
@@ -246,43 +249,18 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
     // stroke is wide anywhere: where a stroke crosses or runs close by itself, a narrow part
     // reaching that far would paint over a wide part beside it (#5960). The start of a closed
     // subpath is also its end. Ribs near an arrowhead reach across it.
-    let cover = |i: usize| {
-        let t = along[i] / total;
-        if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(t) }
-    };
-    let widest = lay.hw * lay.st.profile_max() + lay.margin;
+    let cover: Vec<f64> = (0..n).map(|i| if closed && i == 0 { lay.cover(0.0).max(lay.cover(1.0)) } else { lay.cover(along[i] / total) }).collect();
     let window = match lay.st.dash {
         Some(_) if lay.st.profile.is_some() => cap_extent(lay.st.cap, 2.0 * lay.hw * lay.st.profile_max()),
         _ => 0.0,
     };
+    let ahead = widest_ahead(&cover, &seg, closed, window);
+    // Behind a point is ahead of it on the subpath run backwards.
+    let back_seg: Vec<f64> = (0..n).map(|i| seg[(2 * n - 2 - i) % n]).collect();
+    let back_cover: Vec<f64> = cover.iter().rev().copied().collect();
+    let behind: Vec<f64> = widest_ahead(&back_cover, &back_seg, closed, window).into_iter().rev().collect();
     let reach = |i: usize| {
-        let mut r = cover(i);
-        for forward in [false, true] {
-            // Out to the first point past the window (bounded: past that many, as wide as anywhere).
-            let (mut j, mut d, mut past) = (i, 0.0, false);
-            for _ in 0..WINDOW_POINTS {
-                let k = match (closed, forward) {
-                    (true, true) => (j + 1) % n,
-                    (true, false) => (j + n - 1) % n,
-                    (false, true) if j + 1 < n => j + 1,
-                    (false, false) if j > 0 => j - 1,
-                    _ => {
-                        past = true;
-                        break;
-                    }
-                };
-                r = r.max(cover(k));
-                d += pts[j].distance(pts[k]);
-                j = k;
-                if d > window {
-                    past = true;
-                    break;
-                }
-            }
-            if !past {
-                r = r.max(widest);
-            }
-        }
+        let mut r = cover[i].max(ahead[i]).max(behind[i]);
         let s = along[i];
         if heads.0 > 0.0 && s <= heads.0 {
             r = r.max(heads.0 + lay.margin);
@@ -313,6 +291,49 @@ fn strip(lay: &Lay, pts: &[Point], closed: bool, total: f64, side: Option<bool>,
         let (d, b) = (dir[seg_count - 1], lay.band(1.0, side));
         out.push(Rib::square(pts[n - 1], d, reach(n - 1), 1.0, b));
         out.push(Rib::square(pts[n - 1] + d * lay.ext.1, d, reach(n - 1), 1.0, b));
+    }
+    out
+}
+
+/// For each of the points of a subpath, how far the ribs of the points ahead of it reach
+/// (`cover`), out to the first point more than `window` along (or the end of an open subpath,
+/// or once round a closed one): `seg[i]` is how far point `i` is from the next (past the last,
+/// the first when `closed`). Both ends of the window only move forward, so a queue of the
+/// points that reach farther than every point after them gives each maximum, and a subpath
+/// costs time in proportion to its points however many a window spans.
+pub(super) fn widest_ahead(cover: &[f64], seg: &[f64], closed: bool, window: f64) -> Vec<f64> {
+    let n = cover.len().min(seg.len());
+    if n == 0 {
+        return vec![];
+    }
+    // A closed subpath's points ahead are numbered on round it once more.
+    let last = if closed { 2 * n - 1 } else { n - 1 };
+    let mut pos = Vec::with_capacity(last + 1);
+    let mut s = 0.0;
+    for k in 0..=last {
+        pos.push(s);
+        s += seg[k % n];
+    }
+    let mut out = Vec::with_capacity(n);
+    let mut queue: VecDeque<usize> = VecDeque::new();
+    let mut next = 1;
+    for i in 0..n {
+        next = next.max(i + 1);
+        let stop = if closed { i + n } else { last };
+        let mut past = next > i + 1 && pos[next - 1] - pos[i] > window;
+        while !past && next <= stop {
+            let r = cover[next % n];
+            while queue.back().is_some_and(|&k| cover[k % n] <= r) {
+                queue.pop_back();
+            }
+            queue.push_back(next);
+            past = pos[next] - pos[i] > window;
+            next += 1;
+        }
+        while queue.front().is_some_and(|&k| k <= i) {
+            queue.pop_front();
+        }
+        out.push(queue.front().map_or(0.0, |&k| cover[k % n]));
     }
     out
 }
