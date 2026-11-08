@@ -183,6 +183,7 @@ impl Renderer {
                 (image, x0, y0, scale, moved, cropped)
             }
         };
+        self.stats.view_sized += usize::from(cropped.is_some() || scale != 1.0);
         Some(Shadow { image, at: Affine::translate((x, y)) * Affine::scale(scale), mode, moved, cropped })
     }
 
