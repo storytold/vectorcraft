@@ -3956,7 +3956,7 @@ axis	Both	Her İkisi
 @msg	already editing a pattern	zaten bir desen düzenliyor
 @msg	an object can't be read	bir nesne okunamıyor
 @msg	an object in perspective would leave the edited grid	perspektifteki bir nesne düzenlenen ızgaradan ayrılır
-@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: yok, resim veya tür
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art veya type
 @msg	artboard {0} does not exist	{0} çalışma yüzeyi mevcut değil
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	bu ölçekte çizim {w} × {h} nk, kanvasın sığabileceğinden daha fazladır: daha küçük bir ölçek seçin veya çalışma yüzeyine sığdırın
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil

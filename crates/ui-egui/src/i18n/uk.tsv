@@ -4005,7 +4005,7 @@ axis	Both	Обидві
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
-@msg	kerning must be a number, "auto", or "optical"	Кернінг має бути числом, «auto» або «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning має бути числом, «auto» або «optical»
 @msg	the selection has no gradient fill	виділення не має градієнтної заливки
 @msg	the selection has no gradient stroke	виділення не має градієнтного обведення
 @msg	the selection has no pattern fill	виділення не має візерункової заливки
@@ -4232,9 +4232,9 @@ axis	Both	Обидві
 @msg	bad shortcut	неприпустиме поєднання клавіш
 @msg	bad stream length	неприпустима довжина потоку
 @msg	bad trailer	неприпустимий трейлер
-@msg	balance must be between 0 and 100	баланс має бути від 0 до 100
+@msg	balance must be between 0 and 100	balance має бути від 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	крок пакету {_1} (`{id}`) не виконано: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яскравість має бути dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness має бути dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не вдалося закодувати документ: {0}
 @msg	can't parse shortcut `{c}`	не вдалося розібрати поєднання `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не вдалося розібрати поєднання `{s}` для `{k}`
@@ -4259,7 +4259,7 @@ axis	Both	Обидві
 @msg	compound paths can only contain paths	складені контури можуть містити лише контури
 @msg	compressed (RLE) bitmaps can't be read yet	стислі (RLE) растрові зображення поки не читаються
 @msg	damaged	пошкоджено
-@msg	decimals must be {_1}–{_2} (got {_3})	число десяткових знаків має бути {_1}–{_2} (отримано {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals має бути {_1}–{_2} (отримано {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	розділіть на 1–{MAX_PIECES} фрагментів
 @msg	effect {k} is `{_1}`, not `{id}`	ефект {k} - це `{_1}`, а не `{id}`
 @msg	empty brush stroke	порожній мазок пензля
@@ -4458,9 +4458,9 @@ axis	Both	Обидві
 @msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
-@msg	percent must be above 0 and at most 6400, not {p}	відсоток має бути більше 0 і не більше 6400, а не {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent має бути більше 0 і не більше 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	виберіть колір, градієнт або візерунок, щоб зберегти як зразок
-@msg	plane must be left, right or ground	площина повинна бути left, right або ground
+@msg	plane must be left, right or ground	plane має бути left, right або ground
 @msg	plug-in ABI: {0}	ABI модуля: {0}
 @msg	plug-in exceeded its {0}	модуль перевищив свій {0}
 @msg	plug-in failed: {0}	модуль завершився помилково: {0}
@@ -4479,8 +4479,8 @@ axis	Both	Обидві
 @msg	result would exceed the canvas (coordinates out of range)	результат перевищив би полотно (координати поза діапазоном)
 @msg	objects can't be nested more than 32 deep	об’єкти не можна вкладати глибше ніж на 32 рівні
 @msg	the SVG's elements are nested more than {0} deep	елементи SVG вкладено глибше ніж на {0} рівнів
-@msg	scale must be a number from {_1} to {_2}, not {_3}	масштаб має бути числом від {_1} до {_2}, а не {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	масштаб має бути числом від {_1} до {_2}, а не {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale має бути числом від {_1} до {_2}, а не {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale має бути числом від {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	виділіть (або вкажіть як об’єкт) об’єкти, оформлення яких не є основним
 @msg	select a Live Paint group	виділіть групу швидкої заливки
 @msg	select a blend	виділіть перехід
@@ -4947,7 +4947,7 @@ axis	Both	Обидві
 @msg	before must name a panel	before має вказувати панель
 @msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
 @msg	group must be true or false	group має мати значення true або false
-@msg	panel is not in a dock group	панель не входить до групи дока
+@msg	panel is not in a dock group	panel не входить до групи дока
 @msg	only a dock group above or below others collapses, not one beside another	згорнути можна лише групу дока над або під іншими, а не поруч з ними
 @msg	icon must be true or false	icon має бути true або false
 @msg	icon only docks a panel in the icon column, with no anchor	icon лише закріплює панель у стовпці значків, без anchor

@@ -4002,7 +4002,7 @@ imageTrace	Outline	Kontur
 @plural	{n} stroke|{n} strokes	{n} kontur|{n} konturer
 @msg	no library `{id}`	intet bibliotek `{id}`
 @msg	select some type first	markér først noget tekst
-@msg	kerning must be a number, "auto", or "optical"	Kerning skal være et tal, „auto“ eller „optical“
+@msg	kerning must be a number, "auto", or "optical"	kerning skal være et tal, „auto“ eller „optical“
 @msg	{_1} has no {_2} style	{_1} har ingen {_2}-stil
 @msg	a layer couldn't be read	et lag kunne ikke læses
 @msg	it has more than one artboard	den har mere end én tegneflade
@@ -4177,7 +4177,7 @@ imageTrace	Outline	Kontur
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art eller type
 @msg	artboard {0} does not exist	tegneflade {0} findes ikke
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	ved denne skala er tegningen {w} × {h} pt, mere end lærredet rummer: vælg en mindre skala, eller tilpas den til tegnefladen
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	aksen skal være "vertical", "horizontal" eller en vinkel i grader, ikke `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis skal være "vertical", "horizontal" eller en vinkel i grader, ikke `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	baggrund {other}: gennemsigtig, hvid, sort eller en farve som "#ff8800"
 @msg	bad color {v}	ugyldig farve {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio skal være et tal fra 0,1 til 10
@@ -4188,7 +4188,7 @@ imageTrace	Outline	Kontur
 @msg	bad trailer	ugyldig trailer
 @msg	balance must be between 0 and 100	balance skal være mellem 0 og 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchtrin {_1} (`{id}`) mislykkedes: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	lysstyrken skal være dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness skal være dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan ikke kode dokumentet: {0}
 @msg	can't parse shortcut `{c}`	kan ikke parse genvejen `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	kan ikke parse genvejen `{s}` for `{k}`
@@ -4211,7 +4211,7 @@ imageTrace	Outline	Kontur
 @msg	compound paths can only contain paths	sammensatte kurver kan kun indeholde kurver
 @msg	compressed (RLE) bitmaps can't be read yet	komprimerede (RLE) bitmaps kan endnu ikke læses
 @msg	damaged	beskadiget
-@msg	decimals must be {_1}–{_2} (got {_3})	decimaler skal være {_1}–{_2} (fik {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals skal være {_1}–{_2} (fik {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	opdel i 1 til {MAX_PIECES} udsnit
 @msg	effect {k} is `{_1}`, not `{id}`	effekten {k} er `{_1}`, ikke `{id}`
 @msg	empty brush stroke	tomt penselstrøg
@@ -4228,8 +4228,8 @@ imageTrace	Outline	Kontur
 @msg	an image has no pixels and was left out	et billede uden pixels blev udeladt
 @msg	image data `{_1}` is missing	billeddata `{_1}` mangler
 @msg	image would be too large; lower the resolution	billedet ville blive for stort; sænk opløsningen
-@msg	index must be a number or first, previous, next or last	indeks skal være et tal eller first, previous, next eller last
-@msg	index must be a number or first, previous, next or last, not `{other}`	indeks skal være et tal eller first, previous, next eller last, ikke `{other}`
+@msg	index must be a number or first, previous, next or last	index skal være et tal eller first, previous, next eller last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index skal være et tal eller first, previous, next eller last, ikke `{other}`
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	installation fra en sti er ikke tilgængelig på webbet; overfør modulet som `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	intern fejl i `{cmd}`: {msg} (dokumentet blev efterladt, som det var tidligere; meld venligst denne fejl)
 @msg	internal error: {msg} (please report this bug)	intern fejl: {msg} (meld venligst denne fejl)
@@ -4392,9 +4392,9 @@ imageTrace	Outline	Kontur
 @msg	replace: the object to replace was changed or deleted	erstat: objektet, der skulle erstattes, er ændret eller slettet
 @msg	pattern missing	mønster mangler
 @msg	patterns nested too deeply are filled with mid-grey	mønstre, der er indlejret for dybt, udfyldes med mellemgrå
-@msg	percent must be above 0 and at most 6400, not {p}	procent skal være over 0 og højst 6400, ikke {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent skal være over 0 og højst 6400, ikke {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	vælg en farve, en gradient eller et mønster, der skal gemmes som en farveprøve
-@msg	plane must be left, right or ground	planet skal være venstre, højre eller grund
+@msg	plane must be left, right or ground	plane skal være left, right eller ground
 @msg	plug-in ABI: {0}	plug-in-ABI: {0}
 @msg	plug-in exceeded its {0}	plug-in'et overskred sin {0}
 @msg	plug-in failed: {0}	plug-in fejlede: {0}
@@ -4413,8 +4413,8 @@ imageTrace	Outline	Kontur
 @msg	result would exceed the canvas (coordinates out of range)	resultatet ville gå ud over lærredet (koordinater uden for intervallet)
 @msg	objects can't be nested more than 32 deep	objekter kan ikke indlejres mere end 32 niveauer dybt
 @msg	the SVG's elements are nested more than {0} deep	SVG'ens elementer er indlejret mere end {0} niveauer dybt
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skalaen skal være et tal fra {_1} til {_2}, ikke {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skalaen skal være et tal fra {_1} til {_2}, ikke {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale skal være et tal fra {_1} til {_2}, ikke {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale skal være et tal fra {_1} til {_2}, ikke {s}
 @msg	select (or target) objects whose appearance isn't basic	markér (eller målret) objekter, hvis udseende ikke er grundlæggende
 @msg	select a Live Paint group	markér en Live Paint-gruppe
 @msg	select a blend	markér en blanding
@@ -4722,7 +4722,7 @@ imageTrace	Outline	Kontur
 @msg	before must name a panel	before skal angive et panel
 @msg	docking action contains an unknown panel or an excessive split path	dokningshandlingen indeholder et ukendt panel eller en overdreven opdelingssti
 @msg	group must be true or false	group skal være true eller false
-@msg	panel is not in a dock group	panelet er ikke i en dockgruppe
+@msg	panel is not in a dock group	panel er ikke i en dockgruppe
 @msg	only a dock group above or below others collapses, not one beside another	kun en dockgruppe over eller under andre kan skjules, ikke en ved siden af en anden
 @msg	icon must be true or false	icon skal være true eller false
 @msg	icon only docks a panel in the icon column, with no anchor	icon docker kun et panel i ikonkolonnen, uden anchor

@@ -4021,7 +4021,7 @@ axis	Both	Entrambi
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	nessuna libreria `{id}`
 @msg	select some type first	seleziona prima del testo
-@msg	kerning must be a number, "auto", or "optical"	La crenatura deve essere un numero, «auto» o «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning deve essere un numero, «auto» o «optical»
 @msg	the selection has no gradient fill	la selezione non ha una sfumatura di riempimento
 @msg	the selection has no gradient stroke	la selezione non ha una sfumatura di traccia
 @msg	the selection has no pattern fill	la selezione non ha un motivo di riempimento
@@ -4248,9 +4248,9 @@ axis	Both	Entrambi
 @msg	bad shortcut	scelta rapida non valida
 @msg	bad stream length	lunghezza dello stream non valida
 @msg	bad trailer	trailer non valido
-@msg	balance must be between 0 and 100	il bilanciamento deve essere compreso tra 0 e 100
+@msg	balance must be between 0 and 100	balance deve essere compreso tra 0 e 100
 @msg	batch step {_1} (`{id}`) failed: {e}	il passaggio {_1} del batch (`{id}`) non è riuscito: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	la luminosità deve essere dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness deve essere dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	impossibile codificare il documento: {0}
 @msg	can't parse shortcut `{c}`	impossibile interpretare la scelta rapida `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	impossibile interpretare la scelta rapida `{s}` per `{k}`
@@ -4275,7 +4275,7 @@ axis	Both	Entrambi
 @msg	compound paths can only contain paths	i tracciati composti possono contenere solo tracciati
 @msg	compressed (RLE) bitmaps can't be read yet	le bitmap compresse (RLE) non possono ancora essere lette
 @msg	damaged	danneggiato
-@msg	decimals must be {_1}–{_2} (got {_3})	i decimali devono essere {_1}–{_2} (ricevuto {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals deve essere {_1}–{_2} (ricevuto {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	dividi in un numero di sezioni da 1 a {MAX_PIECES}
 @msg	effect {k} is `{_1}`, not `{id}`	l'effetto {k} è `{_1}`, non `{id}`
 @msg	empty brush stroke	traccia di pennello vuota
@@ -4474,7 +4474,7 @@ axis	Both	Entrambi
 @msg	replace: the object to replace was changed or deleted	replace: l’oggetto da sostituire è stato modificato o eliminato
 @msg	pattern missing	motivo mancante
 @msg	patterns nested too deeply are filled with mid-grey	i motivi annidati troppo in profondità vengono riempiti di grigio medio
-@msg	percent must be above 0 and at most 6400, not {p}	la percentuale deve essere maggiore di 0 e al massimo 6400, non {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent deve essere maggiore di 0 e al massimo 6400, non {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	scegli un colore, una sfumatura o un motivo da salvare come campione
 @msg	plane must be left, right or ground	plane deve essere left, right o ground
 @msg	plug-in ABI: {0}	ABI del plug-in: {0}
@@ -4495,8 +4495,8 @@ axis	Both	Entrambi
 @msg	result would exceed the canvas (coordinates out of range)	il risultato supererebbe l'area di disegno (coordinate fuori intervallo)
 @msg	objects can't be nested more than 32 deep	gli oggetti non possono essere nidificati oltre 32 livelli
 @msg	the SVG's elements are nested more than {0} deep	gli elementi dell'SVG sono nidificati oltre {0} livelli
-@msg	scale must be a number from {_1} to {_2}, not {_3}	la scala deve essere un numero da {_1} a {_2}, non {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	la scala deve essere un numero da {_1} a {_2}, non {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale deve essere un numero da {_1} a {_2}, non {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale deve essere un numero da {_1} a {_2}, non {s}
 @msg	select (or target) objects whose appearance isn't basic	seleziona (o imposta come destinazione) oggetti con un aspetto non di base
 @msg	select a Live Paint group	seleziona un gruppo di pittura dinamica
 @msg	select a blend	seleziona una fusione
@@ -4965,7 +4965,7 @@ effect	Regular	Normale
 @msg	before must name a panel	before deve indicare un pannello
 @msg	docking action contains an unknown panel or an excessive split path	L’azione di ancoraggio contiene un pannello sconosciuto o un percorso di divisioni troppo lungo
 @msg	group must be true or false	group deve essere true o false
-@msg	panel is not in a dock group	il pannello non è in un gruppo del dock
+@msg	panel is not in a dock group	panel non è in un gruppo del dock
 @msg	only a dock group above or below others collapses, not one beside another	si comprime solo un gruppo del dock sopra o sotto altri, non uno accanto
 @msg	icon must be true or false	icon deve essere true o false
 @msg	icon only docks a panel in the icon column, with no anchor	icon ancora un pannello solo nella colonna delle icone, senza anchor

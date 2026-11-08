@@ -3787,7 +3787,7 @@ axis	Both	Ambos
 @msg	bad shortcut	atalho inválido
 @msg	bad stream length	comprimento de fluxo inválido
 @msg	bad trailer	trailer inválido
-@msg	balance must be between 0 and 100	o equilíbrio deve estar entre 0 e 100
+@msg	balance must be between 0 and 100	balance deve estar entre 0 e 100
 @msg	batch step {_1} (`{id}`) failed: {e}	a etapa {_1} do lote (`{id}`) falhou: {e}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness deve ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	não foi possível codificar o documento: {0}
@@ -3814,7 +3814,7 @@ axis	Both	Ambos
 @msg	compound paths can only contain paths	traçados compostos só podem conter traçados
 @msg	compressed (RLE) bitmaps can't be read yet	bitmaps compactados (RLE) ainda não podem ser lidos
 @msg	damaged	danificado
-@msg	decimals must be {_1}–{_2} (got {_3})	as casas decimais devem estar entre {_1} e {_2} (recebido {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals deve estar entre {_1} e {_2} (recebido {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	divida em 1 a {MAX_PIECES} fatias
 @msg	effect {k} is `{_1}`, not `{id}`	o efeito {k} é `{_1}`, não `{id}`
 @msg	empty brush stroke	traço de pincel vazio
@@ -4010,7 +4010,7 @@ axis	Both	Ambos
 @msg	replace: the object to replace was changed or deleted	replace: o objeto a ser substituído foi alterado ou excluído
 @msg	pattern missing	padrão ausente
 @msg	patterns nested too deeply are filled with mid-grey	padrões aninhados com profundidade excessiva são preenchidos com cinza médio
-@msg	percent must be above 0 and at most 6400, not {p}	a porcentagem deve ser maior que 0 e no máximo 6400, não {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent deve ser maior que 0 e no máximo 6400, não {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	escolha uma cor, gradiente ou padrão para salvar como amostra
 @msg	plane must be left, right or ground	plane deve ser left, right ou ground
 @msg	plug-in ABI: {0}	ABI do plug-in: {0}
@@ -4031,8 +4031,8 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	o resultado excederia a tela (coordenadas fora do intervalo)
 @msg	objects can't be nested more than 32 deep	os objetos não podem ser aninhados em mais de 32 níveis
 @msg	the SVG's elements are nested more than {0} deep	os elementos do SVG estão aninhados em mais de {0} níveis
-@msg	scale must be a number from {_1} to {_2}, not {_3}	a escala deve ser um número de {_1} a {_2}, não {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	a escala deve ser um número de {_1} a {_2}, não {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale deve ser um número de {_1} a {_2}, não {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale deve ser um número de {_1} a {_2}, não {s}
 @msg	select (or target) objects whose appearance isn't basic	selecione (ou direcione) objetos cuja aparência não seja básica
 @msg	select a Live Paint group	selecione um grupo de Pintura dinâmica
 @msg	select a blend	selecione uma mesclagem
@@ -4374,7 +4374,7 @@ axis	Both	Ambos
 @msg	before must name a panel	before deve nomear um painel
 @msg	docking action contains an unknown panel or an excessive split path	a ação de encaixe contém um painel desconhecido ou um caminho de divisão excessivo
 @msg	group must be true or false	group deve ser true ou false
-@msg	panel is not in a dock group	o painel não está em um grupo do encaixe
+@msg	panel is not in a dock group	panel não está em um grupo do encaixe
 @msg	only a dock group above or below others collapses, not one beside another	só um grupo do encaixe acima ou abaixo de outros é recolhido, não um ao lado
 @msg	icon must be true or false	icon deve ser true ou false
 @msg	icon only docks a panel in the icon column, with no anchor	icon apenas encaixa um painel na coluna de ícones, sem anchor
