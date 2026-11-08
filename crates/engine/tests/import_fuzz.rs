@@ -3043,6 +3043,36 @@ fn arb_area_options() -> impl Strategy<Value = String> {
     prop::collection::vec((keys, values), 0..8).prop_map(|kv| kv.iter().map(|(k, v)| format!("/{k} {v}")).collect::<Vec<_>>().join(" "))
 }
 
+/// Type on a Path Options as a frame might keep them at key 11: nothing, a value that isn't a
+/// dictionary, or a dictionary of codes and flags of any value or type.
+fn arb_path_options() -> impl Strategy<Value = String> {
+    let keys = prop::sample::select(vec!["0", "1", "2", "3", "4", "6", "7", "18", "22"]);
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "-1",
+        "2.5",
+        "1e400",
+        "NaN",
+        "inf",
+        "(x)",
+        "true",
+        "false",
+        "/Name",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    (prop::collection::vec((keys, values), 0..6), 0usize..3).prop_map(|(kv, shape)| match shape {
+        0 => format!("/11 << {} >>", kv.iter().map(|(k, v)| format!("/{k} {v}")).collect::<Vec<_>>().join(" ")),
+        1 => "/11 3".to_string(),
+        _ => String::new(),
+    })
+}
+
 /// A text document of `kinds.len()` stories, story `i` in frame `i` of kind `kinds[i]` (0 point type,
 /// 1 area type, 2 type on a path, others a kind the reader doesn't know), with a line break inside
 /// its paragraph (`\x03`) at each of `soft` (by character, wrapping, the story's end included) and
@@ -3190,6 +3220,18 @@ proptest! {
         survive("EPS text frames with hostile area options", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
         survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// The type on a path of the same text document with hostile Type on a Path Options, opened as
+    /// an EPS document and as a `.ai`'s editing data.
+    #[test]
+    fn text_frames_with_hostile_path_options_never_panic(options in arb_path_options()) {
+        let text = frames_document_text().replacen("/6 [ 0.5 2.0 ]", &format!("/6 [ 0.5 2.0 ] {options}"), 1);
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile path options", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile path options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
     /// The same for vertical type and Tate-chu-yoko runs: orientations and baseline directions of
