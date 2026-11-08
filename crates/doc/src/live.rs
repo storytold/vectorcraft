@@ -318,14 +318,32 @@ mod tests {
 
     #[test]
     fn a_top_object_corner_tie_goes_to_the_first_anchor() {
-        // Both chamfer anchors lie 30 from the box corner: the first one along the outline wins.
+        // Both chamfer anchors lie 30 from the box corner: the first one along the outline, in
+        // the order it was drawn, wins.
         let c = |p: (f64, f64)| (p, p, p);
-        let from_left = outline(&[c((0.0, 30.0)), c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0))]);
-        let tl = Coons::from_top_object(&from_left, None).unwrap().corners()[0];
-        assert!(tl.distance(Point::new(0.0, 30.0)) < 1e-9, "{tl:?}");
-        let from_top = outline(&[c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0)), c((0.0, 30.0))]);
-        let tl = Coons::from_top_object(&from_top, None).unwrap().corners()[0];
-        assert!(tl.distance(Point::new(30.0, 0.0)) < 1e-9, "{tl:?}");
+        let tl = |pts: &[Knot]| Coons::from_top_object(&outline(pts), None).unwrap().corners()[0];
+        let from_left = tl(&[c((0.0, 30.0)), c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0))]);
+        assert!(from_left.distance(Point::new(0.0, 30.0)) < 1e-9, "{from_left:?}");
+        let from_top = tl(&[c((30.0, 0.0)), c((100.0, 0.0)), c((100.0, 100.0)), c((0.0, 100.0)), c((0.0, 30.0))]);
+        assert!(from_top.distance(Point::new(30.0, 0.0)) < 1e-9, "{from_top:?}");
+        // Drawn counter-clockwise, the anchor met first in that order wins.
+        let back = tl(&[c((0.0, 100.0)), c((100.0, 100.0)), c((100.0, 0.0)), c((30.0, 0.0)), c((0.0, 30.0))]);
+        assert!(back.distance(Point::new(30.0, 0.0)) < 1e-9, "{back:?}");
+        let back = tl(&[c((0.0, 30.0)), c((0.0, 100.0)), c((100.0, 100.0)), c((100.0, 0.0)), c((30.0, 0.0))]);
+        assert!(back.distance(Point::new(0.0, 30.0)) < 1e-9, "{back:?}");
+    }
+
+    #[test]
+    fn a_reflected_top_object_keeps_the_corners_a_file_gives() {
+        // Reflecting the outline across x = 0 keeps its anchors in the same order, now running
+        // counter-clockwise: the corners stay on the same anchors, so the content is reflected too.
+        let mut path = top_split_at_30();
+        path.transform(Affine::FLIP_X);
+        let c = Coons::from_top_object(&path, Some([1, 2, 3, 4])).unwrap();
+        let want = [(-30.0, 0.0), (-100.0, 0.0), (-100.0, 50.0), (0.0, 50.0)].map(Point::from);
+        assert!(c.corners().iter().zip(want).all(|(p, q)| p.distance(q) < 1e-9), "{:?}", c.corners());
+        let p = c.eval(0.5, 0.5);
+        assert!(p.distance(Point::new(-50.0, 17.5)) < 1e-9, "{p:?}");
     }
 
     #[test]
@@ -348,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn a_top_object_is_not_the_same_after_splitting_a_curve() {
+    fn a_split_curve_moves_the_top_object_share_to_its_new_anchor() {
         // Splitting the top curve at t = 0.3 keeps its shape but changes the polygon shares: the
         // new anchor lands at the first piece's share, not at u = 0.3.
         let top = CubicBez::new((0.0, 0.0), (40.0, -40.0), (160.0, -40.0), (200.0, 0.0));

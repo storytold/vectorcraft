@@ -147,30 +147,35 @@ impl Coons {
     /// The patch of a top object's outline (the largest subpath of `path`), split into four sides
     /// at its corners. Each piece of a side between two anchors or corners takes a share of `u` or
     /// `v` in proportion to the length of its control polygon, spread along the piece by its own
-    /// curve parameter. A straight segment counts as a cubic with its handles a third of the way
-    /// along, so the content spreads evenly along it. `corners` are the anchors (indices into the
-    /// outline, in its own order) at the top left, top right, bottom right and bottom left, as a
-    /// saved file gives them; without them, or when they don't fit the outline, each corner is
-    /// found from the outline ([`top_object_corner`]). A straight segment closes an open subpath,
-    /// and segments of no length are left out. A top object's envelope maps onto this patch.
+    /// curve parameter. A segment without handles counts as a cubic with its handles a third of
+    /// the way along, so the content spreads evenly along it. `corners` are the anchors (indices
+    /// into the outline, in its own order) at the top left, top right, bottom right and bottom
+    /// left, as a saved file gives them. They stay on those anchors when they run the way the
+    /// outline does or the opposite way, so a reflected outline keeps them; without them, or when
+    /// they don't fit the outline, each corner is found from the outline ([`top_object_corner`]).
+    /// A straight segment closes an open subpath, and segments of no length are left out. A top
+    /// object's envelope maps onto this patch.
     pub fn from_top_object(path: &PathData, corners: Option<[u32; 4]>) -> Option<Self> {
         let sp = path.subpaths.iter().filter(|s| s.anchors.len() >= 2).max_by(|a, b| a.area().abs().total_cmp(&b.area().abs()))?;
         let mut sp = sp.clone();
         let count = sp.anchors.len();
-        let mut corners = corners.map(|c| c.map(|i| i as usize));
-        // Orient clockwise in y-down (TL → TR → BR → BL).
-        if sp.signed_area() < 0.0 {
-            sp.reverse();
-            corners = corners.map(|c| c.map(|i| count.saturating_sub(1).saturating_sub(i)));
-        }
         // Stored corners count only when they are distinct anchors met in order around the outline.
-        let corners = corners.filter(|c| {
+        let fits = |c: &[usize; 4]| {
             if !c.iter().all(|i| *i < count) {
                 return false;
             }
             let gaps: Vec<usize> = (0..4).map(|k| (c[(k + 1) % 4] + count - c[k]) % count).collect();
             gaps.iter().all(|g| *g > 0) && gaps.iter().sum::<usize>() == count
-        });
+        };
+        let given = corners.map(|c| c.map(|i| i as usize));
+        // Stored corners met in the outline's own order keep it as drawn, even counter-clockwise
+        // (a reflected outline). Otherwise orient it clockwise in y-down (TL → TR → BR → BL).
+        let mut corners = given.filter(fits);
+        let reversed = corners.is_none() && sp.signed_area() < 0.0;
+        if reversed {
+            sp.reverse();
+            corners = given.map(|c| c.map(|i| count.saturating_sub(1).saturating_sub(i))).filter(fits);
+        }
         // Each segment, and whether it is straight: a straight one's parameter runs evenly along it.
         let line = |a: Point, b: Point| (CubicBez::new(a, a.lerp(b, 1.0 / 3.0), a.lerp(b, 2.0 / 3.0), b), true);
         let mut segs: Vec<(usize, (CubicBez, bool))> = (0..sp.segment_count())
@@ -187,6 +192,12 @@ impl Coons {
         segs.retain(|(_, (c, _))| [c.p1, c.p2, c.p3].iter().any(|p| p.distance(c.p0) > 1e-9));
         // The kept segment that anchor `k` starts (a segment of no length starts where the next begins).
         let starts: Vec<usize> = segs.iter().map(|(i, _)| *i).collect();
+        // Where each kept segment and the anchor it starts at come in the outline as drawn: a tie
+        // between corners goes to the one met first there.
+        let order: Vec<(usize, usize)> = starts
+            .iter()
+            .map(|&i| if reversed { (count.saturating_sub(1).saturating_sub(i), (2 * count).saturating_sub(2 + i) % count.max(1)) } else { (i, i) })
+            .collect();
         let segs: Vec<(CubicBez, bool)> = segs.into_iter().map(|(_, s)| s).collect();
         let r = segs.iter().map(|(c, _)| c.bounding_box()).reduce(|a, b| a.union(b)).or_else(|| path.bounds())?;
         // An outline of fewer than three points (a straight line there and back) maps onto its
@@ -254,7 +265,7 @@ impl Coons {
                 (place(c[0]), place(c[1]), place(c[2]), place(c[3]))
             }
             None => {
-                let corner = |q: Point| top_object_corner(&segs, r, q);
+                let corner = |q: Point| top_object_corner(&segs, &order, r, q);
                 (corner(Point::new(r.x0, r.y0)), corner(Point::new(r.x1, r.y0)), corner(Point::new(r.x1, r.y1)), corner(Point::new(r.x0, r.y1)))
             }
         };
@@ -329,7 +340,7 @@ const MAX_SIDE_POINTS: usize = 1 << 16;
 /// of a top object looks for an anchor.
 const CORNER_REACH: f64 = 0.475;
 
-/// A handle shorter than this (in points) makes its anchor a corner of a top object.
+/// A handle this long (in points) or shorter makes its anchor a corner of a top object.
 const SHORT_HANDLE: f64 = 0.01;
 
 /// An anchor whose tangent directions, as unit vectors, differ by less than this in x and in y is
@@ -341,7 +352,7 @@ const SMOOTH_TURN: f64 = 0.01;
 const CORNER_END_SNAP: f64 = 0.005;
 
 /// Is the anchor at `a`, reached by handle `h_in` and left by handle `h_out` on an outline that
-/// runs clockwise on screen, a corner of a top object? A handle shorter than [`SHORT_HANDLE`]
+/// runs clockwise on screen, a corner of a top object? A handle of [`SHORT_HANDLE`] or shorter
 /// makes it one. Otherwise its tangent directions must differ by [`SMOOTH_TURN`] or more and turn
 /// clockwise, so it points out of the outline.
 fn top_object_corner_anchor(h_in: Point, a: Point, h_out: Point) -> bool {
@@ -360,33 +371,39 @@ fn top_object_corner_anchor(h_in: Point, a: Point, h_out: Point) -> bool {
 /// Where along `segs` (segment index + parameter, in [0, n)) the corner of a top object nearest
 /// corner `q` of its bounding box `r` lies, for an outline that runs clockwise on screen. It is
 /// the nearest anchor to `q` that is a corner ([`top_object_corner_anchor`]) and lies within
-/// [`CORNER_REACH`] of the box's width and height from `q`; the first such anchor wins a tie.
-/// Without one, it is the nearest point of the outline to `q`, moved onto its segment's anchor
-/// when within [`CORNER_END_SNAP`] of either end.
-fn top_object_corner(segs: &[(CubicBez, bool)], r: Rect, q: Point) -> f64 {
+/// [`CORNER_REACH`] of the box's width and height from `q`. Without one, it is the nearest point
+/// of the outline to `q`, moved onto its segment's anchor when within [`CORNER_END_SNAP`] of
+/// either end. `order` gives where each segment's first anchor and the segment itself come in the
+/// outline as drawn, which may run the other way; on a tie the one met first there wins.
+fn top_object_corner(segs: &[(CubicBez, bool)], order: &[(usize, usize)], r: Rect, q: Point) -> f64 {
     use vectorcraft_geom::kurbo::ParamCurveNearest;
     let n = segs.len();
     if n == 0 {
         return 0.0;
     }
+    let rank = |i: usize| order.get(i).copied().unwrap_or((i, i));
     let (reach_x, reach_y) = (r.width() * CORNER_REACH, r.height() * CORNER_REACH);
-    let mut best: Option<(f64, usize)> = None;
+    let mut best: Option<(f64, usize, usize)> = None;
     for i in 0..n {
         let (Some((prev, _)), Some((cur, _))) = (segs.get((i + n - 1) % n), segs.get(i)) else { continue };
         let a = cur.p0;
         if (a.x - q.x).abs() > reach_x || (a.y - q.y).abs() > reach_y || !top_object_corner_anchor(prev.p2, a, cur.p1) {
             continue;
         }
-        let d = a.distance_squared(q);
-        if best.is_none_or(|(b, _)| d < b) {
-            best = Some((d, i));
+        let (d, k) = (a.distance_squared(q), rank(i).0);
+        if best.is_none_or(|(b, bk, _)| d < b || (d == b && k < bk)) {
+            best = Some((d, k, i));
         }
     }
-    if let Some((_, i)) = best {
+    if let Some((_, _, i)) = best {
         return i as f64;
     }
     let tol = (r.width() + r.height()).max(1e-6) * 1e-9;
-    let nearest = segs.iter().enumerate().map(|(i, (c, _))| (c.nearest(q, tol), i)).min_by(|a, b| a.0.distance_sq.total_cmp(&b.0.distance_sq));
+    let nearest = segs
+        .iter()
+        .enumerate()
+        .map(|(i, (c, _))| (c.nearest(q, tol), i))
+        .min_by(|a, b| a.0.distance_sq.total_cmp(&b.0.distance_sq).then(rank(a.1).1.cmp(&rank(b.1).1)));
     let Some((near, i)) = nearest else { return 0.0 };
     if near.t > CORNER_END_SNAP && near.t < 1.0 - CORNER_END_SNAP {
         i as f64 + near.t
