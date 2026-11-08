@@ -842,6 +842,9 @@ impl<'p> Builder<'p> {
             let vx = self.fonts.get(&key).and_then(|f| f.vertical.as_ref()).map_or(500.0, |v| v.centre(glyph));
             m * kurbo::Point::new(vx, 880.0)
         });
+        // A horizontal line is gathered in visual order and put back in logical order as a whole:
+        // a ligature's characters (lam-alef, lam-lam-heh) go in visual order too (#6072).
+        let text = if top.is_none() { visual_glyph_text(text) } else { text };
         let place = |line: &mut TextLine| match top {
             Some(top) => line.push_upright(&look, at, opacity, Upright { top }, &text),
             None => line.push(&look, at, opacity, advance, &text),
@@ -870,4 +873,17 @@ impl<'p> Builder<'p> {
         }
         true
     }
+}
+
+/// The characters of one glyph in the order they are drawn: a PDF names a ligature's characters
+/// in logical order (lam then alef for لا), while a horizontal line of type is gathered glyph by
+/// glyph in visual order and only then put back in logical order. Right-to-left characters are
+/// turned round here so that putting the line back restores them.
+fn visual_glyph_text(text: String) -> String {
+    if text.chars().nth(1).is_none() {
+        return text;
+    }
+    let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
+    let chars: Vec<char> = text.chars().collect();
+    order.iter().filter_map(|&i| chars.get(i)).collect()
 }
