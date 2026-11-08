@@ -45,13 +45,15 @@ fn every_solid_draws_shaded_faces_and_leaves_the_source_editable() {
         assert_eq!(n.path_data(), Some(&source), "{id}");
         assert!(!faces(&art).is_empty(), "{id}");
         // The faces are the fill's red or the stroke's black, shaded: never brighter, never another
-        // hue (the classic Plastic surface adds a white highlight, tested on its own).
+        // hue. The classic Plastic surface, its default, also lightens a face toward white, which
+        // scales every channel's distance from white by the same factor and so keeps r - g to
+        // r - b at 6 to 7.
         for f in faces(&art) {
             let [r, g, b] = fill_rgb(f);
-            assert!(
-                r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4 || id == ROTATE || id == CLASSIC_EXTRUDE,
-                "{id}: {r} {g} {b}"
-            );
+            let shaded = r <= 0.8 + 1e-6 && (g * 4.0 - r).abs() < 1e-4 && (b * 8.0 - r).abs() < 1e-4;
+            let highlighted =
+                id == CLASSIC_EXTRUDE && [r, g, b].iter().all(|c| (0.0..=1.0).contains(c)) && ((r - g) * 7.0 - (r - b) * 6.0).abs() < 1e-4;
+            assert!(shaded || highlighted || id == ROTATE, "{id}: {r} {g} {b}");
         }
         // The art follows the source when it moves.
         let before = art.visual_bounds().unwrap();
