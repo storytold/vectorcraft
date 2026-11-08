@@ -135,12 +135,19 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
     enabled(app, "object.envelope.release") != reset
 }
 
+/// Menu items shown only with Preferences › Type › Show East Asian Options on: Type › Composite
+/// Fonts….
+fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
+    id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
+}
+
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
-/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
-/// another stands in for ([`swapped_out`]).
+/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]), an item
+/// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
+/// ([`east_asian_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
     let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
-    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
         return None;
     }
     Some((en, checked(app, id, p)))
@@ -175,7 +182,7 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 /// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
 /// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
 /// on their keys.
-pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
+pub(super) const SUBJECT_COMMANDS: [&str; 3] = ["appearance.addFill", "appearance.addStroke", "svgFilter.apply"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
 pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
@@ -246,7 +253,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             let min = crate::panels::pathfinder::minimum_operands(op);
             crate::panels::pathfinder::operands(app) >= min
         }),
-        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
+            app.session.active().is_some()
+        }
+        "ui.importSvgFilter" => {
+            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
+        }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),

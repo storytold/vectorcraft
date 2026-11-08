@@ -244,6 +244,141 @@ fn the_relative_path_finds_the_file_after_the_folder_moves() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// A document moved to another folder while its linked file is missing keeps the file's relative
+/// path when it is saved again, there or in a subfolder, so the file is found once it is back
+/// beside the document.
+#[test]
+fn a_missing_link_keeps_its_relative_path_when_the_moved_document_is_saved() {
+    let a = Folder::new("missing-save-a");
+    let b = Folder::new("missing-save-b");
+    let away = Folder::new("missing-save-away");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    // Move the document and its links, then take the links away.
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::create_dir_all(b.0.join("copies")).unwrap();
+    save(&mut s, &b.file("copies/poster.vectorcraft"));
+    let relative = |path: &str| {
+        let mut saved: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        saved_image(&mut saved)["link"]["relative"].as_str().map(str::to_string)
+    };
+    assert_eq!(relative(&b.file("poster.vectorcraft")).as_deref(), Some("art/photo.png"));
+    assert_eq!(relative(&b.file("copies/poster.vectorcraft")).as_deref(), Some("../art/photo.png"));
+    // Saved again where the last save put it, the file is still named from the folder it was read from.
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(relative(&b.file("copies/poster.vectorcraft")).as_deref(), Some("../art/photo.png"));
+    // The links come back: both saved documents find the file.
+    std::fs::rename(away.0.join("art"), b.0.join("art")).unwrap();
+    let moved = b.file("art/photo.png");
+    for doc in [b.file("poster.vectorcraft"), b.file("copies/poster.vectorcraft")] {
+        let r = open(&mut s, &doc);
+        assert_eq!(&r["missingLinks"], &json!([]), "{doc}: {r}");
+        assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&moved), "{doc}");
+    }
+}
+
+/// A file found by name in the document's folder, then missing before the next save, keeps the
+/// place it was last found: the saved relative path names that place, not the folder its old
+/// relative path named.
+#[test]
+fn a_file_found_elsewhere_then_missing_keeps_the_place_it_was_found() {
+    let dir = Folder::new("found-then-missing");
+    let pic = dir.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let doc = dir.file("poster.vectorcraft");
+    save(&mut s, &doc);
+    let beside = dir.file("photo.png");
+    std::fs::rename(&pic, &beside).unwrap();
+    let r = open(&mut s, &doc);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&beside));
+    let away = dir.file("away.png");
+    std::fs::rename(&beside, &away).unwrap();
+    save(&mut s, &doc);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("photo.png"));
+}
+
+/// After a save in another folder, a file Update Links finds by name beside the saved document,
+/// then missing before the next save, keeps the place it was found.
+#[test]
+fn a_file_update_links_finds_after_a_save_elsewhere_keeps_its_place() {
+    let a = Folder::new("update-after-save-as-a");
+    let b = Folder::new("update-after-save-as-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    open(&mut s, &a.file("poster.vectorcraft"));
+    let doc = b.file("poster.vectorcraft");
+    save(&mut s, &doc);
+    let beside = b.file("photo.png");
+    std::fs::rename(&pic, &beside).unwrap();
+    let r = s.execute("links.update", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(&r["missing"], &json!([]), "{r}");
+    assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&beside));
+    std::fs::remove_file(&beside).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("photo.png"));
+}
+
+/// A file found at its relative path from the folder of the last save, away from its path and from
+/// the folder the document was read from, is written relative to where it was found.
+#[test]
+fn a_file_found_beside_the_last_save_is_written_where_it_was_found() {
+    let a = Folder::new("found-beside-save-a");
+    let b = Folder::new("found-beside-save-b");
+    let c = Folder::new("found-beside-save-c");
+    write(&a.file("art/photo.png"), &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    open(&mut s, &a.file("poster.vectorcraft"));
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::rename(a.0.join("art"), b.0.join("art")).unwrap();
+    save(&mut s, &c.file("poster.vectorcraft"));
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+}
+
+/// After a moved document with a missing link is saved in another folder, `links.check` finds the
+/// file once it is back at the place its relative path names from the folder the document was
+/// read from, which is where the saved file looks for it too.
+#[test]
+fn a_missing_link_comes_back_where_the_document_saved_elsewhere_looks_for_it() {
+    let a = Folder::new("check-after-save-as-a");
+    let b = Folder::new("check-after-save-as-b");
+    let c = Folder::new("check-after-save-as-c");
+    let away = Folder::new("check-after-save-as-away");
+    write(&a.file("art/photo.png"), &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    save(&mut s, &c.file("poster.vectorcraft"));
+    std::fs::rename(away.0.join("art"), b.0.join("art")).unwrap();
+    let r = s.execute("links.check", &json!({})).unwrap();
+    let found = r["links"][0]["found"].as_str().map(Path::new);
+    assert_eq!((r["missing"].as_u64(), found), (Some(0), Some(Path::new(&b.file("art/photo.png")))), "{r}");
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+}
+
 /// Links in symbols, graph designs, patterns and opacity masks are saved with their relative
 /// paths, as links in the layers are: after the folder moves, each file is found and its link takes
 /// the new path, which the next save writes relative to the document again.
@@ -781,7 +916,7 @@ fn low_res_proxy_eps_export_uses_full_resolution_from_the_linked_file() {
     assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"].clone()), (json!([]), json!([])), "{r}");
     let key = image(&s, id).key;
     assert!(s.doc().unwrap().doc.images[&key].is_proxy());
-    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, None);
+    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, Default::default());
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(!full.images[&key].is_proxy());
     let dim =
@@ -812,7 +947,7 @@ fn export_reads_a_found_svg_link_into_its_own_images_only() {
 
     let bytes = png(20, 20, RED);
     write(&dir.file("a.png"), &bytes);
-    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, None);
+    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, Default::default());
     assert_eq!(warnings.len(), 1, "b.png is still missing: {warnings:?}");
     assert_eq!(*full.images[&a.key].bytes, bytes, "a.png's pixels");
     assert_eq!(full.images[&b.key].bytes, placeholder, "b.png keeps its placeholder");
@@ -845,7 +980,7 @@ fn export_reads_a_changed_svg_link_into_its_own_images_only() {
     let doc = &s.doc().unwrap().doc;
     assert!(doc.images[&a.key].is_proxy() && doc.images[&b.key].is_proxy(), "previews");
     let preview = doc.images[&a.key].bytes.clone();
-    let (full, warnings) = cmd::links::full_linked_images(doc, None);
+    let (full, warnings) = cmd::links::full_linked_images(doc, Default::default());
     assert_eq!(warnings.len(), 1, "a.png is missing: {warnings:?}");
     assert_eq!(*full.images[&b.key].bytes, blue, "b.png's new pixels");
     assert_eq!(full.images[&a.key].bytes, preview, "a.png keeps its preview");
@@ -1002,7 +1137,7 @@ fn relative_paths_are_written_against_the_saved_file() {
     };
     d.insert(Some(lid), 0, vectorcraft_doc::Node::new(nid, NodeKind::Image(Box::new(im)))).unwrap();
     let rel = |dest: String| {
-        let d = cmd::links::with_relative_paths(&d, &dest).unwrap_or_else(|| d.clone());
+        let d = cmd::links::with_relative_paths(&d, Default::default(), &dest).unwrap_or_else(|| d.clone());
         match &d.node(nid).unwrap().kind {
             NodeKind::Image(im) => im.link.as_ref().unwrap().relative.clone(),
             _ => None,
@@ -1083,15 +1218,11 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
 }
 
-/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
-/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
-/// and hash of the file found there. Not found, the link keeps no such details.
-#[test]
-fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+/// `poster.ai` in `dir`, a `.ai` file another app wrote, placing `src/photo.png` (relative to it)
+/// under a path that no longer exists → its path.
+fn imported_with_placed_file(dir: &Folder) -> String {
     use vectorcraft_testkit::ai;
-    let dir = Folder::new("imported-relative");
     std::fs::create_dir_all(dir.0.join("src")).unwrap();
-    let pic = dir.file("src/photo.png").replace('\\', "/");
     let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n(/no/such/folder/src/photo.png)`\n\
          %%IncludeFile:/no/such/folder/src/photo.png\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
          %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
@@ -1099,6 +1230,17 @@ fn links_of_an_imported_file_are_found_by_their_relative_folder() {
     let doc_path = dir.file("poster.ai");
     let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
     write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    doc_path
+}
+
+/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
+/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
+/// and hash of the file found there. Not found, the link keeps no such details.
+#[test]
+fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+    let dir = Folder::new("imported-relative");
+    let pic = dir.file("src/photo.png").replace('\\', "/");
+    let doc_path = imported_with_placed_file(&dir);
     let link = |s: &Session| {
         let mut found = vec![];
         s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
@@ -1112,9 +1254,16 @@ fn links_of_an_imported_file_are_found_by_their_relative_folder() {
     let (l, proxy) = link(&s);
     assert_eq!((l.path.as_str(), l.relative.as_deref()), ("/no/such/folder/src/photo.png", Some("src/photo.png")));
     assert!(proxy && l.size.is_none() && l.modified.is_none() && l.hash.is_none(), "{l:?}");
+    // Saved beside it while the file is missing, the document keeps the folder the file is in.
+    let native = dir.file("poster.vectorcraft");
+    save(&mut s, &native);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&native).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("src/photo.png"));
 
     let bytes = png(600, 300, RED);
     write(&pic, &bytes);
+    let r = open(&mut s, &native);
+    assert_eq!(&r["missingLinks"], &json!([]), "the native copy finds the file: {r}");
     let r = open(&mut s, &doc_path);
     assert_eq!(&r["missingLinks"], &json!([]), "{r}");
     let (l, proxy) = link(&s);
@@ -1122,4 +1271,28 @@ fn links_of_an_imported_file_are_found_by_their_relative_folder() {
     assert_eq!(l.path.replace('\\', "/"), pic);
     assert_eq!((l.size, l.hash.clone()), (Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&bytes))));
     assert!(l.modified.is_some(), "{l:?}");
+}
+
+/// A Data Recovery copy of such a document keeps the file its links' relative paths name places
+/// from: restored and saved beside the `.ai` file, it keeps the folder the placed file is in.
+#[test]
+fn a_recovered_copy_of_an_imported_file_keeps_its_links_folder() {
+    let dir = Folder::new("imported-recovered");
+    let doc_path = imported_with_placed_file(&dir);
+    let store = std::sync::Arc::new(crate::cmd::recovery::MemoryStore::default());
+    let mut s = session();
+    s.recovery.set_store(store.clone());
+    open(&mut s, &doc_path);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let r = s.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"].as_array().map(Vec::len), Some(1), "{r}");
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store);
+    let r = s.execute("file.recovery.restore", &json!({})).unwrap();
+    assert_eq!(r["restored"].as_array().map(Vec::len), Some(1), "{r}");
+    let native = dir.file("poster.vectorcraft");
+    save(&mut s, &native);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&native).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("src/photo.png"));
 }

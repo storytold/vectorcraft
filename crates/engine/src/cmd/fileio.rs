@@ -17,6 +17,7 @@
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
 //! - `metafile`: EMF and WMF export, open and place.
+//! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -32,6 +33,7 @@ mod export;
 pub(crate) mod imagemap;
 mod legacy_ai;
 mod load;
+mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod heifread;
 mod jp2read;
@@ -74,6 +76,8 @@ pub use load::{
     read_for_open, texture_image,
 };
 pub use load::{losses_summary, overwrite_losses};
+pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
+pub(crate) use mesh3d::{mesh_file_names, mesh_files};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
@@ -125,7 +129,9 @@ pub(crate) use access::{drive_share_path, share_path, touched};
 pub(crate) use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
-pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
+pub(crate) use export_names::{
+    artboard_file_names_keeping_dots, default_name, merge, unique_file_names_keeping_dots, with_black_output, write_or_return,
+};
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{

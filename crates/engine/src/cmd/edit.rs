@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -220,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -794,11 +794,14 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
     let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
-    if let Some(path) = st.path.as_deref() {
+    let base = super::links::LinkBase::of(st);
+    if base.doc.is_some() {
         // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
         let roots = crate::file_access::current().or_else(|| opened_by.clone());
-        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, base));
     }
+    // The copy's links keep their relative paths, which name places from the same file.
+    let links_from = base.relative.map(str::to_string);
     doc.drop_edit_modes();
     if doc.pattern_edit.is_some() {
         super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
@@ -815,6 +818,7 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     st.imported_from = imported_from;
     st.import_losses = import_losses;
+    st.links_from = links_from;
     st.opened_by = st.opened_by.take().or(opened_by);
     st.mark_unsaved();
     Ok(json!({ "index": i, "title": st.title() }))
@@ -829,16 +833,38 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 }
 
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.
+///
+/// Refused with [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art
+/// is selected ([`super::brushsym::selected_part`]): only the paint commands change that object,
+/// and only its solid fill and stroke, so a command that gathers the selection here leaves the
+/// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+}
+
+/// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
+/// for the commands that read the selected objects without [`selected_roots`]. A command that
+/// changes nothing in the document ([`Session::reading`]) reads the instance instead.
+pub(crate) fn refuse_symbol_part(s: &Session) -> Result<()> {
+    if !s.reading && s.doc()?.selection.symbol_part.is_some() { Err(super::brushsym::part_only()) } else { Ok(()) }
+}
+
+/// [`refuse_symbol_part`] as a command's `enabled` check: the command is dimmed, and refused with
+/// [`super::brushsym::part_only`]'s message, while an object of a dynamic symbol instance's art is
+/// selected.
+pub(crate) fn no_symbol_part(s: &Session) -> std::result::Result<(), String> {
+    if !s.reading && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) { Err(super::brushsym::part_only().to_string()) } else { Ok(()) }
 }
 
 /// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): a
 /// path of a compound path selected on its own (Group Selection, or in the isolated compound path)
 /// is an object of its own, so the hole of a ring moves without the ring (#2441). Paint and the
-/// rest still go to the compound path, which holds the paint.
+/// rest still go to the compound path, which holds the paint. Refused while an object of a symbol
+/// instance's art is selected, as [`selected_roots`] is: it moves with its instance only.
 pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_, _| true))
 }
@@ -847,8 +873,10 @@ pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
 /// ([`super::inside_isolation`]): `root` itself and objects outside it are left out before the
 /// objects held by another selected object are dropped. A selected path of a compound path stands
 /// for its compound unless the compound is `root` or `members` is set (as in
-/// [`selected_roots_to_transform`]).
+/// [`selected_roots_to_transform`]). Refused while an object of a symbol instance's art is
+/// selected, as [`selected_roots`] is.
 pub(crate) fn selected_roots_inside(s: &Session, root: NodeId, members: bool) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     let ids = st.selection.in_paint_order(&st.doc).into_iter().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect();
     Ok(roots_within(&st.doc, ids, |compound, _| members || compound == root))
@@ -906,7 +934,10 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
 /// The direct-selection flag and resolved root nodes for Copy and Cut operations.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
-    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature");
+    // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
+    // the whole path then (#2122), unless a selection tool Cmd lent them picked the anchors (#6123).
+    let picked = s.lent_selection.as_ref().is_some_and(|(uid, sel)| *uid == st.uid && *sel == st.selection);
+    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
     let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
@@ -925,6 +956,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
     }
+    // With an object of a dynamic symbol instance's art selected, the instance is copied.
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
     // Selected ruler guides come along (#3226), as canvas guides: their layer and artboard stay
@@ -965,6 +997,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
     }
+    refuse_symbol_part(s)?;
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {
         copy(s, p)?;
@@ -1046,6 +1079,10 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
+    // An object of a symbol instance's art can't be removed from the instance alone.
+    if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
+        return Err(super::brushsym::part_only());
+    }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
         return super::path::delete_anchors(s, p);
@@ -1277,10 +1314,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
                 imported.apply(&mut c);
+                let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
                     // including the pattern phase, independently of transform-tool settings.
-                    c.transform(xf, vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() });
+                    c.transform(xf, sc);
                 }
                 let layer = match clip.source_layers.get(k) {
                     Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
@@ -1316,6 +1354,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                                 if let NodeKind::Path { live, .. } = &mut child_node.kind {
                                     *live = None;
                                 }
+                                if child_node.extras().pixel_aligned {
+                                    child_node.extras_mut().pixel_aligned = false;
+                                }
                                 let insert_idx = if idx == usize::MAX { usize::MAX } else { idx.saturating_add(offset) };
                                 new_ids.push(d.insert(par, insert_idx, child_node)?);
                             }
@@ -1328,6 +1369,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             if let NodeKind::Path { live, .. } = &mut c.kind {
                                 *live = None;
                             }
+                            // A path inside a compound path snaps with the compound path, whose property it takes.
+                            if c.extras().pixel_aligned {
+                                c.extras_mut().pixel_aligned = false;
+                            }
                             new_ids.push(d.insert(par, idx, c)?);
                         }
                         _ => {
@@ -1336,13 +1381,18 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             let offset = *placed.entry(outer_par).or_default();
                             *placed.entry(outer_par).or_default() += 1;
                             let insert_idx = if beside_idx == usize::MAX { usize::MAX } else { beside_idx.saturating_add(offset) };
+                            super::object::keep_pixel_aligned(&mut c, sc);
                             new_ids.push(d.insert(outer_par, insert_idx, c)?);
                         }
                     }
                 } else {
+                    super::object::keep_pixel_aligned(&mut c, sc);
                     new_ids.push(d.insert(par, idx, c)?);
                 }
             }
+        }
+        for id in &new_ids {
+            super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
@@ -1415,7 +1465,10 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Duplicate `roots` directly above each original, transform the copies, select them
 /// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let out = copy_above(d, roots, |_, _, c| c.transform(xf, true))?;
+    let out = copy_above(d, roots, |_, _, c| {
+        c.transform(xf, true);
+        super::object::keep_pixel_aligned(c, true.into());
+    })?;
     sel.set(out.iter().copied());
     Ok(out)
 }
