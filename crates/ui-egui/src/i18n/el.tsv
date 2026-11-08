@@ -66,6 +66,11 @@
 	3 Color Job…	Εργασία τριών χρωμάτων…
 	30° Angles	Γωνίες 30°
 	3D and Materials	3D και υλικά
+	Plane	Επίπεδο
+	Extrude	Εξώθηση
+	Revolve	Περιστροφή γύρω από άξονα
+	Inflate	Φούσκωμα
+	Select objects, then pick an object type to give them a 3D effect.	Επιλέξτε αντικείμενα και, στη συνέχεια, έναν τύπο αντικειμένου για να τους δώσετε εφέ 3D.
 	3D Ribbon	Τρισδιάστατη κορδέλα
 	45° Angles	Γωνίες 45°
 	60° Angles	Γωνίες 60°
@@ -262,6 +267,8 @@ font-technology	Variable	Μεταβλητές
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
 	Video Ruler Pixel Aspect Ratio:	Αναλογία διαστάσεων pixel χαράκων βίντεο:
+	Fade Region Outside Artboard	Σκίαση περιοχής εκτός πίνακα σχεδίασης
+	Update While Dragging	Ενημέρωση κατά τη μεταφορά
 	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
 	Background Contents:	Περιεχόμενο φόντου:
@@ -1033,6 +1040,8 @@ font-technology	Variable	Μεταβλητές
 	Export for Screens Settings	Ρυθμίσεις εξαγωγής για οθόνες
 	Export for Screens…	Εξαγωγή για οθόνες…
 	Export Keyboard Shortcuts…	Εξαγωγή συντομεύσεων πληκτρολογίου…
+	Export Keyboard Shortcuts as Text…	Εξαγωγή συντομεύσεων πληκτρολογίου ως κείμενο…
+	Export Text…	Εξαγωγή κειμένου…
 	Export Option	Επιλογή εξαγωγής
 	Export PDF	Εξαγωγή PDF
 	Export PDF Presets	Εξαγωγή προεπιλογών PDF
@@ -1297,6 +1306,8 @@ font-technology	Variable	Μεταβλητές
 	Grays	Γκρι τόνοι
 	Grays and Neutrals	Γκρι και ουδέτεροι τόνοι
 	Grayscale	Κλίμακα του γκρι
+	High Color	Πολλά χρώματα
+	Low Color	Λίγα χρώματα
 	Grayscale images	Εικόνες σε κλίμακα του γκρι
 	Greek & Cyrillic	Ελληνικά και κυριλλικά
 	Green	Πράσινο
@@ -1369,6 +1380,7 @@ font-technology	Variable	Μεταβλητές
 	Step Backward	Ένα βήμα πίσω
 	Step Forward	Ένα βήμα εμπρός
 	Clear History	Εκκαθάριση ιστορικού
+	New Document from State	Νέο έγγραφο από κατάσταση
 	Set History Limit…	Ορισμός ορίου ιστορικού…
 	History States	Καταστάσεις ιστορικού
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1869,6 +1881,8 @@ font-technology	Variable	Μεταβλητές
 	Reselect	Επαναφορά προηγούμενης επιλογής
 	Reset	Επαναφορά
 	Reset Preferences	Επαναφορά προτιμήσεων
+	Search Preferences	Αναζήτηση στις προτιμήσεις
+	No settings found	Δεν βρέθηκαν ρυθμίσεις
 	Reset to Default	Επαναφορά προεπιλογής
 	Resolution:	Ανάλυση:
 	Restore	Επαναφορά
@@ -1881,6 +1895,7 @@ font-technology	Variable	Μεταβλητές
 	Rotate	Περιστροφή
 	Rotate View Tool	Εργαλείο περιστροφής προβολής (Rotate View Tool)
 	Trackpad Gesture to Rotate View	Περιστροφή προβολής με χειρονομία στην επιφάνεια αφής
+	Hold a Tool Shortcut to Use the Tool Temporarily	Προσωρινή χρήση εργαλείου κρατώντας πατημένη τη συντόμευσή του
 	Rotate…	Περιστροφή…
 	Rotation	Περιστροφή
 	Rows:	Γραμμές:
@@ -2134,6 +2149,9 @@ axis	Vertical	Κατακόρυφα
 axis	Both	Και τα δύο
 	Float Panel	Αιωρούμενο πάνελ
 	Dock Panel	Αγκύρωση πάνελ
+	Dock to Top	Αγκύρωση επάνω
+	Dock to Bottom	Αγκύρωση κάτω
+	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
 @msg	kerning must be a number, "auto", or "optical"	Η διαγραμμάτωση πρέπει να είναι αριθμός, «auto» ή «optical»
@@ -2634,6 +2652,9 @@ theme	Appearance	Εμφάνιση
 	Live Paint Selection Tool	Επιλογή δυναμικής βαφής (Live Paint Selection Tool)
 	Live Shape Properties	Ιδιότητες δυναμικού σχήματος
 	Load Color Profile…	Φόρτωση προφίλ χρώματος…
+	Load Character Styles…	Φόρτωση στυλ χαρακτήρων…
+	Load Paragraph Styles…	Φόρτωση στυλ παραγράφων…
+	Load All Styles…	Φόρτωση όλων των στυλ…
 	Remove Color Profile…	Αφαίρεση προφίλ χρώματος…
 	Load Image into Clipboard	Φόρτωση εικόνας στο πρόχειρο
 	Load Metafile into Clipboard	Φόρτωση μετααρχείου στο πρόχειρο
@@ -3254,6 +3275,14 @@ digits	Malayalam	Μαλαγιάλαμ
 	Relink	Επανασύνδεση
 	Relink Linked Files to the Document	Επανασύνδεση συνδεδεμένων αρχείων με το έγγραφο
 	Relink to Folder…	Επανασύνδεση σε φάκελο…
+	Each Link Separately	Κάθε σύνδεση χωριστά
+	Selected Instances	Επιλεγμένες παρουσίες
+	All Instances	Όλες οι παρουσίες
+	Missing Links from This Folder	Συνδέσεις που λείπουν από αυτόν τον φάκελο
+@msg	scope {v} is not each|selected|all|missingInFolder	το scope {v} δεν είναι each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	τα scope each και paths πάνε μαζί: το paths απαριθμεί καταχωρίσεις με ids και path, αντί για ids, path και folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	η καταχώριση {i} του paths χρειάζεται path και ids (αναγνωριστικά αντικειμένων που δεν έχει άλλη καταχώριση)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	το scope missingInFolder δέχεται path: στον φάκελο αυτού του αρχείου αναζητούνται οι άλλες συνδέσεις που λείπουν
 	Relink…	Επανασύνδεση…
 	Find Linked Files	Εύρεση συνδεδεμένων αρχείων
 	Find Linked Files in Folder…	Εύρεση συνδεδεμένων αρχείων σε φάκελο…
@@ -3293,6 +3322,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Αντικαταστήστε το με άλλο αρχείο ή αγνοήστε το: οι εικόνες του θα συνεχίσουν να εμφανίζουν την προεπισκόπηση που αποθηκεύτηκε στο έγγραφο.
 	Replace Spine	Αντικατάσταση κεντρικής καμπύλης
 	Replace Symbol	Αντικατάσταση συμβόλου
+	Reset Transformation	Επαναφορά μετασχηματισμού
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
 	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
 	System	Σύστημα
@@ -3630,6 +3660,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Spaces	Διαστήματα
 	Spacing Guides	Οδηγοί αποστάσεων
 	Invoke Distance Guides	Εμφάνιση οδηγών μέτρησης απόστασης
+	Snap to Last Location	Προσκόλληση στην τελευταία θέση
 	Spanish	Ισπανικά
 	Specified Distance	Καθορισμένη απόσταση
 	Specified Steps	Καθορισμένα βήματα
@@ -4331,6 +4362,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	nothing to save: the document has no visible art	δεν υπάρχει τίποτα για αποθήκευση: το έγγραφο δεν έχει ορατό σχέδιο
 @msg	nothing to undo	δεν υπάρχει τίποτα για αναίρεση
 @msg	no history to clear	δεν υπάρχει ιστορικό για εκκαθάριση
+@msg	no history state {v}	δεν υπάρχει κατάσταση ιστορικού {v}
 @msg	nothing to warp	δεν υπάρχει τίποτα για στρέβλωση
 @msg	nothing to wrap	δεν υπάρχει τίποτα για αναδίπλωση
 @msg	object {0} cannot have children	το αντικείμενο {0} δεν μπορεί να έχει θυγατρικά στοιχεία
@@ -4573,6 +4605,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} εικόνα δεν ήταν δυνατό να αποκωδικοποιηθεί: εμφανίζεται ως πλαίσιο με σταυρό|{n} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τη νέα έκδοση|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ενημερώθηκε {n} συνδεδεμένο αρχείο που άλλαξε στον δίσκο|Ενημερώθηκαν {n} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	το έγγραφο ορίζει ξάκρισμα που αυτό το αρχείο PDF/X παραλείπει: ενεργοποιήστε τη «Χρήση ρυθμίσεων ξακρίσματος εγγράφου»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Εξήχθη το {what} με {n} σημείωση: {first}|Εξήχθη το {what} με {n} σημειώσεις: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
@@ -4697,6 +4730,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	ICF Box	Πλαίσιο ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
+@msg	`colors` must be an array of colors, not {v}	το `colors` πρέπει να είναι πίνακας χρωμάτων, όχι {v}
 @msg	`corners` must be an array of anchor indices, not {v}	το `corners` πρέπει να είναι πίνακας δεικτών αγκύρωσης, όχι {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: το αποτέλεσμα του βήματος {i} δεν έχει τέτοια τιμή (γράψτε $$ για κυριολεκτικό $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: δεν υπάρχει βήμα {i} πριν από αυτό (η αρίθμηση αρχίζει από 0· γράψτε $$ για κυριολεκτικό $)
@@ -5739,6 +5773,33 @@ axis	Y Axis	Άξονας Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ένα δυναμικό εφέ εκτελείται κατά τη σχεδίαση του εγγράφου, οπότε δεν μπορεί να είναι `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ένα πρόσθετο εξαγωγής παίρνει πάντα τον προϋπολογισμό μιας εξαγωγής: παραλείψτε το `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	το «{_1}» ζητά μεγάλο υπολογιστικό προϋπολογισμό (κάθε εκτέλεση έως {minutes} λεπτά και {times} φορές τις συνήθεις εντολές): εγκαταστήστε το με `allowHeavy: true` μόλις συμφωνήσει ο χρήστης
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Να εγκατασταθεί το «{name}», που ζητά αυτά τα δικαιώματα;
+	ID: {id}	Αναγνωριστικό: {id}
+	Version: {version}	Έκδοση: {version}
+	File SHA-256: {hash}	SHA-256 αρχείου: {hash}
+	Read the objects it is given	Ανάγνωση των αντικειμένων που του δίνονται
+	Change, add and delete objects in the document	Αλλαγή, προσθήκη και διαγραφή αντικειμένων στο έγγραφο
+	Keep data of its own with the document	Αποθήκευση δικών του δεδομένων μαζί με το έγγραφο
+	Change how the objects its effect is applied to are drawn	Αλλαγή του τρόπου σχεδίασης των αντικειμένων στα οποία εφαρμόζεται το εφέ του
+	Write the document as a file in its own format	Εγγραφή του εγγράφου ως αρχείου σε δική του μορφή
+	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `progress` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	η λειτουργική μονάδα εισάγει το `env.{name}` με άλλον τύπο από αυτόν του κεντρικού υπολογιστή: ο τύπος του είναι {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	η λειτουργική μονάδα εισάγει το `env.{name}`, το οποίο ένα πρόσθετο μπορεί να χρησιμοποιεί μόνο στο επίπεδο API προσθέτων {PROGRESS_API} (`api` {PROGRESS_API}) και με το δικαίωμα `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	η λειτουργική μονάδα εισάγει το `{from}.{name}`, το οποίο δεν προσφέρει ο κεντρικός υπολογιστής: ένα πρόσθετο μπορεί να εισάγει μόνο τα `env.vc_progress`, `env.vc_cancelled` και `env.vc_log` (επίπεδο API προσθέτων 2) και κανένα WASI, αρχεία ή δίκτυο
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
+@msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
+@msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	το πολύ {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	το δικαίωμα `{shown}` δεν ισχύει για πρόσθετο τύπου `{_1}`
+@msg	permission `{shown}` is listed twice	το δικαίωμα `{shown}` αναφέρεται δύο φορές
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
+@msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	το «{name}» ζητά τα δικαιώματα {asked}: εγκαταστήστε το με ένα `grant` που τα απαριθμεί μόλις συμφωνήσει ο χρήστης
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	στο «{name}» δεν παραχωρήθηκε το `{p}`, που χρειάζεται η έξοδός του: δεν άλλαξε τίποτα
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	η λειτουργική μονάδα δεν έχει το SHA-256 που δίνει το `hash`: δεν εγκαταστάθηκε τίποτα
 # Actions panel: action sets (#3712).
 	New Set…	Νέο σύνολο…
 	New Set	Νέο σύνολο
@@ -6199,6 +6260,7 @@ breakText	Glyphs	Γλύφοι
 	Gap 5	Διάκενο 5
 
 @msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	παραμορφωμένα αντικείμενα κειμένου που εισήχθησαν ως γραφικά, όχι ως επεξεργάσιμο κείμενο: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	τα αντικείμενα που σχεδιάστηκαν διαφορετικά από την ίδια τη σελίδα του αρχείου εισήχθησαν ως γραφικά της σελίδας: {_1}
 
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.

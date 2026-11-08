@@ -761,7 +761,8 @@ impl<'a> Reader<'a> {
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),
             _ => Some(Node::group(self.doc.alloc_id(), art)),
-        };
+        }
+        .map(brush::without_frame);
         let Some(node) = node else { return };
         self.brush_art.insert(name.clone(), node);
         let mut colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };
