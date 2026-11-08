@@ -239,6 +239,12 @@ impl Plugin {
 
     /// Calls `f` with at most `fuel` instructions, in slices, checking the deadline and the
     /// caller's cancellation ([`vectorcraft_doc::cancel`]) between them.
+    ///
+    /// wasmi pauses before an instruction that the store's fuel can't pay for, and charges nothing
+    /// for it. It charges a `memory.fill` or `memory.copy` for its whole length before writing, so
+    /// up to that cost can be left in the store at a pause. Each slice tops the store up to the
+    /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
+    /// store's fuel and the rest of the budget together can't pay for the next instruction.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
         let mut left = fuel;
         let give = left.min(FUEL_SLICE);
@@ -251,14 +257,16 @@ impl Plugin {
                 TypedResumableCall::HostTrap(_) => return Err(Error::Trap("unexpected host trap".into())),
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
-                    if left == 0 || need > left {
+                    let held = live.store.get_fuel().map_err(wasm_err)?;
+                    let total = held.saturating_add(left);
+                    if need > total {
                         return Err(Error::Limit("instruction budget".into()));
                     }
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    let give = left.min(FUEL_SLICE.max(need));
-                    left -= give;
-                    live.store.set_fuel(give).map_err(wasm_err)?;
+                    let fill = total.min(FUEL_SLICE.max(need)).max(held);
+                    left -= fill - held;
+                    live.store.set_fuel(fill).map_err(wasm_err)?;
                     call = inv.resume(&mut live.store).map_err(wasm_err)?;
                 }
             }

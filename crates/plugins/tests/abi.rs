@@ -155,6 +155,45 @@ fn budgets_stop_runaway_plugins() {
     assert_eq!(e, Error::Limit("instruction budget".into()));
 }
 
+/// A filter that runs `op`, an 8 MiB bulk memory instruction costing about 131,000 instructions,
+/// 160 times (about 21 million instructions in all), or forever when `endless`.
+fn bulk_module(op: &str, endless: bool) -> Vec<u8> {
+    let bulk = match op {
+        "fill" => "(memory.fill (i32.const 1024) (i32.const 7) (i32.const 8388608))",
+        "copy" => "(memory.copy (i32.const 1024) (i32.const 2048) (i32.const 8387584))",
+        _ => panic!("no bulk operation `{op}`"),
+    };
+    let run = if endless {
+        format!("(loop $work {bulk} (br $work)) {}", tpl::ECHO)
+    } else {
+        format!(
+            "(local $n i32) (local.set $n (i32.const 160)) \
+             (loop $work {bulk} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n))) {}",
+            tpl::ECHO
+        )
+    };
+    build(&tpl::module(MANIFEST, &run, "", 130))
+}
+
+fn bulk_run(op: &str, endless: bool, fuel_base: u64) -> vectorcraft_plugins::Result<Vec<u8>> {
+    let p = Plugin::load(&bulk_module(op, endless), Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() })?;
+    p.run(INPUT.as_bytes(), b"{}")
+}
+
+/// A bulk memory instruction that the fuel left in a slice of the budget can't pay for pauses the
+/// run without using that fuel, and the run keeps it: 160 fills or copies that cross the first
+/// slice finish within 21 million instructions, though the pause left about 75,000 of them in the
+/// slice. With fewer instructions than the work takes, or with a loop that never ends, the run
+/// still ends with the instruction budget.
+#[test]
+fn a_bulk_memory_instruction_at_the_end_of_a_slice_keeps_the_run_s_fuel() {
+    for op in ["fill", "copy"] {
+        assert_eq!(bulk_run(op, false, 21_000_000), Ok(INPUT.as_bytes().to_vec()), "{op} within its budget");
+        assert_eq!(bulk_run(op, false, 15_000_000), Err(Error::Limit("instruction budget".into())), "{op} over its budget");
+        assert_eq!(bulk_run(op, true, 21_000_000), Err(Error::Limit("instruction budget".into())), "endless {op}");
+    }
+}
+
 #[test]
 fn wall_clock_budget_stops_runaway_plugins() {
     let spin = ok_module("(loop $l (br $l)) (i64.const 0)");
