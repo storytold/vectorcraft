@@ -65,7 +65,8 @@ pub(crate) fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.pattern_edit.is_some() {
         return Err(bad(C, "finish editing the pattern first"));
     }
-    let given = object_param(p, "id", C)?.map(|i| vec![i]).or_else(|| super::ids_param(p, "ids").filter(|v| !v.is_empty()));
+    let ids = super::ids_param(p, "ids", C)?;
+    let given = object_param(p, "id", C)?.map(|i| vec![i]).or_else(|| ids.filter(|v| !v.is_empty()));
     let (name, xf, instance) = match given {
         Some(ids) => {
             let symbols = ids.iter().map(|id| instance_of(&st.doc, *id)).collect::<Option<Vec<_>>>();

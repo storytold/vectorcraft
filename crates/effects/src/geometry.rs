@@ -245,10 +245,11 @@ impl Carry {
         self.0.is_empty()
     }
 
-    /// Does it move any of the gradients of `ap`? Callers check first, so an appearance shared
-    /// with other objects is not copied for nothing.
+    /// Does it move any of the gradients of `ap` (those drawn at a place in document space, a
+    /// freeform gradient's own points included)? Callers check first, so an appearance shared with
+    /// other objects is not copied for nothing.
     pub fn moves(&self, ap: &Appearance) -> bool {
-        !self.0.is_empty() && ap.has_placed_gradient()
+        !self.0.is_empty() && ap.has_positioned_gradient()
     }
 
     /// Move the placed gradients of `ap` along, through each step in turn.
