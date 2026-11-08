@@ -1022,34 +1022,16 @@ impl Spine {
                 let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
                 let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
                 let e = c.eval(t);
-                let tv = c.deriv().eval(t);
-                // Handle zero curve derivative: use limiting tangent from nearby parameter
-                let tv = if tv.x.abs() < 1e-12 && tv.y.abs() < 1e-12 {
-                    // Use tangent at adjacent parameter as fallback
-                    let t2 = t.clamp(0.5, 0.5).max(t.min(1.0 - 1e-3).min(1.0 - 1e-3)).clamp(1e-3, 1.0 - 1e-3);
-                    c.deriv().eval(t2)
-                } else {
-                    tv
-                };
+                let tv = c.deriv().eval(t).to_vec2();
+                // Where a handle sits on its anchor the derivative vanishes there: take the
+                // direction between points a little before and after instead.
+                let tv = if tv.hypot2() < 1e-24 { c.eval((t + 1e-3).min(1.0)) - c.eval((t - 1e-3).max(0.0)) } else { tv };
                 return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
             }
             start = end;
         }
-        let c = sp.segment(n - 1);
-        let end = self.length();
-        let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
-        let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
-        let e = c.eval(t);
-        let tv = c.deriv().eval(t);
-        // Handle zero curve derivative: use limiting tangent from nearby parameter
-        let tv = if tv.x.abs() < 1e-12 && tv.y.abs() < 1e-12 {
-            // Use tangent at adjacent parameter as fallback
-            let t2 = t.clamp(0.5, 0.5).max(t.min(1.0 - 1e-3).min(1.0 - 1e-3)).clamp(1e-3, 1.0 - 1e-3);
-            c.deriv().eval(t2)
-        } else {
-            tv
-        };
-        (Point::new(e.x, e.y), tv.y.atan2(tv.x))
+        // Only a spine without segments gets here: the loop returns at the last one.
+        (self.pts.first().copied().unwrap_or_default(), 0.0)
     }
 }
 
@@ -1501,6 +1483,22 @@ mod tests {
             }
             prev = Some(ang);
         }
+    }
+
+    /// Where the spine starts at an anchor whose handle sits on it, the first step still faces along
+    /// the curve (towards the next handle), not along a direction of zero length.
+    #[test]
+    fn a_handle_on_its_anchor_still_gives_the_curve_direction() {
+        let spine = PathData::single(SubPath::new(
+            vec![Anchor::corner(Point::new(0.0, 0.0)), Anchor::smooth(Point::new(100.0, 0.0), Point::new(150.0, -50.0))],
+            false,
+        ));
+        let sp = Spine::new(&spine).unwrap();
+        let (p, angle) = sp.at_length(0.0);
+        assert!(p.x.abs() < 1e-6 && p.y.abs() < 1e-6, "{p:?}");
+        assert!((angle - std::f64::consts::FRAC_PI_4).abs() < 0.05, "faces the in handle at (50, 50): {angle}");
+        let (_, end) = sp.at_length(sp.length());
+        assert!(end.is_finite(), "{end}");
     }
 
     #[test]
