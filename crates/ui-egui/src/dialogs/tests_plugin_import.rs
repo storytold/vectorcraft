@@ -95,15 +95,15 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let mut app = app();
     let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
     // RECT when the parameters hold density 7; the file, which isn't JSON, otherwise.
-    install(&mut app, &tpl::when_given(&tpl::importer("test.ui.params", r#"["tup"]"#, params), Given::Params, r#""density":7.0"#, RECT));
+    install(&mut app, &tpl::when_given(&tpl::importer("test.ui.importparams", r#"["tup"]"#, params), Given::Params, r#""density":7.0"#, RECT));
     let file = dir.join("a.tup");
     std::fs::write(&file, "not json").unwrap();
     let file = file.to_string_lossy().into_owned();
 
-    app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file})).unwrap();
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
     assert_eq!(kind(&app), Some(plugin::IMPORT_KIND));
     let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("__label"), d.fields.get("density")), ("Test test.ui.params".to_string(), Some(&json!(4.0))));
+    assert_eq!((d.str("__label"), d.fields.get("density")), ("Test test.ui.importparams".to_string(), Some(&json!(4.0))));
     assert!(app.session.documents().is_empty(), "nothing opened before Open");
     frame(&mut app);
     set(&mut app, "density", json!(7));
@@ -115,17 +115,17 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
 
     // Only a file from the picker goes off the UI thread after the dialog: a caller naming `path`
     // gets the document.
-    app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file})).unwrap();
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], false);
     app.ui.dialog = None;
     let picked = file.clone();
     app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
-    app.run("file.openWith", json!({"importer": "plugin.test.ui.params"})).unwrap();
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams"})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], true);
     app.ui.dialog = None;
 
-    let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file, "params": {"density": 7}})).unwrap();
-    assert_eq!(r["format"], "plugin.test.ui.params");
+    let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file, "params": {"density": 7}})).unwrap();
+    assert_eq!(r["format"], "plugin.test.ui.importparams");
     assert!(app.ui.dialog.is_none());
     assert_eq!(app.session.documents().len(), 2);
 
@@ -135,14 +135,14 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
         let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
         r
     };
-    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.params", "params": {"density": 7}}));
-    assert_eq!(r["result"]["format"], "plugin.test.ui.params", "{r}");
+    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.importparams", "params": {"density": 7}}));
+    assert_eq!(r["result"]["format"], "plugin.test.ui.importparams", "{r}");
     assert_eq!(app.session.documents().len(), 3);
-    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.params"}));
+    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.importparams"}));
     assert!(r.get("error").is_some(), "the defaults (density 4) don't open the file: {r}");
     assert_ne!(kind(&app), Some(plugin::IMPORT_KIND));
     assert_eq!(app.session.documents().len(), 3);
-    app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
+    app.run("plugin.remove", json!({"id": "test.ui.importparams"})).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -173,6 +173,22 @@ fn only_file_open_s_dialog_lists_an_importer_s_files() {
         assert!(!lists(&filters), "{kind}");
     }
     app.run("plugin.remove", json!({"id": "test.ui.filters"})).unwrap();
+}
+
+/// Export As lists an installed exporter and not an installed importer, whose format can only be
+/// read, and it does not preset the importer's format.
+#[test]
+fn export_as_lists_exporters_and_not_importers() {
+    let mut app = app();
+    install(&mut app, &tpl::module(&tpl::importer("test.ui.readonly", r#"["tur"]"#, "{}"), tpl::ECHO, "", 1));
+    install(&mut app, &tpl::module(&tpl::exporter("test.ui.writes", r#"["tuw"]"#, "{}"), tpl::ECHO, "", 1));
+    let listed: Vec<&str> = export_as::formats().iter().map(|f| f.id).collect();
+    assert!(listed.contains(&"plugin.test.ui.writes"), "{listed:?}");
+    assert!(!listed.contains(&"plugin.test.ui.readonly"), "{listed:?}");
+    app.run("file.exportAs", json!({"format": "plugin.test.ui.readonly"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("format"), "png");
+    app.run("plugin.remove", json!({"id": "test.ui.readonly"})).unwrap();
+    app.run("plugin.remove", json!({"id": "test.ui.writes"})).unwrap();
 }
 
 /// The extensions File › Open's filters leave out of importers' (`fileio::opens_as_other`) are the
