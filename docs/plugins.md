@@ -48,7 +48,7 @@ one whose id sorts first opens it. `document.open {"importer": "plugin.<id>", "p
 which must list the file's extension, also one a built-in format reads (an importer that lists `svg` opens an `.svg`
 only this way). A damaged file of a built-in format reports that format's error, and the file is not handed to an
 importer. The importer's objects become a new document whose artboard is their bounds (at least 1 pt wide and high,
-and within ±4,000,000 pt); the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats. These rules are
+and within ±4,000,000 pt); the document keeps no path, so Save asks for a name. File › Place reads only the built-in formats, and a file only an importer reads opens as a new document when it is dropped on the canvas. These rules are
 VectorCraft's own.
 
 In the app, installed filters appear under **Object › Plug-ins**, next to **Install Plug-in…** and **Reload

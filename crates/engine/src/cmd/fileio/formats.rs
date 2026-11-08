@@ -669,6 +669,13 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
+/// Whether a file named `name` can only be read by an importer plug-in: an installed importer lists
+/// its extension and File › Place does not read that extension.
+pub fn opens_with_importer(name: &str) -> bool {
+    let ext = extension(name);
+    !ext.is_empty() && !PLACE_EXTS.contains(&ext.as_str()) && !vectorcraft_plugins::import::for_extension(&ext).is_empty()
+}
+
 /// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
 /// document: a plug-in (installed), a shortcut set, a script (checked), flattener, PDF, print,
 /// perspective grid or export presets (imported), a Libraries panel library, or a swatch or graphic

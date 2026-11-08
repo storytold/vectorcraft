@@ -191,6 +191,32 @@ fn export_as_lists_exporters_and_not_importers() {
     app.run("plugin.remove", json!({"id": "test.ui.writes"})).unwrap();
 }
 
+/// A file only an importer reads opens wherever it is dropped, also when an exporter lists its
+/// extension; a file File › Place reads is still placed on the canvas.
+#[test]
+fn a_dropped_file_only_an_importer_reads_opens() {
+    use crate::place::DropTarget;
+    let mut app = app();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.sync_views();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0)));
+    let on_canvas = Some(egui::pos2(400.0, 300.0));
+    let placed = |app: &VectorcraftApp, name, pos| matches!(app.drop_target(name, pos, false), DropTarget::Place(_));
+    assert!(placed(&app, "a.tud", on_canvas), "no importer lists the extension yet");
+
+    install(&mut app, &tpl::module(&tpl::importer("test.ui.dropped", r#"["tud","tus","png"]"#, "{}"), tpl::ECHO, "", 1));
+    install(&mut app, &tpl::module(&tpl::exporter("test.ui.dropshare", r#"["tus"]"#, "{}"), tpl::ECHO, "", 1));
+    for name in ["a.tud", "A.TUD", "a.tus"] {
+        assert_eq!(app.drop_target(name, on_canvas, false), DropTarget::Open, "{name} on the canvas");
+        assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name} without a position");
+    }
+    assert!(placed(&app, "a.png", on_canvas), "File › Place reads the extension");
+    assert!(placed(&app, "a.png", None));
+
+    app.run("plugin.remove", json!({"id": "test.ui.dropped"})).unwrap();
+    app.run("plugin.remove", json!({"id": "test.ui.dropshare"})).unwrap();
+}
+
 /// The extensions File › Open's filters leave out of importers' (`fileio::opens_as_other`) are the
 /// ones File › Open installs, imports, checks or loads as something other than a document.
 #[test]
