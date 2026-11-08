@@ -5863,6 +5863,14 @@ axis	Y Axis	Άξονας Y
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	το «{name}» ζητά τα δικαιώματα {asked}: εγκαταστήστε το με ένα `grant` που τα απαριθμεί μόλις συμφωνήσει ο χρήστης
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	στο «{name}» δεν παραχωρήθηκε το `{p}`, που χρειάζεται η έξοδός του: δεν άλλαξε τίποτα
+@msg	a heavy filter runs in the background, so it can't declare `commands`	ένα βαρύ φίλτρο εκτελείται στο παρασκήνιο, οπότε δεν μπορεί να δηλώνει `commands`
+@msg	at most {MAX_COMMANDS} `commands`	το πολύ {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	η εντολή {name} δηλώνεται δύο φορές
+@msg	command {name}: `label` must be 1-64 printable characters	εντολή {name}: το `label` πρέπει να έχει 1-64 εκτυπώσιμους χαρακτήρες
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	εντολή {name}: χρησιμοποιήστε αναγνωριστικό 1-{MAX_COMMAND_ID} χαρακτήρων από a-z 0-9 _ που αρχίζει με γράμμα
+@msg	command {name}: {e}	εντολή {name}: {e}
+@msg	only a filter or a live effect declares `commands`	μόνο ένα φίλτρο ή ένα δυναμικό εφέ δηλώνει `commands`
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	η λειτουργική μονάδα δεν έχει το SHA-256 που δίνει το `hash`: δεν εγκαταστάθηκε τίποτα
 # Actions panel: action sets (#3712).
 	New Set…	Νέο σύνολο…

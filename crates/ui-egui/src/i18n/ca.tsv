@@ -5925,6 +5925,14 @@ digits	Malayalam	Malaiàlam
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre pesat s’executa en segon pla, de manera que no pot declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	com a màxim {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	l’ordre {name} està declarada dues vegades
+@msg	command {name}: `label` must be 1-64 printable characters	ordre {name}: `label` ha de tenir 1-64 caràcters imprimibles
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ordre {name}: fes servir un id d’1-{MAX_COMMAND_ID} caràcters d’a-z 0-9 _ que comenci per una lletra
+@msg	command {name}: {e}	ordre {name}: {e}
+@msg	only a filter or a live effect declares `commands`	només un filtre o un efecte dinàmic declara `commands`
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos

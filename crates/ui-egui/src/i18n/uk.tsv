@@ -5508,6 +5508,14 @@ axis	Y Axis	Вісь Y
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
+@msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
+@msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	команду {name} оголошено двічі
+@msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
+@msg	command {name}: {e}	команда {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
 # Actions panel: action sets (#3712).
 	New Set…	Новий набір…

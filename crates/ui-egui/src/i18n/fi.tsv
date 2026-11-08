@@ -5942,6 +5942,14 @@ axis	Y Axis	Y-akseli
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” ei saanut käyttöoikeutta `{p}`, jota sen tulos tarvitsee: mitään ei muutettu
+@msg	a heavy filter runs in the background, so it can't declare `commands`	raskas suodin suoritetaan taustalla, joten se ei voi määritellä `commands`-kohtaa
+@msg	at most {MAX_COMMANDS} `commands`	enintään {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	komento {name} on määritelty kahdesti
+@msg	command {name}: `label` must be 1-64 printable characters	komento {name}: `label`-kentässä on oltava 1-64 tulostettavaa merkkiä
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	komento {name}: käytä 1-{MAX_COMMAND_ID} merkin tunnusta merkeistä a-z 0-9 _, joka alkaa kirjaimella
+@msg	command {name}: {e}	komento {name}: {e}
+@msg	only a filter or a live effect declares `commands`	vain suodin tai live-tehoste määrittelee `commands`-kohdan
+@msg	“{name}” › {label}: {e}	”{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduulilla ei ole `hash`-kentän SHA-256-arvoa: mitään ei asennettu
 # Actions panel: action sets (#3712).
 	New Set…	Uusi sarja…

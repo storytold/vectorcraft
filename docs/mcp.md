@@ -6558,6 +6558,13 @@ anything else, or imports one of these without `api` 2 and the import's permissi
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
+A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
+`plugin.<id>.<command>` while the plug-in is installed, listed by `command_list` and in its `plugin.list` entry
+(`commands: [{id, command, label, params, paramsSchema}]`). Run it with `{ids?, params?}` (its parameters may also
+be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
+command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
+name and the command's label and leaves the document and the undo history as they were. For `plugin.run` and plug-in
+commands, `ids` left out or null means the selection, and an `ids` that is not a list of object ids is an error.
 
 Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
 the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
@@ -6594,6 +6601,7 @@ Disable and Continue can't save the plug-in it turns off, this launch skips it a
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.org.example.tidy.grow","params":{"by":3}}}
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/tiles-2.wasm","replace":true}}}
 {"name":"run_command","arguments":{"command":"plugin.clearCache","params":{"id":"org.example.tiles"}}}
 ```

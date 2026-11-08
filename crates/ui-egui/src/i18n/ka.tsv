@@ -5836,6 +5836,14 @@ axis	Y Axis	Y ღერძი
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
+@msg	a heavy filter runs in the background, so it can't declare `commands`	მძიმე ფილტრი ფონურ რეჟიმში მუშაობს, ამიტომ მას არ შეუძლია `commands`-ის გამოცხადება
+@msg	at most {MAX_COMMANDS} `commands`	მაქსიმუმ {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	ბრძანება {name} ორჯერაა გამოცხადებული
+@msg	command {name}: `label` must be 1-64 printable characters	ბრძანება {name}: `label` უნდა შედგებოდეს 1-64 დასაბეჭდი სიმბოლოსგან
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	ბრძანება {name}: გამოიყენეთ 1-{MAX_COMMAND_ID} სიმბოლოიანი id a-z 0-9 _ სიმბოლოებიდან, რომელიც ასოთი იწყება
+@msg	command {name}: {e}	ბრძანება {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands`-ს მხოლოდ ფილტრი ან ცოცხალი ეფექტი აცხადებს
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
 # Actions panel: action sets (#3712).
 	New Set…	ახალი ნაკრები…

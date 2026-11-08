@@ -5912,6 +5912,14 @@ axis	Y Axis	osa Y
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ žádá o oprávnění {asked}: nainstalujte ho s `grant`, který je uvádí, jakmile uživatel souhlasí
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“ nedostal `{p}`, které jeho výstup potřebuje: nic se nezměnilo
+@msg	a heavy filter runs in the background, so it can't declare `commands`	těžký filtr běží na pozadí, takže nemůže deklarovat `commands`
+@msg	at most {MAX_COMMANDS} `commands`	nejvýše {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	příkaz {name} je deklarován dvakrát
+@msg	command {name}: `label` must be 1-64 printable characters	příkaz {name}: `label` musí mít 1-64 tisknutelných znaků
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	příkaz {name}: použijte id o 1-{MAX_COMMAND_ID} znacích z a-z 0-9 _, které začíná písmenem
+@msg	command {name}: {e}	příkaz {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` deklaruje jen filtr nebo živý efekt
+@msg	“{name}” › {label}: {e}	„{name}“ › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nemá SHA-256 uvedený v `hash`: nic nebylo nainstalováno
 # Actions panel: action sets (#3712).
 	New Set…	Nová sada…

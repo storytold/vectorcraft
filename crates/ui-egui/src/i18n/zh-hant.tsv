@@ -5546,6 +5546,14 @@ axis	Y Axis	Y 軸
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重型濾鏡在背景執行，因此不能宣告 `commands`
+@msg	at most {MAX_COMMANDS} `commands`	最多 {MAX_COMMANDS} 個 `commands`
+@msg	command {name} is declared twice	指令 {name} 宣告了兩次
+@msg	command {name}: `label` must be 1-64 printable characters	指令 {name}：`label` 必須是 1-64 個可列印字元
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	指令 {name}：請使用由 a-z 0-9 _ 組成、以字母開頭的 1-{MAX_COMMAND_ID} 個字元的 ID
+@msg	command {name}: {e}	指令 {name}：{e}
+@msg	only a filter or a live effect declares `commands`	只有濾鏡或即時效果才能宣告 `commands`
+@msg	“{name}” › {label}: {e}	「{name}」 › {label}：{e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
 # Actions panel: action sets (#3712).
 	New Set…	新增組…

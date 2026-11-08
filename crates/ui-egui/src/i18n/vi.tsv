@@ -5509,6 +5509,14 @@ axis	Y Axis	Trục Y
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” yêu cầu các quyền {asked}: hãy cài đặt với `grant` liệt kê chúng khi người dùng đồng ý
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” chưa được cấp `{p}`, quyền mà đầu ra của nó cần: không có gì thay đổi
+@msg	a heavy filter runs in the background, so it can't declare `commands`	bộ lọc nặng chạy ở chế độ nền nên không thể khai báo `commands`
+@msg	at most {MAX_COMMANDS} `commands`	tối đa {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	lệnh {name} được khai báo hai lần
+@msg	command {name}: `label` must be 1-64 printable characters	lệnh {name}: `label` phải có 1-64 ký tự in được
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	lệnh {name}: hãy dùng id gồm 1-{MAX_COMMAND_ID} ký tự từ a-z 0-9 _ và bắt đầu bằng một chữ cái
+@msg	command {name}: {e}	lệnh {name}: {e}
+@msg	only a filter or a live effect declares `commands`	chỉ bộ lọc hoặc hiệu ứng trực tiếp mới khai báo `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt
 # Actions panel: action sets (#3712).
 	New Set…	Bộ mới…
