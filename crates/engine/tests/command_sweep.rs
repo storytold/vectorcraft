@@ -236,6 +236,17 @@ fn structured_junk() {
         ("select.anchorsMany", json!({"items": [{"id": 2, "anchors": [[0, 0]]}], "mode": "subtract"})),
         ("select.anchorsMany", json!({"items": [], "mode": 7})),
         ("select.toggle", json!({"ids": [2, u64::MAX, "x"]})),
+        ("addon.select.byArtboards", json!({"artboards": [0, u64::MAX, -1, "x", null, 1.5], "relation": "inside"})),
+        ("addon.select.byArtboards", json!({"artboards": [1e308], "relation": [1]})),
+        ("addon.select.byArtboards", json!({"artboards": {"a": 1}, "relation": "outside"})),
+        ("addon.select.byLinkStatus", json!({"status": ["linked", "missing", null, 7, {"a": 1}], "ids": [2, u64::MAX, -1, "x", 1.5]})),
+        ("addon.select.byLinkStatus", json!({"status": "embedded", "ids": {"a": 1}, "add": [1], "zoom": "yes"})),
+        ("addon.select.byLinkStatus", json!({"status": ["modified", "embedded"], "ids": [], "add": true, "zoom": true})),
+        ("addon.select.byLinkStatus", json!({"status": [[["linked"]]], "ids": null})),
+        ("links.relink", json!({"scope": "each", "paths": [{"ids": [2, u64::MAX, -1, "x"], "path": ""}, null, 7, {"path": [1]}]})),
+        ("links.relink", json!({"scope": ["all"], "path": "/no/such/file.png", "ids": {"a": 1}})),
+        ("links.relink", json!({"scope": "missingInFolder", "path": "", "folder": [], "paths": "x"})),
+        ("links.relink", json!({"scope": "all", "path": "/no/such/file.png", "ids": [2, u64::MAX, -1, 1.5]})),
         ("object.transform", json!({"matrix": [0, 0, 0, 0, 0, 0]})),
         ("object.transform", json!({"matrix": [1e308, 1e308, 1e308, 1e308, 1e308, 1e308]})),
         ("object.transform", json!({"matrix": [1, 2, 3]})),
@@ -523,6 +534,10 @@ fn structured_junk() {
         ("document.open", json!({"name": "x.pdf", "dataBase64": "JVBERi0xLjQK"})),
         ("document.open", json!({"name": "x.vectorcraft", "dataBase64": "e30="})),
         ("document.activate", json!({"index": 99})),
+        ("document.move", json!({"from": 99, "to": 0})),
+        ("document.move", json!({"from": 0, "to": u64::MAX})),
+        ("document.move", json!({"from": -1, "to": 1e308})),
+        ("document.move", json!({"from": "x", "to": null})),
         ("file.close", json!({"index": 99})),
         ("file.new", json!({"width": -1, "height": 0, "artboards": 1000000})),
         ("command.batch", json!({"commands": [{"command": 5}, {"params": 3}]})),
@@ -590,6 +605,12 @@ fn structured_junk() {
         ("addon.pathtools.cornerSet", json!({"items": [1, null, {"anchors": "x"}], "radius": 1})),
         ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 1e308, "kind": "spiky"})),
         ("addon.pathtools.cornerSet", json!({"items": "all", "radius": f64::NAN, "anchors": [-1, 1.5, "x"]})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2, 3], "radius": 5, "every": "odd"})),
+        ("addon.pathtools.cornerSet", json!({"items": [{"id": 2, "anchors": [1, u64::MAX]}], "radius": 5, "every": "even"})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "every": [1, "x", null]})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2, 3], "radius": 5, "minAngle": 0, "maxAngle": 0})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "minAngle": 180, "maxAngle": 180, "every": "odd"})),
+        ("addon.pathtools.cornerSet", json!({"ids": [2], "radius": 5, "minAngle": f64::MAX, "maxAngle": -1e-300})),
         ("addon.pathtools.cornerRemove", json!({"ids": [0, 1, 2, 3, u64::MAX]})),
         ("addon.pathtools.cornerRemove", json!({"items": [{"id": 2, "anchors": [u64::MAX]}]})),
         ("addon.pathtools.slideAnchor", json!({"id": 2, "anchor": 1, "t": 0.98})),
@@ -653,6 +674,17 @@ fn structured_junk() {
         ("addon.pen.reshape", json!({"id": 2, "segment": 0, "t": "x", "dx": 1, "dy": 1, "mode": "symmetric"})),
         ("addon.pen.nextSegment", json!({"curved": "yes"})),
         ("addon.pen.closeJoin", json!({"ids": [u64::MAX]})),
+        // Type Tools add-on.
+        ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
+        ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
+        ("addon.type.textTweaker", json!({"attribute": "rotation", "from": -360, "to": 360, "shape": "bow", "skipSpaces": false, "ids": [u64::MAX]})),
+        ("addon.type.textTweaker", json!({"attribute": "hScale", "id": 2, "start": u64::MAX, "end": 0, "shape": "ease"})),
+        ("addon.type.textTweaker", json!({"attribute": ["size"], "from": "x", "seed": 1e308, "skipSpaces": "no", "ids": "all"})),
+        ("addon.type.releasePath", json!({"mode": "both", "keepOriginal": true, "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8]})),
+        ("addon.type.releasePath", json!({"mode": "path", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
+        ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
+        ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
+        ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
         ("addon.cleanup.breakText", json!({"by": "glyphs", "ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, u64::MAX]})),
         ("addon.cleanup.breakText", json!({"by": ["lines"]})),
         ("addon.cleanup.breakText", json!({"by": "paragraphs"})),
@@ -883,7 +915,15 @@ fn every_command_undoes_exactly() {
         let mut s = Fixture::Multi.session();
         let before = doc_json(&s.doc().unwrap().doc);
         let depth = s.doc().unwrap().history.undo.len();
+        let source = s.active_index().unwrap();
         let Ok(Ok(_)) = catch_quiet(|| s.execute(c.id, &json!({}))) else { continue };
+        // A command that makes a new document and makes it active leaves the source document as it is.
+        if s.active_index() != Some(source) {
+            if s.documents().get(source).map(|d| doc_json(&d.doc)).as_ref() != Some(&before) {
+                failures.push(format!("{}: changed the source document while making another active", c.id));
+            }
+            continue;
+        }
         if s.doc().unwrap().history.undo.len() > depth {
             let _ = no_panic(s.execute("edit.undo", &json!({})));
             let after = doc_json(&s.doc().unwrap().doc);

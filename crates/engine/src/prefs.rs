@@ -10,6 +10,14 @@ pub enum DrawMode {
     Inside,
 }
 
+/// A saved Default Language as its tag: older preferences hold the language's name, and one the list
+/// no longer has reads as the default.
+fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
+    let saved = <String as serde::Deserialize>::deserialize(d)?;
+    let tag = vectorcraft_doc::setup::char_language(&saved).ok().flatten();
+    Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -33,6 +41,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
+    pub fade_region_outside_artboard: bool,
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -44,6 +58,9 @@ pub struct Prefs {
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
     pub trackpad_rotate_view: bool,
+    /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
+    /// tool active before comes back; a quick press chooses the tool for good.
+    pub hold_tool_keys: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -107,6 +124,7 @@ pub struct Prefs {
     pub measurement_labels: bool,
     pub spacing_guides: bool,
     pub distance_guides: bool,
+    pub snap_to_last_location: bool,
     pub snapping_tolerance: f64,
     pub snap_tangent: bool,
     pub snap_perpendicular: bool,
@@ -114,6 +132,9 @@ pub struct Prefs {
     pub show_slice_numbers: bool,
     pub slice_line_color: String,
     // Hyphenation
+    /// Default Language: the BCP 47 tag of the language new type takes when its document's language
+    /// is the default ([`vectorcraft_doc::setup::LANGUAGES`]).
+    #[serde(deserialize_with = "language_tag")]
     pub hyphenation_language: String,
     pub hyphenation_exceptions: String,
     /// Type › Options › Additional Fonts Folder: a folder (read with its subfolders) whose fonts
@@ -338,6 +359,8 @@ impl Default for Prefs {
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            fade_region_outside_artboard: true,
+            artboard_update_while_dragging: true,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
@@ -346,6 +369,7 @@ impl Default for Prefs {
             zoom_with_mouse_wheel: false,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
+            hold_tool_keys: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             object_selection_by_path_only: false,
@@ -399,12 +423,13 @@ impl Default for Prefs {
             measurement_labels: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             snap_tangent: true,
             snap_perpendicular: true,
             show_slice_numbers: true,
             slice_line_color: s("#ff3f3f"),
-            hyphenation_language: s("English: USA"),
+            hyphenation_language: s("en-US"),
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),

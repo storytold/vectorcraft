@@ -53,8 +53,9 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
-    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, envelope_bounds, envelope_expand, envelope_frame,
-    envelope_grid, envelope_mapper, envelope_of, envelope_overlay, smooth_handles,
+    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
+    envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
+    set_type_ink, smooth_handles,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{
@@ -231,6 +232,64 @@ mod tests {
         let kind = EnvelopeKind::Mesh { rows: u32::MAX, cols: u32::MAX, points: vec![], handles: vec![] };
         let p = Point::new(25.0, 50.0);
         assert_eq!(envelope_mapper(&kind, Rect::new(0.0, 0.0, 100.0, 100.0))(p), p);
+    }
+
+    /// `bounds_margin` grows the box an envelope maps from, only while Distort Appearance is on. It
+    /// holds shares of the box, and an envelope with an uneven frame maps from the same box in that
+    /// frame. A native file writes it only when it isn't zero.
+    #[test]
+    fn an_envelope_maps_from_its_box_with_its_margins() {
+        let rect = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 110.0, 70.0)), crate::Appearance::default_art());
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+        let content = [Arc::new(rect)];
+        let src = |content: &[Arc<Node>], frame: Affine, options: EnvelopeOptions| EnvelopeMap::new(content, &kind, frame, options).unwrap().src();
+        // Top, bottom, left and right.
+        let on = EnvelopeOptions { bounds_margin: [0.125, 0.25, 0.0625, 0.5], ..EnvelopeOptions::NEW };
+        let geometric = Rect::new(10.0, 20.0, 110.0, 70.0);
+        let grown = Rect::new(3.75, 13.75, 160.0, 82.5);
+        assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions::default()), geometric);
+        assert_eq!(src(&content, Affine::IDENTITY, on), grown);
+        assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions { distort_appearance: false, ..on }), geometric);
+        for bad in [f32::NAN, f32::INFINITY, -0.05] {
+            assert_eq!(src(&content, Affine::IDENTITY, EnvelopeOptions { bounds_margin: [bad, 0.25, 0.0625, 0.5], ..on }), geometric);
+        }
+        // A finite share of a box too wide to grow leaves the box as it is.
+        let wide = Node::path(NodeId(3), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 1e308, 10.0)), crate::Appearance::default_art());
+        let wide = [Arc::new(wide)];
+        let huge = EnvelopeOptions { bounds_margin: [0.0, 0.0, f32::MAX, 0.0], ..on };
+        assert_eq!(src(&wide, Affine::IDENTITY, huge), src(&wide, Affine::IDENTITY, EnvelopeOptions::NEW));
+        // Bounds follow the box: a warp that doesn't bend covers it.
+        let b = envelope_bounds(&content, &kind, Affine::IDENTITY, on).unwrap();
+        assert!((b.x0 - 3.75).abs() < 1e-6 && (b.y1 - 82.5).abs() < 1e-6, "{b:?}");
+        // Art taken through an uneven frame maps from the same box in that frame.
+        let frame = Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale_non_uniform(2.0, 0.5);
+        let mut placed = (*content[0]).clone();
+        placed.transform(frame, true);
+        let framed = src(&[Arc::new(placed)], frame, on);
+        assert!((framed.x0 - 3.75).abs() + (framed.y0 - 13.75).abs() + (framed.x1 - 160.0).abs() + (framed.y1 - 82.5).abs() < 1e-6, "{framed:?}");
+
+        // A frame that turns and scales gives the same margins as the art had before it took them.
+        let mut stroked = (*content[0]).clone();
+        if let Some(s) = stroked.appearance.stroke_mut() {
+            s.width = 10.0;
+        }
+        let margin = |n: &Node, frame: Affine| {
+            let (with, plain) = envelope_content_boxes(&[Arc::new(n.clone())], frame).unwrap();
+            envelope_stroke_margin(with, plain).unwrap()
+        };
+        let before = margin(&stroked, Affine::IDENTITY);
+        assert_eq!(before.map(|m| (m * 1000.0).round()), [100.0, 100.0, 50.0, 50.0]);
+        let frame = Affine::rotate(std::f64::consts::FRAC_PI_2) * Affine::scale(2.0);
+        let mut turned = stroked.clone();
+        turned.transform(frame, true);
+        assert_eq!(margin(&turned, frame).map(|m| (m * 1000.0).round()), before.map(|m| (m * 1000.0).round()));
+        // Margins an `f32` can't hold are none.
+        assert_eq!(envelope_stroke_margin(Rect::new(-5e41, 0.0, 100.0, 100.0), Rect::new(0.0, 0.0, 100.0, 100.0)), None);
+
+        assert!(serde_json::to_value(EnvelopeOptions::default()).unwrap().get("boundsMargin").is_none());
+        let saved = serde_json::to_value(on).unwrap();
+        assert_eq!(saved["boundsMargin"], serde_json::json!([0.125, 0.25, 0.0625, 0.5]));
+        assert_eq!(serde_json::from_value::<EnvelopeOptions>(saved).unwrap(), on);
     }
 
     /// How far the border of `m` strays from the ellipse in `r`, in points (measured across the

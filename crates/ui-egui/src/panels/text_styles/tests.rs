@@ -766,6 +766,44 @@ fn dragging_a_highlighted_style_carries_every_highlighted_style() {
     }
 }
 
+/// The panel menu's Load Character Styles… (Load Paragraph Styles…) adds that kind of style from
+/// the document picked in the open dialog, and Load All Styles… adds both kinds, each in one undo
+/// step. Without an open dialog the items are off.
+#[test]
+fn panel_menus_load_the_styles_of_a_picked_document() {
+    let mut src = vectorcraft_engine::Session::new();
+    src.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Lead", "attrs": {"size": 30.0}})).unwrap();
+    src.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Center"}})).unwrap();
+    let dir = std::env::temp_dir().join(format!("vc-panel-load-styles-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Styles.vectorcraft");
+    std::fs::write(&path, vectorcraft_format::save(&src.doc().unwrap().doc, false)).unwrap();
+    let names = |app: &mut VectorcraftApp, kind| styles(app, kind).into_iter().skip(1).map(|s| s.0).collect::<Vec<_>>();
+    for kind in [Kind::Char, Kind::Para] {
+        let (mut app, _) = several_app();
+        let ctx = egui::Context::default();
+        let items = |app: &mut VectorcraftApp, ui: &mut egui::Ui| menu(app, ui, kind);
+        let one = format!("   Load {} Styles…", kind.what());
+        let doc = app.session.doc().unwrap().doc.clone();
+        click_text_held(&ctx, &mut app, &one, egui::Modifiers::NONE, items);
+        assert_eq!(app.session.doc().unwrap().doc, doc, "{} Styles: off without an open dialog", kind.what());
+        let picked = path.to_string_lossy().to_string();
+        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, &one, egui::Modifiers::NONE, items);
+        let (added, other) = if kind == Kind::Char { ("Lead", Kind::Para) } else { ("Centered", Kind::Char) };
+        assert_eq!(names(&mut app, kind), ["A", "B", "C", "D", added], "{} Styles", kind.what());
+        assert_eq!(names(&mut app, other), ["A", "B", "C", "D"], "{} Styles: the other kind", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+        click_text_held(&ctx, &mut app, "   Load All Styles…", egui::Modifiers::NONE, items);
+        assert_eq!(names(&mut app, Kind::Char), ["A", "B", "C", "D", "Lead"], "{} Styles: Load All Styles", kind.what());
+        assert_eq!(names(&mut app, Kind::Para), ["A", "B", "C", "D", "Centered"], "{} Styles: Load All Styles", kind.what());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
+    }
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 /// Feed real text/shortcut events through the canvas Type routing. No focus reset or typing
 /// settlement here: the capture dispatch itself must close the live typing interaction.
 fn capture_input(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) {

@@ -1,7 +1,26 @@
 use egui::{Event, Modifiers, PointerButton};
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
+
+/// The gradient swatches menu has one row per gradient swatch: with enough of them it stops inside a
+/// short window and the wheel reaches Save to Swatches. With few of them it does not scroll.
+#[test]
+fn a_long_gradient_swatch_menu_scrolls_inside_a_short_window() {
+    let stops = json!([{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
+    let paint = current(&app).expect("a gradient fill");
+    let short = paint.clone();
+    let arrow = |window: &PopupWindow| window.clickable(vec2(14.0, 40.0))[0].center();
+    let first = gradient_swatches(&app)[0].0.clone();
+    assert_short_list_does_not_scroll(&mut app, move |app, ui| thumbnail(app, ui, &short, true), arrow, &first, "Save to Swatches");
+    for n in 0..30 {
+        app.run("swatch.new", json!({"name": format!("Long {n}"), "gradient": {"stops": stops}})).unwrap();
+    }
+    assert_last_row_scrolls_into_view(&mut app, 200.0, move |app, ui| thumbnail(app, ui, &paint, true), arrow, &first, "Save to Swatches");
+}
 
 #[test]
 fn offsets_and_json() {
@@ -725,4 +744,40 @@ fn the_panel_menu_saves_deletes_and_hides_presets() {
     let texts = p.frame_of(&mut app, vec![], Modifiers::NONE, menu);
     p.menu_click(&mut app, text_at(&texts, "Show Presets").unwrap());
     assert!(text_at(&p.frame(&mut app, vec![], Modifiers::NONE), "Presets:").is_some());
+}
+
+/// A stop is deleted by dragging it down off the ramp or with Delete Stop, which sits at the
+/// ramp's right end (so a short panel doesn't hide it below the stop fields, #5403); one undo
+/// step each, and a two-stop gradient keeps both.
+#[test]
+fn a_stop_dragged_off_the_ramp_or_deleted_with_the_button_beside_it_goes() {
+    let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#ff0000"}, {"offset": 1, "color": "#000000"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    let mut p = Panel::new();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let mid = p.widget(("grad-stop", 1)).center();
+    // Dragged down off the ramp, the middle stop goes.
+    p.drag(&mut app, mid, mid + vec2(0.0, 60.0), Modifiers::NONE);
+    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
+    // Delete Stop, level with the ramp and right of it, removes the selected stop.
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    let bar = p.widget("grad-bar");
+    let del = *p.row_after(bar.left_center(), 22.0).last().expect("Delete Stop beside the ramp");
+    assert!(del.left() >= bar.right(), "right of the ramp");
+    p.click(&mut app, del.center());
+    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(hexes(&app), ["#ffffff", "#ff0000", "#000000"]);
+    app.run("edit.redo", json!({})).unwrap();
+    // Two stops stay two: dragged off, the stop comes back, and the button is off.
+    let first = p.widget(("grad-stop", 0)).center();
+    p.drag(&mut app, first, first + vec2(0.0, 60.0), Modifiers::NONE);
+    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    p.frame(&mut app, vec![], Modifiers::NONE);
+    p.click(&mut app, del.center());
+    assert_eq!(hexes(&app), ["#ffffff", "#000000"]);
 }

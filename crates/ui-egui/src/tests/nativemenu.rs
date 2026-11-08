@@ -15,8 +15,12 @@ use crate::i18n::Lang;
 use crate::native_menu::{self, Backend, MenuBar, MenuRole, NativeMenu, Node, Standard};
 use crate::{VectorcraftApp, menus};
 
+/// A new app, after the installed fonts' scan it starts has ended: until then Type › Font lists
+/// only the loaded fonts (#5483), and a scan that ends part way through a test adds items between
+/// two reads of the menus.
 fn app(doc: bool) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    vectorcraft_text::FontDb::global().family_list();
     if doc {
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 37, "height": 40})).unwrap();
@@ -151,7 +155,8 @@ fn language_and_appearance_are_in_the_app_menu() {
 
 /// Everything the in-window bar lists is in the Mac menu bar, once: what moved to the app menu
 /// (About, Settings, Quit, Language, UI Brightness) leaves its other places, and Join Our Discord
-/// stays under Help.
+/// stays under Help. The Mac bar is laid out from the in-window bar's own read of the menus: Type ›
+/// Font and the plug-in rows come from process-wide state that a test running alongside can change.
 #[test]
 fn every_in_window_item_is_in_the_mac_menu_bar_once() {
     let app = app(true);
@@ -167,7 +172,7 @@ fn every_in_window_item_is_in_the_mac_menu_bar_once() {
         n
     };
     let in_window = native_menu::from_tree(&app, &menus::menu_tree());
-    let mac = bar(&app);
+    let mac = native_menu::mac_layout(&app, &in_window, Lang::EN).bar;
     let (a, b) = (count(&in_window), count(&mac));
     // The in-window application menu's commands, its submenus' included.
     let moved: Vec<&str> = MenuBar { menus: vec![in_window.menus[0].clone()] }.items().iter().filter_map(|it| it.command).collect();
@@ -221,19 +226,26 @@ fn a_command_keeps_a_system_key_it_is_bound_to() {
 }
 
 /// A native menu can't turn a plain item into a check item in place: opening a document or
-/// selecting must not change the menus' structure, or every change rebuilds them.
+/// selecting must not change the menus' structure, or every change rebuilds them. The four reads run
+/// undisturbed: a font or plug-in that a test running alongside adds between two of them changes the
+/// key.
 #[test]
 fn documents_and_selections_change_state_not_structure() {
-    let empty = native_menu::structure_key(&bar(&app(false)));
-    let mut a = app(true);
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "a document with a selected rectangle");
-    a.run("select.none", json!({})).unwrap();
-    a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
-    assert!(!a.session.active().unwrap().selection.objects.is_empty());
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "type selected");
-    // A recent file is a new item: the menus are rebuilt.
-    crate::io::note_recent(&mut a, "/art/a.svg");
-    assert_ne!(native_menu::structure_key(&bar(&a)), empty);
+    let (_m, (empty, drawn, typed, recent)) = undisturbed(|_| {
+        let key = |app: &VectorcraftApp| native_menu::structure_key(&bar(app));
+        let empty = key(&app(false));
+        let mut a = app(true);
+        let drawn = key(&a);
+        a.run("select.none", json!({})).unwrap();
+        a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
+        assert!(!a.session.active().unwrap().selection.objects.is_empty());
+        let typed = key(&a);
+        crate::io::note_recent(&mut a, "/art/a.svg");
+        (empty, drawn, typed, key(&a))
+    });
+    assert_eq!(drawn, empty, "a document with a selected rectangle");
+    assert_eq!(typed, empty, "type selected");
+    assert_ne!(recent, empty, "a recent file is a new item: the menus are rebuilt");
 }
 
 #[test]
@@ -388,12 +400,20 @@ fn click(at: Pos2, pressed: bool) -> Event {
 }
 
 /// Run `drag` on a new app with the fake native menu, and run it again on another new app until
-/// the shortcut and plug-in generations hold still through a run (at most 20 runs). Return that app
-/// and what `drag` returned. The generations are process-wide and only grow. A test running
-/// alongside can bump them, and the app then reads the menus again, so every step whose menu
-/// reads a test counts runs inside `drag`.
+/// the shortcut, plug-in and font generations hold still through a run (at most 20 runs). Return
+/// that app and what `drag` returned. The generations are process-wide and only grow. A test
+/// running alongside can bump them (a font it adds, the installed fonts' scan ending), and the app
+/// then reads the menus again, so every step whose menu reads a test counts runs inside `drag`.
 fn undisturbed<R>(drag: impl Fn(&mut Mac) -> R) -> (Mac, R) {
-    let generations = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
+    let fonts = vectorcraft_text::FontDb::global();
+    let generations = || {
+        (
+            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
+            crate::menus::plugin_revision(),
+            fonts.generation(),
+            fonts.installed_fonts_ready(),
+        )
+    };
     for _ in 0..20 {
         let mut m = Mac::new(true);
         let before = generations();
@@ -420,10 +440,18 @@ fn key_equivalents_run_through_the_normal_shortcut_path_once() {
     m.key_equivalent("Cmd+Z");
     assert_eq!(undo(&m), before - 1, "⌘Z undid one step");
     assert!(m.fake.synced() >= 1, "the menus were built");
-    // Idle frames don't read the menus again. The shortcut and plug-in generations are
-    // process-wide, and tests running alongside with other shortcuts bump them (rightly reading
-    // the menus again), so judge two idle frames in which they held still.
-    let globals = || (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::menus::plugin_revision());
+    // Idle frames don't read the menus again. The shortcut, plug-in and font generations are
+    // process-wide, and tests running alongside with other shortcuts or fonts bump them (rightly
+    // reading the menus again), so judge two idle frames in which they held still.
+    let fonts = vectorcraft_text::FontDb::global();
+    let globals = || {
+        (
+            crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed),
+            crate::menus::plugin_revision(),
+            fonts.generation(),
+            fonts.installed_fonts_ready(),
+        )
+    };
     let quiet = (0..50).any(|_| {
         let (before, synced) = (globals(), m.fake.synced());
         m.frame(vec![]);
@@ -538,6 +566,23 @@ fn applying_a_dialog_preview_reads_the_menus() {
     assert!(closed);
     assert_eq!(after, synced + 1, "the menus were read");
     assert_eq!(find(&m.fake.last(), "edit.undo").label, "Undo Rotate");
+}
+
+/// Fonts that come in after the menus were read (the installed fonts' scan ending, #5483) make the
+/// next frame read them again, with no click or key, so Type › Font lists them.
+#[test]
+fn fonts_that_load_read_the_menus_again() {
+    use vectorcraft_text::test_fonts as t;
+    let db = vectorcraft_text::FontDb::global();
+    // A test font no other test loaded yet, so adding it changes the fonts.
+    let fonts = [t::vertical_font(true), t::two_axis_font(), t::variable_font()];
+    let mut m = Mac::new(true);
+    let synced = m.fake.synced();
+    if !fonts.into_iter().flatten().any(|data| db.add_font(data) > 0) {
+        return;
+    }
+    m.frame(vec![]);
+    assert!(m.fake.synced() > synced, "the menus were read again");
 }
 
 /// The font menu previews each font it highlights on the selected type, in one interaction: the

@@ -290,6 +290,30 @@ fn ai_export_public_aliases_preserve_missing_placed_links() {
     }
 }
 
+/// The `.ai` editing copy for other apps draws a missing placed file as its preview, with the
+/// pages or without them, and says so.
+#[test]
+fn ai_editing_copy_warns_about_missing_placed_files() {
+    let dir = Folder::new("placed-ai-editing-copy-missing");
+    let src = dir.file("logo.vectorcraft");
+    star_source(&src, "placed-ai-editing-copy-missing-unique");
+    let mut s = session();
+    place(&mut s, &src);
+    let parent = dir.file("parent.vectorcraft");
+    save(&mut s, &parent);
+    std::fs::remove_file(&src).unwrap();
+    open(&mut s, &parent);
+    let doc = &s.doc().unwrap().doc;
+    let (_, missing) = cmd::place::document::full_documents(doc);
+    assert!(!missing.is_empty());
+    for compatible in [true, false] {
+        let enc = cmd::fileio::encode_all(doc, "ai", &json!({"pdfCompatible": compatible})).unwrap();
+        for w in &missing {
+            assert!(enc.warnings.contains(w), "pdfCompatible {compatible}: {w:?} not in {:?}", enc.warnings);
+        }
+    }
+}
+
 /// Include Linked Files must retain relinkable objects when only their previews are available.
 #[test]
 fn native_included_links_keep_missing_placed_documents_editable() {
@@ -347,6 +371,30 @@ fn native_included_links_keep_missing_placed_documents_editable() {
             }
         }
     }
+}
+
+/// Output prepared by a caller that may not read the placed file shows its preview, not the full
+/// art an earlier caller that could read it left cached.
+#[test]
+fn a_confined_export_does_not_reuse_full_art_read_for_another_caller() {
+    let dir = Folder::new("placed-confined");
+    let other = Folder::new("placed-confined-other");
+    let src = dir.file("src.vectorcraft");
+    source(&src, 100.0, 50.0, BLUE, 0);
+    let mut s = session();
+    place(&mut s, &src);
+    // As a document saved with previews opens: each placed file's blob holds only its preview.
+    for b in std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.values_mut() {
+        if let Some(p) = b.proxy.clone() {
+            b.bytes = p;
+        }
+    }
+    let d = s.doc().unwrap().doc.clone();
+    let preview = |d: &Document| d.images.keys().any(|k| k.starts_with(vectorcraft_doc::placed_document::RESOURCE_PREFIX) && k.ends_with("/preview"));
+    assert!(!preview(&d.with_placed_art()), "the file is read in full");
+    let roots = crate::file_access::AutomationRoots::new(&[&other.0], &[]).unwrap().unwrap();
+    let confined = crate::file_access::confine(Some(&roots), || d.with_placed_art().into_owned());
+    assert!(preview(&confined), "only the preview shows");
 }
 
 #[test]
@@ -438,6 +486,35 @@ fn relink_points_a_placed_document_at_another_file() {
     assert_eq!(r["relinked"], json!([id.0]), "{r}");
     assert_eq!(placed(&s, id).link.path, b);
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
+/// Missing Links from This Folder finds a missing placed document by name, except with copy, which
+/// takes images only: the placed document then stays as it is.
+#[test]
+fn relink_missing_in_folder_finds_placed_documents_except_with_copy() {
+    let dir = Folder::new("placed-missing-folder");
+    let (doc_file, pic) = (dir.file("art/a.vectorcraft"), dir.file("art/photo.png"));
+    write(&pic, &crate::tests_links::png(60, 30, RED));
+    source(&doc_file, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let (placed_id, image_id) = (place(&mut s, &doc_file), place(&mut s, &pic));
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&doc_file).unwrap();
+    std::fs::remove_file(&pic).unwrap();
+    open(&mut s, &doc_path);
+    let found = dir.0.join("found");
+    let chosen = found.join("renamed.png").to_string_lossy().into_owned();
+    write(&chosen, &crate::tests_links::png(60, 30, BLUE));
+    source(&found.join("a.vectorcraft").to_string_lossy(), 100.0, 50.0, BLUE, 0);
+    let p = json!({"ids": [image_id.0], "path": chosen, "scope": "missingInFolder", "copy": true});
+    let r = s.execute("links.relink", &p).unwrap();
+    assert_eq!(r["relinked"], json!([image_id.0]), "{r}");
+    assert_eq!(placed(&s, placed_id).link.path, doc_file, "copy leaves the placed document");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let p = json!({"ids": [image_id.0], "path": chosen, "scope": "missingInFolder"});
+    let r = s.execute("links.relink", &p).unwrap();
+    assert_eq!(r["relinked"], json!([image_id.0, placed_id.0]), "{r}");
 }
 
 /// A file made from scratch at `path` in `format` (`pdf`, or `ai`: a PDF-compatible .ai): one
@@ -803,6 +880,24 @@ fn expand_turns_a_placed_document_into_editable_art_with_its_resources() {
     assert_eq!(info["object"], false, "nothing left to expand: {info}");
 }
 
+/// Expand also expands a placed document in the art of a selected symbol instance, in the same
+/// command.
+#[test]
+fn expand_expands_a_placed_document_in_a_symbol_instances_art() {
+    let dir = Folder::new("placed-expand-symbol");
+    let src = dir.file("badge.vectorcraft");
+    star_source(&src, "star");
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.select(|_, sel| sel.set([id])).unwrap();
+    let inst = NodeId(s.execute("symbol.new", &json!({"name": "Badge"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("object.expand", &json!({})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let mut placed = 0;
+    doc.node(inst).unwrap().walk(&mut |c| placed += usize::from(matches!(c.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(placed, 0, "the placed document in the art is expanded");
+}
+
 #[test]
 fn saving_a_document_refreshes_the_open_documents_that_place_it() {
     let dir = Folder::new("placed-refresh");
@@ -823,6 +918,36 @@ fn saving_a_document_refreshes_the_open_documents_that_place_it() {
     assert!(near(centre_colour(&doc.doc), BLUE), "shows the saved version");
     assert!(matches!(doc.doc.node(id).map(|n| &n.kind), Some(NodeKind::PlacedDocument(_))));
     assert_eq!(s.active_index(), Some(child), "the saved document stays active");
+}
+
+/// Placed documents inside a symbol and a pattern of another open document are read again when
+/// their file is saved, as one in the layers is.
+#[test]
+fn saving_a_document_refreshes_its_placed_copies_inside_symbols_and_patterns() {
+    let dir = Folder::new("placed-refresh-nested");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("symbol.new", &json!({"name": "Logo", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &src);
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let parent = s.active_index().unwrap();
+    let mut in_layers = 0;
+    s.doc().unwrap().doc.walk(|n| in_layers += usize::from(matches!(n.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(in_layers, 0, "no placed document in the layers");
+    s.execute("document.open", &json!({"path": src})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#1414e6"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let hash = Some(vectorcraft_doc::links::hash_bytes(&std::fs::read(&src).unwrap()));
+    let doc = &s.documents()[parent];
+    assert_eq!(doc.history.undo.last().unwrap().label, "Update Links");
+    assert!(near(centre_colour(&doc.doc), BLUE), "the symbol's instance shows the saved version");
+    let mut hashes = vec![];
+    doc.doc.visit_placed(|_, p| hashes.push(p.link.hash.clone()));
+    assert_eq!(hashes, [hash.clone(), hash], "the symbol's, then the pattern's");
 }
 
 #[test]

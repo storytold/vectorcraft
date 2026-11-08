@@ -94,7 +94,7 @@ the two can still win that race.
 | `document.inspect` | `{depth?, childLimit?, ids?, kind?, limit?, offset?}` | layer tree, selection, the key object (`key`, null without one; a key ruler guide as `keyGuide`), history, paint defaults; `depth` / `childLimit` slice the layer tree as `document.node {summary: true}` does; `ids`, `kind`, `limit` and `offset` list just some nodes as `nodes` (with `total`) instead of the whole tree, see [mcp.md](mcp.md). Each node reports `opacity` below 1 and `blend` when it isn't Normal; objects and compound paths report `fill`, `stroke` and `strokeWidth`, a compound path's members `compoundMember: true` instead |
 | `ui.inspect` | | tool, UI state, `screenMode` (0 normal, 1 full screen with menu bar, 2 full screen, 3 Presentation Mode), `taskBar` (`pinned`, and `rect` `[x, y, w, h]` while the Contextual Task Bar shows), `freeTransformWidget` (`[x, y, w, h]` while the Free Transform widget shows), view, canvas rect, window size, perf, background saves and exports still running, `nativeMenuBar` (true when the menus are in the macOS menu bar rather than the window; `ui.menu.list` lists the in-window menus either way), `fileDialog` (`"open"`, `"place"`, `"save"` or `"folder"` while a native file dialog is open, `null` otherwise; see below) |
 | `ui.menu.list` / `ui.menu.invoke` | `{command, params}` | the full menu tree / invoke an item |
-| `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected. While a menu opened over locked objects is open, it has an `Unlock` submenu with one item for each locked object under the pointer, topmost first and at most 20, labeled with the object's name, which runs `layer.setProps {ids: [id], locked: false}`. A locked group gets one item, and the locked objects inside it get none. Hidden objects, objects on hidden, locked or template layers, and in isolation mode objects outside the isolated group get no item |
+| `ui.contextMenu.list` | | the canvas context menu for the current selection, flattened like `ui.menu.list` (`path` holds its submenus). `ui.click {x, y, button: "right"}` on the canvas opens it, after selecting the object there unless it is already selected. With the Artboard tool it lists the artboard entries (see `docs/mcp.md`), after selecting the artboard there unless it is already selected. While a menu opened over locked objects is open, it has an `Unlock` submenu with one item for each locked object under the pointer, topmost first and at most 20, labeled with the object's name, which runs `layer.setProps {ids: [id], locked: false}`. A locked group gets one item, and the locked objects inside it get none. Hidden objects, objects on hidden, locked or template layers, and in isolation mode objects outside the isolated group get no item |
 | `ui.tool.select` / `ui.tool.list` | `{tool}` | |
 | `ui.pointer` | `{events:[{kind: down|drag|up|move|doubleclick, x, y, space?: "doc"|"screen", mods?}]}` | drive the active tool exactly like the mouse: `mods.cmd` held at a press with any tool but a selection tool drags with the selection tool chosen last (Direct Selection with the Pen until one is), and the release gives the tool back as it was; the reply lists `selection`, `key` (the key object, null without one) and `tool`. With the Shape Builder or the Live Paint Bucket and a selection of more than 128 segments, the app finds the regions off the UI thread, so a `move` replies before the region under the pointer is highlighted, and the highlight shows in the first frame after the regions are found |
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
@@ -320,6 +320,7 @@ The User Defined libraries are `window.userBrushLibrary1`…`10` in Window → B
 Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) opens the `tileEdgeColor` dialog (field
 `color`: `#rrggbb` or a preset name such as "Light Blue"); `ui.dialog.confirm` sets the preference
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
+A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
 Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
 caption buttons (Minimize, Maximize/Restore, Close) sit at the bar's right end, 46 pt each; they are window chrome,
@@ -382,6 +383,16 @@ two-column flag, top-left corner, the groups torn off it). They are kept with th
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new
 workspace with a copy of them.
 
+Manage Toolbars: Window › Toolbars › Manage Toolbars… (or Manage Toolbars… in the drawer's ☰ menu,
+`window.toolbar.manage`) lists these toolbars. A new name typed for the selected toolbar renames it at Enter, when
+the text box loses focus, or at OK (`window.toolbar.rename {name, to}`; the name must not be empty, longer than 200
+characters or another toolbar's, whatever the case). The + button copies the selected toolbar with its tools as
+"`name` Copy", shown a little below it and below earlier copies (`window.toolbar.duplicate {name}`), and with none
+selected it makes a blank toolbar called "Toolbar N" (`window.toolbar.duplicate {}`). The trash can deletes the
+selected toolbar and the groups torn off it (`window.toolbar.delete {name}`). Renaming or deleting a toolbar closes
+the drawer and a group's flyout open on it; a new name that changes only the case leaves them open. Each change is
+kept with the current workspace.
+
 The Contextual Task Bar: its handle (the grip at its left end) drags it anywhere on the canvas, which always holds
 it whole, also when the window shrinks. Unpinned, the bar keeps that offset as it follows the selection, until
 another document becomes active. Its More Options (…) menu has Hide Bar (`window.taskBar`); Pin Bar Position
@@ -390,6 +401,12 @@ selection changes (the handle still moves it) and, turned off, lets it follow th
 Bar Position (`window.taskBar.reset`), which unpins it and puts it back under the selection; and Show Properties
 Panel. As in Illustrator, neither the position nor the pin is saved: each launch starts with the bar under the
 selection.
+
+The Compound Shapes add-on's setting, `window.pathfinder.compoundShapes` (omitted params toggle; checked while on; kept with the
+preferences; off by default), swaps what a click and an Alt-click do on the Pathfinder panel's Shape Mode buttons: on, a click makes a
+compound shape (`object.compoundShape.make`) and Alt-click gives the permanent Pathfinder result. Selected members of a compound
+shape always take the clicked mode (`object.compoundShape.setMode`). Its submenu, Object › Plug-ins › Compound Shapes, also lists
+Make, Release and Expand Compound Shape.
 
 The Free Transform widget: while the Free Transform tool (E) is active, a small box at the canvas's top left holds
 Constrain over the tool's three modes, Free Transform, Perspective Distort and Free Distort. The buttons set the tool's
@@ -445,7 +462,9 @@ changed since); its preview greys the art and paints the highlighted objects or 
 
 Expand: Object → Expand… (`ui.expandDialog`, or `object.expand` without params from the menus, palette and shortcuts)
 opens the `expand` dialog for the selection. Fields: `object`, `fill`, `stroke` (all on; `__object`, `__fill`,
-`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled),
+`__stroke` say which the selection has something for, as `object.expand.info` does, and the others are disabled;
+`__fill_symbol`, `__stroke_symbol` and `__gradient_symbol` say that only the art of symbol instances holds it, and
+those options are enabled only while `object` is on),
 `gradient` (`objects` or `mesh`) and `steps` (1–1000, default 255), which are enabled when `fill` is on and
 `__gradient` says the selection has a gradient fill (`object.expand.info`'s `gradient`). `ui.dialog.confirm` runs `object.expand` with them as
 one undo step. While the selection has an appearance Expand Appearance expands (effects, several fills or strokes, a
@@ -471,14 +490,15 @@ equivalents); `ui.dialog.confirm` runs `swatch.spotOptions {useLab}` as one undo
 Scale options: `ui.menuDialog {command}` opens the dialog a command's menu item opens (`object.scale` → `scale`,
 `object.transformEach` → `transformEach`, also Move, Rotate, Reflect, Shear and the Path dialogs). The Scale dialog
 (`scale`) and Object → Transform → Transform Each… (dialog `transformEach`: `scaleH`,
-`scaleV` %, `moveH`, `moveV` pt, `rotate` °, `reflectX`, `reflectY`, `random`, `reference` 0–8, `copy`, `preview`)
+`scaleV` %, and `absH`, `absV` pt, the width and height each object becomes with `relative` false, absent while they
+read "Mixed"; `moveH`, `moveV` pt, `rotate` °, `reflectX`, `reflectY`, `random`, `reference` 0–8, `copy`, `preview`)
 have the fields `corners` (Scale Corners) and `strokes` (Scale Strokes & Effects). They start from the preferences
 `scaleCorners` and `scaleStrokes`, and `ui.dialog.confirm` keeps them as the preferences (`prefs.set`) before running
 `object.scale` / `object.transformEach` with them. The Transform panel's checkboxes and flyout item and the Properties
 panel's checkbox set the same preferences through `prefs.set`. Transform Each opens on the values it was last
-confirmed with (scale, move, rotate, reflect, random, reference, `objects` and `preview`; never `copy`), kept with the
-UI state (#1732). Its Copy button, left of Cancel, sets `copy: true` and confirms; `ui.dialog.set {field: "copy",
-value: true}` then `ui.dialog.confirm` does the same.
+confirmed with (scale, Relative or Absolute, the link between the two scales, move, rotate, reflect, random,
+reference, `objects` and `preview`; never `copy`), kept with the UI state (#1732). Its Copy button, left of Cancel,
+sets `copy: true` and confirms; `ui.dialog.set {field: "copy", value: true}` then `ui.dialog.confirm` does the same.
 
 Use Preview Bounds: the Align panel flyout's Use Preview Bounds item shows and toggles the `usePreviewBounds`
 preference (`prefs.set`); while it is on, the bounding box and the Transform panel, Properties and Control bar
@@ -510,7 +530,8 @@ opens the `perspectivePlane` dialog (fields `plane`: left, right or ground; `loc
 normal; `objects`: none, move or copy). `ui.dialog.confirm` runs `perspective.plane.move` with them.
 
 Units: dialog distance fields (Move's `dx`/`dy`, shape sizes, Offset Path's `offset`, Split Into Grid's gutters and totals,
-Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV`, New Document's `width`/`height`, the
+Artboard Options' sizes, effects' distances, `transformEach`'s `moveH`/`moveV` and its Absolute `scaleH`/`scaleV`, New
+Document's `width`/`height`, the
 length preferences in `preferences`) show in the General unit (the active document's units, or `unitsGeneral` without a
 document). Through `ui.dialog.set` a number is in points and a string may carry its unit (`"10 mm"`; a bare number in a
 string is points). The `preferences` dialog's `unitsGeneral` starts as the active document's units, and OK sets them.
@@ -624,7 +645,7 @@ dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
 type with those options (`file.place {text: {…}}`).
 
-System clipboard formats: through the desktop app, `edit.copy` and `edit.cut` publish what `clipboard.flavours`
+System clipboard formats: through the desktop app, `edit.copy`, `edit.cut`, `artboard.copy` and `artboard.cut` publish what `clipboard.flavours`
 lists to the system clipboard (once they are written, the status bar shows the first of the PNG's and PDF's
 `warnings`, such as an image that couldn't be decoded), and every Paste command first loads what another app copied (`clipboard.importSvg`,
 `importPdf`, `importEps`, `importText` or `importImage`, centred in the view; the desktop app reads PDF and EPS from
@@ -664,7 +685,16 @@ art too large at that scale) keeps the dialog open.
 Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?}` for agents) opens the
 `placementOptions` dialog for the selected images (fields `ids`, `preserve`: `transforms`/`bounds`/`fileDimensions`/
 `fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as
-one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
+one undo step.
+
+Relink: the Links panel's Relink… button and flyout item (or `ui.relinkDialog {ids?}` for agents) open the `relink`
+dialog for the selected images and placed documents (fields `ids`, `links`: `[{name, ids}]`, one row per linked file,
+`scope`: `each`/`selected`/`all`/`missingInFolder`, default `selected`, `path` and `paths`). With nothing selected and
+no `ids`, it fails with "select the images to relink, or pass ids". `ui.dialog.set {field: "path", value}` then `ui.dialog.confirm` runs
+`links.relink {ids, path, scope}` as one undo step; without `path` a file is picked. With `scope: "each"`, each confirm
+takes `path` (or picks a file) for the next row of `links`, adds it to `paths` and keeps the dialog open, returning
+`{next}` (the next row's name); the last row's confirm runs `links.relink {scope: "each", paths}` for every row as one
+undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).
@@ -846,7 +876,7 @@ events take `pressure` (0..1, default 1): it is the Liquify intensity while Use 
 
 Freehand Tool Options: double-clicking the Pencil, Paintbrush, Smooth, Blob Brush or Eraser tool
 (`tool.options {tool: "pencil"}`) opens a `freehandOptions` dialog. Its fields are `tool` and the options the tool
-keeps: `fidelity` (pt; Pencil, Paintbrush, Smooth, Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
+keeps: `fidelity` (screen pixels for the Pencil and Paintbrush, the same at any zoom; pt for Smooth and Blob Brush), `fill` (Pencil, Paintbrush), `keepSelected` (Pencil,
 Paintbrush, Blob Brush; on by default for the Pencil and Paintbrush and off for the Blob Brush, and while it is off
 the path a stroke draws, continues or merges into is not selected afterwards), `mergeOnlySelection` (Blob Brush;
 off by default, and while it is on a stroke merges only with selected blobs), `closeWithin` and `editWithin`
@@ -979,14 +1009,18 @@ app:
 |---|---|
 | `vectorcraft.request(method, params)` | any control method of this document → its `result` |
 | `vectorcraft.execute(command, params)` | `engine.execute` |
-| `vectorcraft.commands()` / `vectorcraft.inspect()` | `engine.commands` / the inspect method |
-| `vectorcraft.screenshot(params)` | `ui.screenshot` (no `path`: the PNG comes back inline) |
+| `vectorcraft.commands()` | `engine.commands` |
+| `vectorcraft.docInspect(params)` / `vectorcraft.uiInspect(params)` | `document.inspect` / `ui.inspect` |
+| `vectorcraft.inspect()` | `ui.inspect` (the name before `uiInspect`) |
+| `vectorcraft.screenshot(params)` | `ui.screenshot` (no `path`: the PNG comes back inline, as `data` and as `pngBase64`) |
 | `vectorcraft.openFile(name, bytes)` | opens the bytes the way a dropped file opens (returns `true` once queued) |
 | `vectorcraft.captureDownloads(on)` | while on, a save or export is kept in the page instead of downloaded |
 | `vectorcraft.files()` / `vectorcraft.readFile(name)` | the kept files (`{path, size}`) / one of them as a `Uint8Array` |
 
 Errors reject with an `Error` carrying the method's message. Requests run on the UI's next frame, so a
 hidden tab (whose frames the browser pauses) answers when it is shown again.
+
+`request`, `execute`, `commands`, `docInspect`, `uiInspect` and `screenshot` come from [`craft-web-api`](https://github.com/storytold/craft-libs/tree/main/crates/web-api) (storytold/craft-libs#413), the same shape in every Craft app. A call the app does not answer within 30 seconds rejects, and the app drops it unrun if it had not started it. `openFile`, `captureDownloads`, `files`, `readFile` and `inspect` are VectorCraft's own.
 
 ## Revision history
 

@@ -242,6 +242,9 @@ pub struct ToolContext<'a> {
     /// object shows how far the selection is from it, and over an empty part of an artboard how
     /// far it is from the artboard's edges ([`guides::distance_guides`]).
     pub distance_guides: bool,
+    /// Smart Guides → Snap to Last Location: a selection moved by dragging goes back to where the
+    /// move began while it is within Snapping Tolerance of it ([`guides::Targets::snap_back`]).
+    pub snap_to_last_location: bool,
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,

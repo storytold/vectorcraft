@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color, stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Artboard",
             [],
             None,
-            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} move artboards (and the art fully inside them; locked and hidden art, and art also on another locked artboard, only with prefs moveLockedWithArtboard), several in one step (an error when one is locked); `copy` (Alt-drag) leaves them and moves copies, which start unlocked → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
+            "{index | indices: [index…], dx, dy, moveArt?: bool, copy?: bool, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard)} move artboards (and the art fully inside them; locked and hidden art, and art also on another locked artboard, only with lockedAndHidden), several in one step (an error when one is locked); `copy` (Alt-drag) leaves them and moves copies, which start unlocked → {index (the first), indices: the artboards moved or the copies, moved: the art moved or the copies}",
             has_doc,
             artboard_move
         ),
@@ -384,13 +384,14 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
     let dv = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let move_art = bool_or(p, "moveArt", false);
     let copy = bool_or(p, "copy", false);
+    let locked_art = super::panelcmds::locked_and_hidden(s, p, move_art, "artboard.move")?;
     if !copy {
         super::panelcmds::refuse_locked(&s.doc()?.doc, &indices)?;
     }
     // Each artboard's art, an object counted once (artboards can overlap).
     let mut arts: Vec<(usize, Vec<NodeId>)> = vec![];
     for &i in &indices {
-        let art = super::panelcmds::artboard_art(s, i, move_art, !copy)?;
+        let art = super::panelcmds::artboard_art(s, i, move_art, locked_art, !copy)?;
         let art = art.into_iter().filter(|id| !arts.iter().any(|(_, a)| a.contains(id))).collect();
         arts.push((i, art));
     }

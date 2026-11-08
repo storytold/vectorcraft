@@ -106,6 +106,12 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         description: "compress the PDF's content and the native document it carries (the PDF option compression.compressText)",
     },
     FormatOption {
+        name: "editingData",
+        ty: "boolean",
+        default: "true",
+        description: "also carry an editing copy of the artwork in the form other apps that open .ai files read: layers and sublayers, groups, compound paths, paths, fills and strokes, colors, linear and radial gradients, patterns on a grid of tiles, swatches, artboards and which one is active, the transparency of objects and layers, objects' opacity masks, clipping groups and layers clipped by a path, embedded images with their pixels, linked images as placed files with a preview, point type, area type and type on a path as text, and symbols and their instances, with other type, other patterns, other clipping objects, other symbol instances and live objects as plain filled and stroked paths, freeform gradients, gradients along or across a stroke and gradients of more than 256 stops as their average color, gradients that dither or mix perceptually as classic ones, and gradient stops linked to global process colors as their colors (written only with every artboard, as Preserve Editing is)",
+    },
+    FormatOption {
         name: "aiVersion",
         ty: "string",
         default: "\"pdf\"",
@@ -115,7 +121,7 @@ pub const AI_OPTIONS: &[FormatOption] = &[
         name: "transparentImages",
         ty: "string",
         default: "\"flatten\"",
-        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity or a blending mode): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
+        description: "with aiVersion 7, the images version 7 can't hold (see-through pixels, opacity, a blending mode, or a colorize color unless every pixel is black or white): flatten (the default: each becomes an opaque image of itself and the art under it, clipped to where it changes what shows; that art stays as it is) or omit (left out)",
     },
     FormatOption {
         name: "hiddenObjects",

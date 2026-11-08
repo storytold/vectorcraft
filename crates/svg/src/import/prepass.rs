@@ -5,6 +5,8 @@ use super::{
     symbol_units, vector_effect,
 };
 
+mod id_styles;
+
 /// What usvg would lose, found in the XML before it runs ([`prepass`]).
 #[derive(Default)]
 pub(super) struct Found {
@@ -19,7 +21,7 @@ pub(super) struct Found {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     pub(super) non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    pub(super) data: HashMap<String, Vec<(String, String)>>,
+    pub(super) data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     pub(super) events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).
@@ -31,6 +33,8 @@ pub(super) struct Found {
     /// Ids of the `<circle>` and `<ellipse>` elements, which come back as the ellipse VectorCraft
     /// draws ([`drawn_ellipse`](super::convert::drawn_ellipse)).
     pub(super) ellipses: HashSet<String>,
+    /// The text importer reads styles from this SVG before tracking IDs are added.
+    pub(super) text_source: Option<String>,
     pub(super) warnings: Vec<String>,
 }
 
@@ -38,6 +42,8 @@ pub(super) struct Found {
 #[derive(Default)]
 pub(crate) struct Edits {
     list: Vec<(std::ops::Range<usize>, String)>,
+    /// These edits assign tracking IDs.
+    id_edits: Vec<(std::ops::Range<usize>, String)>,
     /// The ids made up so far, by element.
     ids: HashMap<roxmltree::NodeId, String>,
     /// The numbers `n` of the `{MADE_UP_ID}n` the file names (as an element's id, in a style
@@ -70,7 +76,13 @@ impl Edits {
         }
         let id = format!("{MADE_UP_ID}{}", self.next);
         self.next += 1;
-        self.set(svg, n, "id", &id);
+        match n.attributes().find(|a| a.name() == "id" && a.namespace().is_none()) {
+            Some(a) => self.id_edits.push((a.range_value(), id.clone())),
+            None => {
+                let at = tag_name_end(svg, n);
+                self.id_edits.push((at..at, format!(" id=\"{id}\"")));
+            }
+        }
         self.ids.insert(n.id(), id.clone());
         id
     }
@@ -98,6 +110,7 @@ impl Edits {
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
     fn apply(mut self, svg: &str) -> Cow<'_, str> {
+        self.list.append(&mut self.id_edits);
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
             self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });
         }
@@ -157,7 +170,12 @@ fn named_made_up_ids(xml: &roxmltree::Document) -> HashSet<usize> {
 /// Whether each is there at all is read from `markers`: `svg` with its data URLs left out
 /// ([`depth::prescan`]), so an embedded picture isn't searched a dozen times. The edits are made
 /// in `svg` itself.
-pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document, opts: &ImportOptions) -> (Cow<'s, str>, Found) {
+pub(super) fn prepass<'s>(
+    svg: &'s str,
+    markers: &str,
+    xml: &roxmltree::Document,
+    opts: &ImportOptions,
+) -> Result<(Cow<'s, str>, Found), crate::SvgError> {
     let mut found = Found::default();
     // (`:` for prefixed elements such as `<svg:image>`.)
     let css_transform = has_css_transform(markers);
@@ -172,11 +190,11 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
         && !events
         && !foreign_attrs
         && !ellipses
-        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "groupmode", "script"]
+        && !["<a", "display", "<use", ":use", "<image", ":image", vector_effect::NON_SCALING, "data-", "class", "groupmode", "script"]
             .iter()
             .any(|t| markers.contains(t))
     {
-        return (svg.into(), found);
+        return Ok((svg.into(), found));
     }
     let mut edits = Edits::default();
     let elements = || xml.descendants().filter(|n| n.is_element());
@@ -185,11 +203,12 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
             found.links.insert(edits.id(svg, a), url.to_string());
         }
     }
-    if markers.contains("data-") {
+    if markers.contains("data-") || markers.contains("class") {
         for e in elements().filter(|e| OBJECT_ELEMENTS.contains(&e.tag_name().name())) {
             let data = user_data(e);
-            if !data.is_empty() {
-                found.data.insert(edits.id(svg, e), data);
+            let classes = user_classes(e);
+            if !data.is_empty() || !classes.is_empty() {
+                found.data.insert(edits.id(svg, e), (data, classes));
             }
         }
     }
@@ -245,7 +264,14 @@ pub(super) fn prepass<'s>(svg: &'s str, markers: &str, xml: &roxmltree::Document
     if css_transform {
         edits.list.extend(css_transform::rewrites(svg, xml));
     }
-    (edits.apply(svg), found)
+    if attribute_selectors && !edits.ids.is_empty() {
+        if elements().any(|n| matches!(n.tag_name().name(), "text" | "flowRoot")) {
+            let text_edits = Edits { list: edits.list.clone(), styles: edits.styles.clone(), ..Default::default() };
+            found.text_source = Some(text_edits.apply(svg).into_owned());
+        }
+        id_styles::preserve_matches(svg, xml, &mut edits, &mut found.warnings)?;
+    }
+    Ok((edits.apply(svg), found))
 }
 
 /// Is there a `transform` CSS declaration in `markers` (`transform` followed by `:`)?
@@ -294,6 +320,26 @@ fn hidden_objects(svg: &str, xml: &roxmltree::Document, css: &css::Styles, edits
 fn tag_name_end(svg: &str, n: XNode) -> usize {
     let start = n.range().start;
     svg.get(start + 1..).and_then(|s| s.find(|c: char| c.is_whitespace() || c == '/' || c == '>')).map_or(start + 2, |i| start + 1 + i)
+}
+
+/// What import keeps of an element's own attributes: its `data-*` attributes and CSS classes.
+pub(super) type Extras = (Vec<(String, String)>, Vec<String>);
+
+/// The most CSS classes kept per element (the file is untrusted).
+const MAX_CLASSES: usize = 64;
+
+/// The CSS classes of element `e`, in order and without repeats. Classes our own export
+/// generated (`cls-1`, with or without a prefix) aren't kept: export makes them again. A class list
+/// is split on SVG's five ASCII whitespace characters only, so a no-break space stays inside a name.
+fn user_classes(e: XNode) -> Vec<String> {
+    let generated = |c: &str| c.rsplit_once("cls-").is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    let mut out: Vec<String> = Vec::new();
+    for c in e.attribute("class").into_iter().flat_map(|v| v.split(['\u{20}', '\t', '\n', '\u{c}', '\r']).filter(|c| !c.is_empty())) {
+        if out.len() < MAX_CLASSES && !generated(c) && !out.iter().any(|k| k == c) {
+            out.push(c.to_string());
+        }
+    }
+    out
 }
 
 /// The elements that become objects, whose `data-*` attributes are kept.

@@ -1,6 +1,6 @@
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{Affine, BezPath, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, BezPath, Point, Rect, Vec2, shapes};
 
 use super::*;
 
@@ -296,6 +296,101 @@ fn pattern_places_corner_tiles() {
     for n in out.iter().filter(|n| !curved(n)) {
         let NodeKind::Path { path, .. } = &n.kind else { continue };
         assert_eq!(path.subpaths[0].anchors.len(), 4, "a rectangle tile on a straight run stays four anchors");
+    }
+}
+
+/// A pattern brush whose corner tiles have a 4 × 4 pt frame and, as art, a 2 × 2 pt square in the
+/// top-left quarter of the frame. Corner art joins a side tile on its right to one below it, so
+/// that quarter is on the outside of the turn. `inner` and `outer` say which kinds of corner have
+/// art; `flips` are the brush's Flip Along and Flip Across.
+fn marked_corner_brush(inner: bool, outer: bool, (flip_along, flip_across): (bool, bool)) -> Brush {
+    let marker =
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, -2.0, 2.0, 0.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let mut b = pattern_brush(PatternFit::Stretch, false);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        let frame = Some(Rect::new(0.0, -2.0, 4.0, 2.0));
+        if inner {
+            (p.inner_corner, p.inner_corner_frame) = (Some(marker.clone()), frame);
+        }
+        if outer {
+            (p.outer_corner, p.outer_corner_frame) = (Some(marker), frame);
+        }
+        (p.flip_along, p.flip_across) = (flip_along, flip_across);
+    }
+    b
+}
+
+/// Each combination of corner art (both kinds, inner only, outer only) and of the two flips.
+fn marked_corner_brushes() -> Vec<(String, Brush)> {
+    let mut v = vec![];
+    for (inner, outer) in [(true, true), (true, false), (false, true)] {
+        for flips in [(false, false), (true, false), (false, true), (true, true)] {
+            v.push((format!("inner {inner}, outer {outer}, flips {flips:?}"), marked_corner_brush(inner, outer, flips)));
+        }
+    }
+    v
+}
+
+/// The bounds of the 2 × 2 pt corner markers among `out`, turned or not.
+fn marker_bounds(out: &[Node]) -> Vec<Rect> {
+    out.iter().filter_map(Node::geometric_bounds).filter(|r| r.width() < 3.0 && r.height() < 3.0).collect()
+}
+
+/// Corner tiles are square to the sides at a right angle and turn 90° with each turn of the path:
+/// on a square drawn either way round, each corner's marker fills the quarter of the band's corner
+/// outside the turn, with the brush flipped or not and with art for one kind of corner only
+/// (#6110).
+#[test]
+fn pattern_corner_tiles_are_square_to_the_sides() {
+    let doc = Document::new(1.0, 1.0);
+    let sq = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)).to_bezpath();
+    let mut reversed = BezPath::new();
+    reversed.move_to((0.0, 0.0));
+    for (x, y) in [(0.0, 100.0), (100.0, 100.0), (100.0, 0.0)] {
+        reversed.line_to((x, y));
+    }
+    reversed.close_path();
+    // The square turns the same way at all four corners, and the reversed square the other way,
+    // so one draws only inner corner tiles and the other only outer ones.
+    for (name, brush) in marked_corner_brushes() {
+        for path in [&sq, &reversed] {
+            let out = stroke_pieces(&doc, &brush, path, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 4, "{name}: one marker a corner");
+            for (corner, outside) in SQUARE_CORNERS {
+                let want = Rect::from_points(corner, outside);
+                assert!(
+                    marks
+                        .iter()
+                        .any(|r| near(r.x0, want.x0, 1e-6) && near(r.y0, want.y0, 1e-6) && near(r.x1, want.x1, 1e-6) && near(r.y1, want.y1, 1e-6)),
+                    "{name}: the marker at {corner:?} fills {want:?}: {marks:?}"
+                );
+            }
+        }
+    }
+}
+
+/// At a corner that is not a right angle, a corner tile splits the difference between the two
+/// sides: its marker lies on the line that halves the angle, outside the turn, for sharp and
+/// shallow turns either way. Near a hairpin the marker moves smoothly towards the line the path
+/// arrives on.
+#[test]
+fn pattern_corner_tiles_sit_on_the_corners_diagonal() {
+    let doc = Document::new(1.0, 1.0);
+    for (name, brush) in marked_corner_brushes() {
+        for turn in [-179.9_f64, -170.0, -135.0, -60.0, -45.0, 45.0, 60.0, 135.0, 170.0, 179.9] {
+            let (a, b) = (Vec2::new(1.0, 0.0), Vec2::new(turn.to_radians().cos(), turn.to_radians().sin()));
+            let mut bp = BezPath::new();
+            bp.move_to((0.0, 0.0));
+            bp.line_to((50.0, 0.0));
+            bp.line_to(Point::new(50.0, 0.0) + b * 50.0);
+            let out = stroke_pieces(&doc, &brush, &bp, &stroke(1.0));
+            let marks = marker_bounds(&out);
+            assert_eq!(marks.len(), 1, "{name}, {turn}°: one corner marker");
+            let away = a - b;
+            let want = Point::new(50.0, 0.0) + away / away.hypot() * 2.0_f64.sqrt();
+            assert!(marks[0].center().distance(want) < 1e-6, "{name}, {turn}°: the marker is at {:?}, not {want:?}", marks[0].center());
+        }
     }
 }
 
@@ -701,6 +796,55 @@ fn tints_colorization_uses_stroke_colour() {
     assert_eq!(white.appearance.fill_paint().color().unwrap().to_rgb(), [1.0, 1.0, 1.0]);
 }
 
+/// Black ink alone is a tint by its amount: a process black stroke leaves it as it is, and another
+/// process stroke color takes that share of its inks. Tints of a process color stay process.
+#[test]
+fn tints_of_black_ink_are_its_amount_of_the_stroke_color() {
+    let tinted = |art: Color, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(art));
+        colorize(&mut n, Colorization::Tints, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let ink = Color::cmyk(0.0, 0.0, 0.0, 0.6);
+    let close = |a: Color, b: Color| {
+        let (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) = (a, b) else { panic!("{a:?} {b:?}") };
+        (c - c2).abs() < 1e-5 && (m - m2).abs() < 1e-5 && (y - y2).abs() < 1e-5 && (k - k2).abs() < 1e-5
+    };
+    assert!(close(tinted(ink, Color::cmyk(0.0, 0.0, 0.0, 1.0)), ink));
+    assert!(close(tinted(ink, Color::cmyk(0.0, 1.0, 1.0, 0.0)), Color::cmyk(0.0, 0.6, 0.6, 0.0)));
+    let [r, g, b] = tinted(ink, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!((r - 1.0).abs() < 1e-5 && (g - 0.4).abs() < 1e-5 && (b - 0.4).abs() < 1e-5, "{r} {g} {b}");
+    let Color::Gray { k } = tinted(ink, Color::gray(0.5)) else { panic!("tints of a gray stroke color stay gray") };
+    assert!((k - 0.3).abs() < 1e-5, "{k}");
+}
+
+/// Under Tints and Shades black ink stays black, however light 100% K displays, and a band of black
+/// ink is its amount: K 0.5 is the stroke color. A process or gray stroke color stays in its model.
+#[test]
+fn tints_and_shades_of_black_ink_go_by_its_amount() {
+    let mapped = |k: f32, stroke: Color| {
+        let mut n = rect_art(1.0, 1.0);
+        n.appearance.set_fill(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, k)));
+        colorize(&mut n, Colorization::TintsAndShades, &Paint::solid(stroke));
+        n.appearance.fill_paint().color().unwrap()
+    };
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-5);
+    let inks = |c: Color| {
+        let Color::Cmyk { c, m, y, k } = c else { panic!("a process color: {c:?}") };
+        [c, m, y, k]
+    };
+    let orange = Color::cmyk(0.0, 0.6, 1.0, 0.0);
+    assert!(close(inks(mapped(1.0, orange)), [0.0, 0.0, 0.0, 1.0]), "black stays black");
+    assert!(close(inks(mapped(0.5, orange)), [0.0, 0.6, 1.0, 0.0]), "the stroke color");
+    assert!(close(inks(mapped(0.25, orange)), [0.0, 0.3, 0.5, 0.0]), "a tint");
+    assert!(close(inks(mapped(0.75, orange)), [0.0, 0.3, 0.5, 0.5]), "a shade");
+    let Color::Gray { k } = mapped(0.75, Color::gray(0.4)) else { panic!("a gray stroke color stays gray") };
+    assert!((k - 0.7).abs() < 1e-5, "{k}");
+    let [r, g, b] = mapped(1.0, Color::rgb(1.0, 0.0, 0.0)).to_rgb();
+    assert!(r < 1e-5 && g < 1e-5 && b < 1e-5, "black stays black: {r} {g} {b}");
+}
+
 /// Point type at (0, 0) whose characters are painted `fill` and `stroke` (1 pt wide).
 fn type_art(fill: Paint, stroke: Paint) -> Node {
     use vectorcraft_doc::{CharStyle, TextObject};
@@ -762,6 +906,26 @@ fn stain_mixes_type_strokes_too() {
     let mut art = type_art(linked.clone(), linked);
     tint_node(&mut art, &blue, 1.0);
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
+}
+
+/// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
+/// swatch links.
+#[test]
+fn a_fill_with_no_opacity_leaves_the_symbol_art_linked() {
+    let spot = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4), swatch: Some("Spot".into()), tint: 1.0 };
+    let art = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(spot.clone(), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "Dot".into(), xf: Affine::IDENTITY });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.0;
+    }
+    assert_eq!(stain(&inst), None);
+    assert_eq!(instance_art(&art, &inst).appearance.fill_paint(), spot);
+    // Any opacity above 0 still stains.
+    if let Some(f) = inst.appearance.fill_mut() {
+        f.opacity = 0.01;
+    }
+    assert_ne!(instance_art(&art, &inst).appearance.fill_paint(), spot);
 }
 
 #[test]
@@ -1301,6 +1465,7 @@ fn pieces_leave_out_what_draws_a_brushed_stroke_by_name() {
     };
     let art = Node::group(NodeId(0), [instance("plain"), instance("brushed"), painted("plain"), painted("brushed")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -1325,7 +1490,10 @@ fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
     let mut doc = Document::new(100.0, 100.0);
     let mut brushed = rect_art(10.0, 4.0);
     brushed.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("s".into()), ..stroke(1.0) }));
-    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed)] {
+    // A brush the library lacks draws a plain stroke: its mask stays.
+    let mut unresolved = rect_art(10.0, 4.0);
+    unresolved.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(StrokeLayer { brush: Some("missing".into()), ..stroke(1.0) }));
+    for (name, art) in [("plain", rect_art(10.0, 4.0)), ("brushed", brushed), ("unresolved", unresolved)] {
         doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: std::sync::Arc::new(art) });
     }
     let instance = |symbol: &str| Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
@@ -1334,8 +1502,9 @@ fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
         n.extras_mut().mask = Some(Box::new(OpacityMask::new(instance(symbol), true)));
         n
     };
-    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed")].map(std::sync::Arc::new).into());
+    let art = Node::group(NodeId(0), [masked("plain"), masked("brushed"), masked("unresolved")].map(std::sync::Arc::new).into());
     let b = Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization: Colorization::None, ..Default::default() }) };
+    store(&mut doc, std::slice::from_ref(&b));
     let out = stroke_pieces(&doc, &b, &line(0.0, 0.0, 100.0, 0.0), &stroke(1.0));
     assert!(!out.is_empty());
     for piece in &out {
@@ -1348,7 +1517,7 @@ fn pieces_leave_out_a_mask_whose_root_draws_a_brushed_stroke() {
                 _ => None,
             })
             .collect();
-        assert_eq!(roots, [Some("plain"), None], "the plain mask stays and the brushed one goes");
+        assert_eq!(roots, [Some("plain"), None, Some("unresolved")], "the plain and unresolved masks stay and the brushed one goes");
     }
 }
 

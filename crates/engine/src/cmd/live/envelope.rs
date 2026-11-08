@@ -1,9 +1,9 @@
+use super::super::object::choice;
 use super::common::{fix_ids, ids_json, is_envelope, roots_param, selected_of, wrap};
 use super::mesh::{handle_param, index_param, whole};
 use super::{
     Affine, Appearance, Arc, Beside, Color, Document, EngineError, EnvelopeKind, EnvelopeMap, EnvelopeOptions, Node, NodeId, NodeKind, Paint,
-    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, check_switches, f64_or, f64_req, id_param, json, live, ok, str_param,
-    switch_or,
+    PathData, Point, PreserveShape, Result, Session, Value, bad, check_numbers, f64_or, f64_req, id_param, json, live, ok, switch_or, text_param,
 };
 
 // ---------- Envelope ----------
@@ -17,7 +17,7 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
     if let Some(EnvelopeKind::Warp { style: s0, bend: b0, h: h0, v: v0, horizontal: z0 }) = cur {
         (style, bend, h, v, horizontal) = (s0.clone(), *b0, *h0, *v0, *z0);
     }
-    if let Some(s) = str_param(p, "style") {
+    if let Some(s) = text_param(p, "style", cmd)? {
         let s = s.strip_prefix("warp.").unwrap_or(s);
         if live::WarpStyle::from_id(s).is_none() {
             return Err(bad(cmd, format!("unknown warp style `{s}`")));
@@ -28,10 +28,9 @@ fn warp_kind(p: &Value, cmd: &str, cur: Option<&EnvelopeKind>) -> Result<Envelop
     h = f64_or(p, "h", f64_or(p, "horizontalDistortion", h)).clamp(-100.0, 100.0);
     v = f64_or(p, "v", f64_or(p, "verticalDistortion", v)).clamp(-100.0, 100.0);
     let given = switch_or(p, "horizontal", horizontal, cmd)?;
-    horizontal = match str_param(p, "orientation") {
-        Some("vertical") => false,
-        Some("horizontal") => true,
-        _ => given,
+    horizontal = match choice(p, cmd, "orientation", &["horizontal", "vertical"])? {
+        Some(o) => o == "horizontal",
+        None => given,
     };
     Ok(EnvelopeKind::Warp { style, bend, h, v, horizontal })
 }
@@ -85,7 +84,7 @@ pub(super) fn env_make_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = roots_param(s, p)?;
     let st = s.doc()?;
     let nodes: Vec<Arc<Node>> = roots.iter().filter_map(|id| st.doc.node(*id).cloned()).map(Arc::new).collect();
-    let src = live::nodes_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
+    let src = live::envelope_content_bounds(&nodes).ok_or_else(|| bad(C, "selection has no bounds"))?;
     let kind = EnvelopeKind::Mesh { rows, cols, points: live::grid_points(src, rows, cols), handles: vec![] };
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| wrap(d, sel, &roots, |id, content| envelope(id, content, kind, defaults)))?;
@@ -177,12 +176,15 @@ fn envelope_options_json(mut v: Value, o: &EnvelopeOptions, fidelity: f64) -> Va
     v["distortAppearance"] = json!(o.distort_appearance);
     v["distortLinearGradients"] = json!(o.distort_linear_gradients);
     v["distortPatternFills"] = json!(o.distort_pattern_fills);
+    if o.bounds_margin != [0.0; 4] {
+        v["boundsMargin"] = json!(o.bounds_margin);
+    }
     v
 }
 
 /// `cur` with the options `p` sets.
 fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeOptions> {
-    let preserve_shape = match str_param(p, "preserveShape") {
+    let preserve_shape = match text_param(p, "preserveShape", cmd)? {
         Some(v) => PreserveShape::parse(v).ok_or_else(|| bad(cmd, "preserveShape must be clippingMask|transparency"))?,
         None => cur.preserve_shape,
     };
@@ -192,6 +194,7 @@ fn options_param(p: &Value, cmd: &str, cur: EnvelopeOptions) -> Result<EnvelopeO
         distort_appearance: switch_or(p, "distortAppearance", cur.distort_appearance, cmd)?,
         distort_linear_gradients: switch_or(p, "distortLinearGradients", cur.distort_linear_gradients, cmd)?,
         distort_pattern_fills: switch_or(p, "distortPatternFills", cur.distort_pattern_fills, cmd)?,
+        bounds_margin: cur.bounds_margin,
     })
 }
 
@@ -285,8 +288,8 @@ pub(super) fn env_release(s: &mut Session, _: &Value) -> Result<Value> {
 pub(super) fn env_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.options";
     check_numbers(p, &["fidelity"], C)?;
-    check_numbers(p, WARP_NUMBERS, C)?;
-    check_switches(p, &["horizontal"], C)?;
+    // The warp keys are checked whatever is selected: with nothing or only mesh envelopes, too.
+    warp_kind(p, C, None)?;
     let fid = p.get("fidelity").and_then(Value::as_f64);
     if fid.is_some_and(|f| !(0.0..=100.0).contains(&f)) {
         return Err(bad(C, "fidelity must be 0..100"));
@@ -369,6 +372,12 @@ pub(super) fn env_expand(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// The margins the strokes of `content` give in the axes of `frame` (none for content without
+/// width or height).
+fn stroke_margin(content: &[Arc<Node>], frame: Affine) -> [f32; 4] {
+    live::envelope_content_boxes(content, frame).and_then(|(stroked, plain)| live::envelope_stroke_margin(stroked, plain)).unwrap_or_default()
+}
+
 pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.envelope.editContents";
     let envs = selected_of(s, is_envelope);
@@ -377,11 +386,25 @@ pub(super) fn env_edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit(if want { "Edit Contents" } else { "Edit Envelope" }, |d, sel| {
         let mut content_ids = vec![];
         for e in &envs {
-            if let Some(n) = d.node_mut(*e)
-                && let NodeKind::Envelope { editing, content, .. } = &mut n.kind
-            {
+            let Some(n) = d.node_mut(*e) else { continue };
+            let start = n.extras().envelope_edit_margin;
+            let mut began = None;
+            if let NodeKind::Envelope { editing, content, options, frame, .. } = &mut n.kind {
+                // Margins stay when the strokes reach as far as when Edit Contents began, whatever
+                // transforms the envelope took before that.
+                if options.bounds_margin != [0.0; 4] {
+                    let now = stroke_margin(content, **frame);
+                    if want {
+                        began = start.filter(|_| *editing).or(Some(now));
+                    } else if *editing && start != Some(now) {
+                        options.bounds_margin = now;
+                    }
+                }
                 *editing = want;
                 content_ids.extend(content.iter().map(|c| c.id));
+            }
+            if began != start {
+                n.extras_mut().envelope_edit_margin = began;
             }
         }
         if want {

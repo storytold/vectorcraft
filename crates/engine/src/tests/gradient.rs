@@ -30,6 +30,47 @@ fn fill_gradient(s: &Session, id: NodeId) -> GradientPaint {
     }
 }
 
+#[test]
+fn new_gradient_defaults_follow_the_cmyk_document_mode() {
+    for kind in ["linear", "radial", "freeform"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":200,"height":200,"colorMode":"cmyk"})).unwrap();
+        let id = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
+        s.execute("paint.editGradient", &json!({"kind":kind})).unwrap();
+        let g = fill_gradient(&s, id);
+        assert!(g.gradient.stops.iter().all(|stop| matches!(stop.color, Color::Cmyk { .. })), "{kind}: {:?}", g.gradient.stops);
+        if let Some(freeform) = g.freeform {
+            assert!(freeform.points.iter().all(|point| matches!(point.color, Color::Cmyk { .. })), "freeform points must use the same color model");
+        }
+    }
+}
+
+#[test]
+fn editing_an_explicit_rgb_gradient_in_cmyk_keeps_its_color_model() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width":200,"height":200,"colorMode":"cmyk"})).unwrap();
+    let id = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
+    s.execute("paint.editGradient", &json!({"kind":"linear","keepModel":true})).unwrap();
+    let before = fill_gradient(&s, id).gradient.stops;
+    assert!(before.iter().all(|stop| matches!(stop.color, Color::Rgb { .. })));
+    s.execute("paint.editGradient", &json!({"angle":45})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.stops, before);
+}
+
+#[test]
+fn drawing_a_new_gradient_vector_uses_cmyk_default_stops() {
+    for stroke in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width":200,"height":200,"colorMode":"cmyk"})).unwrap();
+        let id = rect(&mut s, 10.0, 10.0, 100.0, 100.0);
+        s.execute("paint.setGradientGeom", &json!({"start":[10,10],"end":[110,10],"stroke":stroke})).unwrap();
+        let appearance = &node(&s, id).appearance;
+        let paint = if stroke { appearance.stroke_paint() } else { appearance.fill_paint() };
+        let Paint::Gradient(g) = paint else { panic!("not a gradient") };
+        assert!(g.gradient.stops.iter().all(|stop| matches!(stop.color, Color::Cmyk { .. })), "stroke={stroke}: {:?}", g.gradient.stops);
+    }
+}
+
 /// A three-stop freeform gradient with a 0.3 midpoint, partial opacity and a placed vector.
 fn three_stops() -> GradientPaint {
     let stop = |offset, color, opacity, midpoint| GradientStop { opacity, midpoint, ..GradientStop::new(offset, color) };

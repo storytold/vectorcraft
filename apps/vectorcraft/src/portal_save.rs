@@ -96,6 +96,12 @@ fn answer(code: u32, results: &HashMap<String, OwnedValue>) -> Result<Option<Sav
         .map_err(|e: zbus::zvariant::Error| e.to_string())?;
     let uri = uris.first().ok_or("no file in the portal's answer")?;
     let path = file_uri_path(uri).ok_or_else(|| format!("not a local file: {uri}"))?;
+    // A name that isn't UTF-8 can't be written as picked: replacing its bytes would save over (and
+    // ask to replace) another file. The dialog ends without a file instead.
+    let Ok(path) = String::from_utf8(path) else {
+        log::warn!("the portal's save dialog picked a file name that isn't UTF-8: nothing is saved");
+        return Ok(None);
+    };
     let filter = results.get("current_filter").and_then(|v| {
         let (label, _globs): (String, Vec<(u32, String)>) = v.try_clone().ok()?.try_into().ok()?;
         Some(label)
@@ -103,9 +109,9 @@ fn answer(code: u32, results: &HashMap<String, OwnedValue>) -> Result<Option<Sav
     Ok(Some(Saved { path, filter }))
 }
 
-/// `file:///home/me/A%20b.svg` → `/home/me/A b.svg`; `None` for a file elsewhere (`file://host/`)
-/// or another scheme.
-fn file_uri_path(uri: &str) -> Option<String> {
+/// `file:///home/me/A%20b.svg` → `/home/me/A b.svg` (its bytes); `None` for a file elsewhere
+/// (`file://host/`) or another scheme.
+fn file_uri_path(uri: &str) -> Option<Vec<u8>> {
     let rest = uri.strip_prefix("file://")?;
     let rest = rest.strip_prefix("localhost").unwrap_or(rest);
     if !rest.starts_with('/') {
@@ -126,8 +132,7 @@ fn file_uri_path(uri: &str) -> Option<String> {
             }
         }
     }
-    // `show_dialog` makes rfd's path a string with `to_string_lossy` too.
-    Some(String::from_utf8_lossy(&out).into_owned())
+    Some(out)
 }
 
 /// `saved` as the answer of the save dialog for `request`: the path, then the first extension of
@@ -406,6 +411,7 @@ mod tests {
 
     #[test]
     fn file_uris_become_local_paths() {
+        let file_uri_path = |uri: &str| super::file_uri_path(uri).map(|b| String::from_utf8(b).unwrap());
         assert_eq!(file_uri_path("file:///home/me/Untitled-1.vectorcraft").as_deref(), Some("/home/me/Untitled-1.vectorcraft"));
         assert_eq!(file_uri_path("file:///home/me/A%20b%C3%A9.svg").as_deref(), Some("/home/me/A bé.svg"));
         assert_eq!(file_uri_path("file://localhost/tmp/x.pdf").as_deref(), Some("/tmp/x.pdf"));
@@ -413,6 +419,9 @@ mod tests {
         assert_eq!(file_uri_path("file:///tmp/100%+1%2").as_deref(), Some("/tmp/100%+1%2"));
         assert_eq!(file_uri_path("file://host/x.svg"), None);
         assert_eq!(file_uri_path("sftp://host/x.svg"), None);
+        // Not UTF-8: the bytes as they are, which `answer` refuses rather than changing them.
+        assert_eq!(super::file_uri_path("file:///tmp/a%FF.svg"), Some(b"/tmp/a\xff.svg".to_vec()));
+        assert!(matches!(answer(0, &results("file:///tmp/a%FF.svg", None)), Ok(None)));
     }
 
     #[test]

@@ -29,11 +29,19 @@ impl Tool for TypeTool {
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
-    /// A dropped press drops only the selection drag or the type it was placing: the type being
-    /// edited stays in editing, with the caret and selection it had before the press.
-    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
-        if let Some((caret, anchor)) = self.before_press.take() {
-            (self.caret, self.anchor) = (caret, anchor);
+    /// If the original text still exists, a dropped press restores its edit target, caret, and anchor.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let mut out = vec![];
+        if let Some(before) = self.before_press.take() {
+            if self.editing != before.editing {
+                out.extend(self.finish(cx));
+                if let Some(id) = before.editing.filter(|id| Self::text(cx, *id).is_some()) {
+                    self.start_editing(id, before.caret);
+                    self.remember(cx);
+                }
+            }
+            self.fresh = before.fresh.filter(|id| self.editing == Some(*id));
+            (self.caret, self.anchor) = (before.caret, before.anchor);
         }
         self.selecting = false;
         self.clicks = (None, 0);
@@ -41,16 +49,17 @@ impl Tool for TypeTool {
         self.held = None;
         self.drag = None;
         self.snap.clear();
-        vec![]
+        out
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         match ev.kind {
             PointerKind::Down => {
+                let before = super::BeforePress { editing: self.editing, fresh: self.fresh, caret: self.caret, anchor: self.anchor };
                 if let Some(byte) = self.hit_edited(cx, ev.pos) {
                     let same = self.clicks.0.is_some_and(|q| (q - ev.pos).hypot() <= cx.tol(4.0));
                     let n = if same { self.clicks.1 + 1 } else { 1 };
                     self.clicks = (Some(ev.pos), n);
-                    self.before_press = Some((self.caret, self.anchor));
+                    self.before_press = Some(before);
                     let out = self.move_to(byte, ev.mods.shift);
                     self.goal_x = None;
                     if n >= 3 {
@@ -66,7 +75,7 @@ impl Tool for TypeTool {
                 // as it does in the type being edited.
                 if let Some(out) = self.edit_at(cx, ev.pos) {
                     self.selecting = true;
-                    self.before_press = Some((self.caret, self.anchor));
+                    self.before_press = Some(before);
                     return out;
                 }
                 self.press = Some((ev.pos, self.snap.press(cx, ev.pos, self.editing.as_slice(), None)));
@@ -188,11 +197,14 @@ impl Tool for TypeTool {
         };
         let text = t.plain_text();
         let len = text.len();
+        let story = self.story_selected(cx);
+        let selected = (self.caret, self.anchor);
         self.caret = self.caret.min(len);
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
-        if let Some(out) = self.step_attribute(key, mods, a, b, t.vertical) {
+        if let Some(out) = self.step_attribute(cx, key, mods, a, b, t.vertical) {
+            self.keep_story_offsets(story, selected);
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -216,15 +228,10 @@ impl Tool for TypeTool {
             // Escape ends editing and goes back to the tool used before double-clicking into type
             // (or to the Selection tool by default), the type selected: the keyboard is free for
             // tool shortcuts again (#1686).
-            ToolKey::Escape => {
-                let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
-                let mut out = self.finish(cx);
-                out.push(Action::SwitchTool(target));
-                out
-            }
-            ToolKey::Enter => self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None),
+            ToolKey::Escape => self.end_editing(cx),
+            ToolKey::Enter => self.enter(cx, mods),
             ToolKey::Tab => self.replace(cx, "\t", None),
-            ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
+            ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
                 self.replace(cx, "", None)
@@ -304,7 +311,10 @@ impl Tool for TypeTool {
                 let to = if mods.cmd { len } else { vectorcraft_text::line_end_of(&lay, self.caret) };
                 self.move_to(to, mods.shift)
             }
-            _ => vec![],
+            _ => {
+                self.keep_story_offsets(story, selected);
+                vec![]
+            }
         }
     }
     fn ime_preedit(&mut self, cx: &ToolContext, text: &str, active_chars: Option<Range<usize>>) -> Vec<Action> {
@@ -497,14 +507,14 @@ impl Tool for TypeTool {
             self.caret = t.map_or(0, |t| edit::runs_len(&t.runs));
         }
     }
-    /// `{editing, start, end, caret, anchor, typing, composing}` — the Character panel styles
-    /// `start..end`.
+    /// `{editing, start, end, caret, anchor, typing, composing, story?}` — the Character panel styles
+    /// `start..end`; `story` lists the frames of a threaded story whose whole text Select All selected.
     fn options(&self) -> Value {
         match self.editing {
             Some(id) => {
                 // Offsets may exceed the text after Select All; callers clamp to the text length.
                 let (a, b) = self.sel();
-                json!({
+                let mut o = json!({
                     "editing": id.0,
                     "start": a,
                     "end": b,
@@ -513,7 +523,12 @@ impl Tool for TypeTool {
                     "typing": self.typing.is_some(),
                     "composing": self.preedit.is_some(),
                     "prevTool": self.prev_tool,
-                })
+                });
+                // After Select All in threaded text, the frames whose whole text is selected too.
+                if !self.story.is_empty() {
+                    o["story"] = json!(self.story.iter().map(|f| f.0).collect::<Vec<_>>());
+                }
+                o
             }
             None => json!({"editing": null, "prevTool": self.prev_tool}),
         }
@@ -532,6 +547,12 @@ impl Tool for TypeTool {
                 {
                     self.start_editing(NodeId(id), b);
                     self.anchor = a;
+                    // The frames of a threaded story whose whole text Select All selected.
+                    let story: Vec<NodeId> =
+                        v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                    if story.len() >= 2 && story.contains(&NodeId(id)) {
+                        self.story = story;
+                    }
                 }
             }
             "prevTool" | "previousTool" => {
@@ -542,7 +563,23 @@ impl Tool for TypeTool {
                 self.preedit = None;
                 self.typing_ended = true;
             }
+            // `{story: [id…], editing?: id}`: the frames of the threaded story being edited, in
+            // thread order. The tool edits frame `editing` of them (default: the first), and the
+            // whole story's text is selected.
             "selectAll" if self.editing.is_some() => {
+                let story: Vec<NodeId> =
+                    v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                if story.len() >= 2
+                    && let Some(first) = story.first().copied()
+                {
+                    let target = v.get("editing").and_then(Value::as_u64).map(NodeId).filter(|t| story.contains(t)).unwrap_or(first);
+                    if self.editing != Some(target) {
+                        self.start_editing(target, 0);
+                    }
+                    self.story = story;
+                } else {
+                    self.story.clear();
+                }
                 self.anchor = 0;
                 self.caret = usize::MAX / 4;
             }
@@ -551,6 +588,7 @@ impl Tool for TypeTool {
                 if let (Some(a), Some(b)) = (g("start"), g("end")) {
                     self.anchor = a;
                     self.caret = b;
+                    self.story.clear();
                 }
             }
             "copy" => {
@@ -562,6 +600,7 @@ impl Tool for TypeTool {
                 self.typing = None;
                 self.preedit = None;
                 self.editing = None;
+                self.story.clear();
                 self.prev_tool = None;
             }
             _ => {}
@@ -639,6 +678,17 @@ impl Tool for TypeTool {
         } else {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
+            }
+        }
+        // The whole story is selected: the other frames' text is highlighted too, also when the
+        // edited frame holds no text.
+        if self.preedit.is_none() {
+            for f in self.story_others(cx) {
+                let Some(other) = Self::text(cx, f) else { continue };
+                let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), other);
+                for q in vectorcraft_text::selection_quads(&lay, 0, edit::runs_len(&other.runs)) {
+                    o.push(Overlay::Highlight { quad: q.map(|p| other.xf * p), color: [60, 120, 255, 90] });
+                }
             }
         }
         if let Some(id) = self.editing.filter(|id| shown && ported(cx.doc, *id).is_some()) {

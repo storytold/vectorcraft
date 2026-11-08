@@ -232,11 +232,12 @@ fn prepare_paragraph<'a, 'text>(
         }
     }
     let pm = {
-        let (asc, desc, _) = style_metrics(cx.db, cx.style_at(pr.start));
+        let face = cx.face_at(pr.start);
+        let (asc, desc, _) = style_metrics(face.as_deref(), cx.style_at(pr.start));
         let lead = auto_leading(cx.style_at(pr.start));
         let style = cx.style_at(pr.start);
-        let (cap, xh) = cap_x_heights(cx.db, style);
-        let centre = cx.db.style_face(style).map_or(EM_CENTER, |face| face.ideographic_centre());
+        let (cap, xh) = cap_x_heights(face.as_deref(), style);
+        let centre = face.map_or(EM_CENTER, |face| face.ideographic_centre());
         Metrics { asc, desc, lead, cap, xh, top: (centre + 0.5) * style.size * style.v_scale / 100.0 }
     };
     if pi > 0 {
@@ -418,7 +419,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         hyphen_run = if position.hyph && position.end > index { hyphen_run + 1 } else { 0 };
         pen.pending = 0.0;
         let geometry = prepare_line_geometry(cx, t, &paragraph, position, index);
-        let justification = justify_flow_line(cx.vertical, cx.text, &paragraph, &geometry);
+        let justification = justify_flow_line(cx, &paragraph, &geometry);
         emit_flow_line(cx, pen, &paragraph, &geometry, &justification);
         line_in_paragraph += 1;
         index = geometry.position.end;
@@ -591,7 +592,7 @@ fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -
     value
 }
 
-fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
+fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
     let para = paragraph.para;
     let sg = &paragraph.sg;
     let (held, hung) = (&line.held, &line.hung);
@@ -629,8 +630,8 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     };
     // Insert Kashidas: the Arabic words of a horizontal line take its room on kashidas,
     // and the word spaces and gaps take what is left.
-    let kashidas = if justify && !vertical && room > line.render_width + EPS {
-        kashida::plan(text, sg, line.index..line.body, para.kashida, room - line.render_width)
+    let kashidas = if justify && !cx.vertical && room > line.render_width + EPS {
+        kashida::plan(cx.text, sg, line.index..line.body, para.kashida, room - line.render_width, |byte| cx.style_at(byte).kashidas)
     } else {
         Vec::new()
     };

@@ -23,6 +23,21 @@ fn increasing_samples_match_single_samples() {
     assert_eq!(g.sample_increasing_with(ts, Color::lerp_keep_model), one_by_one);
 }
 
+/// The prepared sampler gives what sampling each position alone does, out-of-order stops included.
+#[test]
+fn the_sampler_matches_single_samples() {
+    let stop = |offset: f32, hex: &str| GradientStop::new(offset, Color::from_hex(hex).unwrap());
+    let g = Gradient::new(
+        GradientKind::Linear,
+        vec![stop(0.1, "#ff0000"), stop(0.4, "#00ff00"), stop(0.4, "#0000ff"), stop(0.2, "#ffff00"), stop(0.9, "#000000")],
+    );
+    let sample = g.sampler();
+    for k in (0..=40).rev() {
+        let t = k as f32 / 40.0;
+        assert_eq!(sample(t), g.sample(t), "{t}");
+    }
+}
+
 /// Looking stops up by their reach finds what scanning them does, for any order of offsets,
 /// repeated, out-of-order and NaN ones included, and for positions outside and between them.
 #[test]
@@ -569,4 +584,23 @@ fn ink_mixes_follow_the_perceptual_curve() {
     let n = MAX_INK_TINTS + 1;
     g.stops = (0..n).map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { magenta } else { Color::WHITE })).collect();
     assert_eq!(g.ink_mixes(), None);
+}
+
+/// From red to blue the display RGB mix darkens past blue's lightness and comes back, so a
+/// weight found by lightness near the blue stop would be a red-side one and the inks would jump
+/// there. The weights are the mix positions instead, and reach the blue stop's inks steadily.
+#[test]
+fn ink_mixes_use_the_mix_position_when_the_lightness_turns_back() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, red), GradientStop::new(1.0, blue)]);
+    g.method = GradientMethod::Perceptual;
+    let mixes = g.ink_mixes().expect("a Perceptual gradient's curve");
+    assert_eq!(mixes[mixes.len() - 1], (1.0, 1, 0.0, 1.0), "the blue stop");
+    let between: Vec<_> = mixes.iter().filter(|m| m.1 == 0 && m.0 > 0.0).collect();
+    assert!(!between.is_empty(), "stops on the curve between red and blue: {mixes:?}");
+    // With the midpoint at ½, a stop's offset on the curve is its mix position.
+    for (t, _, w, _) in &between {
+        assert!((w - t).abs() < 1e-6, "at {t}: weight {w}");
+    }
+    assert!(mixes.windows(2).filter(|p| p[1].1 == 0).all(|p| p[0].2 <= p[1].2), "the weights rise: {mixes:?}");
 }

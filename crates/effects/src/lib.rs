@@ -77,15 +77,15 @@ pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_par
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
-pub use raster::{RASTERIZE, RasterFx, Rasterize, outset, raster_effects};
+pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, outset, raster_effects};
 pub use reshape::{
-    SYMBOL_ART_MAX_NODES, expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_options, image_paint,
-    needs_outline, outline_art, outline_text, reshape,
+    SYMBOL_ART_MAX_NODES, expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_copies, has_transform_options,
+    image_paint, needs_outline, outline_art, outline_text, reshape,
 };
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
-    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, extrude_options, has_solid, inflate_options, is_three_d, solid_art, validate_solid,
-    validate_three_d, view_options,
+    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
+    three_d_params_as, validate_solid, validate_three_d, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use trap::TRAP;
@@ -95,7 +95,7 @@ mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects};
+pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
 #[cfg(test)]

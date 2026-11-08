@@ -71,6 +71,9 @@ struct Typing {
     /// previewed span starts no later, so Return at a paragraph's end splits that paragraph (its
     /// style continues), not the next one.
     lo: usize,
+    /// The other frames of the story whose text the session removed: it began by replacing the
+    /// whole story that Select All selected ([`TypeTool::story`]).
+    clear: Vec<NodeId>,
 }
 
 /// IME marked text inside the typing session, not yet committed.
@@ -171,6 +174,11 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
+    /// After Select All in a frame of threaded text: the story's frames in thread order then, the
+    /// edited one included. While the selection is the edited frame's whole text and this holds the
+    /// edited frame, the text of the other frames of its current thread is selected too. Empty
+    /// otherwise.
+    story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
     typing: Option<Typing>,
@@ -189,9 +197,8 @@ pub struct TypeTool {
     snap: DrawSnap,
     /// The press landed in the edited text: dragging selects.
     selecting: bool,
-    /// The caret and anchor from before a press in type, kept until its release; a dropped press
-    /// puts them back.
-    before_press: Option<(usize, usize)>,
+    /// This saves the edit target, caret, and anchor until the press ends.
+    before_press: Option<BeforePress>,
     /// Click counting for double/triple click (position of the last click, count).
     clicks: (Option<Point>, u8),
     /// Styled copy of the last copied range (pasting the same plain text keeps its styles).
@@ -211,16 +218,30 @@ pub struct TypeTool {
     cache: Mutex<Option<CachedLayout>>,
 }
 
+struct BeforePress {
+    editing: Option<NodeId>,
+    fresh: Option<NodeId>,
+    caret: usize,
+    anchor: usize,
+}
+
 impl TypeTool {
-    pub(super) fn step_attribute(&mut self, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
+    pub(super) fn step_attribute(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods, a: usize, b: usize, vertical: bool) -> Option<Vec<Action>> {
         if !mods.alt {
             return None;
         }
         let id = self.editing?;
-        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
+        let story = !self.story_others(cx).is_empty();
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b && !story, vertical)?;
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
-        out.push(Action::Exec("type.step".into(), json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})));
+        // With the whole story selected, `type.step` steps the text of every frame of it.
+        let p = if story {
+            json!({"attribute": attribute, "by": by})
+        } else {
+            json!({"id": id.0, "start": a, "end": b, "attribute": attribute, "by": by})
+        };
+        out.push(Action::Exec("type.step".into(), p));
         Some(out)
     }
     pub fn new(id: &str) -> Self {
@@ -369,9 +390,29 @@ impl TypeTool {
             out.push(Action::Exec("text.discardEmpty".into(), json!({"id": id.0})));
         }
         self.editing = None;
+        self.story.clear();
         self.selecting = false;
         self.goal_x = None;
         out
+    }
+
+    /// Stop editing and go back to the tool used before double-clicking into type (or to the
+    /// Selection tool), and leave the type selected.
+    fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
+        let mut out = self.finish(cx);
+        out.push(Action::SwitchTool(target));
+        out
+    }
+
+    /// Enter types a line break, and Shift+Enter types a forced line break. Cmd+Enter (Ctrl+Enter on
+    /// Windows and Linux) ends editing as Escape does and keeps the typed text. `Mods` does not tell
+    /// Ctrl apart from Cmd+Ctrl, so Cmd+Ctrl+Enter on macOS ends editing too.
+    fn enter(&mut self, cx: &ToolContext, mods: Mods) -> Vec<Action> {
+        if mods.cmd && !mods.shift && !mods.alt {
+            return self.end_editing(cx);
+        }
+        self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None)
     }
 
     /// Replace the selection with `insert` (styled `runs` when given) inside the typing session.
@@ -382,8 +423,12 @@ impl TypeTool {
             return vec![];
         };
         let mut out = vec![];
+        // The whole story is selected: the edit replaces it, so the other frames' text goes too, in
+        // a typing session of its own.
+        let others = self.story_others(cx);
+        self.story.clear();
         // The document changed under us (undo, a panel edit): start a new session.
-        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs) {
+        if self.typing.as_ref().is_some_and(|ty| ty.cur != t.runs || !others.is_empty()) {
             out.push(Action::Commit);
             self.typing = None;
             self.preedit = None;
@@ -393,7 +438,7 @@ impl TypeTool {
             out.push(Action::Begin("Typing".into()));
             self.typing_ended = false;
         }
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: others });
         let len = edit::runs_len(&ty.cur);
         let (a, b) = (self.caret.min(self.anchor).min(len), self.caret.max(self.anchor).min(len));
         ty.lo = ty.lo.min(a);
@@ -410,9 +455,37 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
+    }
+
+    /// The other frames whose whole text is selected along with the edited frame's after Select
+    /// All in threaded text ([`Self::story`]), read from the document's current thread: none once
+    /// the selection is not all of the edited frame's text.
+    fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
+        let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
+        let Some(t) = Self::text(cx, id) else { return vec![] };
+        let (a, b) = self.sel();
+        if a != 0 || b < edit::runs_len(&t.runs) {
+            return vec![];
+        }
+        cx.doc.story_of(id).into_iter().filter(|f| *f != id).collect()
+    }
+
+    /// Whether the whole story is selected ([`Self::story_others`]) and its other frames hold text.
+    /// The story stays selected when the edited frame holds no text, as after a frame threaded in
+    /// before it took the text.
+    fn story_selected(&self, cx: &ToolContext) -> bool {
+        self.story_others(cx).into_iter().any(|f| Self::text(cx, f).is_some_and(|o| edit::runs_len(&o.runs) > 0))
+    }
+
+    /// Put back the caret and anchor `selected` that a key clamped to the edited frame's text, when
+    /// the key leaves the whole story selected.
+    fn keep_story_offsets(&mut self, story: bool, selected: (usize, usize)) {
+        if story {
+            (self.caret, self.anchor) = selected;
+        }
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.
@@ -423,6 +496,7 @@ impl TypeTool {
             self.anchor = byte;
         }
         self.listed = None;
+        self.story.clear();
         out
     }
 
@@ -436,6 +510,7 @@ impl TypeTool {
         self.known = None;
         self.caret = caret;
         self.anchor = caret;
+        self.story.clear();
         self.goal_x = None;
         self.typing = None;
         self.preedit = None;
@@ -516,6 +591,7 @@ impl TypeTool {
     /// leaves the caret and the selection where they are, within the text.
     fn after_history_step(&mut self, cx: &ToolContext, undo: bool) {
         self.stepped = true;
+        self.story.clear();
         let Some(id) = self.editing else { return };
         let Some(text) = Self::text(cx, id).map(TextObject::plain_text) else { return };
         match self.known.take() {
@@ -615,6 +691,7 @@ impl TypeTool {
     fn select_word_or_para(&mut self, cx: &ToolContext, para: bool) {
         let s = self.plain(cx);
         let r = if para { edit::paragraph_at(&s, self.caret) } else { edit::word_at(&s, self.caret) };
+        self.story.clear();
         self.anchor = r.start;
         self.caret = r.end;
     }
@@ -759,7 +836,7 @@ impl TypeTool {
             p.range.end = shift(p.range.end.min(len));
         }
         self.goal_x = None;
-        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX });
+        let ty = self.typing.get_or_insert_with(|| Typing { base: t.runs.clone(), cur: t.runs.clone(), lo: usize::MAX, clear: vec![] });
         // Delete from the end so earlier offsets stay valid; each call floors to a char boundary
         // and the one Preview below still makes the whole session one undo step.
         for &(a, b) in sorted.iter().rev() {
@@ -772,10 +849,20 @@ impl TypeTool {
         let (p, s) = common_affixes(&base, &cur, ty.lo);
         let runs = edit::slice_runs(&ty.cur, p, cur.len() - s);
         let runs = if runs.is_empty() { json!([]) } else { serde_json::to_value(&runs).unwrap_or(json!([])) };
-        out.push(Action::Preview("text.editRange".into(), json!({"id": id.0, "start": p, "end": base.len() - s, "runs": runs})));
+        out.push(Action::Preview("text.editRange".into(), edit_range_params(id, p, base.len() - s, runs, &ty.clear)));
         self.note_edit(fresh, id, (&base, base.len() - s), (&cur, cur.len() - s));
         out
     }
+}
+
+/// The params of a typing session's `text.editRange` preview: bytes `start..end` of `id` become
+/// `runs`, and the text of the frames in `clear` goes.
+fn edit_range_params(id: NodeId, start: usize, end: usize, runs: Value, clear: &[NodeId]) -> Value {
+    let mut p = json!({"id": id.0, "start": start, "end": end, "runs": runs});
+    if !clear.is_empty() {
+        p["clear"] = json!(clear.iter().map(|f| f.0).collect::<Vec<_>>());
+    }
+    p
 }
 
 #[cfg(test)]

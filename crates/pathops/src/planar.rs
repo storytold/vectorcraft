@@ -34,7 +34,7 @@ mod shape_builder;
 
 pub(crate) use graph::pin_ends;
 #[cfg(test)]
-use index::{Crossings, RectIndex, reference_budget, segment_footprint};
+use index::{Crossings, RectIndex, reference_budget, segment_footprint, work_done};
 pub use live_paint::{find_gaps, live_paint, live_paint_with_gaps};
 pub use map::interior_point;
 pub(crate) use map::{Map, Rest, map};

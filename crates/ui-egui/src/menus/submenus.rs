@@ -63,21 +63,27 @@ pub(super) fn insert_items(list: &[(&'static str, &'static str)]) -> Vec<Item> {
 /// Type → Font: one item per available family, the installed fonts included. Built again only when
 /// the fonts or Show Font Names in English change (the menu tree is built every frame); labels are
 /// interned once each, so rebuilding doesn't allocate forever. The command still sets the English
-/// family name ([`vectorcraft_text::FontDb::canonical`]).
+/// family name ([`vectorcraft_text::FontDb::canonical`]). Until the installed fonts are scanned it
+/// lists the fonts already loaded, by their English names, rather than wait for the scan: the menu
+/// bar is drawn in the window's first frame, which a large font library would otherwise hold up
+/// past the first-frame watchdog (#5483).
 pub(super) fn font_items(english_names: bool) -> Vec<Item> {
     static NAMES: std::sync::Mutex<std::collections::BTreeSet<&'static str>> = std::sync::Mutex::new(std::collections::BTreeSet::new());
-    static ITEMS: std::sync::Mutex<(u64, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, Vec::new()));
+    static ITEMS: std::sync::Mutex<(u64, bool, bool, Vec<Item>)> = std::sync::Mutex::new((u64::MAX, true, false, Vec::new()));
     let db = vectorcraft_text::FontDb::global();
-    // Read first: fonts that load meanwhile make the next frame build the list again.
+    // Read first: fonts that load meanwhile make the next frame build the list again. The scan
+    // ends between changing the generation and counting as cataloged, so both are kept.
+    let cataloged = db.installed_fonts_ready();
     let generation = db.generation();
-    let fams = db.menu_family_list();
+    let fams = db.menu_family_list_now();
     let (Ok(mut names), Ok(mut items)) = (NAMES.lock(), ITEMS.lock()) else { return vec![] };
-    if items.0 != generation || items.1 != english_names {
+    if items.0 != generation || items.1 != english_names || items.2 != cataloged {
         let list = fams
             .iter()
             .map(|f| {
                 let english = f.as_str();
-                let shown = db.family_display_name(english, english_names);
+                // A native name may be the catalog's, which isn't there to read yet.
+                let shown = if cataloged { db.family_display_name(english, english_names) } else { english.to_string() };
                 let label: &'static str = match names.get(shown.as_str()) {
                     Some(n) => n,
                     None => {
@@ -97,9 +103,9 @@ pub(super) fn font_items(english_names: bool) -> Vec<Item> {
                 cp(label, "text.setStyle", json!({ "font": font }))
             })
             .collect();
-        *items = (generation, english_names, list);
+        *items = (generation, english_names, cataloged, list);
     }
-    items.2.clone()
+    items.3.clone()
 }
 
 /// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the

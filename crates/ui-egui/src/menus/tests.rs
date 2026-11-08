@@ -935,15 +935,17 @@ fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
     }
 }
 
-/// #3724: Window › New Window is greyed out until VectorCraft can open a second window on a
-/// document, instead of being enabled and answering with an internal milestone note.
+/// #4116: Window › New Window is enabled with a document open and opens a second view of it; with
+/// no document open it is greyed out.
 #[test]
-fn new_window_is_disabled_until_it_opens_a_window() {
+fn new_window_opens_a_view_of_the_current_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(!enabled(&app, "window.newWindow"), "no document to open a window on");
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap_err(), "no document open");
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    assert!(!enabled(&app, "window.newWindow"), "New Window is enabled but opens no window");
-    let e = app.run("window.newWindow", json!({})).unwrap_err();
-    assert!(!e.contains("M11.5"), "a user-facing message, not a milestone: {e}");
+    assert!(enabled(&app, "window.newWindow"));
+    assert_eq!(app.run("window.newWindow", json!({})).unwrap(), json!({"index": 0, "view": 2}));
+    assert_eq!(app.session.documents().len(), 1, "the same document, in a second window");
 }
 
 /// #4143: Window menu panels and panel submenus are listed in alphabetical order according to the

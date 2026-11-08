@@ -1148,6 +1148,37 @@ fn character_direction_is_a_character_attribute_saved_only_when_set() {
     assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style).get("charDirection"), Some(&serde_json::Value::Null));
 }
 
+/// The Character-menu switch is on for new and old text, and changing a selected range leaves
+/// its neighbors alone. The paragraph's Insert Kashidas length is a separate setting.
+#[test]
+fn character_kashidas_default_on_and_round_trip_by_range() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "كتب محمد"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    assert!(runs(&s)[0].style.kashidas);
+    let old = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(old.get("kashidas").is_none());
+    assert!(serde_json::from_value::<vectorcraft_doc::CharStyle>(old).unwrap().kashidas);
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 6, "kashidas": false})).unwrap();
+    assert_eq!(runs(&s).iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    let err = s.execute("text.setRangeStyle", &json!({"id": id, "kashidas": "off"})).unwrap_err().to_string();
+    assert!(err.contains("kashidas"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    s.execute("edit.redo", &json!({})).unwrap();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs.iter().map(|r| r.style.kashidas).collect::<Vec<_>>(), [true, false, true]);
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"kashidas": true})).unwrap();
+    assert!(runs(&s).iter().all(|r| r.style.kashidas));
+    assert_eq!(super::super::textstyles::char_attrs(&runs(&s)[0].style)["kashidas"], true);
+}
+
 /// Proportional Metrics (#966): a character attribute, saved only when on.
 #[test]
 fn proportional_metrics_is_a_character_attribute_saved_only_when_on() {
@@ -1730,4 +1761,47 @@ fn area_options_set_a_gutter_between_rows_of_its_own() {
     s.execute("text.areaOptions", &json!({"rowGutter": 30})).unwrap();
     s.execute("text.areaOptions", &json!({"rowGutter": null})).unwrap();
     assert_eq!(area(&s).row_gutter, None);
+}
+
+/// #3759: an option given for several area types goes onto each one's own options: the others
+/// stay as each had them, not copied from the first.
+#[test]
+fn area_options_for_several_frames_change_only_what_is_given() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [a], "columns": 3, "gutter": 6})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [b], "inset": 4})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [a, b], "verticalAlign": "bottom"})).unwrap();
+    let area = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.clone(),
+        k => panic!("{k:?}"),
+    };
+    let (oa, ob) = (area(&s, a), area(&s, b));
+    assert_eq!((oa.vertical_align, ob.vertical_align), (vectorcraft_doc::VerticalAlign::Bottom, vectorcraft_doc::VerticalAlign::Bottom));
+    assert_eq!((oa.columns, oa.gutter, oa.inset), (3, 6.0, 0.0));
+    assert_eq!((ob.columns, ob.inset), (1, 4.0), "b keeps its own options");
+}
+
+/// `fitMinPercent` alone changes only the frames that shrink text to fit, each from its own
+/// setting (#3759).
+#[test]
+fn fit_min_percent_for_several_frames_keeps_each_frames_fit() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let make = |s: &mut Session, x: f64| {
+        s.execute("text.create", &json!({"x": x, "y": 10, "text": "A", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (plain, shrink) = (make(&mut s, 10.0), make(&mut s, 200.0));
+    s.execute("text.areaOptions", &json!({"ids": [shrink], "fit": "shrinkText"})).unwrap();
+    s.execute("text.areaOptions", &json!({"ids": [plain, shrink], "fitMinPercent": 30})).unwrap();
+    let fit = |s: &Session, id: u64| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.area.fit,
+        k => panic!("{k:?}"),
+    };
+    assert_eq!(fit(&s, plain), vectorcraft_doc::AreaFit::None, "the plain frame doesn't start shrinking");
+    assert_eq!(fit(&s, shrink), vectorcraft_doc::AreaFit::ShrinkText { min_percent: 30.0 });
 }
