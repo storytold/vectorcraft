@@ -5,11 +5,11 @@
 //! the module is loaded ([`check_imports`], [`check_granted`]): one it doesn't offer, one with
 //! another signature and one the manifest doesn't allow are refused by name.
 //!
-//! Each call's arguments are checked: progress is clamped and passed on at most once per tenth of
-//! a percent (and, past [`MAX_PROGRESS_REPORTS`], once per [`PROGRESS_STRIDE`] changes), log text
-//! must lie inside the module's memory and be UTF-8, and each line ([`MAX_LOG_LINE`]) and each run
-//! ([`MAX_LOG_LINES`], [`MAX_LOG_BYTES`], [`MAX_LOG_READ`]) are capped. Nothing a module passes can
-//! panic the host.
+//! Each call's arguments are checked: progress is clamped and passed on only when it changes (with
+//! a known total, to another tenth of a percent; past [`MAX_PROGRESS_REPORTS`], once per
+//! [`PROGRESS_STRIDE`] changes), log text must lie inside the module's memory and be UTF-8, and
+//! each line ([`MAX_LOG_LINE`]) and each run ([`MAX_LOG_LINES`], [`MAX_LOG_BYTES`],
+//! [`MAX_LOG_READ`]) are capped. Nothing a module passes can panic the host.
 
 use wasmi::{Caller, Engine, Extern, ExternType, Linker, Module, StoreLimits, ValType};
 
@@ -358,7 +358,8 @@ mod tests {
         }
     }
 
-    /// Reports are passed on once per tenth of a percent at most, whatever the total, and past
+    /// Reports are passed on only when they change (with a known total, to another tenth of a
+    /// percent, however the total changes; with an unknown total, each change of `done`), and past
     /// [`MAX_PROGRESS_REPORTS`] once per [`PROGRESS_STRIDE`] changes, except the first after the
     /// total becomes known; the last one is always kept.
     #[test]

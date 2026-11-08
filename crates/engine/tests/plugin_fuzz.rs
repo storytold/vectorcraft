@@ -329,7 +329,7 @@ proptest! {
             prop_oneof![
                 (any::<i64>(), any::<i64>()).prop_map(|(d, t)| format!("(call $vc_progress (i64.const {d}) (i64.const {t}))")),
                 Just("(drop (call $vc_cancelled))".to_string()),
-                (any::<i32>(), prop_oneof![any::<i32>(), 0x1ff00..0x20100i32], prop_oneof![any::<i32>(), 0..5000i32])
+                (prop_oneof![any::<i32>(), -1..5i32], prop_oneof![any::<i32>(), 0x1ff00..0x20100i32], prop_oneof![any::<i32>(), 0..5000i32])
                     .prop_map(|(l, p, n)| format!("(drop (call $vc_log (i32.const {l}) (i32.const {p}) (i32.const {n})))")),
             ],
             0..24,

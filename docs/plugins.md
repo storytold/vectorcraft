@@ -195,10 +195,10 @@ still returns `1`.
 - A filter's or an exporter's progress is shown as a share: a heavy filter's progress window and the export's progress
   window draw a bar with a percentage, and Cancel there makes `vc_cancelled` return `1`. A plug-in that checks it can
   stop early, and the host discards what it returns after the Cancel or after its time budget ran out; one that
-  ignores it is still stopped by the instruction and time budgets. Progress is passed on at most
-  once per tenth of a percent; after 2,000 reports in a run, one change in 1,000 is passed on, and so is the first
-  report after the total becomes known or unknown. A live effect's progress is not shown, since it is drawn as part of
-  something else.
+  ignores it is still stopped by the instruction and time budgets. With a known total, a report is passed on only when
+  it reaches another tenth of a percent; with an unknown total, each change of `done` is passed on. After 2,000 reports
+  in a run, one change in 1,000 is passed on, and so is the first report after the total becomes known or unknown. A
+  live effect's progress is not shown, since it is drawn as part of something else.
 - Log lines go to the app's log (target `vectorcraft_plugins`) as `<plug-in id>: <text>`, with control and
   bidirectional characters escaped. The whole text must be UTF-8. A line shows its first 1,024 bytes, as at most 1,024
   characters with the escapes, and ends with `…` when it is cut. A run writes at most 200 lines and 32 KiB of shown
