@@ -98,7 +98,9 @@ fn templates_and_libraries_cannot_silently_extract_preview_content() {
     let original = s.doc().unwrap().doc.clone();
     for name in ["test.af", "renamed.svg"] {
         let p = json!({"name":name, "dataBase64":vectorcraft_format::base64_encode(&file(&png()))});
-        for cmd in ["file.newFromTemplate", "swatch.library.load", "graphicStyle.loadLibrary"] {
+        for cmd in
+            ["file.newFromTemplate", "swatch.library.load", "graphicStyle.loadLibrary", "charStyle.load", "paraStyle.load", "textStyle.loadAll"]
+        {
             let e = s.execute(cmd, &p).unwrap_err().to_string();
             assert!(e.contains("File › Open"), "{cmd}: {e}");
         }

@@ -232,11 +232,12 @@ fn prepare_paragraph<'a, 'text>(
         }
     }
     let pm = {
-        let (asc, desc, _) = style_metrics(cx.db, cx.style_at(pr.start));
+        let face = cx.face_at(pr.start);
+        let (asc, desc, _) = style_metrics(face.as_deref(), cx.style_at(pr.start));
         let lead = auto_leading(cx.style_at(pr.start));
         let style = cx.style_at(pr.start);
-        let (cap, xh) = cap_x_heights(cx.db, style);
-        let centre = cx.db.style_face(style).map_or(EM_CENTER, |face| face.ideographic_centre());
+        let (cap, xh) = cap_x_heights(face.as_deref(), style);
+        let centre = face.map_or(EM_CENTER, |face| face.ideographic_centre());
         Metrics { asc, desc, lead, cap, xh, top: (centre + 0.5) * style.size * style.v_scale / 100.0 }
     };
     if pi > 0 {

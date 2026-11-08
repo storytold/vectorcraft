@@ -66,7 +66,7 @@ fn measure(s: &Session, p: &Value, cmd: &str) -> Result<Measure> {
     Ok(Measure { preview, point: s.prefs.align_glyph_bounds_point, area: s.prefs.align_glyph_bounds_area })
 }
 
-/// Param `key` of the Align commands, Shear, Unlock All, Show All and `text.setFormat`'s lists: one
+/// Param `key` of the Align commands, Shear, Unlock All, Show All, a warp's `orientation` and `text.setFormat`'s lists: one
 /// of `values`, or `None` when it is missing or null. Any other value is an error that lists `values`.
 pub(crate) fn choice<'a>(p: &'a Value, cmd: &str, key: &str, values: &[&str]) -> Result<Option<&'a str>> {
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };

@@ -8,15 +8,19 @@
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
 //! described key by key, so only the top level is checked.
 //!
-//! Callers outside the app (the control channel, MCP, the CLI) are answered with a parameter error
-//! for a key the description doesn't name ([`check_params`]): a misspelt `widht` no longer runs the
-//! command with its default. So are the `params` of an effect (#1592): `effect.apply` and
+//! [`Session::execute`] answers a key the description doesn't name with a parameter error
+//! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
+//! commands a command runs, the steps of a `command.batch` or an `action.batch` included: a
+//! misspelled `widht` no longer runs the command with its default. So are the `params` of an
+//! effect (#1592): `effect.apply` and
 //! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
-//! default, with a parameter error ([`check_effect_params`]). [`Session::execute`] itself takes
-//! what it is given, so the journal of an older version still replays, except for an effect's
-//! `color` that the effect can't read and a Levels or Curves `channel` that the effect doesn't
-//! have, which `effect.apply` and `effect.setParams` refuse themselves ([`check_effect_color`],
-//! [`check_effect_channel`]).
+//! default, with a parameter error ([`check_effect_params`]).
+//!
+//! Saved steps play through [`Session::replay`] instead: a journal or an action recorded by an older
+//! version, with a key a command no longer reads or an effect parameter it no longer takes, still
+//! plays. Even there, an effect's `color` that the effect can't read and a Levels or Curves
+//! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
+//! themselves ([`check_effect_color`], [`check_effect_channel`]).
 
 use serde_json::Value;
 
@@ -473,10 +477,16 @@ pub const UNCHECKED: &[&str] = &[
     "webExport.settings",
 ];
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` included, and
+/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included, and
 /// [`check_effect_params`] for the effect `effect.apply` adds. A command the engine doesn't have
 /// passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
+    check_params_in(id, params, false)
+}
+
+/// [`check_params`] for a step of a batch when `in_batch`: batches can't nest, so the steps of a
+/// `command.batch` or `action.batch` step aren't checked (running it reports that), however deep they go.
+fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
     if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
         (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
@@ -487,10 +497,10 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
-    if id == "command.batch" {
+    if matches!(id, "command.batch" | "action.batch") && !in_batch {
         for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
             if let (Some(step_id), Some(step_params)) = (step.get("command").and_then(Value::as_str), step.get("params")) {
-                check_params(step_id, step_params)?;
+                check_params_in(step_id, step_params, true)?;
             }
         }
     }

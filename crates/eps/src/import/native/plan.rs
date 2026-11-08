@@ -75,6 +75,7 @@ pub(super) fn make_slots(
             // Area type and type on a path in the object's own frame: the text document's frame
             // of a copied object keeps its original's path.
             frame_text_from_art(info, &mut node, &mut region);
+            story.flip_on_path(&mut node, info.frame);
             if let NodeKind::Text(text) = &mut node.kind
                 && story.fit_first_line(text)
             {
