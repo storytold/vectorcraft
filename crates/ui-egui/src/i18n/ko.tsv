@@ -4341,6 +4341,7 @@ theme	Appearance	외관
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	연결된 영역, 문자 감싸기 또는 컴파운드 패스에서 마스크로 사용된 문자는 클리핑하지 않습니다
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	표시되는 글꼴의 한 줄보다 낮은 프레임의 영역 문자는 프레임을 더 높였습니다({_1}). 그렇지 않으면 문자가 표시되지 않습니다

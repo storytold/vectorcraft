@@ -5189,6 +5189,7 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	linked type areas past VectorCraft's limits were left out	s’han omès les àrees de text enllaçades que superen els límits de VectorCraft
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	el text que canvia de direcció d’escriptura dins d’un objecte de text s’obre en la direcció del seu primer caràcter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusió de pintura interactiva: seleccioneu un grup de pintura interactiva i els traçats que voleu afegir

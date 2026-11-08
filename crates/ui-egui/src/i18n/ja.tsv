@@ -4414,6 +4414,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	表示に使われるフォントの 1 行に対して低すぎるフレーム内のエリア内文字は、フレームを高くしました ({_1}): そうしないと文字が表示されません
