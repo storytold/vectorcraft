@@ -108,11 +108,13 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// Text objects among `ids` and their descendants.
 pub(crate) fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
+        if let Some(n) = paths.get(id).and_then(|p| d.node_at(p)) {
             n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                if matches!(c.kind, NodeKind::Text(_)) && seen.insert(c.id) {
                     out.push(c.id);
                 }
             });

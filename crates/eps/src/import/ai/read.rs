@@ -135,11 +135,12 @@ mod types;
 pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{
-    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, symbols, variables,
+    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, symbols,
+    variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -515,7 +516,8 @@ struct Reader<'a> {
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
-    /// Painted copies of clipping paths that have a fill (drawn under what they clip).
+    /// The fills of compound clipping paths whose subpaths paint differently, as compound paths of their own (drawn
+    /// under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
     looks: HashSet<NodeId>,
@@ -587,6 +589,8 @@ struct Reader<'a> {
     brush_drafts: Vec<super::brush::BrushDraft>,
     /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
     brush_art: HashMap<String, Node>,
+    /// The colors of the art in [`Reader::brush_art`], by name.
+    brush_art_colors: HashMap<String, BrushArtColors>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
     /// What the brushes and brush art read so far give a brushed stroke.
@@ -737,6 +741,7 @@ impl<'a> Reader<'a> {
             brush_order: None,
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
+            brush_art_colors: HashMap::new(),
             brush_art_sections: 0,
             brushes_kept: BrushesKept::default(),
             brushes_unread: 0,

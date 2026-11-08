@@ -467,9 +467,10 @@ fn a_glow_too_large_for_a_full_size_raster_keeps_its_solid_silhouette() {
 }
 
 #[test]
-fn thirty_stacked_glows_draw_quickly_cached_or_not() {
+fn thirty_stacked_glows_draw_thirty_silhouettes_cached_or_not() {
     // GUARDS: each glow is of the content with the glows before it; drawing those again for every glow costs 2^n.
     // A shape draws through the shadow cache, a symbol instance without it (the filter layers).
+    // Each glow's silhouette is drawn once.
     let glows: Vec<(&str, serde_json::Value)> =
         (0..30).map(|k| ("stylize.outerGlow", json!({"color": "#ff0000", "mode": "normal", "opacity": 20, "blur": 1 + k % 4}))).collect();
     let shape = doc_with(Rect::new(30.0, 30.0, 70.0, 70.0), Color::BLACK, glows.clone());
@@ -486,9 +487,10 @@ fn thirty_stacked_glows_draw_quickly_cached_or_not() {
     let l = instanced.layers[0].id;
     instanced.insert(Some(l), 0, instance).unwrap();
     for d in [&shape, &instanced] {
-        let start = std::time::Instant::now();
+        let before = super::renderer::silhouettes();
         let p = render(d).pixel(25, 50);
-        assert!(start.elapsed() < std::time::Duration::from_secs(20), "{:?}", start.elapsed());
+        let drawn = super::renderer::silhouettes() - before;
+        assert_eq!(drawn, 30, "silhouettes drawn for 30 glows");
         assert!(p[1] < 250, "the glows show: {p:?}");
     }
 }

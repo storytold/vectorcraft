@@ -981,6 +981,8 @@
 	Export Document	Exportar Documento
 	Export EPS	Exportar EPS
 	Export Keyboard Shortcuts…	Exportar Atalhos de Teclado…
+	Export Keyboard Shortcuts as Text…	Exportar Atalhos de Teclado como Texto…
+	Export Text…	Exportar Texto…
 	Export Option	Opção de Exportação
 	Export PDF	Exportar PDF
 	Export PDF Presets	Exportar Predefinidos de PDF
@@ -1268,6 +1270,7 @@
 	Step Backward	Voltar um Passo
 	Step Forward	Avançar um Passo
 	Clear History	Limpar Histórico
+	New Document from State	Novo Documento do Estado
 	Set History Limit…	Definir Limite do Histórico…
 	History States	Estados do Histórico
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2279,6 +2282,7 @@ digits	Malayalam	Malaiala
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
 	Replace Symbol	Substituir Símbolo
+	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte
 	Replace With Font From	Substituir Com Fonte De
 	System	Sistema
@@ -2296,6 +2300,8 @@ digits	Malayalam	Malaiala
 	Reset OpenType Features	Redefinir Recursos OpenType
 	Reset Panel	Redefinir Painel
 	Reset Preferences	Redefinir Preferências
+	Search Preferences	Pesquisar nas Preferências
+	No settings found	Nenhuma configuração encontrada
 	Reset Profiles	Redefinir Perfis
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
@@ -2709,6 +2715,7 @@ digits	Malayalam	Malaiala
 	Spaces	Espaços
 	Spacing Guides	Guias de Espaçamento
 	Invoke Distance Guides	Invocar Guias de Distância
+	Snap to Last Location	Ajustar ao Último Local
 	Spacing:	Espaçamento:
 	Spanish	Espanhol
 	Specify:	Especificar:
@@ -3955,6 +3962,7 @@ axis	Both	Ambos
 @msg	nothing to save: the document has no visible art	nada para salvar: o documento não tem arte visível
 @msg	nothing to undo	nada para desfazer
 @msg	no history to clear	nenhum histórico para limpar
+@msg	no history state {v}	nenhum estado do histórico {v}
 @msg	nothing to warp	nada para deformar
 @msg	nothing to wrap	nada para envolver
 @msg	object {0} cannot have children	o objeto {0} não pode ter filhos
@@ -4201,6 +4209,7 @@ axis	Both	Ambos
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	não foi possível decodificar {n} imagem: ela aparece como uma caixa marcada com um X|não foi possível decodificar {n} imagens: elas aparecem como caixas marcadas com um X
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagem vinculada mudou no disco: Atualizar links mostra a nova versão|{n} imagens vinculadas mudaram no disco: Atualizar links mostra as novas versões
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} arquivo vinculado alterado no disco atualizado|{n} arquivos vinculados alterados no disco atualizados
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	o documento define uma sangria que este arquivo PDF/X omite: ative "Usar configurações de sangria do documento"
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} exportado com {n} observação: {first}|{what} exportado com {n} observações: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} arquivo de fonte agora está em {folder}|{n} arquivos de fonte agora estão em {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} arquivo de fonte agora está em {folder}; não foi possível adicionar {failed}: {reason}|{n} arquivos de fonte agora estão em {folder}; não foi possível adicionar {failed}: {reason}
@@ -5711,6 +5720,19 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Playback Options…	Opções de Reprodução…
+	Insert Stop…	Inserir Parada…
+	Insert Stop	Inserir Parada
+	Record Stop	Gravar Parada
+	Allow Continue	Permitir Continuar
+	Continue	Continuar
+	Continue Action	Continuar Ação
+	Delete Action Step	Excluir Etapa da Ação
+	Press Play Current Selection in the Actions panel to go on.	Para continuar, pressione Reproduzir Seleção Atual no painel Ações.
+	Stop: {message}	Parada: {message}
+@msg	no action is waiting at a stop	nenhuma ação está aguardando em uma parada
+@msg	message must be text	message deve ser texto
+@msg	allowContinue must be true or false	allowContinue deve ser true ou false
+@msg	Batch cannot play an action with a stop	Lote não pode reproduzir uma ação com uma parada
 	Playback Options	Opções de Reprodução
 	Accelerated	Acelerada
 	Step by Step	Passo a Passo

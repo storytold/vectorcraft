@@ -70,6 +70,7 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
                 fill: None,
@@ -255,6 +256,7 @@ impl VectorcraftApp {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.tick_frame(ctx))) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -494,6 +496,7 @@ impl VectorcraftApp {
             })
         }) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
         crate::ime::finish_ui(self, &ctx);

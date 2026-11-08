@@ -957,6 +957,8 @@ lighting	Light	Světlo
 	Expand Layers Panel Rows	Rozbalit řádky panelu Vrstvy
 	Export CSS…	Exportovat CSS…
 	Export Keyboard Shortcuts…	Exportovat klávesové zkratky…
+	Export Keyboard Shortcuts as Text…	Exportovat klávesové zkratky jako text…
+	Export Text…	Exportovat text…
 	File Info Dialog	Dialogové okno Informace o souboru
 	Go to Artboard	Přejít na pracovní plochu
 	First Artboard	První pracovní plocha
@@ -1634,6 +1636,7 @@ digits	Malayalam	Malajálamské
 	Step Backward	Krok zpět
 	Step Forward	Krok vpřed
 	Clear History	Vymazat historii
+	New Document from State	Nový dokument ze stavu
 	Set History Limit…	Nastavit limit historie…
 	Open a document to see its history.	Otevřete dokument, abyste viděli jeho historii.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -3199,6 +3202,7 @@ theme	Appearance	Motiv
 	Redefine Symbol	Předefinovat symbol
 	Remove Brush Stroke	Odebrat tah štětcem
 	Replace Symbol	Nahradit symbol
+	Reset Transformation	Obnovit transformaci
 	Select All Instances	Vybrat všechny instance
 	Symbol Sprayer	Rozprašovač symbolů
 	Symbolism Tool	Nástroj symbolů
@@ -3671,6 +3675,8 @@ theme	Appearance	Motiv
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
+	Search Preferences	Hledat v předvolbách
+	No settings found	Nenalezena žádná nastavení
 	Scale Corners	Měnit velikost rohů
 	Scale Cursor Proportional to UI	Měnit velikost kurzoru úměrně rozhraní
 	Scale Strokes & Effects	Měnit velikost tahů a efektů
@@ -3691,6 +3697,7 @@ theme	Appearance	Motiv
 	Snapping Tolerance	Tolerance přichytávání
 	Spacing Guides	Vodítka rozestupů
 	Invoke Distance Guides	Vyvolat vodítka vzdálenosti
+	Snap to Last Location	Přichytávat k poslednímu umístění
 	Spanish	Španělština
 	Subdivisions	Dělení
 	Templates Folder	Složka šablon
@@ -4682,6 +4689,7 @@ imageTrace	Outline	Obrys
 @msg	nothing to save: the document has no visible art	není co uložit: dokument nemá žádnou viditelnou kresbu
 @msg	nothing to undo	není co vrátit
 @msg	no history to clear	není žádná historie k vymazání
+@msg	no history state {v}	žádný stav historie {v}
 @msg	nothing to warp	není co pokřivit
 @msg	nothing to wrap	není co obtékat
 @msg	object {0} cannot have children	objekt {0} nemůže mít potomky
@@ -4930,6 +4938,7 @@ imageTrace	Outline	Obrys
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} obrázek nelze dekódovat: zobrazuje se jako přeškrtnutý rámeček|{n} obrázky nelze dekódovat: zobrazují se jako přeškrtnuté rámečky|{n} obrázků nelze dekódovat: zobrazují se jako přeškrtnuté rámečky
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	Na disku se změnil {n} propojený obrázek: novou verzi zobrazí Aktualizovat propojení|Na disku se změnily {n} propojené obrázky: nové verze zobrazí Aktualizovat propojení|Na disku se změnilo {n} propojených obrázků: nové verze zobrazí Aktualizovat propojení
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aktualizován {n} propojený soubor změněný na disku|Aktualizovány {n} propojené soubory změněné na disku|Aktualizováno {n} propojených souborů změněných na disku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument nastavuje spadávku, kterou tento soubor PDF/X vynechává: zapněte „Použít nastavení spadávky dokumentu“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportováno: {what}, {n} poznámka: {first}|Exportováno: {what}, {n} poznámky: {first}|Exportováno: {what}, {n} poznámek: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} soubor písma je nyní ve složce {folder}|{n} soubory písem jsou nyní ve složce {folder}|{n} souborů písem je nyní ve složce {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} soubor písma je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} soubory písem jsou nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}|{n} souborů písem je nyní ve složce {folder}; nepodařilo se přidat {failed}: {reason}
@@ -5796,6 +5805,19 @@ axis	Y Axis	osa Y
 	Action Options…	Možnosti akce…
 	Action Options	Možnosti akce
 	Playback Options…	Možnosti přehrávání…
+	Insert Stop…	Vložit zastavení…
+	Insert Stop	Vložit zastavení
+	Record Stop	Zaznamenat zastavení
+	Allow Continue	Povolit pokračování
+	Continue	Pokračovat
+	Continue Action	Pokračovat v akci
+	Delete Action Step	Odstranit krok akce
+	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
+	Stop: {message}	Zastavení: {message}
+@msg	no action is waiting at a stop	žádná akce nečeká na zastavení
+@msg	message must be text	message musí být text
+@msg	allowContinue must be true or false	allowContinue musí být true nebo false
+@msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
 	Playback Options	Možnosti přehrávání
 	Accelerated	Zrychleně
 	Step by Step	Krok za krokem

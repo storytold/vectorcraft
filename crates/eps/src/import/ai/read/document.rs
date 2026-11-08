@@ -149,15 +149,7 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     }
     // Reading can stop before the artboards (art kept in the document's data comes first), or
     // between them and the active artboard's entry: read their array on its own.
-    let Some((array, active)) = artboard_array(data) else { return found };
-    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
-    alone.extend_from_slice(array);
-    if let Some(active) = active {
-        alone.push(b'\n');
-        alone.extend_from_slice(active);
-    }
-    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
-    let (boards, active) = artboards_read(&alone);
+    let Some((boards, active)) = artboard_array_read(data) else { return found };
     if found.0.is_empty() {
         (boards, active)
     } else if boards == found.0 {
@@ -166,6 +158,29 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     } else {
         found
     }
+}
+
+/// The index of the active artboard (`CropAreaActive`) in the `ArtboardArray` of the editing data
+/// `data`, as [`artboards`] reads it, from that array and the entry beside it alone.
+pub fn active_artboard(data: &[u8]) -> Option<usize> {
+    artboard_array_read(data)?.1
+}
+
+/// Artboards as [`artboards`] gives them: names and rects in art space, and the active one's index.
+type ArtboardsRead = (Vec<(String, Rect)>, Option<usize>);
+
+/// The `ArtboardArray` entry of the editing data `data` ([`artboard_array`]), with the
+/// `CropAreaActive` entry beside it, read on their own as [`artboards_read`] reads them.
+fn artboard_array_read(data: &[u8]) -> Option<ArtboardsRead> {
+    let (array, active) = artboard_array(data)?;
+    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
+    alone.extend_from_slice(array);
+    if let Some(active) = active {
+        alone.push(b'\n');
+        alone.extend_from_slice(active);
+    }
+    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
+    Some(artboards_read(&alone))
 }
 
 /// The key that ends the `ArtboardArray` entry of the editing data.
@@ -998,6 +1013,41 @@ impl<'a> Reader<'a> {
         Some((lib, left_out + self.brushes_unread))
     }
 
+    /// Count the colors of the brush art that the brushes `lib` use after the colors read so far,
+    /// in the order the art was read: its spot colors make swatches, and its colors count toward
+    /// the color mode. Art that no brush of `lib` uses brings none of its colors. The art brings
+    /// at most [`brush::MAX_BRUSH_ART_COLORS`] different color names in all, each name's color
+    /// operators before its gradient stops, as [`Self::file_swatches`] takes them; its colors past
+    /// them still count toward the color mode.
+    fn count_brush_art_colors(&mut self, lib: &[vectorcraft_brush::Brush]) {
+        let used: std::collections::HashSet<NodeId> = lib.iter().flat_map(|b| b.art()).map(|a| a.id).collect();
+        let mut names: Vec<(NodeId, String)> = self.brush_art.iter().filter(|(_, a)| used.contains(&a.id)).map(|(n, a)| (a.id, n.clone())).collect();
+        names.sort();
+        // The names brought so far: every section's color operators', then every section's stops'.
+        let mut brought = std::collections::HashSet::new();
+        let mut stops = vec![];
+        for (_, name) in names {
+            let Some(colors) = self.brush_art_colors.remove(&name) else { continue };
+            for n in colors.spots {
+                if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                    continue;
+                }
+                brought.insert(n.name.clone());
+                self.spots.push(n);
+            }
+            stops.push(colors.stop_spots);
+            self.cmyk_colors += colors.cmyk;
+            self.rgb_colors += colors.rgb;
+        }
+        for n in stops.into_iter().flatten() {
+            if brought.contains(&n.name) || brought.len() >= brush::MAX_BRUSH_ART_COLORS {
+                continue;
+            }
+            brought.insert(n.name.clone());
+            self.stop_spots.push(n);
+        }
+    }
+
     /// The graphic styles of the style list, in its order: each listed name the art styles define with
     /// an appearance [`appearance_from_art_style`] reads, once (a name listed again, empty or not
     /// defined is left out), with ids from 1. Also the id of each kept name.
@@ -1108,6 +1158,10 @@ impl<'a> Reader<'a> {
             };
             take_ruler_guides(&mut doc.layers, &pick, &mut doc.guides, 0);
         }
+        let mut brushes = self.brush_library();
+        if let Some((lib, _)) = &brushes {
+            self.count_brush_art_colors(lib);
+        }
         if self.color_model.unwrap_or(self.cmyk_colors > self.rgb_colors) {
             doc.color_mode = ColorMode::Cmyk;
             let (swatches, groups) = vectorcraft_color::default_swatches(ColorMode::Cmyk.model());
@@ -1128,7 +1182,6 @@ impl<'a> Reader<'a> {
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
-        let mut brushes = self.brush_library();
         // The file's graphic styles in place of the defaults, and the objects linked to them.
         let (styles, ids) = self.graphic_styles();
         let styles_read = !styles.is_empty();

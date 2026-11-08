@@ -894,6 +894,8 @@ lighting	Light	Światło
 	Expand Layers Panel Rows	Rozwiń wiersze panelu Warstwy
 	Export CSS…	Eksportuj CSS…
 	Export Keyboard Shortcuts…	Eksportuj skróty klawiaturowe…
+	Export Keyboard Shortcuts as Text…	Eksportuj skróty klawiaturowe jako tekst…
+	Export Text…	Eksportuj tekst…
 	File Info Dialog	Okno informacji o pliku
 	Go to Artboard	Przejdź do obszaru kompozycji
 	First Artboard	Pierwszy obszar kompozycji
@@ -1547,6 +1549,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Krok wstecz
 	Step Forward	Krok naprzód
 	Clear History	Wyczyść historię
+	New Document from State	Nowy dokument ze stanu
 	Set History Limit…	Ustaw limit historii…
 	Open a document to see its history.	Otwórz dokument, aby zobaczyć jego historię.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -3078,6 +3081,7 @@ theme	Appearance	Wygląd
 	Redefine Symbol	Zdefiniuj ponownie symbol
 	Remove Brush Stroke	Usuń pociągnięcie pędzla
 	Replace Symbol	Zastąp symbol
+	Reset Transformation	Resetuj przekształcenie
 	Select All Instances	Zaznacz wszystkie wystąpienia
 	Symbol Sprayer	Rozpylanie symboli
 	Symbolism Tool	Narzędzie symboli
@@ -3534,6 +3538,8 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Search Preferences	Szukaj w preferencjach
+	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
 	Scale Cursor Proportional to UI	Skaluj kursor proporcjonalnie do interfejsu
 	Scale Strokes & Effects	Skaluj obrysy i efekty
@@ -3554,6 +3560,7 @@ theme	Appearance	Wygląd
 	Snapping Tolerance	Tolerancja przyciągania
 	Spacing Guides	Linie odstępów
 	Invoke Distance Guides	Wywołuj linie odległości
+	Snap to Last Location	Przyciągaj do ostatniego położenia
 	Spanish	Hiszpański
 	Subdivisions	Podpodziały
 	Templates Folder	Folder szablonów
@@ -4507,6 +4514,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to save: the document has no visible art	nie ma czego zapisać: dokument nie ma widocznej kompozycji
 @msg	nothing to undo	nie ma czego cofnąć
 @msg	no history to clear	brak historii do wyczyszczenia
+@msg	no history state {v}	brak stanu historii {v}
 @msg	nothing to warp	nie ma czego wypaczyć
 @msg	nothing to wrap	nie ma czego oblewać
 @msg	object {0} cannot have children	obiekt {0} nie może mieć elementów podrzędnych
@@ -4756,6 +4764,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	nie udało się zdekodować {n} obrazu: jest wyświetlany jako przekreślona ramka|nie udało się zdekodować {n} obrazów: są wyświetlane jako przekreślone ramki|nie udało się zdekodować {n} obrazów: są wyświetlane jako przekreślone ramki
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} połączony obraz zmienił się na dysku: Aktualizuj łącza pokaże nową wersję|{n} połączone obrazy zmieniły się na dysku: Aktualizuj łącza pokaże nowe wersje|{n} połączonych obrazów zmieniło się na dysku: Aktualizuj łącza pokaże nowe wersje
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Zaktualizowano {n} połączony plik zmieniony na dysku|Zaktualizowano {n} połączone pliki zmienione na dysku|Zaktualizowano {n} połączonych plików zmienionych na dysku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument ustawia spad, który ten plik PDF/X pomija: włącz „Użyj ustawień spadu dokumentu”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Wyeksportowano {what} z {n} uwagą: {first}|Wyeksportowano {what} z {n} uwagami: {first}|Wyeksportowano {what} z {n} uwagami: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} plik czcionki jest teraz w {folder}|{n} pliki czcionek są teraz w {folder}|{n} plików czcionek jest teraz w {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} plik czcionki jest teraz w {folder}; nie udało się dodać {failed}: {reason}|{n} pliki czcionek są teraz w {folder}; nie udało się dodać {failed}: {reason}|{n} plików czcionek jest teraz w {folder}; nie udało się dodać {failed}: {reason}
@@ -5649,6 +5658,19 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Playback Options…	Opcje odtwarzania…
+	Insert Stop…	Wstaw zatrzymanie…
+	Insert Stop	Wstaw zatrzymanie
+	Record Stop	Nagraj zatrzymanie
+	Allow Continue	Zezwalaj na kontynuację
+	Continue	Kontynuuj
+	Continue Action	Kontynuuj operację
+	Delete Action Step	Usuń krok operacji
+	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
+	Stop: {message}	Zatrzymanie: {message}
+@msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
+@msg	message must be text	message musi być tekstem
+@msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
+@msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
 	Playback Options	Opcje odtwarzania
 	Accelerated	Przyspieszone
 	Step by Step	Krok po kroku

@@ -44,6 +44,7 @@ impl Session {
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
+            replaying: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -334,7 +335,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

@@ -22,6 +22,7 @@ mod fontdb;
 pub mod hyphen;
 mod justify;
 mod kashida;
+mod kept;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -43,6 +44,7 @@ pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
+pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;
@@ -830,6 +832,16 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
     // of the visual text is its logical order.
     let levels = bidi.reordered_levels_per_char(para, para.range.clone());
     Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
+}
+
+/// Line metrics of the font at `index` of `data`, at its default axis settings, in font units:
+/// (units per em, ascent, descent (negative below the baseline), line gap). egui builds its text
+/// rows from these values. `None` if the font can't be read.
+pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
+    use skrifa::MetadataProvider;
+    let f = skrifa::FontRef::from_index(data, index).ok()?;
+    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
 }
 
 #[cfg(test)]

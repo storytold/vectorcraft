@@ -1054,6 +1054,8 @@ font-technology	Variable	可變
 	Export for Screens Settings	匯出為螢幕適用設定
 	Export for Screens…	匯出為螢幕適用…
 	Export Keyboard Shortcuts…	匯出鍵盤快速鍵…
+	Export Keyboard Shortcuts as Text…	將鍵盤快速鍵匯出為文字…
+	Export Text…	匯出文字…
 	Export Option	匯出選項
 	Export PDF	匯出 PDF
 	Export PDF Presets	匯出 PDF 預設集
@@ -1426,6 +1428,7 @@ file-filter	Templates	範本
 	Step Backward	後退一步
 	Step Forward	前進一步
 	Clear History	清除步驟記錄
+	New Document from State	從步驟新增文件
 	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1777,6 +1780,7 @@ file-filter	Templates	範本
 @msg	nothing to redo	沒有可重做的動作
 @msg	nothing to undo	沒有可復原的動作
 @msg	no history to clear	沒有可清除的步驟記錄
+@msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
@@ -2331,6 +2335,7 @@ file-filter	Templates	範本
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	無法解碼 {n} 張影像：它們顯示為打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -3632,6 +3637,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
+	Reset Transformation	重設變形
 	Replace With Font	取代為字體
 	Replace With Font From	取代字體來源
 	System	系統
@@ -3648,6 +3654,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset OpenType Features	重設 OpenType 功能
 	Reset Panel	重設面板
 	Reset Preferences	重設偏好設定
+	Search Preferences	搜尋偏好設定
+	No settings found	找不到設定
 	Reset Profiles	重設描述檔
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
@@ -4142,6 +4150,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Spaces	空格
 	Spacing Guides	間距參考線
 	Invoke Distance Guides	叫用距離參考線
+	Snap to Last Location	靠齊上一個位置
 	Spacing:	間距：
 	Spanish	西班牙文
 	Specified Distance	指定距離
@@ -5430,6 +5439,19 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Playback Options…	播放選項…
+	Insert Stop…	插入停止…
+	Insert Stop	插入停止
+	Record Stop	記錄停止
+	Allow Continue	允許繼續
+	Continue	繼續
+	Continue Action	繼續動作
+	Delete Action Step	刪除動作步驟
+	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
+	Stop: {message}	停止：{message}
+@msg	no action is waiting at a stop	沒有動作在停止處等待
+@msg	message must be text	message 必須是文字
+@msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
+@msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Playback Options	播放選項
 	Accelerated	加速
 	Step by Step	逐步

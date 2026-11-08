@@ -851,6 +851,28 @@ pub fn with_relative_paths(d: &Document, dest: &str) -> Option<Document> {
     Some(d)
 }
 
+/// Sets each link of `d`, a copy of the document saved at `doc_path` that has no file of its own,
+/// to the path where that document finds its file, so the copy finds the same files.
+/// Links in the layers, symbols, graph designs, patterns and opacity masks are all set.
+pub(crate) fn with_found_paths(d: &mut Document, doc_path: &str) {
+    // The new path of each link by what `locate` reads of it: its path, relative path and name.
+    let mut found: BTreeMap<(String, Option<String>), Option<String>> = BTreeMap::new();
+    let mut look = |l: &LinkInfo| {
+        found.entry((l.path.clone(), l.relative.clone())).or_insert_with(|| locate(l, Some(doc_path)).map(|f| f.path));
+    };
+    d.visit_images(|_, im| im.link.iter().for_each(&mut look));
+    d.visit_placed(|_, p| look(&p.link));
+    found.retain(|(path, _), f| f.as_ref().is_some_and(|f| f != path));
+    if found.is_empty() {
+        return;
+    }
+    d.update_links(|l| {
+        if let Some(Some(f)) = found.get(&(l.path.clone(), l.relative.clone())) {
+            l.path = f.clone();
+        }
+    });
+}
+
 // ---------- commands ----------
 
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
