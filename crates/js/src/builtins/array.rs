@@ -262,16 +262,24 @@ fn to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult
     })
 }
 
-/// Joins the elements `0..len` of `o`, each turned into a string by `item`, with `sep` between
-/// them. A cycle back to an object being joined joins as an empty string.
-fn join_with(interp: &mut Interp, o: ObjId, sep: &[u16], item: fn(&mut Interp, Value) -> JsResult<Option<Str>>) -> JsResult<Value> {
+/// Joins the elements `0..len` of `o`, each turned into a string by `item`, with `separator`
+/// between them (`,` when it is `undefined`). `length` is read before the separator is converted,
+/// and the separator is converted even when `length` is 0 (section 15.4.4.5 steps 2 to 6). A cycle
+/// back to an object being joined joins as an empty string.
+fn join_with(interp: &mut Interp, o: ObjId, separator: &Value, item: fn(&mut Interp, Value) -> JsResult<Option<Str>>) -> JsResult<Value> {
     if interp.join_stack.contains(&o) {
         return Ok(Value::str(""));
     }
     let len = length_of(interp, o)?;
+    let sep = match separator {
+        Value::Undefined => Str::from(","),
+        v => interp.to_str(v)?,
+    };
     if len == 0 {
         return Ok(Value::str(""));
     }
+    let flat = sep.flat();
+    let sep = &flat[..];
     // A result that cannot fit is refused before any element is read.
     let least = (sep.len() as u64).saturating_mul(u64::from(len - 1));
     if least > (interp.limits.heap_bytes / 4) as u64 {
@@ -321,18 +329,13 @@ fn locale_item(interp: &mut Interp, v: Value) -> JsResult<Option<Str>> {
 
 /// `Array.prototype.join` (section 15.4.4.5).
 fn join(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    with_this(interp, &this, |interp, o| {
-        let sep = match arg(args, 0) {
-            Value::Undefined => Str::from(","),
-            v => interp.to_str(&v)?,
-        };
-        join_with(interp, o, &sep.flat(), join_item)
-    })
+    let separator = arg(args, 0);
+    with_this(interp, &this, |interp, o| join_with(interp, o, &separator, join_item))
 }
 
 /// `Array.prototype.toLocaleString` (section 15.4.4.3).
 fn to_locale_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    with_this(interp, &this, |interp, o| join_with(interp, o, &[u16::from(b',')], locale_item))
+    with_this(interp, &this, |interp, o| join_with(interp, o, &Value::Undefined, locale_item))
 }
 
 // ---- methods that change the object ----

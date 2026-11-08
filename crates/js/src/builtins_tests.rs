@@ -247,6 +247,15 @@ fn join_and_to_string_are_cycle_safe() {
         ),
         "object,,object"
     );
+    // `length` is read before the separator is converted, and the separator is converted even
+    // when `length` is 0 (section 15.4.4.5 steps 2 to 6).
+    assert_eq!(
+        string(
+            "var log = ''; Array.prototype.join.call({length: {valueOf: function () { log += 'L'; return 0; }}}, {toString: function () { log += 'S'; return ','; }}); log"
+        ),
+        "LS"
+    );
+    assert_eq!(string("var log = ''; try { [].join({toString: function () { throw 1; }}); } catch (e) { log = 'threw ' + e; } log"), "threw 1");
 }
 
 #[test]
