@@ -188,11 +188,9 @@ pub struct Carry(Vec<CarryStep>);
 /// Does `m` fix a gradient fitted to the object to its fit before mapping it? It does when a refit
 /// would not reproduce the map (a turn, a reflection or an uneven scale) and `m` keeps area: a map
 /// that flattens the geometry to a line (a scale of 0) leaves the gradient fitted, since mapping it
-/// would flatten it to one color.
+/// would flatten it to one color ([`vectorcraft_doc::node::flattens`]).
 pub(crate) fn fixes_fit(m: vectorcraft_geom::Affine) -> bool {
-    let [a, b, c, d, _, _] = m.as_coeffs();
-    let norm = a * a + b * b + c * c + d * d;
-    m.is_finite() && m.determinant().abs() > 1e-12 * norm && !vectorcraft_doc::node::keeps_gradient_fit(m)
+    !vectorcraft_doc::node::flattens(m) && !vectorcraft_doc::node::keeps_gradient_fit(m)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

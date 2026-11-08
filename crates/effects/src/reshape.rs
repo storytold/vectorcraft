@@ -701,7 +701,8 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                     return;
                 }
                 if separate {
-                    let made = copy_leaf(leaf, &path, m, copies, vectorcraft_doc::Scaling::default(), room);
+                    let scaling = vectorcraft_doc::Scaling { keep_fit_when_flat: true, ..Default::default() };
+                    let made = copy_leaf(leaf, &path, m, copies, scaling, room);
                     used = used.minus(before).plus(made);
                     return;
                 }
@@ -771,6 +772,8 @@ fn transform_leaf(
         strokes: options.strokes,
         effects: options.strokes.then_some(crate::scale_effect as fn(&mut Effect, f64)),
         patterns: options.patterns,
+        // A map that flattens the path leaves its fitted gradients fitted, as `fixes_fit` does.
+        keep_fit_when_flat: true,
         ..Default::default()
     };
     if !options.objects {

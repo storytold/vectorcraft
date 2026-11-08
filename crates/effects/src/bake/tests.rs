@@ -313,20 +313,34 @@ fn a_transform_effect_that_scales_to_nothing_leaves_a_fitted_gradient_fitted() {
     use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
     let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
     let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
-    let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::None, fitted, 4.0));
-    n.appearance.effects = vec![fx("distort.transform", json!({"scaleH": 0.0, "rotate": 30.0}))];
-    let d = bake_document(&doc_with(n)).unwrap();
-    let mut found = vec![];
-    d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
-        for item in &c.appearance.items {
-            if let AppearanceItem::Stroke(s) = item
-                && let Paint::Gradient(g) = &s.paint
-            {
-                found.push(g.geom);
-            }
+    // With Scale Strokes & Effects or Transform Patterns on, and for each copy, as without them.
+    for (options, strokes) in [
+        (json!({}), 1),
+        (json!({"strokes": true}), 1),
+        (json!({"patterns": true}), 1),
+        (json!({"copies": 2}), 3),
+        (json!({"strokes": true, "copies": 2}), 3),
+        (json!({"patterns": true, "copies": 2}), 3),
+    ] {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::None, fitted.clone(), 4.0));
+        let mut p = json!({"scaleH": 0.0, "rotate": 30.0});
+        if let (Some(p), Some(o)) = (p.as_object_mut(), options.as_object()) {
+            p.extend(o.clone());
         }
-    });
-    assert_eq!(found, [None]);
+        n.appearance.effects = vec![fx("distort.transform", p)];
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    found.push(g.geom);
+                }
+            }
+        });
+        assert_eq!(found, vec![None; strokes], "{options}");
+    }
 }
 
 #[test]
