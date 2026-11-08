@@ -109,7 +109,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => {
             let margin = egui::Margin { left: 6, right: 0, top: 6, bottom: 6 };
             egui::Panel::left("toolbar").resizable(false).exact_size(w + 6.0).frame(egui::Frame::NONE).show(ui, |ui| {
-                crate::theme::card(ui, &t, margin, |ui| body(app, ui, cols, None));
+                crate::theme::card(ui, &t, margin, crate::theme::Edge::Right, |ui| body(app, ui, cols, None));
             });
         }
         Some(pos) => {

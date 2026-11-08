@@ -30,7 +30,7 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
-    ui.painter().rect_filled(rect, t.cr(), t.button);
+    crate::theme::paint_raised(ui.painter(), rect, t.cr(), t.button, &t);
     flat_fill(ui, rect, &resp);
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
@@ -44,7 +44,7 @@ pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let width = (galley.size().x + 24.0).max(min_width);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
-    ui.painter().rect_filled(rect, t.cr(), t.button);
+    crate::theme::paint_raised(ui.painter(), rect, t.cr(), t.button, &t);
     flat_fill(ui, rect, &resp);
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
@@ -71,7 +71,7 @@ pub fn split_button_named(ui: &mut Ui, text: &str, arrow_tip: &str, width: f32) 
     let arrow_rect = Rect::from_min_max(pos2(split, rect.top()), rect.max);
     let main = ui.interact(main_rect, ui.scope_id().with((text, "split")), Sense::click());
     let arrow = ui.interact(arrow_rect, ui.scope_id().with((text, "split-arrow")), Sense::click());
-    ui.painter().rect_filled(rect, t.cr(), t.button);
+    crate::theme::paint_raised(ui.painter(), rect, t.cr(), t.button, &t);
     flat_fill(ui, main_rect, &main);
     flat_fill(ui, arrow_rect, &arrow);
     ui.painter().vline(split, rect.y_range().shrink(5.0), Stroke::new(1.0, t.panel));

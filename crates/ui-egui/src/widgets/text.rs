@@ -1,7 +1,7 @@
 use super::labels::{PreviousLabel, label_field, name_field, take_previous_label};
 use super::numeric::mixed_field_named;
 use super::panel_chrome::chevron_cell;
-use super::{CornerRadius, Rect, Response, Stroke, StrokeKind, Tokens, Ui, id_with, vec2};
+use super::{CornerRadius, Rect, Response, Stroke, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
 /// first enabled field drawn takes it ([`take_dialog_focus`]).
@@ -262,7 +262,7 @@ pub(super) fn recessed_text(
             } else {
                 Stroke::new(1.0, t.input_border)
             };
-            ui.painter().rect(rect, corners, t.input, stroke, StrokeKind::Inside);
+            crate::theme::paint_inset(ui.painter(), rect, corners, t.input, stroke, &t);
             let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
