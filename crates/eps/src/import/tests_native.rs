@@ -2829,6 +2829,32 @@ fn a_tate_chu_yoko_run_is_marked() {
 }
 
 #[test]
+fn a_standard_baseline_run_keeps_standard_vertical_roman_alignment() {
+    // Three runs over "ab12": "ab" with key 35 at 1 (Standard), "1" at 2 (rotated), "2" without it.
+    // Horizontal type keeps the mark too.
+    for vertical in [true, false] {
+        let doc = text_document(&[("ab12\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+        let doc = if vertical { vertical_text_document(&doc, 0.0) } else { doc };
+        let run = |n: u32, own: &str| {
+            format!(
+                "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own}/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 {n} >>"
+            )
+        };
+        let one = run(5, "");
+        assert!(doc.contains(&one));
+        let doc = doc.replacen(&one, &format!("{} {} {}", run(2, "/35 1 "), run(1, "/35 2 "), run(2, "")), 1);
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts = text_of(&r.document.layers[1]);
+        assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+        assert_eq!(texts[0].vertical, vertical);
+        let marked: Vec<(String, bool, bool)> =
+            texts[0].runs.iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman, r.style.tate_chu_yoko)).collect();
+        assert_eq!(marked, [("ab".to_string(), true, false), ("1".to_string(), false, false), ("2".to_string(), false, false)], "{vertical}");
+    }
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
@@ -2840,6 +2866,8 @@ fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
         assert_eq!(texts.len(), 1, "{bad}: {:?}", r.warnings);
         assert!(!texts[0].vertical, "{bad}");
         assert!(texts[0].runs.iter().all(|r| !r.style.tate_chu_yoko), "{bad}");
+        // Key 35 at 1 is Standard Vertical Roman Alignment; the other values leave it off.
+        assert!(texts[0].runs.iter().all(|r| r.style.standard_vertical_roman == (bad == "1")), "{bad}");
     }
 }
 
