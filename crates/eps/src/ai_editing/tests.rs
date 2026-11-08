@@ -3393,7 +3393,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
         for r in &t.runs {
             let s = &r.style;
             out.push(format!(
-                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={}",
+                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={} roman={}",
                 r.text,
                 s.font_family,
                 s.font_style,
@@ -3409,6 +3409,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
                 s.all_caps,
                 s.small_caps.map(r3),
                 s.tate_chu_yoko,
+                s.standard_vertical_roman,
             ));
         }
     }
@@ -3554,6 +3555,62 @@ fn type_is_written_again_as_the_same_bytes() {
     let text = |p: &[u8]| text_document(&String::from_utf8_lossy(p).replace("\r\n", "\n"));
     assert_eq!(text(&again.program), text(&first.program));
     assert_eq!(String::from_utf8_lossy(&again.program), String::from_utf8_lossy(&first.program));
+}
+
+/// Standard Vertical Roman Alignment comes back on or off, in vertical type and in horizontal
+/// type, and Tate-chu-yoko stays as it was: each run's key 35 is 1 (Standard) when it's on, 2
+/// (rotated) when it's off and 3 for Tate-chu-yoko, and the document's defaults and the normal
+/// character style carry 1. Each object lays out as it did. A Tate-chu-yoko run with the
+/// setting on comes back without it, and that is reported.
+#[test]
+fn standard_vertical_roman_alignment_comes_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(14.0, Color::BLACK);
+    let roman = CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut down = TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "", plain.clone());
+    down.runs = vec![TextRun::new("Up AB ", roman.clone()), TextRun::new("turned CD ", plain.clone()), TextRun::new("12", tcy.clone())];
+    down.vertical = true;
+    let mut across = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "", plain.clone());
+    across.runs = vec![TextRun::new("Marked ", roman.clone()), TextRun::new("plain", plain.clone())];
+    for t in [down, across] {
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let texts = |d: &Document| -> Vec<TextObject> {
+        d.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+    };
+    let flags = |t: &TextObject| t.runs.iter().map(|r| (r.style.standard_vertical_roman, r.style.tate_chu_yoko)).collect::<Vec<_>>();
+    let (written, read) = (texts(&doc), texts(&back));
+    assert_eq!(read.iter().map(flags).collect::<Vec<_>>(), [vec![(true, false), (false, false), (false, true)], vec![(true, false), (false, false)]]);
+    let origins = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (r3(g.origin.x), r3(g.origin.y))).collect::<Vec<_>>()
+    };
+    for (w, r) in written.iter().zip(&read) {
+        assert_eq!(origins(r), origins(w), "vertical={}", w.vertical);
+    }
+    let decoded = text_document(&program(&doc));
+    // Two runs on, two off and one Tate-chu-yoko; the defaults and the normal style add a 1 each.
+    for (key, count) in [("/35 1 ", 4), ("/35 2 ", 2), ("/35 3 ", 1)] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    let normal = decoded.find("[Normal Character Style]").unwrap();
+    let sheet = &decoded[normal..decoded.find("[Normal Paragraph Style]").unwrap()];
+    assert!(sheet.contains("/35 1 "), "{sheet}");
+    // Key 35 holds one value: Tate-chu-yoko wins, and the setting it leaves out is reported.
+    let mut both = doc.clone();
+    let id = both.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = both.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.standard_vertical_roman = true;
+    }
+    assert_eq!(export_ai_editing(&both, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+    assert_eq!(flags(&texts(&read_back(&both))[0])[2], (false, true));
 }
 
 /// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero
