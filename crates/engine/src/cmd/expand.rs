@@ -416,8 +416,9 @@ fn expand_piece_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node
     let mut expanded = false;
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
-        let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(d, l, item, &path, bounds)?;
+        let art = gradient_fill(item).and_then(|_| {
+            let (fl, path, bounds, moved) = fill_shape(d, l, item, &path, bounds)?;
+            let (f, g) = gradient_fill(&moved)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -520,29 +521,39 @@ fn expand_piece_leaves(
 /// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
 /// path that one paints goes through [`expand_pieces`] instead.
 fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
     let (path, _) = node_path(l)?;
-    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext { doc: Some(doc), ..GeomContext::of(l) });
+    let (g, carry) = apply_geometry_carrying(&l.appearance.effects, &path, path.bounds()?, &GeomContext { doc: Some(doc), ..GeomContext::of(l) });
     let mut m = with_path(l, g);
+    // Its gradients move with the outline, as the canvas paints them.
+    if carry.moves(&m.appearance) {
+        carry.apply(&mut m.appearance);
+    }
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some(m)
 }
 
 /// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
-/// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
-/// `path` as a plain path, and that outline's box.
-fn fill_shape(doc: &Document, l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
+/// outline, box and fill: when the fill has visible geometry effects, `l` with the outline they
+/// make of `path` as a plain path, that outline's box, and the fill with its gradient moved along
+/// with the outline.
+fn fill_shape(doc: &Document, l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect, AppearanceItem)> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry};
     if !has_geometry(item.effects()) {
-        return Some((l.clone(), path.clone(), bounds));
+        return Some((l.clone(), path.clone(), bounds, item.clone()));
     }
     // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
-    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext { doc: Some(doc), ..GeomContext::of(l) }.item(item));
+    let (outline, carry) = apply_geometry_carrying(item.effects(), path, bounds, &GeomContext { doc: Some(doc), ..GeomContext::of(l) }.item(item));
     let b = outline.bounds()?;
-    Some((with_path(l, outline.clone()), outline, b))
+    let mut one = Appearance { items: vec![item.clone()], ..Default::default() };
+    if carry.moves(&one) {
+        carry.apply(&mut one);
+    }
+    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
 /// Path or compound path `l` with `path` as its path, a plain path.
@@ -868,7 +879,7 @@ fn expand_piece_patterns(d: &mut Document, l: &Node, which: impl Fn(&Document, &
         later -= usize::from(fill.is_some());
         let room = if later > 0 { left.saturating_sub(l.count() + 1) } else { left };
         let tiles = fill.filter(|_| !full).and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(d, l, item, &path, bounds)?;
+            let (fl, _, bounds, _) = fill_shape(d, l, item, &path, bounds)?;
             let Some(t) = pattern_tiles(d, &def, xf, bounds, room) else {
                 full = true;
                 return None;

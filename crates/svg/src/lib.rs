@@ -548,6 +548,15 @@ pub fn import_with_report(svg: &str) -> Result<(Document, Vec<String>), SvgError
     import_with(svg, &ImportOptions::default())
 }
 
+/// Effect › SVG Filters › Import SVG Filter: the `<filter>` elements of SVG text `svg` that an SVG
+/// filter effect takes, as (name, XML) in document order, up to `room` of them and leaving out the
+/// names `taken` says, and how many it doesn't take. Filters past `room` or named as `taken` says
+/// are not checked. The text is read with the limits on depth and entities that [`import`] reads
+/// documents with.
+pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Result<(Vec<(String, String)>, usize), SvgError> {
+    import::svg_filters(svg, room, taken)
+}
+
 pub use glyph::glyph_art;
 pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
 

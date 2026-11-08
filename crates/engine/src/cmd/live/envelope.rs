@@ -113,7 +113,7 @@ pub(super) fn env_make_top(s: &mut Session, p: &Value) -> Result<Value> {
     let path = s.doc()?.doc.node(top).and_then(outline_of).filter(|p| p.bounds().is_some()).ok_or_else(|| bad(C, "the top object must be a path"))?;
     let defaults = envelope_defaults(s);
     let id = s.edit("Make Envelope", |d, sel| {
-        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path }, defaults))?;
+        let id = wrap(d, sel, &content, |id, content| envelope(id, content, EnvelopeKind::TopObject { path, corners: None }, defaults))?;
         d.remove(top)?;
         Ok(id)
     })?;
@@ -223,7 +223,7 @@ pub(super) fn env_info(s: &mut Session, _: &Value) -> Result<Value> {
 fn envelope_shape(env: &Node, kind: &EnvelopeKind) -> Option<Node> {
     let grey = Color::gray(0.25);
     let (rows, cols) = match kind {
-        EnvelopeKind::TopObject { path } => {
+        EnvelopeKind::TopObject { path, .. } => {
             return Some(Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(grey), Paint::None, 0.0)));
         }
         // The mesh itself, handles and all.

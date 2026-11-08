@@ -407,6 +407,54 @@ fn stacked_effects_on_art_stay_within_the_anchor_budget() {
     assert_eq!(reshaped, 10);
 }
 
+/// A path that keeps its shape because its Transform effect would pass the budget keeps the
+/// gradients that paint the art as a whole in place too, also with Scale Strokes & Effects on.
+#[test]
+fn art_past_the_budget_keeps_its_own_gradients_in_place() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let id = NodeId(9);
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let circle = || Arc::new(Node::path(id, shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+    // The group's own fill, a gradient placed across the circle, after `carry` moves it.
+    let own_end = |carry: &crate::Carry| {
+        let mut ap = Appearance::default();
+        ap.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        carry.apply(&mut ap);
+        match ap.fill_paint() {
+            Paint::Gradient(g) => g.geom.map(|g| g.end.x),
+            _ => None,
+        }
+    };
+    for params in [json!({"scaleH": 1000, "scaleV": 1000}), json!({"scaleH": 1000, "scaleV": 1000, "strokes": true})] {
+        let grow = fx("distort.transform", params.clone());
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget::EFFECTS, None);
+        let end = own_end(&carry).unwrap();
+        assert!((end - 550.0).abs() < 1e-6, "{params}: within the budget the group's gradient grows with the circle: {end}");
+        // No room beyond what the circle costs: scaled up, it would be drawn with more lines.
+        let mut art = Node::group(id, vec![circle()]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 }, None);
+        let b = art.geometric_bounds().unwrap();
+        assert!(b.width() < 101.0 && b.height() < 101.0, "{params}: the circle keeps its shape: {b:?}");
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the group's gradient stays where it was placed");
+        // A group inside the art whose square took the effect moves its own gradient all the same.
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut inner = Node::group(NodeId(2), vec![square]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        let mut art = Node::group(id, vec![circle(), Arc::new(inner)]);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], Budget { anchors: usize::MAX, lines: 0 }, None);
+        assert_eq!(own_end(&carry), Some(100.0), "{params}: the art's own gradient stays");
+        let inner = &art.children().unwrap()[1];
+        let Paint::Gradient(g) = inner.appearance.fill_paint() else { panic!("a gradient") };
+        assert!((g.geom.unwrap().end.x - 550.0).abs() < 1e-6, "{params}: the inner group's gradient: {:?}", g.geom);
+    }
+}
+
 /// #3578: a large Roughen draws each of its points as many lines; they stay within the budget,
 /// the Roughen built again with fewer points where they wouldn't.
 #[test]

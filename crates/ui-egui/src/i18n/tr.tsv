@@ -1057,6 +1057,14 @@ font-technology	Variable	Değişken
 	Export As SVG…	SVG Olarak Dışa Aktar…
 	Export Asset	Varlığı Dışa Aktar
 	Export Assets	Varlıkları Dışa Aktar
+	Export 3D Object	3D Nesneyi Dışa Aktar
+	3D Export Format	3D Dışa Aktarma Biçimi
+	Export 3D Assets	3D Varlıkları Dışa Aktar
+@msg	{what} can't be exported in 3D: {e}	{what} 3D olarak dışa aktarılamıyor: {e}
+@msg	asset {id} isn't a 3D asset	{id} varlığı bir 3D varlık değil
+@msg	asset {id} is a 3D asset: assets.export3D writes it	{id} varlığı bir 3D varlık: onu assets.export3D yazar
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	henüz 3D varlık yok: önce 3D efekti olan bir nesne toplayın (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D efekti olan bir nesne seçin (veya kimliklerini verin)
 	Export As…	Farklı Dışa Aktar…
 	Export CSS	CSS'yi dışa aktar
 	Export CSS…	CSS'yi dışa aktar…
@@ -1553,6 +1561,7 @@ font-technology	Variable	Değişken
 	Report copied	Rapor kopyalandı
 	Line {line}	{line} Hattı
 	Line {line}: {name}: {status}	Hat {line}: {name}: {status}
+	Read Action Set File	Eylem Seti Dosyasını Oku
 	Read Shortcut Set File	Kısayol Seti Dosyasını Oku
 	Import Matches	Eşleşmeleri İçe Aktar
 	Remember Import Matches	İçe Aktarılan Eşleşmeleri Hatırla
@@ -3956,7 +3965,7 @@ axis	Both	Her İkisi
 @msg	already editing a pattern	zaten bir desen düzenliyor
 @msg	an object can't be read	bir nesne okunamıyor
 @msg	an object in perspective would leave the edited grid	perspektifteki bir nesne düzenlenen ızgaradan ayrılır
-@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: yok, resim veya tür
+@msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art veya type
 @msg	artboard {0} does not exist	{0} çalışma yüzeyi mevcut değil
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	bu ölçekte çizim {w} × {h} nk, kanvasın sığabileceğinden daha fazladır: daha küçük bir ölçek seçin veya çalışma yüzeyine sığdırın
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis "vertical", "horizontal" veya derece cinsinden bir açı olmalıdır, `{v}` değil
@@ -4124,6 +4133,8 @@ axis	Both	Her İkisi
 @msg	no such action set	öyle bir eylem seti yok
 @msg	the action sets changed; nothing was deleted	eylem setleri değişti; hiçbir şey silinmedi
 @msg	no action set to save	kaydedilecek eylem seti yok
+@msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
@@ -4626,6 +4637,9 @@ axis	Both	Her İkisi
 effect	Soft	Yumuşak
 	Edge	Kenar
 	System Title Bar	Sistem Başlık Çubuğu
+	VectorCraft Title Bar on Every Desktop	Her Masaüstünde VectorCraft Başlık Çubuğu
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
+	System Title Bar takes precedence over this option while it is on.	Sistem Başlık Çubuğu açık olduğu sürece bu seçeneğe göre önceliklidir.
 	Value Axis	Değer Ekseni
 	On Left Side	Sol Tarafta
 	On Right Side	Sağ Tarafta
@@ -6364,6 +6378,7 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
@@ -6461,3 +6476,25 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Safe Mode
+	Safe Mode…	Güvenli Mod…
+	Safe Mode	Güvenli Mod
+	Help › Safe Mode…	Yardım › Güvenli Mod…
+	Enable on Re-launch	Sonraki Başlatmada Etkinleştir
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft'ın son başlatılması, {name} eklentisi yüklenirken durdu. Nedeni bu eklenti olmayabilir.
+	Disable and Continue	Devre Dışı Bırak ve Devam Et
+	Start Normally	Normal Başlat
+	Start in Safe Mode	Güvenli Modda Başlat
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft Güvenli Mod'da: normal başlatılana kadar hiçbir eklenti yüklenmez veya çalıştırılmaz.
+	Disabled plug-ins	Devre dışı eklentiler
+	No plug-ins are disabled.	Devre dışı bırakılmış eklenti yok.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Güvenli Mod açık: VectorCraft normal başlatılana kadar eklentiler yüklenmez veya çalıştırılmaz
+@msg	give `id` or `file` (see plugin.safeMode)	`id` veya `file` belirtin (bkz. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	bu eklenti devre dışı değil (bkz. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Devre dışı eklentiler bir sonraki başlatma için kaydedilemedi
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Görünümü Genişlet: seçimdeki bir eklenti efekti Güvenli Mod'da genişletilemez
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Piksel Izgarasına Hizala
+@msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir

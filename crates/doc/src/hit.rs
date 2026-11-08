@@ -937,6 +937,257 @@ fn hit_any(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option
     }
 }
 
+/// The art of a symbol instance with its own appearance changes, in the symbol's coordinates, and
+/// how the canvas places each object of it: through the symbol's 9-slice guides when the instance
+/// is scaled by them ([`Document::place_symbol_art`]), otherwise by the instance's transform.
+struct InstanceArt {
+    art: Node,
+    map: Option<crate::NineSliceMap>,
+    xf: vectorcraft_geom::Affine,
+}
+
+impl InstanceArt {
+    /// The art of symbol instance `inst`. `None` for anything else, a missing symbol, or art that
+    /// placing through the guides could make more than [`crate::MAX_SYMBOL_NODES`] objects of,
+    /// which [`Document::place_symbol_art`] does not place and the canvas does not draw.
+    fn of(doc: &Document, inst: &Node) -> Option<Self> {
+        let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
+        let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
+        let art = crate::symbol_overrides::dynamic_art(&sym.art, inst);
+        let map = doc.symbol_slice_map(symbol, *xf);
+        if map.as_ref().is_some_and(|m| m.most_placed(&art, doc) > crate::MAX_SYMBOL_NODES) {
+            return None;
+        }
+        Some(Self { art, map, xf: *xf })
+    }
+
+    /// The map that the objects inside group or layer `n` are moved by as one piece: `whole`, the
+    /// map of an object around `n` that is moved as one piece, or else the map of the 9-slice cell
+    /// `n` lies in ([`crate::NineSliceMap::one_cell`]). `None` when `n` is placed through the guides
+    /// object by object.
+    fn whole(&self, n: &Node, doc: &Document, whole: Option<vectorcraft_geom::Affine>) -> Option<vectorcraft_geom::Affine> {
+        whole.or_else(|| self.map.as_ref()?.one_cell(n, doc))
+    }
+
+    /// Object `n` of the art placed on the canvas as it is drawn, clip groups included: moved by
+    /// `whole` when an object around it is moved as one piece ([`Self::whole`]). `None` when
+    /// placing it through the guides could make more than [`crate::MAX_SYMBOL_NODES`] objects, as
+    /// [`Document::place_symbol_art`] refuses it.
+    fn place(&self, n: &Node, doc: &Document, whole: Option<vectorcraft_geom::Affine>) -> Option<Node> {
+        match (&self.map, whole) {
+            (_, Some(a)) => Some(moved(n, a)),
+            (Some(m), None) => (m.most_placed(n, doc) <= crate::MAX_SYMBOL_NODES).then(|| m.place(n, doc)),
+            (None, None) => Some(moved(n, self.xf)),
+        }
+    }
+
+    /// Object `n` of the art placed on the canvas without clip groups
+    /// ([`crate::NineSliceMap::place_unclipped`]), as [`Self::place`] places it and within the
+    /// same limit ([`Document::place_symbol_art_unclipped`]).
+    fn place_unclipped(&self, n: &Node, doc: &Document, whole: Option<vectorcraft_geom::Affine>) -> Option<Node> {
+        match (&self.map, whole) {
+            (_, Some(a)) => Some(moved(n, a)),
+            (Some(m), None) => (m.most_placed_unclipped(n, doc) <= crate::MAX_SYMBOL_NODES).then(|| m.place_unclipped(n, doc)),
+            (None, None) => Some(moved(n, self.xf)),
+        }
+    }
+}
+
+/// `n` transformed by `xf`, its strokes at their own weight.
+fn moved(n: &Node, xf: vectorcraft_geom::Affine) -> Node {
+    let mut out = n.clone();
+    out.transform(xf, false);
+    out
+}
+
+/// The object of symbol instance `inst`'s art under `p`, for Direct Selection on a dynamic symbol's
+/// instance: its path of child indices from the art's root ([`crate::symbol_overrides::part`]), the
+/// topmost object hit inside the art's groups. With [`HitOptions::clip_outlines`], a press on the
+/// outline of the clipping path of a clip group or a clipping layer picks that path before the art
+/// it clips, as [`hit_test`] does outside symbols. Hidden, locked and template objects are passed
+/// over, as [`hit_test`] passes over them when it looks for editable objects, and so are a Shaper
+/// group's original shapes, which the canvas does not draw, and guide paths with
+/// [`HitOptions::skip_guides`]. Nothing is picked in art that placing through the symbol's 9-slice
+/// guides could make more than [`crate::MAX_SYMBOL_NODES`] objects of, which the canvas does not
+/// draw. `None` when `inst` is not a symbol instance or no editable object of its art is under `p`.
+pub fn symbol_part_at(doc: &Document, inst: &Node, p: Point, opt: HitOptions) -> Option<Vec<u32>> {
+    struct Find<'a> {
+        doc: &'a Document,
+        art: &'a InstanceArt,
+        p: Point,
+        opt: HitOptions,
+        symbols: &'a SymbolBoxes<'a>,
+    }
+    impl Find<'_> {
+        fn hit(&self, n: &Node, whole: Option<vectorcraft_geom::Affine>) -> bool {
+            self.art.place(n, self.doc, whole).is_some_and(|n| hit_any(&n, self.p, self.opt, self.symbols).is_some())
+        }
+        fn skips_guide(&self, n: &Node) -> bool {
+            self.opt.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
+        }
+        fn find(&self, n: &Node, path: &mut Vec<u32>, whole: Option<vectorcraft_geom::Affine>) -> bool {
+            if !n.visible || n.locked || n.is_template() || self.skips_guide(n) {
+                return false;
+            }
+            let (NodeKind::Group { children, .. } | NodeKind::Layer { children, .. }) = &n.kind else { return self.hit(n, whole) };
+            if path.len() >= crate::symbol_overrides::MAX_PATH_DEPTH {
+                return self.hit(n, whole);
+            }
+            let whole = self.art.whole(n, self.doc, whole);
+            if n.clips()
+                && let Some(first) = children.first()
+            {
+                let Some(clip) = self.art.place_unclipped(first, self.doc, whole) else { return false };
+                if self.opt.clip_outlines
+                    && first.visible
+                    && !first.locked
+                    && !self.skips_guide(first)
+                    && clip_outline(&clip, self.p, self.opt).is_some()
+                {
+                    path.push(0);
+                    return true;
+                }
+                if !clip_contains(&clip, self.p) {
+                    return false;
+                }
+            }
+            for (i, c) in children.iter().enumerate().rev() {
+                // A Shaper group's original shapes are not drawn; symbol art has no isolation scope.
+                if shaper_hides(n, i, None) {
+                    continue;
+                }
+                let Ok(i) = u32::try_from(i) else { continue };
+                path.push(i);
+                if self.find(c, path, whole) {
+                    return true;
+                }
+                path.pop();
+            }
+            false
+        }
+    }
+    let art = InstanceArt::of(doc, inst)?;
+    let symbols = doc.symbol_boxes();
+    let mut path = vec![];
+    Find { doc, art: &art, p, opt, symbols: &symbols }.find(&art.art, &mut path, None).then_some(path)
+}
+
+/// The outlines of the object at `path` in symbol instance `inst`'s art (see [`symbol_part_at`]),
+/// placed on the canvas as it is drawn: its paths' outlines, and the bounds of objects without a
+/// path. Inside a clip group (an object drawn once in each 9-slice cell it reaches is one clip
+/// group per cell) they are cut to the bounds of the group's clip path, which is not outlined. An
+/// object inside a clip group or a clipping layer of the art, other than its clipping path, is cut
+/// to the bounds of that clipping path as well, which contain the region where [`symbol_part_at`]
+/// picks it.
+/// `None` for art past the 9-slice object limit that [`symbol_part_at`] applies.
+pub fn symbol_part_outline(doc: &Document, inst: &Node, path: &[u32]) -> Option<BezPath> {
+    let art = InstanceArt::of(doc, inst)?;
+    let part = crate::symbol_overrides::part(&art.art, path)?;
+    let mut out = BezPath::new();
+    let mut limit = None;
+    let mut whole = None;
+    let mut n = &art.art;
+    for &i in path {
+        let children = n.children()?;
+        whole = art.whole(n, doc, whole);
+        if i != 0
+            && n.clips()
+            && let Some(first) = children.first()
+            && let Some(clip) = art.place_unclipped(first, doc, whole)?.geometric_bounds()
+        {
+            match meet(Some(clip), limit) {
+                Some(r) => limit = Some(r),
+                None => return Some(out),
+            }
+        }
+        n = children.get(usize::try_from(i).ok()?)?;
+    }
+    outline_within(&art.place(part, doc, whole)?, limit, &mut out);
+    Some(out)
+}
+
+/// [`symbol_part_outline`] for placed object `n`, cut to `limit` when there is one.
+fn outline_within(n: &Node, limit: Option<Rect>, out: &mut BezPath) {
+    use vectorcraft_geom::kurbo::Shape;
+    if let Some(pd) = n.path_data() {
+        match limit {
+            Some(r) => push_cut(out, &pd.to_bezpath(), r),
+            None => out.extend(pd.to_bezpath()),
+        }
+    } else if n.children().is_none()
+        && let Some(b) = n.geometric_bounds()
+        && let Some(b) = meet(Some(b), limit)
+    {
+        out.extend(b.to_path(0.1));
+    }
+    let Some(children) = n.children() else { return };
+    if n.clips()
+        && let Some((first, rest)) = children.split_first()
+    {
+        let inner = match first.geometric_bounds() {
+            Some(c) => match meet(Some(c), limit) {
+                Some(r) => Some(r),
+                None => return,
+            },
+            None => limit,
+        };
+        rest.iter().for_each(|c| outline_within(c, inner, out));
+        return;
+    }
+    children.iter().for_each(|c| outline_within(c, limit, out));
+}
+
+/// The overlap of `a` and `b` (`a` alone without `b`), `None` when they do not overlap.
+fn meet(a: Option<Rect>, b: Option<Rect>) -> Option<Rect> {
+    let a = a?;
+    let Some(b) = b else { return Some(a) };
+    let r = Rect::new(a.x0.max(b.x0), a.y0.max(b.y0), a.x1.min(b.x1), a.y1.min(b.y1));
+    (r.x0 <= r.x1 && r.y0 <= r.y1).then_some(r)
+}
+
+/// The parts of path `p`, flattened to lines, that lie inside `r`, appended to `out`.
+fn push_cut(out: &mut BezPath, p: &BezPath, r: Rect) {
+    use vectorcraft_geom::kurbo::PathEl;
+    let (mut at, mut start, mut last) = (Point::ZERO, Point::ZERO, None::<Point>);
+    vectorcraft_geom::kurbo::flatten(p.iter(), 0.1, |el| {
+        let to = match el {
+            PathEl::MoveTo(q) => {
+                (at, start, last) = (q, q, None);
+                return;
+            }
+            PathEl::LineTo(q) => q,
+            PathEl::ClosePath => start,
+            _ => return,
+        };
+        if let Some((a, b)) = cut_segment(at, to, r) {
+            if last != Some(a) {
+                out.move_to(a);
+            }
+            out.line_to(b);
+            last = Some(b);
+        }
+        at = to;
+    });
+}
+
+/// The part of segment `a` to `b` inside `r`, `None` when none of it is.
+fn cut_segment(a: Point, b: Point, r: Rect) -> Option<(Point, Point)> {
+    let d = b - a;
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (p, q) in [(-d.x, a.x - r.x0), (d.x, r.x1 - a.x), (-d.y, a.y - r.y0), (d.y, r.y1 - a.y)] {
+        if p.abs() < 1e-12 {
+            if q < 0.0 {
+                return None;
+            }
+        } else if p < 0.0 {
+            t0 = t0.max(q / p);
+        } else {
+            t1 = t1.min(q / p);
+        }
+    }
+    (t0 <= t1).then(|| (a + d * t0, a + d * t1))
+}
+
 /// The path of compound path `n` under `p`, for the Group Selection tool: the one whose outline is
 /// within `tol`, else the innermost one whose area holds `p` (a hole inside an outer shape, an
 /// island inside a hole). `None` when `n` isn't a compound path or no part is under `p`.

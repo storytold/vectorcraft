@@ -119,6 +119,7 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
 pub fn is_raster(id: &str) -> bool {
     matches!(id, "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow" | "stylize.feather" | "blur.gaussian" | RASTERIZE)
         || PIXEL_EFFECTS.contains(&id)
+        || id == crate::SVG_FILTER
 }
 
 /// Does `id` change geometry? (Crop Marks and Vector Halftone add art of their own instead,

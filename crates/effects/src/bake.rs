@@ -28,7 +28,7 @@ use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
 use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
-    GeomContext, adjust_in_document, apply_geometry_with, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
+    GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
     has_item_geometry, has_pathfinder, is_geometry, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
@@ -71,12 +71,27 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
     }
 }
 
-fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> PathData {
+/// `path` with the geometry effects of `effects` applied, and how gradients follow them
+/// ([`crate::Carry`]).
+fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> (PathData, crate::Carry) {
     if !has_geometry(effects) || path.is_empty() {
-        return path.clone();
+        return (path.clone(), crate::Carry::default());
     }
     let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
-    apply_geometry_with(effects, path, b, ctx)
+    apply_geometry_carrying(effects, path, b, ctx)
+}
+
+/// The geometry `g` with the own effects of `item` (one of the fills and strokes `ctx` is the
+/// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
+/// moved along with them.
+fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
+    let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
+    let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
+    if !carry.moves(&ap) {
+        return (ig, carried.clone());
+    }
+    carry.apply(&mut ap);
+    (ig, ap.items.pop().unwrap_or_else(|| carried.clone()))
 }
 
 /// A path node of `kind`'s flavour (compound when the result has several subpaths).
@@ -414,12 +429,15 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
 }
 
 /// `n`'s geometry with its object-level geometry effects applied, its fill rule, the context of
-/// its effects, and `n` without those effects.
+/// its effects, and `n` without those effects, its gradients moved along with them.
 fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     let (base, rule) = geometry(n)?;
     let ctx = GeomContext::of(n);
-    let g = apply(&n.appearance.effects, &base, &ctx);
     let mut m = n.clone();
+    let (g, carry) = apply(&n.appearance.effects, &base, &ctx);
+    if carry.moves(&m.appearance) {
+        carry.apply(&mut m.appearance);
+    }
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some((g, rule, ctx, m))
 }
@@ -436,9 +454,9 @@ fn bake_leaf(d: &mut Document, n: &Node) -> Option<Node> {
         .appearance
         .items
         .iter()
-        .map(|item| {
-            let ig = apply(item_effects(item), &g, &ctx.item(item));
-            let mut it = item.clone();
+        .zip(&m.appearance.items)
+        .map(|(item, carried)| {
+            let (ig, mut it) = apply_item(item, carried, &g, &ctx);
             clear_item_effects(&mut it);
             Arc::new(piece(d, n, ig, rule, it))
         })
@@ -470,9 +488,8 @@ pub fn expand_leaf(d: &mut Document, n: &Node, stroke_art: StrokeArt) -> Option<
     let (g, rule, ctx, mut m) = leaf_base(n)?;
     m.appearance.effects.retain(|e| e.visible);
     let mut pieces = vec![];
-    for item in n.appearance.items.iter().filter(|i| paints(i)) {
-        let ig = apply(item.effects(), &g, &ctx.item(item));
-        let mut it = item.clone();
+    for (item, carried) in n.appearance.items.iter().zip(&m.appearance.items).filter(|(i, _)| paints(i)) {
+        let (ig, mut it) = apply_item(item, carried, &g, &ctx);
         clear_item_effects(&mut it);
         it.effects_mut().retain(|e| e.visible);
         let p = match &it {
@@ -563,9 +580,8 @@ pub fn bake_appearance(doc: Option<&Document>, n: &Node) -> Option<Node> {
         Arc::new(p)
     };
     let mut pieces = vec![];
-    for item in n.appearance.items.iter().filter(|i| paints(i)) {
-        let ig = apply(item_effects(item), &g, &ctx.item(item));
-        let mut it = item.clone();
+    for (item, carried) in n.appearance.items.iter().zip(&m.appearance.items).filter(|(i, _)| paints(i)) {
+        let (ig, mut it) = apply_item(item, carried, &g, &ctx);
         clear_item_effects(&mut it);
         pieces.push(match &it {
             AppearanceItem::Stroke(st) if st.brush.is_none() => {

@@ -1210,6 +1210,9 @@ fn items(
         let mut pieces = vec![];
         for id in ids {
             let a = doc.asset(*id).ok_or_else(|| bad(C, format!("no asset {id} (see assets.list)")))?;
+            if a.format_3d.is_some() {
+                return Err(bad(C, format!("asset {id} is a 3D asset: assets.export3D writes it")));
+            }
             let (d, r) = alone(&a.nodes, &a.name).ok_or_else(|| bad(C, format!("asset `{}` has no art to export", a.name)))?;
             pieces.push((a.name.clone(), d, Some(0), r));
         }

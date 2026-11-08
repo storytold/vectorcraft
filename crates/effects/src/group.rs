@@ -209,7 +209,11 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             Some(area) => Some(reshaped(&area, n, doc)),
             None => {
                 let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
-                crate::reshape::reshape_leaves(&mut m, &fx, doc);
+                let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+                // The group's own fills and strokes follow the effects as its members do.
+                if carry.moves(&m.appearance) {
+                    carry.apply(&mut m.appearance);
+                }
                 without_geometry_effects(&mut m);
                 Some(m)
             }
@@ -221,7 +225,11 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             let art = h(n).filter(|art| nodes.charge(art))?;
             let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
-            crate::reshape::reshape_leaves(&mut art, &fx, doc);
+            let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, doc);
+            // The art's own fills and strokes follow the effects as its members do.
+            if carry.moves(&art.appearance) {
+                carry.apply(&mut art.appearance);
+            }
             (art.opacity, art.blend, art.isolate) = (n.opacity, n.blend, n.isolate);
             art.appearance.effects = n.appearance.effects.clone();
             without_geometry_effects(&mut art);
@@ -242,8 +250,13 @@ fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
     let mut m = src.clone();
     if let Some((path, rule)) = geometry(src) {
         let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
-        let g = crate::apply_geometry_with(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
+        let (g, carry) =
+            crate::apply_geometry_carrying(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
         m.kind = NodeKind::Path { path: g, rule, live: None, clipping: false, guide: false };
+        // Its gradients move with the outline, as the canvas paints them.
+        if carry.moves(&m.appearance) {
+            carry.apply(&mut m.appearance);
+        }
     }
     without_geometry_effects(&mut m);
     m
@@ -724,7 +737,12 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        crate::reshape::reshape_leaves(&mut m, &fx, doc);
+        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, doc);
+        // The group's own fills and strokes paint the members as a whole: their gradients follow
+        // the effects as the members' do.
+        if paint && carry.moves(&m.appearance) {
+            carry.apply(&mut m.appearance);
+        }
     }
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
     if paint {

@@ -1105,6 +1105,85 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// A legacy `.ai` text path holds the path and where the type starts on it, and no Align to Path
+/// or end bracket: type on a path with either is written as text, with the warning that they are
+/// left out. An end bracket at the end of an open path, or once around a closed one, is kept. A
+/// path with a second subpath is written with its first one only, with the same warning.
+#[test]
+fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
+    use vectorcraft_doc::{PathAlign, TextKind, TextObject};
+    let along = |closed: bool| {
+        let pts = [(150.0, 150.0).into(), (250.0, 150.0).into(), (250.0, 190.0).into()];
+        PathData::new(vec![vectorcraft_geom::SubPath::polyline(&pts, closed)])
+    };
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Along", style(12.0, Paint::solid(Color::BLACK)));
+        t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: None };
+        t.xf = Affine::IDENTITY;
+        edit(&mut t);
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(Along) Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    for align in [PathAlign::Ascender, PathAlign::Descender, PathAlign::Center] {
+        assert!(warned(&|t| t.path_align = align), "{align:?}");
+    }
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(0.6) }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.25, end: Some(0.9) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.25, end: Some(1.0) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.1, end: Some(0.1) }));
+    assert!(!warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: None }));
+    // A closed path's span that wraps past the path's start and stops short of a full turn.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(true), start: 0.7, end: Some(0.5) }));
+    // An open path's end bracket before its start bracket.
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: along(false), start: 0.5, end: Some(0.3) }));
+    let two = |first_closed: bool| {
+        let mut path = along(first_closed);
+        let pts = [(150.0, 100.0).into(), (250.0, 100.0).into()];
+        path.subpaths.push(vectorcraft_geom::SubPath::polyline(&pts, false));
+        path
+    };
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(true), start: 0.25, end: None }));
+    assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(false), start: 0.25, end: None }));
+}
+
+/// Kerning other than Auto or 0, optical kerning, Optical Margin Alignment, System Layout,
+/// fractional widths off and an area type frame with a second subpath are not held by a legacy
+/// `.ai` text object: type with any of them is written as text, with the warning that they are
+/// left out.
+#[test]
+fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
+    use vectorcraft_doc::{TextKind, TextObject};
+    let warned = |edit: &dyn Fn(&mut TextObject)| {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            edit(t);
+        }
+        let out = write(&doc);
+        assert!(String::from_utf8(out.bytes).unwrap().contains(") Tx\n"), "still written as text");
+        out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES)
+    };
+    assert!(!warned(&|_| {}));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(0.0)));
+    assert!(warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(warned(&|t| t.runs[0].style.optical_kerning = true));
+    assert!(warned(&|t| t.optical_margin = true));
+    assert!(warned(&|t| t.system_layout = true));
+    assert!(warned(&|t| t.fractional_widths = false));
+    let square = |x: f64| {
+        let pts = [(x, 10.0).into(), (x + 80.0, 10.0).into(), (x + 80.0, 90.0).into(), (x, 90.0).into()];
+        vectorcraft_geom::SubPath::polyline(&pts, true)
+    };
+    assert!(!warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0)]) }));
+    assert!(warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0), square(120.0)]) }));
+}
+
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with
 /// no warning: 14 pt measuring a 0.7 em cap height reads back as 20 pt type.
 #[test]

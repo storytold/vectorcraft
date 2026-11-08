@@ -13,7 +13,9 @@
 //!   move or go away). Attaching the folder registers them again.
 //! * **Plug-ins**: the module of each plug-in `plugin.install` installs, as a `.wasm` file named
 //!   after its id (as Illustrator keeps plug-ins in its Plug-ins folder); `plugin.remove` deletes it.
-//!   Attaching the folder installs them again. The Additional Plug-ins Folder preference is not
+//!   Attaching the folder installs them again, except in Safe Mode and except the ones the user
+//!   disabled, which `disabled.json` in the same folder lists (`plugin.setEnabled`; a window locks
+//!   `disabled.lock` while it writes the list). The Additional Plug-ins Folder preference is not
 //!   copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
 //!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
 //!   permissions it doesn't grant is skipped with a log record, and stays in the folder.
@@ -26,6 +28,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_pdf::{PdfPreset, builtin_preset};
+use vectorcraft_plugins::safe_mode;
 
 use crate::Session;
 use crate::cmd::pdfcmds::{PRESET_FORMAT, PresetFile};
@@ -44,6 +47,10 @@ const PROFILE_EXT: &str = "icc";
 pub const MAX_PLUGIN_STORE: u64 = 512 << 20;
 /// The extension of a stored plug-in.
 const PLUGIN_EXT: &str = "wasm";
+/// The file in the plug-in folder that lists the plug-ins the user disabled.
+pub const DISABLED_FILE: &str = "disabled.json";
+/// The file in the plug-in folder that a window locks while it reads and writes [`DISABLED_FILE`].
+pub const DISABLED_LOCK: &str = "disabled.lock";
 /// The file in the plug-in store that holds the permissions the user granted.
 const GRANTS_FILE: &str = "grants.json";
 /// The largest grants file read.
@@ -112,6 +119,25 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[cfg(target_arch = "wasm32")]
 fn write_atomic(_: &Path, _: &[u8]) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
+}
+
+/// [`DISABLED_LOCK`] in `dir`, locked until the file is dropped, waiting while another window holds
+/// it; `None` when it can't be opened or locked.
+#[cfg(not(target_arch = "wasm32"))]
+fn lock_disabled(dir: &Path) -> Option<std::fs::File> {
+    let opened = std::fs::create_dir_all(dir)
+        .and_then(|()| std::fs::File::options().create(true).truncate(false).read(true).write(true).open(dir.join(DISABLED_LOCK)));
+    let file = opened.and_then(|f| f.lock().map(|()| f));
+    if let Err(e) = &file {
+        log::warn!("can't lock {}: {e}", dir.join(DISABLED_LOCK).display());
+    }
+    file.ok()
+}
+
+/// The browser has no folders to keep anything in.
+#[cfg(target_arch = "wasm32")]
+fn lock_disabled(_: &Path) -> Option<std::fs::File> {
+    None
 }
 
 /// Remove `dir/file`; a file that isn't there is what was wanted.
@@ -223,10 +249,25 @@ impl Session {
         }
     }
 
-    /// Keep the plug-ins this session installs in `dir`, and install the ones already there (a
-    /// module that doesn't load, and one that lists permissions the grants there don't grant it,
-    /// is skipped with a log record).
+    /// Keep the plug-ins this session installs in `dir`, take the disabled plug-ins saved there
+    /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
+        let disabled =
+            read_capped(&dir.join(DISABLED_FILE), safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
+        safe_mode::set_disabled(disabled);
+        self.plugin_dir = Some(dir);
+        self.load_stored_plugins();
+    }
+
+    /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
+    /// disabled (matched by file name, which is made from the id). The launch marker names each
+    /// file while it loads. A module that doesn't load, and one that lists permissions the grants
+    /// there don't grant it, is skipped with a log record.
+    pub fn load_stored_plugins(&mut self) {
+        let Some(dir) = self.plugin_dir.clone() else { return };
+        if safe_mode::active() {
+            return;
+        }
         let grants = stored_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
@@ -235,10 +276,19 @@ impl Session {
                 log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
                 break;
             }
+            let item = safe_mode::Item::file(path.display().to_string());
+            let stem = path.file_stem().map(|s| s.to_string_lossy().to_string());
+            let by_id = safe_mode::skipped_ids().iter().any(|id| stem.as_deref() == Some(file_stem(id).as_str()));
+            if safe_mode::skipped(&item) || by_id {
+                log::info!("skipping the stored plug-in {}: disabled", path.display());
+                continue;
+            }
+            let token = safe_mode::loading(&item);
             let loaded = read_capped(&path, (limits.max_module_bytes as u64).min(left)).and_then(|bytes| {
                 left -= bytes.len() as u64;
                 vectorcraft_plugins::Plugin::load(&bytes, limits.clone()).map_err(|e| e.to_string())
             });
+            safe_mode::loaded(token);
             match loaded {
                 // Only this store's grants count: one given elsewhere in the process doesn't let a
                 // module stored here load.
@@ -258,7 +308,40 @@ impl Session {
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
             }
         }
-        self.plugin_dir = Some(dir);
+    }
+
+    /// Write the disabled plug-ins saved for the next launch to the plug-in folder → whether they
+    /// went there, every change included (`false` without a folder, and when a plug-in turned off
+    /// found the file's list full: [`safe_mode::Merged::complete`]). The changes this launch made are applied to the list
+    /// the file holds now ([`safe_mode::merge_saved`]), so a change another window saved to the same
+    /// folder meanwhile stays. Windows that save at the same time take turns on [`DISABLED_LOCK`];
+    /// when it can't be locked, nothing is written, and the next change saves this one too. So is
+    /// a file that can't be read (too large, say) or that a later version wrote
+    /// ([`safe_mode::read_disabled_file`]): it is kept as it is.
+    pub fn store_disabled_plugins(&self) -> bool {
+        let Some(dir) = self.plugin_dir.as_deref() else { return false };
+        let Some(_turn) = lock_disabled(dir) else { return false };
+        let path = dir.join(DISABLED_FILE);
+        let theirs = match read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES) {
+            Ok(bytes) => match safe_mode::read_disabled_file(&bytes) {
+                Some(items) => items,
+                None => {
+                    log::warn!("can't save {}: it holds another format or version of the list", path.display());
+                    return false;
+                }
+            },
+            Err(_) if !path.exists() => Vec::new(),
+            Err(e) => {
+                log::warn!("can't save {}: {e}", path.display());
+                return false;
+            }
+        };
+        let merged = safe_mode::merge_saved(Some(theirs));
+        let written = put(dir, DISABLED_FILE, &merged.bytes);
+        if written {
+            safe_mode::saved_written(&merged);
+        }
+        written && merged.complete()
     }
 
     /// Whether `plugin` installs without asking the user: it lists no permissions, or its id was
@@ -281,11 +364,16 @@ impl Session {
         }
     }
 
-    /// Write the module `bytes` of the plug-in `id` to the store.
-    pub(crate) fn store_plugin(&self, id: &str, bytes: &[u8]) {
-        if let Some(dir) = &self.plugin_dir {
-            put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes);
-        }
+    /// Write the module `bytes` of the plug-in `id` to the store → whether they went there (`false`
+    /// without a folder).
+    pub(crate) fn store_plugin(&self, id: &str, bytes: &[u8]) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
+    }
+
+    /// The file the plug-in `id` is stored in, spelled as [`Session::load_stored_plugins`] names it
+    /// (`None` without a plug-in folder).
+    pub(crate) fn stored_plugin_file(&self, id: &str) -> Option<String> {
+        self.plugin_dir.as_ref().map(|dir| dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id))).display().to_string())
     }
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's

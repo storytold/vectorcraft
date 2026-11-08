@@ -301,10 +301,11 @@ impl Importer {
             (None, id) => format!("'{id}'"),
         };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
-        // Blurs, shadows and glows become live effects (see [`fx`]).
+        // Blurs, shadows and glows become live effects (see [`fx`]); other filters become Effect ›
+        // SVG Filters effects that keep their XML.
         let effects = match g.filters() {
             [] => vec![],
-            filters => fx::effects(filters, ts, &self.blends).unwrap_or_else(|| {
+            filters => fx::effects(filters, ts, &self.blends).or_else(|| fx::kept(filters, ts, &self.filter_sources)).unwrap_or_else(|| {
                 // usvg wraps a filtered element in a group of its own: name the element then.
                 let on = match g.children() {
                     [usvg::Node::Group(_)] | [] => label.clone(),
@@ -777,9 +778,10 @@ impl Importer {
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
             std::mem::take(&mut self.ellipses),
+            std::mem::take(&mut self.filter_sources),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses, self.filter_sources) = outer;
         art
     }
 }
@@ -811,6 +813,7 @@ mod tests {
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
+            filter_sources: HashMap::new(),
             files: Files::default(),
             non_scaling: HashSet::new(),
             data: HashMap::new(),

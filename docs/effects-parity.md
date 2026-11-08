@@ -11,7 +11,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
-| Illustrator effects (vector and stylize) | 50 | 49 | 98% | 4–8 |
+| Illustrator effects (vector and stylize) | 50 | 50 | 100% | — |
 | Photoshop effects (raster, Effect Gallery) | 57 | 57 | 100% | 1–2 (Effect Gallery thumbnails and in-dialog preview) |
 | 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
@@ -27,7 +27,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Pathfinder | Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline, Hard Mix, Soft Mix, Trap | 13/13 | Trap traps only solid fills (gradients and patterns hide what is below them but don't trap) and spreads each colour's visible area as a whole; the public page gives no default values, so Trap's 0.25 pt, 100% and 40% are VectorCraft's own |
 | Rasterize | Rasterize… (as a live effect) | 1/1 | — |
 | Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |
-| SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
+| SVG Filters | Apply SVG Filter… and the filter list | 1/1 | The submenu lists the document's own filters: VectorCraft ships no default filters. A filter that is the object's last effect is written to SVG as a `<filter>` element; otherwise SVG export draws the object as an image. A filter on a turned or skewed object in an imported SVG is left out with a warning |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; Arc is a circular arc in the object's own proportions (#1578) |
 
 Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers
@@ -183,11 +183,11 @@ VectorCraft choices; an original approximation, never compared with another appl
 | Materials panel, lighting, ray-traced render | Window › 3D and Materials panel with the object types (Plane, Extrude, Revolve, Inflate) and the Object, Rotation and Lighting settings of the applied effect ([three-d.md](three-d.md#3d-and-materials-panel)); one to ten directional lights with per-light Color (opaque RGB, white by default), Intensity, Rotation, Height, Softness and neutral Ambient Light, Revolve and colored Inflate use smooth vector shading; Extrude & Bevel and Rotate retain planar shading; original Standard, Diffuse, Top Left and Right lighting rigs; no materials, shadows or ray tracing |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |
-| Export 3D objects (OBJ, USDA, glTF) | none |
+| Export 3D objects (OBJ, USDA, glTF) | initial: Asset Export's Export 3D Object collects an object with Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, and Export writes its solids as a USDA (the default), USDZ, glTF or OBJ mesh with a material in each solid's paint color (`assets.add3D`, `assets.set3DFormat`, `assets.export3D`); no textures, map art or shading ([3D export help](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html)) |
 
 The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials and shadows, ray-traced rendering,
-angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45 h.
+angular cut caps, exact visibility, 3D Classic, Turntable) is 25–45 h.
 
 ## Revision history
 

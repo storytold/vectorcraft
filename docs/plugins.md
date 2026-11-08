@@ -293,8 +293,8 @@ from before these give geometry only). The paints are read only: an effect may d
 fill's colour to decide its shape, but it changes only the geometry, unless it declares `paintOutput` ([painted live
 effects](#painted-live-effects)).
 
-An **exporter** gets something else: the document as a native `.vectorcraft` file's JSON, as `document.save` writes it
-but without indentation (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
+An **exporter** gets something else: the native `.vectorcraft` document JSON without indentation, optional preview/PDF
+renditions or save-preference metadata (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
 appearance and effect record, artboard, swatch and symbol, so an exporter reads whatever the document holds; it checks
 `version`, since a later host may write a newer one. Images of 8 KiB or more are listed in `images` with their MIME
 type and `blob` but without their data, which follows the JSON in a saved file; smaller ones keep their base64 `data`.

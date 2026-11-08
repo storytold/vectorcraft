@@ -150,6 +150,7 @@
 	Report copied	Zpráva zkopírována
 	Line {line}	Řádek {line}
 	Line {line}: {name}: {status}	Řádek {line}: {name}: {status}
+	Read Action Set File	Přečíst soubor sady akcí
 	Read Shortcut Set File	Přečíst soubor sady klávesových zkratek
 	Import Matches	Přiřazení z importů
 	Remember Import Matches	Zapamatovat přiřazení z importů
@@ -894,6 +895,9 @@
 	Stained Glass…	Vitráž…
 	Texturizer…	Texturovač…
 	System Title Bar	Systémové záhlaví okna
+	VectorCraft Title Bar on Every Desktop	Záhlaví okna VectorCraftu v každém desktopovém prostředí
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dokud je proměnná prostředí VECTORCRAFT_TITLEBAR nastavena, záhlaví okna volí ona.
+	System Title Bar takes precedence over this option while it is on.	Dokud je Systémové záhlaví okna zapnuté, má přednost před touto volbou.
 	Exit	Ukončit
 	Distort	Zkreslení
 	Diffuse Glow…	Rozptýlená záře…
@@ -3187,6 +3191,14 @@ theme	Appearance	Motiv
 	Asset Export Settings	Nastavení exportu prvků
 	Assets	Prvky
 	Export Assets	Exportovat prvky
+	Export 3D Object	Exportovat 3D objekt
+	3D Export Format	Formát 3D exportu
+	Export 3D Assets	Exportovat 3D prvky
+@msg	{what} can't be exported in 3D: {e}	{what} nelze exportovat ve 3D: {e}
+@msg	asset {id} isn't a 3D asset	prvek {id} není 3D prvek
+@msg	asset {id} is a 3D asset: assets.export3D writes it	prvek {id} je 3D prvek: zapisuje jej assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	zatím žádné 3D prvky: nejprve shromážděte objekt s 3D efektem (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	vyberte objekt s 3D efektem (nebo zadejte jeho ID)
 	Remove Asset	Odebrat prvek
 	Rename Asset	Přejmenovat prvek
 	Fill Rule	Pravidlo výplně
@@ -4287,7 +4299,7 @@ imageTrace	Outline	Obrys
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
 @msg	select some type first	nejprve vyberte text
-@msg	kerning must be a number, "auto", or "optical"	Vyrovnání párů musí být číslo, „auto“ nebo „optical“
+@msg	kerning must be a number, "auto", or "optical"	kerning musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň
 @msg	the selection has no gradient stroke	výběr nemá přechodový tah
 @msg	the selection has no pattern fill	výběr nemá vzorkovou výplň
@@ -4499,7 +4511,7 @@ imageTrace	Outline	Obrys
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art nebo type
 @msg	artboard {0} does not exist	pracovní plocha {0} neexistuje
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	v tomto měřítku má kresba {w} × {h} pt, víc než pojme plátno: zvolte menší měřítko nebo ji přizpůsobte pracovní ploše
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	osa musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis musí být "vertical", "horizontal" nebo úhel ve stupních, ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadí {other}: transparent, white, black nebo barva jako "#ff8800"
 @msg	bad color {v}	chybná barva {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio musí být číslo od 0,1 do 10
@@ -4513,9 +4525,9 @@ imageTrace	Outline	Obrys
 @msg	bad shortcut	chybná klávesová zkratka
 @msg	bad stream length	chybná délka datového proudu
 @msg	bad trailer	chybný trailer
-@msg	balance must be between 0 and 100	vyvážení musí být mezi 0 a 100
+@msg	balance must be between 0 and 100	balance musí být mezi 0 a 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok dávky {_1} (`{id}`) selhal: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	jas musí být dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness musí být dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	dokument nelze zakódovat: {0}
 @msg	can't parse shortcut `{c}`	klávesovou zkratku `{c}` nelze analyzovat
 @msg	can't parse shortcut `{s}` for `{k}`	klávesovou zkratku `{s}` pro `{k}` nelze analyzovat
@@ -4540,7 +4552,7 @@ imageTrace	Outline	Obrys
 @msg	compound paths can only contain paths	složené cesty mohou obsahovat jen cesty
 @msg	compressed (RLE) bitmaps can't be read yet	komprimované bitmapy (RLE) zatím nelze načíst
 @msg	damaged	poškozeno
-@msg	decimals must be {_1}–{_2} (got {_3})	počet desetinných míst musí být {_1}–{_2} (zadáno {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals musí být {_1}–{_2} (zadáno {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	rozdělit lze na 1 až {MAX_PIECES} řezů
 @msg	effect {k} is `{_1}`, not `{id}`	efekt {k} je `{_1}`, ne `{id}`
 @msg	empty brush stroke	prázdný tah štětcem
@@ -4665,6 +4677,8 @@ imageTrace	Outline	Obrys
 @msg	no such action set	taková sada akcí neexistuje
 @msg	the action sets changed; nothing was deleted	sady akcí se změnily; nic nebylo odstraněno
 @msg	no action set to save	žádná sada akcí k uložení
+@msg	the action set file can't be read in full	soubor sady akcí nelze přečíst celý
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
 @msg	the action set file holds more than 1,000 actions	soubor sady akcí obsahuje více než 1 000 akcí
@@ -4738,9 +4752,9 @@ imageTrace	Outline	Obrys
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
-@msg	percent must be above 0 and at most 6400, not {p}	procento musí být větší než 0 a nejvýše 6400, ne {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	vyberte barvu, přechod nebo vzorek, který se má uložit do vzorníku
-@msg	plane must be left, right or ground	rovina musí být left, right nebo ground
+@msg	plane must be left, right or ground	plane musí být left, right nebo ground
 @msg	plug-in ABI: {0}	ABI zásuvného modulu: {0}
 @msg	plug-in exceeded its {0}	zásuvný modul překročil limit: {0}
 @msg	plug-in failed: {0}	zásuvný modul selhal: {0}
@@ -4759,8 +4773,8 @@ imageTrace	Outline	Obrys
 @msg	result would exceed the canvas (coordinates out of range)	výsledek by přesáhl plátno (souřadnice mimo rozsah)
 @msg	objects can't be nested more than 32 deep	objekty nelze vnořit hlouběji než do 32 úrovní
 @msg	the SVG's elements are nested more than {0} deep	prvky SVG jsou vnořeny hlouběji než do {0} úrovní
-@msg	scale must be a number from {_1} to {_2}, not {_3}	měřítko musí být číslo od {_1} do {_2}, ne {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	měřítko musí být číslo od {_1} do {_2}, ne {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale musí být číslo od {_1} do {_2}, ne {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale musí být číslo od {_1} do {_2}, ne {s}
 @msg	select (or target) objects whose appearance isn't basic	vyberte (nebo zacilte) objekty, jejichž vzhled není základní
 @msg	select a Live Paint group	vyberte skupinu živé malby
 @msg	select a blend	vyberte prolnutí
@@ -6407,6 +6421,7 @@ breakText	Glyphs	Glyfy
 	Reset Symbol Instance	Obnovit instanci symbolu
 @msg	type must be static or dynamic, not {v}	type musí být static nebo dynamic, ne {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` je statický symbol: nejprve nastavte jeho typ symbolu na Dynamický
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	U cesty, složené cesty nebo textu vybraného v instanci symbolu lze měnit jen plnou barvu výplně a tahu
 @msg	path must be a list of child indices	path musí být seznam indexů potomků
 @msg	no object at path {shown} in the symbol's art	v kresbě symbolu není na cestě {shown} žádný objekt
 @msg	give fill, stroke, opacity and/or blend	zadejte fill, stroke, opacity a/nebo blend
@@ -6504,3 +6519,25 @@ breakText	Glyphs	Glyfy
 # 3D Box add-on
 	3D Box	3D kvádr
 	3D Box Tool	Nástroj 3D kvádr
+
+# Safe Mode
+	Safe Mode…	Nouzový režim…
+	Safe Mode	Nouzový režim
+	Help › Safe Mode…	Nápověda › Nouzový režim…
+	Enable on Re-launch	Povolit při příštím spuštění
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Poslední spuštění aplikace VectorCraft se zastavilo během načítání zásuvného modulu {name}. Tento modul nemusí být příčinou.
+	Disable and Continue	Zakázat a pokračovat
+	Start Normally	Spustit normálně
+	Start in Safe Mode	Spustit v nouzovém režimu
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft je v nouzovém režimu: zásuvné moduly se nenačítají ani nespouštějí, dokud se aplikace nespustí normálně.
+	Disabled plug-ins	Zakázané zásuvné moduly
+	No plug-ins are disabled.	Žádné zásuvné moduly nejsou zakázány.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Nouzový režim je zapnutý: zásuvné moduly se nenačítají ani nespouštějí, dokud se VectorCraft nespustí normálně
+@msg	give `id` or `file` (see plugin.safeMode)	zadejte `id` nebo `file` (viz plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	tento zásuvný modul není zakázán (viz plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Zakázané zásuvné moduly nebylo možné uložit pro příští spuštění
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Rozložit vzhled: efekt zásuvného modulu ve výběru nelze v nouzovém režimu rozložit
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Zarovnat na mřížku obrazových bodů
+@msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty

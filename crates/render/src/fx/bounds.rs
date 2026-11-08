@@ -34,6 +34,19 @@ pub(crate) fn effected_path(doc: &Document, n: &Node, bp: &BezPath) -> BezPath {
     apply(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
 }
 
+/// [`apply`], and how gradients follow the effects ([`effects::Carry`]).
+pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> (BezPath, effects::Carry) {
+    if !effects::has_geometry(effects) || bp.elements().is_empty() {
+        return (bp.clone(), effects::Carry::default());
+    }
+    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+}
+
+/// [`effected_path`], and how `n`'s gradients follow its effects.
+pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> (BezPath, effects::Carry) {
+    apply_carrying(&n.appearance.effects, bp, &GeomContext { doc: Some(doc), ..GeomContext::of(n) })
+}
+
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,

@@ -17,6 +17,20 @@ fn fx(id: &str, params: serde_json::Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
 }
 
+/// Asserts that placed gradient `got` has `want`'s start, end, aspect and focal point, within 1e-6.
+fn assert_geom_near(got: vectorcraft_color::GradientGeom, want: vectorcraft_color::GradientGeom, what: &str) {
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    let focal = match (got.focal, want.focal) {
+        (None, None) => true,
+        (Some(a), Some(b)) => near(a, b),
+        _ => false,
+    };
+    assert!(
+        near(got.start, want.start) && near(got.end, want.end) && (got.aspect - want.aspect).abs() < 1e-6 && focal,
+        "{what}: got {got:?}, want {want:?}"
+    );
+}
+
 fn doc_with(n: Node) -> Document {
     let mut d = Document::new(400.0, 400.0);
     let l = d.layers[0].id;
@@ -43,6 +57,157 @@ fn object_effects_become_geometry_and_raster_effects_stay() {
     assert!((b.width() - 120.0).abs() < 0.5, "{b:?}");
     assert_eq!(m.appearance.effects.len(), 1);
     assert_eq!(m.appearance.effects[0].id, "stylize.dropShadow");
+}
+
+#[test]
+fn a_baked_transform_moves_a_placed_gradient_with_the_path() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let placed_geom = |n: &Node| match n.appearance.fill_paint() {
+        Paint::Gradient(g) => g.geom.unwrap(),
+        p => panic!("a gradient: {p:?}"),
+    };
+    // A move 30 pt right, and a turn of 90° with the width halved about the center (50, 50): the
+    // square becomes 100 pt wide and 50 pt tall, and the gradient runs from the bottom up.
+    let moves = [
+        (json!({"moveH": 30.0}), Point::new(30.0, 0.0), GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom }),
+        (
+            json!({"rotate": 90.0, "scaleH": 50.0}),
+            Point::new(0.0, 25.0),
+            GradientGeom { start: Point::new(50.0, 75.0), end: Point::new(50.0, 25.0), ..geom },
+        ),
+    ];
+    // Alone, with a stroke whose own effect makes one path for each fill and stroke, and as the
+    // fill's own effect.
+    for (params, corner, want) in moves {
+        for (split, own) in [(false, false), (true, false), (true, true)] {
+            let mut ap = Appearance::basic(placed.clone(), Paint::solid(Color::BLACK), if split { 1.0 } else { 0.0 });
+            if split && let AppearanceItem::Stroke(s) = &mut ap.items[1] {
+                s.effects.push(fx("path.offsetPath", json!({"offset": 5.0})));
+            }
+            let transform = fx("distort.transform", params.clone());
+            if own {
+                ap.items[0].effects_mut().push(transform.clone());
+            }
+            let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+            if !own {
+                n.appearance.effects.push(transform);
+            }
+            let d = bake_document(&doc_with(n)).unwrap();
+            let m = d.node(NodeId(50)).unwrap();
+            let fill: &Node = if split { &m.children().unwrap()[0] } else { m };
+            let b = fill.geometric_bounds().unwrap();
+            assert!(b.origin().distance(corner) < 1e-6, "{params}, split {split}, own {own}: {b:?}");
+            assert_geom_near(placed_geom(fill), want, &format!("{params}, split {split}, own {own}"));
+        }
+    }
+}
+
+/// A stroke's own Transform effect or Free Distort moves the gradient placed on that stroke.
+#[test]
+fn a_strokes_own_transform_and_free_distort_move_its_placed_gradient() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    // Moved 30 pt right by Transform, and one width (100 pt) right by Free Distort.
+    let moves = [
+        (fx("distort.transform", json!({"moveH": 30.0})), 30.0),
+        (fx("distort.freeDistort", json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]})), 100.0),
+    ];
+    for (e, moved) in moves {
+        let mut ap = Appearance::basic(Paint::None, placed.clone(), 4.0);
+        let Some(stroke) = ap.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        stroke.effects_mut().push(e.clone());
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut geoms = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            for item in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = item
+                    && let Paint::Gradient(g) = &s.paint
+                {
+                    geoms.push(g.geom.unwrap());
+                }
+            }
+        });
+        assert!(!geoms.is_empty(), "{}: the stroke keeps its gradient", e.id);
+        let want = GradientGeom { start: Point::new(moved, 50.0), end: Point::new(100.0 + moved, 50.0), ..geom };
+        for g in geoms {
+            assert_geom_near(g, want, &e.id);
+        }
+    }
+}
+
+#[test]
+fn a_fills_gradient_follows_the_effects_around_its_transform_with_options() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(100.0, 50.0), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let moved = fx("distort.transform", json!({"moveH": 30.0}));
+    let scales_strokes = fx("distort.transform", json!({"strokes": true}));
+    // A move before and a move after the fill's Transform effect with Scale Strokes & Effects on.
+    for fill_fx in [vec![moved.clone(), scales_strokes.clone()], vec![scales_strokes, moved]] {
+        let mut ap = Appearance::basic(placed.clone(), Paint::None, 0.0);
+        *ap.items[0].effects_mut() = fill_fx.clone();
+        let n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let mut found = vec![];
+        d.node(NodeId(50)).unwrap().walk(&mut |c: &Node| {
+            if let Paint::Gradient(g) = c.appearance.fill_paint() {
+                found.push((c.geometric_bounds().unwrap(), g.geom.unwrap()));
+            }
+        });
+        assert!(!found.is_empty(), "{fill_fx:?}: the fill keeps its gradient");
+        let want = GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(130.0, 50.0), ..geom };
+        for (b, g) in found {
+            assert!(b.origin().distance(Point::new(30.0, 0.0)) < 1e-6, "{fill_fx:?}: {b:?}");
+            assert_geom_near(g, want, &format!("{fill_fx:?}"));
+        }
+    }
+}
+
+#[test]
+fn baked_free_distort_moves_placed_gradients_from_the_bounds_to_the_distorted_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = |kind| GradientPaint::new(Gradient::new(kind, stops.clone()));
+    let linear = GradientGeom { start: Point::new(20.0, 50.0), end: Point::new(80.0, 50.0), aspect: 1.0, focal: None };
+    let radial = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(60.0, 30.0), aspect: 0.5, focal: Some(Point::new(45.0, 32.0)) };
+    let placed_linear = Paint::Gradient(Box::new(GradientPaint { geom: Some(linear), ..ramp(GradientKind::Linear) }));
+    let placed_radial = Paint::Gradient(Box::new(GradientPaint { geom: Some(radial), ..ramp(GradientKind::Radial) }));
+    let fitted = Paint::Gradient(Box::new(ramp(GradientKind::Linear)));
+    let baked = |fill: &Paint, e: Effect| {
+        let mut n = Node::path(NodeId(50), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(fill.clone(), Paint::None, 0.0));
+        n.appearance.effects.push(e);
+        let d = bake_document(&doc_with(n)).unwrap();
+        let m = d.node(NodeId(50)).unwrap();
+        match m.appearance.fill_paint() {
+            Paint::Gradient(g) => (m.geometric_bounds().unwrap(), (*g).clone()),
+            p => panic!("a gradient: {p:?}"),
+        }
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // The bottom right corner moves 50 pt right, so the bounds grow from 0..100 to 0..150 across.
+    let corners = json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.5, 1.0], [0.0, 1.0]]});
+    let distort = || fx("distort.freeDistort", corners.clone());
+    let (b, g) = baked(&placed_linear, distort());
+    assert!((b.x1 - 150.0).abs() < 1e-6, "{b:?}");
+    let geom = g.geom.unwrap();
+    assert!(near(geom.start, Point::new(30.0, 50.0)) && near(geom.end, Point::new(120.0, 50.0)), "{geom:?}");
+    // A radial gradient's center, focal point and ellipse take the same stretch: the radius along
+    // the vector grows from 20 to 30 pt and the 10 pt radius across it stays.
+    let (_, g) = baked(&placed_radial, distort());
+    let want = GradientGeom { start: Point::new(60.0, 30.0), end: Point::new(90.0, 30.0), aspect: 1.0 / 3.0, focal: Some(Point::new(67.5, 32.0)) };
+    assert_geom_near(g.geom.unwrap(), want, "radial");
+    // A fitted gradient stays fitted, and fits the distorted outline.
+    assert_eq!(baked(&fitted, distort()).1.geom, None);
 }
 
 #[test]

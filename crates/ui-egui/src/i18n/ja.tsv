@@ -1589,6 +1589,14 @@ digits	Malayalam	マラヤーラム数字
 	PDF Print	印刷用 PDF
 	Export As	形式を指定して書き出し
 	Export Assets	アセットを書き出し
+	Export 3D Object	3D オブジェクトを書き出し
+	3D Export Format	3D 書き出し形式
+	Export 3D Assets	3D アセットを書き出し
+@msg	{what} can't be exported in 3D: {e}	{what} は 3D で書き出せません: {e}
+@msg	asset {id} isn't a 3D asset	アセット {id} は 3D アセットではありません
+@msg	asset {id} is a 3D asset: assets.export3D writes it	アセット {id} は 3D アセットです: assets.export3D で書き出します
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D アセットがまだありません: まず 3D 効果のあるオブジェクトを追加してください (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D 効果のあるオブジェクトを選択してください (または ID を指定)
 	Export CSS	CSS を書き出し
 	Export CSS…	CSS を書き出し…
 	Export DXF	DXF を書き出し
@@ -2008,6 +2016,7 @@ digits	Malayalam	マラヤーラム数字
 	Line {line}	{line} 行目
 	Line {line}: {name}: {status}	{line} 行目: {name}: {status}
 	Imported. Press OK to keep the imported set.	読み込みました。読み込んだセットを保持するには OK を押してください。
+	Read Action Set File	アクションセットファイルを読む
 	Read Shortcut Set File	ショートカットセットファイルを読む
 	Import Matches	読み込み時の対応付け
 	Remember Import Matches	読み込み時の対応付けを記憶
@@ -4115,14 +4124,14 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の VectorCraft の起動はウィンドウが表示される前に {name} で終了したため、{summary} で起動しました。このグラフィックプロセッサーをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	前回の VectorCraft の起動はグラフィックプロセッサーの一覧を取得している間に終了したため、OpenGL のみを使って {summary} で起動しました。ほかのグラフィックバックエンドをもう一度試すには、「環境設定 › パフォーマンス › グラフィックプロセッサー」を変更するか、WGPU_BACKEND を設定して起動してください
 @msg	not a DXF drawing	DXF 図面ではありません
-@msg	scale must be a number from {_1} to {_2}, not {s}	縮尺は {_1} から {_2} までの数値にしてください ({s} は指定できません)
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale は {_1} から {_2} までの数値にしてください ({s} は指定できません)
 @msg	the artboard to fit must be a positive size up to {_1} pt	合わせる先のアートボードのサイズは 0 より大きく {_1} pt 以下にしてください
 @msg	the drawing has no layout `{_1}` (it has {_2})	図面にレイアウト `{_1}` はありません (含まれるレイアウト: {_2})
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	DWG 図面は読み込めません: CAD アプリで ASCII DXF として保存し、そのファイルを開いてください
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	この縮尺では図面が {w} × {h} pt になり、カンバスに収まりません: 縮尺を小さくするか、アートボードに合わせてください
 @msg	the scale is not a usable number	縮尺が有効な数値ではありません
 @msg	the drawing is too large to open	図面が大きすぎて開けません
-@msg	scale must be a number from {_1} to {_2}, not {_3}	縮尺は {_1} から {_2} までの数値にしてください ({_3} は指定できません)
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale は {_1} から {_2} までの数値にしてください ({_3} は指定できません)
 @msg	an image has no pixels and was left out	ピクセルがない画像を省略しました
 @msg	object {0} cannot have children	オブジェクト {0} には子オブジェクトを含められません
 @msg	range `{s}` is empty	範囲 `{s}` が空です
@@ -4240,7 +4249,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{name}: no local header	{name}: ローカルヘッダーがありません
 @msg	Flatten Transparency: select objects to flatten	透明部分を分割・統合: 分割・統合するオブジェクトを選択してください
 @msg	Flatten Transparency: {e}	透明部分を分割・統合: {e}
-@msg	balance must be between 0 and 100	バランスは 0 から 100 までの値にしてください
+@msg	balance must be between 0 and 100	balance は 0 から 100 までの値にしてください
 @msg	resolutions must be between 1 and 2400 ppi	解像度は 1 から 2400 ppi までの値にしてください
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	`{name}` は不明なプリセットです (high、medium、low、または保存したプリセット: flattener.presets.list を参照してください)
 @msg	`at` must be [x, y]	`at` は [x, y] の形式で指定してください
@@ -4410,7 +4419,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no artboard {i} (0-based; the document has {_1})	アートボード {i} はありません (番号は 0 始まり、このドキュメントには {_1} 個あります)
 @msg	no selected slice in the image: select slices, or save all of them	画像内に選択されたスライスがありません: スライスを選択するか、すべてのスライスを保存してください
 @msg	nothing to save: the document has no visible art	保存するものがありません: ドキュメントに表示されているアートがありません
-@msg	percent must be above 0 and at most 6400, not {p}	パーセントは 0 より大きく 6400 以下にしてください ({p} は指定できません)
+@msg	percent must be above 0 and at most 6400, not {p}	percent は 0 より大きく 6400 以下にしてください ({p} は指定できません)
 @msg	unknown preset `{name}` (see webExport.presets.list)	`{name}` は不明なプリセットです (webExport.presets.list を参照してください)
 @msg	width and height are at least 1 pixel	幅と高さは 1 ピクセル以上にしてください
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` は 1、3、5 のいずれかにしてください
@@ -4573,7 +4582,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	is not an image VectorCraft reads	VectorCraft で読み込める画像ではありません
 @msg	not found	見つかりません
 @msg	SVG parse error: {0}	SVG を解析できませんでした: {0}
-@msg	decimals must be {_1}–{_2} (got {_3})	小数点以下の桁数は {_1} から {_2} までにしてください (指定値: {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals は {_1} から {_2} までにしてください (指定値: {_3})
 @msg	Exporting {_1}	{_1} を書き出し中
 @msg	Packaging {_1}	{_1} をパッケージ中
 @msg	Placing {_1}	{_1} を配置中
@@ -4735,6 +4744,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such action set	指定されたアクションセットが見つかりません
 @msg	the action sets changed; nothing was deleted	アクションセットが変更されたため、何も削除しませんでした
 @msg	no action set to save	保存するアクションセットがありません
+@msg	the action set file can't be read in full	アクションセットファイルをすべて読み込めません
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
 @msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています
@@ -4743,7 +4754,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	choose a folder to export to	書き出し先のフォルダーを選択してください
 @msg	the selection has no URL (or they differ)	選択したオブジェクトに URL がありません (または URL がそれぞれ異なります)
 @msg	select some type first	先にテキストを選択してください
-@msg	kerning must be a number, "auto", or "optical"	カーニングは数値、「auto」または「optical」にしてください
+@msg	kerning must be a number, "auto", or "optical"	kerning は数値、「auto」または「optical」にしてください
 @msg	the selection has no gradient fill	選択したオブジェクトに塗りのグラデーションがありません
 @msg	the selection has no gradient stroke	選択したオブジェクトに線のグラデーションがありません
 @msg	the selection has no pattern fill	選択したオブジェクトに塗りのパターンがありません
@@ -4961,6 +4972,9 @@ effect	Horizontal	水平
 effect	Vertical	垂直
 	Edge	エッジ
 	System Title Bar	システムのタイトルバー
+	VectorCraft Title Bar on Every Desktop	すべてのデスクトップで VectorCraft のタイトルバー
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	環境変数 VECTORCRAFT_TITLEBAR が設定されている間は、この変数でタイトルバーが決まります。
+	System Title Bar takes precedence over this option while it is on.	システムのタイトルバーがオンの間は、そちらがこのオプションより優先されます。
 	Value Axis	数値軸
 	On Left Side	左側
 	On Right Side	右側
@@ -5008,7 +5022,7 @@ effect	Vertical	垂直
 @msg	before must name a panel	before にパネルを指定してください
 @msg	docking action contains an unknown panel or an excessive split path	ドッキング操作に不明なパネルまたは長すぎる分割パスが含まれています
 @msg	group must be true or false	group は true または false にしてください
-@msg	panel is not in a dock group	パネルはドックのグループにありません
+@msg	panel is not in a dock group	panel はドックのグループにありません
 @msg	only a dock group above or below others collapses, not one beside another	折りたためるのは他のグループの上下にあるドックのグループだけで、横に並んだグループは折りたためません
 @msg	icon must be true or false	icon は true または false である必要があります
 @msg	icon only docks a panel in the icon column, with no anchor	icon はパネルをアイコン列にのみドッキングします（anchor なし）
@@ -6092,6 +6106,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	シンボルインスタンスをリセット
 @msg	type must be static or dynamic, not {v}	type は static または dynamic にしてください({v} は無効です)
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` はスタティックシンボルです。先にシンボルの種類をダイナミックに設定してください
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	シンボルインスタンス内で選択したパス、複合パス、テキストは、塗りと線の単色のみ変更できます
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
@@ -6189,3 +6204,25 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
+
+# Safe Mode
+	Safe Mode…	セーフモード…
+	Safe Mode	セーフモード
+	Help › Safe Mode…	ヘルプ › セーフモード…
+	Enable on Re-launch	次回起動時に有効にする
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	前回の VectorCraft の起動は、プラグイン {name} の読み込み中に停止しました。これが原因とは限りません。
+	Disable and Continue	無効にして続行
+	Start Normally	通常どおり起動
+	Start in Safe Mode	セーフモードで起動
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft はセーフモードです: 通常どおり起動するまで、プラグインは読み込まれず実行もされません。
+	Disabled plug-ins	無効なプラグイン
+	No plug-ins are disabled.	無効なプラグインはありません。
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	セーフモードがオンです: VectorCraft が通常どおり起動するまで、プラグインは読み込まれず実行もされません
+@msg	give `id` or `file` (see plugin.safeMode)	`id` または `file` を指定してください (plugin.safeMode を参照)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	そのプラグインは無効になっていません (plugin.safeMode を参照)
+@msg	Couldn't save the disabled plug-ins for the next launch	無効なプラグインを次回の起動用に保存できませんでした
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	アピアランスを分割: 選択範囲のプラグイン効果はセーフモードでは分割できません
+
+# Align to Pixel Grid
+	Align to Pixel Grid	ピクセルグリッドに整合
+@msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです

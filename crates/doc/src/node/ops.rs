@@ -450,6 +450,9 @@ impl Node {
         if self.appearance.gradients().next().is_some() {
             self.appearance.transform_gradients(a);
         }
+        if self.appearance.has_svg_filter() {
+            self.appearance.transform_svg_filters(a);
+        }
         if sc.patterns {
             crate::pattern::transform_pattern_paints(self, a);
         }
@@ -510,7 +513,7 @@ impl Node {
                             *h = (lin * h.to_point()).to_vec2();
                         }
                     }
-                    EnvelopeKind::TopObject { path } => path.transform(a),
+                    EnvelopeKind::TopObject { path, .. } => path.transform(a),
                     EnvelopeKind::Warp { .. } => {}
                 }
             }
