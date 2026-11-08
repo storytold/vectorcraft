@@ -338,6 +338,13 @@
 	Apply Bullets	Aplicar Marcadores
 	Numbered List	Lista Numerada
 	Apply Numbers	Aplicar Numeração
+	Bullets and Numbering…	Marcadores e Numeração…
+	Numbers	Números
+	Level:	Nível:
+	Bullet Character:	Caractere do Marcador:
+	Number Style:	Estilo de Número:
+	Left Indent:	Recuo Esquerdo:
+	First Line Indent:	Recuo da Primeira Linha:
 	Convert to Text	Converter em Texto
 	Filled Dot	Ponto Preenchido
 	Dash	Travessão
@@ -4315,6 +4322,7 @@ axis	Both	Ambos
 @msg	an image VectorCraft can't read was left out	uma imagem que o VectorCraft não consegue ler foi omitida
 @msg	graphs come in as plain art, without their data or settings	os gráficos são importados como arte comum, sem seus dados nem configurações
 @msg	an image whose data is cut short was left out	uma imagem com dados incompletos foi omitida
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	uma imagem incorporada de {_1} × {_2} pixels foi reduzida para {_3} × {_4} pixels para manter as camadas
 @msg	its editing data doesn't say where its art is	seus dados de edição não indicam onde está a arte
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	este arquivo foi salvo sem compatibilidade com PDF e seus dados de edição não podem ser lidos ({why})
 @msg	the PDF part couldn't be read ({_1}): the file opened from its editing data	não foi possível ler a parte PDF ({_1}): o arquivo foi aberto a partir dos seus dados de edição
@@ -4343,6 +4351,7 @@ axis	Both	Ambos
 @msg	object ids are non-negative integers, not {v}	os ids de objeto são inteiros não negativos, não {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} deve ser uma matriz de ids de objeto que sejam inteiros não negativos
 @msg	invalid object id {value}: expected a non-negative integer	id de objeto inválido {value}: era esperado um inteiro não negativo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	a entrada {index} de `{key}` é {value}, não um id de objeto (inteiro não negativo)
 @msg	no such object id {value}	não existe objeto com o id {value}
 @msg	id {value} is a layer, not an object	o id {value} é uma camada, não um objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	o id {value} é uma camada, não um objeto; mova camadas com layer.move
@@ -4912,6 +4921,15 @@ axis	Both	Ambos
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configurações de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configurações de Tate-chu-yoko
+	Composite Fonts…	Fontes compostas…
+	Composite Fonts	Fontes compostas
+	Export Composite Fonts	Exportar fontes compostas
+	Import Composite Fonts	Importar fontes compostas
+	Delete Font	Excluir fonte
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Números
+	Scale at Center	Dimensionar a partir do centro
 	Up/Down:	Para Cima/Para Baixo:
 	Left/Right:	Esquerda/Direita:
 	Temperature	Temperatura
@@ -5781,6 +5799,9 @@ axis	Y Axis	Eixo Y
 	Install “{name}”, which asks for these permissions?	Instalar “{name}”, que pede estas permissões?
 	ID: {id}	ID: {id}
 	Version: {version}	Versão: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Instalar “{name}” no lugar do plug-in com o mesmo ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este arquivo não é o plug-in instalado antes com este ID. Ele recebe as configurações e o cache guardados para esse ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” é um módulo diferente do plug-in com ID {_1} e receberia as configurações e o cache guardados para ele: instale-o com `replace: true` depois que o usuário concordar
 	File SHA-256: {hash}	SHA-256 do arquivo: {hash}
 	Read the objects it is given	Ler os objetos que recebe
 	Change, add and delete objects in the document	Alterar, adicionar e excluir objetos no documento
@@ -5788,10 +5809,13 @@ axis	Y Axis	Eixo Y
 	Change how the objects its effect is applied to are drawn	Alterar como são desenhados os objetos aos quais seu efeito é aplicado
 	Write the document as a file in its own format	Gravar o documento como um arquivo em formato próprio
 	Show its progress, see Cancel and write log lines	Mostrar seu progresso, detectar o cancelamento e gravar linhas de log
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a permissão `progress` exige o nível de API de plug-in {PROGRESS_API}: informe `api` {PROGRESS_API}
+	Keep settings of its own	Guardar configurações próprias
+	Keep a cache of its own, which you can clear	Guardar um cache próprio, que você pode limpar
+	Clear Plug-in Cache	Limpar cache do plug-in
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a permissão `{permission}` exige o nível de API de plug-in {PROGRESS_API}: informe `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	o módulo importa `env.{name}` com um tipo diferente do tipo do host: o do host é {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	o módulo importa `env.{name}`, que um plug-in só pode usar no nível de API de plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e com a permissão `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	o módulo importa `{from}.{name}`, que o host não oferece: um plug-in só pode importar `env.vc_progress`, `env.vc_cancelled` e `env.vc_log` (nível de API de plug-in 2), e nenhum WASI, arquivo ou rede
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	o módulo importa `env.{name}`, que um plug-in só pode usar no nível de API de plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e com a permissão `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	o módulo importa `{from}.{name}`, que o host não oferece: um plug-in só pode importar as funções `env.vc_*` listadas em docs/plugins.md (nível de API de plug-in 2), e nenhum WASI, arquivo ou rede
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` é {_1}; este host aceita os níveis de API de plug-in de 1 a {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` deve ser uma lista de nomes de permissões
 @msg	`grant` names an unknown permission `{shown}`	`grant` cita uma permissão desconhecida `{shown}`

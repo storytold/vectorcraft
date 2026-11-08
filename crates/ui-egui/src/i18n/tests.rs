@@ -2098,9 +2098,9 @@ fn dataset_import_cell_errors_are_translated() {
 
 /// The errors of the parameter checks that many commands share (a number given as text, a missing
 /// number or index, a fraction for a whole number, `ids` that aren't a list of object ids, an
-/// object id that is negative or names no object, a date that isn't Unix seconds) fill their
-/// templates, and each language shows the value in the message, such as a quoted `"60 mm"`, as
-/// given: in its row's translation, or in English where it has none.
+/// `ids` entry or an `id` that is negative, an object id that names no object, a date that isn't
+/// Unix seconds) fill their templates, and each language shows the value in the message, such as a
+/// quoted `"60 mm"`, as given: in its row's translation, or in English where it has none.
 #[test]
 fn shared_param_check_errors_show_their_values_as_given() {
     use serde_json::json;
@@ -2111,7 +2111,7 @@ fn shared_param_check_errors_show_their_values_as_given() {
     s.execute("select.all", &json!({})).unwrap();
     // A command, its params, the English template of its error and the template's values.
     type Case = (&'static str, serde_json::Value, &'static str, &'static [(&'static str, &'static str)]);
-    let cases: [Case; 10] = [
+    let cases: [Case; 11] = [
         ("object.move", json!({"dx": "60 mm"}), "`{key}` must be a number, not {v}", &[("key", "dx"), ("v", r#""60 mm""#)]),
         ("object.rotate", json!({"angle": true}), "`{key}` must be a number, not {v}", &[("key", "angle"), ("v", "true")]),
         ("object.setBounds", json!({"width": [1, 2]}), "`{key}` must be a number, not {v}", &[("key", "width"), ("v", "[1,2]")]),
@@ -2119,7 +2119,13 @@ fn shared_param_check_errors_show_their_values_as_given() {
         ("appearance.setItem", json!({}), "missing integer `{key}`", &[("key", "index")]),
         ("object.transformEach", json!({"reference": 2.5}), "`{key}` must be a whole number", &[("key", "reference")]),
         ("edit.clear", json!({"ids": "all"}), "{key} must be an array of non-negative integer object ids", &[("key", "ids")]),
-        ("edit.clear", json!({"ids": [-1]}), "invalid object id {value}: expected a non-negative integer", &[("value", "-1")]),
+        (
+            "edit.clear",
+            json!({"ids": [-1]}),
+            "`{key}` entry {index} is {value}, not a non-negative integer object id",
+            &[("key", "ids"), ("index", "0"), ("value", "-1")],
+        ),
+        ("paint.invert", json!({"id": -1}), "invalid object id {value}: expected a non-negative integer", &[("value", "-1")]),
         ("edit.clear", json!({"ids": [99999]}), "no such object id {value}", &[("value", "99999")]),
         ("file.new", json!({"created": "yesterday"}), "{key} must be Unix seconds (an integer) or null", &[("key", "created")]),
     ];

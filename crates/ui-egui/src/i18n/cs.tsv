@@ -340,6 +340,13 @@
 	Apply Bullets	Použít odrážky
 	Numbered List	Číslovaný seznam
 	Apply Numbers	Použít číslování
+	Bullets and Numbering…	Odrážky a číslování…
+	Numbers	Čísla
+	Level:	Úroveň:
+	Bullet Character:	Znak odrážky:
+	Number Style:	Styl číslování:
+	Left Indent:	Odsazení zleva:
+	First Line Indent:	Odsazení prvního řádku:
 	Convert to Text	Převést na text
 	Filled Dot	Plná tečka
 	Dash	Pomlčka
@@ -1525,6 +1532,15 @@ digits	Malayalam	Malajálamské
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Nastavení Tate-chu-yoko…
 	Tate-chu-yoko Settings	Nastavení Tate-chu-yoko
+	Composite Fonts…	Složená písma…
+	Composite Fonts	Složená písma
+	Export Composite Fonts	Exportovat složená písma
+	Import Composite Fonts	Importovat složená písma
+	Delete Font	Odstranit písmo
+	Kanji	Kandži
+	Kana	Kana
+	Numerals	Číslice
+	Scale at Center	Měřítko od středu
 	Up/Down:	Nahoru/dolů:
 	Left/Right:	Vlevo/vpravo:
 	Underline	Podtržení
@@ -5045,6 +5061,7 @@ imageTrace	Outline	Obrys
 @msg	an image VectorCraft can't read was left out	obrázek, který VectorCraft neumí přečíst, byl vynechán
 @msg	graphs come in as plain art, without their data or settings	grafy se načtou jako obyčejná grafika, bez svých dat a nastavení
 @msg	an image whose data is cut short was left out	obrázek s useknutými daty byl vynechán
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	vložený obrázek o rozměrech {_1} × {_2} pixelů byl zmenšen na {_3} × {_4} pixelů, aby se zachovaly vrstvy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	linked type areas past VectorCraft's limits were left out	propojené textové oblasti nad limity aplikace VectorCraft byly vynechány
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text, který mění směr psaní uvnitř textového objektu, se otevře ve směru svého prvního znaku
@@ -5080,6 +5097,7 @@ imageTrace	Outline	Obrys
 @msg	object ids are non-negative integers, not {v}	ID objektů jsou nezáporná celá čísla, ne {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} musí být pole ID objektů, která jsou nezáporná celá čísla
 @msg	invalid object id {value}: expected a non-negative integer	neplatné ID objektu {value}: očekává se nezáporné celé číslo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	položka {index} v `{key}` je {value}, nikoli ID objektu (nezáporné celé číslo)
 @msg	no such object id {value}	objekt s ID {value} neexistuje
 @msg	id {value} is a layer, not an object	ID {value} je vrstva, nikoli objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} je vrstva, nikoli objekt; vrstvy přesunete pomocí layer.move
@@ -5866,6 +5884,9 @@ axis	Y Axis	osa Y
 	Install “{name}”, which asks for these permissions?	Nainstalovat „{name}“, který žádá o tato oprávnění?
 	ID: {id}	ID: {id}
 	Version: {version}	Verze: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Nainstalovat „{name}“ místo zásuvného modulu se stejným ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tento soubor není zásuvný modul dříve nainstalovaný s tímto ID. Získá nastavení a mezipaměť uchovávané pro toto ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}“ je jiný modul než zásuvný modul s ID {_1} a získal by nastavení a mezipaměť uchovávané pro něj: nainstalujte ho s `replace: true`, jakmile uživatel souhlasí
 	File SHA-256: {hash}	SHA-256 souboru: {hash}
 	Read the objects it is given	Číst objekty, které dostane
 	Change, add and delete objects in the document	Měnit, přidávat a mazat objekty v dokumentu
@@ -5873,10 +5894,13 @@ axis	Y Axis	osa Y
 	Change how the objects its effect is applied to are drawn	Měnit, jak se kreslí objekty, na které je použit jeho efekt
 	Write the document as a file in its own format	Zapsat dokument jako soubor ve vlastním formátu
 	Show its progress, see Cancel and write log lines	Zobrazit průběh, rozpoznat zrušení a zapisovat řádky protokolu
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	oprávnění `progress` vyžaduje úroveň API zásuvných modulů {PROGRESS_API}: uveďte `api` {PROGRESS_API}
+	Keep settings of its own	Uchovávat vlastní nastavení
+	Keep a cache of its own, which you can clear	Uchovávat vlastní mezipaměť, kterou můžete vymazat
+	Clear Plug-in Cache	Vymazat mezipaměť zásuvného modulu
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	oprávnění `{permission}` vyžaduje úroveň API zásuvných modulů {PROGRESS_API}: uveďte `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul importuje `env.{name}` s jiným typem, než má hostitel: typ hostitele je {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul importuje `env.{name}`, který zásuvný modul smí používat jen na úrovni API zásuvných modulů {PROGRESS_API} (`api` {PROGRESS_API}) a s oprávněním `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul importuje `{from}.{name}`, který hostitel nenabízí: zásuvný modul smí importovat jen `env.vc_progress`, `env.vc_cancelled` a `env.vc_log` (úroveň API zásuvných modulů 2), a žádné WASI, soubory ani síť
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modul importuje `env.{name}`, který zásuvný modul smí používat jen na úrovni API zásuvných modulů {PROGRESS_API} (`api` {PROGRESS_API}) a s oprávněním `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modul importuje `{from}.{name}`, který hostitel nenabízí: zásuvný modul smí importovat jen funkce `env.vc_*`, které uvádí docs/plugins.md (úroveň API zásuvných modulů 2), a žádné WASI, soubory ani síť
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
 @msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`

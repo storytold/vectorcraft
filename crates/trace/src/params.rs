@@ -91,6 +91,10 @@ pub struct TraceParams {
     /// The colour Ignore Color leaves out (`#rrggbb`): the palette colours within about 30 levels
     /// of it. `None` is white. (Flat Logo mode leaves out white only.)
     pub ignore_color: Option<String>,
+    /// With Ignore Color: leave out only the areas of that color that reach the image's edge (a
+    /// background), through neighbors above, below and to either side, and trace the areas of it
+    /// that other colors enclose. (Flat Logo mode leaves out every white area.)
+    pub ignore_background: bool,
     /// Keep Colors: the colors to trace (`#rrggbb`). Only the palette colors within about 30
     /// levels of one of them (as Ignore Color matches a color) are traced, a gradient by its middle
     /// color, and their paths are the ones the trace of every color has. Empty traces every color.
@@ -145,6 +149,7 @@ impl Default for TraceParams {
             method: Method::Abutting,
             ignore_white: false,
             ignore_color: None,
+            ignore_background: false,
             keep_colors: Vec::new(),
             snap_curves_to_lines: false,
             shapes: false,

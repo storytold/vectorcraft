@@ -376,6 +376,11 @@ impl Appearance {
     pub fn has_placed_gradient(&self) -> bool {
         self.has_gradient(true)
     }
+    /// Does a fill or stroke carry a gradient that is drawn at a place in document space: a placed
+    /// one, or a freeform gradient with points of its own whose vector is fitted to the bounds?
+    pub fn has_positioned_gradient(&self) -> bool {
+        self.gradients().any(|g| g.is_placed() || g.has_freeform_points())
+    }
     /// Fix unplaced gradients to their fit on `bounds` (the object's geometric bounds; strokes fit
     /// the stroke-inflated box), so they can follow transforms that refitting wouldn't reproduce.
     pub fn pin_gradients(&mut self, bounds: vectorcraft_geom::Rect) {
