@@ -64,6 +64,58 @@ fn a_recent_colour_recolours_the_selected_gradient_stop() {
     assert_eq!(hex, ["#ffffff", "#ff0000"]);
 }
 
+/// In a narrow panel the Recent Colors chips wrap onto further rows, so all 30 can be clicked.
+#[test]
+fn all_thirty_recent_colors_wrap_into_a_narrow_panel() {
+    let mut app = app();
+    let hex = |i: u8| Color::rgb8(i * 8, 0, 255 - i * 8).to_hex();
+    for i in 0..30u8 {
+        app.run("paint.setFill", json!({"color": hex(i)})).unwrap();
+    }
+    assert_eq!(app.session.recent_colors.len(), 30);
+    let ctx = egui::Context::default();
+    let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(160.0, 2000.0));
+    let chips = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut rects = vec![];
+        let input = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+        let mut full = ctx.run_ui(input, |ui| {
+            show(app, ui);
+            rects = (0..30usize).map(|i| ctx.read_response(ui.scope_id().with(("recent", i))).map(|r| r.rect)).collect();
+        });
+        full.textures_delta.clear();
+        rects
+    };
+    let rects: Vec<Rect> = chips(&mut app, vec![]).into_iter().map(|r| r.expect("every chip is drawn")).collect();
+    for (i, r) in rects.iter().enumerate() {
+        assert!(r.right() <= screen.right(), "chip {i} fits the panel's width: {r:?}");
+        for (j, o) in rects.iter().enumerate().skip(i + 1) {
+            assert!(!r.intersects(*o), "chips {i} and {j} do not overlap");
+        }
+    }
+    assert!(rects[29].top() > rects[0].top(), "the chips wrap onto another row");
+    // The last chip, the oldest color, applies like the others.
+    let pos = rects[29].center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    chips(&mut app, vec![egui::Event::PointerMoved(pos), button(true)]);
+    chips(&mut app, vec![button(false)]);
+    let Paint::Solid { color, .. } = crate::panels::current_paints(&app).0 else { panic!("a solid fill") };
+    assert_eq!(color.to_hex(), hex(0));
+}
+
+/// With a few recent colors the chips take one row, as tall as before.
+#[test]
+fn a_short_recent_colors_list_takes_one_row() {
+    let mut app = app();
+    for h in ["#ff0000", "#00ff00", "#0000ff"] {
+        app.run("paint.setFill", json!({"color": h})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    let first = frame_with(&mut app, &ctx, vec![], egui::Modifiers::NONE, ("recent", 0usize)).0.expect("the first chip is drawn");
+    let last = frame_with(&mut app, &ctx, vec![], egui::Modifiers::NONE, ("recent", 2usize)).0.expect("the third chip is drawn");
+    assert_eq!(first.top(), last.top());
+    assert_eq!(last.left() - first.left(), 38.0);
+}
+
 /// In a CMYK document the sliders keep the model picked in the panel for a gradient stop and a
 /// freeform point, as they do for a solid fill.
 #[test]

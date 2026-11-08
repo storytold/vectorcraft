@@ -2,7 +2,7 @@
 //! art retained underneath. Recipes select topology regions; source edits re-evaluate them in
 //! the same undo transaction. Rendering and exporters only see ordinary groups and paths.
 use super::pathops::Beside;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, point_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_param, cmd, f64_or, has_doc, id_param, object_param, point_param};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -785,15 +785,15 @@ fn end_isolation(s: &mut Session) -> Result<()> {
     st.isolation = editing_layer(&st.doc);
     Ok(())
 }
-fn target(s: &Session, p: &Value) -> Result<NodeId> {
-    let id = id_param(p, "id")
+fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
+    let id = object_param(p, "id", cmd)?
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
-        .ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
-    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad("shaper.release", "select a Shaper group"))?;
+        .ok_or_else(|| bad(cmd, "select a Shaper group"))?;
+    s.doc()?.doc.node(id).filter(|n| n.extras().shaper.is_some()).ok_or_else(|| bad(cmd, "select a Shaper group"))?;
     Ok(id)
 }
 fn release(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p)?;
+    let id = target(s, p, "shaper.release")?;
     let ids = s.edit("Release Shaper Group", |d, sel| {
         let original = d.node(id).map(sources).ok_or(EngineError::NoNode(id))?;
         let (parent, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
@@ -809,7 +809,7 @@ fn release(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 fn expand(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = target(s, p)?;
+    let id = target(s, p, "shaper.expand")?;
     s.edit("Expand Shaper Group", |d, sel| {
         let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
         n.extras_mut().shaper = None;

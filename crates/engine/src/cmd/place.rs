@@ -47,7 +47,7 @@ use vectorcraft_geom::{Affine, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, id_param, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, finite_numbers, has_doc, object_param, str_param, unique_name};
 use crate::{EngineError, MAX_COORD};
 
 const PLACE: &str = "file.place";
@@ -866,7 +866,7 @@ pub fn read_info(p: &Value) -> Result<Value> {
 pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "image.info";
     let st = s.doc()?;
-    let id = match (id_param(p, "id"), &st.selection.objects[..]) {
+    let id = match (object_param(p, "id", C)?, &st.selection.objects[..]) {
         (Some(id), _) => id,
         (None, [id]) => *id,
         _ => return Err(bad(C, "select one image or pass id")),

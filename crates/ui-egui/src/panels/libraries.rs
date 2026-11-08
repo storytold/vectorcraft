@@ -600,27 +600,29 @@ impl Items<'_> {
         let at = self.group_of(kind, key);
         let item = json!({ "kind": kind_param(kind), "item": key });
         ui.menu_button(format!("   {}", tl!("Move to Group")), |ui| {
-            if menu_item(ui, "No Group", true, at.is_none()) {
-                if at.is_some() {
-                    *act = Some(Act::Run("library.moveItem", item.clone()));
-                }
-                ui.close();
-            }
-            for (i, g) in self.lib.groups.iter().enumerate() {
-                if menu_item_name(ui, &g.name, true, at == Some(i)) {
-                    if at != Some(i) {
-                        let mut p = item.clone();
-                        p["group"] = json!(g.name);
-                        *act = Some(Act::Run("library.moveItem", p));
+            widgets::menu_scroll(ui, |ui| {
+                if menu_item(ui, "No Group", true, at.is_none()) {
+                    if at.is_some() {
+                        *act = Some(Act::Run("library.moveItem", item.clone()));
                     }
                     ui.close();
                 }
-            }
-            ui.separator();
-            if menu_item(ui, "New Group…", true, false) {
-                *act = Some(Act::NewGroup(json!([item])));
-                ui.close();
-            }
+                for (i, g) in self.lib.groups.iter().enumerate() {
+                    if menu_item_name(ui, &g.name, true, at == Some(i)) {
+                        if at != Some(i) {
+                            let mut p = item.clone();
+                            p["group"] = json!(g.name);
+                            *act = Some(Act::Run("library.moveItem", p));
+                        }
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                if menu_item(ui, "New Group…", true, false) {
+                    *act = Some(Act::NewGroup(json!([item])));
+                    ui.close();
+                }
+            });
         });
         if menu_item(ui, "Delete", true, false) {
             *act = Some(Act::Run("library.removeItem", item));

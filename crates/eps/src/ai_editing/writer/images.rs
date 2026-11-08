@@ -13,7 +13,7 @@ use crate::ps;
 pub(in crate::ai_editing) const IMAGES: &str = "images that can't be decoded or have more than 33,554,432 pixels are written as their outlines filled mid gray in the editing data for other apps";
 pub(in crate::ai_editing) const IMAGE_DEPTH: &str = "images of 16 bits a channel are written at 8 bits a channel in the editing data for other apps";
 pub(in crate::ai_editing) const LINKS_EMBEDDED: &str =
-    "linked images in opacity masks and pattern tiles are written as embedded images in the editing data for other apps";
+    "linked images in opacity masks, pattern tiles and symbols are written as embedded images in the editing data for other apps";
 
 /// The most pixels an image is written with: as many as the reader reads.
 pub(super) const MAX_PIXELS: u64 = 1 << 25;
@@ -94,7 +94,7 @@ impl Samples {
 impl Writer<'_> {
     /// Image object `im` of transparency `xy`: embedded, a raster ([`Self::raster`]); linked, a
     /// placed file with a preview ([`Self::placed_file`]), except in a part of the data written on
-    /// `%_` lines. One whose pixels can't be read is its outline filled mid gray. Where the art is
+    /// `%_` lines and in a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
     /// cut to a clipping path, the image is in a clipping group of that path.
     pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) {
         let doc = self.doc;
@@ -120,7 +120,11 @@ impl Writer<'_> {
         let fit =
             Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(samples.width), f64::from(im.height.max(1)) / f64::from(samples.height));
         match &im.link {
-            Some(link) if self.hidden == 0 => self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf),
+            Some(link) if self.hidden == 0 && !self.in_symbol => {
+                // Cut to a region, the placed file is in a clipping group.
+                self.placed = cut.is_none();
+                self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf);
+            }
             other => {
                 if other.is_some() {
                     self.warn(LINKS_EMBEDDED);
@@ -154,9 +158,12 @@ impl Writer<'_> {
     /// `[matrix] 0 0 w h w h 8 type alpha reserved 1 0 4 4 0 0`, `%%BeginData:` counting `XI`, its
     /// line end and the color samples, `XI`, the color samples then the alpha channel in binary,
     /// `%%EndData`, `XH`, `%AI5_EndRaster`, `N`. The matrix is an art-space matrix applied to the
-    /// pixels with their rows running downwards, `(u, -v)`, as §8.1's image matrix.
+    /// pixels with their rows running downwards, `(u, -v)`, as §8.1's image matrix; in a symbol's
+    /// art (outside a pattern's tile in it), a matrix in the canvas's space turned y up about art
+    /// space's origin there, as an instance's matrix in it is.
     fn raster(&mut self, s: &Samples, xf: Affine) {
-        let m = matrix(self.to_art * xf * Affine::FLIP_Y);
+        let space = if self.in_symbol && self.defining.is_empty() { self.instance_space } else { self.to_art };
+        let m = matrix(space * xf * Affine::FLIP_Y);
         let (w, h) = (s.width, s.height);
         let alpha = u8::from(s.alpha.is_some());
         let mut payload = Vec::with_capacity(2 + s.color.len() + s.alpha.as_ref().map_or(0, Vec::len));
@@ -233,7 +240,7 @@ fn matrix(m: Affine) -> String {
 }
 
 /// `v` rounded to ten decimals, without trailing zeros (0 when not finite).
-fn precise(v: f64) -> String {
+pub(super) fn precise(v: f64) -> String {
     let r = (v * 1e10).round() / 1e10;
     if !r.is_finite() {
         return if v.is_finite() { format!("{}", v + 0.0) } else { "0".into() };

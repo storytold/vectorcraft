@@ -975,12 +975,12 @@ source = "git+https://github.com/storytold/craft-libs?rev=9be9a63782298ab59cd9b7
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=35a11a94034a984d04c5983e0f28f7826abb4798#35a11a94034a984d04c5983e0f28f7826abb4798"
+source = "git+https://github.com/storytold/craft-libs?rev=b5bc1c95731016287784bfc3e58677dde34d5440#b5bc1c95731016287784bfc3e58677dde34d5440"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=35a11a94034a984d04c5983e0f28f7826abb4798#35a11a94034a984d04c5983e0f28f7826abb4798"
+source = "git+https://github.com/storytold/craft-libs?rev=b5bc1c95731016287784bfc3e58677dde34d5440#b5bc1c95731016287784bfc3e58677dde34d5440"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -1038,7 +1038,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=35a11a94034a984d04c5983e0f28f7826abb4798#35a11a94034a984d04c5983e0f28f7826abb4798"
+source = "git+https://github.com/storytold/craft-libs?rev=b5bc1c95731016287784bfc3e58677dde34d5440#b5bc1c95731016287784bfc3e58677dde34d5440"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
@@ -2978,8 +2978,7 @@ checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
 [[package]]
 name = "linesweeper"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25df1b0c5432893f41bba817150e323703ee5f6d974f3a6808ac7fd7f046d18"
+source = "git+https://github.com/storytold/craft-libs?rev=481f66d287b2a06845f3667a19daf35f0fe958ed#481f66d287b2a06845f3667a19daf35f0fe958ed"
 dependencies = [
  "arrayvec",
  "kurbo 0.13.1",
@@ -6265,6 +6264,7 @@ dependencies = [
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-js",
  "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
@@ -6283,6 +6283,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
+ "craft-pdf",
  "fax",
  "flate2",
  "hayro-ccitt",
@@ -6330,6 +6331,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-testkit",
+]
+
+[[package]]
+name = "vectorcraft-js"
+version = "0.21.0"
+dependencies = [
+ "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]
@@ -6413,8 +6422,10 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "log",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "vectorcraft-color",
  "vectorcraft-doc",

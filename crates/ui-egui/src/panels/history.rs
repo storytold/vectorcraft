@@ -4,7 +4,7 @@ use egui::{Sense, Ui, vec2};
 use serde_json::json;
 
 use crate::theme::Tokens;
-use crate::widgets::menu_item;
+use crate::widgets::{self, menu_item};
 use crate::{VectorcraftApp, icons};
 
 /// Undo (negative) / redo (positive) steps to reach row `target` when `current` is the current
@@ -87,6 +87,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+    widgets::divider(ui);
+    // A click on a row moves to its state at once, so the selected state is the current one.
+    const NEW_DOCUMENT: &str = "edit.newDocumentFromState";
+    let new_document = crate::menus::enabled(app, NEW_DOCUMENT);
+    ui.horizontal(|ui| {
+        if widgets::icon_button_enabled(ui, "file-plus", tl!("New Document from State"), false, new_document, 24.0).clicked() {
+            crate::menus::invoke(app, NEW_DOCUMENT, json!({}));
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -301,6 +310,37 @@ mod tests {
         let revision = app.session.active().unwrap().revision;
         click(&mut app, "Clear History");
         assert_eq!(app.session.active().unwrap().revision, revision, "a click on the disabled item changes nothing");
+    }
+
+    /// The bottom of the panel's New Document from State button makes a new document, the active
+    /// one, from the state a click on a row moved to. The source document stays open at that state.
+    #[test]
+    fn the_new_document_button_makes_a_document_from_the_selected_state() {
+        let mut app = app_with_two_rectangles();
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        let source = app.session.active().unwrap().doc.clone();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        egui_extras::install_image_loaders(&ctx);
+        let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(240.0, 400.0)));
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+        };
+        frame(&mut app, vec![]);
+        let nodes = frame(&mut app, vec![]);
+        let button = nodes.iter().map(|(_, n)| n).find(|n| n.label() == Some("New Document from State")).expect("the button");
+        let at = button.bounds().expect("its bounds");
+        let at = egui::pos2((at.x0 + at.x1) as f32 / 2.0, (at.y0 + at.y1) as f32 / 2.0);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press(true), press(false)]);
+        assert_eq!(app.session.documents().len(), 2);
+        assert_eq!(app.session.active_index(), Some(1), "the new document is the active one");
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.layers[0].children().unwrap().len(), 1, "the art of the selected state");
+        assert!(st.is_dirty(), "the new document is unsaved");
+        assert!(std::sync::Arc::ptr_eq(&app.session.documents()[0].doc, &source), "the source stays at that state");
     }
 
     /// Set History Limit… opens Preferences at Performance, the page with History States.

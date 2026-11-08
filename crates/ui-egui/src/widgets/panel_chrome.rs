@@ -172,10 +172,78 @@ pub fn layout_button(ui: &mut Ui, tiles: &[(u8, u8)], selected: bool, tip: &str)
     resp.on_hover_text(tip).clicked()
 }
 
-/// The chevron cell on the right of a field that opens its preset list (rounded on the right).
+/// The field at `field`, before a preset chevron, when it has the keyboard focus and Alt+↓ (with
+/// no other modifier) was pressed. The key is taken before the field is drawn, so that the field
+/// does not step on it; the caller then opens the preset list ([`open_presets_from_keys`]).
+pub(super) fn alt_down_in_field(ui: &Ui, field: Rect) -> Option<egui::Id> {
+    let focused = ui.memory(|m| m.focused())?;
+    let in_field = ui.ctx().read_response(focused).is_some_and(|r| field.expand(1.0).contains_rect(r.rect));
+    let alt_down = |e: &egui::Event| matches!(e, egui::Event::Key { key: egui::Key::ArrowDown, pressed: true, modifiers, .. } if modifiers.matches_exact(egui::Modifiers::ALT));
+    let pressed = in_field
+        && ui.is_enabled()
+        && ui.input_mut(|i| {
+            let before = i.events.len();
+            i.events.retain(|e| !alt_down(e));
+            i.events.len() != before
+        });
+    pressed.then_some(focused)
+}
+
+/// Opens the preset list of `chevron` when Alt+↓ was pressed in `field` ([`alt_down_in_field`]),
+/// and remembers the field so that [`return_focus_from_presets`] gives it the keyboard focus back
+/// once the list closes. Returns whether it opened the list.
+pub(super) fn open_presets_from_keys(ui: &Ui, chevron: &Response, field: Option<egui::Id>) -> bool {
+    let Some(field) = field else { return false };
+    let popup = egui::Popup::default_response_id(chevron);
+    egui::Popup::open_id(ui.ctx(), popup);
+    ui.data_mut(|d| d.insert_temp(popup.with("return focus"), field));
+    true
+}
+
+/// Whether the preset list of `chevron` is open, read before the list is drawn for
+/// [`keep_enter_in_presets`].
+pub(super) fn presets_open(ui: &Ui, chevron: &Response) -> bool {
+    egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(chevron))
+}
+
+/// Takes this frame's Enter presses after an open preset list was drawn: Enter picks the focused
+/// entry and does not also reach the dialog's OK, as in [`super::dropdowns`]' combo boxes.
+pub(super) fn keep_enter_in_presets(ui: &Ui, was_open: bool) {
+    if was_open {
+        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    }
+}
+
+/// After the preset list of `chevron` was drawn: when a list that Alt+↓ opened has closed (an
+/// entry was picked, or Escape or a click outside closed it), the field gets the keyboard focus
+/// back, unless the focus has moved on to a widget outside the list.
+pub(super) fn return_focus_from_presets(ui: &Ui, chevron: &Response) {
+    let popup = egui::Popup::default_response_id(chevron);
+    let key = popup.with("return focus");
+    let Some(field) = ui.data(|d| d.get_temp::<egui::Id>(key)) else { return };
+    if egui::Popup::is_id_open(ui.ctx(), popup) {
+        return;
+    }
+    ui.data_mut(|d| d.remove::<egui::Id>(key));
+    // The list's entries are drawn in the popup's own layer, whose id is the popup id.
+    let elsewhere = ui.memory(|m| m.focused()).and_then(|id| ui.ctx().read_response(id)).is_some_and(|r| r.layer_id.id != popup);
+    if !elsewhere {
+        ui.memory_mut(|m| m.request_focus(field));
+    }
+}
+
+/// The entry of a preset list that gets the keyboard focus when Alt+↓ opened the list: the
+/// chosen one, else the first. `None` when the list was not opened from the keys.
+pub(super) fn entry_to_focus(opened_from_keys: bool, chosen: impl IntoIterator<Item = bool>) -> Option<usize> {
+    opened_from_keys.then(|| chosen.into_iter().position(|c| c).unwrap_or(0))
+}
+
+/// The chevron cell on the right of a field that opens its preset list (rounded on the right). It
+/// is not a Tab stop: Tab goes from the field to the next field, and Alt+↓ in the field opens the
+/// list ([`alt_down_in_field`]).
 pub(super) fn chevron_cell(ui: &mut Ui, h: f32) -> Response {
     let t = Tokens::get(ui.ctx());
-    let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::click());
+    let (dr, dresp) = ui.allocate_exact_size(vec2(20.0, h), Sense::CLICK);
     ui.painter().rect_filled(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, t.input);
     ui.painter().rect_stroke(dr, CornerRadius { nw: 0, sw: 0, ne: 2, se: 2 }, Stroke::new(1.0, t.input_border), StrokeKind::Inside);
     let c = if !ui.is_enabled() {
