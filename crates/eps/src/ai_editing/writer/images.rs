@@ -120,7 +120,11 @@ impl Writer<'_> {
         let fit =
             Affine::scale_non_uniform(f64::from(im.width.max(1)) / f64::from(samples.width), f64::from(im.height.max(1)) / f64::from(samples.height));
         match &im.link {
-            Some(link) if self.hidden == 0 && !self.in_symbol => self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf),
+            Some(link) if self.hidden == 0 && !self.in_symbol => {
+                // Cut to a region, the placed file is in a clipping group.
+                self.placed = cut.is_none();
+                self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf);
+            }
             other => {
                 if other.is_some() {
                     self.warn(LINKS_EMBEDDED);

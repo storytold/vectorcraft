@@ -20,6 +20,7 @@ mod paints;
 mod styles;
 mod symbols;
 mod texts;
+mod variables;
 
 pub(super) use styles::{LARGE_CANVAS_STYLES, style_links, styled_objects};
 #[cfg(test)]
@@ -34,6 +35,8 @@ pub(super) use paints::{GRADIENT_MIX, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SW
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
 pub(super) use texts::TYPE_ATTRIBUTES;
+#[cfg(test)]
+pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 
 /// How deep symbols, live objects and pattern tiles may nest in one another (deeper art is left
 /// out). Groups and layers need no limit of their own: a document is never deeper than
@@ -168,6 +171,13 @@ pub(super) struct Writer<'a> {
     /// How many parts of the data written on `%_` lines (opacity masks' art, patterns' tiles) the
     /// art being written is in.
     hidden: u32,
+    /// The image just written was written as a placed file.
+    placed: bool,
+    /// The type just written was written as type, not as its outlines.
+    typed: bool,
+    /// The objects bound to variables so far, in the order they are written: each one's id, its XML
+    /// id and the variables it is bound to ([`Self::bound_variables`]).
+    bound: Vec<(vectorcraft_doc::NodeId, String, Vec<String>)>,
     /// The text document: the stories of the type written as text.
     pub(super) texts: texts::TextDoc,
     /// Symbol instances on the layers may be written as instances ([`Self::live_instance`]); false
@@ -240,6 +250,9 @@ impl<'a> Writer<'a> {
             canvas_origin: origin,
             payloads: vec![],
             hidden: 0,
+            placed: false,
+            typed: false,
+            bound: vec![],
             texts: texts::TextDoc::default(),
             cms: vectorcraft_color::cms::active(),
             body: String::new(),
@@ -594,11 +607,15 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`])
-    /// or an opacity mask (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art (its symbol's
-    /// entries first, see [`Self::define_symbol`]).
+    /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),
+    /// is bound to variables ([`Self::bound_variables`]; without a name, it gets an XML id and an
+    /// empty `AIArtName`), has an opacity mask (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art
+    /// (its symbol's entries first, see [`Self::define_symbol`]).
     fn dictionary(&mut self, n: &Node) {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
+        let placed = std::mem::take(&mut self.placed);
+        let typed = std::mem::take(&mut self.typed);
+        let bound = self.bound_variables(n, placed, typed);
         let mut mask = n.extras().mask.as_deref();
         // Masks nested too deep are left out (an empty mask would hide the object).
         if mask.is_some() && self.nest >= MAX_NEST {
@@ -609,16 +626,23 @@ impl<'a> Writer<'a> {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
         };
-        if name.is_none() && mask.is_none() && entries.is_none() {
+        if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() {
             return;
         }
         self.body.push_str("%_/ArtDictionary :\n");
         if let Some(e) = entries {
             self.body.push_str(&e);
         }
-        if let Some(name) = name {
-            let id = self.take_id(name);
+        if name.is_some() || !bound.is_empty() {
+            let id = self.take_id(name.unwrap_or("XMLID"));
             let _ = writeln!(self.body, "%_/XMLUID : {} ; (AI10_ArtUID) ,", ps::bytes(id.as_bytes()));
+            if name.is_none() {
+                // The XML id names the object unless the dictionary gives it another name.
+                self.body.push_str("%_() /String (AIArtName) ,\n");
+            }
+            if !bound.is_empty() {
+                self.bound.push((n.id, id, bound));
+            }
         }
         if let Some(m) = mask {
             self.mask(m);
@@ -1045,6 +1069,7 @@ impl<'a> Writer<'a> {
             None
         };
         let Some(((story, frame), lost)) = placed else { return self.outlined_text(n, xy) };
+        self.typed = true;
         if lost {
             self.warn(texts::TYPE_ATTRIBUTES);
         }

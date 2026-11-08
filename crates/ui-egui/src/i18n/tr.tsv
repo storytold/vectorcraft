@@ -5753,6 +5753,19 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Playback Options…	Oynatma Seçenekleri…
+	Insert Stop…	Durak Ekle…
+	Insert Stop	Durak Ekle
+	Record Stop	Durak Kaydet
+	Allow Continue	Devam Etmeye İzin Ver
+	Continue	Devam Et
+	Continue Action	Eyleme Devam Et
+	Delete Action Step	Eylem Adımını Sil
+	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
+	Stop: {message}	Durak: {message}
+@msg	no action is waiting at a stop	durakta bekleyen eylem yok
+@msg	message must be text	"message" metin olmalıdır
+@msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
+@msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
 	Playback Options	Oynatma Seçenekleri
 	Accelerated	Hızlandırılmış
 	Step by Step	Adım Adım
@@ -5931,8 +5944,8 @@ anchor	Points:	Noktalar:
 	Hue/Saturation	Ton/Doygunluk
 	Temperature/Tint	Sıcaklık/Renk Tonu
 @msg	`{id}` is not a colour adjustment	`{id}` bir renk ayarı değil
-@msg	missing `effect`	"isim" eksik
-@msg	`params` must be an object	"gradyan" bir nesne olmalıdır
+@msg	missing `effect`	`effect` eksik
+@msg	`params` must be an object	`params` bir nesne olmalıdır
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Yol Hassasiyet Araçları
 	Anchor Eraser Brush	Bağlantı Noktası Silgi Fırçası
