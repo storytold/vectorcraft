@@ -40,6 +40,8 @@
 //! https://helpx.adobe.com/illustrator/desktop/draw-and-paint/use-strokes/stroke-panel-options.html)
 //! is its own basic filter too, `(Adobe Stroke Offset)`, with its stroke's style and
 //! `StrokeOffsetInside` (1: inside, 0: outside, as its `DisplayString` names it) as entries.
+//! Without that entry, or with it as anything but a `/Bool` 0 or 1, which side it paints isn't
+//! known and the style isn't plain (its objects keep their drawn look).
 //!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
 //! with a pattern or gradient too; strokes with a gradient, a Calligraphic or Art brush or aligned inside or outside too), each with its own

@@ -5281,12 +5281,21 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
 /// whose `StrokeOffsetInside` entry is `inside` (`None`: left out).
 fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
     let switch = inside.map(|v| format!("{v} /Bool (StrokeOffsetInside) ,\n")).unwrap_or_default();
+    offset_stroke_style_with(name, &switch, OFFSET_STROKE)
+}
+
+/// The Stroke Offset stroke of [`offset_stroke_style`]: red, 2 pt, butt caps, miter joins, solid.
+const OFFSET_STROKE: &str = "0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+
+/// An art style named `name`: a blue fill under a Stroke Offset filter whose dictionary holds
+/// `entries` and the stroke style `stroke` (what follows `/StrokeStyle :`).
+fn offset_stroke_style_with(name: &str, entries: &str, stroke: &str) -> String {
     format!(
         "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
          /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
          /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
-         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{switch}(Side) /String (DisplayString) ,\n\
-         /StrokeStyle : 0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{entries}(Side) /String (DisplayString) ,\n\
+         /StrokeStyle : {stroke}\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
          /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
          /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
     )
@@ -5296,7 +5305,7 @@ fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
 fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
     // GUARDS: a style's stroke aligned inside or outside (Stroke panel › Align Stroke) left the object as its drawn look.
     use vectorcraft_doc::StrokeAlign;
-    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None)] {
+    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None), (Some(2), None)] {
         let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", offset_stroke_style("Edge", inside), layer(&styled_square("Edge"))));
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{a:#?}");
@@ -5308,10 +5317,69 @@ fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
                 assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
                 assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
             }
-            // Without the switch, which side it paints isn't known: the drawn look stays.
-            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings),
+            // Without a 0/1 switch, which side it paints isn't known: the drawn look stays.
+            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{inside:?}: {:?}", r.warnings),
         }
     }
+}
+
+/// A Stroke Offset stroke keeps the caps, joins, miter limit, dashes and width profile of its
+/// style, as a Stroke Style Filter's does.
+#[test]
+fn a_stroke_offset_filter_keeps_its_strokes_style() {
+    use vectorcraft_doc::StrokeAlign;
+    let profile = "/Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+                   /Array :\n1 /Real ,\n0.1 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let entries = format!("0 /Bool (StrokeOffsetInside) ,\n{profile}");
+    let stroke = "0 R\n0 1 1 0 1 0 0 XA\n1 J 2 j 3 w 4 M [5 10 ]0 d\n0 XR\n1 0 Xd";
+    let style = offset_stroke_style_with("Edge", &entries, stroke);
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let s = a[0].appearance.stroke().expect("a stroke");
+    assert_eq!((s.align, s.width, s.cap, s.join, s.miter_limit), (StrokeAlign::Outside, 3.0, LineCap::Round, LineJoin::Bevel, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| d.pattern.clone()), Some(vec![5.0, 10.0]));
+    assert_eq!(s.profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 1.0, 1.0), (1.0, 0.1, 0.1)]));
+}
+
+/// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
+/// written as another kind, dashes aligned to corners and path ends, a gradient.
+#[test]
+fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
+    let outside = "0 /Bool (StrokeOffsetInside) ,\n";
+    let gradient = "0 R\nBb\n0 0 0 0 Bh\n2 (Red ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+    let cases = [
+        ("a switch written as a number", offset_stroke_style_with("Edge", "1 /Int (StrokeOffsetInside) ,\n", OFFSET_STROKE)),
+        (
+            "dashes aligned to corners",
+            offset_stroke_style_with(
+                "Edge",
+                &format!("{outside}/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n"),
+                &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"),
+            ),
+        ),
+        ("a gradient", offset_stroke_style_with("Edge", outside, gradient)),
+    ];
+    for (why, style) in cases {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// A listed `[Default]` style whose stroke is aligned outside comes in as the default graphic
+/// style with that stroke.
+#[test]
+fn a_default_style_with_a_stroke_aligned_outside_comes_in() {
+    use vectorcraft_doc::StrokeAlign;
+    let r =
+        read_ok(&format!("{}{}", styles_and_list(&[offset_stroke_style("[Default]", Some(0))], &["[Default]"]), layer(&styled_square("[Default]"))));
+    assert_eq!(style_names(&r.doc), [("[Default]".to_string(), 1)]);
+    let stroke = r.doc.graphic_styles[0].appearance.stroke().map(|s| (s.align, s.width));
+    assert_eq!(stroke, Some((StrokeAlign::Outside, 2.0)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert_eq!(a[0].extras().graphic_style, Some(1));
 }
 
 #[test]
