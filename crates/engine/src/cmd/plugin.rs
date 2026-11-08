@@ -386,10 +386,14 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         // This module takes the id over, so nothing the user approved for the id applies any more.
         registry::revoke(&m.id);
-        s.store_grant(&m.id, None);
     }
     // Installed plug-ins stay installed after a restart (#2541).
     let stored = s.store_plugin(plugin.id(), &bytes);
+    // When the write fails, the old stored module stays in the folder and needs its grant at the
+    // next launch.
+    if stored && !m.asks_permissions() {
+        s.store_grant(&m.id, None);
+    }
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
     // the new version could not replace the stored file, the old one stays disabled.

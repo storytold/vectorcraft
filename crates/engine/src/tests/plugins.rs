@@ -735,6 +735,32 @@ fn a_module_without_permissions_ends_the_grant_kept_in_the_store() {
     run(&mut fourth, "plugin.remove", json!({"id": other}));
 }
 
+/// A module listing no permissions that can't be written to the plug-in store leaves the stored
+/// module in place, so `grants.json` keeps the grant that module needs at the next launch.
+#[test]
+fn a_failed_store_write_keeps_the_stored_grant() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-write");
+    let id = "test.engine.permissions.storefail";
+    let empty = json!({"objects": []});
+    let approved = asking(id, r#"["doc.read"]"#, &empty);
+    let plain = asking(id, "null", &empty);
+    let grants = folder.0.join("grants.json");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&approved), "grant": ["doc.read"]}));
+    let before = std::fs::read(&grants).unwrap();
+    let file = s.stored_plugin_file(id).unwrap();
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&plain)}));
+    assert_eq!(std::fs::read(&grants).unwrap(), before, "the grant stays with the module left in the store");
+    assert!(vectorcraft_plugins::registry::granted(id).is_none(), "the process runs the module that lists nothing");
+
+    std::fs::remove_dir(&file).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A plug-in folder that leaves a module listing no permissions under an id forgets the process's
 /// grant for it, unless a later file in the folder leaves a granted module there. A grant kept in
 /// the plug-in store stays, with the stored module it covers.

@@ -139,7 +139,8 @@ capability model proposed for PhotoCraft plug-ins
   grant stay as they are; once it is, the grant records the new hash. A grant whose hash is not 64 lower-case
   hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
   module that lists no permissions under that id, so the earlier bytes need a new approval. A refused install leaves
-  the grant as it is. A stored module that lists no permissions has any grant for its id forgotten when the `Plug-ins`
+  the grant as it is. When such an install can't write the module to the `Plug-ins` folder, the module already stored
+  there stays and `grants.json` keeps its grant. A stored module that lists no permissions has any grant for its id forgotten when the `Plug-ins`
   folder is attached. The Additional Plug-ins Folder and `plugin.reload` do not change the `Plug-ins` folder: when they
   leave a module that lists no permissions under an id, the process forgets its own grant for that id, and a grant
   kept in `grants.json` stays with the stored module it covers. An entry of `grants.json` that this version can't use (a
