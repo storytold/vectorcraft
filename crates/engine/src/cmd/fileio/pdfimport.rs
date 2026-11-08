@@ -7,7 +7,7 @@ use vectorcraft_doc::{ColorMode, Document};
 use vectorcraft_pdf::{Choice, CropTo, ImportOptions, PdfError, TextAs};
 
 use super::super::colormgmt::Grays;
-use super::super::{Result, Session, bad, f64_or, parse_range, str_param};
+use super::super::{Result, Session, bad, check_numbers, number_or, parse_range, text_param};
 use super::{err, source};
 
 /// The `document.open` options besides the file. The PDF ones (pages, box, password, text,
@@ -80,16 +80,17 @@ impl LoadOptions {
             Some(Value::Number(n)) => Some(n.to_string()),
             Some(v) => return Err(bad(cmd, format!("pages must be a range such as \"2-3\" or a page number, not {v}"))),
         };
-        let crop = choice(cmd, "cropTo", str_param(p, "cropTo").or_else(|| str_param(p, "crop")))?;
-        let password = str_param(p, "password").filter(|s| !s.is_empty()).map(str::to_string);
-        let color_mode = match str_param(p, "colorMode").map(str::to_ascii_lowercase).as_deref() {
+        let (crop_to, crop_alias) = (text_param(p, "cropTo", cmd)?, text_param(p, "crop", cmd)?);
+        let crop = choice(cmd, "cropTo", crop_to.or(crop_alias))?;
+        let password = text_param(p, "password", cmd)?.filter(|s| !s.is_empty()).map(str::to_string);
+        let color_mode = match text_param(p, "colorMode", cmd)?.map(str::to_ascii_lowercase).as_deref() {
             None => None,
             Some("rgb") => Some(ColorMode::Rgb),
             Some("cmyk") => Some(ColorMode::Cmyk),
             Some(m) => return Err(bad(cmd, format!("colorMode must be rgb or cmyk, not `{m}`"))),
         };
         let grays = Grays::param(cmd, p)?;
-        let text_as = choice(cmd, "textAs", str_param(p, "textAs"))?;
+        let text_as = choice(cmd, "textAs", text_param(p, "textAs", cmd)?)?;
         let layers = match p.get("layers").filter(|v| !v.is_null()) {
             None => true,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "layers must be true or false"))?,
@@ -190,6 +191,7 @@ const INFO: &str = "document.pdfInfo";
 pub(super) fn pdf_info(_: &mut Session, p: &Value) -> Result<Value> {
     let bytes = source(p, INFO)?.bytes;
     let o = LoadOptions::from_params(INFO, p)?;
+    check_numbers(p, &["thumbnailSize"], INFO)?;
     // Programs whose header is only `%!` are PostScript too, as `clipboard.importEps` reads them.
     if bytes.starts_with(b"%!") || vectorcraft_pdf::is_postscript(&bytes) {
         return postscript_info(&bytes, p);
@@ -247,7 +249,7 @@ fn postscript_info(bytes: &[u8], p: &Value) -> Result<Value> {
 /// A PNG of `doc`'s first artboard, `thumbnailSize` px (default 160, from 16 to 1024) on its longer
 /// side, base64.
 fn thumbnail(doc: &Document, p: &Value) -> Result<String> {
-    let size = f64_or(p, "thumbnailSize", 160.0).clamp(16.0, 1024.0);
+    let size = number_or(p, "thumbnailSize", 160.0, INFO)?.clamp(16.0, 1024.0);
     let r = doc.artboards.first().map(|a| a.rect).ok_or_else(|| err("the page has no area"))?;
     let png = super::encode(doc, "png", &json!({"scale": size / r.width().max(r.height()).max(1.0)}))?;
     Ok(vectorcraft_format::base64_encode(&png))

@@ -6,9 +6,11 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{CharStyle, Document, Justify, LockedArtboards, Node, NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{Affine, Rect, shapes};
 
+use super::object::choice;
 use super::typecmd::refresh_bounds;
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, find_command, has_clipboard, has_doc, has_selection, ids_param, str_param, targets,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
+    switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -108,11 +110,13 @@ pub fn specs() -> Vec<CommandSpec> {
 
 /// Text objects among `ids` and their descendants.
 pub(crate) fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
+        if let Some(n) = paths.get(id).and_then(|p| d.node_at(p)) {
             n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                if matches!(c.kind, NodeKind::Text(_)) && seen.insert(c.id) {
                     out.push(c.id);
                 }
             });
@@ -180,7 +184,7 @@ struct CaseState {
 
 fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.changeCase";
-    let case = str_param(p, "case").ok_or_else(|| bad(C, "missing case"))?.to_ascii_lowercase();
+    let case = text_param(p, "case", C)?.ok_or_else(|| bad(C, "missing case"))?.to_ascii_lowercase();
     if !["upper", "uppercase", "lower", "lowercase", "title", "sentence"].contains(&case.as_str()) {
         return Err(bad(C, "case must be upper|lower|title|sentence"));
     }
@@ -251,11 +255,14 @@ pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quote
 }
 
 fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
-    let (d, e) = (bool_or(p, "dashes", true), bool_or(p, "ellipsis", true));
+    const C: &str = "type.smartPunctuation";
+    let (d, e) = (switch_or(p, "dashes", true, C)?, switch_or(p, "ellipsis", true, C)?);
+    let quotes = switch_or(p, "quotes", true, C)?;
+    let document = choice(p, C, "scope", &["selection", "document"])? == Some("document");
     let st = s.doc()?;
     // Quotes in the document's style (Document Setup → Type).
-    let q = bool_or(p, "quotes", true).then_some(st.doc.setup.quotes);
-    let ids = if str_param(p, "scope") == Some("document") || st.selection.is_empty() {
+    let q = quotes.then_some(st.doc.setup.quotes);
+    let ids = if document || st.selection.is_empty() {
         let mut v = vec![];
         st.doc.walk(|n| {
             if matches!(n.kind, NodeKind::Text(_)) {
@@ -434,16 +441,19 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     let start = fraction("start")?;
     // `end: null` puts the end bracket back at the end of the path.
     let end = p.get("end").map(|_| fraction("end")).transpose()?;
-    let flip = bool_or(p, "flip", false);
-    let effect = match str_param(p, "effect") {
+    let flip = switch_or(p, "flip", false, C)?;
+    let effect = match text_param(p, "effect", C)? {
         Some(e) => Some(vectorcraft_doc::PathEffect::parse(e).ok_or_else(|| bad(C, format!("unknown effect `{e}`")))?),
         None => None,
     };
-    let align = match str_param(p, "alignToPath") {
+    let align = match text_param(p, "alignToPath", C)? {
         Some(a) => Some(vectorcraft_doc::PathAlign::parse(a).ok_or_else(|| bad(C, format!("unknown alignToPath `{a}`")))?),
         None => None,
     };
-    let spacing = p.get("spacing").and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(-1000.0, 1000.0));
+    let spacing = match p.get("spacing") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(number_or(p, "spacing", 0.0, C)?.clamp(-1000.0, 1000.0)),
+    };
     // Without a flip, when every object already has every value given, the document and its undo
     // history stay as they are.
     let has_values = |t: &TextObject| match &t.kind {
@@ -606,16 +616,21 @@ fn unicode_char(u: &str) -> Option<char> {
 
 fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.insert";
-    let text = match (str_param(p, "char"), str_param(p, "text")) {
-        (Some(c), _) => special_char(c).ok_or_else(|| bad(C, format!("unknown character `{c}`")))?.to_string(),
-        (None, Some(t)) => t.to_string(),
-        _ => match (p.get("code"), str_param(p, "unicode")) {
-            (Some(code), _) => alt_code_char(code.as_u64().ok_or_else(|| bad(C, "`code` must be a whole number"))?)
-                .ok_or_else(|| bad(C, format!("no character has code {code}")))?
-                .to_string(),
-            (None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
-            _ => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
-        },
+    // Every source is type-checked before one is chosen, so a bad value is refused even when a
+    // source ahead of it is given.
+    let ch = text_param(p, "char", C)?;
+    let txt = text_param(p, "text", C)?;
+    let code = match p.get("code").filter(|v| !v.is_null()) {
+        Some(v) => Some(v.as_u64().ok_or_else(|| bad(C, "`code` must be a whole number"))?),
+        None => None,
+    };
+    let uni = text_param(p, "unicode", C)?;
+    let text = match (ch, txt, code, uni) {
+        (Some(c), ..) => special_char(c).ok_or_else(|| bad(C, format!("unknown character `{c}`")))?.to_string(),
+        (None, Some(t), ..) => t.to_string(),
+        (None, None, Some(code), _) => alt_code_char(code).ok_or_else(|| bad(C, format!("no character has code {code}")))?.to_string(),
+        (None, None, None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
+        (None, None, None, None) => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
     };
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
@@ -720,11 +735,11 @@ fn all_texts(d: &Document) -> Vec<NodeId> {
 
 fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findReplace";
-    let find = str_param(p, "find").filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
-    let rep = str_param(p, "replace").unwrap_or("").to_string();
-    let (mc, ww) = (bool_or(p, "matchCase", false), bool_or(p, "wholeWord", false));
-    let ids = match ids_param(p, "ids") {
-        Some(v) => text_ids(&s.doc()?.doc, &v),
+    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
+    let rep = text_param(p, "replace", C)?.unwrap_or("").to_string();
+    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
+    let ids = match p.get("ids").filter(|v| !v.is_null()) {
+        Some(_) => text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?),
         None => all_texts(&s.doc()?.doc),
     };
     let st = s.doc()?;
@@ -777,8 +792,8 @@ fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findNext";
-    let find = str_param(p, "find").filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
-    let (mc, ww) = (bool_or(p, "matchCase", false), bool_or(p, "wholeWord", false));
+    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
+    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
     let st = s.doc()?;
     let all = all_texts(&st.doc);
     let cur = st.selection.objects.first().and_then(|id| all.iter().position(|x| x == id));

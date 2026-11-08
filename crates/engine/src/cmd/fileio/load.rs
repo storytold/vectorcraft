@@ -373,7 +373,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 Ok(o) => super::pdfimport::import(bytes, o, opts, format.id != "pdf"),
                 Err(e) => Err(err(e)),
             };
-            let read = restore_or_import(editing, || {
+            let mut read = restore_or_import(editing, || {
                 // Type all from the text document and nothing that needs the PDF part: the layers
                 // alone, the PDF part not imported. Else what was read of the layers is kept for
                 // reading them with the PDF part.
@@ -439,6 +439,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             // The File Info of a file read from its pages or its editing copy.
             if !read.2 {
                 file_info = opened.as_ref().ok().map(|o| o.file_info());
+            }
+            // A restored document opens on the artboard that the editing copy beside it names as
+            // active, as a file read from that copy does (the restored document never holds one).
+            if read.2
+                && let Some(private) = opened.as_ref().ok().and_then(|o| o.illustrator_data())
+            {
+                read.0.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &read.0);
             }
             read
         }

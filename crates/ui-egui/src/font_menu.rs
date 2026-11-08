@@ -443,12 +443,17 @@ struct WheelField {
 
 #[derive(Clone)]
 struct QueuedWheel {
+    #[cfg(not(target_arch = "wasm32"))]
     frame: u64,
     field: egui::Id,
+    #[cfg(not(target_arch = "wasm32"))]
     menu: egui::Id,
+    #[cfg(not(target_arch = "wasm32"))]
     position: egui::Pos2,
     rect: egui::Rect,
+    #[cfg(not(target_arch = "wasm32"))]
     event: egui::Event,
+    #[cfg(not(target_arch = "wasm32"))]
     amount: f32,
     reset_after: bool,
     positions_after: Vec<egui::Pos2>,
@@ -456,6 +461,7 @@ struct QueuedWheel {
 
 #[derive(Clone)]
 struct ReplayWheel {
+    #[cfg(not(target_arch = "wasm32"))]
     target: egui::LayerId,
     position: egui::Pos2,
     event: egui::Event,
@@ -791,6 +797,7 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
                         egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page => delta.y,
                     };
                     if cfg!(not(target_arch = "wasm32")) && ctx.viewport_id() != raw.viewport_id {
+                        #[cfg(not(target_arch = "wasm32"))]
                         if let Some(position) = pointer {
                             fields.queued.push(QueuedWheel {
                                 frame,

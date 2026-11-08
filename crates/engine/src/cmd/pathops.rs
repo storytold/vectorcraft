@@ -134,7 +134,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Stroke",
             ["Object", "Path"],
             None,
-            "{} replace stroked paths with filled outlines → {ids}",
+            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined, or selected with the art it measures when that art is outlined, becomes a plain group of its art → {ids}",
             has_selection,
             outline_stroke
         ),
@@ -980,6 +980,8 @@ pub(crate) fn replace_leaves(d: &mut Document, root: NodeId, mut f: impl FnMut(&
 fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
+        let before = d.clone();
+        let mut ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
@@ -988,6 +990,9 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
             new_sel.push(id);
             changed += n;
         }
+        // A dimension whose source was outlined stays plain: its link no longer fits that art.
+        ended.retain(|e| e.source_kept(&before, d));
+        super::dimension::restore_unchanged(d, ended);
         if changed == 0 {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }

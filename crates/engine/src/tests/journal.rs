@@ -268,9 +268,24 @@ fn artboard_commands_record_the_selected_artboards_for_a_replay_and_not_for_an_a
     for (id, params, recorded, action) in [
         ("artboard.switchOrientation", json!({}), json!({"selectedArtboards": [1], "scaleArt": false}), json!({"scaleArt": false})),
         ("artboard.rename", json!({"name": "Back"}), json!({"name": "Back", "selectedArtboards": [1]}), json!({"name": "Back"})),
-        ("artboard.duplicate", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
-        ("artboard.cut", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
-        ("artboard.copy", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
+        (
+            "artboard.duplicate",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.cut",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.copy",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
     ] {
         let mut s = Session::new();
         let start = second_artboard_selected(&mut s);
@@ -303,14 +318,14 @@ fn artboard_commands_keep_a_named_artboard_and_note_a_batch_steps_artboards() {
     s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
     assert_eq!(s.journal.last().unwrap().1, json!({"index": 0, "scaleArt": false}));
     s.execute("artboard.duplicate", &json!({"indices": [0]})).unwrap();
-    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true}));
+    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
     let steps = json!([{"command": "artboard.switchOrientation", "params": {}}]);
     s.execute("command.batch", &json!({ "commands": steps })).unwrap();
     assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "scaleArt": false}));
     assert_eq!(documents(&replayed(&s)), documents(&s));
     let action = s.journal_for_action(start);
     assert_eq!(action[0].1, json!({"index": 0, "scaleArt": false}));
-    assert_eq!(action[1].1, json!({"indices": [0], "art": true}));
+    assert_eq!(action[1].1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
     assert_eq!(action[2].1["commands"][0]["params"], json!({"scaleArt": false}));
 }
 
@@ -329,14 +344,14 @@ fn artboard_commands_read_the_recorded_selected_artboards() {
 }
 
 /// `edit.copy` and `edit.cut` run the Artboard tool's copy and take no artboards, so their entries
-/// stay as given.
+/// stay as given, apart from the locked-art preference the Artboard tool's copy notes.
 #[test]
 fn edit_copy_and_cut_with_the_artboard_tool_record_their_params_as_given() {
     for id in ["edit.copy", "edit.cut"] {
         let mut s = Session::new();
         second_artboard_selected(&mut s);
         s.execute(id, &json!({})).unwrap();
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), json!({})), "{id}");
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), json!({"lockedAndHidden": false})), "{id}");
     }
 }
 
