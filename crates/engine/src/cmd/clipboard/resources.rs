@@ -720,8 +720,9 @@ impl<'c> Def<'c> {
         }
     }
 
-    /// Is it the definition `d` has under `name`, once relinked by `r`?
-    fn same_in(&self, d: &Document, name: &str, r: &Relink) -> bool {
+    /// Is it the definition `d` has under `name`, once relinked by `r`? (`brushes`: the brush
+    /// library of `d`.)
+    fn same_in(&self, d: &Document, brushes: &Brushes<'_>, name: &str, r: &Relink) -> bool {
         match self {
             Def::Style(res, s) => {
                 let theirs = if *res == Res::CharStyle { &d.char_styles } else { &d.para_styles };
@@ -738,18 +739,19 @@ impl<'c> Def<'c> {
                 let bare = |p: &PatternDef| PatternDef { name: String::new(), art: vec![], ..p.clone() };
                 d.pattern(name).is_some_and(|x| bare(x) == bare(p) && same_art(r, &x.art, &p.art))
             }
-            Def::Brush(b) => vectorcraft_brush::library(d).iter().any(|x| x.name == name && same_brush(r, x, b)),
+            Def::Brush(b) => brushes.get().iter().any(|x| x.name == name && same_brush(r, x, b)),
         }
     }
 
-    /// The names of its kind in `d` that are its name or a numbered copy of it.
-    fn names_in(&self, d: &Document) -> Vec<String> {
+    /// The names of its kind in `d` (`brushes`: its brush library) that are its name or a numbered
+    /// copy of it.
+    fn names_in(&self, d: &Document, brushes: &Brushes<'_>) -> Vec<String> {
         let (res, name) = self.key();
         let names: Vec<String> = match res {
             Res::CharStyle => d.char_styles.iter().map(|s| s.name.clone()).collect(),
             Res::ParaStyle => d.para_styles.iter().map(|s| s.name.clone()).collect(),
             Res::Symbol => d.symbols.iter().map(|s| s.name.clone()).collect(),
-            Res::Brush => vectorcraft_brush::library(d).into_iter().map(|b| b.name).collect(),
+            Res::Brush => brushes.get().iter().map(|b| b.name.clone()).collect(),
             _ => d.patterns.iter().map(|p| p.name.clone()).collect(),
         };
         names.into_iter().filter(|n| copy_of(name, n)).collect()
@@ -859,9 +861,12 @@ fn components(uses: &[Vec<usize>]) -> Vec<(Vec<usize>, bool)> {
 /// numbered copy of it. The names are picked one definition at a time, in order, and each
 /// definition is compared as soon as the names of those it uses are picked, so a pick that does
 /// not fit is dropped with every combination that follows from it; at most 65,536 comparisons are
-/// made. `None` when no combination fits, or none was found within that many comparisons.
+/// made. `None` when no combination fits, or none was found within that many comparisons. The brush
+/// library of `d` is read once, the first time a brush is compared.
 fn names_of_loop(d: &Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<String>> {
-    let names: Vec<Vec<String>> = looped.iter().map(|def| def.names_in(d)).collect();
+    let library = OnceCell::new();
+    let brushes = Brushes::Lazy(d, &library);
+    let names: Vec<Vec<String>> = looped.iter().map(|def| def.names_in(d, &brushes)).collect();
     if names.is_empty() || names.iter().any(Vec::is_empty) {
         return None;
     }
@@ -876,7 +881,7 @@ fn names_of_loop(d: &Document, looped: &[Def<'_>], r: &Relink) -> Option<Vec<Str
         guess.renames.entry(res).or_default().insert(own.to_string(), names[k][pick[k]].clone());
         let fits = compare_at[k].iter().all(|&i| {
             budget = budget.saturating_sub(1);
-            looped[i].same_in(d, &names[i][pick[i]], &guess)
+            looped[i].same_in(d, &brushes, &names[i][pick[i]], &guess)
         });
         if fits && k + 1 == looped.len() {
             return Some(names.iter().zip(&pick).map(|(l, &p)| l[p].clone()).collect());
@@ -1046,6 +1051,9 @@ impl Clipboard {
         let mut fresh = false;
         // The names in the document of the loop being placed, when it has them all at once.
         let mut matched: BTreeMap<(Res, String), String> = BTreeMap::new();
+        // The document's brush library, read the first time a brush is placed in use order and
+        // stored again after each brush added; nothing else in the loop changes it.
+        let mut library: Option<Vec<Brush>> = None;
         for (def, looped, starts) in steps {
             fresh &= looped;
             if !looped {
@@ -1125,11 +1133,11 @@ impl Clipboard {
                     out.placed(Res::Pattern, &def.name, &p);
                 }
                 Def::Brush(b) => {
-                    let mut lib = vectorcraft_brush::library(d);
+                    let lib = library.get_or_insert_with(|| vectorcraft_brush::library(d));
                     let r = &out.relink;
-                    let p = place(&mut lib, b, same_doc, |ours, theirs| !fresh && same_brush(r, ours, theirs));
+                    let p = place(lib, b, same_doc, |ours, theirs| !fresh && same_brush(r, ours, theirs));
                     if let Some(name) = p.new_name(&b.name) {
-                        vectorcraft_brush::store(d, &lib);
+                        vectorcraft_brush::store(d, lib);
                         added_brushes.insert(name);
                     }
                     out.placed(Res::Brush, &b.name, &p);

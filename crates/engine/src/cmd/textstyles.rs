@@ -125,7 +125,7 @@ macro_rules! style_cmds {
 }
 
 /// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
-const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with and the styles of either kind that type in those patterns is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}})";
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -972,12 +972,19 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
         }
     }
     let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
-    let current = s.doc()?.doc.clone();
-    let mut trial = (*current).clone();
+    let mut trial = (*s.doc()?.doc).clone();
     let mut placed = import_text_styles(&src, &mut trial, chars, paras);
-    // An undo step only when the document changes.
-    if trial != *current {
-        placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
+    // An undo step only when the document changes. The step takes the document the import made,
+    // unless the edit first ends a typing session, which can change the document it starts from.
+    if trial != *s.doc()?.doc {
+        if super::typing_in_progress(s) {
+            placed = s.edit(label, |d, _| Ok(import_text_styles(&src, d, chars, paras)))?;
+        } else {
+            s.edit(label, |d, _| {
+                *d = trial;
+                Ok(())
+            })?;
+        }
     }
     let reply = |para: bool| {
         let names = |added: bool| placed.iter().filter(|p| p.para == para && p.added == added).map(|p| p.name.as_str()).collect::<Vec<_>>();
