@@ -966,6 +966,66 @@ fn a_failing_plugin_command_changes_nothing_and_names_itself() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A command that runs out of its instruction budget leaves the document and its history as they
+/// were, and the error names the plug-in and the command.
+#[test]
+fn a_plugin_command_out_of_budget_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.spin";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    // More steps than a light budget pays for (as the plug-in crate's budget test counts them).
+    install_wat(&mut s, &tpl::spinning(&with_commands(id, "filter", r#"[{"id":"spin","label":"Spin"}]"#), 100_000_000, triangle));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "spin"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Spin: ") && e.contains("instruction budget"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// An `ids` that is not a list, or that holds an entry that is not an object id, is an error naming
+/// `ids` for a plug-in command and for `plugin.run`, and is never read as the selection; left out
+/// or null, `ids` is the selection.
+#[test]
+fn a_malformed_ids_is_refused_not_read_as_the_selection() {
+    let mut s = session();
+    let id = "test.engine.cmds.ids";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let cases = [
+        (grow.as_str(), json!(5)),
+        (grow.as_str(), json!([1, "x"])),
+        (grow.as_str(), json!([-1])),
+        ("plugin.run", json!("all")),
+        ("plugin.run", json!([1.5])),
+    ];
+    for (cmd, ids) in cases {
+        let mut p = json!({"ids": ids});
+        if cmd == "plugin.run" {
+            p["id"] = json!(id);
+        }
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { cmd: c, .. } if c == cmd), "{cmd} {ids}: {e}");
+        assert!(e.to_string().contains("ids must be an array of non-negative integer object ids"), "{cmd} {ids}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before, "{cmd} {ids}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {ids}");
+    }
+    // Left out or null, the command runs on the selection.
+    for p in [json!({}), json!({"ids": null})] {
+        let r = run(&mut s, &grow, p.clone());
+        assert_eq!(r["command"], "grow", "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{p}");
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc().unwrap().doc, before, "{p}");
+    }
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A live effect's commands are listed under Effect › Plug-ins, run under its permissions (it may
 /// not change the document), and labels show bidirectional characters escaped. A malformed
 /// `commands` entry is refused at install, and the error names it.

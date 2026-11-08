@@ -5926,11 +5926,12 @@ permission names, and a `hash` that is not the module's SHA-256. `prefs.set` ret
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
 A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
-`plugin.<id>.<command>` while the plug-in is installed, listed by `command.list` and in its `plugin.list` entry
+`plugin.<id>.<command>` while the plug-in is installed, listed by `command_list` and in its `plugin.list` entry
 (`commands: [{id, command, label, params, paramsSchema}]`). Run it with `{ids?, params?}` (its parameters may also
 be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
-command, and a failing run returns an error that starts with the plug-in's name and the command's label and leaves
-the document as it was.
+command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
+name and the command's label and leaves the document and the undo history as they were. For `plugin.run` and plug-in
+commands, `ids` left out or null means the selection, and an `ids` that is not a list of object ids is an error.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}

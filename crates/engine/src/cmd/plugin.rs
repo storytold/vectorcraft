@@ -33,7 +33,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry};
 
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, str_param, switch_or};
 
 use vectorcraft_plugins::permissions::{self, Grant, Permission};
 
@@ -91,6 +91,19 @@ fn plugin_params(p: &Value) -> Value {
             Value::Object(m.iter().filter(|(k, _)| !matches!(k.as_str(), "id" | "ids")).map(|(k, v)| (k.clone(), v.clone())).collect())
         }
         _ => Value::Object(Map::new()),
+    }
+}
+
+/// The objects command `c`'s params `p` give as `ids`, or `None` when `p` leaves it out or gives
+/// null. A value that is not a list, or an entry that is not a non-negative integer, is an error
+/// naming `ids`: a malformed list is never read as the selection.
+fn given_ids(c: &str, p: &Value) -> Result<Option<Vec<NodeId>>> {
+    let key = "ids";
+    let malformed = || bad(c, format!("{key} must be an array of non-negative integer object ids"));
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(a)) => a.iter().map(|v| v.as_u64().map(NodeId).ok_or_else(malformed)).collect::<Result<Vec<_>>>().map(Some),
+        Some(_) => Err(malformed()),
     }
 }
 
@@ -164,7 +177,7 @@ impl FilterRun {
         let mut params = Value::Object(resolved.map_err(|e| bad(c, e.to_string()))?);
         let may = m.permissions();
         let st = s.doc()?;
-        let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
+        let selected = given_ids(c, p)?.unwrap_or_else(|| st.selection.objects.clone());
         // Without `doc.read` a filter is given no objects: it can only add new ones.
         let inputs = if may.contains(&Permission::DocRead) { objects::filter_targets(&st.doc, &selected) } else { Vec::new() };
         let parent = st.insertion_parent();
@@ -362,7 +375,8 @@ fn spec_of(p: &Plugin, c: &Command) -> &'static CommandSpec {
     let label = c.shown_label();
     let top = if m.kind == Kind::Effect { "Effect" } else { "Object" };
     let name = permissions::display_text(m.name.trim(), permissions::MAX_SHOWN_NAME);
-    let mut fields = String::from("ids?: [..] (default: the selection), params?: {…} (its parameters; or give them as top-level keys)");
+    let mut fields =
+        String::from("ids?: [object id] (left out or null: the selection), params?: {…} (its parameters; or give them as top-level keys)");
     let doc = m.for_command(c).params_doc();
     if let Some(own) = doc.strip_prefix('{').and_then(|d| d.strip_suffix('}')).filter(|d| !d.is_empty()) {
         fields.push_str(", ");
@@ -692,7 +706,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
         ),

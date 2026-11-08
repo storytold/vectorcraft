@@ -25,7 +25,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 |---|---|---|
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
-| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
+| `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed. With `hash`, a module whose SHA-256 differs is refused. |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when `plugin.install` needs `grant`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
@@ -64,14 +64,16 @@ replaced by a module without it.
   shortcut. A manifest cannot give a command a shortcut.
 - **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
   parameters. `run`, MCP and `command.batch` call it as `plugin.<id>.<command>` with `{"ids"?: [...], "params"?: {…}}`
-  (its parameters may also be top-level keys). `command.list` lists it, and `plugin.list` lists a plug-in's commands
-  as `commands: [{id, command, label, params, paramsSchema}]`.
+  (its parameters may also be top-level keys). MCP's `command_list` and `list_commands` list it, and `plugin.list`
+  lists a plug-in's commands as `commands: [{id, command, label, params, paramsSchema}]`.
 - **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
   through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
   `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
   [permissions](#permissions): a live effect's command has no `doc.write`, so an output that changes the document is
-  refused. One run is one undo step named after the command. A run that traps or fails leaves the document as it was,
-  and the error starts with the plug-in's name and the command's label (`“Cmd Test” › Grow: …`).
+  refused. `ids` left out or null means the selection; an `ids` that is not a list of object ids is an error. One run
+  is one undo step named after the command. A run that traps, runs out of its instruction budget or fails leaves the
+  document and the undo history as they were, and the error starts with the plug-in's name and the command's label
+  (`“Cmd Test” › Grow: …`).
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
