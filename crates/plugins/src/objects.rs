@@ -6,9 +6,10 @@
 //! in-range coordinates, capped counts, clamped colours) before it reaches the document.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use vectorcraft_color::cms::{self, Cms, CmykLut, lab};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, SymbolBoxes,
@@ -288,8 +289,8 @@ fn affine_json(xf: Affine) -> Value {
 ///   or [`MAX_INPUT_RUNS`];
 /// - an image (`"image"`): `pixelSize: [w, h]`, `colorMode: "rgb"|"cmyk"|"gray"|"unknown"`,
 ///   `linked`, `pixelsOmitted`, and for an embedded image of at most [`MAX_INPUT_PIXELS`]
-///   `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top. A linked image's file
-///   and path are never read or given;
+///   `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top (a CMYK image's inks
+///   through the working CMYK profile). A linked image's file and path are never read or given;
 /// - a symbol instance (`"symbolInstance"`): `symbolId` (the symbol's name), `missing: true` when
 ///   the document has no such symbol, and `overrides: {}`.
 pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
@@ -424,6 +425,9 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
     if bytes == 0 || bytes.div_ceil(3) * 4 > max as u64 {
         return None;
     }
+    if b.is_cmyk() {
+        return cmyk_rgba(b, w, h);
+    }
     let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
     if reader()?.into_dimensions().ok()? != (w, h) {
         return None;
@@ -435,6 +439,51 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
     r.limits(limits);
     let img = r.decode().ok()?.into_rgba8();
     (img.dimensions() == (w, h)).then(|| img.into_raw())
+}
+
+/// The inks → XYZ table of [`cmyk_rgba`] and the color settings it was built with.
+static CMYK_DISPLAY: Mutex<Option<(Arc<Cms>, Arc<CmykLut>)>> = Mutex::new(None);
+
+/// The pixels of CMYK image `b` as straight RGBA, when it is `w` × `h` pixels (checked from its
+/// header first): its inks shown through the working CMYK profile, by a table built as
+/// `vectorcraft-render`'s `InkLut` builds its own and kept for the active color settings.
+fn cmyk_rgba(b: &ImageBlob, w: u32, h: u32) -> Option<Vec<u8>> {
+    if b.header_size()? != (w, h) {
+        return None;
+    }
+    let inks = b.cmyk().filter(|i| (i.width, i.height) == (w, h))?;
+    let lut = {
+        let cms = cms::active();
+        let mut slot = CMYK_DISPLAY.lock().unwrap_or_else(|e| e.into_inner());
+        match &*slot {
+            Some((owner, lut)) if Arc::ptr_eq(owner, &cms) => lut.clone(),
+            _ => {
+                let lut = Arc::new(CmykLut::build(|c| {
+                    let [x, y, z] = lab::lab_to_xyz(cms.cmyk_display_lab(c));
+                    [x, y, z, 0.0]
+                }));
+                *slot = Some((cms, lut.clone()));
+                lut
+            }
+        }
+    };
+    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let mut out = Vec::with_capacity(inks.data.len());
+    // Runs of one color convert once.
+    let mut last: Option<([u8; 4], [u8; 4])> = None;
+    for p in inks.data.as_chunks::<4>().0 {
+        let rgba = match last {
+            Some((k, v)) if k == *p => v,
+            _ => {
+                let [x, y, z, _] = lut.apply(p.map(|v| f32::from(v) / 255.0));
+                let [r, g, b] = lab::xyz_to_srgb([x, y, z]).map(q);
+                last = Some((*p, [r, g, b, 255]));
+                [r, g, b, 255]
+            }
+        };
+        out.extend_from_slice(&rgba);
+    }
+    Some(out)
 }
 
 fn out_err(at: &str, msg: impl std::fmt::Display) -> Error {

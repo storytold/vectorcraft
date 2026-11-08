@@ -458,6 +458,25 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     }
 }
 
+/// A CMYK image's pixels are its inks as the working CMYK profile shows them on the canvas: black
+/// ink alone is the profile's black, not RGB black.
+#[test]
+fn cmyk_image_pixels_go_through_the_working_cmyk_profile() {
+    use vectorcraft_color::cms::{self, lab};
+    let (mut d, _, layer, _) = mixed();
+    let inks = vectorcraft_doc::cmyk::Inks::new(2, 1, vec![0, 0, 0, 255, 0, 0, 0, 0]).unwrap();
+    d.images.insert("k".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+    let n = image_node(&mut d, "k", (2, 1), None);
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let o = encode_read_only(&d, d.node(id).unwrap()).unwrap();
+    assert_eq!((&o["colorMode"], &o["pixelsOmitted"]), (&json!("cmyk"), &json!(false)));
+    let pixels = craft_vectorcraft_format::base64::decode(o["pixelsBase64"].as_str().unwrap()).unwrap();
+    let shown = |c: [f32; 4]| lab::xyz_to_srgb(lab::lab_to_xyz(cms::active().cmyk_display_lab(c))).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    let ([r, g, b], [r2, g2, b2]) = (shown([0.0, 0.0, 0.0, 1.0]), shown([0.0; 4]));
+    assert_eq!(pixels, [r, g, b, 255, r2, g2, b2, 255]);
+    assert_ne!(&pixels[..3], &[0, 0, 0], "not converted without the profile");
+}
+
 /// A symbol instance comes with the symbol it shows and its transform, never its art; one whose
 /// symbol the document lacks says so.
 #[test]

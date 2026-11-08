@@ -429,8 +429,9 @@ In this example the character and paragraph styles are cut short; a filter gets 
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
-  `pixelsOmitted: false`. The pixels of all the images in one input take at most 16 MiB in base64. A larger image, one
-  whose pixels don't fit what the images before it in paint order left, and a linked image (`linked: true`) have
+  `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile. The pixels of all the
+  images in one input take at most 16 MiB in base64. A larger image, one whose pixels don't fit what the images before
+  it in paint order left, and a linked image (`linked: true`) have
   `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. The host never
   reads a linked image's file for a filter and never gives its path.
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
