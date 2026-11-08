@@ -1145,6 +1145,7 @@ font-technology	Variable	Variabel
 	Stroke When Editable	Kontur, wenn bearbeitbar
 	Fill Color	Flächenfarbe
 	Fill New Type Objects With Placeholder Text	Neue Textobjekte mit Platzhaltertext füllen
+	Start Lists From Typed Markers	Listen aus getippten Aufzählungszeichen beginnen
 	Fill Rule	Füllregel
 	Fill with Placeholder Text	Mit Platzhaltertext füllen
 	Fill:	Fläche:
@@ -1155,6 +1156,7 @@ font-technology	Variable	Variabel
 	Find Font…	Schrift suchen…
 	Find Next	Weitersuchen
 	Find Objects	Objekte suchen
+	Compare with Image	Mit Bild vergleichen
 	First Page	Erste Seite
 	First-line Left Indent	Einzug links in erster Zeile
 	Fisheye…	Fischauge…
@@ -3020,6 +3022,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Ausgewählte Farbfelder
 	Selected Swatches Only	Nur ausgewählte Farbfelder
 	Selection	Auswahl
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rechteckauswahl
+	Touching	Berührt
+	Fully Enclosed	Vollständig eingeschlossen
+	Drag Direction	Ziehrichtung
 	Selection & Anchor Display	Auswahl und Ankerpunktanzeige
 	Selection Only	Nur Auswahl
 	Selection Tool	Auswahl-Werkzeug
@@ -3157,6 +3164,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Farbiges Papier simulieren
 	Simulate Paper	Papier simulieren
 	Double Column	Zweispaltig
+	Keep Tools Beside the Canvas	Werkzeuge neben der Arbeitsfläche
 	Single Left Quotation Mark	Einfaches öffnendes Anführungszeichen
 	Single Quotes:	Einfache Anführungszeichen:
 	Single Right Quotation Mark	Einfaches schließendes Anführungszeichen
@@ -3702,6 +3710,7 @@ effect	Points	Punkte
 	Zoom to Selection	Auf Auswahl zoomen
 	Zoom Tool	Zoom-Werkzeug
 	Zoom with Mouse Wheel	Mit Mausrad zoomen
+	Scroll Sideways with Cmd/Ctrl + Wheel	Mit Cmd/Ctrl + Mausrad horizontal scrollen
 	Scrub Numeric Fields by Dragging	Zahlenfelder durch Ziehen ändern
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} Datei in {folder} {note}. Paketordner anzeigen?|{n} Dateien in {folder} {note}. Paketordner anzeigen?
 @plural	{n} linked file not found|{n} linked files not found	{n} verknüpfte Datei nicht gefunden|{n} verknüpfte Dateien nicht gefunden
@@ -4823,6 +4832,9 @@ theme	Appearance	Erscheinungsbild
 @msg	the Pixar file's image data is damaged	die Bilddaten der Pixar-Datei sind beschädigt
 @msg	the JPEG 2000 file can't be read	die JPEG-2000-Datei kann nicht gelesen werden
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	die JPEG-2000-Datei enthält einen nicht unterstützten Farbraum oder JPX-Inhalt
+@msg	the HEIC or HEIF file can't be read	die HEIC- oder HEIF-Datei kann nicht gelesen werden
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	die HEIC- oder HEIF-Datei enthält eine Bildart, die nicht gelesen werden kann
+@msg	HEIC and HEIF images can't be opened in this build	HEIC- und HEIF-Bilder können in diesem Build nicht geöffnet werden
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	das PSD-Bild ist zu groß zum Lesen ({_1} × {_2} Pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ZIP-komprimierte 32-Bit-PSD-Bilddaten mit Vorhersage können nicht gelesen werden
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-Bit-PSD-Dateien in diesem Farbmodus können nicht gelesen werden
@@ -5078,6 +5090,11 @@ lighting	Light	Licht
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}
 	Load EPS into Clipboard	EPS in die Zwischenablage laden
 @msg	an image of {w} × {h} pixels is too large to draw	ein Bild mit {w} × {h} Pixeln ist zu groß, um gezeichnet zu werden
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: kein PNG-, JPEG-, WebP-, TIFF- oder BMP-Bild
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	das Bild hat {iw} × {ih} Pixel und die Zeichenfläche in dieser Breite {rw} × {rh} Pixel: ihre Proportionen unterscheiden sich
+@msg	`threshold` must be a number from 0 to 1	`threshold` muss eine Zahl von 0 bis 1 sein
+@msg	background {v}: a color such as "#808080"	background {v}: eine Farbe wie "#808080"
+@msg	comparing with an image file isn't available in the browser	der Vergleich mit einer Bilddatei ist im Browser nicht verfügbar
 @msg	an image of {w} × {h} pixels is shown at reduced size	ein Bild mit {w} × {h} Pixeln wird verkleinert angezeigt
 @msg	the image can't be read as a texture	das Bild kann nicht als Struktur gelesen werden
 	Basic	Basis
@@ -5284,6 +5301,9 @@ effect	Soft	Weich
 @msg	too many library panels were opened in this session	in dieser Sitzung wurden zu viele Bibliotheksbedienfelder geöffnet
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Das Bild hat {_1} × {_2} Pixel, mehr als {LARGE_TRACE_SIDE} auf einer Seite: Es wird nachgezeichnet, aber langsamer. Eine Vorgabe mit geringerer Detailtreue oder eine kleinere Kopie des Bildes geht schneller.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Das Bild wurde mit {_1} × {_2} Pixeln nachgezeichnet, verkleinert von {_3} × {_4} (höchstens {_5} Megapixel).
+@msg	byColor must be true or false	byColor muss true oder false sein
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kann Gruppen aus Automatisch gruppieren nicht aufteilen: ohne Automatisch gruppieren nachzeichnen
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kann eine Nachzeichnung mit einem aktiven Pathfinder-Effekt nicht neu gruppieren: ohne byColor umwandeln
 	Snapping	Einrasten
 	Snap to Tangent	An Tangente ausrichten
 	Snap to Perpendicular	An Senkrechter ausrichten
@@ -5850,6 +5870,8 @@ breakText	Glyphs	Glyphen
 	File + Data Set Name	Datei + Datensatzname
 	Data Set Name	Datensatzname
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` muss `fileNumber`, `fileDataSetName` oder `dataSetName` sein
+	Each data set saves over the same file, which keeps only the last data set.	Jeder Datensatz wird über dieselbe Datei gespeichert, die nur den letzten Datensatz behält.
+@msg	save the document with Save As before Save and Close	speichern Sie das Dokument mit „Speichern unter“, bevor Sie „Speichern und schließen“ wählen
 @msg	no free data set file name in destination folder	Kein freier Dateiname für den Datensatz im Zielordner
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

@@ -1934,6 +1934,33 @@ proptest! {
     }
 }
 
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated HEIF boxes and HEVC data must return errors rather than unwind.
+    #[test]
+    fn mutated_heif_files_do_not_panic(which in 0usize..4, cut in 0usize..1300, edits in prop::collection::vec((0usize..1300, any::<u8>()), 0..8)) {
+        let mut bytes = match which {
+            0 => include_bytes!("fixtures/heif/quadrants.heic").to_vec(),
+            1 => include_bytes!("fixtures/heif/quadrants-alpha.heic").to_vec(),
+            2 => include_bytes!("fixtures/heif/quadrants-grid.heic").to_vec(),
+            // Its stream's VUI gives the color description.
+            _ => include_bytes!("fixtures/heif/tones-p3-icc-only.heic").to_vec(),
+        };
+        for (at, byte) in edits {
+            if let Some(slot) = bytes.get_mut(at) { *slot = byte; }
+        }
+        bytes.truncate(cut);
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let params = json!({"name": "a.heic", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        prop_assert!(result.is_ok(), "a.heic: panicked: {:?}", result.err());
+    }
+}
+
 /// The rich document with a hidden layer, saved as SVG with its editing data.
 fn saved_svg() -> String {
     let mut d = rich_doc();
