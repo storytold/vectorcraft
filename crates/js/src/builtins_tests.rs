@@ -85,6 +85,10 @@ fn array_length_and_index_definitions_follow_section_15_4_5_1() {
     truth("var a = [1]; Object.defineProperty(a, 'length', {writable: false}); a[5] = 1; a.length === 1 && !(5 in a)");
     throws("var a = [1]; Object.defineProperty(a, 'length', {writable: false}); Object.defineProperty(a, '3', {value: 1});", "TypeError");
     throws("Object.defineProperty([], 'length', {value: -1})", "RangeError");
+    // Steps 3.c and 3.d convert the new length once with ToUint32 and once with ToNumber.
+    let counted = "var calls = 0; var len = {valueOf: function () { calls++; return 2; }}; var a = [1, 2, 3];";
+    assert_eq!(num(&format!("{counted} Object.defineProperty(a, 'length', {{value: len}}); calls * 10 + a.length")), 22.0);
+    assert_eq!(num(&format!("{counted} a.length = len; calls * 10 + a.length")), 22.0);
     truth("var a = []; Object.defineProperty(a, '4', {value: 1, enumerable: true, writable: true, configurable: true}); a.length === 5");
     throws("var a = Object.freeze([1, 2]); a.push(3);", "TypeError");
 }
@@ -229,6 +233,13 @@ fn join_and_to_string_are_cycle_safe() {
     assert_eq!(string("[null, undefined, 0].join('-')"), "--0");
     assert_eq!(string("Array.prototype.toString.call({join: 1})"), "[object Object]");
     assert_eq!(string("var a = [{toLocaleString: function () { return 'L'; }}, null]; a.push(a); a.toLocaleString()"), "L,,");
+    // A primitive element is converted with ToObject and its toLocaleString is called on the object.
+    assert_eq!(
+        string(
+            "Object.getPrototypeOf(Object(1)).toLocaleString = function () { 'use strict'; return typeof this; }; [1, undefined, 2].toLocaleString()"
+        ),
+        "object,,object"
+    );
 }
 
 #[test]
@@ -501,6 +512,9 @@ fn json_stringify_writes_values_with_replacers_and_indentation() {
     assert_eq!(string("JSON.stringify({toJSON: function (k) { return 'k=' + k; }})"), "\"k=\"");
     assert_eq!(string("JSON.stringify({d: {toJSON: function (k) { return k; }}})"), "{\"d\":\"d\"}");
     assert_eq!(string("JSON.stringify([Object(false), Object(true)])"), "[false,true]");
+    // Number and String objects go through ToNumber and ToString, which call valueOf and toString.
+    assert_eq!(string("var n = Object(5); n.valueOf = function () { return 7; }; JSON.stringify([n])"), "[7]");
+    assert_eq!(string("var s = Object('x'); s.toString = function () { return 'y'; }; JSON.stringify({s: s})"), "{\"s\":\"y\"}");
     assert_eq!(string("JSON.stringify({}, null, 4) + JSON.stringify([], null, 4)"), "{}[]");
     throws("var a = []; a.push(a); JSON.stringify(a)", "TypeError");
     throws("var o = {}; o.x = {y: o}; JSON.stringify(o)", "TypeError");

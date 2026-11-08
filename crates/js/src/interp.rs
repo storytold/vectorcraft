@@ -1272,11 +1272,11 @@ impl Interp {
         }
     }
 
-    /// Assigning to an array's `length` (section 15.4.5.1).
+    /// Assigning to an array's `length` (section 15.4.5.1). [[Put]] defines the value, so the
+    /// value is converted once with ToUint32 and once with ToNumber, as in steps 3.c and 3.d.
     fn set_array_length(&mut self, id: ObjId, v: &Value, throw: bool) -> JsResult<()> {
-        let n = self.to_number(v)?;
-        let new = to_uint32(n);
-        if f64::from(new) != n {
+        let new = to_uint32(self.to_number(v)?);
+        if f64::from(new) != self.to_number(v)? {
             return Err(self.throw(ErrorType::Range, "invalid array length"));
         }
         let Class::Array { length_writable, .. } = self.object(id)?.class else { return internal("not an array") };
