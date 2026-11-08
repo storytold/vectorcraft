@@ -249,6 +249,53 @@ impl Document {
         n
     }
 
+    /// Does this document qualify as a "Large Canvas" document (any artboard larger than 16,383 pt)?
+    pub fn is_large_canvas(&self) -> bool {
+        self.artboards.iter().any(|a| a.rect.width() > crate::DRAWING_AREA_SIDE || a.rect.height() > crate::DRAWING_AREA_SIDE)
+    }
+
+    /// The document's drawing area (canvas boundary), matching Adobe Illustrator's 16,383 pt
+    /// standard canvas (or 163,830 pt for Large Canvas documents).
+    /// It is centered on the first artboard (or origin), as in Illustrator's %AI3_TemplateBox.
+    pub fn drawing_area(&self) -> Rect {
+        let half = if self.is_large_canvas() { crate::LARGE_CANVAS_HALF } else { crate::DRAWING_AREA_HALF };
+        let center = self.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ORIGIN);
+        Rect::new(center.x - half, center.y - half, center.x + half, center.y + half)
+    }
+
+    /// Does bounding box `r` fall completely off the document's drawing area?
+    pub fn falls_off_drawing_area(&self, r: Rect) -> bool {
+        let da = self.drawing_area();
+        r.x1 < da.x0 || r.x0 > da.x1 || r.y1 < da.y0 || r.y0 > da.y1
+    }
+
+    /// The bounding box of ruler guide `g`:
+    /// - For an artboard guide, its span across that artboard.
+    /// - For a canvas guide, its span across the document's [`Document::drawing_area`].
+    pub fn guide_bounds(&self, g: &Guide) -> Rect {
+        match self.guide_span(g) {
+            Some((a, b)) => {
+                if g.vertical {
+                    Rect::new(g.pos, a, g.pos, b)
+                } else {
+                    Rect::new(a, g.pos, b, g.pos)
+                }
+            }
+            None => {
+                let da = self.drawing_area();
+                if g.vertical { Rect::new(g.pos, da.y0, g.pos, da.y1) } else { Rect::new(da.x0, g.pos, da.x1, g.pos) }
+            }
+        }
+    }
+
+    /// The length of ruler guide `g`:
+    /// - For an artboard guide, the width or height of its artboard.
+    /// - For a canvas guide, the side length of the document's [`Document::drawing_area`] (16,383 pt).
+    pub fn guide_length(&self, g: &Guide) -> f64 {
+        let b = self.guide_bounds(g);
+        if g.vertical { b.height() } else { b.width() }
+    }
+
     /// The ruler guides on layer `layer` (not its sublayers'), by index.
     pub fn guides_on(&self, layer: NodeId) -> impl Iterator<Item = (usize, &Guide)> + '_ {
         self.guides.iter().enumerate().filter(move |(_, g)| g.layer == Some(layer))
@@ -257,7 +304,11 @@ impl Document {
     /// Does ruler guide `g` run past `p` (up to `tol` beyond its ends)?
     pub fn guide_passes(&self, g: &Guide, p: Point, tol: f64) -> bool {
         let along = if g.vertical { p.y } else { p.x };
-        self.guide_span(g).is_none_or(|(a, b)| along >= a - tol && along <= b + tol)
+        let (a, b) = self.guide_span(g).unwrap_or_else(|| {
+            let da = self.drawing_area();
+            if g.vertical { (da.y0, da.y1) } else { (da.x0, da.x1) }
+        });
+        along >= a - tol && along <= b + tol
     }
 
     /// Keep the ruler guides `keep` accepts (by index), the selected ones left keeping their

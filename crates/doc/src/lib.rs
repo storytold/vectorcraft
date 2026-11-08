@@ -149,7 +149,7 @@ pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};
 pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
-pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
+pub use limits::{DRAWING_AREA_HALF, DRAWING_AREA_SIDE, DocError, FORMAT_VERSION, LARGE_CANVAS_HALF, LARGE_CANVAS_SIDE, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 

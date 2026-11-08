@@ -512,3 +512,34 @@ fn mask_edit_naming_art_leaves_it() {
     assert!(d.node(a).is_some() && d.node(b).is_some());
     assert_eq!(d.mask_edit, None);
 }
+
+#[test]
+fn drawing_area_and_guide_bounds() {
+    let doc = Document::new(800.0, 600.0);
+    assert!(!doc.is_large_canvas());
+    let da = doc.drawing_area();
+    assert_eq!(da.width(), DRAWING_AREA_SIDE);
+    assert_eq!(da.height(), DRAWING_AREA_SIDE);
+    assert_eq!(da.center(), Point::new(400.0, 300.0));
+
+    let v_guide = Guide::new(true, 100.0);
+    let h_guide = Guide::new(false, 200.0);
+    assert_eq!(doc.guide_bounds(&v_guide), Rect::new(100.0, da.y0, 100.0, da.y1));
+    assert_eq!(doc.guide_bounds(&h_guide), Rect::new(da.x0, 200.0, da.x1, 200.0));
+    assert_eq!(doc.guide_length(&v_guide), DRAWING_AREA_SIDE);
+    assert_eq!(doc.guide_length(&h_guide), DRAWING_AREA_SIDE);
+
+    assert!(doc.guide_passes(&v_guide, Point::new(100.0, 300.0), 1.0));
+    assert!(!doc.guide_passes(&v_guide, Point::new(100.0, da.y1 + 10.0), 1.0));
+
+    // An object beyond the 16,383 pt canvas falls off the drawing area:
+    assert!(!doc.falls_off_drawing_area(Rect::new(0.0, 0.0, 100.0, 100.0)));
+    assert!(doc.falls_off_drawing_area(Rect::new(1_400_000.0, 0.0, 1_400_100.0, 100.0)));
+
+    // Large canvas document:
+    let large_doc = Document::new(30_000.0, 20_000.0);
+    assert!(large_doc.is_large_canvas());
+    let lda = large_doc.drawing_area();
+    assert_eq!(lda.width(), LARGE_CANVAS_SIDE);
+    assert_eq!(lda.height(), LARGE_CANVAS_SIDE);
+}
