@@ -101,6 +101,6 @@ pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geomet
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
-    default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params, new_effect, plugin_revision,
-    scale_effect, upgrade_params,
+    any_plugin_paints_output, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params,
+    new_effect, plugin_revision, scale_effect, upgrade_params,
 };

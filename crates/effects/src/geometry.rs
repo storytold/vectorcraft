@@ -3,6 +3,7 @@ use super::{
     Appearance, AppearanceItem, BezPath, Effect, FillRule, Node, NodeKind, PathData, Rect, StrokeLayer, Value, WarpStyle, distort, stroke, stylize,
     util, warp,
 };
+use vectorcraft_doc::Document;
 
 /// Context the geometry effects may need from the object's appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -22,6 +23,9 @@ pub struct GeomContext<'a> {
     /// The index in `appearance.items` of the fill or stroke whose own effects these are; `None`:
     /// the object's effects.
     pub item: Option<usize>,
+    /// The document that the swatches and patterns named by a live-effect plug-in that paints its
+    /// pieces are looked up in. Without one, a result that names any is refused.
+    pub doc: Option<&'a Document>,
 }
 
 impl<'a> GeomContext<'a> {
@@ -32,7 +36,7 @@ impl<'a> GeomContext<'a> {
             _ => FillRule::NonZero,
         };
         let stroke = n.appearance.stroke().filter(|s| !s.paint.is_none() && s.width > 0.0);
-        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None }
+        Self { stroke, rule, seed: n.id.0, appearance: Some(&n.appearance), item: None, doc: None }
     }
 
     /// The context of the effects on `item`, one of the same object's appearance items: a
@@ -224,7 +228,7 @@ fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomCont
     use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
         let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item };
-        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints).unwrap_or_else(|| path.clone());
+        return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints, ctx.doc).unwrap_or_else(|| path.clone());
     }
     match id {
         "distort.freeDistort" => distort::free_distort(path, b, p, max),

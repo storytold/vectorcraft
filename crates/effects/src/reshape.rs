@@ -173,17 +173,18 @@ fn image_rows(items: &[AppearanceItem]) -> Vec<AppearanceItem> {
 /// The shapes that the image `n`'s own fills and strokes paint ([`image_rows`]), each with its fill
 /// rule and the fill or stroke that paints it: the paths (or compound paths) along its frame that
 /// [`reshape`] makes, with each fill's or stroke's geometry effects applied as the renderer applies
-/// them. Empty for anything but an image with such fills or strokes.
-pub fn image_paint(n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+/// them. Empty for anything but an image with such fills or strokes. The swatches and patterns that
+/// live-effect plug-ins painting their pieces name are looked up in `doc`.
+pub fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
     if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
         return vec![];
     }
-    let Some(art) = reshape(None, n, None) else { return vec![] };
+    let Some(art) = reshape(doc, n, None) else { return vec![] };
     let mut out = vec![];
     art.walk(&mut |c| {
         let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
         let Some(g) = c.stroke_path() else { return };
-        let ctx = GeomContext::of(c);
+        let ctx = GeomContext { doc, ..GeomContext::of(c) };
         for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
             let fx = item.effects();
             let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
@@ -296,14 +297,17 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
 pub fn outline_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    outline_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default(), false)
+    outline_art_with(doc, doc, n, symbol_art, &outline_text, &SymbolNodes::default(), false)
 }
 
 /// [`outline_art`] with live objects evaluated through `outline` ([`evaluated_with`]); with
 /// `apart`, also a path or compound path whose Transform effect makes copies
-/// ([`has_transform_copies`]), as the one piece the copies are made from.
+/// ([`has_transform_copies`]), as the one piece the copies are made from. `symbols` is the document
+/// the symbols of the art come from; `paint_doc` is the one the swatches and patterns of painted
+/// pieces are looked up in.
 fn outline_art_with(
-    doc: Option<&Document>,
+    symbols: Option<&Document>,
+    paint_doc: Option<&Document>,
     n: &Node,
     symbol_art: Option<&Node>,
     outline: OutlineHook,
@@ -313,7 +317,7 @@ fn outline_art_with(
     let mut art = match &n.kind {
         NodeKind::Text(_) => outline_text(n)?,
         NodeKind::SymbolInstance { symbol, xf } => {
-            let a = match doc {
+            let a = match symbols {
                 Some(d) => d.place_symbol_art(symbol, symbol_art?, *xf)?,
                 None => {
                     let mut a = symbol_art?.clone();
@@ -333,10 +337,10 @@ fn outline_art_with(
             one.appearance.effects.clear();
             Node::group(n.id, vec![Arc::new(one)])
         }
-        _ if vectorcraft_doc::live::is_live(n) => evaluated_with(doc, n, outline, nodes),
+        _ if vectorcraft_doc::live::is_live(n) => evaluated_with(symbols, n, outline, nodes),
         _ => return None,
     };
-    outline_nested_text(doc, &mut art, false);
+    outline_nested_text(paint_doc, &mut art, false);
     art.opacity = 1.0;
     art.blend = Default::default();
     art.isolate = false;
@@ -491,7 +495,7 @@ pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Nod
     // effect in a group of their own (copies of copies nest), as the reference app expands them
     // (#5612).
     if has_transform_art(n) || has_transform_copies(n) {
-        return as_art_opts(doc, n, symbol_art, &outline_text, &SymbolNodes::default(), true);
+        return as_art_opts(doc, doc, n, symbol_art, &outline_text, &SymbolNodes::default(), true);
     }
     let own_paint = match n.kind {
         NodeKind::Text(_) => !n.appearance.items.is_empty(),
@@ -505,17 +509,34 @@ pub fn expand_outlined(doc: Option<&Document>, n: &Node, symbol_art: Option<&Nod
 
 /// [`reshape`] without its checks (no geometry effects: just the art).
 pub(crate) fn as_art(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    as_art_with(doc, n, symbol_art, &outline_text, &SymbolNodes::default())
+    as_art_with(doc, doc, n, symbol_art, &outline_text, &SymbolNodes::default())
 }
 
-/// [`as_art`] with live objects evaluated through `outline` ([`evaluated_with`]).
-pub(crate) fn as_art_with(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes) -> Option<Node> {
-    as_art_opts(doc, n, symbol_art, outline, nodes, false)
+/// [`as_art`] with live objects evaluated through `outline` ([`evaluated_with`]). `symbols` is the
+/// document the symbols of the art come from; `paint_doc` is the one the swatches and patterns of
+/// painted pieces are looked up in.
+pub(crate) fn as_art_with(
+    symbols: Option<&Document>,
+    paint_doc: Option<&Document>,
+    n: &Node,
+    symbol_art: Option<&Node>,
+    outline: OutlineHook,
+    nodes: &SymbolNodes,
+) -> Option<Node> {
+    as_art_opts(symbols, paint_doc, n, symbol_art, outline, nodes, false)
 }
 
 /// [`as_art_with`]; with `apart`, a path's or compound path's Transform effects make each copy an
 /// object of its own ([`copy_leaf`]) rather than one path of every copy.
-fn as_art_opts(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outline: OutlineHook, nodes: &SymbolNodes, apart: bool) -> Option<Node> {
+fn as_art_opts(
+    symbols: Option<&Document>,
+    paint_doc: Option<&Document>,
+    n: &Node,
+    symbol_art: Option<&Node>,
+    outline: OutlineHook,
+    nodes: &SymbolNodes,
+    apart: bool,
+) -> Option<Node> {
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
@@ -543,13 +564,13 @@ fn as_art_opts(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>, outl
                 Node::group(n.id, rows(below).into_iter().chain([Arc::new(image)]).chain(rows(above)).collect())
             }
         }
-        _ => outline_art_with(doc, n, symbol_art, outline, nodes, apart)?,
+        _ => outline_art_with(symbols, paint_doc, n, symbol_art, outline, nodes, apart)?,
     };
-    reshape_leaves_apart(&mut art, &fx, Budget::EFFECTS, apart, doc);
+    reshape_leaves_apart(&mut art, &fx, Budget::EFFECTS, apart, paint_doc);
     if apart {
         hoist_copies(&mut art);
     }
-    transform_items(&mut art, doc);
+    transform_items(&mut art, paint_doc);
     // Type and symbols in perspective: the art projected onto their plane.
     if let Some(h) = n.projection() {
         project_leaves(&mut art, &h);
@@ -1079,7 +1100,7 @@ fn transform_piece(p: &mut Node, seed: u64, max: Budget, used: &mut Budget, doc:
                 AppearanceItem::Stroke(s) => Some(s),
                 AppearanceItem::Fill(_) => None,
             };
-            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0) };
+            let ctx = GeomContext { stroke, rule, seed, appearance: Some(&appearance), item: Some(0), doc };
             let out = crate::geometry::apply_geometry_within(std::slice::from_ref(&e), &path, bounds, &ctx, room);
             *used = used.minus(before).plus(Budget::of(&out));
             set_geometry(leaf, out, rule);
@@ -1237,14 +1258,21 @@ fn placed_count(n: &Node) -> usize {
 /// `n` with type anywhere inside it outlined and live objects evaluated, so geometry effects on
 /// it reach every member.
 pub(crate) fn outlined_members(doc: Option<&Document>, n: &Node) -> Node {
-    outlined_members_with(doc, n, &outline_text, &SymbolNodes::default())
+    outlined_members_with(doc, doc, n, &outline_text, &SymbolNodes::default())
 }
 
 /// [`outlined_members`] with live objects and symbol instances given as art through `outline`
-/// ([`evaluated_with`]).
-pub(crate) fn outlined_members_with(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes) -> Node {
-    let mut art = evaluated_with(doc, n, outline, nodes);
-    outline_nested_text(doc, &mut art, false);
+/// ([`evaluated_with`]), with the symbols of the art from `symbols` and the swatches and patterns
+/// of painted pieces looked up in `paint_doc`.
+pub(crate) fn outlined_members_with(
+    symbols: Option<&Document>,
+    paint_doc: Option<&Document>,
+    n: &Node,
+    outline: OutlineHook,
+    nodes: &SymbolNodes,
+) -> Node {
+    let mut art = evaluated_with(symbols, n, outline, nodes);
+    outline_nested_text(paint_doc, &mut art, false);
     art
 }
 

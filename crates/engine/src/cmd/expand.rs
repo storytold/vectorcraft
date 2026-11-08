@@ -398,7 +398,7 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !l.appearance.items.iter().any(|i| gradient_fill(i).is_some()) {
         return None;
     }
-    let reshaped = reshaped(l);
+    let reshaped = reshaped(d, l);
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, _) = node_path(l)?;
     let bounds = path.bounds()?;
@@ -408,7 +408,7 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
         let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(l, item, &path, bounds)?;
+            let (fl, path, bounds) = fill_shape(d, l, item, &path, bounds)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -468,14 +468,15 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
 
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
 /// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
-/// visible geometry effect.
-fn reshaped(l: &Node) -> Option<Node> {
+/// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
+/// pieces name are looked up in `doc`.
+fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
     let (path, _) = node_path(l)?;
-    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
+    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext { doc: Some(doc), ..GeomContext::of(l) });
     let mut m = with_path(l, g);
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some(m)
@@ -484,13 +485,13 @@ fn reshaped(l: &Node) -> Option<Node> {
 /// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
 /// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
 /// `path` as a plain path, and that outline's box.
-fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
+fn fill_shape(doc: &Document, l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
     if !has_geometry(item.effects()) {
         return Some((l.clone(), path.clone(), bounds));
     }
     // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
-    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext::of(l).item(item));
+    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext { doc: Some(doc), ..GeomContext::of(l) }.item(item));
     let b = outline.bounds()?;
     Some((with_path(l, outline.clone()), outline, b))
 }
@@ -777,7 +778,7 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
     {
         return None;
     }
-    let reshaped = reshaped(l);
+    let reshaped = reshaped(d, l);
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, _) = node_path(l)?;
     let bounds = path.bounds()?;
@@ -809,7 +810,7 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
         later -= usize::from(fill.is_some());
         let room = if later > 0 { left.saturating_sub(l.count() + 1) } else { left };
         let tiles = fill.filter(|_| !full).and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(l, item, &path, bounds)?;
+            let (fl, _, bounds) = fill_shape(d, l, item, &path, bounds)?;
             let Some(t) = pattern_tiles(d, &def, xf, bounds, room) else {
                 full = true;
                 return None;

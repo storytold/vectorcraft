@@ -43,6 +43,8 @@ impl Renderer {
             kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
+            painting_plugins: false,
+            paint_names: 0,
             strokes: PtrMap::default(),
             moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
@@ -113,7 +115,7 @@ impl Renderer {
                 return Rendered { width: w, height: h, pixels };
             }
         }
-        self.check_plugins();
+        self.check_plugins(doc);
         // The document's own symbols: proofing rewrites the colors and blend modes of their art.
         self.check_symbols(doc);
         let prepared = proof::prepare(doc, opts, &mut self.proof_art);
@@ -334,7 +336,7 @@ impl Renderer {
 
     /// [`Self::render_node`] with `opts` (e.g. [`RenderOptions::mark_undecoded_images`]).
     pub fn render_node_with(&mut self, doc: &Document, n: &Arc<Node>, w: u16, h: u16, view: Affine, opts: &RenderOptions) -> Option<Rendered> {
-        self.check_plugins();
+        self.check_plugins(doc);
         self.check_symbols(doc);
         let inv = view.inverse();
         let visible = inv.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
@@ -373,7 +375,7 @@ impl Renderer {
         background: Option<[u8; 4]>,
         opts: &RenderOptions,
     ) -> Option<Rendered> {
-        self.check_plugins();
+        self.check_plugins(doc);
         self.check_symbols(doc);
         let b = brush_fx::cull_bounds(&doc.symbol_boxes(), n)?;
         let w = size.clamp(1, MAX_CONTEXT_SIDE) as u16;

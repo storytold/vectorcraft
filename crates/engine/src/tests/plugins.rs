@@ -451,6 +451,136 @@ fn pathfinder_and_baked_appearance_take_painted_pieces_with_swatch_links() {
     assert_eq!(fills, [(square_at(40.0).bounds(), Some(leaf))]);
 }
 
+/// A swatch-linked piece on screen is drawn when the path it comes from is off screen: the
+/// renderer's bounds of the path take in the piece.
+#[test]
+fn a_swatch_linked_piece_is_not_culled_with_its_off_screen_path() {
+    let mut s = session();
+    let id = rect(&mut s, 500.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.culled", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.culled"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// A retained renderer's kept bounds follow the document's swatches: a swatch-linked piece on
+/// screen appears when its swatch is added, though the path it comes from is off screen.
+#[test]
+fn a_retained_renderer_shows_a_piece_once_its_swatch_exists() {
+    let mut s = session();
+    let id = rect(&mut s, 500.0, "#ff0000");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.lateleaf", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.lateleaf"}));
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = vectorcraft_render::Renderer::new();
+    let at_piece = |r: &mut vectorcraft_render::Renderer, s: &Session| {
+        r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50)
+    };
+    assert_eq!(at_piece(&mut r, &s), WHITE, "the piece is refused");
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    assert_eq!(at_piece(&mut r, &s), GREEN, "the piece is drawn with its swatch");
+}
+
+/// Object › Expand of a gradient fill takes the geometry of a piece linked to the document's swatch.
+#[test]
+fn expanding_a_gradient_fill_takes_a_swatch_linked_piece() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear"}}));
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.expandref", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandref"}));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "object.expand", json!({"object": false, "fill": true, "stroke": false}));
+    let img = drawn(&s);
+    assert_eq!(img.pixel(15, 15), WHITE, "the input path is gone");
+    assert_ne!(img.pixel(50, 50), WHITE, "the piece's geometry is filled");
+}
+
+/// The geometry of a painted result that names a swatch counts only when the document has that
+/// swatch: without a document, and with one that lacks it, the effect keeps its input.
+#[test]
+fn painted_geometry_is_used_only_when_its_references_are_in_the_document() {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_with};
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.geomref", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.geomref"}));
+    let n = node(&s, id);
+    let path = n.path_data().unwrap().clone();
+    let input = path.bounds().unwrap();
+    let geometry = |doc: Option<&vectorcraft_doc::Document>| {
+        apply_geometry_with(&n.appearance.effects, &path, input, &GeomContext { doc, ..GeomContext::of(&n) }).bounds()
+    };
+    assert_eq!(geometry(None), Some(input), "no document");
+    assert_eq!(geometry(Some(&s.doc().unwrap().doc)), Some(input), "no such swatch");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    assert_eq!(geometry(Some(&s.doc().unwrap().doc)), square_at(40.0).bounds(), "the piece's geometry");
+}
+
+/// Type with a painted effect, in a group with a live Pathfinder effect: the operation takes the
+/// piece linked to the document's swatch.
+#[test]
+fn pathfinder_takes_the_swatch_linked_pieces_of_type() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 20}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.typepaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [t.0], "effect": "plugin.test.engine.typepaint"}));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.divide"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// Type whose fill has a painted effect, in a group with a geometry effect inside a live Pathfinder
+/// effect: the operation takes the piece linked to the document's swatch.
+#[test]
+fn pathfinder_takes_swatch_linked_pieces_of_type_in_a_reshaped_group() {
+    let mut s = session();
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 20}))["id"].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.memberpaint", true), &leaf_square()));
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "plugin.test.engine.memberpaint", "item": 0}));
+    let inner = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [inner.0], "effect": "path.offsetPath", "params": {"offset": 0}}));
+    let outer = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [outer.0], "effect": "pathfinder.divide"}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+}
+
+/// A painted effect on an image's own fill that links its piece to a swatch: hit tests and bounds
+/// use the piece the canvas draws.
+#[test]
+fn an_image_s_painted_fill_is_hit_and_measured_as_drawn() {
+    let mut s = session();
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    let out = json!({"objects": [{"path": square_at(120.0), "fills": [leaf]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.imagepaint", true), &out));
+    run(&mut s, "select.set", json!({"ids": [im.0]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    run(&mut s, "effect.apply", json!({"effect": "plugin.test.engine.imagepaint", "item": 0}));
+    assert_eq!(drawn(&s).pixel(130, 50), GREEN, "the canvas draws the piece");
+    let doc = &s.doc().unwrap().doc;
+    assert!(vectorcraft_doc::hit::hit_test(doc, Point::new(130.0, 50.0), Default::default()).is_some(), "a click on the piece hits the image");
+    let boxes = doc.symbol_boxes();
+    assert!(doc.node(im).unwrap().reach_bounds_with(&boxes).unwrap().x1 >= 140.0, "the bounds take in the piece");
+}
+
 /// A path with a painted effect takes part in a Pathfinder operation as its pieces, each with its
 /// own paint and the path's opacity: Divide on a group holding it makes one face per piece,
 /// painted as the piece is.

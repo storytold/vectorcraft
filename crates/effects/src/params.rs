@@ -155,6 +155,11 @@ pub fn has_painted_plugin_effect(n: &Node) -> bool {
     n.appearance.effects.iter().any(painted) || n.appearance.items.iter().any(|i| i.effects().iter().any(painted))
 }
 
+/// Is a live-effect plug-in that paints the pieces it returns installed?
+pub fn any_plugin_paints_output() -> bool {
+    vectorcraft_plugins::registry::list().iter().any(|p| vectorcraft_plugins::effect::paints_output(&p.manifest().id))
+}
+
 /// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
 pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()

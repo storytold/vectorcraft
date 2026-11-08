@@ -203,12 +203,12 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
         // with its own paints, as the renderer draws it.
         NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. } if !fx.is_empty() => {
             let painted = crate::reshape::has_painted_effects(n).then(|| crate::reshape::reshape(doc, n, None)).flatten();
-            Some(painted.unwrap_or_else(|| reshaped(n, n)))
+            Some(painted.unwrap_or_else(|| reshaped(n, n, doc)))
         }
         NodeKind::Group { .. } | NodeKind::Layer { .. } if !fx.is_empty() => match compound_shape_art_in(doc, n, hook, nodes) {
-            Some(area) => Some(reshaped(&area, n)),
+            Some(area) => Some(reshaped(&area, n, doc)),
             None => {
-                let mut m = crate::reshape::outlined_members_with(None, n, outline, nodes);
+                let mut m = crate::reshape::outlined_members_with(None, doc, n, outline, nodes);
                 crate::reshape::reshape_leaves(&mut m, &fx, doc);
                 without_geometry_effects(&mut m);
                 Some(m)
@@ -229,19 +229,20 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
         }
         NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => None,
         _ if crate::needs_outline(n) && (vectorcraft_doc::live::is_live(n) || !fx.is_empty()) => {
-            crate::reshape::as_art_with(None, n, None, outline, nodes)
+            crate::reshape::as_art_with(None, doc, n, None, outline, nodes)
         }
         _ => None,
     }
 }
 
 /// `src`, a path, compound path or compound shape's area, as one path reshaped by the visible
-/// geometry effects of `n`, without those effects.
-fn reshaped(src: &Node, n: &Node) -> Node {
+/// geometry effects of `n`, without those effects. The swatches and patterns a live-effect plug-in
+/// that paints its pieces names are looked up in `doc`.
+fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
     let mut m = src.clone();
     if let Some((path, rule)) = geometry(src) {
         let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
-        let g = crate::apply_geometry_with(&n.appearance.effects, &path, bounds, &crate::GeomContext::of(n));
+        let g = crate::apply_geometry_with(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
         m.kind = NodeKind::Path { path: g, rule, live: None, clipping: false, guide: false };
     }
     without_geometry_effects(&mut m);

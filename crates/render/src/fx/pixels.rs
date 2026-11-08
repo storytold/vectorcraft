@@ -11,6 +11,14 @@ use super::{
     RasterFx, Rect, RenderContext, Renderer, Shape, blend_mode, effects, fill_rule, paint, peniko,
 };
 
+/// A hash of the names of `doc`'s swatches and patterns.
+pub(crate) fn paint_names(doc: &Document) -> u64 {
+    let mut h = DefaultHasher::new();
+    doc.swatches_iter().for_each(|s| s.name.hash(&mut h));
+    doc.patterns.iter().for_each(|p| p.name.hash(&mut h));
+    h.finish()
+}
+
 impl Renderer {
     /// Paint `content` through the content-changing effects of `rfx` (Gaussian Blur, Feather, the
     /// Photoshop-style filters and Rasterize) in stack order on its pixels: rendered offscreen over
@@ -472,10 +480,7 @@ impl Renderer {
                 (key, Arc::as_ptr(&blob.bytes) as usize, blob.proxy.as_ref().map(|p| Arc::as_ptr(p) as usize)).hash(h);
             }
         });
-        let names = hash(&mut |h| {
-            doc.swatches_iter().for_each(|s| s.name.hash(h));
-            doc.patterns.iter().for_each(|p| p.name.hash(h));
-        });
+        let names = paint_names(doc);
         let found = (patterns, symbols, images, names, Arc::as_ptr(&cms) as usize);
         let d = match &self.doc_inputs {
             Some((_, d)) if (d.patterns, d.symbols, d.images, d.names, d.cms) == found => d.clone(),

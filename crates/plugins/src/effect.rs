@@ -195,9 +195,14 @@ pub fn paints_output(id: &str) -> bool {
 /// Runs live-effect plug-in `id` on `path` (whose reference box is `bounds`), of an object painted
 /// with `paints`: the new geometry, or `None` when the plug-in isn't installed, isn't an effect, or
 /// fails (the caller then keeps the geometry). For an effect that returns painted pieces, the
-/// geometry is every piece's path in order.
-pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints) -> Option<PathData> {
-    evaluate(id, params, path, bounds, rule, paints).map(|(_, out)| out.geometry())
+/// geometry is every piece's path in order, and `None` when the swatches and patterns they name
+/// are refused as [`apply_painted`] refuses them.
+pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: FillRule, paints: Paints, doc: Option<&Document>) -> Option<PathData> {
+    let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
+    if let Out::Pieces(pieces) = &out {
+        references_found(id, &plugin, pieces, doc)?;
+    }
+    Some(out.geometry())
 }
 
 /// Runs live-effect plug-in `id`, which declares `paintOutput`, as [`apply`] does: its painted
@@ -217,13 +222,19 @@ pub fn apply_painted(
 ) -> Option<Arc<Vec<Piece>>> {
     let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
     let Out::Pieces(pieces) = out else { return None };
-    // The document's swatches and patterns can change while the result stays cached.
-    let checked = painted::check_references(&pieces, doc);
-    if doc.is_some() {
-        note(id, &plugin, checked.as_ref().map(|_| ()));
-    }
-    checked.ok()?;
+    references_found(id, &plugin, &pieces, doc)?;
     Some(pieces)
+}
+
+/// `Some` when every swatch and pattern `pieces` name is in `doc` ([`painted::check_references`]),
+/// recording the outcome for [`last_error`] when there is a document. The document's swatches and
+/// patterns can change while a result stays cached, so each use checks them.
+fn references_found(id: &str, plugin: &crate::Plugin, pieces: &[Piece], doc: Option<&Document>) -> Option<()> {
+    let checked = painted::check_references(pieces, doc);
+    if doc.is_some() {
+        note(id, plugin, checked.as_ref().map(|_| ()));
+    }
+    checked.ok()
 }
 
 /// Runs plug-in `id` as [`apply`] says, or takes its result from the cache: the plug-in and what
