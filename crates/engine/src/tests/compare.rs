@@ -138,7 +138,7 @@ fn a_linked_image_is_drawn_from_its_file_as_a_png_export_draws_it() {
     let r = compare(&mut s, json!({"path": out}));
     assert_eq!(r["over"].as_u64(), r["total"].as_u64(), "{r}");
     let warnings = r["warnings"].as_array().unwrap();
-    assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("output as their previews"), "{r}");
+    assert!(warnings.len() == 1 && warnings[0].as_str().unwrap().contains("1 linked image output as its preview"), "{r}");
     // With type that doesn't fit its frame as well, the warnings come in the export's order.
     let overset =
         s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Ab\nCd\nEf\nGh", "size": 12, "area": {"width": 100, "height": 20}})).unwrap();
