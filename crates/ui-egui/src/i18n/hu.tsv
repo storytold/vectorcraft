@@ -111,6 +111,11 @@
 	32 bit	32 bit
 	32 bits/pixel	32 bit/pixel
 	3D and Materials	3D és anyagok
+	Plane	Sík
+	Extrude	Kihúzás
+	Revolve	Forgatás tengely körül
+	Inflate	Felfújás
+	Select objects, then pick an object type to give them a 3D effect.	Jelöljön ki objektumokat, majd válasszon objektumtípust, hogy 3D-effektust kapjanak.
 	3D Ribbon	3D szalag
 	4 bit	4 bit
 	4-Up	4 nézet
