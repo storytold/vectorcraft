@@ -2047,6 +2047,37 @@ fn gradients_and_patterns_are_read_back() {
     same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
 }
 
+/// A new document's gradient swatches read back with the paint they were written with, not linked
+/// to a swatch, and art filled with one of them reads back linked to it.
+#[test]
+fn gradient_swatches_read_back_unlinked() {
+    let mut doc = Document::new(200.0, 100.0);
+    let Some(Paint::Gradient(sunset)) = doc.swatch("Sunset").map(|s| s.paint.clone()) else { panic!("no Sunset swatch") };
+    let layer = doc.layers[0].id;
+    let linked = gradient_paint(sunset.gradient.clone(), None, Some("Sunset"));
+    let rect = painted(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)), vec![AppearanceItem::Fill(FillLayer::new(linked))]);
+    doc.insert(Some(layer), usize::MAX, rect).unwrap();
+    let back = read_back(&doc);
+    let gradients = |d: &Document| -> Vec<String> {
+        d.swatches_iter()
+            .filter_map(|s| match &s.paint {
+                Paint::Gradient(g) => {
+                    Some(format!("{} {:?} stops={} geom={:?} swatch={:?}", s.name, g.gradient.kind, g.gradient.stops.len(), g.geom, g.swatch))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let want = gradients(&doc);
+    assert_eq!(want.len(), 4, "{want:?}");
+    assert_eq!(gradients(&back), want);
+    let link = back.layers[0].children().and_then(|c| c.first()).map(|n| match n.appearance.items.first().map(AppearanceItem::paint) {
+        Some(Paint::Gradient(g)) => g.swatch.clone(),
+        other => panic!("{other:?}"),
+    });
+    assert_eq!(link, Some(Some("Sunset".to_string())));
+}
+
 #[test]
 fn gradients_and_patterns_write_the_same_bytes_again() {
     let doc = gradients_and_patterns();

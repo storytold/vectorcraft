@@ -1331,6 +1331,22 @@ fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() 
     assert!(d.swatch("Red ink").is_some_and(|s| s.spot));
 }
 
+/// A `.ai` gradient library (a palette of gradient swatches and no layers) gets the palette's
+/// gradient swatches, each holding its gradient without a link to a swatch.
+#[test]
+fn an_ai_file_without_layers_keeps_the_gradients_of_its_palette_unlinked() {
+    let sky = "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\nPB\n%AI5_EndPalette\n";
+    let art = native(&format!("{sky}{palette}"));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "Sky"], "{warnings:?}");
+    let Some(vectorcraft_color::Paint::Gradient(g)) = d.swatch("Sky").map(|s| &s.paint) else { panic!("{:?}", d.swatch("Sky")) };
+    assert_eq!(g.swatch, None, "the swatch's own paint");
+    assert_eq!(g.gradient.stops.len(), 2);
+}
+
 /// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
 /// pattern gets the patterns its editing data defines with the palette's pattern swatches.
 #[test]

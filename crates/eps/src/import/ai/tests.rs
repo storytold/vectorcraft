@@ -906,6 +906,26 @@ fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
     assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
 }
 
+/// A palette's gradient swatch holds its gradient without a link to a swatch, whether it is named
+/// by its gradient or has a name of its own, and the art filled with the gradient links to the
+/// swatch named by the gradient.
+#[test]
+fn a_palette_gradient_swatch_is_not_linked_to_itself() {
+    let gradient = "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n\
+                   Bb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\nPB\n%AI5_EndPalette\n";
+    let filled = format!("Bb\n1 (Sky) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{gradient}{palette}{}", layer(&filled))).doc;
+    for name in ["Sky", "Brand"] {
+        let sw = doc.swatch(name).unwrap_or_else(|| panic!("no {name} swatch"));
+        let Paint::Gradient(g) = &sw.paint else { panic!("{sw:?}") };
+        assert_eq!(g.swatch, None, "{name}'s own paint");
+        assert_eq!(g.geom, None);
+        assert_eq!(g.gradient.stops.len(), 2);
+    }
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("Sky")));
+}
+
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
 #[test]
 fn a_palette_pattern_swatch_takes_its_patterns_shown_name() {
