@@ -5430,6 +5430,19 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Playback Options…	播放選項…
+	Insert Stop…	插入停止…
+	Insert Stop	插入停止
+	Record Stop	記錄停止
+	Allow Continue	允許繼續
+	Continue	繼續
+	Continue Action	繼續動作
+	Delete Action Step	刪除動作步驟
+	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
+	Stop: {message}	停止：{message}
+@msg	no action is waiting at a stop	沒有動作在停止處等待
+@msg	message must be text	message 必須是文字
+@msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
+@msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Playback Options	播放選項
 	Accelerated	加速
 	Step by Step	逐步

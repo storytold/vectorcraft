@@ -5791,6 +5791,19 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Playback Options…	Options d’exécution…
+	Insert Stop…	Insérer un arrêt…
+	Insert Stop	Insérer un arrêt
+	Record Stop	Enregistrer un arrêt
+	Allow Continue	Autoriser la poursuite
+	Continue	Continuer
+	Continue Action	Continuer le script
+	Delete Action Step	Supprimer l’étape du script
+	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
+	Stop: {message}	Arrêt : {message}
+@msg	no action is waiting at a stop	aucun script n’attend à un arrêt
+@msg	message must be text	message doit être du texte
+@msg	allowContinue must be true or false	allowContinue doit valoir true ou false
+@msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Playback Options	Options d’exécution
 	Accelerated	Accélérée
 	Step by Step	Pas à pas

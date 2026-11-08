@@ -875,6 +875,8 @@ document exactly (`restored: true`); when another app changed the pages, or the 
 imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
+The restored document opens on the artboard its editing copy names as active. A file saved with `editingData: false` has
+no editing copy and opens on the first artboard.
 `document.export` / `serialize` to `.ai` (and the CLI's `run --export x.ai` and `convert in.svg out.ai`) write the same file
 without giving the document a path. `options: {aiVersion: "7"}` writes legacy `.ai` files of version 7 instead (the
 PostScript form, which keeps layers, groups, compound paths and clipping groups in apps that read it), one per artboard
@@ -1080,10 +1082,12 @@ PDF 1.3 export.
 
 ### Parameter keys
 
-`command_run`, each step of `command_batch`, `run --cmd … --params` and the control channel's `engine.execute` check
-the keys of `params` against the command's params description (the `params` text `command_list` returns): the object
-it starts with, `{x, width?: pt, name?|title?: …}`, names the keys; `?` marks an optional one. A key it doesn't name
-is refused before the command runs:
+The engine checks the keys of `params` of every command it runs against the command's params description (the
+`params` text `command_list` returns): `command_run`, each step of `command_batch` and of the `command.batch` and
+`action.batch` commands, `run --cmd … --params`, the control channel's `engine.execute`, and the app's own calls. A
+batch with such a step fails before its first step runs. The object the description
+starts with, `{x, width?: pt, name?|title?: …}`, names the keys; `?` marks an optional one. A key it doesn't name is
+refused before the command runs:
 
 ```json
 {"id": "file.new", "params": {"widht": 300}}
@@ -1126,13 +1130,17 @@ one opens as before and draws it as `rgb`:
 ```
 
 A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
-plug-in effect's parameters are resolved against its manifest instead, and `effect.setParams` as a step of
-`command.batch` isn't checked before the batch runs (the effect it edits may only exist once the steps before it ran);
-the command still refuses an effect `color` it can't read. A description with a `…` entry takes more keys than it lists: those of the command it names
+plug-in effect's parameters are resolved against its manifest instead. `effect.setParams` as a step of
+`command.batch` is checked when the step runs, against the effects the steps before it added, and the batch then
+fails with no change. A description with a `…` entry takes more keys than it lists: those of the command it names
 (`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
 of the format they write (one object can carry several formats' options). A command that takes its own reply back
-(`document.setup`, `text.areaOptions`) says so the same way. The app's own journal isn't checked: an action or
-journal recorded by an older version replays as it did, except for an effect `color` that the effect can't read.
+(`document.setup`, `text.areaOptions`) says so the same way.
+
+Saved actions aren't checked this way. When the Actions panel plays an action (Play at any speed, an action's function
+key, the Batch dialog or `ui.action.play`), a key a command no longer reads, recorded by an older version, is ignored
+and the action still plays. `Session::replay` plays a journal the same way. The command still refuses an effect
+`color` or `channel` it can't read.
 
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
@@ -1160,7 +1168,7 @@ These Object menu commands refuse a string, a number or another value that is no
 `` `copy` must be true or false ``, naming the key, and change nothing: `reflectX`, `reflectY`, `random`, `copy`,
 `relative`, `strokes`, `corners`, `objects` and `patterns` in `object.transformEach`; `gray` and `deleteRaster` in
 `object.createObjectMosaic`; `trim` in `object.cropImage`; `allArtboards` in `object.createTrimMarks`; and `byColumn`,
-`moveArtwork` and `patterns` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
+`moveArtwork`, `patterns` and `lockedAndHidden` in `artboard.rearrange`. A null is read as a key left out. `object.createTrimMarks`
 refuses a `style` that is not a string, such as `5`, with `` `style` must be roman or japanese ``, the message it gives
 for a string that names no style.
 
@@ -1844,11 +1852,13 @@ already walks Image Trace. Short agent entry points:
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
   other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
-  `{"format": "vcactions", "version": 1 or 2, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
-  a command id and its params as `command.batch` takes them. `excluded: true` preserves a step but omits it from playback;
-  an absent or false flag includes the step. Files with excluded steps use version 2, so older builds refuse them
-  instead of playing the excluded steps; files without exclusions use version 1. A file with another `format` or a `version` other than
-  1 or 2, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
+  `{"format": "vcactions", "version": 1, 2 or 3, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
+  a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
+  `{message, allowContinue}`. `excluded: true` preserves a step but omits it from playback;
+  an absent or false flag includes the step. Files with stops use version 3, and files with excluded steps and no stops
+  use version 2, so older builds refuse them
+  instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
+  1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
   disabled where there is no open dialog (the web).
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
@@ -1891,7 +1901,29 @@ already walks Image Trace. Short agent entry points:
   action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
   then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. A
   `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
-  here and in Batch….
+  here and in Batch…. An action with an included stop plays up to the stop at any speed and then waits, with its
+  message box open, until `ui.action.continue` or `ui.action.stop`. At Accelerated the steps between two stops are one
+  undoable batch each. The result is then `{results, pending, atStop?}`, with `atStop: true` when the action already
+  waits. Batch… refuses an action with an included stop, and a stop that is excluded does not hold playback.
+- Actions: `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}` inserts a stop. With `set` and
+  `action`, the stop goes into that action, after step `step`, else after its last step, and the command returns
+  `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
+  returns `{recording: true}`. `message` is the text playback shows (default: none), and `allowContinue` (default:
+  false) offers Continue in the message box. An action with an empty message still waits at the stop, which is
+  VectorCraft's own rule. A stop in an action becomes the panel's selected step, and its action and set become the
+  selected ones. An index past the last set, action or step, a param of another type, params that are not an
+  object, or no action and no recording is an error, and then nothing changes. The panel menu's Insert Stop… opens the `actionStopRecord` dialog
+  (`message`, `allowContinue`, `set`, `action`, `step`), whose OK runs this.
+- Actions: `ui.action.continue {}` plays on from the stop the playing action waits at, on the document active now, and
+  closes the stop's message box (`actionStopMessage`). The next step runs at once, or at Accelerated the steps up to
+  the next stop as one undo step. It returns `{results, pending, atStop?}`. With no action waiting at a stop it is an
+  error. The panel's Play Current Selection runs this while an action waits. In the message box, Continue (shown with
+  Allow Continue) runs this, and Stop closes the box while the action keeps waiting for the manual task.
+- Actions: `ui.action.deleteStep {set, action, step}` deletes one step, a stop or a command, of the action at `action`
+  in set `set` (0 is the top set, action or step), and returns `{set, action, step}`. The steps after it keep whether
+  they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one
+  open on a later step of the action follows it up. A missing or invalid index is an error, and then nothing changes.
+  Undo does not restore a deleted step. The panel's Delete Selection runs this for the selected step.
 - Actions: `ui.action.playbackOptions {speed?, seconds?}` sets how the Actions panel plays actions and returns
   `{speed, seconds}`. `speed` is `accelerated` (the default: every step at once), `step` (one step at a time, with the
   window drawn after each step before the next runs) or `pause` (a pause of `seconds` between steps). `seconds` is a
@@ -1901,14 +1933,16 @@ already walks Image Trace. Short agent entry points:
   this. Batch… (`action.batch`) plays every step at once whatever the setting.
 - Actions: `ui.action.stop {}` ends the recording in progress and keeps its steps, in the action `ui.action.new` made
   for it, else in a new action after the last action of its set, and returns `{stopped}`. It also ends an action
-  playing at Step by Step or Pause For: the steps already played stay, and the rest do not play. With nothing
+  playing at Step by Step or Pause For, or one waiting at a stop, whose message box closes: the steps already played
+  stay, and the rest do not play. With nothing
   recording or playing it changes nothing. The panel's Stop Playing/Recording button runs this.
 - Action sets: `ui.actionSet.delete {sets?: [index], ids?: [id]}` deletes the Actions panel's sets at these indexes
   (0 is the top set) with their actions, by default the current set, and returns `{deleted}`. An index past the last
   set is an error, and then no set is deleted. `ids` holds the panel's own set ids, which its question passes: the
   sets with these ids are deleted wherever they are now and `sets` is not read; when one of them no longer exists, the
   command returns an error and deletes no set. A recording into a deleted set stops and keeps no steps; a recording into another set
-  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) asks before it runs
+  goes on in that set. The panel's Delete Selection (the trash button and the panel menu's Delete) deletes a selected
+  step (`ui.action.deleteStep`), else a selected action. Otherwise it asks before it runs
   this for the selected sets, and Shift-click on a set's name selects the sets from the current one to it. Undo does
   not restore a deleted set.
   `ui.actionSet.duplicate {set?: index, action?: index}` copies the action at `action` in set `set` to right after it
@@ -2938,6 +2972,8 @@ for which Object → Expand… is dimmed in the menus; `symbolArt: {fill, stroke
 holds symbol instances that `object` expands, whether only their art holds it, which Fill and Stroke reach only with
 `object` on), and `object.mesh.create` on a gradient-filled object colours the
 mesh points as the gradient paints them, with the colors Object › Expand gives them.
+`object.expand`, `effect.expandAppearance`, `type.createOutlines` and `object.path.outlineStroke` turn a dimension whose
+art they change into a plain group of that art, in the same undo step (see [dimensions.md](dimensions.md)).
 
 ```json
 {"name":"run_command","arguments":{"command":"object.expand","params":{"stroke":false,"gradient":"mesh"}}}
@@ -3088,8 +3124,13 @@ the path it had begun while that stays selected. Its reply's `tool` is the tool 
 `object.path.simplify` takes the amount as `tolerance` (points, 1 by default) or as the Simplify slider's `level`, a whole
 number from 0 (the fewest anchor points) to 100 (the closest fit). Level 50 is a tolerance of 1 pt, and every 10 levels
 halve or double it, so level 0 is 32 pt and level 100 is 1/32 pt. `auto: true` (Auto-Simplify) uses the lowest level
-whose tolerance is at most 1/400 of the selection's longer side, or level 100 when that side is under 12.5 pt. With
-`level` or `auto`, the reply also has the `level` used:
+whose tolerance is at most 1/400 of the selection's longer side, or level 100 when that side is under 12.5 pt. The
+result and the original path stay within `tolerance` of each other, except that a closed subpath that refits to one curve
+is dropped, so a small circle in a compound path can be removed at a large `tolerance`. A segment that would need more
+than 65,536 samples at that tolerance stays as it is, and so does a segment after a run's first 16,777,216 samples or
+2,097,152 result segments. With `straightLines`, such a segment becomes evenly spaced lines, up to 65,536, and past those
+limits the lines can be farther than `tolerance` from the segment. With `level` or `auto`, the reply also has the `level`
+used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}
@@ -3481,7 +3522,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   guide that near.
 - `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
   hidden art, and art that is also on a locked artboard, with the artboard too, and `artboard.setProps {scaleArt: true}`
-  scales it too; off (the default) it stays where it is.
+  scales it too; off (the default) it stays where it is. `artboard.duplicate`, `artboard.copy` and `artboard.cut` copy or
+  cut locked and hidden art only with it on. A `lockedAndHidden` param on any of these commands takes its place.
 - `penRubberBand`, `curvatureRubberBand` (on by default): off, the Pen and Curvature tools draw no preview segment to
   the pointer.
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
@@ -3935,8 +3977,8 @@ isolation mode.
 
 Artboards copy with their art. `artboard.copy {index? | indices?, art?}` puts artboards on the clipboard together
 with the art fully inside each (`index` and `indices` default to the artboards the Artboard tool has selected; `art`
-defaults to the tool's `moveArt` option, Move/Copy Artwork with Artboard; locked and hidden art only with prefs
-`moveLockedWithArtboard`); with the Artboard tool chosen, `edit.copy` does this for the tool's selected artboards and
+defaults to the tool's `moveArt` option, Move/Copy Artwork with Artboard; locked and hidden art only with
+`lockedAndHidden: true`, default: prefs `moveLockedWithArtboard`); with the Artboard tool chosen, `edit.copy` does this for the tool's selected artboards and
 `edit.cut` runs `artboard.cut`, which also deletes them (one artboard is always left: a cut of every artboard fails).
 Then `edit.paste` adds a copy of each artboard, together right of the last one and placed as they lay, with their art
 in the layers it came from, in one undo step (`edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack` put
@@ -3949,6 +3991,9 @@ active one) as `indices`, and a row dragged onto New Artboard passes its artboar
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
 also move the pattern tiles of the copies when `patterns` is true (default: prefs `transformPatternTiles`);
 `edit.paste` leaves the tiles of a pasted artboard's art where they were.
+`artboard.duplicate`, `artboard.copy`, `artboard.cut`, `artboard.move` and `artboard.rearrange` take `lockedAndHidden?`
+(default: prefs `moveLockedWithArtboard`), and with the Artboard tool chosen `edit.copy` and `edit.cut` pass it on. When
+art goes along, the journal records the value, so a replay under another preference takes the same art.
 Every artboard command that takes an `index` fails with `no such artboard` when the `index` is not the
 0-based index of an artboard (past the last one, negative, fractional, a string or null), and the document and the
 clipboard stay as they were.
@@ -3956,8 +4001,8 @@ These artboard commands refuse a string, a number or another value that is not t
 `` `art` must be true or false ``, naming the key, and leave the document, its undo history and the clipboard as they
 were: `moveArt`, `scaleArt`, `strokes`, `corners`, `patterns`, `lockedAndHidden` and an artboard's `locked`,
 `showCenterMark`, `showCrossHairs` and `showVideoSafeAreas` in `artboard.setProps`; `showCenterMark`, `showCrossHairs`
-and `showVideoSafeAreas` in `artboard.new`; `moveArt`, `copy` and `patterns` in `artboard.move`; `art` and `patterns` in `artboard.duplicate`;
-and `art` in `artboard.copy` and `artboard.cut`. `artboard.setProps` refuses an artboard's `x`, `y`, `width` or
+and `showVideoSafeAreas` in `artboard.new`; `moveArt`, `copy`, `patterns` and `lockedAndHidden` in `artboard.move`; `art`, `patterns` and `lockedAndHidden` in `artboard.duplicate`;
+and `art` and `lockedAndHidden` in `artboard.copy` and `artboard.cut`. `artboard.setProps` refuses an artboard's `x`, `y`, `width` or
 `height` that is not a number, and `artboard.move` refuses such a `dx` or `dy`, with
 `` `dx` must be a number, not "10" ``. A null is read as a key left out.
 `artboard.new` refuses an `x`, `y`, `width` or `height` that is not a number with the same message, and
@@ -4065,7 +4110,7 @@ editable until a selection leaves it out or an edit moves it off the locked artb
 other art on it. `edit.undo`, `edit.redo` and a failed `command.batch` bring back the selection a step had, with that
 art selected and editable when it was. When another artboard moves, scales or is cut (`artboard.move`,
 `artboard.setProps`, `artboard.cut`, `artboard.rearrange`), art that is also on a locked artboard stays where it is
-unless prefs `moveLockedWithArtboard` is on (`lockedAndHidden` for `artboard.setProps`); a copy of an artboard copies
+unless `lockedAndHidden` is true (default: prefs `moveLockedWithArtboard`); a copy of an artboard copies
 it. With the Artboard tool, a click
 selects a locked artboard, but a drag doesn't move or copy it, it shows no handles, Delete leaves it, and a
 double-click on its name above the canvas doesn't edit the name (`artboard.setProps {name}` and the Artboards panel
@@ -4743,8 +4788,7 @@ or in `options` (`file.formatOptions {format}` lists them with their values):
 - The editing copy of a `.ai` or `.ait` file (`editingData`) names its active artboard (`CropAreaActive`): the active
   artboard of the app's view when the app saves or exports the file, otherwise the artboard the document opened on (the
   active artboard of the `.ai` file it was opened from), else the first. A `.ai` file read from its editing copy
-  opens on that artboard. VectorCraft opens a `.ai` file it saved from the native document the file carries, on the
-  first artboard.
+  opens on that artboard, and so does a `.ai` file restored from the native document it carries.
 
 File → Save As asks for these in the save options dialog (VectorCraft Options) after the save panel, and Save a Copy
 does too for a `.ai` file; Save, Save a Copy to a native file and Save as Template reuse the options as last saved (or Use Compression).
