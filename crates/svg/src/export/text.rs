@@ -519,14 +519,24 @@ impl Writer<'_> {
         let space = (lay.bounds, self.xf * t.xf);
         let base = self.char_props(&t.first_style(), space);
         let mut props = base.clone();
-        match t.para_at(0).justify {
-            Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
-            Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
-            _ => {}
-        }
+        let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
+        // The anchor sits where the layout aligns the line within its span.
+        let at = match t.para_at(0).justify {
+            Justify::Center | Justify::JustifyCenter => {
+                props.push(("text-anchor", "middle".into()));
+                (from + to) / 2.0
+            }
+            Justify::Right | Justify::JustifyRight => {
+                props.push(("text-anchor", "end".into()));
+                to
+            }
+            _ => from,
+        };
+        // A closed path's span runs past its start point; `startOffset` can't, so wrap it.
+        let at = if at > 1.0 { at - 1.0 } else { at };
         props.extend(css::transparency(n));
         let a = self.attrs(&props);
-        let offset = fmt_num(start * 100.0, 3);
+        let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
         for run in &t.runs {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
