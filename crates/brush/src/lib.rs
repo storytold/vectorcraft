@@ -475,6 +475,10 @@ pub struct PatternBrush {
     pub side_frame: Option<Rect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub side_swatch: Option<String>,
+    /// Art for the corners where the path turns towards the side tile's top (`-y`); `inner_corner`
+    /// is the art for the corners where it turns the other way. Both are drawn as the corner that
+    /// joins a side tile on its right to one below it, and each corner tile is turned so that
+    /// those two arms meet the sides.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outer_corner: Option<Node>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -144,6 +144,62 @@ pub fn decorations(layout: &TextLayout, db: &FontDb, t: &TextObject) -> Vec<(usi
     out
 }
 
+/// The box of what `t` draws with text space mapped by `m`: its glyph outlines
+/// ([`TextLayout::ink_bounds_in`]) and its underline and strikethrough bars ([`decorations`]). With
+/// `projection` `(h, after)`, each point `m` maps is then drawn through `h` (a point `h` can't map
+/// stays where it is, as the renderer draws it) and mapped by `after`; the outlines and bars are
+/// flattened to within 1/1000 of their size, and images, color glyphs and inline graphics count by
+/// their boxes' corners. What an envelope maps type from ([`register_envelope_ink`]). `None` when
+/// nothing draws.
+pub fn envelope_ink(t: &TextObject, m: Affine, projection: Option<(vectorcraft_geom::Homography, Affine)>) -> Option<Rect> {
+    let db = FontDb::global();
+    let laid = layout(db, t);
+    let bars = decorations(&laid, db, t).into_iter().map(|(_, bar)| bar);
+    let union = |acc: Option<Rect>, b: Rect| Some(acc.map_or(b, |a| a.union(b)));
+    let Some((h, after)) = projection else {
+        return bars.map(|bar| (m * bar).bounding_box()).fold(laid.ink_bounds_in(m), union);
+    };
+    let draw = |p: Point| {
+        let q = m * p;
+        after * h.apply(q).unwrap_or(q)
+    };
+    let add = |acc: Option<Rect>, p: Point| union(acc, Rect::from_points(p, p));
+    let projected = |path: &BezPath| {
+        let size = path.bounding_box();
+        let tolerance = (size.width().max(size.height()) / 1000.0).max(1e-6);
+        let mut points = vec![];
+        kurbo::flatten(path, tolerance, |el| {
+            if let kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) = el {
+                points.push(draw(p));
+            }
+        });
+        points.into_iter().fold(None, add)
+    };
+    let corners = |r: Rect| {
+        [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)].map(draw).into_iter().fold(None, add)
+    };
+    let glyphs = laid.glyphs.iter().chain(&laid.ruby).filter_map(|g| projected(&g.outline));
+    let boxes = laid.glyphs.iter().flat_map(|g| {
+        let image = g.placed_image().map(|(image, xf)| xf.transform_rect_bbox(image.rect()));
+        let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| g.xf.transform_rect_bbox(b));
+        [image, colour]
+    });
+    let boxes = boxes.chain(laid.inlines.iter().map(|i| Some(i.bounds))).flatten().filter_map(corners);
+    glyphs.chain(bars.filter_map(|bar| projected(&bar))).chain(boxes).fold(None, union)
+}
+
+/// Make envelopes map type from [`envelope_ink`], measured again when the fonts or the hyphenation
+/// exceptions change (the first registration stays, see `vectorcraft_doc::live::set_type_ink`).
+pub fn register_envelope_ink() {
+    vectorcraft_doc::live::set_type_ink(envelope_ink, envelope_ink_inputs);
+}
+
+/// A number that changes whenever what [`envelope_ink`] reads besides the type changes: the
+/// installed fonts and the hyphenation exceptions.
+pub(crate) fn envelope_ink_inputs() -> u64 {
+    FontDb::global().generation().rotate_left(32) ^ crate::hyphen::exceptions_generation()
+}
+
 /// Most layout passes Shrink Text to Fit runs past the first (bisection plus the final pass).
 const SHRINK_PASSES: usize = 11;
 
@@ -151,6 +207,8 @@ const SHRINK_PASSES: usize = 11;
 /// fit, composer, OpenType features). Each run is set at the em size its font height reference
 /// gives it ([`FontDb::font_heights_resolved`]).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    #[cfg(any(test, feature = "test-fonts"))]
+    crate::test_fonts::count_layout();
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);
@@ -234,6 +292,22 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
     s
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Set while [`layout_faces_per_call`] lays text out: layout keeps no run faces.
+    static FACES_PER_CALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`layout`] keeping no run faces, so that every lookup of a face asks [`FontDb::style_face`]
+/// again: the reference the faces kept per run are compared with.
+#[cfg(test)]
+pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
+    FACES_PER_CALL.set(true);
+    let l = layout(db, t);
+    FACES_PER_CALL.set(false);
+    l
+}
+
 /// One layout pass, without fitting.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
     let text = t.plain_text();
@@ -264,10 +338,14 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
     } else {
         opts
     };
+    let faces = runs.iter().map(|_| std::cell::OnceCell::new()).collect();
+    #[cfg(test)]
+    let faces = if FACES_PER_CALL.get() { Vec::new() } else { faces };
     let mut cx = Ctx {
         on_path: is_on_path,
         db,
         text: &text,
+        faces,
         runs,
         inlines,
         default: CharStyle::default(),
@@ -286,7 +364,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         TextKind::OnPath { .. } => Affine::IDENTITY,
         TextKind::Point => {
             let first = cx.style_at(0);
-            let centre = db.style_face(first).map_or(EM_CENTER, |f| f.ideographic_centre());
+            let centre = cx.face_at(0).map_or(EM_CENTER, |f| f.ideographic_centre());
             Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,

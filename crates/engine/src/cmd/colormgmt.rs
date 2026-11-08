@@ -19,7 +19,7 @@ use vectorcraft_render::proof;
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::EngineError;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, color_value, has_doc, str_param, targets};
+use super::{CommandSpec, Result, Session, always, bad, cmd, color_value, has_doc, switch_or, targets, text_param};
 
 /// `Document.unknown` key under which files before format v3 kept the assigned profiles (migrated
 /// to `Document::color_profiles` on load).
@@ -100,7 +100,7 @@ pub fn specs() -> Vec<CommandSpec> {
             proof_setup
         ),
         cmd!(query "view.proofColors", "Proof Colors", ["View"], None, "{on?: bool (default: toggle)} → proof state", always, |s, p| {
-            toggle_view(s, p, |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
+            toggle_view(s, p, "view.proofColors", |v, on| v.proof_colors = on.unwrap_or(!v.proof_colors))
         }),
         cmd!(
             query "view.overprintPreview",
@@ -109,7 +109,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Some("Cmd+Alt+Shift+Y"),
             "{on?: bool (default: toggle)} → proof state",
             always,
-            |s, p| toggle_view(s, p, |v, on| v.overprint = on.unwrap_or(!v.overprint))
+            |s, p| toggle_view(s, p, "view.overprintPreview", |v, on| v.overprint = on.unwrap_or(!v.overprint))
         ),
         cmd!(
             query "view.separationsPreview",
@@ -143,10 +143,19 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn intent_param(p: &Value, cmd: &str) -> Result<Option<Intent>> {
-    match str_param(p, "intent") {
+    match text_param(p, "intent", cmd)? {
         None => Ok(None),
         Some(i) => Intent::parse(i).map(Some).ok_or_else(|| bad(cmd, format!("unknown intent `{i}`"))),
     }
+}
+
+/// The true or false `p` gives for `key`, or `None` when `p` leaves it out or gives null. Any other
+/// value is an error, as [`switch_or`] reads it.
+fn on_param(p: &Value, key: &str, cmd: &str) -> Result<Option<bool>> {
+    if p.get(key).is_none_or(Value::is_null) {
+        return Ok(None);
+    }
+    switch_or(p, key, false, cmd).map(Some)
 }
 
 fn settings_json(st: &ColorSettings) -> Value {
@@ -171,16 +180,16 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colorSettings";
     let mut st = cms::active_settings();
     let before = st.clone();
-    if let Some(v) = str_param(p, "rgb") {
+    if let Some(v) = text_param(p, "rgb", C)? {
         st.rgb = cms::canonical_name(v).to_string();
     }
-    if let Some(v) = str_param(p, "cmyk") {
+    if let Some(v) = text_param(p, "cmyk", C)? {
         st.cmyk = cms::canonical_name(v).to_string();
     }
     if let Some(i) = intent_param(p, C)? {
         st.intent = i;
     }
-    st.bpc = bool_or(p, "bpc", st.bpc);
+    st.bpc = switch_or(p, "bpc", st.bpc, C)?;
     if st != before {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         touch_all(s);
@@ -191,7 +200,7 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(not(target_arch = "wasm32"))]
 fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.loadProfile";
-    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let path = text_param(p, "path", C)?.ok_or_else(|| bad(C, "missing `path`"))?;
     crate::file_access::check_read(path).map_err(EngineError::Other)?;
     let bytes = crate::store::read_capped(std::path::Path::new(path), crate::store::MAX_PROFILE_FILE).map_err(|e| bad(C, format!("{path}: {e}")))?;
     let info = cms::register_icc(&bytes, None).map_err(|e| bad(C, e.to_string()))?;
@@ -209,7 +218,7 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
 /// Forget a profile `color.loadProfile` loaded, and the copy that is kept of it.
 fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.removeProfile";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?;
     let info = cms::profiles().into_iter().find(|i| i.name == name).ok_or_else(|| bad(C, format!("no profile named `{name}`")))?;
     if info.builtin {
         return Err(bad(C, format!("`{name}` is a built-in profile and stays")));
@@ -289,7 +298,7 @@ pub enum Grays {
 impl Grays {
     /// The `grays` param of `cmd`: `"profile"` (default) or `"black"`.
     pub(crate) fn param(cmd: &str, p: &Value) -> Result<Self> {
-        match str_param(p, "grays").map(str::to_ascii_lowercase).as_deref() {
+        match text_param(p, "grays", cmd)?.map(str::to_ascii_lowercase).as_deref() {
             None | Some("profile") => Ok(Grays::Profile),
             Some("black") => Ok(Grays::Black),
             Some(g) => Err(bad(cmd, format!("grays must be \"profile\" or \"black\", not `{g}`"))),
@@ -302,18 +311,18 @@ impl Grays {
 /// colour through the colour settings.
 pub(crate) fn convert_mode(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "file.documentColorMode";
-    let mode = match str_param(p, "mode").map(str::to_ascii_lowercase).as_deref() {
+    let mode = match p.get("mode").and_then(Value::as_str).map(str::to_ascii_lowercase).as_deref() {
         Some("cmyk") => ColorMode::Cmyk,
         Some("rgb") => ColorMode::Rgb,
         _ => return Err(bad(C, "mode must be \"cmyk\" or \"rgb\"")),
     };
     let intent = intent_param(p, C)?;
     let grays = Grays::param(C, p)?;
+    let convert = switch_or(p, "convert", true, C)?;
     // Choosing the mode the document already has (the checked menu item) is not an edit.
     if s.doc()?.doc.color_mode == mode {
         return Ok(json!({ "changed": 0 }));
     }
-    let convert = bool_or(p, "convert", true);
     let mut changed = 0usize;
     s.edit("Document Color Mode", |d, _| {
         changed = set_color_mode(d, mode, convert, intent, grays);
@@ -654,7 +663,7 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
     let c = cms::active();
     let intent = intent_param(p, C)?.unwrap_or(c.settings().intent);
     let lab = c.lab(&col);
-    let (model, vals) = match str_param(p, "to").unwrap_or("rgb") {
+    let (model, vals) = match text_param(p, "to", C)?.unwrap_or("rgb") {
         "rgb" => ("rgb", values(&c.convert(&col, Model::Rgb, intent))),
         "cmyk" => ("cmyk", values(&c.convert(&col, Model::Cmyk, intent))),
         "gray" | "grayscale" => ("gray", values(&c.convert(&col, Model::Gray, intent))),
@@ -674,7 +683,11 @@ fn convert_color(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn gamut_check(s: &mut Session, p: &Value) -> Result<Value> {
     let mut cols: Vec<Color> = vec![];
-    if let Some(a) = p.get("colors").and_then(Value::as_array) {
+    let colors = p.get("colors").filter(|v| !v.is_null());
+    if let Some(v) = colors.filter(|v| !v.is_array()) {
+        return Err(bad("color.gamutCheck", format!("`colors` must be an array of colors, not {v}")));
+    }
+    if let Some(a) = colors.and_then(Value::as_array) {
         for v in a {
             cols.push(color_value(v).ok_or_else(|| bad("color.gamutCheck", format!("bad color {v}")))?);
         }
@@ -728,7 +741,7 @@ fn view_json(v: &proof::ProofView) -> Value {
 fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "view.proofSetup";
     let mut v = proof::view();
-    if let Some(t) = str_param(p, "target") {
+    if let Some(t) = text_param(p, "target", C)? {
         let t = ProofTarget::parse(t).ok_or_else(|| bad(C, format!("unknown proof target `{t}`")))?;
         if let ProofTarget::Cmyk(name) = &t
             && !cms::profile(name).is_some_and(|k| k.kind == cms::ProfileKind::Cmyk)
@@ -740,8 +753,8 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(i) = intent_param(p, C)? {
         v.setup.intent = i;
     }
-    v.setup.simulate_paper = bool_or(p, "simulatePaper", v.setup.simulate_paper);
-    if let Some(on) = p.get("proof").and_then(Value::as_bool) {
+    v.setup.simulate_paper = switch_or(p, "simulatePaper", v.setup.simulate_paper, C)?;
+    if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
     proof::set_view(v.clone());
@@ -749,9 +762,10 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(view_json(&v))
 }
 
-fn toggle_view(s: &mut Session, p: &Value, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
+fn toggle_view(s: &mut Session, p: &Value, cmd: &str, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
+    let on = on_param(p, "on", cmd)?;
     let mut v = proof::view();
-    f(&mut v, p.get("on").and_then(Value::as_bool));
+    f(&mut v, on);
     proof::set_view(v.clone());
     touch_all(s);
     Ok(view_json(&v))
@@ -779,16 +793,23 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|d| proof::plates(&d.doc).into_iter().map(|p| p.name).collect())
         .unwrap_or_else(|| cms::PROCESS_PLATES.iter().map(|s| s.to_string()).collect());
     let check = |n: &str| if all.iter().any(|a| a == n) { Ok(n.to_string()) } else { Err(bad(C, format!("unknown plate `{n}`"))) };
-    if let Some(on) = p.get("on").and_then(Value::as_bool) {
+    if let Some(on) = on_param(p, "on", C)? {
         v.separations = if on { Some(v.separations.take().unwrap_or_else(|| all.clone())) } else { None };
     }
-    if let Some(a) = p.get("plates").and_then(Value::as_array) {
-        v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+    match p.get("plates") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(a)) if a.iter().all(Value::is_string) => {
+            v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+        }
+        Some(_) => {
+            let key = "plates";
+            return Err(bad(C, format!("`{key}` must be an array of these names: {}", all.join(", "))));
+        }
     }
-    if let Some(n) = str_param(p, "only") {
+    if let Some(n) = text_param(p, "only", C)? {
         v.separations = Some(vec![check(n)?]);
     }
-    if let Some(n) = str_param(p, "toggle") {
+    if let Some(n) = text_param(p, "toggle", C)? {
         let n = check(n)?;
         let vis = v.separations.get_or_insert_with(|| all.clone());
         if let Some(i) = vis.iter().position(|x| *x == n) {
@@ -804,8 +825,8 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_spot(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.setSpot";
-    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?.to_string();
-    let spot = bool_or(p, "spot", true);
+    let name = text_param(p, "name", C)?.ok_or_else(|| bad(C, "missing `name`"))?.to_string();
+    let spot = switch_or(p, "spot", true, C)?;
     let sw = s.doc()?.doc.swatch(&name).ok_or_else(|| bad(C, format!("no swatch `{name}`")))?;
     if !matches!(sw.paint, Paint::Solid { .. }) {
         return Err(bad(C, "only solid-colour swatches can be spot colours"));

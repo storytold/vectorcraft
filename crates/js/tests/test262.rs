@@ -1,0 +1,178 @@
+//! The ES5 parse subset of test262, the ECMAScript conformance suite, when `cargo xtask test262`
+//! has fetched it (it sets `VECTORCRAFT_TEST262_DIR`; without it the test looks in
+//! `corpus/test262/` and skips when the suite is absent).
+//!
+//! The subset is every test under `test/language/` that names the ES5 section it was written for
+//! (`es5id:`) and has no `features:` tag (the tags name syntax and built-ins later than ES5) and no
+//! `module` flag. The other tests without a feature tag (written for later editions, many of them
+//! using later syntax) run too, and their counts are printed apart. A test whose metadata says
+//! `negative: phase: parse` must give a `SyntaxError`; every other test must parse. Each test runs
+//! as sloppy and as strict mode code (with `"use strict";` before it, as the suite's
+//! `INTERPRETING.md` says), unless its `onlyStrict`, `noStrict` or `raw` flag says otherwise. The
+//! test prints the counts and writes each failure to `failures.txt` beside the suite; it fails only
+//! when the suite cannot be read.
+
+use std::path::{Path, PathBuf};
+
+use vectorcraft_js::{Options, parse};
+
+/// A test file's metadata, from its `/*--- … ---*/` block.
+#[derive(Default)]
+struct Meta {
+    features: Vec<String>,
+    flags: Vec<String>,
+    negative_phase: Option<String>,
+    /// The test names the ES5 section it was written for (`es5id:`).
+    es5: bool,
+}
+
+fn suite_dir() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("VECTORCRAFT_TEST262_DIR") {
+        return Some(PathBuf::from(dir));
+    }
+    let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/test262");
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(corpus).ok()?.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.is_dir()).collect();
+    dirs.sort();
+    dirs.pop()
+}
+
+/// The `.js` files under `dir`, sorted, with the `_FIXTURE` helper files left out.
+fn test_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "js") && !path.to_string_lossy().contains("_FIXTURE") {
+                out.push(path);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// A YAML flow list (`[a, b]`) or the block list (`- a` lines) after a key.
+fn list(value: &str, lines: &mut std::iter::Peekable<std::str::Lines<'_>>) -> Vec<String> {
+    let value = value.trim();
+    if let Some(inner) = value.strip_prefix('[').and_then(|v| v.strip_suffix(']')) {
+        return inner.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    }
+    let mut out = Vec::new();
+    while let Some(item) = lines.peek().and_then(|l| l.trim().strip_prefix("- ")) {
+        out.push(item.trim().to_string());
+        lines.next();
+    }
+    out
+}
+
+fn meta(source: &str) -> Meta {
+    let mut meta = Meta::default();
+    let Some(block) = source.split_once("/*---").and_then(|(_, rest)| rest.split_once("---*/")).map(|(block, _)| block) else {
+        return meta;
+    };
+    let mut lines = block.lines().peekable();
+    let mut in_negative = false;
+    while let Some(line) = lines.next() {
+        let indented = line.starts_with(' ');
+        let trimmed = line.trim();
+        if !indented {
+            in_negative = false;
+        }
+        if let Some(v) = trimmed.strip_prefix("features:").filter(|_| !indented) {
+            meta.features = list(v, &mut lines);
+        } else if let Some(v) = trimmed.strip_prefix("flags:").filter(|_| !indented) {
+            meta.flags = list(v, &mut lines);
+        } else if trimmed.starts_with("es5id:") && !indented {
+            meta.es5 = true;
+        } else if trimmed == "negative:" && !indented {
+            in_negative = true;
+        } else if let Some(v) = trimmed.strip_prefix("phase:").filter(|_| in_negative) {
+            meta.negative_phase = Some(v.trim().to_string());
+        }
+    }
+    meta
+}
+
+#[test]
+fn es5_parse_subset() {
+    let Some(dir) = suite_dir() else {
+        println!("test262: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let language = dir.join("test").join("language");
+    assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
+    let files = test_files(&language);
+    assert!(!files.is_empty(), "no tests under {}", language.display());
+    // VECTORCRAFT_TEST262_VERBOSE=1 prints each test before it is parsed.
+    let verbose = std::env::var_os("VECTORCRAFT_TEST262_VERBOSE").is_some();
+
+    let (mut positive, mut negative, mut with_features, mut modules) = (0usize, 0usize, 0usize, 0usize);
+    let (mut passed, mut failed) = (0usize, 0usize);
+    // The tests without a feature tag that name no ES5 section: files, runs passed and failed.
+    let (mut later, mut later_passed, mut later_failed) = (0usize, 0usize, 0usize);
+    let mut failures = String::new();
+    let mut later_failures = String::new();
+    for path in &files {
+        let source = String::from_utf8_lossy(&std::fs::read(path).unwrap()).into_owned();
+        let meta = meta(&source);
+        if !meta.features.is_empty() {
+            with_features += 1;
+            continue;
+        }
+        if meta.flags.iter().any(|f| f == "module") || meta.negative_phase.as_deref() == Some("resolution") {
+            modules += 1;
+            continue;
+        }
+        let expect_error = meta.negative_phase.as_deref() == Some("parse");
+        if !meta.es5 {
+            later += 1;
+        } else if expect_error {
+            negative += 1;
+        } else {
+            positive += 1;
+        }
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let modes: &[bool] = if has("raw") || has("noStrict") {
+            &[false]
+        } else if has("onlyStrict") {
+            &[true]
+        } else {
+            &[false, true]
+        };
+        for &strict in modes {
+            if verbose {
+                eprintln!("{} ({})", path.display(), if strict { "strict" } else { "sloppy" });
+            }
+            let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+            let result = parse(&text, &Options::default());
+            let (pass, fail, list) =
+                if meta.es5 { (&mut passed, &mut failed, &mut failures) } else { (&mut later_passed, &mut later_failed, &mut later_failures) };
+            if result.is_err() == expect_error {
+                *pass += 1;
+            } else {
+                *fail += 1;
+                let rel = path.strip_prefix(&dir).unwrap_or(path).display().to_string().replace('\\', "/");
+                let mode = if strict { "strict" } else { "sloppy" };
+                let outcome = match &result {
+                    Ok(_) => "parsed; a SyntaxError was expected".to_string(),
+                    Err(e) => e.to_string(),
+                };
+                list.push_str(&format!("{rel} ({mode}): {outcome}\n"));
+            }
+        }
+    }
+    let report = dir.join("failures.txt");
+    std::fs::write(&report, format!("# ES5 subset\n{failures}\n# Other tests without a feature tag\n{later_failures}")).unwrap();
+    println!(
+        "test262 ES5 parse subset ({}): {} tests ({positive} that must parse, {negative} that must give a SyntaxError), \
+         {passed} runs passed, {failed} failed. Other tests without a feature tag: {later} tests, {later_passed} runs passed, \
+         {later_failed} failed. Skipped {with_features} tests with feature tags and {modules} module tests. Failures: {}",
+        dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        positive + negative,
+        report.display()
+    );
+}

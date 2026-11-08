@@ -21,6 +21,8 @@ vectorcraft-text = { workspace = true }
 vectorcraft-metafile = { workspace = true }
 # Non-native art in Illustrator editing data (a placed PDF's content, kept as a PDF).
 vectorcraft-pdf = { workspace = true }
+# The predefined CMaps that strings of legacy type in CJK fonts are decoded by.
+craft-pdf = { workspace = true }
 # The TIFF writer (previews) and PackBits, shared with raster export.
 vectorcraft-render = { workspace = true }
 kurbo = { workspace = true }
