@@ -8168,7 +8168,7 @@ fn the_brush_managers_order_gives_each_brushs_kind_in_order() {
 }
 
 /// A file's brushes replace the default ones, in the manager's order, with their values. A pattern
-/// brush is left out (which slot holds which tile isn't known), with a note.
+/// brush with a start or end tile is left out (which slot holds which isn't known), with a note.
 #[test]
 fn a_files_brushes_come_in_with_their_values_in_the_panels_order() {
     let r = read_ok(&format!("{}{}", five_brushes(), layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
@@ -8208,6 +8208,85 @@ fn a_pattern_brushs_five_slots_are_kept() {
     assert!(matches!(d.kind, brush::DraftKind::Scatter { ref art, .. } if art == "Dot art"), "{d:?}");
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", RIBBON).unwrap();
     assert!(matches!(d.kind, brush::DraftKind::Art { ref art, .. } if art == "Ribbon art"), "{d:?}");
+}
+
+/// An Art brush in the older form (first number 1: one field fewer before its 8 numbers) is read
+/// with the art of its section, but not as plain (its numbers aren't known); a Scatter brush in
+/// that form isn't read (its values aren't all there).
+#[test]
+fn an_older_art_brush_comes_in_with_its_art() {
+    const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
+    assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
+    // A count of numbers neither form has isn't read.
+    for bad in ["1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0", "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0"] {
+        assert_eq!(brush::parse_tool_object(brush::Tool::Art, "Ribbon", bad), Err(brush::BrushError::Values), "{bad}");
+    }
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
+    // 8 numbers are the older form whatever the first number says: read with the defaults.
+    let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", "0 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0").unwrap();
+    let brush::DraftKind::Art { ref brush, ref art, plain } = d.kind else { panic!("art") };
+    assert_eq!((art.as_str(), plain, brush.colorization), ("Ribbon art", false, vectorcraft_brush::ArtBrush::default().colorization));
+    let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
+    let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Art(a) = brush_named(&lib, "Ribbon") else { panic!("art") };
+    assert_eq!(a.art.geometric_bounds().map(|b| (b.width(), b.height())), Some((4.0, 4.0)), "the art of its section");
+    assert_eq!(lib.len(), 1, "a brush naming no art is left out");
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (1)")), "{:?}", r.warnings);
+}
+
+/// A Pattern brush comes in when its tiles don't depend on which corner slot is which: its side
+/// tile from the first slot, and the art of its second and third slots, when they name the same,
+/// at both kinds of corner; at its scale. One whose corner slots differ, or that names a start or
+/// end tile, is left out with a note.
+#[test]
+fn a_pattern_brush_whose_tiles_are_known_comes_in() {
+    let objects = [
+        plugin_object(PATTERN_BRUSH, "Rail", "1 / Post art/ Knot art/ Knot art/ / / 0 1 /  1 0 0.5 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Plain", "1 / Post art/ / / / / 0 1 /  1 0 2 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Mixed", "1 / Post art/ Knot art/ Bend art/ / / 0 1 /  1 0 1 0 1 0 0 0"),
+        plugin_object(PATTERN_BRUSH, "Fence", FENCE),
+    ]
+    .concat();
+    let art: String = [("Post art", 4.0), ("Knot art", 6.0), ("Bend art", 8.0)].iter().map(|(n, s)| brush_art(n, *s)).collect();
+    let r = read_ok(&format!("{art}{objects}{}", layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Rail", "Plain"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.ends_with("Brushes panel (2)")), "{:?}", r.warnings);
+    let size = |n: &vectorcraft_doc::Node| n.geometric_bounds().map(|b| (b.width(), b.height()));
+    let vectorcraft_brush::BrushKind::Pattern(p) = brush_named(&lib, "Rail") else { panic!("pattern") };
+    assert_eq!(size(&p.side), Some((4.0, 4.0)), "the side tile");
+    assert_eq!(p.outer_corner.as_ref().and_then(size), Some((6.0, 6.0)));
+    assert_eq!(p.inner_corner.as_ref().and_then(size), Some((6.0, 6.0)));
+    assert!(p.start.is_none() && p.end.is_none());
+    assert!((p.scale - 50.0).abs() < 1e-9);
+    assert_eq!(p.colorization, vectorcraft_brush::Colorization::None, "the art keeps its colors");
+    let vectorcraft_brush::BrushKind::Pattern(p) = brush_named(&lib, "Plain") else { panic!("pattern") };
+    assert!(p.outer_corner.is_none() && p.inner_corner.is_none());
+    assert!((p.scale - 200.0).abs() < 1e-9);
+}
+
+/// A Pattern brush needs only its first 3 numbers, its scale the third (as a percentage), so the
+/// older form's 8 numbers read too; fewer than 3 aren't read.
+#[test]
+fn a_pattern_brush_reads_its_scale_from_three_or_more_numbers() {
+    const SLOTS: &str = "1 / Tile one/ Tile two/ / / Tile five/ 0 1 / ";
+    for numbers in ["1 0 0.5", "1 0 0.5 0 1 0 0 0"] {
+        let d = brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")).unwrap();
+        let brush::DraftKind::Pattern { tiles, scale } = d.kind else { panic!("{d:?}") };
+        assert_eq!(tiles[1].as_deref(), Some("Tile two"), "{numbers}");
+        assert!((scale - 50.0).abs() < 1e-9, "{numbers}: {scale}");
+    }
+    for numbers in ["", "1", "1 0"] {
+        assert_eq!(
+            brush::parse_tool_object(brush::Tool::Pattern, "Fence", &format!("{SLOTS}{numbers}")),
+            Err(brush::BrushError::Values),
+            "{numbers:?}"
+        );
+    }
 }
 
 /// A brush's art filled with a pattern the file defines before it is read, with that pattern.

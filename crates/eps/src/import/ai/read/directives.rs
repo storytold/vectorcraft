@@ -1132,6 +1132,35 @@ mod tests {
     }
 
     #[test]
+    fn a_pattern_brush_counts_its_side_and_both_corners_against_the_budget() {
+        let mut reader = Reader::new(b"");
+        reader.define_brush_art(b"(A)\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        let nodes = reader.brush_art.get("A").map(brush::art_weight).unwrap_or_default();
+        assert!(nodes > 0);
+        let pattern = |corner: Option<&str>| brush::BrushDraft {
+            name: format!("Rail {corner:?}"),
+            kind: brush::DraftKind::Pattern {
+                tiles: [Some("A".to_string()), corner.map(str::to_string), corner.map(str::to_string), None, None],
+                scale: 100.0,
+            },
+        };
+        // The side tile and the same art at both corners: three copies.
+        let drafts = vec![pattern(Some("A")), pattern(None)];
+        assert_eq!(brush::kept_brushes(&drafts, &reader.brush_art, 3 * nodes), [true, false]);
+        assert_eq!(brush::kept_brushes(&drafts, &reader.brush_art, 4 * nodes), [true, true]);
+        assert_eq!(brush::kept_brushes(&drafts, &reader.brush_art, 2 * nodes), [false, true]);
+        // A corner whose art isn't read, or tiles that depend on which slot is which, aren't kept.
+        let unknown = vec![
+            pattern(Some("B")),
+            brush::BrushDraft {
+                name: "Mixed".to_string(),
+                kind: brush::DraftKind::Pattern { tiles: [Some("A".to_string()), Some("A".to_string()), None, None, None], scale: 100.0 },
+            },
+        ];
+        assert_eq!(brush::kept_brushes(&unknown, &reader.brush_art, 10 * nodes), [false, false]);
+    }
+
+    #[test]
     fn brush_art_with_an_unread_object_is_not_kept() {
         // A placed file the data keeps no preview of, shown and hidden.
         let placed =
