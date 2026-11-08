@@ -42,10 +42,50 @@ pub fn returning(manifest: &str, output: &str) -> String {
 /// A plug-in whose `vc_run` runs `first` (instructions, with the locals it declares first), then
 /// returns `output`.
 fn then_returning(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, "", first, output)
+}
+
+/// A plug-in with the module fields `imports` before the others, whose `vc_run` runs `first`, then
+/// returns `output`.
+pub fn with_imports(manifest: &str, imports: &str, first: &str, output: &str) -> String {
     let run = format!("{first} (i64.or (i64.shl (i64.const {}) (i64.const 32)) (i64.const {OUTPUT_AT}))", output.len());
-    let extra = format!(r#"(data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
+    let extra = format!(r#"{imports} (data (i32.const {OUTPUT_AT}) "{}")"#, string(output));
     module(manifest, &run, &extra, (OUTPUT_AT + output.len()).div_ceil(0x1_0000) as u32 + 1)
 }
+
+/// The host imports of plug-in API level 2 ([`crate::host::IMPORTS`]), as `$vc_progress`,
+/// `$vc_cancelled` and `$vc_log`.
+pub const HOST_IMPORTS: &str = r#"(import "env" "vc_progress" (func $vc_progress (param i64 i64)))
+  (import "env" "vc_cancelled" (func $vc_cancelled (result i32)))
+  (import "env" "vc_log" (func $vc_log (param i32 i32 i32) (result i32)))"#;
+
+/// A plug-in of API level 2 (its manifest gives `api` 2 and lists `progress`) that imports the
+/// host functions ([`HOST_IMPORTS`]) and whose `vc_run` runs `first`, which may call them, then
+/// returns `output`.
+pub fn reporting(manifest: &str, first: &str, output: &str) -> String {
+    with_imports(manifest, HOST_IMPORTS, first, output)
+}
+
+/// A plug-in of API level 2 that counts `steps` down, reporting each step's progress and checking
+/// `vc_cancelled` before it: when that says the run was cancelled it returns `stopped`, else
+/// `output` once the steps are done.
+pub fn cooperating(manifest: &str, steps: u64, stopped: &str, output: &str) -> String {
+    let first = format!(
+        r#"(local $n i64) (local.set $n (i64.const {steps}))
+    (block $done (loop $step
+      (br_if $done (i64.le_s (local.get $n) (i64.const 0)))
+      (call $vc_progress (i64.sub (i64.const {steps}) (local.get $n)) (i64.const {steps}))
+      (if (call $vc_cancelled) (then (return (i64.or (i64.shl (i64.const {len}) (i64.const 32)) (i64.const {STOPPED_AT})))))
+      (local.set $n (i64.sub (local.get $n) (i64.const 1)))
+      (br $step)))"#,
+        len = stopped.len(),
+    );
+    let imports = format!(r#"{HOST_IMPORTS} (data (i32.const {STOPPED_AT}) "{}")"#, string(stopped));
+    with_imports(manifest, &imports, &first, output)
+}
+
+/// Where [`cooperating`] keeps what it returns when it is cancelled.
+const STOPPED_AT: usize = 0x8000;
 
 /// A plug-in that counts `steps` down before it returns `output`. Each step costs a few
 /// instructions, so a test picks work that a light budget can't finish and a heavy one can, or

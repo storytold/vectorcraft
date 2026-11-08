@@ -453,6 +453,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    (
+        "window.control.dock",
+        "Dock Control Bar",
+        "",
+        "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -964,6 +970,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
     ),
     (
+        "ui.loadCharStyles",
+        "Load Character Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character styles to the active one (engine: charStyle.load), the Character Styles panel menu's Load Character Styles…",
+    ),
+    (
+        "ui.loadParaStyles",
+        "Load Paragraph Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's paragraph styles to the active one (engine: paraStyle.load), the Paragraph Styles panel menu's Load Paragraph Styles…",
+    ),
+    (
+        "ui.loadAllStyles",
+        "Load All Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character and paragraph styles to the active one (engine: textStyle.loadAll), Load All Styles… in either panel's menu",
+    ),
+    (
         "window.userGraphicStyleLibrary1",
         "User Graphic Style Library 1",
         "",
@@ -1240,6 +1264,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Placement Options…",
         "",
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
+    ),
+    (
+        "ui.relinkDialog",
+        "Relink…",
+        "",
+        "{ids?: [image or placed document ids]} open Relink for `ids` (default: the selected ones; dialog `relink`: ids, links ([{name, ids}], one row per linked file), scope (Replace: each|selected (default)|all|missingInFolder, see links.relink), path (picked when empty), paths (with each: the files chosen so far, one per row of links)); OK runs links.relink with them, one undo step, except with each: OK takes path, or picks a file, for the next row of links, and the last row's OK relinks them all. An error when nothing is given or selected",
     ),
     (
         "ui.findLinksInFolder",

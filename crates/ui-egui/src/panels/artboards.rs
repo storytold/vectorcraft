@@ -48,10 +48,15 @@ const ART_OPTIONS_WIDTH: f32 = 370.0;
 /// less, they show only in the Transform link's popover.
 const INLINE_FIELDS_WIDTH: f32 = 480.0;
 
+/// The room the Control bar needs from the artboard's name field to Move and Scale Artwork with
+/// Artboard shown as their boxes; with less, the name field narrows from 120 to 100 points.
+const NAME_FIELD_ROOM: f32 = 330.0;
+
 /// The Control bar while the Artboard tool is in use, in place of the object controls: the active
-/// artboard's preset and orientation, New Artboard and Delete Artboard, its name, Artboard Options,
-/// Rearrange All Artboards and the Transform link (the Transform panel in a popover), which all fit
-/// in the narrowest window; then Move and Scale Artwork with Artboard (the boxes alone, with their
+/// artboard's preset and orientation, New Artboard and Delete Artboard, its name (in a narrower
+/// field when the bar is short of room), Artboard Options, Rearrange All Artboards and the Transform
+/// link (the Transform panel in a popover), which all fit in the narrowest window, left of the bar's
+/// panel menu button; then Move and Scale Artwork with Artboard (the boxes alone, with their
 /// names in tooltips, when the bar is short of room) and, while the bar has room, the reference
 /// point the Transform panel also uses with the artboard's X and Y, and its W and H with the
 /// Constrain Width and Height Proportions link. Each control runs the command its Properties panel
@@ -77,7 +82,8 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     // The field shows the name as it is (names are never translated). A new name is applied on Enter
     // or a click elsewhere, and an empty field or Escape keeps the old one, as in the Properties panel.
     ui.label(egui::RichText::new(tl!("Name:")).size(12.0).color(t.text));
-    if let Some(name) = widgets::text_field_named(ui, ("cb-ab", "name"), Some(tl!("Name:")), Some(&ab.name), 120.0, 1).filter(|n| !n.is_empty()) {
+    let width = if ui.available_width() < NAME_FIELD_ROOM { 100.0 } else { 120.0 };
+    if let Some(name) = widgets::text_field_named(ui, ("cb-ab", "name"), Some(tl!("Name:")), Some(&ab.name), width, 1).filter(|n| !n.is_empty()) {
         app.run("artboard.setProps", json!({"index": i, "name": name})).ok();
     }
     if widgets::icon_button(ui, "dc-artboard-options", tl!("Artboard Options"), false, 24.0).clicked() {

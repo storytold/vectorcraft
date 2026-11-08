@@ -1602,13 +1602,18 @@ fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
 }
 
 /// Two headless canvas frames → the vertices of the second one's tessellated mesh, which the
-/// GPU takes in one buffer.
+/// GPU takes in one buffer, without the art's raster: the render worker's frame can land in
+/// either frame of a comparison.
 fn frame_vertices(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
     frame(app, ctx, vec![]);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(app, ui));
     out.textures_delta.clear();
-    let mesh = |p: &egui::ClippedPrimitive| if let egui::epaint::Primitive::Mesh(m) = &p.primitive { m.vertices.len() } else { 0 };
+    let art = app.canvas.texture.as_ref().map(|t| t.id());
+    let mesh = |p: &egui::ClippedPrimitive| match &p.primitive {
+        egui::epaint::Primitive::Mesh(m) if Some(m.texture_id) != art => m.vertices.len(),
+        _ => 0,
+    };
     ctx.tessellate(out.shapes, out.pixels_per_point).iter().map(mesh).sum()
 }
 
@@ -6159,6 +6164,32 @@ fn clear_history_waits_while_the_ime_composes() {
     assert!(crate::menus::enabled(&app, "edit.clearHistory"));
 }
 
+/// New Document from State waits while an IME composes, as Undo does: no document is made and the
+/// composition goes on.
+#[test]
+fn new_document_from_state_waits_while_the_ime_composes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    typing_frame(&mut app, &ctx, vec![]);
+    app.select_tool("type");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = xf.to_screen(Point::new(100.0, 100.0));
+    let click =
+        |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+    typing_frame(&mut app, &ctx, vec![click(at, false)]);
+    typing_frame(&mut app, &ctx, vec![preedit("が", 1)]);
+    assert!(app.session.tool_composing());
+    assert!(!crate::menus::enabled(&app, "edit.newDocumentFromState"));
+    crate::menus::invoke(&mut app, "edit.newDocumentFromState", json!({}));
+    assert!(app.session.tool_composing(), "the composition goes on");
+    assert_eq!(app.session.documents().len(), 1);
+    typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("雅".into()))]);
+    assert!(crate::menus::enabled(&app, "edit.newDocumentFromState"));
+}
+
 #[test]
 fn clicking_away_mid_composition_keeps_the_text_and_interrupts_the_ime() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -6345,7 +6376,7 @@ fn editing_keys_after_an_ime_commit_apply_in_the_same_frame() {
 }
 
 /// Cmd/Ctrl+Enter bound to a command runs the command and types no line break, also when a plain
-/// Enter comes in the same frame. Unbound, it types a line break as Enter does.
+/// Enter comes in the same frame. Unbound, it ends editing and keeps the text.
 #[test]
 fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -6360,18 +6391,83 @@ fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
         modifiers: egui::Modifiers::COMMAND,
     });
     typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
-    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter");
     crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Cmd+Enter");
     crate::shortcut_editor::sync(&app.ui);
     let grid = app.ui.view.grid;
     typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    let ran = (plain(&app, id), app.ui.view.grid);
+    let ran = (plain(&app, id), app.ui.view.grid, app.session.tool_wants_text());
     typing_frame(&mut app, &ctx, [tap(egui::Key::Enter).to_vec(), cmd_enter.to_vec()].concat());
     app.ui.shortcut_overrides.clear();
     crate::shortcut_editor::sync(&app.ui);
-    assert_eq!((ran.0.as_str(), ran.1), ("a\n", !grid), "Cmd+Enter runs Show Grid only");
-    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert_eq!((ran.0.as_str(), ran.1, ran.2), ("a", !grid, true), "Cmd+Enter runs Show Grid only");
+    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert!(app.session.tool_wants_text(), "a bound Cmd+Enter does not end editing");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter: no line break");
+    assert!(!app.session.tool_wants_text(), "unbound, Cmd+Enter ends editing");
+    assert_eq!(app.session.tool_id(), "selection");
+}
+
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing like Escape: a repeat of it, and text,
+/// keys and a paste after it in the same frame, leave the type as it was. Enter, Shift+Enter and
+/// Ctrl+Enter on macOS still type line breaks.
+#[test]
+fn cmd_enter_ends_text_editing_and_keeps_the_text() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let key = |pressed, repeat, modifiers| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat, modifiers };
+    let mac_ctrl = egui::Modifiers { ctrl: true, ..Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::NONE), key(false, false, egui::Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::SHIFT), key(false, false, egui::Modifiers::SHIFT)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, mac_ctrl), key(false, false, mac_ctrl)]);
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+    assert!(app.session.tool_wants_text());
+    let held = vec![
+        key(true, false, egui::Modifiers::COMMAND),
+        key(true, true, egui::Modifiers::COMMAND),
+        egui::Event::Text("b".into()),
+        egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+        egui::Event::Paste("c".into()),
+        egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+    ];
+    typing_frame(&mut app, &ctx, held);
+    assert!(!app.session.tool_wants_text(), "editing ended");
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n", "the text is kept, and nothing after the chord changes it");
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)], "the type stays selected");
+    typing_frame(&mut app, &ctx, vec![key(true, true, egui::Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![key(false, false, egui::Modifiers::COMMAND)]);
+    assert!(app.ui.dialog.is_none(), "the repeats of the chord open no dialog");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+}
+
+/// While the IME composes, Cmd+Enter is the IME's: it does not end editing, drop the marked text or
+/// type a line break, in the frame that starts the composition or in a later one.
+#[test]
+fn cmd_enter_while_composing_keeps_the_composition_and_editing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let cmd_enter = [true, false].map(|pressed| egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, [vec![preedit("か", 1)], cmd_enter.to_vec()].concat());
+    assert!(app.session.tool_composing(), "the same frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "the same frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "the same frame keeps the marked text and types no line break");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert!(app.session.tool_composing(), "a later frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "a later frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "a later frame keeps the marked text and types no line break");
 }
 
 /// Reset to a blank document, select the Type tool and click document point (100, 100), returning
@@ -9014,6 +9110,205 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.select_tool("selection");
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
+}
+
+/// One headless canvas frame → whether the fade outside the artboards is drawn.
+fn fades(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    fade_mesh(&shapes(app, ctx)).is_some()
+}
+
+/// The fade outside the artboards among `shapes`, with its position: the mesh in [`FADE_OUTSIDE`].
+fn fade_mesh(shapes: &[Shape]) -> Option<(usize, &egui::Mesh)> {
+    shapes.iter().enumerate().find_map(|(i, s)| match s {
+        Shape::Mesh(m) if !m.vertices.is_empty() && m.vertices.iter().all(|v| v.color == FADE_OUTSIDE) => Some((i, &**m)),
+        _ => None,
+    })
+}
+
+/// Does `mesh` cover the screen point `p`?
+fn mesh_covers(mesh: &egui::Mesh, p: Pos2) -> bool {
+    let cross = |a: Pos2, b: Pos2| (b - a).x * (p - a).y - (b - a).y * (p - a).x;
+    mesh.indices.chunks(3).any(|t| {
+        let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.vertices[i as usize].pos);
+        let (d0, d1, d2) = (cross(a, b), cross(b, c), cross(c, a));
+        (d0 >= 0.0 && d1 >= 0.0 && d2 >= 0.0) || (d0 <= 0.0 && d1 <= 0.0 && d2 <= 0.0)
+    })
+}
+
+/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the area
+/// outside the artboards draws darker; with another tool, or with the preference off, it draws as
+/// usual.
+#[test]
+fn the_artboard_tool_fades_the_pasteboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(FADE_OUTSIDE.a(), 102, "black at 40%: each channel under it shows at 60%");
+    assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
+    assert!(!fades(&mut app, &ctx), "the Selection tool");
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.select_tool("rectangle");
+    assert!(!fades(&mut app, &ctx), "the Rectangle tool");
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    app.select_tool("artboard");
+    assert!(!fades(&mut app, &ctx), "the preference off");
+}
+
+/// Presentation Mode shows only the art: with the Artboard tool active and the fade on, it draws no
+/// fade, and the fade comes back when Presentation Mode ends.
+#[test]
+fn presentation_mode_draws_no_fade() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.run("view.presentation", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 3);
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert!(!fades(&mut app, &ctx), "Presentation Mode");
+    app.run("view.presentation", json!({})).unwrap();
+    assert!(fades(&mut app, &ctx), "after Presentation Mode");
+}
+
+/// A row of boards aligned at the top, each a different height, gives a number of parts that grows
+/// with the number of boards, not with its square, and the parts still add up to the uncovered area.
+#[test]
+fn outside_rects_of_a_row_of_boards_stay_few() {
+    let n = 200;
+    let boards: Vec<Rect> =
+        (0..n).map(|i| Rect::new(20.0 * f64::from(i) + 10.0, 10.0, 20.0 * f64::from(i) + 20.0, 20.0 + 10.0 * f64::from(i))).collect();
+    let bounds = Rect::new(0.0, 0.0, 20.0 * f64::from(n) + 10.0, 10.0 * f64::from(n) + 40.0);
+    let parts = outside_rects(bounds, &boards, usize::MAX).unwrap();
+    assert!(parts.len() <= 3 * n as usize, "{} parts for {n} boards", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let covered: f64 = boards.iter().map(area).sum();
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - covered);
+}
+
+/// 500 narrow tall boards crossed by 500 narrow wide ones leave about 250,000 gaps between them.
+/// The fade then covers only the parts outside the box around all the boards, so it stays a few
+/// rectangles.
+#[test]
+fn the_fade_of_crossing_boards_stays_bounded() {
+    let n = 500;
+    let side = 4.0 * f64::from(n);
+    let boards: Vec<Rect> = (0..n)
+        .flat_map(|i| {
+            let at = 4.0 * f64::from(i);
+            [Rect::new(at, 0.0, at + 1.0, side), Rect::new(0.0, at, side, at + 1.0)]
+        })
+        .collect();
+    let bounds = Rect::new(-100.0, -100.0, side + 100.0, side + 100.0);
+    assert!(outside_rects(bounds, &boards, FADE_MAX_RECTS).is_none(), "more than {FADE_MAX_RECTS} gaps");
+    let parts = fade_rects(bounds, &boards);
+    assert!(parts.len() <= 4, "{} parts", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let all = Rect::new(0.0, 0.0, side, side);
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - area(&all));
+}
+
+/// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
+/// the art, over a point of an object outside the artboard and not over a point of an object on it,
+/// in an upright view and in a rotated one.
+#[test]
+fn the_fade_darkens_art_on_the_pasteboard_and_not_on_the_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": -150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+    app.view_mut().unwrap().zoom = 0.5;
+    app.select_tool("artboard");
+    for rotation in [0.0, 30.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let s = shapes(&mut app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let image = s.iter().position(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)).expect("the art");
+        let (at, mesh) = fade_mesh(&s).expect("the fade");
+        assert!(at > image, "over the art, rotation {rotation}");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(-100.0, 150.0))), "the object outside, rotation {rotation}");
+        assert!(!mesh_covers(mesh, xf.to_screen(Point::new(200.0, 150.0))), "the object on the artboard, rotation {rotation}");
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(200.0, -40.0))), "the pasteboard, rotation {rotation}");
+    }
+}
+
+/// The parts outside the boards: none where boards cover the bounds, the bounds without boards, and
+/// otherwise rectangles that do not overlap a board or each other and add up to the uncovered area.
+#[test]
+fn outside_rects_cover_the_bounds_minus_the_boards() {
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(fade_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
+    assert_eq!(fade_rects(bounds, &[]), vec![bounds]);
+    let boards = [Rect::new(10.0, 10.0, 40.0, 40.0), Rect::new(30.0, 30.0, 60.0, 80.0), Rect::new(90.0, -20.0, 130.0, 50.0)];
+    let parts = fade_rects(bounds, &boards);
+    let area = |r: &Rect| r.width() * r.height();
+    let overlap = |a: &Rect, b: &Rect| (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0) * (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
+    for (i, p) in parts.iter().enumerate() {
+        assert!(boards.iter().all(|b| overlap(p, b) == 0.0), "{p:?} overlaps a board");
+        assert!(parts[i + 1..].iter().all(|q| overlap(p, q) == 0.0), "{p:?} overlaps another part");
+    }
+    // Inside the bounds the boards cover 900 + 1,500 less their 100 of overlap, and 500 of the third.
+    assert_eq!(parts.iter().map(area).sum::<f64>(), 10_000.0 - (900.0 + 1_500.0 - 100.0 + 500.0));
+}
+
+/// Artboard Options › Update While Dragging: on, the pasteboard stays darker while the Artboard tool
+/// moves or resizes an artboard; off, it draws as usual during the drag and darker again after it.
+#[test]
+fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
+    for update in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "artboardUpdateWhileDragging", "value": update})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let r = app.session.active().unwrap().doc.artboards[0].rect;
+        let view = app.view_info();
+        // A move from the artboard's middle, then a resize from its right edge.
+        let (cx, cy) = (r.center().x, r.center().y);
+        for (from, to) in
+            [(Point::new(cx, cy), Point::new(cx + 40.0, cy + 30.0)), (Point::new(r.x1 + 40.0, cy + 30.0), Point::new(r.x1 + 90.0, cy + 30.0))]
+        {
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Down, from.x, from.y), view);
+            for p in [from + (to - from) * 0.5, to] {
+                dispatch(&mut app, &PointerEvent::new(PointerKind::Drag, p.x, p.y), view);
+            }
+            assert!(app.session.tool_transforming(), "the artboard is being dragged");
+            assert_eq!(fades(&mut app, &ctx), update, "Update While Dragging {update}");
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Up, to.x, to.y), view);
+            assert!(!app.session.tool_transforming());
+            assert!(fades(&mut app, &ctx), "darker again after the drag");
+        }
+        let moved = app.session.active().unwrap().doc.artboards[0].rect;
+        assert!(moved.x0 > r.x0 && moved.width() > r.width(), "moved, then resized: {moved:?} from {r:?}");
+    }
+}
+
+/// The fade is drawn only on the canvas: exports with the Artboard tool active and the fade on are
+/// the same as with the Selection tool and the fade off.
+#[test]
+fn the_pasteboard_fade_leaves_exports_unchanged() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": -40, "y": 20, "width": 120, "height": 40})).unwrap();
+    let exports = |app: &mut VectorcraftApp| -> Vec<serde_json::Value> {
+        ["svg", "png"].iter().map(|f| app.run("document.export", json!({"format": f})).unwrap()).collect()
+    };
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    let plain = exports(&mut app);
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": true})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert!(fades_outside_artboards(&app));
+    assert_eq!(exports(&mut app), plain);
 }
 
 /// Finished worker renders are uploaded whenever they are not older than what is currently

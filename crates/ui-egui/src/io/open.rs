@@ -175,6 +175,7 @@ fn permission_words(name: &str) -> String {
         Some(permissions::Permission::EffectRender) => tl!("Change how the objects its effect is applied to are drawn"),
         Some(permissions::Permission::ExportWrite) => tl!("Write the document as a file in its own format"),
         Some(permissions::Permission::ImportRead) => tl!("Read files you open in its format and make documents from them"),
+        Some(permissions::Permission::Progress) => tl!("Show its progress, see Cancel and write log lines"),
         None => return permissions::display_text(name, permissions::MAX_SHOWN_FIELD),
     };
     words.to_string()

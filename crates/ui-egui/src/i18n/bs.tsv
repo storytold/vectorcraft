@@ -448,6 +448,11 @@
 	Document Raster Effects Settings…	Postavke rasterskih efekata dokumenta…
 	Vector Effects	Vektorski efekti
 	3D and Materials	3D i materijali
+	Plane	Ravan
+	Extrude	Istiskivanje
+	Revolve	Rotaciono tijelo
+	Inflate	Napuhni
+	Select objects, then pick an object type to give them a 3D effect.	Odaberite objekte, zatim odaberite vrstu objekta da im date 3D efekat.
 	Extrude & Bevel…	Istiskivanje i zakošenje…
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -809,6 +814,9 @@
 	Put back in the toolbar	Vrati u traku s alatima
 	Float Panel	Odvoji panel
 	Dock Panel	Usidri panel
+	Dock to Top	Usidri na vrh
+	Dock to Bottom	Usidri na dno
+	Dock Control Bar	Usidri kontrolnu traku
 	Float Tool Group	Odvoji grupu alata
 	Services	Usluge
 	Hide VectorCraft	Sakrij VectorCraft
@@ -1290,6 +1298,7 @@ lighting	Light	Svjetlo
 	Rotate Tool	Alat za rotaciju
 	Rotate View Tool	Alat za rotaciju prikaza
 	Trackpad Gesture to Rotate View	Pokret dodirne ploče za rotaciju prikaza
+	Hold a Tool Shortcut to Use the Tool Temporarily	Držite prečicu alata za privremenu upotrebu alata
 	Rotate View	Rotiraj prikaz
 	Rounded Rectangle Tool	Alat zaobljeni pravougaonik
 	Scale Tool	Alat za skaliranje
@@ -1612,6 +1621,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Korak unazad
 	Step Forward	Korak naprijed
 	Clear History	Očisti historiju
+	New Document from State	Novi dokument iz stanja
 	Set History Limit…	Postavi ograničenje historije…
 	Open a document to see its history.	Otvorite dokument da vidite njegovu historiju.
 	Apply Data Set	Primijeni skup podataka
@@ -2057,6 +2067,14 @@ digits	Malayalam	Malajalam
 	Location	Lokacija
 	No images	Nema slika
 	Relink to Folder…	Ponovo poveži s folderom…
+	Each Link Separately	Svaku vezu zasebno
+	Selected Instances	Odabrane instance
+	All Instances	Sve instance
+	Missing Links from This Folder	Nedostajuće veze iz ovog foldera
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} nije each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths idu zajedno: paths navodi unose s ids i path, umjesto ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene
@@ -2558,6 +2576,8 @@ digits	Malayalam	Malajalam
 	Show Cross Hairs	Prikaži končanicu
 	Show Video Safe Areas	Prikaži sigurne oblasti za video
 	Video Ruler Pixel Aspect Ratio:	Omjer stranica piksela video ravnala:
+	Fade Region Outside Artboard	Zatamni područje izvan radne ploče
+	Update While Dragging	Ažuriraj tokom povlačenja
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
@@ -3162,6 +3182,7 @@ theme	Appearance	Izgled
 	Redefine Symbol	Ponovo definiši simbol
 	Remove Brush Stroke	Ukloni potez četkicom
 	Replace Symbol	Zamijeni simbol
+	Reset Transformation	Vrati transformaciju na početno
 	Select All Instances	Odaberi sve instance
 	Symbol Sprayer	Raspršivač simbola
 	Symbolism Tool	Alat simbolizam
@@ -3632,6 +3653,8 @@ theme	Appearance	Izgled
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
+	Search Preferences	Pretraga postavki
+	No settings found	Nema pronađenih postavki
 	Scale Corners	Skaliraj uglove
 	Scale Cursor Proportional to UI	Skaliraj kursor proporcionalno interfejsu
 	Scale Strokes & Effects	Skaliraj poteze i efekte
@@ -3652,6 +3675,7 @@ theme	Appearance	Izgled
 	Snapping Tolerance	Tolerancija hvatanja
 	Spacing Guides	Vodilice razmaka
 	Invoke Distance Guides	Pozovi vodiče udaljenosti
+	Snap to Last Location	Prilijepi uz posljednju lokaciju
 	Spanish	Španski
 	Subdivisions	Podjele
 	Templates Folder	Folder predložaka
@@ -3819,6 +3843,8 @@ axis	Both	Obje
 	Center	Sredina
 	Transform in Perspective	Transformiši u perspektivi
 	Grayscale	Nijanse sive
+	High Color	Mnogo boja
+	Low Color	Malo boja
 	Embed	Ugradi
 	Star	Zvijezda
 	Power Saving (integrated)	Ušteda energije (integrisana)
@@ -4637,6 +4663,7 @@ imageTrace	Outline	Obris
 @msg	nothing to save: the document has no visible art	nema ničeg za čuvanje: dokument nema vidljiv crtež
 @msg	nothing to undo	nema ničeg za poništavanje
 @msg	no history to clear	nema historije za brisanje
+@msg	no history state {v}	nema stanja historije {v}
 @msg	nothing to warp	nema ničeg za iskrivljenje
 @msg	nothing to wrap	nema ničeg za omotavanje
 @msg	object {0} cannot have children	objekat {0} ne može imati djecu
@@ -4961,6 +4988,7 @@ imageTrace	Outline	Obris
 @msg	No linked files to look for	Nema povezanih datoteka za traženje
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je referenca na korak {r}, koju razrješavaju samo `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` mora biti niz ID-ova objekata, a ne {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` mora biti niz boja, a ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` mora biti niz indeksa sidara, a ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: rezultat koraka {i} nema takvu vrijednost (napišite $$ za doslovni $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: prije ovog nema koraka {i} (koraci se broje od 0; napišite $$ za doslovni $)
@@ -5709,6 +5737,11 @@ axis	Y Axis	Y osa
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
 	Write the document as a file in its own format	Zapisati dokument kao datoteku u vlastitom formatu
+	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `progress` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul uvozi `env.{name}`, koji dodatak smije koristiti samo na nivou API-ja dodataka {PROGRESS_API} (`api` {PROGRESS_API}) i s dozvolom `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul uvozi `{from}.{name}`, koji domaćin ne nudi: dodatak smije uvoziti samo `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivo API-ja dodataka 2), a nikakav WASI, datoteke ni mrežu
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; ovaj domaćin podržava nivoe API-ja dodataka od 1 do {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` mora biti lista naziva dozvola
 @msg	`grant` names an unknown permission `{shown}`	`grant` navodi nepoznatu dozvolu `{shown}`
@@ -6156,6 +6189,7 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	iskrivljeni tekstualni objekti uvezeni kao ilustracija, a ne kao tekst koji se može uređivati: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.

@@ -41,6 +41,7 @@ pub use fontdb::{
     style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
+pub use layout::{envelope_ink, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
@@ -440,6 +441,20 @@ impl TextLayout {
         let inlines = self.inlines.iter().map(|i| Some(i.bounds));
         glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
     }
+    /// The box of [`Self::ink_bounds`]' ink with text space mapped by `m`: the glyph and ruby
+    /// outlines are mapped point by point, so a rotated or sheared `m` gives the outlines' own
+    /// bounds. Images, color glyphs and inline graphics count by their mapped boxes.
+    pub fn ink_bounds_in(&self, m: Affine) -> Option<Rect> {
+        let outlined = |g: &PositionedGlyph| (!g.outline.elements().is_empty()).then(|| (m * &g.outline).bounding_box());
+        let glyphs = self.glyphs.iter().flat_map(|g| {
+            let image = g.placed_image().map(|(image, xf)| (m * xf).transform_rect_bbox(image.rect()));
+            let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| (m * g.xf).transform_rect_bbox(b));
+            [outlined(g), image, colour]
+        });
+        let ruby = self.ruby.iter().map(outlined);
+        let inlines = self.inlines.iter().map(|i| Some(m.transform_rect_bbox(i.bounds)));
+        glyphs.chain(ruby).chain(inlines).flatten().reduce(|a, b| a.union(b))
+    }
     /// All glyph outlines combined (e.g. for Create Outlines).
     pub fn to_bezpath(&self) -> BezPath {
         let mut p = BezPath::new();
@@ -832,6 +847,16 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
     // of the visual text is its logical order.
     let levels = bidi.reordered_levels_per_char(para, para.range.clone());
     Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
+}
+
+/// Line metrics of the font at `index` of `data`, at its default axis settings, in font units:
+/// (units per em, ascent, descent (negative below the baseline), line gap). egui builds its text
+/// rows from these values. `None` if the font can't be read.
+pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
+    use skrifa::MetadataProvider;
+    let f = skrifa::FontRef::from_index(data, index).ok()?;
+    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
 }
 
 #[cfg(test)]

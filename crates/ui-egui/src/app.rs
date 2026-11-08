@@ -171,6 +171,7 @@ impl VectorcraftApp {
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
+            held_tool: Vec::new(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -534,8 +535,9 @@ impl VectorcraftApp {
         if self.ui.status_bar && self.ui.screen_mode < 3 {
             chrome::status_bar(self, ui);
             chrome::hint_bar(self, ui);
-        } else {
-            // Keeps the previous frame's value valid for menus drawn above, before the bars.
+        } else if !(self.ui.control_bar && self.ui.control_bar_bottom && self.ui.screen_mode < 2) {
+            // Keeps the previous frame's value valid for menus drawn above, before the bars. A
+            // Control bar docked at the bottom has set it to the bar's top.
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
@@ -556,6 +558,8 @@ impl VectorcraftApp {
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
         palette::show(self, &ctx);
+        // After every panel had its chance to draw in this pass.
+        crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
             titlebar::resize_zones(ui);
         }
