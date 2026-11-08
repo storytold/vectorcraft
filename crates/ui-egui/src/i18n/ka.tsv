@@ -6530,3 +6530,7 @@ font-script	Japanese	იაპონური
 # 3D Box add-on
 	3D Box	3D ყუთი
 	3D Box Tool	3D ყუთის ხელსაწყო
+
+# Align to Pixel Grid
+	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
+@msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი

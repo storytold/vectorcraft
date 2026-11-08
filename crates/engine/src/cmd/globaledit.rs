@@ -768,10 +768,12 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
         let mut placed = model.clone();
         placed.transform(*xf * back, Scaling::default());
         give(was, &model, placed, &mut n, d);
+        super::object::keep_pixel_aligned(&mut n, Scaling::default());
         if let Some(slot) = d.node_mut(*id) {
             *slot = n;
             edited.push(*id);
         }
+        super::object::keep_compound_aligned(d, *id, Scaling::default());
     }
     edited
 }

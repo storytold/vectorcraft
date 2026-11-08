@@ -6203,3 +6203,7 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
+
+# Align to Pixel Grid
+	Align to Pixel Grid	ピクセルグリッドに整合
+@msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです

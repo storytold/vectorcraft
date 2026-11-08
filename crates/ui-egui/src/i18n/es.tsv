@@ -6460,3 +6460,7 @@ breakText	Glyphs	Glifos
 # 3D Box add-on
 	3D Box	Caja 3D
 	3D Box Tool	Herramienta Caja 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Alinear con cuadrícula de píxeles
+@msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles

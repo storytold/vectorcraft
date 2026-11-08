@@ -6350,3 +6350,6 @@ breakText	Glyphs	Glif
 # 3D Box add-on
 	3D Box	Kotak 3D
 	3D Box Tool	Alat Kotak 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Sejajarkan ke grid piksel

@@ -598,6 +598,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     n.appearance.items.push(item);
                     added.push((*id, fill));
                 }
+                if !fill {
+                    super::object::snap_if_aligned(n);
+                }
             }
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -620,6 +623,7 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
                 clear(n);
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -727,9 +731,11 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         }
         to.appearance = ap;
         (to.opacity, to.blend, to.isolate, to.knockout, to.knockout_shape) = (src.opacity, src.blend, src.isolate, src.knockout, src.knockout_shape);
+        super::object::snap_if_aligned(to);
         if !copy && let Some(n) = d.node_mut(source) {
             clear(n);
             (n.isolate, n.knockout, n.knockout_shape) = (false, Default::default(), false);
+            super::object::snap_if_aligned(n);
         }
         let changed = if copy { vec![target] } else { vec![source, target] };
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&changed));
@@ -788,6 +794,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                     st.blend = BlendMode::Normal;
                     n.appearance.items.push(AppearanceItem::Stroke(st));
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -847,6 +854,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = p.get("visible").and_then(Value::as_bool) {
                 *vis = v;
             }
+            super::object::snap_if_aligned(n);
             let items = &n.appearance.items;
             if let Some(fill) =
                 items.get(idx).map(AppearanceItem::is_fill).filter(|f| items.iter().rposition(|it| it.is_fill() == *f && it.visible()) == Some(idx))
@@ -907,6 +915,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
                 for &i in idx.iter().rev() {
                     n.appearance.remove_item(i);
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -1011,7 +1020,19 @@ fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = require_targets(s, p, "appearance.showAllHidden")?;
     let before = s.doc()?.doc.clone();
     let ids = s.edit("Show All Hidden Attributes", |d, _| {
-        let shown: Vec<NodeId> = roots.iter().copied().filter(|id| d.node_mut(*id).is_some_and(|n| n.appearance.show_all())).collect();
+        let shown: Vec<NodeId> = roots
+            .iter()
+            .copied()
+            .filter(|id| {
+                d.node_mut(*id).is_some_and(|n| {
+                    let shown = n.appearance.show_all();
+                    if shown {
+                        super::object::snap_if_aligned(n);
+                    }
+                    shown
+                })
+            })
+            .collect();
         if shown.is_empty() {
             return Err(EngineError::Other("Show All Hidden Attributes: nothing is hidden".into()));
         }
@@ -1408,6 +1429,7 @@ impl Picked {
             let placed = self.placed(n.geometric_bounds());
             n.appearance.items.extend(placed.items.into_iter().filter(|it| if it.is_fill() { ap.fill.color } else { ap.stroke.color }));
             n.appearance.effects.extend(placed.effects);
+            super::object::snap_if_aligned(n);
             return;
         }
         if let NodeKind::Text(t) = &mut n.kind {
@@ -1431,6 +1453,7 @@ impl Picked {
         } else {
             focal_attrs(&mut n.appearance, &placed, ap);
         }
+        super::object::snap_if_aligned(n);
     }
 }
 

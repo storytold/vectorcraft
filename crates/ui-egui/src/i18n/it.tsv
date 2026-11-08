@@ -6138,3 +6138,7 @@ breakText	Glyphs	Glifi
 # 3D Box add-on
 	3D Box	Scatola 3D
 	3D Box Tool	Strumento Scatola 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Allinea alla griglia pixel
+@msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel

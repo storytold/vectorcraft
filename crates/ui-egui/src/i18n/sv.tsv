@@ -8005,3 +8005,7 @@ digits	Hindi	Hindi
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Justera mot pixelrutnät
+@msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet

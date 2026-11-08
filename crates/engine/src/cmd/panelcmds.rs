@@ -377,7 +377,10 @@ pub(crate) fn copy_artboard(d: &mut vectorcraft_doc::Document, i: usize, dv: Vec
     if let Some(id) = d.artboards.get(index).map(|a| a.id) {
         d.copy_artboard_guides(src.id, id, dv);
     }
-    let copies = super::edit::copy_above(d, art, |_, _, c| c.transform(Affine::translate(dv), sc))?;
+    let copies = super::edit::copy_above(d, art, |_, _, c| {
+        c.transform(Affine::translate(dv), sc);
+        super::object::keep_pixel_aligned(c, sc);
+    })?;
     Ok((index, copies))
 }
 

@@ -6104,3 +6104,7 @@ breakText	Glyphs	Glyphen
 # 3D Box add-on
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Am Pixelraster ausrichten
+@msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden

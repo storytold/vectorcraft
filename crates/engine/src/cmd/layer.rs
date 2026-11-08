@@ -1125,6 +1125,7 @@ fn artboard_set(s: &mut Session, p: &Value) -> Result<Value> {
                 for id in &e.art {
                     if let Some(n) = d.node_mut(*id) {
                         n.transform(xf, sc);
+                        super::object::keep_pixel_aligned(n, sc);
                     }
                 }
             } else if !e.resized {

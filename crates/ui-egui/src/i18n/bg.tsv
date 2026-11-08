@@ -6336,3 +6336,6 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Подравняване към пикселната мрежа

@@ -262,11 +262,19 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
                             *a = a.transform(xf);
                         }
                     }
+                    // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
+                    // to the pixel grid again after its anchors move.
+                    let top = compound_or_self(doc, *id);
+                    if let Some(n) = doc.node_mut(top) {
+                        super::object::snap_if_aligned(n);
+                    }
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
                         n.transform(xf, sc);
+                        super::object::keep_pixel_aligned(n, sc);
                     }
+                    super::object::keep_compound_aligned(doc, *id, sc);
                 }
             }
         }
@@ -308,6 +316,12 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         *a = a.transform(vectorcraft_geom::Affine::translate(pos - a.p));
+        // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps to the
+        // pixel grid again.
+        let top = compound_or_self(d, id);
+        if let Some(n) = d.node_mut(top) {
+            super::object::snap_if_aligned(n);
+        }
         Ok(())
     })?;
     ok()
@@ -337,6 +351,7 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
+        super::object::resnap(d, id);
         Ok(())
     })?;
     ok()

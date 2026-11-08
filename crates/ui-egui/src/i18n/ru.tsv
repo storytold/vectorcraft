@@ -6607,3 +6607,7 @@ shape	Open	Открытый
 # 3D Box add-on
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Выровнять по пиксельной сетке
+@msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры

@@ -6501,3 +6501,7 @@ breakText	Glyphs	Glifs
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Eina Caixa 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Alinea a la quadrícula de píxels
+@msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels

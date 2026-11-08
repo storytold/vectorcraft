@@ -3429,6 +3429,56 @@ Absolute target, so it leaves objects that already have that size as they are; r
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"relative":false,"scaleH":50,"scaleV":50}}}
 ```
 
+## Align to Pixel Grid
+
+`object.setPixelAligned {ids?|id?, on?}` turns the pixel-aligned property of the objects given (default: the selected
+objects) on or off (`on` defaults to true), as the Transform panel's Align to Pixel Grid checkbox does (described on
+the help page,
+<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>).
+It returns `{ids}`, the objects whose property changed. While the property is on:
+
+- The object's horizontal and vertical straight segments sit on whole points, or on half points when a stroke centered
+  on the path has an odd weight, so that the stroke's edges fall on the pixel grid. A stroke that is hidden or has no
+  paint does not count. Its stroke weights are whole points, at least 1.
+- Every move, scale, rotation, reflection, shear, Transform Each, Align or Distribute move (of objects or of
+  direct-selected anchors), Transform panel change, move of direct-selected anchors or of one anchor
+  (`path.moveAnchor`), new anchors from `path.setAnchors`, live shape change (`object.setLiveShape`), move of a
+  compound path's path on its own, and artboard move or resize that carries the art (`artboard.move` with
+  `moveArt`, `artboard.setProps` with art, Rearrange Artboards) snaps those segments again, as do the art copies of `artboard.move` with `copy` and Duplicate
+  Artboards, the copies that `edit.duplicate` and the paste commands move, and `object.slice.move` of an object slice,
+  and so does every `stroke.set`, `stroke.weightUp` and `stroke.weightDown` edit, which also rounds the new weight. An
+  appearance edit that adds, removes, hides, repaints or reweighs a stroke snaps them again too:
+  `appearance.setItem`, `appearance.addStroke`, `appearance.removeItem`, `appearance.clear`,
+  `appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer` (both objects), `appearance.copyFrom`
+  (the Eyedropper), `paint.setStroke` and `graphicStyle.apply`, in the same undo step as the edit, as is every member
+  of an active Global Edit that such an edit or move reaches. Every other command that changes a pixel-aligned object
+  (for example Object › Path › Average) snaps it again as part of its undo step. Each anchor that such a segment shares moves with its handles, so diagonal segments and curves keep their shape apart from those
+  anchors. A rotated shape with no horizontal or vertical segment is left as it is. Pixel-aligned art of a linked
+  opacity mask snaps when its object moves.
+- Coordinates that differ stay at least 1 pt apart within a subpath, so a narrow shape does not collapse. A
+  coordinate on a whole point snaps to the half point above it and one on a half point to the whole point below it, so
+  hiding and showing an odd stroke returns the path to where it was. A placed gradient and the art of a linked opacity
+  mask move with the snapped anchors, and so do pattern tiles when the move transforms patterns. A pixel-aligned member
+  of an Objects on Path group snaps again after the group places it on its path.
+- A live rectangle, polygon, line or pie is moved and scaled as a whole to the snapped bounds, and stays live. A full
+  ellipse has only curves and is left as it is. A path with Live Corners snaps the outline its corners are cut from and keeps
+  its Live Corners. A compound path snaps each of its paths with the compound path's stroke.
+- Make Compound Path from paths or compound paths that include a pixel-aligned one gives a pixel-aligned compound path
+  and snaps it; its paths do not keep the property, and a path inside a compound path cannot take it alone (an error).
+  Release Compound Path gives each released path the property of the compound path. A path pasted into a compound
+  path, alone or from a pasted compound path, drops its own property and snaps with the compound path.
+
+Turning the property on snaps the objects at once; turning it off keeps their geometry. These rules are VectorCraft's
+own: only paths and compound paths can be aligned, and type, images, groups, guides and other objects are an error
+that leaves the document as it was. The change is one undo step, and when every object already has the value nothing
+changes and no undo step is made. The property is saved in the native file (`pixel_aligned` in `document.node`), and
+files saved without it read back with it off.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setPixelAligned","params":{"on":true}}}
+{"name":"run_command","arguments":{"command":"object.setPixelAligned","params":{"ids":[12],"on":false}}}
+```
+
 ## Live Corners
 
 `object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live

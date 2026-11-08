@@ -6470,3 +6470,7 @@ breakText	Glyphs	Γλύφοι
 # 3D Box add-on
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
+@msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων

@@ -577,6 +577,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
                 // A stroke without paint has no weight; painting it again restores the 1 pt default.
                 stroke.width = 0.0;
             }
+            if !fill {
+                super::object::snap_if_aligned(n);
+            }
             Ok(())
         },
         |d, changed| {

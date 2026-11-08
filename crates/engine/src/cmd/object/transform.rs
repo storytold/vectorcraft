@@ -70,10 +70,12 @@ pub(crate) fn transforms_objects(p: &Value) -> bool {
 /// check them with [`check_switches`] before they change anything.
 pub(super) const TRANSFORM_SWITCHES: [&str; 6] = ["copy", "strokes", "corners", "patterns", "objects", "typeAreas"];
 
-/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off.
+/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off. The objects
+/// in `n` that are aligned to the pixel grid snap to it again ([`super::pixelgrid::keep_pixel_aligned`]).
 pub(crate) fn transform_node(n: &mut Node, xf: Affine, sc: Scaling, objects: bool) {
     if objects {
         n.transform(xf, sc);
+        super::pixelgrid::keep_pixel_aligned(n, sc);
     } else if sc.patterns {
         vectorcraft_doc::pattern::transform_patterns_only(n, xf);
     }
@@ -166,6 +168,11 @@ fn apply_transform_moving_guides(
                     && !(objects && areas && resize_type_area(n, xf))
                 {
                     transform_node(n, xf, sc, objects);
+                }
+            }
+            if objects {
+                for id in &targets {
+                    super::pixelgrid::keep_compound_aligned(d, *id, sc);
                 }
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {

@@ -6475,3 +6475,7 @@ breakText	Glyphs	Glifler
 # 3D Box add-on
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Piksel Izgarasına Hizala
+@msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
