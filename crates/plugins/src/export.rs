@@ -75,7 +75,8 @@ pub struct Target<'a> {
 
 /// The limits of an export by `plugin`: its own, with the budgets of an export.
 pub fn limits(plugin: &Plugin) -> Limits {
-    Limits { fuel_base: FUEL, wall_time_ms: WALL_TIME_MS, ..plugin.limits().clone() }
+    let own = plugin.limits();
+    Limits { fuel_base: own.export_fuel, wall_time_ms: own.export_wall_time_ms, ..own.clone() }
 }
 
 /// Runs exporter `plugin` on `document`, the native file's JSON, with `params` (checked against

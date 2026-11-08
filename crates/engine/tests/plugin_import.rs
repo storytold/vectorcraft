@@ -13,12 +13,16 @@ use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
 use vectorcraft_engine::{EngineError, Session};
 use vectorcraft_plugins::wat::{self as tpl, Given};
+use vectorcraft_plugins::{Limits, Plugin};
 
 /// An importer's output: one red rectangle from (10, 20) to (110, 70) and a warning.
 const RECT: &str = r#"{"objects":[{"type":"path","name":"Box","path":{"subpaths":[{"closed":true,"anchors":[{"p":[10,20]},{"p":[110,20]},{"p":[110,70]},{"p":[10,70]}]}]},"fills":[{"type":"solid","color":{"model":"rgb","r":1,"g":0,"b":0}}]}],"warnings":["2 layers merged"]}"#;
 
 /// An importer's output: a horizontal line from (0, 5) to (50, 5).
 const LINE: &str = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":false,"anchors":[{"p":[0,5]},{"p":[50,5]}]}]}}]}"#;
+
+/// The `vc_run` body of an importer that never returns.
+const SPINS: &str = "(loop $l (br $l)) (i64.const 0)";
 
 /// Installs the plug-in written in WAT `src` → its `plugin.list` entry.
 fn install(s: &mut Session, src: &str) -> Value {
@@ -57,6 +61,19 @@ fn state(s: &mut Session) -> (usize, Option<usize>, usize, usize, bool, Value) {
     let content = s.execute("document.inspect", &json!({})).unwrap();
     let d = s.doc().unwrap();
     (s.documents().len(), s.active_index(), d.history.undo.len(), d.history.redo.len(), d.is_dirty(), content)
+}
+
+/// Opens a document through a new importer `id`, with an undo step and a redo step → its [`state`].
+fn open_edited(s: &mut Session, id: &str) -> (usize, Option<usize>, usize, usize, bool, Value) {
+    install(s, &tpl::returning(&tpl::importer(id, r#"["tsk"]"#, "{}"), RECT));
+    open(s, "Kept.tsk", b"?", json!({"importer": format!("plugin.{id}")})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let before = state(s);
+    assert!(before.2 > 0 && before.3 > 0, "{before:?}");
+    before
 }
 
 /// A fresh folder for files this test writes.
@@ -269,15 +286,8 @@ fn failures_open_nothing() {
     assert!(s.documents().is_empty(), "nothing opened");
 
     // A document that is already open keeps its tab, content and undo and redo steps.
-    install(&mut s, &tpl::returning(&tpl::importer("test.fail.opens", r#"["tsk"]"#, "{}"), RECT));
-    install(&mut s, &tpl::module(&tpl::importer("test.fail.spins", r#"["tsf"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
-    open(&mut s, "Kept.tsk", b"?", json!({})).unwrap();
-    s.execute("select.all", &json!({})).unwrap();
-    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
-    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
-    s.execute("edit.undo", &json!({})).unwrap();
-    let before = state(&mut s);
-    assert!(before.2 > 0 && before.3 > 0, "{before:?}");
+    install(&mut s, &tpl::module(&tpl::importer("test.fail.spins", r#"["tsf"]"#, "{}"), SPINS, "", 1));
+    let before = open_edited(&mut s, "test.fail.opens");
     for id in cases.iter().map(|c| c.0).chain(["test.fail.traps"]) {
         assert!(open(&mut s, "x.tsf", b"?", json!({"importer": format!("plugin.{id}")})).is_err(), "{id}");
         assert_eq!(state(&mut s), before, "{id}");
@@ -294,7 +304,7 @@ fn failures_open_nothing() {
 #[test]
 fn a_cancelled_open_stops_the_importer() {
     let mut s = Session::new();
-    install(&mut s, &tpl::module(&tpl::importer("test.spins", r#"["tss"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
+    install(&mut s, &tpl::module(&tpl::importer("test.spins", r#"["tss"]"#, "{}"), SPINS, "", 1));
     let token = vectorcraft_doc::cancel::CancelToken::new();
     token.cancel();
     let r = vectorcraft_doc::cancel::scope(&token, None, || open(&mut s, "x.tss", b"?", json!({})));
@@ -302,18 +312,59 @@ fn a_cancelled_open_stops_the_importer() {
     assert!(s.documents().is_empty());
 }
 
-/// A file past the importer's input limit is not read past it, and doesn't open.
+/// An importer that never returns, held to a small import budget, ends at its instruction limit
+/// or at its time limit (0 ms, which has passed at the first check between two slices of the
+/// budget). The open reports the limit, opens no document, and leaves an open document's content
+/// and undo and redo steps as they were.
+#[test]
+fn an_importer_past_its_budget_opens_nothing() {
+    let cases = [
+        ("test.budget.fuel", Limits { export_fuel: 1_000_000, ..Limits::default() }, "instruction budget"),
+        ("test.budget.time", Limits { export_fuel: 1_000_000_000, export_wall_time_ms: 0, ..Limits::default() }, "time budget"),
+    ];
+    for (id, limits, _) in &cases {
+        let wasm = wat::parse_str(tpl::module(&tpl::importer(id, r#"["tbg"]"#, "{}"), SPINS, "", 1)).unwrap();
+        vectorcraft_plugins::registry::install(Plugin::load(&wasm, limits.clone()).unwrap());
+    }
+    let mut s = Session::new();
+    for (id, _, why) in &cases {
+        let e = open(&mut s, "x.tbg", b"?", json!({"importer": format!("plugin.{id}")})).unwrap_err();
+        assert!(e.to_string().contains(why) && e.to_string().contains("x.tbg"), "{id}: {e}");
+        assert!(s.documents().is_empty(), "{id}");
+    }
+    let before = open_edited(&mut s, "test.budget.opens");
+    for (id, _, why) in &cases {
+        let e = open(&mut s, "x.tbg", b"?", json!({"importer": format!("plugin.{id}")})).unwrap_err();
+        assert!(e.to_string().contains(why), "{id}: {e}");
+        assert_eq!(state(&mut s), before, "{id}");
+    }
+    for (id, _, _) in &cases {
+        vectorcraft_plugins::registry::remove(id);
+    }
+}
+
+/// A file past the importer's input limit is not read past it, and doesn't open: an open document
+/// keeps its content and its undo and redo steps. Given as data, it is refused the same way.
 #[test]
 fn a_file_past_the_input_limit_is_refused() {
     let dir = tmp_dir("large");
     let mut s = Session::new();
     echo(&mut s, "test.large", r#"["tsb"]"#);
     let path = dir.join("big.tsb");
-    std::fs::File::create(&path).unwrap().set_len(vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 + 1).unwrap();
+    let max = vectorcraft_plugins::import::MAX_INPUT_BYTES;
+    std::fs::File::create(&path).unwrap().set_len(max as u64 + 1).unwrap();
     let e = s.execute("document.open", &json!({"path": path_of(&path)})).unwrap_err();
     assert!(e.to_string().contains("larger than"), "{e}");
     assert!(e.to_string().contains("big.tsb"), "{e}");
     assert!(s.documents().is_empty());
+
+    let before = open_edited(&mut s, "test.large.opens");
+    let e = s.execute("document.open", &json!({"path": path_of(&path)})).unwrap_err();
+    assert!(e.to_string().contains("larger than"), "{e}");
+    assert_eq!(state(&mut s), before, "by path");
+    let e = open(&mut s, "big.tsb", &vec![0; max + 1], json!({})).unwrap_err();
+    assert!(e.to_string().contains("larger than"), "{e}");
+    assert_eq!(state(&mut s), before, "as data");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

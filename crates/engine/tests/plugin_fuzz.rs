@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat as tpl;
-use vectorcraft_plugins::{Error, Limits, Plugin};
+use vectorcraft_plugins::{Error, Kind, Limits, Plugin};
 use vectorcraft_testkit::catch_quiet;
 use vectorcraft_testkit::fixtures::rich_session;
 
@@ -64,6 +64,29 @@ fn arb_junk() -> impl Strategy<Value = Value> {
             prop::collection::btree_map("[a-z]{1,5}", inner, 0..3).prop_map(|m| Value::Object(m.into_iter().collect())),
         ]
     })
+}
+
+/// One entry of a manifest's `extensions`: valid, dotted, mixed-case, empty or too long, or junk.
+fn arb_extension() -> impl Strategy<Value = Value> {
+    prop_oneof![
+        4 => "[a-z0-9]{1,16}".prop_map(Value::from),
+        1 => prop::sample::select(vec![".fz", "FZ", "fZ", "a b", "", "x.y", "é", "a\u{202E}", "abcdefghijklmnopq"]).prop_map(Value::from),
+        1 => "[a-z0-9]{17,32}".prop_map(Value::from),
+        1 => arb_junk(),
+    ]
+}
+
+/// A manifest's `extensions`: `None` leaves the key out; otherwise an empty list, up to the eight
+/// allowed, too many, one repeated, or junk.
+fn arb_extensions() -> impl Strategy<Value = Option<Value>> {
+    prop_oneof![
+        1 => Just(None),
+        1 => Just(Some(json!([]))),
+        4 => prop::collection::vec(arb_extension(), 1..=8).prop_map(|l| Some(Value::Array(l))),
+        1 => prop::collection::vec(arb_extension(), 9..=12).prop_map(|l| Some(Value::Array(l))),
+        1 => "[a-z0-9]{1,8}".prop_map(|e| Some(json!([e, "fz", e]))),
+        1 => arb_junk().prop_map(Some),
+    ]
 }
 
 /// Numbers that tend to break arithmetic.
@@ -583,10 +606,11 @@ proptest! {
         renders(&s, "after mutated modules")?;
     }
 
-    /// Manifests with hostile `permissions`, `api` and names (unknown, reserved and repeated
-    /// permissions, junk of every type, control and bidirectional override characters) parse to
-    /// an error or to a manifest whose permissions fit its kind, and installing one with a junk
-    /// `grant` ends as an error or an install, never a panic. A prompt never shows a hidden
+    /// Manifests with hostile `permissions`, `api`, names and `extensions` (unknown, reserved and
+    /// repeated permissions, junk of every type, control and bidirectional override characters,
+    /// extensions missing, dotted, mixed-case, repeated, too long or too many) parse to an error
+    /// or to a manifest whose permissions and extensions fit its kind, and installing one with a
+    /// junk `grant` ends as an error or an install, never a panic. A prompt never shows a hidden
     /// character from the name.
     #[test]
     fn hostile_manifest_permissions_never_crash(
@@ -607,20 +631,38 @@ proptest! {
             arb_junk(),
             Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write", "import.read", "progress"]))
         ],
+        extensions in prop::option::weighted(0.5, arb_extensions()),
     ) {
         let mut m = json!({"id": "fuzz.permissions", "name": name, "kind": kind, "api": api});
-        if matches!(kind, "exporter" | "importer") {
-            m["extensions"] = json!(["fz"]);
+        // Hostile extensions come with a valid `api` and no `permissions`, so the parse reaches
+        // them. The other half of the cases keep a valid list and reach the other fields.
+        let hostile_extensions = extensions.is_some();
+        match extensions {
+            None if matches!(kind, "exporter" | "importer") => m["extensions"] = json!(["fz"]),
+            None | Some(None) => {}
+            Some(Some(hostile)) => m["extensions"] = hostile,
         }
-        m["permissions"] = match permissions {
-            Some(Value::Null) | None => json!(names),
-            Some(junk) => junk,
-        };
+        if hostile_extensions {
+            m["api"] = json!(1);
+        } else {
+            m["permissions"] = match permissions {
+                Some(Value::Null) | None => json!(names),
+                Some(junk) => junk,
+            };
+        }
         let text = m.to_string();
         let parsed = catch_quiet(|| vectorcraft_plugins::Manifest::parse(text.as_bytes()));
         let parsed = parsed.map_err(|msg| TestCaseError::fail(format!("panicked on {text}: {msg}")))?;
         if let Ok(man) = &parsed {
             prop_assert!(man.permissions().iter().all(|p| p.applies(man.kind)), "{}", text);
+            let exts = &man.extensions;
+            if matches!(man.kind, Kind::Exporter | Kind::Importer) {
+                prop_assert!((1..=8).contains(&exts.len()), "{}", text);
+                prop_assert!(exts.iter().all(|e| (1..=16).contains(&e.len()) && e.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())), "{}", text);
+                prop_assert!(exts.iter().enumerate().all(|(i, e)| !exts[..i].contains(e)), "{}", text);
+            } else {
+                prop_assert!(exts.is_empty(), "{}", text);
+            }
             let shown = vectorcraft_plugins::permissions::display_text(&man.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
             prop_assert!(!shown.chars().any(|c| c.is_control() || matches!(c, '\u{202E}' | '\u{2066}' | '\u{200F}')), "{}", shown);
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);

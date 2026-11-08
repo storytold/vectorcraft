@@ -143,6 +143,8 @@ mod tests {
         assert!(out.objects.iter().all(|o| o.id.is_none() && o.path.is_some()));
         assert_eq!(decode(format!(r#"{{"objects":[{SQUARE}]}}"#).as_bytes()).unwrap().warnings, Vec::<String>::new());
         assert_eq!(decode(br#"{"error": "Not a\nplot file."}"#), Err(Error::Failed("Not aplot file.".into())));
+        // A decline is reported as one, also with keys the host doesn't read beside it.
+        assert_eq!(decode(br#"{"error": "No.", "layers": []}"#), Err(Error::Failed("No.".into())));
     }
 
     /// Nothing an importer returns reaches a document unchecked: malformed JSON, no objects, keys
