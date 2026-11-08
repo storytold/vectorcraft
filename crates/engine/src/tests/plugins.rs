@@ -1140,6 +1140,11 @@ fn a_request_cannot_grant_what_only_a_person_approves() {
     assert!(e.contains("SHA-256"), "{e}");
     let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
     assert!(e.contains(refused), "{e}");
+    // So does one refused for its params.
+    s.approve_plugin_install(approval(id, &wasm, &["doc.read"], false));
+    s.execute("plugin.install", &json!({"dataBase64": data, "grant": "doc.read"})).unwrap_err();
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read"]})).unwrap_err().to_string();
+    assert!(e.contains(refused), "{e}");
 
     // The heavy budget needs its own agreement.
     let heavy_id = "test.engine.approval.heavy";

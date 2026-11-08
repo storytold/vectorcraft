@@ -390,10 +390,10 @@ impl Session {
 /// `plugin.list` entry.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
-    let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
-    let grant = grant_param(C, p)?;
     // One use: spent whatever this install does.
     let approval = s.plugin_install_approval.take();
+    let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
+    let grant = grant_param(C, p)?;
     let (plugin, bytes) = load_given(C, p)?;
     // `hash` pins the module the user was shown: one with other bytes is refused.
     if let Some(h) = p.get("hash").filter(|v| !v.is_null())
