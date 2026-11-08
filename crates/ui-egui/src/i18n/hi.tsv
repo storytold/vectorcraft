@@ -7403,6 +7403,11 @@
 @msg	the image is fully transparent	इमेज पूरी तरह से पारदर्शी है
 @msg	the image is not on an artboard; pass rect	इमेज एक आर्टबोर्ड पर नहीं है; सही होकर गुजरना
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	इमेज को {_1} × {_2} पिक्सेल पर पता लगाया गया था, जिसे {_3} × {_4} ({_5} मेगापिक्सेल) से नीचे बढ़ाया गया था।
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Flat लोगो मोड keepColors का उपयोग नहीं करता: यह logoColors में बताए गए रंगों को या अपने पाए गए रंगों को ट्रेस करता है।
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	कुछ भी ट्रेस नहीं हुआ: ट्रेस में मिला कोई भी रंग keepColors ({_1}) से मेल नहीं खाता।
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	कुछ भी ट्रेस नहीं हुआ: Ignore रंग keepColors में सूचीबद्ध रंगों के सभी क्षेत्र छोड़ देता है।
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	कुछ भी ट्रेस नहीं हुआ: keepColors से मेल खाने वाले रंग कोई पाथ नहीं बनाते।
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ट्रेस में मिला कोई भी रंग {c} से मेल नहीं खाता, इसलिए इसका कुछ भी ट्रेस नहीं होता।
 @msg	the image's pixels are missing	इमेज के पिक्सेल लापता हैं
 @msg	the image's pixels aren't in the document	इमेज के पिक्सेल डॉक्यूमेंट में नहीं हैं
 @msg	the image's pixels can't be read	इमेज के पिक्सेल को पढ़ा नहीं जा सकता है
