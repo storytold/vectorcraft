@@ -34,13 +34,14 @@ fn unknown(s: &mut Session, p: Value) -> Vec<(u64, u64, u64, String)> {
 #[test]
 fn check_lists_unknown_words_at_the_bytes_edit_range_changes() {
     let mut s = session();
-    // "é" is two bytes, so the unknown word starts at byte 14, not character 13.
-    let t = text(&mut s, 50.0, "café drawing qzxvw tools");
-    assert_eq!(unknown(&mut s, json!({})), [(t.0, 14, 19, "qzxvw".to_string())]);
+    // "—" is three bytes, so the unknown word starts at byte 12, not character 10. Punctuation,
+    // not a word, so the result doesn't depend on which dictionary is built in.
+    let t = text(&mut s, 50.0, "drawing — qzxvw tools");
+    assert_eq!(unknown(&mut s, json!({})), [(t.0, 12, 17, "qzxvw".to_string())]);
     let w = &run(&mut s, "text.spelling.check", json!({}))["words"][0];
     assert_eq!(w["lang"], "en", "text with no language is checked in English");
     // Change: the bytes the check gave, as one undo step.
-    run(&mut s, "text.editRange", json!({"id": t.0, "start": 14, "end": 19, "insert": "vector"}));
+    run(&mut s, "text.editRange", json!({"id": t.0, "start": 12, "end": 17, "insert": "vector"}));
     assert_eq!(unknown(&mut s, json!({})), []);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(unknown(&mut s, json!({})).len(), 1, "undo brings the word back");
@@ -58,6 +59,10 @@ fn check_goes_through_visible_unlocked_type_in_paint_order_or_the_ids_given() {
     let ids: Vec<u64> = unknown(&mut s, json!({})).iter().map(|w| w.0).collect();
     assert_eq!(ids, [a.0, b.0], "hidden and locked type are left out");
     assert_eq!(unknown(&mut s, json!({"ids": [b.0]})), [(b.0, 7, 12, "wvxzq".to_string())]);
+    assert_eq!(unknown(&mut s, json!({"ids": null})).len(), 2, "null ids is the default");
+    for ids in [json!(b.0), json!("all"), json!({"id": b.0}), json!([-1]), json!(["x"]), json!([999_999])] {
+        assert!(s.execute("text.spelling.check", &json!({"ids": ids})).is_err(), "malformed ids {ids} is refused");
+    }
 }
 
 #[test]

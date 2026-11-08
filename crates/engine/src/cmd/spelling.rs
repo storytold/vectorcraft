@@ -12,7 +12,7 @@ use vectorcraft_doc::NodeKind;
 
 use super::menucmds::whole_or;
 use super::typemenu::{all_texts, text_ids};
-use super::{CommandSpec, Result, Session, bad, cmd, has_doc, ids_param, str_param};
+use super::{CommandSpec, Result, Session, bad, checked_ids_param, cmd, has_doc, str_param};
 
 /// Most unknown words one check lists; past it the result says `more`.
 pub const MAX_WORDS: usize = 10_000;
@@ -47,11 +47,14 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
-    let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
-        Some(v) => text_ids(&st.doc, &v),
-        None => all_texts(&st.doc),
+    const C: &str = "text.spelling.check";
+    // Given `ids` are checked like Find and Replace's, so a malformed one is an error rather than
+    // a check of the whole document.
+    let ids = match p.get("ids").filter(|v| !v.is_null()) {
+        Some(_) => text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?),
+        None => all_texts(&s.doc()?.doc),
     };
+    let st = s.doc()?;
     let opts = Options::default();
     let mut words = vec![];
     let mut more = false;
