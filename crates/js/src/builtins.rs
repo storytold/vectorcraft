@@ -113,12 +113,11 @@ fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
     ];
     let mut error_proto = object_proto;
     for (i, (name, f)) in kinds.into_iter().enumerate() {
-        let proto = alloc(interp, Class::Ordinary, Some(if i == 0 { object_proto } else { error_proto }));
+        // Error.prototype and each NativeError prototype are Error objects (sections 15.11.4 and
+        // 15.11.7.7).
+        let proto = alloc(interp, Class::Error, Some(if i == 0 { object_proto } else { error_proto }));
         if i == 0 {
             error_proto = proto;
-            if let Some(p) = interp.heap.object_mut(proto) {
-                p.class = Class::Error;
-            }
             method(interp, proto, "toString", error_to_string, 0)?;
         }
         if let Some(slot) = interp.intrinsics.error_protos.get_mut(i) {

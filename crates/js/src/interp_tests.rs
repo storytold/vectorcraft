@@ -118,6 +118,11 @@ fn objects_arrays_and_accessors() {
     truth("'abc'.length === 3 && 'abc'[1] === 'b' && 'abc'.x === undefined");
     truth("var o = {}; o.hasOwnProperty('x') === false && ({x: 1}).hasOwnProperty('x')");
     truth("Object.prototype.toString.call([]) === '[object Array]' && Object.prototype.toString.call(null) === '[object Null]'");
+    // Error.prototype and each NativeError prototype are Error objects (sections 15.11.4 and 15.11.7.7).
+    truth(
+        "var s = Object.prototype.toString, all = [Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError], ok = true;\
+         for (var i = 0; i < all.length; i++) ok = ok && s.call(all[i].prototype) === '[object Error]'; ok",
+    );
     let e = fail("var a = []; a.length = -1");
     assert!(e.message.starts_with("RangeError"), "{}", e.message);
     let e = fail("'use strict'; var o = { get x() { return 1; } }; o.x = 2;");
