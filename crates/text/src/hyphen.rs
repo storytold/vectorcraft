@@ -90,6 +90,15 @@ fn parse_list(source: &str) -> Exceptions {
 /// case-insensitive. Empty clears the list.
 pub fn set_hyphenation_exceptions(source: &str) {
     *store() = parse_list(source);
+    EXCEPTIONS_SET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// How many times [`set_hyphenation_exceptions`] has run.
+static EXCEPTIONS_SET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A number that changes whenever [`set_hyphenation_exceptions`] runs.
+pub(crate) fn exceptions_generation() -> u64 {
+    EXCEPTIONS_SET.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// The last string passed to [`set_hyphenation_exceptions`] (empty when none).

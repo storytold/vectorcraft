@@ -936,6 +936,8 @@ lighting	Light	Valo
 	Expand Layers Panel Rows	Laajenna tasopaneelin rivit
 	Export CSS…	Vie CSS…
 	Export Keyboard Shortcuts…	Vie pikanäppäimet…
+	Export Keyboard Shortcuts as Text…	Vie pikanäppäimet tekstinä…
+	Export Text…	Vie teksti…
 	File Info Dialog	Tiedoston tiedot -valintaikkuna
 	Go to Artboard	Siirry piirtoalustaan
 	First Artboard	Ensimmäinen piirtoalusta
@@ -4832,6 +4834,7 @@ imageTrace	Outline	Ääriviiva
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} kuvaa ei voitu purkaa: se näkyy ristillä merkittynä ruutuna|{n} kuvaa ei voitu purkaa: ne näkyvät ristillä merkittyinä ruutuina
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linkitetty kuva muuttui levyllä: Päivitä linkit näyttää uuden version|{n} linkitettyä kuvaa muuttui levyllä: Päivitä linkit näyttää uudet versiot
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Päivitettiin {n} levyllä muuttunut linkitetty tiedosto|Päivitettiin {n} levyllä muuttunutta linkitettyä tiedostoa
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	asiakirjassa on leikkuuvara, jonka tämä PDF/X-tiedosto jättää pois: ota käyttöön ”Käytä asiakirjan leikkuuvara-asetuksia”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Vietiin {what}, {n} huomautus: {first}|Vietiin {what}, {n} huomautusta: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fonttitiedosto on nyt kansiossa {folder}|{n} fonttitiedostoa on nyt kansiossa {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fonttitiedosto on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}|{n} fonttitiedostoa on nyt kansiossa {folder}; {failed} ei voitu lisätä: {reason}
@@ -5848,6 +5851,19 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Insert Stop…	Lisää pysäytys…
+	Insert Stop	Lisää pysäytys
+	Record Stop	Nauhoita pysäytys
+	Allow Continue	Salli jatkaminen
+	Continue	Jatka
+	Continue Action	Jatka toimintoa
+	Delete Action Step	Poista toiminnon vaihe
+	Press Play Current Selection in the Actions panel to go on.	Jatka valitsemalla Toiminnot-paneelista Toista nykyinen valinta.
+	Stop: {message}	Pysäytys: {message}
+@msg	no action is waiting at a stop	mikään toiminto ei odota pysäytyksessä
+@msg	message must be text	message on oltava tekstiä
+@msg	allowContinue must be true or false	allowContinue on oltava true tai false
+@msg	Batch cannot play an action with a stop	Erä ei voi toistaa toimintoa, jossa on pysäytys
 	Playback Options	Toistoasetukset
 	Accelerated	Nopeutettu
 	Step by Step	Vaihe kerrallaan

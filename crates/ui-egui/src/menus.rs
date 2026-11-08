@@ -58,6 +58,7 @@ mod tree;
 mod ui_commands;
 
 pub use bar::menu_bar;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bar::menu_open;
 pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]

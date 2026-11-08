@@ -1054,6 +1054,8 @@ font-technology	Variable	可變
 	Export for Screens Settings	匯出為螢幕適用設定
 	Export for Screens…	匯出為螢幕適用…
 	Export Keyboard Shortcuts…	匯出鍵盤快速鍵…
+	Export Keyboard Shortcuts as Text…	將鍵盤快速鍵匯出為文字…
+	Export Text…	匯出文字…
 	Export Option	匯出選項
 	Export PDF	匯出 PDF
 	Export PDF Presets	匯出 PDF 預設集
@@ -2331,6 +2333,7 @@ file-filter	Templates	範本
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	無法解碼 {n} 張影像：它們顯示為打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -5452,6 +5455,19 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Playback Options…	播放選項…
+	Insert Stop…	插入停止…
+	Insert Stop	插入停止
+	Record Stop	記錄停止
+	Allow Continue	允許繼續
+	Continue	繼續
+	Continue Action	繼續動作
+	Delete Action Step	刪除動作步驟
+	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
+	Stop: {message}	停止：{message}
+@msg	no action is waiting at a stop	沒有動作在停止處等待
+@msg	message must be text	message 必須是文字
+@msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
+@msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Playback Options	播放選項
 	Accelerated	加速
 	Step by Step	逐步

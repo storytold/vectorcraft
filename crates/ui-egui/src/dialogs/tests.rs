@@ -954,6 +954,115 @@ fn tab_through_the_hex_field_keeps_the_value_typed_before_it() {
     }
 }
 
+/// A hex code pasted into the # field of the Color Picker or Swatch Options after a click replaces
+/// its digits, with or without `#`. Enter, Tab and a press on another field each take it. A paste
+/// that is not a color changes nothing, and Enter then closes on the color from before it.
+#[test]
+fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "Sky", "color": "#3366cc"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    // One frame of the dialog layer: every text drawn, with its center.
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| collect(&c.shape, &mut texts));
+        texts
+    };
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    // The context keeps a key down until it is let go, and a dialog ignores a repeat of Enter.
+    let release = |key| egui::Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() };
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    type Open = fn(&mut VectorcraftApp);
+    type Applied = fn(&VectorcraftApp) -> String;
+    let dialogs: [(&str, Open, Applied, &str, &str); 2] = [
+        (
+            "Color Picker",
+            |app| drop(app.run("ui.colorPicker", json!({"stroke": false, "color": "#ffffff"}))),
+            |app| crate::panels::current_paints(app).0.color().unwrap().to_hex(),
+            "FFFFFF",
+            "255",
+        ),
+        (
+            "Swatch Options",
+            |app| drop(app.run("ui.swatchOptions", json!({"name": "Sky"}))),
+            |app| app.session.active().unwrap().doc.swatch("Sky").unwrap().paint.color().unwrap().to_hex(),
+            "3366CC",
+            "204",
+        ),
+    ];
+    for (name, open, applied, hex, other) in dialogs {
+        // Opens the dialog and clicks into its # field. → The texts it shows.
+        let click_in = |app: &mut VectorcraftApp| {
+            open(app);
+            for _ in 0..3 {
+                frame(app, vec![]);
+            }
+            let texts = frame(app, vec![]);
+            let at = texts.iter().find(|(t, _)| t == hex).unwrap_or_else(|| panic!("{name}: no # field shows {hex}")).1;
+            frame(app, vec![egui::Event::PointerMoved(at), button(at, true)]);
+            frame(app, vec![button(at, false)]);
+            frame(app, vec![]);
+            texts
+        };
+        let before = applied(&app);
+        // The click selects the digits, so typing replaces them.
+        click_in(&mut app);
+        frame(&mut app, vec![egui::Event::Text("00FF00".into())]);
+        assert!(frame(&mut app, vec![]).iter().any(|(t, _)| t == "00FF00"), "{name}: typing after a click replaces the digits");
+        cancel(&mut app);
+        frame(&mut app, vec![]);
+        // A paste that is not a color leaves the field as it was.
+        for paste in ["hello", "12345", "#12345", "12345678", "#00FF00 and more", ""] {
+            click_in(&mut app);
+            let shows = frame(&mut app, vec![egui::Event::Paste(paste.into())]);
+            assert!(shows.iter().any(|(t, _)| t == hex), "{name}: the # field keeps {hex} after pasting {paste:?}");
+            frame(&mut app, vec![key(egui::Key::Enter)]);
+            frame(&mut app, vec![release(egui::Key::Enter)]);
+            assert!(app.ui.dialog.is_none(), "{name}: Enter closes the dialog after pasting {paste:?}");
+            assert_eq!(applied(&app), before, "{name}: pasting {paste:?} changes no color");
+        }
+        // Tab takes the pasted code.
+        click_in(&mut app);
+        frame(&mut app, vec![egui::Event::Paste("#00FF00".into())]);
+        frame(&mut app, vec![key(egui::Key::Tab)]);
+        frame(&mut app, vec![]);
+        assert!(frame(&mut app, vec![]).iter().any(|(t, _)| t == "00FF00"), "{name}: Tab takes the pasted code");
+        cancel(&mut app);
+        frame(&mut app, vec![]);
+        // So does a press on another field, which is drawn before the # field.
+        let texts = click_in(&mut app);
+        let away = texts.iter().find(|(t, _)| t == other).unwrap_or_else(|| panic!("{name}: no field shows {other}: {texts:?}")).1;
+        frame(&mut app, vec![egui::Event::Paste("00FF00".into())]);
+        frame(&mut app, vec![egui::Event::PointerMoved(away), button(away, true)]);
+        frame(&mut app, vec![button(away, false)]);
+        frame(&mut app, vec![]);
+        assert!(frame(&mut app, vec![]).iter().any(|(t, _)| t == "00FF00"), "{name}: a press elsewhere takes the pasted code");
+        cancel(&mut app);
+        frame(&mut app, vec![]);
+        // Enter takes it and closes the dialog with the color.
+        for paste in ["00FF00", "#00ff00", " #00FF00\n", "0f0"] {
+            click_in(&mut app);
+            frame(&mut app, vec![egui::Event::Paste(paste.into())]);
+            frame(&mut app, vec![key(egui::Key::Enter)]);
+            frame(&mut app, vec![release(egui::Key::Enter)]);
+            assert!(app.ui.dialog.is_none(), "{name}: Enter closes the dialog after pasting {paste:?}");
+            assert_eq!(applied(&app), "#00ff00", "{name}: Enter applies {paste:?}");
+            app.run("swatch.edit", json!({"name": "Sky", "color": "#3366cc"})).unwrap();
+        }
+    }
+}
+
 /// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
 /// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
 #[test]

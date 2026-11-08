@@ -1571,6 +1571,8 @@ digits	Malayalam	말라얄람어
 	Export Document	문서 내보내기
 	Export EPS	EPS 내보내기
 	Export Keyboard Shortcuts…	단축키 내보내기…
+	Export Keyboard Shortcuts as Text…	단축키를 텍스트로 내보내기…
+	Export Text…	텍스트 내보내기…
 	Export Option	내보내기 옵션
 	Export PDF	PDF 내보내기
 	Export PDF Presets	PDF 프리셋 내보내기
@@ -4664,6 +4666,7 @@ theme	Appearance	외관
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	이미지 {n}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -5395,6 +5398,19 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Playback Options…	재생 옵션…
+	Insert Stop…	중지 삽입…
+	Insert Stop	중지 삽입
+	Record Stop	중지 기록
+	Allow Continue	계속 허용
+	Continue	계속
+	Continue Action	액션 계속
+	Delete Action Step	액션 단계 삭제
+	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
+	Stop: {message}	중지: {message}
+@msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
+@msg	message must be text	message의 값은 텍스트여야 합니다
+@msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
+@msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별

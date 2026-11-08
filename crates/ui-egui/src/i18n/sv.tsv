@@ -1068,6 +1068,8 @@ font-technology	Variable	Variabla
 	Export for Screens Settings	Inställningar för Exportera för skärmar
 	Export for Screens…	Exportera för skärmar…
 	Export Keyboard Shortcuts…	Exportera kortkommandon…
+	Export Keyboard Shortcuts as Text…	Exportera kortkommandon som text…
+	Export Text…	Exportera text…
 	Export Option	Exportalternativ
 	Export PDF	Exportera PDF
 	Export PDF Presets	Exportera PDF-förinställningar
@@ -4523,6 +4525,7 @@ axis	Both	Båda
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} bild kunde inte avkodas och visas som en överkryssad ruta|{n} bilder kunde inte avkodas och visas som överkryssade rutor
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} länkad bild har ändrats på disken: Uppdatera länkar visar den nya versionen|{n} länkade bilder har ändrats på disken: Uppdatera länkar visar de nya versionerna
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Uppdaterade {n} länkad fil som ändrats på disken|Uppdaterade {n} länkade filer som ändrats på disken
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet anger ett utfall som den här PDF/X-filen utelämnar: slå på ”Använd dokumentets inställningar för utfall”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exporterade {what} med {n} anteckning: {first}|Exporterade {what} med {n} anteckningar: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} typsnittsfil finns nu i {folder}|{n} typsnittsfiler finns nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil finns nu i {folder}; {failed} kunde inte läggas till: {reason}|{n} typsnittsfiler finns nu i {folder}; {failed} kunde inte läggas till: {reason}
@@ -5841,6 +5844,19 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Playback Options…	Uppspelningsalternativ…
+	Insert Stop…	Infoga stopp…
+	Insert Stop	Infoga stopp
+	Record Stop	Spela in stopp
+	Allow Continue	Tillåt fortsättning
+	Continue	Fortsätt
+	Continue Action	Fortsätt åtgärd
+	Delete Action Step	Radera åtgärdssteg
+	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
+	Stop: {message}	Stopp: {message}
+@msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
+@msg	message must be text	message måste vara text
+@msg	allowContinue must be true or false	allowContinue måste vara true eller false
+@msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
 	Playback Options	Uppspelningsalternativ
 	Accelerated	Accelererad
 	Step by Step	Steg för steg

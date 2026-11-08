@@ -1084,6 +1084,8 @@ font-technology	Variable	Variables
 	Export for Screens Settings	Paramètres d’Exporter pour les écrans
 	Export for Screens…	Exporter pour les écrans…
 	Export Keyboard Shortcuts…	Exporter les raccourcis clavier…
+	Export Keyboard Shortcuts as Text…	Exporter les raccourcis clavier en texte…
+	Export Text…	Exporter le texte…
 	Export Option	Option d’exportation
 	Export PDF	Exporter en PDF
 	Export PDF Presets	Exporter les paramètres prédéfinis PDF
@@ -4612,6 +4614,7 @@ axis	Both	Les deux
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} image impossible à décoder, affichée sous forme de cadre barré d’une croix|{n} images impossibles à décoder, affichées sous forme de cadres barrés d’une croix
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} image liée modifiée sur le disque : Mettre à jour les liens affiche la nouvelle version|{n} images liées modifiées sur le disque : Mettre à jour les liens affiche les nouvelles versions
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} fichier lié modifié sur le disque mis à jour|{n} fichiers liés modifiés sur le disque mis à jour
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	le document définit un fond perdu que ce fichier PDF/X omet : activez « Utiliser les paramètres de fond perdu du document »
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} exporté avec {n} remarque : {first}|{what} exporté avec {n} remarques : {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fichier de polices se trouve maintenant dans {folder}|{n} fichiers de polices se trouvent maintenant dans {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fichier de polices se trouve maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}|{n} fichiers de polices se trouvent maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}
@@ -5813,6 +5816,19 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Playback Options…	Options d’exécution…
+	Insert Stop…	Insérer un arrêt…
+	Insert Stop	Insérer un arrêt
+	Record Stop	Enregistrer un arrêt
+	Allow Continue	Autoriser la poursuite
+	Continue	Continuer
+	Continue Action	Continuer le script
+	Delete Action Step	Supprimer l’étape du script
+	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
+	Stop: {message}	Arrêt : {message}
+@msg	no action is waiting at a stop	aucun script n’attend à un arrêt
+@msg	message must be text	message doit être du texte
+@msg	allowContinue must be true or false	allowContinue doit valoir true ou false
+@msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Playback Options	Options d’exécution
 	Accelerated	Accélérée
 	Step by Step	Pas à pas

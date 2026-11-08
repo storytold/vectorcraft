@@ -1060,6 +1060,8 @@ font-technology	Variable	Variabel
 	Export for Screens Settings	Einstellungen für „Für Bildschirme exportieren“
 	Export for Screens…	Für Bildschirme exportieren…
 	Export Keyboard Shortcuts…	Tastaturbefehle exportieren…
+	Export Keyboard Shortcuts as Text…	Tastaturbefehle als Text exportieren…
+	Export Text…	Text exportieren…
 	Export Option	Exportoption
 	Export PDF	PDF exportieren
 	Export PDF Presets	PDF-Vorgaben exportieren
@@ -4540,6 +4542,7 @@ theme	Appearance	Erscheinungsbild
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} Bild konnte nicht dekodiert werden und wird als durchgekreuzter Rahmen angezeigt|{n} Bilder konnten nicht dekodiert werden und werden als durchgekreuzte Rahmen angezeigt
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} verknüpftes Bild wurde auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neue Version|{n} verknüpfte Bilder wurden auf dem Datenträger geändert: „Verknüpfungen aktualisieren“ zeigt die neuen Versionen
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} auf dem Datenträger geänderte verknüpfte Datei aktualisiert|{n} auf dem Datenträger geänderte verknüpfte Dateien aktualisiert
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	das Dokument legt einen Anschnitt fest, den diese PDF/X-Datei auslässt: „Anschnitteinstellungen des Dokuments verwenden“ aktivieren
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} mit {n} Hinweis exportiert: {first}|{what} mit {n} Hinweisen exportiert: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} Schriftdatei liegt jetzt in {folder}|{n} Schriftdateien liegen jetzt in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} Schriftdatei liegt jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}|{n} Schriftdateien liegen jetzt in {folder}; {failed} konnten nicht hinzugefügt werden: {reason}
@@ -5400,6 +5403,19 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Playback Options…	Wiedergabeoptionen…
+	Insert Stop…	Stopp einfügen…
+	Insert Stop	Stopp einfügen
+	Record Stop	Stopp aufzeichnen
+	Allow Continue	Fortsetzen erlauben
+	Continue	Fortsetzen
+	Continue Action	Aktion fortsetzen
+	Delete Action Step	Aktionsschritt löschen
+	Press Play Current Selection in the Actions panel to go on.	Klicken Sie im Bedienfeld „Aktionen“ auf „Aktuelle Auswahl abspielen“, um fortzufahren.
+	Stop: {message}	Stopp: {message}
+@msg	no action is waiting at a stop	keine Aktion wartet an einem Stopp
+@msg	message must be text	message muss Text sein
+@msg	allowContinue must be true or false	allowContinue muss true oder false sein
+@msg	Batch cannot play an action with a stop	Die Stapelverarbeitung kann keine Aktion mit einem Stopp abspielen
 	Playback Options	Wiedergabeoptionen
 	Accelerated	Beschleunigt
 	Step by Step	Schrittweise

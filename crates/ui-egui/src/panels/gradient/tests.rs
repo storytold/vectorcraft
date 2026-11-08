@@ -1,7 +1,26 @@
 use egui::{Event, Modifiers, PointerButton};
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll};
 use super::*;
+
+/// The gradient swatches menu has one row per gradient swatch: with enough of them it stops inside a
+/// short window and the wheel reaches Save to Swatches. With few of them it does not scroll.
+#[test]
+fn a_long_gradient_swatch_menu_scrolls_inside_a_short_window() {
+    let stops = json!([{"offset": 0, "color": "#000000"}, {"offset": 1, "color": "#ffffff"}]);
+    let mut app = app(json!({"gradient": {"stops": stops}}));
+    app.run("swatch.new", json!({"name": "Dusk", "gradient": {"stops": stops}})).unwrap();
+    let paint = current(&app).expect("a gradient fill");
+    let short = paint.clone();
+    let arrow = |window: &PopupWindow| window.clickable(vec2(14.0, 40.0))[0].center();
+    let first = gradient_swatches(&app)[0].0.clone();
+    assert_short_list_does_not_scroll(&mut app, move |app, ui| thumbnail(app, ui, &short, true), arrow, &first, "Save to Swatches");
+    for n in 0..30 {
+        app.run("swatch.new", json!({"name": format!("Long {n}"), "gradient": {"stops": stops}})).unwrap();
+    }
+    assert_last_row_scrolls_into_view(&mut app, 200.0, move |app, ui| thumbnail(app, ui, &paint, true), arrow, &first, "Save to Swatches");
+}
 
 #[test]
 fn offsets_and_json() {
