@@ -150,9 +150,15 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions, cmyk: bool) -> Option<(Reg
     }
     // An unclipped full raster needs no regions.
     let whole = o.balance <= 0.0 && !o.clip_complex_regions;
-    let regions = if whole { vec![] } else { po::regions(&b.shapes) };
+    // Nor does one that splits into more regions than the balance allows: the build stops at the
+    // first region past the limit.
+    let (regions, over) = match o.region_limit().filter(|_| !every_region()) {
+        _ if whole => (vec![], false),
+        Some(limit) => po::regions_within(&b.shapes, limit).map_or((vec![], true), |r| (r, false)),
+        None => (po::regions(&b.shapes), false),
+    };
     // An arrangement that failed (degenerate geometry) leaves only rasterizing.
-    let all = regions.is_empty() || o.rasterize_all(regions.len());
+    let all = over || regions.is_empty() || o.rasterize_all(regions.len());
     let mut vector: Vec<(usize, RegionFill)> = vec![];
     let mut complex: Vec<usize> = vec![];
     let mut gradients_only = !all;
@@ -193,6 +199,32 @@ fn flatten_group(plain: &[&Node], o: &FlattenOptions, cmyk: bool) -> Option<(Reg
     });
     let vector = vector.into_iter().map(|(k, f)| (regions[k].path.clone(), f)).collect();
     Some((vector, area))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Groups flattened on this thread build all of their regions ([`with_every_region`]).
+    static EVERY_REGION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether groups build all of their regions, past the balance's limit too.
+#[cfg(test)]
+fn every_region() -> bool {
+    EVERY_REGION.with(std::cell::Cell::get)
+}
+
+#[cfg(not(test))]
+fn every_region() -> bool {
+    false
+}
+
+/// `f` with every group it flattens building all of its regions, past the balance's limit too.
+#[cfg(test)]
+pub(crate) fn with_every_region<T>(f: impl FnOnce() -> T) -> T {
+    EVERY_REGION.with(|e| e.set(true));
+    let out = f();
+    EVERY_REGION.with(|e| e.set(false));
+    out
 }
 
 /// The flat colour of a region covered by `sources` (CMYK in a `cmyk` document); `None` where

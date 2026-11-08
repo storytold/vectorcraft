@@ -1,8 +1,8 @@
-use super::axis::{LABEL_SIZE, MAX_CATEGORY_TICKS, MAX_TICK_MARKS, one_line, tick_values, value_axis};
+use super::axis::{LABEL_SIZE, MAX_CATEGORY_TICKS, MAX_TICK_MARKS, one_line, radar_axis, tick_values, value_axis};
 use super::columns::{Allowance, ColumnArt, column_art, column_designs};
 use super::data::fmt_value;
 use super::labels::{
-    FILLED_LINE_BUDGET, Gen, Role, SHADOW_BUDGET, SHADOW_OPACITY, blank_label, label_size, label_width, polyline, recolour_text, runs, shadow_of,
+    Gen, Role, SHADOW_BUDGET, SHADOW_OPACITY, blank_label, filled_lines_on, label_size, label_width, polyline, recolour_text, runs, shadow_of,
 };
 use super::markers::{MARKER_BUDGET, marker_cost, marker_designs};
 use super::series::{series_marks, with_series_opacity};
@@ -264,7 +264,7 @@ impl<'a> Plot<'a> {
             right_edge: g.rect.x1,
             wedge_labels: vec![],
             on_top: vec![],
-            filled: g.filled_lines && g.rows.len().saturating_mul(nser) <= FILLED_LINE_BUDGET,
+            filled: filled_lines_on(g, nser),
             bars_reach: None,
             shadowed: vec![],
             series: vec![vec![]; nser],
@@ -422,7 +422,7 @@ impl<'a> Plot<'a> {
         let (g, r, ncat, cs) = (self.g, self.r, self.ncat, self.cs);
         let centre = r.center();
         let rad = (r.width().min(r.height()) / 2.0).max(1.0);
-        let (lo, hi, step) = value_axis(g.ticks, g.axis_min, g.axis_max, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max));
+        let (lo, hi, step) = radar_axis(g);
         let at = |c: usize, v: f64| {
             let a = -std::f64::consts::FRAC_PI_2 + std::f64::consts::TAU * c as f64 / ncat as f64;
             centre + vectorcraft_geom::Vec2::new(a.cos(), a.sin()) * (rad * ((v - lo) / (hi - lo)).clamp(0.0, 1.0))
