@@ -510,7 +510,7 @@ fn cmd_alt_k_and_cmd_alt_shift_f_highlight_the_character_fields() {
     assert!(app.ui.dialog.is_none(), "not Preferences");
     // Keyboard Shortcuts lists all three under Type; Highlight Tracking has no default key.
     for id in ["type.highlightFontName", "type.highlightKerning", "type.highlightTracking"] {
-        assert_eq!(crate::shortcut_editor::entry(id).map(|e| e.group.as_str()), Some("Type"), "{id}");
+        assert_eq!(crate::shortcut_editor::entry(id).as_ref().map(|e| e.group.as_str()), Some("Type"), "{id}");
     }
     assert_eq!(crate::menus::shortcut_of("type.highlightTracking"), None);
 }
@@ -2347,7 +2347,7 @@ fn all_registered_shortcuts_parse() {
 /// dialog for the selection.
 #[test]
 fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
-    let entry = crate::shortcut_editor::entries().iter().find(|e| e.key == "effect:distort.transform").expect("Transform is listed");
+    let entry = crate::shortcut_editor::entry("effect:distort.transform").expect("Transform is listed");
     assert_eq!(entry.group, "Effect › Distort & Transform");
     assert_eq!(crate::keymap::command_of("effect:distort.transform").id, "effect.dialog");
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -2385,6 +2385,66 @@ fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
     frame(&mut app, press(Key::Enter, cmd()));
     let d = app.ui.dialog.as_ref().expect("a dialog opens");
     assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some("distort.transform"), "the effect's, not Move: {:?}", d.kind);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// A live-effect plug-in installed after Keyboard Shortcuts built its list has a row of its own:
+/// it takes a shortcut, `shortcuts.list` and its Effect › Plug-ins item show it, and the key
+/// applies the effect. While the plug-in is removed it has no row and the key runs nothing; the
+/// saved shortcut is the effect's again when the plug-in comes back, now opening the dialog of the
+/// options it has.
+#[test]
+fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
+    use vectorcraft_plugins::wat as tpl;
+    let (plugin, effect, key) = ("test.ui.keyedfx", "plugin.test.ui.keyedfx", "effect:plugin.test.ui.keyedfx");
+    let install = |params: &str| {
+        let src = tpl::module(&tpl::manifest(plugin, "effect", params), tpl::ECHO, "", 1);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(src).unwrap()).unwrap();
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let node = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+    let effects =
+        |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(node).unwrap().appearance.effects.iter().filter(|e| e.id == effect).count();
+    let shown = |app: &mut VectorcraftApp| {
+        let list = crate::shortcut_editor::run_command(app, "shortcuts.list", &json!({ "query": effect })).unwrap().unwrap();
+        list.as_array().unwrap().iter().map(|e| (e["id"].as_str().unwrap_or_default().to_string(), e["shortcut"].clone())).collect::<Vec<_>>()
+    };
+    let chord = "Cmd+Alt+Shift+F6";
+    let f6 = || press(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    // The lists and the keymap in effect are built before the plug-in is installed.
+    assert!(crate::shortcut_editor::entry(key).is_none());
+    crate::shortcut_editor::sync(&app.ui);
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["effect"] != effect));
+    install("{}");
+    let e = crate::shortcut_editor::entry(key).expect("listed once installed");
+    assert_eq!((e.label.as_str(), e.group.as_str()), ("Test test.ui.keyedfx", "Effect › Plug-ins"));
+    assert_eq!(crate::keymap::command_of(key).id, "effect.apply", "it has no options");
+    let set = crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key, "shortcut": chord})).unwrap().unwrap();
+    assert_eq!(set["shortcut"], chord);
+    assert_eq!(shown(&mut app), vec![(key.to_string(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("effect.apply", &json!({ "effect": effect })), Some(chord));
+    frame(&mut app, f6());
+    assert_eq!(effects(&app), 1, "the key applies the effect");
+    // Removed: no row, and the key runs nothing; the saved shortcut stays.
+    vectorcraft_plugins::registry::remove(plugin);
+    assert!(crate::shortcut_editor::entry(key).is_none());
+    assert_eq!(shown(&mut app), vec![]);
+    frame(&mut app, f6());
+    assert_eq!(effects(&app), 1);
+    assert!(app.ui.dialog.is_none());
+    assert!(crate::keymap::has_override(&app.ui.shortcut_overrides, key));
+    // Back, now with options: the saved shortcut opens its dialog.
+    install(r#"{"wiggle":{"type":"bool"}}"#);
+    assert_eq!(crate::keymap::command_of(key).id, "effect.dialog");
+    assert_eq!(shown(&mut app), vec![(key.to_string(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("effect.dialog", &json!({ "effect": effect })), Some(chord));
+    frame(&mut app, f6());
+    let d = app.ui.dialog.as_ref().expect("the effect's dialog opens");
+    assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some(effect), "{:?}", d.kind);
+    vectorcraft_plugins::registry::remove(plugin);
     crate::shortcut_editor::sync(&crate::state::UiState::default());
 }
 

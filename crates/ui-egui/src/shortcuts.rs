@@ -114,7 +114,7 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
     }
     // Effect menu items with shortcuts of their own (#3296): a chord bound to one is a command's
     // too, so the tool doesn't take Cmd+Enter bound to an effect before the keymap runs it.
-    for e in crate::shortcut_editor::effect_items() {
+    for e in crate::shortcut_editor::effect_items().iter() {
         if let Some(sc) = crate::shortcut_editor::effect_shortcut(&e.effect).and_then(parse) {
             v.push((sc, e.command, json!({ "effect": e.effect })));
         }
