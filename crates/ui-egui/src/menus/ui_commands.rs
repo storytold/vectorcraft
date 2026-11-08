@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
     ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
+    (
+        "shortcuts.exportText",
+        "Export Keyboard Shortcuts as Text…",
+        "",
+        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+    ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
         "ui.shortcutImportDialog",
@@ -441,6 +447,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    (
+        "window.control.dock",
+        "Dock Control Bar",
+        "",
+        "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -952,6 +964,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
     ),
     (
+        "ui.loadCharStyles",
+        "Load Character Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character styles to the active one (engine: charStyle.load), the Character Styles panel menu's Load Character Styles…",
+    ),
+    (
+        "ui.loadParaStyles",
+        "Load Paragraph Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's paragraph styles to the active one (engine: paraStyle.load), the Paragraph Styles panel menu's Load Paragraph Styles…",
+    ),
+    (
+        "ui.loadAllStyles",
+        "Load All Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character and paragraph styles to the active one (engine: textStyle.loadAll), Load All Styles… in either panel's menu",
+    ),
+    (
         "window.userGraphicStyleLibrary1",
         "User Graphic Style Library 1",
         "",
@@ -1230,6 +1260,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
     ),
     (
+        "ui.relinkDialog",
+        "Relink…",
+        "",
+        "{ids?: [image or placed document ids]} open Relink for `ids` (default: the selected ones; dialog `relink`: ids, links ([{name, ids}], one row per linked file), scope (Replace: each|selected (default)|all|missingInFolder, see links.relink), path (picked when empty), paths (with each: the files chosen so far, one per row of links)); OK runs links.relink with them, one undo step, except with each: OK takes path, or picks a file, for the next row of links, and the last row's OK relinks them all. An error when nothing is given or selected",
+    ),
+    (
         "ui.findLinksInFolder",
         "Find Linked Files in Folder…",
         "",
@@ -1415,7 +1451,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A filter that asks for a heavy budget asks the user first: OK installs it → plugin.install's result | {pending: \"confirm\"} while it asks",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool, hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, and so does a filter that asks for a heavy budget: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
     ),
     (
         "plugin.cancelRuns",

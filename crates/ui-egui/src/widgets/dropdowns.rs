@@ -252,8 +252,9 @@ pub(crate) fn popover_is_open(ctx: &egui::Context, anchor: egui::Id) -> bool {
     ctx.data(|d| d.get_temp::<u64>(anchor.with("popover"))).is_some_and(|f| f + 1 >= frame)
 }
 
-/// Records where the bottom bars (status and hint bars) start this frame in the window being drawn,
-/// so its menus can stop above them (#2086). Without bars it is the bottom of the window.
+/// Records where the bottom bars (the status and hint bars, and the Control bar docked at the
+/// bottom) start this frame in the window being drawn, so its menus can stop above them (#2086).
+/// Without bars it is the bottom of the window.
 pub fn set_menu_floor(ctx: &egui::Context, y: f32) {
     let id = menu_floor_id(ctx);
     ctx.data_mut(|d| d.insert_temp(id, y));
@@ -266,7 +267,7 @@ fn menu_floor_id(ctx: &egui::Context) -> egui::Id {
 
 /// Where menus of the window being drawn stop: its recorded floor, or its bottom edge when nothing
 /// recorded one, as in a floating panel's OS window.
-pub(super) fn menu_floor(ctx: &egui::Context) -> f32 {
+pub(crate) fn menu_floor(ctx: &egui::Context) -> f32 {
     let id = menu_floor_id(ctx);
     ctx.data(|d| d.get_temp::<f32>(id)).unwrap_or_else(|| ctx.content_rect().bottom())
 }

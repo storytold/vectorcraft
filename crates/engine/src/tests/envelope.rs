@@ -445,3 +445,470 @@ fn warped_type_in_a_symbol_reopens_unchanged() {
     let differ = (0..300).flat_map(|y| (0..400).map(move |x| (x, y))).filter(|&(x, y)| before.pixel(x, y) != after.pixel(x, y)).count();
     assert_eq!(differ, 0, "{differ} pixels changed on reopening");
 }
+
+/// The glyph outline bounds of type `id` in document space.
+fn ink_of(s: &Session, id: NodeId) -> Rect {
+    match node(s, id).kind {
+        NodeKind::Text(t) => t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).ink_bounds().unwrap()),
+        k => panic!("{k:?}"),
+    }
+}
+
+fn assert_box(a: Rect, b: Rect, what: &str) {
+    let d = [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    assert!(d < 1e-6, "{what}: {a:?} vs {b:?}");
+}
+
+/// The box envelope `id` maps its content from.
+fn src_of(s: &Session, id: NodeId) -> Rect {
+    live::EnvelopeMap::of(&node(s, id)).unwrap().src()
+}
+
+/// Envelopes map point type, area type and type in a group from the glyph outline bounds, not
+/// from the laid-out box (ascent to descent, or the area's frame): with a flat warp the distorted
+/// type sits where the type was, and Make with Mesh lays its grid over the glyphs.
+#[test]
+fn envelopes_map_type_from_its_glyph_outline_bounds() {
+    let mut s = session();
+    let point = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Envelope", "size": 48})).unwrap());
+    let area = id_of(
+        &s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Area type", "size": 36, "area": {"width": 300, "height": 200}})).unwrap(),
+    );
+    let grouped = id_of(&s.execute("text.create", &json!({"x": 450, "y": 200, "text": "Group", "size": 40})).unwrap());
+    sel(&mut s, &[grouped]);
+    let group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    for (t, target) in [(point, point), (area, area), (grouped, group)] {
+        let (ink, laid) = (ink_of(&s, t), node(&s, t).geometric_bounds().unwrap());
+        assert!(laid.height() - ink.height() > 1.0, "the laid-out box {laid:?} reaches past the glyphs {ink:?}");
+        let (stroked, plain) = live::envelope_content_boxes(&[std::sync::Arc::new(node(&s, target))], Affine::IDENTITY).unwrap();
+        assert_box(plain, ink, "geometric box");
+        assert_box(stroked, ink, "box with strokes (none)");
+        sel(&mut s, &[target]);
+        let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+        assert_box(src_of(&s, e), ink, "warp");
+        assert_box(node(&s, e).geometric_bounds().unwrap(), ink, "flat warp's bounds");
+        s.execute("edit.undo", &json!({})).unwrap();
+        let e = id_of(&s.execute("object.envelope.makeWithMesh", &json!({"rows": 2, "cols": 2})).unwrap());
+        let EnvelopeKind::Mesh { points, .. } = kind(&s, e) else { panic!("mesh") };
+        let grid = points.iter().fold(Rect::from_points(points[0], points[0]), |r, p| r.union_pt(*p));
+        assert_box(grid, ink, "mesh grid");
+        assert_box(src_of(&s, e), ink, "mesh");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+}
+
+/// Shrink Text to Fit lays type out by its size on the page: after the envelope is scaled, it
+/// maps from the glyphs of the type laid out at its new size, not those measured before.
+#[test]
+fn a_scaled_envelope_of_shrunk_type_maps_from_its_new_glyphs() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 2, "area": {"width": 3, "height": 3}})).unwrap());
+    s.edit("shrink", |d, _| {
+        if let NodeKind::Text(tx) = &mut d.node_mut(t).unwrap().kind {
+            tx.area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 10.0 };
+        }
+        Ok(())
+    })
+    .unwrap();
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    let text = |s: &Session| match node(s, e).kind {
+        NodeKind::Envelope { content, .. } => match &content[0].kind {
+            NodeKind::Text(tx) => tx.clone(),
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let ink = |tx: &vectorcraft_doc::TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx).ink_bounds().unwrap();
+    let before = text(&s);
+    assert_box(src_of(&s, e), before.xf.transform_rect_bbox(ink(&before)), "before scaling");
+    s.execute("object.scale", &json!({"sx": 150, "sy": 150, "origin": [100, 100]})).unwrap();
+    let after = text(&s);
+    let fresh = after.xf.transform_rect_bbox(ink(&after));
+    let stale = after.xf.transform_rect_bbox(ink(&before));
+    assert!((fresh.width() - stale.width()).abs() > 1e-3 || (fresh.height() - stale.height()).abs() > 1e-3, "{fresh:?} vs {stale:?}");
+    assert_box(src_of(&s, e), fresh, "after scaling");
+}
+
+/// A rotated envelope keeps a frame of its own: shrunk type in it is measured as it is laid out on
+/// the page, and its box is then taken into the frame.
+#[test]
+fn a_rotated_envelope_of_shrunk_type_maps_from_the_glyphs_on_the_page() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type", "size": 2, "area": {"width": 3, "height": 3}})).unwrap());
+    s.edit("shrink", |d, _| {
+        if let NodeKind::Text(tx) = &mut d.node_mut(t).unwrap().kind {
+            tx.area.fit = vectorcraft_doc::AreaFit::ShrinkText { min_percent: 10.0 };
+        }
+        Ok(())
+    })
+    .unwrap();
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    s.execute("object.rotate", &json!({"angle": 30, "origin": [100, 100]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 150, "origin": [100, 100]})).unwrap();
+    let (frame, tx) = match node(&s, e).kind {
+        NodeKind::Envelope { frame, content, .. } => match &content[0].kind {
+            NodeKind::Text(tx) => (*frame, tx.clone()),
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    assert!(frame != Affine::IDENTITY, "a rotated envelope has a frame");
+    let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &tx).ink_bounds().unwrap();
+    assert_box(src_of(&s, e), (frame.inverse() * tx.xf).transform_rect_bbox(ink), "in the frame");
+}
+
+/// The bars of underlined type are part of what it draws, so the envelope maps from them too and
+/// its bounds take them in.
+#[test]
+fn an_envelope_maps_underlined_type_from_its_glyphs_and_bars() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "HH", "size": 100})).unwrap());
+    s.execute("text.setFormat", &json!({"ids": [t.0], "underline": true})).unwrap();
+    let glyphs = ink_of(&s, t);
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    let src = src_of(&s, e);
+    assert!(src.y1 > glyphs.y1 + 1.0, "the underline below the glyphs {glyphs:?} is in the box {src:?}");
+    assert_box(node(&s, e).geometric_bounds().unwrap(), src, "flat warp's bounds");
+    let drawn = vectorcraft_render::effects::expanded_live_group(Some(&s.doc().unwrap().doc), &node(&s, e)).geometric_bounds().unwrap();
+    let off = [drawn.x0 - src.x0, drawn.y0 - src.y0, drawn.x1 - src.x1, drawn.y1 - src.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    assert!(off < 0.05, "the drawn art {drawn:?} fills the box {src:?}");
+}
+
+/// Undo of Make Envelope gives the type back with its laid-out box, and redo maps it from its
+/// glyphs again.
+#[test]
+fn undo_and_redo_of_an_envelope_of_type_keep_the_glyph_mapping() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Undo", "size": 60})).unwrap());
+    let (ink, laid) = (ink_of(&s, t), node(&s, t).geometric_bounds().unwrap());
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "bulge", "bend": 30})).unwrap());
+    let made = node(&s, e).geometric_bounds().unwrap();
+    assert_box(src_of(&s, e), ink, "made");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(e).is_none());
+    assert_box(node(&s, t).geometric_bounds().unwrap(), laid, "the type after undo");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_box(src_of(&s, e), ink, "redone");
+    assert_box(node(&s, e).geometric_bounds().unwrap(), made, "redone bounds");
+}
+
+/// A saved envelope of type reopens drawn by the same rule: from the glyph outline bounds, which
+/// the file does not store.
+#[test]
+fn a_saved_envelope_of_type_reopens_mapped_from_its_glyphs() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Saved", "size": 72})).unwrap());
+    let ink = ink_of(&s, t);
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "flag", "bend": 40})).unwrap());
+    let render = |s: &Session| vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 600, 400, Affine::IDENTITY, &Default::default());
+    let before = render(&s);
+    let dir = std::env::temp_dir().join(format!("vectorcraft-envelope-ink-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("type.vectorcraft");
+    s.execute("document.save", &json!({"path": path})).unwrap();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"path": path})).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_box(src_of(&o, e), ink, "reopened");
+    let after = render(&o);
+    let differ = (0..400).flat_map(|y| (0..600).map(move |x| (x, y))).filter(|&(x, y)| before.pixel(x, y) != after.pixel(x, y)).count();
+    assert_eq!(differ, 0, "{differ} pixels changed on reopening");
+}
+
+/// The type of envelope `e`'s first content object.
+fn content_text(s: &Session, e: NodeId) -> vectorcraft_doc::TextObject {
+    match node(s, e).kind {
+        NodeKind::Envelope { content, .. } => match &content[0].kind {
+            NodeKind::Text(tx) => (**tx).clone(),
+            k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    }
+}
+
+/// The box of `tx`'s glyph outlines with text space mapped by `m`, each outline mapped point by point.
+fn outlines_in(tx: &vectorcraft_doc::TextObject, m: Affine) -> Rect {
+    let path = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx).to_bezpath();
+    kurbo::Shape::bounding_box(&(m * path))
+}
+
+/// Rotated type maps from the box of its rotated glyph outlines, which is smaller than the box of
+/// its rotated glyph box; in a rotated envelope whose frame turns by another angle than the type,
+/// it maps from the outlines taken into the frame.
+#[test]
+fn an_envelope_of_rotated_type_maps_from_its_rotated_outlines() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 200, "y": 300, "text": "Rotated", "size": 60})).unwrap());
+    sel(&mut s, &[t]);
+    s.execute("object.rotate", &json!({"angle": 40, "origin": [200, 300]})).unwrap();
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    let tx = content_text(&s, e);
+    let outlines = outlines_in(&tx, tx.xf);
+    let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &tx).ink_bounds().unwrap();
+    let glyph_box = tx.xf.transform_rect_bbox(ink);
+    assert!(glyph_box.width() - outlines.width() > 1.0 || glyph_box.height() - outlines.height() > 1.0, "{glyph_box:?} vs {outlines:?}");
+    assert_box(src_of(&s, e), outlines, "rotated type");
+    s.execute("object.rotate", &json!({"angle": 15, "origin": [200, 300]})).unwrap();
+    let (frame, tx) = match node(&s, e).kind {
+        NodeKind::Envelope { frame, .. } => (*frame, content_text(&s, e)),
+        k => panic!("{k:?}"),
+    };
+    assert!(frame != Affine::IDENTITY, "a rotated envelope has a frame");
+    let in_frame = frame.inverse() * tx.xf;
+    assert!(in_frame.as_coeffs()[1].abs() > 0.1, "the type is turned against the frame: {in_frame:?}");
+    assert_box(src_of(&s, e), outlines_in(&tx, in_frame), "in the frame");
+}
+
+/// Type in perspective maps from the box of its outlines as its projection draws them, which is
+/// smaller than the projected box of its glyphs. Where the projection can't map a point (past its
+/// horizon), the point counts where it is, as the renderer draws it.
+#[test]
+fn an_envelope_of_type_in_perspective_maps_from_its_projected_outlines() {
+    use vectorcraft_geom::Homography;
+    // Every point of the type is past this one's horizon.
+    let horizon = Homography([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]]);
+    for (h, crosses) in [(Homography([[1.0, 0.3, 0.0], [0.1, 1.0, 0.0], [0.0015, 0.0008, 1.0]]), false), (horizon, true)] {
+        let mut s = session();
+        let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Perspective", "size": 60})).unwrap());
+        s.edit("perspective", |d, _| {
+            let n = d.node_mut(t).unwrap();
+            n.extras_mut().perspective = Some(Box::new(vectorcraft_doc::PerspectiveAttachment {
+                projection: Some(h.to_array()),
+                ..vectorcraft_doc::PerspectiveAttachment::new("left", 0.0)
+            }));
+            Ok(())
+        })
+        .unwrap();
+        assert!(node(&s, t).projection().is_some());
+        let NodeKind::Text(tx) = node(&s, t).kind else { panic!("type") };
+        let path = tx.xf * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &tx).to_bezpath();
+        let (mut drawn, mut unmapped): (Option<Rect>, usize) = (None, 0);
+        kurbo::flatten(&path, 0.001, |el| {
+            if let kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) = el {
+                let q = h.apply(p).unwrap_or_else(|| {
+                    unmapped += 1;
+                    p
+                });
+                drawn = Some(drawn.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+            }
+        });
+        let drawn = drawn.unwrap();
+        assert_eq!(unmapped > 0, crosses, "{unmapped} points past the horizon");
+        if !crosses {
+            let ink = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &tx).ink_bounds().unwrap();
+            let boxed = h.map_rect_bbox(tx.xf.transform_rect_bbox(ink)).unwrap();
+            assert!(boxed.width() - drawn.width() > 1.0 || boxed.height() - drawn.height() > 1.0, "{boxed:?} vs {drawn:?}");
+        }
+        sel(&mut s, &[t]);
+        let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+        let src = src_of(&s, e);
+        let off = [src.x0 - drawn.x0, src.y0 - drawn.y0, src.x1 - drawn.x1, src.y1 - drawn.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+        assert!(off < 0.05, "{src:?} vs {drawn:?}");
+    }
+}
+
+/// Type that draws nothing (only spaces) keeps its laid-out box.
+#[test]
+fn an_envelope_of_type_that_draws_nothing_maps_from_its_laid_out_box() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "   ", "size": 48})).unwrap());
+    let laid = node(&s, t).geometric_bounds().unwrap();
+    assert_box(live::envelope_content_bounds(&[std::sync::Arc::new(node(&s, t))]).unwrap(), laid, "spaces");
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    assert_box(src_of(&s, e), laid, "warp");
+}
+
+/// The strikethrough bar runs to the last glyph's advance, past its outline: the envelope maps
+/// from it too.
+#[test]
+fn an_envelope_maps_struck_through_type_from_its_glyphs_and_bars() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "HH", "size": 100})).unwrap());
+    let plain = ink_of(&s, t);
+    s.execute("text.setFormat", &json!({"ids": [t.0], "strikethrough": true})).unwrap();
+    let NodeKind::Text(tx) = node(&s, t).kind else { panic!("type") };
+    let db = vectorcraft_text::FontDb::global();
+    let laid = vectorcraft_text::layout(db, &tx);
+    let bars = vectorcraft_text::decorations(&laid, db, &tx);
+    assert!(!bars.is_empty(), "struck-through type has a bar");
+    let bar = tx.xf.transform_rect_bbox(kurbo::Shape::bounding_box(&bars[0].1));
+    assert!(bar.x1 > plain.x1 + 1.0, "the bar {bar:?} reaches past the glyphs {plain:?}");
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    assert_box(src_of(&s, e), plain.union(bar), "glyphs and bar");
+}
+
+/// In a layer, the visible type is measured by its glyphs and hidden type isn't measured; in a
+/// clip group whose clipping path is type, the envelope maps from that type's glyphs.
+#[test]
+fn type_in_layers_and_clip_groups_is_measured_by_its_glyphs() {
+    let mut s = session();
+    let shown = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Shown", "size": 48})).unwrap());
+    let hidden = id_of(&s.execute("text.create", &json!({"x": 100, "y": 500, "text": "Hidden", "size": 48})).unwrap());
+    sel(&mut s, &[hidden]);
+    s.execute("object.hide", &json!({})).unwrap();
+    let ink = ink_of(&s, shown);
+    let layer = s.doc().unwrap().doc.layers[0].clone();
+    assert_box(live::envelope_content_bounds(&[layer]).unwrap(), ink, "layer");
+
+    let mut s = session();
+    let back = rect(&mut s, 50.0, 100.0, 500.0, 200.0);
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Clip", "size": 72})).unwrap());
+    let ink = ink_of(&s, t);
+    sel(&mut s, &[back, t]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert!(matches!(node(&s, g).kind, NodeKind::Group { clip: true, .. }));
+    let (stroked, plain) = live::envelope_content_boxes(&[std::sync::Arc::new(node(&s, g))], Affine::IDENTITY).unwrap();
+    assert_box(plain, ink, "clip group");
+    assert_box(stroked, ink, "clip group with strokes (none)");
+    sel(&mut s, &[g]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    assert_box(src_of(&s, e), ink, "warp of the clip group");
+}
+
+/// Stroked type: the box with strokes reaches past the glyphs as far as the type's strokes reach
+/// past its laid-out box. In perspective, the glyphs are the projected outlines and the reach is
+/// that of the strokes past the projected laid-out box.
+#[test]
+fn stroked_type_maps_from_its_glyphs_grown_by_its_strokes() {
+    let h = vectorcraft_geom::Homography([[1.0, 0.3, 0.0], [0.1, 1.0, 0.0], [0.0015, 0.0008, 1.0]]);
+    for perspective in [false, true] {
+        let mut s = session();
+        let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Stroke", "size": 60})).unwrap());
+        sel(&mut s, &[t]);
+        s.execute("paint.setStroke", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("stroke.set", &json!({"weight": 6})).unwrap();
+        if perspective {
+            s.edit("perspective", |d, _| {
+                d.node_mut(t).unwrap().extras_mut().perspective = Some(Box::new(vectorcraft_doc::PerspectiveAttachment {
+                    projection: Some(h.to_array()),
+                    ..vectorcraft_doc::PerspectiveAttachment::new("left", 0.0)
+                }));
+                Ok(())
+            })
+            .unwrap();
+        }
+        let n = node(&s, t);
+        assert_eq!(n.projection().is_some(), perspective);
+        let (v, g) = (n.visual_bounds().unwrap(), n.geometric_bounds().unwrap());
+        assert!(v.x0 < g.x0 - 1.0, "the strokes {v:?} reach past the laid-out box {g:?}");
+        let NodeKind::Text(tx) = &n.kind else { panic!("type") };
+        // The glyph outlines as drawn.
+        let ink = if perspective {
+            let path = tx.xf * vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx).to_bezpath();
+            let mut drawn: Option<Rect> = None;
+            kurbo::flatten(&path, 0.001, |el| {
+                if let kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) = el {
+                    let q = h.apply(p).unwrap();
+                    drawn = Some(drawn.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+                }
+            });
+            drawn.unwrap()
+        } else {
+            ink_of(&s, t)
+        };
+        let (stroked, plain) = live::envelope_content_boxes(&[std::sync::Arc::new(n.clone())], Affine::IDENTITY).unwrap();
+        let near = |a: Rect, b: Rect, what: &str| {
+            let d = [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+            assert!(d < 0.05, "{what} (perspective {perspective}): {a:?} vs {b:?}");
+        };
+        near(plain, ink, "geometric box");
+        near(stroked, Rect::new(ink.x0 - (g.x0 - v.x0), ink.y0 - (g.y0 - v.y0), ink.x1 + (v.x1 - g.x1), ink.y1 + (v.y1 - g.y1)), "with strokes");
+    }
+}
+
+/// Make with Top Object maps type from its glyphs onto the path's outline.
+#[test]
+fn a_top_object_envelope_of_type_maps_from_its_glyphs() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Top", "size": 72})).unwrap());
+    let ink = ink_of(&s, t);
+    let top = rect(&mut s, 80.0, 100.0, 300.0, 150.0);
+    sel(&mut s, &[t, top]);
+    let e = id_of(&s.execute("object.envelope.makeWithTopObject", &json!({})).unwrap());
+    assert!(matches!(kind(&s, e), EnvelopeKind::TopObject { .. }));
+    assert_box(src_of(&s, e), ink, "top object");
+}
+
+/// Type in a symbol instance is measured as before: the envelope maps from the instance's own
+/// bounds, not from the type's glyphs.
+#[test]
+fn an_envelope_of_a_symbol_instance_of_type_maps_from_the_instance_s_bounds() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Symbol", "size": 60})).unwrap());
+    let ink = ink_of(&s, t);
+    sel(&mut s, &[t]);
+    s.execute("symbol.new", &json!({"name": "Type"})).unwrap();
+    let inst = s.doc().unwrap().selection.objects[0];
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }));
+    let own = node(&s, inst).geometric_bounds().unwrap();
+    assert!((own.height() - ink.height()).abs() > 1.0, "{own:?} vs {ink:?}");
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    assert_box(src_of(&s, e), own, "symbol instance");
+}
+
+/// Type inside a blend or a repeat is measured as before: the envelope maps from the object's own
+/// bounds, not from the type's glyphs.
+#[test]
+fn an_envelope_of_a_blend_or_repeat_of_type_maps_from_its_own_bounds() {
+    for repeat in [false, true] {
+        let mut s = session();
+        let a = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Blend", "size": 60})).unwrap());
+        let mut parts = vec![a];
+        if !repeat {
+            parts.push(id_of(&s.execute("text.create", &json!({"x": 300, "y": 400, "text": "Blend", "size": 60})).unwrap()));
+        }
+        let ink = parts.iter().map(|t| ink_of(&s, *t)).reduce(|a, b| a.union(b)).unwrap();
+        sel(&mut s, &parts);
+        let made = if repeat { "object.repeat.grid" } else { "object.blend.make" };
+        let holder = id_of(&s.execute(made, &json!({})).unwrap());
+        let own = node(&s, holder).geometric_bounds().unwrap();
+        let measured = live::envelope_content_bounds(&[std::sync::Arc::new(node(&s, holder))]).unwrap();
+        assert_box(measured, own, made);
+        assert!((own.height() - ink.height()).abs() > 1.0 || (own.width() - ink.width()).abs() > 1.0, "{made}: {own:?} vs {ink:?}");
+        sel(&mut s, &[holder]);
+        let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+        assert_box(src_of(&s, e), own, made);
+    }
+}
+
+/// An inline graphic counts by its box: the envelope maps from the glyph outlines and the box of
+/// the graphic, which reaches past the glyphs.
+#[test]
+fn an_envelope_maps_type_with_an_inline_graphic_from_its_glyphs_and_the_graphic() {
+    let mut s = session();
+    s.execute("shape.ellipse", &json!({"x": 600, "y": 500, "width": 40, "height": 40})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Dot"})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "xx", "size": 40})).unwrap());
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 1, "symbol": "Dot"})).unwrap();
+    let NodeKind::Text(tx) = node(&s, t).kind else { panic!("type") };
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &tx);
+    let [inline] = laid.inlines.as_slice() else { panic!("one inline graphic: {}", laid.inlines.len()) };
+    let graphic = tx.xf.transform_rect_bbox(inline.bounds);
+    let glyphs = outlines_in(&tx, tx.xf);
+    assert!(graphic.y0 < glyphs.y0 - 1.0, "the graphic {graphic:?} reaches above the glyphs {glyphs:?}");
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+    assert_box(src_of(&s, e), glyphs.union(graphic), "glyphs and graphic");
+}
+
+/// Reset with Mesh without Maintain Shape lays its flat grid over the glyphs.
+#[test]
+fn reset_with_mesh_lays_a_flat_grid_over_the_glyphs() {
+    let mut s = session();
+    let t = id_of(&s.execute("text.create", &json!({"x": 100, "y": 200, "text": "Reset", "size": 72})).unwrap());
+    let ink = ink_of(&s, t);
+    sel(&mut s, &[t]);
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "bulge", "bend": 40})).unwrap());
+    s.execute("object.envelope.resetWithMesh", &json!({"rows": 2, "cols": 3, "maintainShape": false})).unwrap();
+    let EnvelopeKind::Mesh { points, .. } = kind(&s, e) else { panic!("mesh") };
+    let grid = points.iter().fold(Rect::from_points(points[0], points[0]), |r, p| r.union_pt(*p));
+    assert_box(grid, ink, "flat grid");
+}

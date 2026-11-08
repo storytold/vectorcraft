@@ -1032,6 +1032,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        // Before the artboards are taken below: the page is the first artboard's.
+        let page = self.page_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1139,6 +1141,9 @@ impl<'a> Reader<'a> {
             for a in brushes.iter_mut().flat_map(|(lib, _)| lib.iter_mut().flat_map(|b| b.art_mut())) {
                 vectorcraft_doc::swatches::map_node_solid_paints(a, &mut follow);
             }
+            for w in &mut self.warped_type {
+                vectorcraft_doc::swatches::map_node_solid_paints(&mut w.look, &mut follow);
+            }
         }
         let mut warnings = self.warnings;
         if let Some((lib, unread)) = brushes {
@@ -1179,6 +1184,12 @@ impl<'a> Reader<'a> {
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             envelopes_drawn: self.envelopes_drawn,
+            warped_type: super::super::envelope::WarpedType {
+                looks: self.warped_type,
+                checks: self.envelope_checks,
+                spent: self.envelope_spent,
+                page,
+            },
             styles_read,
             canvas_scale: self.canvas_scale,
             xml_ids: self.xml_ids,

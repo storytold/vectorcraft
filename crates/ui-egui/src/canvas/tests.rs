@@ -1602,13 +1602,18 @@ fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
 }
 
 /// Two headless canvas frames → the vertices of the second one's tessellated mesh, which the
-/// GPU takes in one buffer.
+/// GPU takes in one buffer, without the art's raster: the render worker's frame can land in
+/// either frame of a comparison.
 fn frame_vertices(app: &mut VectorcraftApp, ctx: &egui::Context) -> usize {
     frame(app, ctx, vec![]);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| show(app, ui));
     out.textures_delta.clear();
-    let mesh = |p: &egui::ClippedPrimitive| if let egui::epaint::Primitive::Mesh(m) = &p.primitive { m.vertices.len() } else { 0 };
+    let art = app.canvas.texture.as_ref().map(|t| t.id());
+    let mesh = |p: &egui::ClippedPrimitive| match &p.primitive {
+        egui::epaint::Primitive::Mesh(m) if Some(m.texture_id) != art => m.vertices.len(),
+        _ => 0,
+    };
     ctx.tessellate(out.shapes, out.pixels_per_point).iter().map(mesh).sum()
 }
 
@@ -2438,7 +2443,7 @@ fn cached_frames_keep_their_scale_during_resize_rotation_and_dpi_changes() {
         // Deliver the actual replacement and verify that it replaces the cached key.
         let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let expected = job.key.clone();
-        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0 }).unwrap();
+        completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 1.0, moved: 0, reused: false }).unwrap();
         frame(&mut app, size, new_ppp);
         assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame arrived");
     }
@@ -2581,11 +2586,12 @@ fn pan_fills_the_area_the_last_frame_leaves() {
     let fill_job = fill_jobs.try_recv().expect("the fill is on the fill worker");
     let (fw, fh, _) = fill_view(&job.key);
     assert!(fill_job.opts.kept_images_only && (fill_job.w, fill_job.h) == (fw, fh), "{:?}", (fill_job.w, fill_job.h));
+    assert!(!fill_job.may_copy && !fill_job.may_keep, "the fill worker copies nothing and holds no frame");
     assert!(app.canvas.fill.is_none(), "nothing to draw until the fill arrives");
     // The fill arrives; the next frame draws it, and asks for no other fill.
     let img = app.canvas.renderer.render(&fill_job.doc, fill_job.w, fill_job.h, fill_job.view, &fill_job.opts);
     let (doc, opts) = (fill_job.doc, fill_job.opts);
-    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0 }).unwrap();
+    fill_completed.send(crate::render_worker::Done { key: fill_job.key, doc, opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
     let (meshes, pixels) = frame(&mut app);
     assert!(fill_jobs.try_recv().is_err(), "the fill covers the canvas");
     assert_eq!(app.canvas.key.as_ref(), Some(&old), "the last frame is still shown");
@@ -2630,11 +2636,11 @@ fn pan_fills_the_area_the_last_frame_leaves() {
     app.view_mut().unwrap().center = Point::new(250.0, 150.0);
     // That fill finishes after the worker's frame: it is taken and not kept.
     let img = app.canvas.renderer.render(&next.doc, next.w, next.h, next.view, &next.opts);
-    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0 }).unwrap();
+    fill_completed.send(crate::render_worker::Done { key: next.key, doc: next.doc, opts: next.opts, img, ms: 5.0, moved: 0, reused: false }).unwrap();
     // The worker's frame arrives: it covers the canvas, and the fill is no longer drawn or kept.
     let img = app.canvas.renderer.render(&job.doc, job.w, job.h, job.view, &job.opts);
     let expected = job.key.clone();
-    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0 }).unwrap();
+    completed.send(crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: 50.0, moved: 0, reused: false }).unwrap();
     let (meshes, _) = frame(&mut app);
     assert_eq!(app.canvas.key.as_ref(), Some(&expected), "the worker's frame is shown");
     assert!(app.canvas.fill.is_none() && meshes.iter().all(|m| m.texture_id != fill_tex), "the fill is dropped");
@@ -6158,6 +6164,32 @@ fn clear_history_waits_while_the_ime_composes() {
     assert!(crate::menus::enabled(&app, "edit.clearHistory"));
 }
 
+/// New Document from State waits while an IME composes, as Undo does: no document is made and the
+/// composition goes on.
+#[test]
+fn new_document_from_state_waits_while_the_ime_composes() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    typing_frame(&mut app, &ctx, vec![]);
+    app.select_tool("type");
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let at = xf.to_screen(Point::new(100.0, 100.0));
+    let click =
+        |p: Pos2, pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(at, true)]);
+    typing_frame(&mut app, &ctx, vec![click(at, false)]);
+    typing_frame(&mut app, &ctx, vec![preedit("が", 1)]);
+    assert!(app.session.tool_composing());
+    assert!(!crate::menus::enabled(&app, "edit.newDocumentFromState"));
+    crate::menus::invoke(&mut app, "edit.newDocumentFromState", json!({}));
+    assert!(app.session.tool_composing(), "the composition goes on");
+    assert_eq!(app.session.documents().len(), 1);
+    typing_frame(&mut app, &ctx, vec![preedit("", 0), egui::Event::Ime(egui::ImeEvent::Commit("雅".into()))]);
+    assert!(crate::menus::enabled(&app, "edit.newDocumentFromState"));
+}
+
 #[test]
 fn clicking_away_mid_composition_keeps_the_text_and_interrupts_the_ime() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -6344,7 +6376,7 @@ fn editing_keys_after_an_ime_commit_apply_in_the_same_frame() {
 }
 
 /// Cmd/Ctrl+Enter bound to a command runs the command and types no line break, also when a plain
-/// Enter comes in the same frame. Unbound, it types a line break as Enter does.
+/// Enter comes in the same frame. Unbound, it ends editing and keeps the text.
 #[test]
 fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -6359,18 +6391,83 @@ fn a_command_on_cmd_enter_runs_without_typing_a_line_break() {
         modifiers: egui::Modifiers::COMMAND,
     });
     typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
-    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter");
     crate::keymap::set_override(&mut app.ui.shortcut_overrides, "view.grid", "Cmd+Enter");
     crate::shortcut_editor::sync(&app.ui);
     let grid = app.ui.view.grid;
     typing_frame(&mut app, &ctx, cmd_enter.to_vec());
-    let ran = (plain(&app, id), app.ui.view.grid);
+    let ran = (plain(&app, id), app.ui.view.grid, app.session.tool_wants_text());
     typing_frame(&mut app, &ctx, [tap(egui::Key::Enter).to_vec(), cmd_enter.to_vec()].concat());
     app.ui.shortcut_overrides.clear();
     crate::shortcut_editor::sync(&app.ui);
-    assert_eq!((ran.0.as_str(), ran.1), ("a\n", !grid), "Cmd+Enter runs Show Grid only");
-    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert_eq!((ran.0.as_str(), ran.1, ran.2), ("a", !grid, true), "Cmd+Enter runs Show Grid only");
+    assert_eq!((plain(&app, id).as_str(), app.ui.view.grid), ("a\n", grid), "Enter types a line break and Cmd+Enter runs Show Grid");
+    assert!(app.session.tool_wants_text(), "a bound Cmd+Enter does not end editing");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert_eq!(plain(&app, id), "a\n", "nothing is bound to Cmd+Enter: no line break");
+    assert!(!app.session.tool_wants_text(), "unbound, Cmd+Enter ends editing");
+    assert_eq!(app.session.tool_id(), "selection");
+}
+
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing like Escape: a repeat of it, and text,
+/// keys and a paste after it in the same frame, leave the type as it was. Enter, Shift+Enter and
+/// Ctrl+Enter on macOS still type line breaks.
+#[test]
+fn cmd_enter_ends_text_editing_and_keeps_the_text() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let key = |pressed, repeat, modifiers| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat, modifiers };
+    let mac_ctrl = egui::Modifiers { ctrl: true, ..Default::default() };
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::NONE), key(false, false, egui::Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::SHIFT), key(false, false, egui::Modifiers::SHIFT)]);
+    typing_frame(&mut app, &ctx, vec![key(true, false, mac_ctrl), key(false, false, mac_ctrl)]);
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+    assert!(app.session.tool_wants_text());
+    let held = vec![
+        key(true, false, egui::Modifiers::COMMAND),
+        key(true, true, egui::Modifiers::COMMAND),
+        egui::Event::Text("b".into()),
+        egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+        egui::Event::Paste("c".into()),
+        egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() },
+    ];
+    typing_frame(&mut app, &ctx, held);
+    assert!(!app.session.tool_wants_text(), "editing ended");
+    assert_eq!(app.session.tool_id(), "selection");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n", "the text is kept, and nothing after the chord changes it");
+    assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)], "the type stays selected");
+    typing_frame(&mut app, &ctx, vec![key(true, true, egui::Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![key(false, false, egui::Modifiers::COMMAND)]);
+    assert!(app.ui.dialog.is_none(), "the repeats of the chord open no dialog");
+    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+}
+
+/// While the IME composes, Cmd+Enter is the IME's: it does not end editing, drop the marked text or
+/// type a line break, in the frame that starts the composition or in a later one.
+#[test]
+fn cmd_enter_while_composing_keeps_the_composition_and_editing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let cmd_enter = [true, false].map(|pressed| egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, [vec![preedit("か", 1)], cmd_enter.to_vec()].concat());
+    assert!(app.session.tool_composing(), "the same frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "the same frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "the same frame keeps the marked text and types no line break");
+    typing_frame(&mut app, &ctx, cmd_enter.to_vec());
+    assert!(app.session.tool_composing(), "a later frame keeps the composition");
+    assert!(app.session.tool_wants_text(), "a later frame keeps editing");
+    assert_eq!(plain(&app, id), "aか", "a later frame keeps the marked text and types no line break");
 }
 
 /// Reset to a blank document, select the Type tool and click document point (100, 100), returning
@@ -9015,6 +9112,205 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     assert_eq!(look(&mut app), (false, true));
 }
 
+/// One headless canvas frame → whether the fade outside the artboards is drawn.
+fn fades(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    fade_mesh(&shapes(app, ctx)).is_some()
+}
+
+/// The fade outside the artboards among `shapes`, with its position: the mesh in [`FADE_OUTSIDE`].
+fn fade_mesh(shapes: &[Shape]) -> Option<(usize, &egui::Mesh)> {
+    shapes.iter().enumerate().find_map(|(i, s)| match s {
+        Shape::Mesh(m) if !m.vertices.is_empty() && m.vertices.iter().all(|v| v.color == FADE_OUTSIDE) => Some((i, &**m)),
+        _ => None,
+    })
+}
+
+/// Does `mesh` cover the screen point `p`?
+fn mesh_covers(mesh: &egui::Mesh, p: Pos2) -> bool {
+    let cross = |a: Pos2, b: Pos2| (b - a).x * (p - a).y - (b - a).y * (p - a).x;
+    mesh.indices.chunks(3).any(|t| {
+        let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.vertices[i as usize].pos);
+        let (d0, d1, d2) = (cross(a, b), cross(b, c), cross(c, a));
+        (d0 >= 0.0 && d1 >= 0.0 && d2 >= 0.0) || (d0 <= 0.0 && d1 <= 0.0 && d2 <= 0.0)
+    })
+}
+
+/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the area
+/// outside the artboards draws darker; with another tool, or with the preference off, it draws as
+/// usual.
+#[test]
+fn the_artboard_tool_fades_the_pasteboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(FADE_OUTSIDE.a(), 102, "black at 40%: each channel under it shows at 60%");
+    assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
+    assert!(!fades(&mut app, &ctx), "the Selection tool");
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.select_tool("rectangle");
+    assert!(!fades(&mut app, &ctx), "the Rectangle tool");
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    app.select_tool("artboard");
+    assert!(!fades(&mut app, &ctx), "the preference off");
+}
+
+/// Presentation Mode shows only the art: with the Artboard tool active and the fade on, it draws no
+/// fade, and the fade comes back when Presentation Mode ends.
+#[test]
+fn presentation_mode_draws_no_fade() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.run("view.presentation", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 3);
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert!(!fades(&mut app, &ctx), "Presentation Mode");
+    app.run("view.presentation", json!({})).unwrap();
+    assert!(fades(&mut app, &ctx), "after Presentation Mode");
+}
+
+/// A row of boards aligned at the top, each a different height, gives a number of parts that grows
+/// with the number of boards, not with its square, and the parts still add up to the uncovered area.
+#[test]
+fn outside_rects_of_a_row_of_boards_stay_few() {
+    let n = 200;
+    let boards: Vec<Rect> =
+        (0..n).map(|i| Rect::new(20.0 * f64::from(i) + 10.0, 10.0, 20.0 * f64::from(i) + 20.0, 20.0 + 10.0 * f64::from(i))).collect();
+    let bounds = Rect::new(0.0, 0.0, 20.0 * f64::from(n) + 10.0, 10.0 * f64::from(n) + 40.0);
+    let parts = outside_rects(bounds, &boards, usize::MAX).unwrap();
+    assert!(parts.len() <= 3 * n as usize, "{} parts for {n} boards", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let covered: f64 = boards.iter().map(area).sum();
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - covered);
+}
+
+/// 500 narrow tall boards crossed by 500 narrow wide ones leave about 250,000 gaps between them.
+/// The fade then covers only the parts outside the box around all the boards, so it stays a few
+/// rectangles.
+#[test]
+fn the_fade_of_crossing_boards_stays_bounded() {
+    let n = 500;
+    let side = 4.0 * f64::from(n);
+    let boards: Vec<Rect> = (0..n)
+        .flat_map(|i| {
+            let at = 4.0 * f64::from(i);
+            [Rect::new(at, 0.0, at + 1.0, side), Rect::new(0.0, at, side, at + 1.0)]
+        })
+        .collect();
+    let bounds = Rect::new(-100.0, -100.0, side + 100.0, side + 100.0);
+    assert!(outside_rects(bounds, &boards, FADE_MAX_RECTS).is_none(), "more than {FADE_MAX_RECTS} gaps");
+    let parts = fade_rects(bounds, &boards);
+    assert!(parts.len() <= 4, "{} parts", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let all = Rect::new(0.0, 0.0, side, side);
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - area(&all));
+}
+
+/// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
+/// the art, over a point of an object outside the artboard and not over a point of an object on it,
+/// in an upright view and in a rotated one.
+#[test]
+fn the_fade_darkens_art_on_the_pasteboard_and_not_on_the_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": -150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+    app.view_mut().unwrap().zoom = 0.5;
+    app.select_tool("artboard");
+    for rotation in [0.0, 30.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let s = shapes(&mut app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let image = s.iter().position(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)).expect("the art");
+        let (at, mesh) = fade_mesh(&s).expect("the fade");
+        assert!(at > image, "over the art, rotation {rotation}");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(-100.0, 150.0))), "the object outside, rotation {rotation}");
+        assert!(!mesh_covers(mesh, xf.to_screen(Point::new(200.0, 150.0))), "the object on the artboard, rotation {rotation}");
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(200.0, -40.0))), "the pasteboard, rotation {rotation}");
+    }
+}
+
+/// The parts outside the boards: none where boards cover the bounds, the bounds without boards, and
+/// otherwise rectangles that do not overlap a board or each other and add up to the uncovered area.
+#[test]
+fn outside_rects_cover_the_bounds_minus_the_boards() {
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(fade_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
+    assert_eq!(fade_rects(bounds, &[]), vec![bounds]);
+    let boards = [Rect::new(10.0, 10.0, 40.0, 40.0), Rect::new(30.0, 30.0, 60.0, 80.0), Rect::new(90.0, -20.0, 130.0, 50.0)];
+    let parts = fade_rects(bounds, &boards);
+    let area = |r: &Rect| r.width() * r.height();
+    let overlap = |a: &Rect, b: &Rect| (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0) * (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
+    for (i, p) in parts.iter().enumerate() {
+        assert!(boards.iter().all(|b| overlap(p, b) == 0.0), "{p:?} overlaps a board");
+        assert!(parts[i + 1..].iter().all(|q| overlap(p, q) == 0.0), "{p:?} overlaps another part");
+    }
+    // Inside the bounds the boards cover 900 + 1,500 less their 100 of overlap, and 500 of the third.
+    assert_eq!(parts.iter().map(area).sum::<f64>(), 10_000.0 - (900.0 + 1_500.0 - 100.0 + 500.0));
+}
+
+/// Artboard Options › Update While Dragging: on, the pasteboard stays darker while the Artboard tool
+/// moves or resizes an artboard; off, it draws as usual during the drag and darker again after it.
+#[test]
+fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
+    for update in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "artboardUpdateWhileDragging", "value": update})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let r = app.session.active().unwrap().doc.artboards[0].rect;
+        let view = app.view_info();
+        // A move from the artboard's middle, then a resize from its right edge.
+        let (cx, cy) = (r.center().x, r.center().y);
+        for (from, to) in
+            [(Point::new(cx, cy), Point::new(cx + 40.0, cy + 30.0)), (Point::new(r.x1 + 40.0, cy + 30.0), Point::new(r.x1 + 90.0, cy + 30.0))]
+        {
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Down, from.x, from.y), view);
+            for p in [from + (to - from) * 0.5, to] {
+                dispatch(&mut app, &PointerEvent::new(PointerKind::Drag, p.x, p.y), view);
+            }
+            assert!(app.session.tool_transforming(), "the artboard is being dragged");
+            assert_eq!(fades(&mut app, &ctx), update, "Update While Dragging {update}");
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Up, to.x, to.y), view);
+            assert!(!app.session.tool_transforming());
+            assert!(fades(&mut app, &ctx), "darker again after the drag");
+        }
+        let moved = app.session.active().unwrap().doc.artboards[0].rect;
+        assert!(moved.x0 > r.x0 && moved.width() > r.width(), "moved, then resized: {moved:?} from {r:?}");
+    }
+}
+
+/// The fade is drawn only on the canvas: exports with the Artboard tool active and the fade on are
+/// the same as with the Selection tool and the fade off.
+#[test]
+fn the_pasteboard_fade_leaves_exports_unchanged() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": -40, "y": 20, "width": 120, "height": 40})).unwrap();
+    let exports = |app: &mut VectorcraftApp| -> Vec<serde_json::Value> {
+        ["svg", "png"].iter().map(|f| app.run("document.export", json!({"format": f})).unwrap()).collect()
+    };
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    let plain = exports(&mut app);
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": true})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert!(fades_outside_artboards(&app));
+    assert_eq!(exports(&mut app), plain);
+}
+
 /// Finished worker renders are uploaded whenever they are not older than what is currently
 /// displayed on screen. During continuous edit streams (drag previews, held arrow nudges, or
 /// command bursts) where the document revision advances every frame, intermediate worker frames
@@ -9055,6 +9351,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img5,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9077,6 +9374,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img3,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9098,6 +9396,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img8,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9119,6 +9418,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
             img: img10,
             ms: 2.5,
             moved: 0,
+            reused: false,
         })
         .unwrap();
 
@@ -9206,7 +9506,493 @@ fn the_contour_bar_sets_corners_and_bakes() {
 /// A frame the render worker finished for `job`: white pixels of the job's size.
 fn finished(job: &crate::render_worker::Job) -> crate::render_worker::Done {
     let img = vectorcraft_render::Rendered { width: job.w, height: job.h, pixels: vec![255; job.w as usize * job.h as usize * 4] };
-    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0 }
+    crate::render_worker::Done { key: job.key.clone(), doc: job.doc.clone(), opts: job.opts.clone(), img, ms: 40.0, moved: 0, reused: false }
+}
+
+/// A job for the render worker to pan over a document of `doc`: a view at 100% moved by `(dx, dy)`
+/// device pixels, in a 256×128 frame.
+fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx, dy): (f64, f64)) -> crate::render_worker::Job {
+    crate::render_worker::Job {
+        key: CacheKey { cx: 128.0 - dx, cy: 64.0 - dy, w: 256, h: 128, ..key.clone() },
+        doc: doc.clone(),
+        w: 256,
+        h: 128,
+        view: Affine::translate((dx, dy)),
+        opts: vectorcraft_render::RenderOptions::default(),
+        scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+        may_copy: true,
+        may_keep: true,
+    }
+}
+
+/// The document and the canvas key the render worker tests start from: rectangles on whole pixels.
+fn pan_doc() -> (std::sync::Arc<vectorcraft_doc::Document>, CacheKey) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    for (x, color) in [(16, "#c02040"), (96, "#2040c0"), (176, "#20a040")] {
+        let id = app.run("shape.rectangle", json!({"x": x, "y": 16, "width": 64, "height": 96})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
+    }
+    app.canvas.worker_started = true;
+    shapes(&mut app, &egui::Context::default());
+    let key = app.canvas.key.clone().expect("a frame was rendered");
+    (app.session.active().unwrap().doc.clone(), CacheKey { zoom: 1.0, rot: 0.0, ppp: 1.0, pixel: None, ..key })
+}
+
+/// A pan by whole device pixels takes the pixels that stay on screen from the last frame: a mark
+/// put in that frame moves with the pan, and the frame matches a whole render where the mark is not.
+#[test]
+fn a_whole_pixel_pan_copies_the_pixels_that_stay_on_screen() {
+    let (doc, key) = pan_doc();
+    for pan in [(10.0, 0.0), (-10.0, 0.0), (0.0, 7.0), (0.0, -7.0), (-13.0, 5.0)] {
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        let first = render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+        assert!(!first.reused, "the first frame renders whole");
+        let k = kept.as_mut().and_then(|k| k.pixels.as_mut()).expect("the frame holds its pixels");
+        // The middle of the frame, which stays on screen.
+        k[(64 * 256 + 128) * 4..(64 * 256 + 128) * 4 + 4].copy_from_slice(&[1, 2, 3, 4]);
+        let job = pan_job(&doc, &key, pan);
+        let frame = render_job(&mut r, &mut kept, &job);
+        assert!(frame.reused, "{pan:?}");
+        let at = ((64 + pan.1 as i64) * 256 + 128 + pan.0 as i64) as usize * 4;
+        assert_eq!(frame.img.pixels[at..at + 4], [1, 2, 3, 4], "{pan:?}: the marked pixel moved with the art");
+        let whole = vectorcraft_render::Renderer::new().render(&doc, 256, 128, job.view, &job.opts);
+        let mut img = frame.img.pixels;
+        img[at..at + 4].copy_from_slice(&whole.pixels[at..at + 4]);
+        assert_eq!(img, whole.pixels, "{pan:?}: the same picture as a whole render");
+    }
+}
+
+/// A frame does not copy from the last one when the view moves by part of a pixel or over half the
+/// frame, when copying is not allowed, or when a listed key field, render option, zoom, rotation,
+/// canvas size or device scale differs. Each such frame has the job's size. The session test
+/// compares such frames with a fresh render pixel by pixel.
+#[test]
+fn a_frame_renders_whole_when_anything_but_a_whole_pixel_pan_changed() {
+    let (doc, key) = pan_doc();
+    let other_opts = |f: &dyn Fn(&mut vectorcraft_render::RenderOptions)| {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        f(&mut job.opts);
+        job
+    };
+    let other_key = |f: &dyn Fn(&mut CacheKey)| {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        f(&mut job.key);
+        job
+    };
+    let mut other_doc = (*doc).clone();
+    other_doc.layers.clear();
+    let scaled = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        job.key.zoom = 2.0;
+        job.view = Affine::translate((10.0, 0.0)) * Affine::scale(2.0);
+        job
+    };
+    let turned = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        job.key.rot = 30.0;
+        job.view = Affine::translate((10.0, 0.0)) * Affine::rotate(30f64.to_radians());
+        job
+    };
+    let resized = {
+        let mut job = pan_job(&doc, &key, (10.0, 0.0));
+        (job.key.w, job.w) = (200, 200);
+        job
+    };
+    let denser = other_key(&|k| k.ppp = 2.0);
+    let not_allowed = crate::render_worker::Job { may_copy: false, ..pan_job(&doc, &key, (10.0, 0.0)) };
+    let cases: Vec<(&str, crate::render_worker::Job)> = vec![
+        ("part of a pixel across", pan_job(&doc, &key, (10.5, 0.0))),
+        ("part of a pixel down", pan_job(&doc, &key, (0.0, 0.25))),
+        ("too far to keep half", pan_job(&doc, &key, (250.0, 0.0))),
+        ("zoom", scaled),
+        ("rotation", turned),
+        ("canvas size", resized),
+        ("device scale", denser),
+        ("not allowed", not_allowed),
+        ("document", other_key(&|k| k.doc += 1)),
+        ("revision", crate::render_worker::Job { doc: std::sync::Arc::new(other_doc), ..other_key(&|k| k.revision += 1) }),
+        ("interaction", other_key(&|k| k.interacting = true)),
+        ("outline key", other_key(&|k| k.outline = true)),
+        ("Pixel Preview", other_key(&|k| k.pixel = Some([0, 0, 256, 128]))),
+        ("placed bitmaps", other_key(&|k| k.placed += 1)),
+        ("outline", other_opts(&|o| o.outline = true)),
+        ("proof", other_opts(&|o| o.proof = Some(Default::default()))),
+        ("overprint preview", other_opts(&|o| o.overprint_preview = true)),
+        ("rich black", other_opts(&|o| o.rich_black = true)),
+        ("trim", other_opts(&|o| o.trim = true)),
+        ("anti-alias", other_opts(&|o| o.anti_alias = vectorcraft_render::AntiAlias::None)),
+        ("smooth images", other_opts(&|o| o.smooth_images = false)),
+        ("opacity mask view", other_opts(&|o| o.mask_view = Some(vectorcraft_doc::NodeId(1)))),
+    ];
+    let mut copied = vec![];
+    for (name, job) in cases {
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+        let frame = render_job(&mut r, &mut kept, &job);
+        if frame.reused {
+            copied.push(name);
+        }
+        let whole = vectorcraft_render::Renderer::new().render(&job.doc, job.w, job.h, job.view, &job.opts);
+        assert_eq!((frame.img.width, frame.img.height), (whole.width, whole.height), "{name}");
+    }
+    assert!(copied.is_empty(), "copied from the last frame: {copied:?}");
+}
+
+/// The worker keeps a frame only when a later one can copy from it: a frame that does not allow
+/// keeping, a frame over the limit and a frame that drew a raster from before its object moved are
+/// not kept. A frame that may not copy can still be kept.
+#[test]
+fn the_render_worker_keeps_one_frame_up_to_its_limit() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 64})).unwrap()["id"].clone();
+    app.run("effect.apply", json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    let before = app.session.active().unwrap().doc.clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("object.move", json!({"dx": 8, "dy": 0})).unwrap();
+    let after = app.session.active().unwrap().doc.clone();
+    let (_, key) = pan_doc();
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    render_job(&mut r, &mut kept, &pan_job(&before, &key, (0.0, 0.0)));
+    assert!(kept.is_some(), "kept");
+    let mut moved = pan_job(&after, &CacheKey { revision: key.revision + 1, interacting: true, ..key.clone() }, (0.0, 0.0));
+    moved.opts.interacting = true;
+    let frame = render_job(&mut r, &mut kept, &moved);
+    assert!(frame.moved > 0, "the shadow drew from the raster made before the move");
+    let mut wrong = vec![];
+    if kept.is_some() {
+        wrong.push("a frame that drew a raster from before its object moved");
+    }
+
+    let (doc, key) = pan_doc();
+    render_job(&mut r, &mut kept, &pan_job(&doc, &key, (0.0, 0.0)));
+    assert!(kept.is_some(), "kept");
+    let off = crate::render_worker::Job { may_keep: false, ..pan_job(&doc, &key, (0.0, 0.0)) };
+    render_job(&mut r, &mut kept, &off);
+    if kept.is_some() {
+        wrong.push("a frame that does not allow keeping");
+    }
+    let whole = crate::render_worker::Job { may_copy: false, ..pan_job(&doc, &key, (0.0, 0.0)) };
+    render_job(&mut r, &mut kept, &whole);
+    assert!(kept.is_some(), "a frame that may not copy is kept");
+    let mut big = pan_job(&doc, &key, (0.0, 0.0));
+    (big.key.w, big.key.h, big.w, big.h) = (4097, 4097, 4097, 4097);
+    render_job(&mut r, &mut kept, &big);
+    if kept.is_some() {
+        wrong.push("a frame over 64 MiB");
+    }
+    assert!(wrong.is_empty(), "kept: {wrong:?}");
+}
+
+/// Through a pan, an edit, an undo, a zoom, a resize, a view mode and a color setting, each frame the
+/// worker renders whole matches a fresh render, and each copied frame is within one level of it.
+#[test]
+fn worker_frames_match_a_fresh_render_through_a_session() {
+    let (doc, key) = pan_doc();
+    let mut edited = (*doc).clone();
+    edited.layers.reverse();
+    let edited = std::sync::Arc::new(edited);
+    let pan = |at: (f64, f64)| pan_job(&doc, &key, at);
+    let changed = |f: &dyn Fn(&mut crate::render_worker::Job)| {
+        let mut job = pan((4.5, -4.0));
+        f(&mut job);
+        job
+    };
+    let steps: Vec<(&str, crate::render_worker::Job, bool)> = vec![
+        ("still", pan((0.0, 0.0)), false),
+        ("pan", pan((10.0, 0.0)), true),
+        ("pan back", pan((3.0, -4.0)), true),
+        ("part of a pixel", pan((3.5, -4.0)), false),
+        ("whole again", pan((4.5, -4.0)), true),
+        ("settled", changed(&|j| j.may_copy = false), false),
+        ("pan after settling", pan((5.5, -4.0)), true),
+        ("back before the edit", pan((4.5, -4.0)), true),
+        (
+            "edit",
+            changed(&|j| {
+                j.doc = edited.clone();
+                j.key.revision += 1;
+            }),
+            false,
+        ),
+        ("undo", pan((4.5, -4.0)), false),
+        (
+            "zoom",
+            changed(&|j| {
+                j.key.zoom = 2.0;
+                j.view = Affine::translate((4.5, -4.0)) * Affine::scale(2.0);
+            }),
+            false,
+        ),
+        (
+            "resize",
+            changed(&|j| {
+                (j.key.w, j.key.h, j.w, j.h) = (200, 100, 200, 100);
+            }),
+            false,
+        ),
+        (
+            "outline",
+            changed(&|j| {
+                j.key.outline = true;
+                j.opts.outline = true;
+            }),
+            false,
+        ),
+        (
+            "rich black",
+            changed(&|j| {
+                j.key.rich_black = true;
+                j.opts.rich_black = true;
+            }),
+            false,
+        ),
+        ("setting back", pan((4.5, -4.0)), false),
+        ("first pan after the setting", pan((5.5, -4.0)), false),
+        ("next pan", pan((6.5, -4.0)), true),
+    ];
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    for (name, job, copies) in steps {
+        let frame = render_job(&mut r, &mut kept, &job);
+        assert_eq!(frame.reused, copies, "{name}");
+        let whole = vectorcraft_render::Renderer::new().render(&job.doc, job.w, job.h, job.view, &job.opts);
+        if copies {
+            let off = frame.img.pixels.iter().zip(&whole.pixels).map(|(a, b)| a.abs_diff(*b)).max();
+            assert!(off.is_some_and(|d| d <= 1), "{name}: {off:?}");
+        } else {
+            assert_eq!(frame.img.pixels, whole.pixels, "{name}");
+        }
+    }
+}
+
+/// A pan over art the frame's size decides stays within one level of a fresh render of the frame,
+/// because it renders whole: a full-page raster effect whose raster a part of the frame would make
+/// at another scale, and a group drawn offscreen across the exposed part's edge with an Inner Glow
+/// child inside the part, whose filter layer starts at another pixel in the part. The worker does
+/// not keep such a frame for the pan to copy from.
+#[test]
+fn a_pan_over_art_the_frame_size_decides_renders_whole() {
+    let (_, key) = pan_doc();
+    let effect = |effect: &str, params: serde_json::Value| {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 595, "height": 842})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 595, "height": 842})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [id], "color": "#1a4de6"})).unwrap();
+        app.run("effect.apply", json!({"effect": effect, "ids": [id], "params": params})).unwrap();
+        app.session.active().unwrap().doc.clone()
+    };
+    let group_glow = {
+        use vectorcraft_doc::Appearance;
+        use vectorcraft_doc::color::{BlendMode, Color, Paint};
+        use vectorcraft_geom::{Rect, shapes::rectangle};
+        let mut d = vectorcraft_doc::Document::new(1600.0, 1200.0);
+        let basic = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+        let wide = Node::path(d.alloc_id(), rectangle(Rect::new(100.0, 100.0, 1590.0, 900.0)), basic(Color::rgb(0.9, 0.8, 0.3)));
+        let mut child = Node::path(d.alloc_id(), rectangle(Rect::new(1453.0, 200.0, 1583.0, 500.0)), basic(Color::rgb(0.1, 0.3, 0.9)));
+        child.appearance.effects = vec![vectorcraft_doc::Effect { id: "stylize.innerGlow".into(), params: json!({"blur": 40}), visible: true }];
+        child.blend = BlendMode::Multiply;
+        let mut group = Node::group(d.alloc_id(), vec![std::sync::Arc::new(wide), std::sync::Arc::new(child)]);
+        group.isolate = true;
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, group).unwrap();
+        std::sync::Arc::new(d)
+    };
+    let cases = [
+        ("Gaussian Blur 500 pt", effect("blur.gaussian", json!({"radius": 500})), (-200.0, -200.0), 2.0, (1440, 870)),
+        ("Craquelure", effect("texture.craquelure", json!({})), (-200.0, -200.0), 10.0, (3840, 2160)),
+        ("Inner Glow in a group drawn offscreen", group_glow, (0.0, 0.0), 1.0, (1600, 1200)),
+    ];
+    for (name, doc, (x, y), zoom, (w, h)) in cases {
+        let job = |dx: f64| {
+            let mut job = pan_job(&doc, &key, (dx, 0.0));
+            (job.key.w, job.key.h, job.w, job.h, job.key.zoom) = (w, h, w, h, zoom);
+            job.view = Affine::translate((x + dx, y)) * Affine::scale(zoom);
+            job
+        };
+        let mut r = vectorcraft_render::Renderer::new();
+        let mut kept = None;
+        render_job(&mut r, &mut kept, &job(0.0));
+        let pan = job(-40.0);
+        let frame = render_job(&mut r, &mut kept, &pan);
+        let whole = vectorcraft_render::Renderer::new().render(&pan.doc, pan.w, pan.h, pan.view, &pan.opts);
+        let off = frame.img.pixels.iter().zip(&whole.pixels).map(|(a, b)| a.abs_diff(*b)).max();
+        assert!(off.is_some_and(|d| d <= 1), "{name}: a channel differs by {off:?}");
+        assert!(!frame.reused, "{name}: the pan renders whole");
+        assert!(kept.is_none(), "{name}: the frame is not kept");
+    }
+}
+
+/// Runs `test`, whose canvas key holds the global placed-document bitmap clock, which tests on
+/// other threads move: a frame whose key changed by more than the view renders whole. An attempt
+/// that fails while the clock moved runs again; one that fails while it stood still is a real
+/// failure.
+fn while_the_placed_clock_stands_still(test: fn()) {
+    for _ in 0..20 {
+        let clock = vectorcraft_render::placed_document::generation();
+        match std::panic::catch_unwind(test) {
+            Ok(()) => return,
+            Err(_) if vectorcraft_render::placed_document::generation() != clock => {}
+            Err(e) => std::panic::resume_unwind(e),
+        }
+    }
+    test();
+}
+
+/// The canvas asks the worker for a frame that may copy pixels when the view moves, keeps the whole
+/// frame's time, and renders the frame whole once the view has been still for STILL_SECS, not
+/// before and only once.
+#[test]
+fn a_frame_with_copied_pixels_renders_whole_once_the_view_stops() {
+    while_the_placed_clock_stands_still(frame_with_copied_pixels_renders_whole_once_the_view_stops);
+}
+
+fn frame_with_copied_pixels_renders_whole_once_the_view_stops() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, t: f64| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(t), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    frame(&mut app, 1.0);
+    done_tx.send(finished(&jobs.try_recv().expect("the first frame"))).unwrap();
+    frame(&mut app, 1.0);
+    assert_eq!(app.canvas.last_ms, 40.0);
+    assert!(app.canvas.reused.is_none());
+
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 2.0);
+    let pan = jobs.try_recv().expect("the pan's frame goes to the worker");
+    assert!(pan.may_copy, "a new view may copy");
+    done_tx.send(crate::render_worker::Done { ms: 2.0, reused: true, ..finished(&pan) }).unwrap();
+    frame(&mut app, 3.0);
+    assert_eq!(app.canvas.reused, Some(3.0));
+    assert_eq!(app.canvas.last_ms, 40.0, "a frame with copied pixels keeps the whole frame's time");
+    assert_eq!(app.perf.render_ms, 2.0);
+
+    frame(&mut app, 3.0 + STILL_SECS / 2.0);
+    assert!(jobs.try_recv().is_err(), "the view has not been still long enough");
+    frame(&mut app, 3.0 + STILL_SECS);
+    let settle = jobs.try_recv().expect("the frame renders whole");
+    assert!(!settle.may_copy, "the settling frame copies nothing");
+    assert_eq!(settle.key, pan.key);
+    frame(&mut app, 3.0 + STILL_SECS * 2.0);
+    assert!(jobs.try_recv().is_err(), "queued once");
+    done_tx.send(finished(&settle)).unwrap();
+    frame(&mut app, 4.0);
+    assert!(app.canvas.reused.is_none());
+    frame(&mut app, 5.0);
+    assert!(jobs.try_recv().is_err(), "nothing to render after it");
+}
+
+/// The frame that renders whole after a pan stops copies nothing and stays on the worker, so the
+/// first step of the next pan copies from it. The jobs are the ones the canvas asks for.
+#[test]
+fn a_pan_after_the_settling_frame_copies() {
+    while_the_placed_clock_stands_still(pan_after_the_settling_frame_copies);
+}
+
+fn pan_after_the_settling_frame_copies() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, t: f64| {
+        let raw =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(t), ..Default::default() };
+        ctx.run_ui(raw, |ui| show(app, ui)).textures_delta.clear();
+    };
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    let mut render = |name: &str, copies: bool| {
+        let job = jobs.try_recv().unwrap_or_else(|_| panic!("{name}: the canvas asks for a frame"));
+        let f = render_job(&mut r, &mut kept, &job);
+        assert_eq!(f.reused, copies, "{name}");
+        let done = crate::render_worker::Done { key: job.key, doc: job.doc, opts: job.opts, img: f.img, ms: 40.0, moved: f.moved, reused: f.reused };
+        done_tx.send(done).unwrap();
+    };
+    frame(&mut app, 1.0);
+    render("the first frame", false);
+    frame(&mut app, 1.0);
+    // At 100% the view moves by whole device pixels.
+    app.view_mut().unwrap().zoom = 1.0;
+    frame(&mut app, 1.5);
+    render("the zoom", false);
+    frame(&mut app, 1.5);
+
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 1.75);
+    render("the first pan after the zoom", false);
+    frame(&mut app, 1.75);
+
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 2.0);
+    render("the pan", true);
+    frame(&mut app, 3.0);
+    frame(&mut app, 3.0 + STILL_SECS);
+    render("the settling frame", false);
+    frame(&mut app, 4.0);
+
+    app.view_mut().unwrap().center.x += 5.0;
+    frame(&mut app, 5.0);
+    render("the next pan", true);
+}
+
+/// A frame after a zoom or an edit holds no pixels, and the frame before it lets its pixels go. The
+/// first pan step after it renders whole and holds its pixels, and the next step copies them.
+#[test]
+fn a_frame_after_a_zoom_or_an_edit_holds_no_pixels() {
+    let (doc, key) = pan_doc();
+    let mut edited = (*doc).clone();
+    edited.layers.reverse();
+    let edited = std::sync::Arc::new(edited);
+    let zoomed = |key: &CacheKey, at: f64, zoom: f64| {
+        let mut job = pan_job(&doc, key, (at, 0.0));
+        job.key.zoom = zoom;
+        job.view = Affine::translate((at, 0.0)) * Affine::scale(zoom);
+        job
+    };
+    let revised = CacheKey { revision: key.revision + 1, ..key.clone() };
+    let steps: Vec<(&str, crate::render_worker::Job, bool, bool)> = vec![
+        ("the first frame", pan_job(&doc, &key, (0.0, 0.0)), false, true),
+        ("a zoom", zoomed(&key, 0.0, 2.0), false, false),
+        ("another zoom", zoomed(&key, 0.0, 1.5), false, false),
+        ("the first pan after the zoom", zoomed(&key, 10.0, 1.5), false, true),
+        ("the next pan", zoomed(&key, 20.0, 1.5), true, true),
+        ("an edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (0.0, 0.0)) }, false, false),
+        ("the first pan after the edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (10.0, 0.0)) }, false, true),
+        ("the next pan after the edit", crate::render_worker::Job { doc: edited.clone(), ..pan_job(&doc, &revised, (20.0, 0.0)) }, true, true),
+    ];
+    let mut r = vectorcraft_render::Renderer::new();
+    let mut kept = None;
+    for (name, job, copies, holds) in steps {
+        assert_eq!(render_job(&mut r, &mut kept, &job).reused, copies, "{name}: copied");
+        assert_eq!(kept.as_ref().is_some_and(|k| k.pixels.is_some()), holds, "{name}: holds its pixels");
+    }
+}
+
+/// The worker thread itself copies pixels on a pan and reports it.
+#[test]
+fn the_render_worker_thread_copies_a_pan() {
+    let (doc, key) = pan_doc();
+    let mut worker = crate::render_worker::Worker::spawn(egui::Context::default()).expect("a worker");
+    // Blocks until the worker sends its frame. A worker thread that stopped gives None.
+    let wait = |worker: &mut crate::render_worker::Worker| worker.wait(std::time::Duration::MAX).expect("the worker sends the frame");
+    worker.submit(pan_job(&doc, &key, (0.0, 0.0)));
+    assert!(!wait(&mut worker).reused);
+    worker.submit(pan_job(&doc, &key, (10.0, 0.0)));
+    assert!(wait(&mut worker).reused);
 }
 
 /// #4155: a document's first frame renders on the render worker, not on the UI thread, where a

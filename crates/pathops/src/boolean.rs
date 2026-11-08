@@ -255,12 +255,60 @@ pub(crate) struct Arrangement {
 pub(crate) struct Tidy {
     pub(crate) precision: f64,
     keep: Vec<Point>,
+    /// `keep` by y, sorted on first use.
+    keep_by_y: std::sync::OnceLock<Vec<Point>>,
     /// Input curves (with inflated bounds) used to rebuild split pieces exactly.
     curves: Vec<(kurbo::Rect, CubicBez)>,
     /// `curves` indices by the left edge of their bounds, and the widest bounds: the curves whose
     /// bounds can hold a point, without testing them all.
     by_x: Vec<usize>,
     max_width: f64,
+    /// The top edge of their bounds and their index, in order of that edge, with the tallest
+    /// bounds, made on first use.
+    by_y: std::sync::OnceLock<(Vec<(f64, usize)>, f64)>,
+    /// The wide lookups in `curves` and in `keep` so far.
+    curve_lookups: WideLookups,
+    point_lookups: WideLookups,
+}
+
+/// The lookups in one list of [`Tidy`] with more than [`WIDE_WINDOW`] candidates along x: the
+/// candidates they counted, a score that rises by [`Y_WIN`] when the window along y was the one
+/// used and falls by one when it was not (within [`Y_SCORE_LIMIT`] either way), and the lookups
+/// made while the score was below zero.
+#[derive(Debug, Default)]
+struct WideLookups {
+    scanned: std::sync::atomic::AtomicUsize,
+    score: std::sync::atomic::AtomicIsize,
+    below: std::sync::atomic::AtomicUsize,
+}
+
+impl Clone for WideLookups {
+    fn clone(&self) -> Self {
+        let get = |n: &std::sync::atomic::AtomicUsize| n.load(std::sync::atomic::Ordering::Relaxed).into();
+        Self { scanned: get(&self.scanned), score: self.score().into(), below: get(&self.below) }
+    }
+}
+
+impl WideLookups {
+    fn score(&self) -> isize {
+        self.score.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    /// Does a lookup with `window` candidates along x measure the window along y? It does past
+    /// [`WIDE_WINDOW`] candidates, once wide lookups have scanned [`SORT_COST`] candidates for each
+    /// of the `len` items that the sort along y orders, while the score is zero or more, and in
+    /// one of every [`Y_RETRY`] lookups while it is below.
+    fn search_y(&self, window: usize, len: usize) -> bool {
+        use std::sync::atomic::Ordering::Relaxed;
+        window > WIDE_WINDOW
+            && self.scanned.fetch_add(window, Relaxed) + window >= len.saturating_mul(SORT_COST)
+            && (self.score() >= 0 || self.below.fetch_add(1, Relaxed) % Y_RETRY == Y_RETRY - 1)
+    }
+    /// Counts a lookup that measured along y, and whether that window was the one used.
+    fn used_y(&self, used: bool) {
+        let step = if used { Y_WIN } else { -1 };
+        let next = (self.score() + step).clamp(-Y_SCORE_LIMIT, Y_SCORE_LIMIT);
+        self.score.store(next, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl Tidy {
@@ -286,12 +334,46 @@ impl Tidy {
         let mut by_x: Vec<usize> = (0..curves.len()).collect();
         by_x.sort_by(|&i, &j| curves[i].0.x0.total_cmp(&curves[j].0.x0));
         let max_width = curves.iter().map(|(r, _)| r.width()).fold(0.0, f64::max);
-        Self { precision, keep, curves, by_x, max_width }
+        Self { precision, keep, curves, by_x, max_width, ..Default::default() }
     }
+    fn keep_by_y(&self) -> &[Point] {
+        self.keep_by_y.get_or_init(|| {
+            let mut keep = self.keep.clone();
+            keep.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
+            keep
+        })
+    }
+    fn by_y(&self) -> (&[(f64, usize)], f64) {
+        let (by_y, max_height) = self.by_y.get_or_init(|| {
+            let mut by_y: Vec<(f64, usize)> = self.curves.iter().enumerate().map(|(i, (r, _))| (r.y0, i)).collect();
+            by_y.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            (by_y, self.curves.iter().map(|(r, _)| r.height()).fold(0.0, f64::max))
+        });
+        (by_y, *max_height)
+    }
+    /// Is a kept point within the tolerance of `p`? The points within it along x are tested, or
+    /// those along y when [`WideLookups::search_y`] holds and there are fewer along y.
     fn is_kept(&self, p: Point) -> bool {
         let tol = 1e-6 * (1.0 + p.x.abs().max(p.y.abs()));
         let lo = self.keep.partition_point(|q| q.x < p.x - tol);
-        self.keep[lo..].iter().take_while(|q| q.x <= p.x + tol).any(|q| (q.y - p.y).abs() <= tol)
+        // Usually one or two points lie within the tolerance along x; count them one by one up to
+        // the wide window, and search past it.
+        let rest = &self.keep[lo..];
+        let mut within = rest.iter().take(WIDE_WINDOW + 1).take_while(|q| q.x <= p.x + tol).count();
+        if within > WIDE_WINDOW {
+            within = rest.partition_point(|q| q.x <= p.x + tol);
+        }
+        let hi = lo + within;
+        if self.point_lookups.search_y(hi - lo, self.keep.len()) {
+            let keep_by_y = self.keep_by_y();
+            let lo_y = keep_by_y.partition_point(|q| q.y < p.y - tol);
+            let hi_y = lo_y + keep_by_y[lo_y..].partition_point(|q| q.y <= p.y + tol);
+            self.point_lookups.used_y(hi_y - lo_y < hi - lo);
+            if hi_y - lo_y < hi - lo {
+                return keep_by_y[lo_y..hi_y].iter().any(|q| (q.x - p.x).abs() <= tol);
+            }
+        }
+        self.keep[lo..hi].iter().any(|q| (q.y - p.y).abs() <= tol)
     }
 }
 
@@ -579,13 +661,52 @@ fn exact_merge(run: &[Seg], tidy: &Tidy) -> Option<CubicBez> {
     None
 }
 
+/// Past this many candidates along x, a lookup in [`Tidy`] adds them to the count of scanned ones.
+const WIDE_WINDOW: usize = 64;
+
+/// The candidates scanned per item of a list before [`Tidy`] sorts that list along y: about the
+/// comparisons per item of sorting 100,000 items.
+const SORT_COST: usize = 16;
+
+/// How much a lookup that used the window along y raises the score in [`WideLookups`].
+const Y_WIN: isize = 4;
+
+/// The highest and the lowest score in [`WideLookups`] (negated).
+const Y_SCORE_LIMIT: isize = 256;
+
+/// While the score in [`WideLookups`] is below zero, one lookup in this many measures along y.
+const Y_RETRY: usize = 32;
+
 impl Tidy {
-    /// The input curves whose bounds hold both `a` and `b`.
+    /// The input curves whose bounds hold both `a` and `b`, in the order of `by_x`. The candidates
+    /// are the curves whose bounds start within the widest bounds' reach of the points along x, or
+    /// the same along y when [`WideLookups::search_y`] holds and there are under a quarter as many
+    /// along y.
     fn curves_around(&self, a: Point, b: Point) -> impl Iterator<Item = &CubicBez> {
+        let holds = move |(r, _): &&(kurbo::Rect, CubicBez)| r.contains(a) && r.contains(b);
         let x = a.x.min(b.x);
         let hi = self.by_x.partition_point(|&i| self.curves[i].0.x0 <= x);
         let lo = self.by_x[..hi].partition_point(|&i| self.curves[i].0.x0 < x - self.max_width);
-        self.by_x[lo..hi].iter().map(|&i| &self.curves[i]).filter(move |(r, _)| r.contains(a) && r.contains(b)).map(|(_, c)| c)
+        let along_y = self.curve_lookups.search_y(hi - lo, self.curves.len()).then(|| {
+            let (by_y, max_height) = self.by_y();
+            let y = a.y.min(b.y);
+            let hi_y = by_y.partition_point(|&(y0, _)| y0 <= y);
+            let lo_y = by_y[..hi_y].partition_point(|&(y0, _)| y0 < y - max_height);
+            &by_y[lo_y..hi_y]
+        });
+        let along_y = along_y.filter(|ys| {
+            let used = ys.len().saturating_mul(4) < hi - lo;
+            self.curve_lookups.used_y(used);
+            used
+        });
+        let along_y = along_y.map(|ys| {
+            let mut found: Vec<(usize, &(kurbo::Rect, CubicBez))> = ys.iter().map(|&(_, i)| (i, &self.curves[i])).filter(|(_, c)| holds(c)).collect();
+            // `by_x` was sorted stably from index order, so this puts them in its order.
+            found.sort_by(|(i, p), (j, q)| p.0.x0.total_cmp(&q.0.x0).then(i.cmp(j)));
+            found.into_iter().map(|(_, c)| c)
+        });
+        let along_x = along_y.is_none().then(|| self.by_x[lo..hi].iter().map(|&i| &self.curves[i]).filter(holds));
+        along_x.into_iter().flatten().chain(along_y.into_iter().flatten()).map(|(_, c)| c)
     }
 
     /// `bp` with each curve piece that strays from the one input curve through both its ends
@@ -821,6 +942,17 @@ pub fn try_unite_all(paths: &[(&PathData, FillRule)]) -> Result<PathData, PathOp
 
 /// [`try_unite_all`] refit to `precision`, dropping slivers thinner than it.
 pub fn try_unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
+    match crate::sweep_axis::turned_fills(paths) {
+        Some(turned) => {
+            let refs: Vec<(&PathData, FillRule)> = turned.iter().map(|(p, r)| (p, *r)).collect();
+            try_unite_all_upright(&refs, precision).map(crate::sweep_axis::unturn)
+        }
+        None => try_unite_all_upright(paths, precision),
+    }
+}
+
+/// [`try_unite_all_with`] with the sweeps run on `paths` as they are.
+pub(crate) fn try_unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> Result<PathData, PathOpsError> {
     let mut all = BezPath::new();
     for (p, r) in paths {
         let bp = fill_bezpath(p);
@@ -846,6 +978,17 @@ pub fn unite_all(paths: &[(&PathData, FillRule)]) -> PathData {
 
 /// [`unite_all`] refit to `precision`, dropping slivers thinner than it.
 pub fn unite_all_with(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
+    match crate::sweep_axis::turned_fills(paths) {
+        Some(turned) => {
+            let refs: Vec<(&PathData, FillRule)> = turned.iter().map(|(p, r)| (p, *r)).collect();
+            crate::sweep_axis::unturn(unite_all_upright(&refs, precision))
+        }
+        None => unite_all_upright(paths, precision),
+    }
+}
+
+/// [`unite_all_with`] with the sweeps run on `paths` as they are.
+pub(crate) fn unite_all_upright(paths: &[(&PathData, FillRule)], precision: f64) -> PathData {
     let mut all = BezPath::new();
     for (p, r) in paths {
         let bp = fill_bezpath(p);
@@ -918,6 +1061,108 @@ mod tests {
         on.line_to(out.p0);
         on.close_path();
         assert_eq!(tidy.repair(&on), on);
+    }
+
+    #[test]
+    fn input_curves_and_kept_points_are_found_in_wide_and_tall_art() {
+        // Rows of short curves across the page, and the same stood on end: one lookup has a
+        // narrow window along x, the other along y.
+        let mut wide = BezPath::new();
+        for row in 0..4 {
+            let y = row as f64 * 3.0;
+            wide.move_to((0.0, y));
+            for k in 0..200 {
+                let x = k as f64;
+                wide.curve_to((x + 0.3, y + 1.0), (x + 0.7, y + 1.0), (x + 1.0, y));
+            }
+        }
+        let tall = kurbo::Affine::new([0.0, 1.0, 1.0, 0.0, 0.0, 0.0]) * &wide;
+        for art in [&wide, &tall] {
+            let tidy = Tidy::keeping(DEFAULT_PRECISION, [art]);
+            let mut sorted: Vec<usize> = (0..tidy.curves.len()).collect();
+            sorted.sort_by(|&i, &j| tidy.curves[i].0.x0.total_cmp(&tidy.curves[j].0.x0).then(i.cmp(&j)));
+            for (_, c) in tidy.curves.iter().step_by(7) {
+                use kurbo::ParamCurve;
+                // A curve's start point is also held by the curve before it, whose bounds start a
+                // whole curve further back.
+                for (a, b) in [(c.p0, c.p3), (c.p0, c.p0), (c.eval(0.25), c.eval(0.75)), (c.p0, c.p0 + kurbo::Vec2::new(2.5, 2.5))] {
+                    let by_hand: Vec<&CubicBez> =
+                        sorted.iter().map(|&i| &tidy.curves[i]).filter(|(r, _)| r.contains(a) && r.contains(b)).map(|(_, c)| c).collect();
+                    assert_eq!(tidy.curves_around(a, b).collect::<Vec<_>>(), by_hand, "{a:?} {b:?}");
+                }
+                for p in [c.p0, c.p0 + kurbo::Vec2::new(1e-7, -1e-7), c.p0 + kurbo::Vec2::new(0.0, 1e-3), c.p0 + kurbo::Vec2::new(1e-3, 0.0)] {
+                    let tol = 1e-6 * (1.0 + p.x.abs().max(p.y.abs()));
+                    let by_hand = tidy.keep.iter().any(|q| (q.x - p.x).abs() <= tol && (q.y - p.y).abs() <= tol);
+                    assert_eq!(tidy.is_kept(p), by_hand, "{p:?}");
+                }
+            }
+            // The tall art's lookups reach the sorted lists along y; the wide art's never do.
+            let tall_art = std::ptr::eq(art, &tall);
+            assert_eq!(tidy.by_y.get().is_some(), tall_art);
+            assert_eq!(tidy.keep_by_y.get().is_some(), tall_art);
+        }
+    }
+
+    #[test]
+    fn a_few_wide_lookups_do_not_sort_along_y() {
+        let mut tall = BezPath::new();
+        for x in 0..2 {
+            let x = f64::from(x) * 3.0;
+            tall.move_to((x, 0.0));
+            for k in 0..200 {
+                let y = f64::from(k);
+                tall.curve_to((x + 1.0, y + 0.3), (x + 1.0, y + 0.7), (x, y + 1.0));
+            }
+        }
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&tall]);
+        let a = Point::new(0.0, 50.0);
+        let found = |tidy: &Tidy| tidy.curves_around(a, a).count();
+        // Bounds at x = 0: the column's 200 curves are candidates along x, and two of them hold `a`.
+        assert_eq!(found(&tidy), 2);
+        assert!(tidy.is_kept(a));
+        assert!(tidy.by_y.get().is_none());
+        assert!(tidy.keep_by_y.get().is_none());
+        // Enough of them to pay for the sort, and the answers stay the same.
+        let scanned = |l: &WideLookups| l.scanned.load(std::sync::atomic::Ordering::Relaxed);
+        while scanned(&tidy.curve_lookups) < SORT_COST * tidy.curves.len() || scanned(&tidy.point_lookups) < SORT_COST * tidy.keep.len() {
+            assert_eq!(found(&tidy), 2);
+            assert!(tidy.is_kept(a));
+        }
+        assert_eq!(found(&tidy), 2);
+        assert!(tidy.is_kept(a));
+        assert!(tidy.by_y.get().is_some());
+        assert!(tidy.keep_by_y.get().is_some());
+        // Along y the windows are narrow, so the lookups keep measuring there.
+        assert!(tidy.curve_lookups.score() > 0 && tidy.point_lookups.score() > 0);
+    }
+
+    #[test]
+    fn lookups_measure_along_y_rarely_where_it_narrows_nothing() {
+        // A square grid of short curves: about as many candidates lie along y as along x.
+        let mut grid = BezPath::new();
+        for row in 0..100 {
+            let y = f64::from(row) * 2.0;
+            grid.move_to((0.0, y));
+            for k in 0..100 {
+                let x = f64::from(k);
+                grid.curve_to((x + 0.3, y + 0.5), (x + 0.7, y + 0.5), (x + 1.0, y));
+            }
+        }
+        let tidy = Tidy::keeping(DEFAULT_PRECISION, [&grid]);
+        let lookups: u32 = 20_000;
+        for k in 0..lookups {
+            let a = Point::new(f64::from(k % 97) + 0.5, f64::from(k % 89) * 2.0 + 0.2);
+            let found: Vec<&CubicBez> = tidy.curves_around(a, a).collect();
+            if k % 500 == 0 {
+                let by_hand: Vec<&CubicBez> = tidy.by_x.iter().map(|&i| &tidy.curves[i]).filter(|(r, _)| r.contains(a)).map(|(_, c)| c).collect();
+                assert_eq!(found, by_hand, "{a:?}");
+            }
+        }
+        // The window along y was measured until the score fell below zero, then once in Y_RETRY lookups.
+        assert!(tidy.by_y.get().is_some());
+        assert_eq!(tidy.curve_lookups.score(), -Y_SCORE_LIMIT);
+        let below = tidy.curve_lookups.below.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(below > lookups as usize / 2, "{below} of {lookups} lookups below zero");
     }
 
     #[test]

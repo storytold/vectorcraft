@@ -120,6 +120,18 @@ fn is_ident(c: char) -> bool {
 /// How deep `:not()`s may nest (real style sheets nest one or two).
 const MAX_NOT_NESTING: usize = 8;
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Selector::matches`] has tested a selector against an element on this thread.
+    static SELECTOR_TESTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`SELECTOR_TESTS`] of this thread.
+#[cfg(test)]
+fn selector_tests() -> u64 {
+    SELECTOR_TESTS.get()
+}
+
 impl Selector {
     /// `None` for selectors this cascade doesn't support (they never match).
     fn parse(s: &str) -> Option<Self> {
@@ -273,6 +285,8 @@ impl Selector {
             memo.insert(key, hit);
             hit
         }
+        #[cfg(test)]
+        SELECTOR_TESTS.set(SELECTOR_TESTS.get().saturating_add(1));
         go(&self.parts, n, &mut HashMap::new())
     }
 }
