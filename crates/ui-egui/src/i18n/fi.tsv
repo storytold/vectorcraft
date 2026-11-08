@@ -6294,6 +6294,7 @@ breakText	Glyphs	Merkit
 	Gap 5	Väli 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	vääristetyt tekstiobjektit, jotka tuotiin piirroksena eikä muokattavana tekstinä: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objektit, jotka piirtyivät eri tavoin kuin tiedoston oma sivu, tuotiin sivun piirroksena: {_1}
 
 @msg	You must choose a side pattern.	Valitse sivukuvio.

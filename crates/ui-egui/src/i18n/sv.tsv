@@ -6316,6 +6316,7 @@ breakText	Glyphs	Glyfer
 	Gap 5	Mellanrum 5
 
 @msg	{_1}: they came in as the page's art	{_1}: de importerades som sidans bild
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	förvrängda textobjekt som importerades som bild och inte som redigerbar text: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekt som ritades annorlunda än filens egen sida importerades som sidans bild: {_1}
 
 @msg	You must choose a side pattern.	Du måste välja ett sidomönster.

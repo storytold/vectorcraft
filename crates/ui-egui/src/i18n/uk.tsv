@@ -5864,6 +5864,7 @@ breakText	Glyphs	Гліфи
 	Gap 5	Проміжок 5
 
 @msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	деформовані текстові об’єкти, імпортовані як графіка, а не як редагований текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	об’єкти, що малювалися інакше, ніж власна сторінка файлу, імпортовано як графіку сторінки: {_1}
 
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.

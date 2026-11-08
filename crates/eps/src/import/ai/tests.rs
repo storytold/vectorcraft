@@ -6847,6 +6847,134 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
 }
 
+/// A document of `n` warped text objects, with the art the live warp makes of each, in its look.
+fn warped_type_doc(n: usize) -> (Document, Vec<super::envelope::WarpedLook>) {
+    use vectorcraft_doc::{Appearance, Effect, TextObject};
+    let mut doc = Document::new(400.0, 200.0);
+    let mut looks = vec![];
+    let mut layer = Node::layer(doc.alloc_id(), "Art", vectorcraft_doc::LayerColor::Preset(0));
+    for i in 0..n {
+        let t = TextObject::point(kurbo::Point::new(20.0, 40.0 + 40.0 * i as f64), "TILT", Default::default());
+        let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        let mut appearance = Appearance::default();
+        appearance.effects.push(Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+        text.appearance = appearance.into();
+        text.name = Some(format!("Type {i}"));
+        text.locked = i == 0;
+        text.visible = i != 0;
+        let mut look = vectorcraft_effects::expand_outlined(None, &text, None).unwrap();
+        look.id = doc.alloc_id();
+        looks.push(super::envelope::WarpedLook { slot: text.id, look, left_out: None });
+        layer.children_mut().unwrap().push(Arc::new(text));
+    }
+    doc.layers = vec![Arc::new(layer)];
+    (doc, looks)
+}
+
+/// Warped text objects share the import's budget of checks. One past it keeps its drawn art with its
+/// text object's name and state, as one that fails the check does, and its box and wrap setting.
+#[test]
+fn warped_type_past_the_budget_comes_in_as_its_look() {
+    let (mut doc, mut looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let left_out = Rect::new(1.0, 2.0, 3.0, 4.0);
+    looks[1].left_out = Some(left_out);
+    let wrap = vectorcraft_doc::TextWrap::default();
+    doc.node_mut(second).unwrap().extras_mut().wrap = Some(wrap);
+    let warped = super::envelope::WarpedType { looks, checks: 1, ..Default::default() };
+    let mut restyled = vec![Rect::new(5.0, 6.0, 7.0, 8.0), left_out];
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut restyled), 1);
+    assert_eq!(restyled, [Rect::new(5.0, 6.0, 7.0, 8.0)]);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    let kept = doc.node(second).unwrap();
+    assert!(matches!(kept.kind, NodeKind::Group { .. } | NodeKind::Path { .. }), "{kept:#?}");
+    assert_eq!((kept.name.as_deref(), kept.visible, kept.locked), (Some("Type 1"), true, false));
+    assert_eq!(kept.extras().wrap, Some(wrap));
+}
+
+/// The budget for warped type is what the envelopes left: their checks and the page's share they
+/// spent, with the page they are held to.
+#[test]
+fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let exact = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat))));
+    let beside = format!("{RED}{}f\n", rect_path(40.5, 20.0, 160.5, 80.0));
+    let shifted = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &beside)));
+    for r in [&exact, &shifted] {
+        assert_eq!(r.warped_type.checks, super::envelope::MAX_CHECKED - 1);
+        assert!(r.warped_type.page.is_some());
+    }
+    live_envelope(&art(&shifted.doc)[0]);
+    assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
+}
+
+/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+#[test]
+fn warped_type_is_held_to_the_first_artboard() {
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+                  %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+                  %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
+                  %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
+    assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
+    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+}
+
+/// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
+#[test]
+fn type_with_a_hidden_warp_stays_type() {
+    let (mut doc, looks) = warped_type_doc(1);
+    let slot = looks[0].slot;
+    let mut appearance = (*doc.node(slot).unwrap().appearance).clone();
+    appearance.effects[0].visible = false;
+    doc.node_mut(slot).unwrap().appearance = appearance.into();
+    let warped = super::envelope::WarpedType { looks, checks: 0, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut vec![]), 0);
+    assert!(matches!(doc.node(slot).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// A warped frame of threaded type stays type, whatever its look draws: the thread's frames share
+/// one story. So does a slot that became no text object.
+#[test]
+fn warped_type_in_a_thread_stays_type() {
+    let (mut doc, looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let warped = super::envelope::WarpedType { looks, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, |id| (id != second).then_some(id), &[first].into(), &mut vec![]), 0);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    assert!(matches!(doc.node(second).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// What is left of the page's share of the budget decides, and the page's share counts only for
+/// what the document shows.
+#[test]
+fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
+    use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE};
+    let (doc, mut looks) = warped_type_doc(2);
+    // The second object shows; the first is hidden. Each look draws a little more than its object.
+    let mark = read_ok(&layer(&format!("{RED}{}f\n", rect_path(2.0, 2.0, 2.6, 2.6))));
+    let mark = art(&mark.doc)[0].clone();
+    for (i, w) in looks.iter_mut().enumerate() {
+        w.look.visible = true;
+        w.look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10 - i as u64), vec![Arc::new(w.look.clone()), mark.clone()]);
+    }
+    let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
+    let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
+    let settle = |w: &super::envelope::WarpedLook, spent| {
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page };
+        warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
+    };
+    let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
+    assert_eq!(settle(&looks[1], Default::default()), 0);
+    assert_eq!(settle(&looks[1], spent()), 1);
+    assert_eq!(settle(&looks[0], spent()), 0);
+}
+
 /// An envelope that comes out close to its drawn art, but with more of the page differing than the
 /// page check can take from the live envelopes (its drawn art 2 pt to the side on a 200 × 100
 /// page), keeps the drawn art, so the file still opens from its layers.

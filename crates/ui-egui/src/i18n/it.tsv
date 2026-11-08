@@ -5884,6 +5884,7 @@ breakText	Glyphs	Glifi
 	Gap 5	Spazio 5
 
 @msg	{_1}: they came in as the page's art	{_1}: sono stati importati come elementi grafici della pagina
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	oggetti di testo alterati importati come elementi grafici, non come testo modificabile: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	gli oggetti disegnati in modo diverso dalla pagina del file stesso sono stati importati come elementi grafici della pagina: {_1}
 
 @msg	You must choose a side pattern.	Devi scegliere un motivo laterale.

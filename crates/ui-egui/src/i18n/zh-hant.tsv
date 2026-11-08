@@ -5902,6 +5902,7 @@ breakText	Glyphs	字符
 	Gap 5	間隙 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	作為圖稿而非可編輯文字匯入的彎曲文字物件：{_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	與檔案本身頁面繪製不同的物件已作為頁面圖稿匯入：{_1}
 
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。

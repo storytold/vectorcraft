@@ -6114,6 +6114,7 @@ breakText	Glyphs	Глифи
 	Gap 5	Разстояние 5
 
 @msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	изкривени текстови обекти, внесени като изображение, а не като редактируем текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
 
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.

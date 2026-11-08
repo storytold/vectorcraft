@@ -1606,6 +1606,19 @@ fn messages_with_a_count_take_the_plural_form() {
     assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
 }
 
+/// The import's note for warped type that opened as drawn art is translated in every complete
+/// catalog. It is built from a constant, which the scan of message literals doesn't see.
+#[test]
+fn warped_type_note_is_translated() {
+    let note = "warped text objects that came in as drawn art, not as editable type: 3";
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, note);
+        assert_ne!(shown, note, "{code}");
+        assert!(shown.contains('3'), "{code}: {shown}");
+    }
+}
+
 /// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
 /// and every complete catalog translates it, in the form its plural rule picks.
 #[test]
