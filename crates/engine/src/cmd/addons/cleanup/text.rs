@@ -962,11 +962,9 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
     let default = CharStyle::default().font_family;
     let wanted = text_param(p, "font", C)?.filter(|f| !f.trim().is_empty()).unwrap_or(&default);
     let db = FontDb::global();
-    // Any name of the family is stored as its own name.
-    let family = match db.resolve(wanted, "Regular") {
-        Some((f, m)) if m != FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, "the replacement font is not available")),
-    };
+    // Any name of the family is stored as its own name, and a composite font as its own name.
+    let composite = db.composite_font(wanted).is_some();
+    let family = db.stored_family(wanted, "Regular").ok_or_else(|| bad(C, "the replacement font is not available"))?;
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
     let lacks = |t: &TextObject| t.runs.iter().any(|r| missing(&r.style));
     let d = &s.doc()?.doc;
@@ -988,8 +986,11 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
         let mut runs = 0;
         let mut replace = |t: &mut TextObject| {
             for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
-                // The style the font has closest to the one the character had.
-                r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                // The style the font has closest to the one the character had (a composite font's
+                // parts name their own styles: the character keeps its style).
+                if !composite {
+                    r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                }
                 r.style.font_family = family.clone();
                 r.style.font_version = None;
                 r.style.font_axes.clear();

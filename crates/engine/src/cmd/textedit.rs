@@ -1068,7 +1068,7 @@ fn set_range_style(s: &mut Session, p: &Value) -> Result<Value> {
             if sets_font {
                 // Empty text has one run, which the empty range styles. Characters that kept their font aren't the command's.
                 let styled = if a == b { t.runs.clone() } else { unprotected_runs(&t.runs, a, b, &kept) };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             refresh_bounds(t);
             n = if *f == id { t.runs.len() } else { n };
@@ -1140,7 +1140,12 @@ fn glyph_target(t: &TextObject, p: &Value, c: &str) -> Result<(char, std::ops::R
                 return Err(bad(c, "an inline graphic has no glyphs"));
             }
             let db = vectorcraft_text::FontDb::global();
-            let face = db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family));
+            let face = match db.composite_resolve_at(&run.style.font_family, &run.text, start - at) {
+                // Type in a composite font: the character is drawn in the font of the part its
+                // grapheme cluster falls in.
+                Some((face, m)) => (m != vectorcraft_text::FontMatch::Missing).then_some(face),
+                None => db.style_face(&run.style).filter(|_| db.has_family(&run.style.font_family)),
+            };
             let face = face.ok_or_else(|| bad(c, format!("the font {} is not available", run.style.font_family)))?;
             return Ok((ch, start..start + ch.len_utf8(), face));
         }

@@ -3811,6 +3811,15 @@ file-filter	Templates	템플릿
 	Tate-chu-yoko	다테추요코
 	Tate-chu-yoko Settings…	다테추요코 설정…
 	Tate-chu-yoko Settings	다테추요코 설정
+	Composite Fonts…	합성 글꼴…
+	Composite Fonts	합성 글꼴
+	Export Composite Fonts	합성 글꼴 내보내기
+	Import Composite Fonts	합성 글꼴 가져오기
+	Delete Font	글꼴 삭제
+	Kanji	한자
+	Kana	가나
+	Numerals	숫자
+	Scale at Center	중심에서 크기 조정
 	Up/Down:	위/아래:
 	Left/Right:	왼쪽/오른쪽:
 	Temperature	색온도

@@ -5833,6 +5833,53 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Composite Fonts
+
+A composite font sets each class of character in a font of its own
+([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347)).
+`type.compositeFonts.set {fonts: [{name, parts}]}` replaces the active document's composite fonts as one undo step,
+and adds no step when nothing changes. `parts` holds `kanji` (the base font), `kana`, `punctuation`, `symbols`, `roman`
+and `numerals`, each `{font, style?, size?, baseline?, hScale?, vScale?, scaleAtCenter?}`; a part left out copies the
+`kanji` part. Which characters fall in each class is VectorCraft's own rule: Kanji takes ideographs, full-width
+letters and digits and every character no other class takes; Kana takes hiragana and katakana of both widths;
+Punctuation takes East Asian and full-width punctuation, quotes and dashes; Symbols takes arrows, math, shapes and
+other symbols; Roman takes half-width letters, their punctuation and spaces; Numerals takes the digits 0 to 9.
+
+`size` (10 to 400, 100 by default) and `baseline` (-100 to 100, 0 by default; positive raises) are percentages of the
+type's size, VectorCraft's own ranges. `hScale` and `vScale` (10 to 400, 100 by default) scale Kana, Roman and
+Numerals only, and `scaleAtCenter` (Kana only) scales kana from the center of the em box instead of the baseline. A
+value out of range, a scale on another class, an unknown class or key, a name that is empty, longer than 255
+characters, shared by two fonts (in any case) or the name of an installed font, and a part set in a composite font are
+each refused with an error, and nothing changes. A document keeps at most 256.
+
+Type set in a composite font names it as its family (`text.setStyle {font: "My Composite"}`), and the font menus list
+composite fonts first. The layout sets each character in its class's font, a letter and its combining marks together.
+A composite font taken out of the document leaves its type naming it, and the type shows as missing. Composite fonts
+are saved with the document. SVG and legacy `.ai` write type in one of the document's composite fonts as outlines, and
+SVG, PDF, EPS and legacy `.ai` export draw it in the font's parts also when the document was read without an open app.
+`type.compositeFonts.list` returns the document's composite fonts.
+
+`text.replaceFont` and `addon.cleanup.replaceFonts` with a composite font as the new font set the type in it by its own
+name, and the type keeps its style. `text.fonts` lists a composite font by its name; its `status` is the worst among the
+parts its characters are drawn in, and `missingGlyphs` counts the characters that their part's font lacks.
+`text.missingFonts`, File › Package and the warnings about fonts that aren't available name the part fonts that the
+characters are drawn in. `text.glyphAlternates` lists the alternates of a character from its part's font.
+
+`type.compositeFonts.export {path?, names?, fonts?}` writes the document's composite fonts (all, or those `names`
+lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`.
+`type.compositeFonts.import {path | data | dataBase64, apply?}` reads a file of at most 4 MB. With `apply` (the
+default) its fonts join the document's, replacing a font of the same name, as one undo step; with `apply: false` it
+only returns them. Opening a `.vccomposite` file imports it.
+
+Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
+Font picks one, and a table sets each class's font, style, size, baseline and scales. New adds a font based on the one
+picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one picked. OK runs
+`type.compositeFonts.set` with every font as one undo step; a refused font keeps the dialog open.
+
+```json
+{"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
+```
+
 ## Optical Margin Alignment
 
 `type.opticalMarginAlignment {on?: bool}` (Type › Optical Margin Alignment) turns Optical Margin Alignment on or off

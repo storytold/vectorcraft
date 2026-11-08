@@ -20,6 +20,7 @@ use vectorcraft_doc::color::Color;
 mod alternates;
 mod build;
 mod cache;
+mod composite;
 mod db;
 mod dirs;
 mod face;
@@ -36,6 +37,7 @@ pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
 use cache::{CanonicalNames, Catalog, GlyphColours, GlyphImages, PostScriptNames};
+pub use composite::{CompositeCoverage, LentCompositeFonts};
 #[cfg(all(not(target_arch = "wasm32"), test))]
 pub(crate) use dirs::fonts_outside;
 #[cfg(test)]
@@ -107,6 +109,11 @@ pub struct FontDb {
     stamp: Mutex<Option<ScanStamp>>,
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
+    /// Composite fonts (Type › Composite Fonts…) by lowercased name ([`FontDb::set_composite_font`]):
+    /// type naming one as its family is set in its parts' fonts.
+    composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// The composite fonts [`FontDb::lend_composite_fonts`] put in, by lowercased name.
+    composite_loans: Mutex<HashMap<String, composite::CompositeLoan>>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

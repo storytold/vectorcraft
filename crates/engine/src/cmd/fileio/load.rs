@@ -564,7 +564,8 @@ impl ReadFile {
 
 /// The first half of [`open_bytes_with`], which needs no session (an app may do it on another
 /// thread): read and decode the file, read its linked files and lay out its type → what
-/// [`open_read`] opens. The linked files are looked for from `path`, where the file was read from,
+/// [`open_read`] opens. Type in the file's composite fonts is measured again once the document
+/// opens and its composite fonts are registered. The linked files are looked for from `path`, where the file was read from,
 /// and modified ones are read again when `update_links` (Preferences › File Handling › Update
 /// Links set to Automatically; see [`crate::cmd::links::resolve`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {

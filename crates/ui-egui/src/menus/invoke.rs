@@ -267,6 +267,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
         return true;
     }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
