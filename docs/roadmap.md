@@ -1,7 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last updated:** 2026-11-08 · **Change:** #3380 deletion review follow-up: split survivors keep their original bounds-fitted gradient placement; documentation evidence, geometry assertions and function docs clarified. Existing multi-subpath paths and compound members stay intact. Segment endpoint highlighting remains open. Scores and estimates unchanged.
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-08 · **Change:** minor (#3380 deletion-only review follow-up: independent survivors keep gradient placement, owned subpaths avoid discarded copies, and contracts/status/evidence are clarified; endpoint highlighting remains open; scores and estimates unchanged; Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
@@ -37,8 +36,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-08 | minor | #3380, deletion only: pin bounds-fitted gradients before creating separate survivors; placed gradients and connected remainders retain their behavior. Regression coverage checks linear/radial fill and stroke vectors, rendered survivors and Undo/Redo. Scores and estimates unchanged. |
-| 2026-11-08 | minor | #3380 review follow-up: clarify deletion evidence and survivor selection, consolidate milestone notes, and retain the open endpoint-highlighting work. Behavior, scores and estimates unchanged. |
+| 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-05 | minor | Effect dialogs: a colour swatch beside a hex colour field follows typed values, and a double-click opens the Color Picker over the dialog, whose OK fills the field (#5365); scores and estimates unchanged. |

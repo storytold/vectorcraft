@@ -764,6 +764,10 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Remove the geometry copied by a direct-selection Cut, including selected guides in one edit.
 /// Select every surviving piece while retaining intentional compound-path structure.
+/// `roots` contains the copied targets: whole-object roots are removed in full, while partial paths
+/// lose only the copied geometry. An exhausted partial path is removed, along with its compound
+/// parent if now empty; layers remain. Returns JSON `null` on success, replacing direct-selection
+/// references with surviving object IDs.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();
@@ -780,20 +784,22 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                 d.remove(*id)?;
                 continue;
             }
-            let Some(path) = node.path_data() else {
+            if node.path_data().is_none() {
                 d.remove(*id)?;
                 continue;
-            };
+            }
+            let original = super::path::deletion_source(d, *id)?;
 
             let seg_refs = sel.segments.get(id);
             let anchor_refs = sel.anchors.get(id);
             let mut subpaths = Vec::new();
-            for (si, sp) in path.subpaths.iter().enumerate() {
-                let cuts = super::clipboard::subpath_selected_segments(sp, si, seg_refs, anchor_refs);
+            let owned = std::mem::take(&mut super::path::path_mut(d, *id)?.subpaths);
+            for (si, sp) in owned.into_iter().enumerate() {
+                let cuts = super::clipboard::subpath_selected_segments(&sp, si, seg_refs, anchor_refs);
                 if cuts.is_empty() {
-                    subpaths.push(sp.clone());
+                    subpaths.push(sp);
                 } else {
-                    subpaths.extend(super::path::without_segments(sp.clone(), &cuts));
+                    subpaths.extend(super::path::without_segments(sp, &cuts));
                 }
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
@@ -806,7 +812,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     d.remove(p)?;
                 }
             } else {
-                survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, *id, subpaths)?);
+                survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
         }
         pieces.finish(d)?;
