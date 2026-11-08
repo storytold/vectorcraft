@@ -47,9 +47,12 @@ pub fn approved(plugin: &Plugin) -> bool {
 
 /// Installs `plugin`, replacing one with the same id.
 pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
+    // The revision changes with the set locked, so a reader that sees the new revision then waits
+    // for the set and finds the plug-in.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     let p = Arc::new(plugin);
-    PLUGINS.write().unwrap_or_else(|e| e.into_inner()).insert(p.id().to_string(), p.clone());
+    plugins.insert(p.id().to_string(), p.clone());
     p
 }
 
@@ -167,4 +170,28 @@ pub fn load_folder_where(
         }
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cache keyed by the revision can't store the old list under the new revision: an install
+    /// waiting for the set leaves the revision alone until it holds the set.
+    #[test]
+    fn an_install_changes_the_revision_only_while_it_holds_the_set() {
+        let plugin = Plugin::load(include_bytes!("../tests/fixtures/desaturate.wasm"), Limits::default()).unwrap();
+        let id = plugin.id().to_string();
+        let held = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
+        let before = revision();
+        let installing = std::thread::spawn(move || install(plugin));
+        let moved = (0..1_000_000).any(|_| {
+            std::thread::yield_now();
+            revision() != before
+        });
+        drop(held);
+        installing.join().unwrap();
+        assert!(!moved, "the revision changed while the install waited for the set");
+        assert!(revision() > before && remove(&id));
+    }
 }
