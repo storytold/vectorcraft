@@ -1068,6 +1068,8 @@ font-technology	Variable	Variabla
 	Export for Screens Settings	Inställningar för Exportera för skärmar
 	Export for Screens…	Exportera för skärmar…
 	Export Keyboard Shortcuts…	Exportera kortkommandon…
+	Export Keyboard Shortcuts as Text…	Exportera kortkommandon som text…
+	Export Text…	Exportera text…
 	Export Option	Exportalternativ
 	Export PDF	Exportera PDF
 	Export PDF Presets	Exportera PDF-förinställningar
@@ -1407,6 +1409,7 @@ font-technology	Variable	Variabla
 	Step Backward	Stega bakåt
 	Step Forward	Stega framåt
 	Clear History	Rensa historik
+	New Document from State	Nytt dokument från tillstånd
 	Set History Limit…	Ange historikgräns…
 	History States	Historiktillstånd
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2673,6 +2676,7 @@ digits	Malayalam	Malayalam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Ersätt den med en annan fil eller ignorera den: dess bilder fortsätter att visa förhandsgranskningen som sparats med dokumentet.
 	Replace Spine	Ersätt ryggrad
 	Replace Symbol	Ersätt symbol
+	Reset Transformation	Återställ transformering
 	Replace With Font	Ersätt med typsnitt
 	Replace With Font From	Ersätt med typsnitt från
 	System	System
@@ -2689,6 +2693,8 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Återställ OpenType-funktioner
 	Reset Panel	Återställ panel
 	Reset Preferences	Återställ inställningar
+	Search Preferences	Sök i inställningar
+	No settings found	Inga inställningar hittades
 	Reset Profiles	Återställ profiler
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
@@ -3168,6 +3174,7 @@ digits	Malayalam	Malayalam
 	Spaces	Blanksteg
 	Spacing Guides	Avståndsstödlinjer
 	Invoke Distance Guides	Anropa mätstödlinjer för avstånd
+	Snap to Last Location	Fäst mot senaste plats
 	Spacing:	Avstånd:
 	Spanish	Spanska
 	Specified Distance	Angivet avstånd
@@ -4281,6 +4288,7 @@ axis	Both	Båda
 @msg	nothing to save: the document has no visible art	inget att spara: dokumentet har ingen synlig grafik
 @msg	nothing to undo	inget att ångra
 @msg	no history to clear	ingen historik att rensa
+@msg	no history state {v}	inget historiktillstånd {v}
 @msg	nothing to warp	inget att böja
 @msg	nothing to wrap	inget att radbryta
 @msg	object {0} cannot have children	objekt {0} kan inte ha underordnade objekt
@@ -4523,6 +4531,7 @@ axis	Both	Båda
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} bild kunde inte avkodas och visas som en överkryssad ruta|{n} bilder kunde inte avkodas och visas som överkryssade rutor
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} länkad bild har ändrats på disken: Uppdatera länkar visar den nya versionen|{n} länkade bilder har ändrats på disken: Uppdatera länkar visar de nya versionerna
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Uppdaterade {n} länkad fil som ändrats på disken|Uppdaterade {n} länkade filer som ändrats på disken
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet anger ett utfall som den här PDF/X-filen utelämnar: slå på ”Använd dokumentets inställningar för utfall”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exporterade {what} med {n} anteckning: {first}|Exporterade {what} med {n} anteckningar: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} typsnittsfil finns nu i {folder}|{n} typsnittsfiler finns nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} typsnittsfil finns nu i {folder}; {failed} kunde inte läggas till: {reason}|{n} typsnittsfiler finns nu i {folder}; {failed} kunde inte läggas till: {reason}

@@ -14,6 +14,7 @@ mod fit;
 mod offset;
 mod pathfinder;
 mod planar;
+mod sweep_axis;
 mod trap;
 
 pub use boolean::{

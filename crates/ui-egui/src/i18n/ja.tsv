@@ -1581,6 +1581,8 @@ digits	Malayalam	マラヤーラム数字
 	Export Document	ドキュメントを書き出し
 	Export EPS	EPS を書き出し
 	Export Keyboard Shortcuts…	キーボードショートカットを書き出し…
+	Export Keyboard Shortcuts as Text…	キーボードショートカットをテキストで書き出し…
+	Export Text…	テキストを書き出し…
 	Export Option	書き出しオプション
 	Export PDF	PDF を書き出し
 	Export PDF Presets	PDF プリセットを書き出し
@@ -1772,6 +1774,7 @@ digits	Malayalam	マラヤーラム数字
 	Step Backward	一段階戻る
 	Step Forward	一段階進む
 	Clear History	ヒストリーを消去
+	New Document from State	状態から新規ドキュメント
 	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2750,6 +2753,7 @@ mark-style	Japanese	日本式
 	Replace:	置換:
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
+	Reset Transformation	変形をリセット
 	Replace With Font	置換するフォント
 	Replace With Font From	置換するフォントの一覧
 	System	システム
@@ -2764,6 +2768,8 @@ mark-style	Japanese	日本式
 	Reset OpenType Features	OpenType 機能をリセット
 	Reset Panel	パネルをリセット
 	Reset Preferences	環境設定をリセット
+	Search Preferences	環境設定を検索
+	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す
@@ -3064,6 +3070,7 @@ mark-style	Japanese	日本式
 	Spaces	スペース
 	Spacing Guides	間隔ガイド
 	Invoke Distance Guides	距離ガイドを呼び出す
+	Snap to Last Location	最後の位置にスナップ
 	Spacing:	間隔:
 	Spanish	スペイン語
 	Specify:	指定:
@@ -4166,6 +4173,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	no history to clear	消去するヒストリーがありません
+@msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
@@ -4737,6 +4745,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ドキュメントに設定された裁ち落としがこの PDF/X ファイルには含まれません: 「ドキュメントの裁ち落とし設定を使用」をオンにしてください
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}

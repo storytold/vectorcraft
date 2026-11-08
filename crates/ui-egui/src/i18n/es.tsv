@@ -1089,6 +1089,8 @@ font-technology	Variable	Variables
 	Export for Screens Settings	Ajustes de Exportar para pantallas
 	Export for Screens…	Exportar para pantallas…
 	Export Keyboard Shortcuts…	Exportar métodos abreviados de teclado…
+	Export Keyboard Shortcuts as Text…	Exportar métodos abreviados de teclado como texto…
+	Export Text…	Exportar texto…
 	Export Option	Opción de exportación
 	Export PDF	Exportar PDF
 	Export PDF Presets	Exportar preajustes de PDF
@@ -1449,6 +1451,7 @@ font-technology	Variable	Variables
 	Step Backward	Paso atrás
 	Step Forward	Paso adelante
 	Clear History	Borrar historial
+	New Document from State	Nuevo documento desde estado
 	Set History Limit…	Definir límite de historial…
 	History States	Estados de historial
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2737,6 +2740,7 @@ digits	Malayalam	Malayálam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
+	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente
 	Replace With Font From	Reemplazar con fuente de
 	System	Sistema
@@ -2753,6 +2757,8 @@ digits	Malayalam	Malayálam
 	Reset OpenType Features	Restablecer funciones OpenType
 	Reset Panel	Restablecer panel
 	Reset Preferences	Restablecer preferencias
+	Search Preferences	Buscar en preferencias
+	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
@@ -3246,6 +3252,7 @@ digits	Malayalam	Malayálam
 	Spaces	Espacios
 	Spacing Guides	Guías de espaciado
 	Invoke Distance Guides	Invocar guías de distancia
+	Snap to Last Location	Ajustar a última ubicación
 	Spacing:	Espaciado:
 	Spanish	Español
 	Specified Distance	Distancia especificada
@@ -4376,6 +4383,7 @@ axis	Both	Ambos
 @msg	nothing to save: the document has no visible art	no hay nada que guardar: el documento no tiene ilustración visible
 @msg	nothing to undo	no hay nada que deshacer
 @msg	no history to clear	no hay historial que borrar
+@msg	no history state {v}	no hay ningún estado del historial {v}
 @msg	nothing to warp	no hay nada que deformar
 @msg	nothing to wrap	no hay nada que envolver
 @msg	object {0} cannot have children	el objeto {0} no puede tener hijos
@@ -4624,6 +4632,7 @@ axis	Both	Ambos
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no se pudo descodificar {n} imagen: se muestra como un recuadro tachado|no se pudieron descodificar {n} imágenes: se muestran como recuadros tachados
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagen vinculada cambió en el disco: Actualizar vínculos muestra la versión nueva|{n} imágenes vinculadas cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Se actualizó {n} archivo vinculado que cambió en el disco|Se actualizaron {n} archivos vinculados que cambiaron en el disco
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	el documento define un sangrado que este archivo PDF/X omite: activa «Usar los ajustes de sangrado del documento»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Se exportó {what} con {n} nota: {first}|Se exportó {what} con {n} notas: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} archivo de fuentes ahora está en {folder}|{n} archivos de fuentes ahora están en {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo de fuentes ahora está en {folder}; no se pudieron agregar {failed}: {reason}|{n} archivos de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}

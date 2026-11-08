@@ -1244,6 +1244,8 @@ font-technology	Variable	Biến thiên
 	Export for Screens Settings	Cài đặt xuất cho màn hình
 	Export for Screens…	Xuất cho màn hình…
 	Export Keyboard Shortcuts…	Xuất phím tắt…
+	Export Keyboard Shortcuts as Text…	Xuất phím tắt dưới dạng văn bản…
+	Export Text…	Xuất văn bản…
 	Export Library	Xuất thư viện
 	Export Library…	Xuất thư viện…
 	Export Option	Tùy chọn xuất
@@ -1674,6 +1676,7 @@ digits	Hindi	Hindi
 	Step Backward	Lùi một bước
 	Step Forward	Tiến một bước
 	Clear History	Xóa lịch sử
+	New Document from State	Tài liệu mới từ trạng thái
 	Set History Limit…	Đặt giới hạn lịch sử…
 	History States	Trạng thái lịch sử
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -3033,6 +3036,7 @@ mark-style	Japanese	Kiểu Nhật
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
+	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
 	Replace With Font From	Thay thế bằng phông chữ từ
 	System	Hệ thống
@@ -3055,6 +3059,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Search Preferences	Tìm trong tùy chọn
+	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
@@ -3609,6 +3615,7 @@ mark-style	Japanese	Kiểu Nhật
 	Spacing	Khoảng cách
 	Spacing Guides	Đường căn khoảng cách
 	Invoke Distance Guides	Gọi đường căn đo khoảng cách
+	Snap to Last Location	Hút vào vị trí cuối cùng
 	Spacing:	Khoảng cách:
 	Spanish	Tiếng Tây Ban Nha
 	Spatter	Bắn tung tóe
@@ -4710,6 +4717,7 @@ theme	Appearance	Giao diện
 @msg	nothing to save: the document has no visible art	không có gì để lưu: tài liệu không có tác phẩm hiển thị
 @msg	nothing to undo	không có gì để hoàn tác
 @msg	no history to clear	không có lịch sử để xóa
+@msg	no history state {v}	không có trạng thái lịch sử {v}
 @msg	nothing to warp	không có gì để biến dạng
 @msg	nothing to wrap	không có gì để bọc
 @msg	object ids are non-negative integers, not {v}	id đối tượng là số nguyên không âm, không phải {v}
@@ -4779,6 +4787,7 @@ theme	Appearance	Giao diện
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} hình ảnh không thể giải mã: chúng hiển thị dưới dạng khung có dấu gạch chéo
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} ảnh liên kết đã thay đổi trên đĩa: Cập nhật liên kết hiển thị phiên bản mới
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Đã cập nhật {n} tệp liên kết đã thay đổi trên đĩa
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	tài liệu đặt bleed mà tệp PDF/X này bỏ qua: hãy bật "Dùng cài đặt bleed của tài liệu"
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Đã xuất {what} với {n} ghi chú: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} tệp phông chữ hiện ở trong {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} tệp phông chữ hiện ở trong {folder}; {failed} không thể thêm: {reason}

@@ -211,7 +211,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
         // leaves the dialog open.
         let popup = app.ui.dialog.as_ref().is_some_and(|d| egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d));
-        if !popup && pressed_anew(ctx, Key::Escape) {
+        // Escape in Preferences' search field with text clears the field first.
+        if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {
             crate::dialogs::cancel(app);
             app.ui.palette_open = false;
         }
@@ -236,8 +237,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let composing = app.session.tool_composing();
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
-    // Enter in the Type tool types a line break, so it goes to the tool with the frame's text,
-    // below: the loop then skips Enter, the first key.
+    // Enter in the Type tool types a line break (Cmd+Enter ends editing), so it goes to the tool
+    // with the frame's text, below: the loop then skips Enter, the first key.
     let enter_types = app.session.tool_wants_text();
     for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)].into_iter().skip(usize::from(enter_types)) {
         if !typing && !composing && !take_claimed_repeat(app, ctx, k, tk, view) && pressed_anew(ctx, k) {

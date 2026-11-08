@@ -938,6 +938,8 @@ lighting	Light	Svjetlo
 	Expand Layers Panel Rows	Proširi redove panela slojeva
 	Export CSS…	Izvezi CSS…
 	Export Keyboard Shortcuts…	Izvezi prečice na tastaturi…
+	Export Keyboard Shortcuts as Text…	Izvezi prečice na tastaturi kao tekst…
+	Export Text…	Izvezi tekst…
 	File Info Dialog	Dijalog informacija o datoteci
 	Go to Artboard	Idi na radnu ploču
 	First Artboard	Prva radna ploča
@@ -1610,6 +1612,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Korak unazad
 	Step Forward	Korak naprijed
 	Clear History	Očisti historiju
+	New Document from State	Novi dokument iz stanja
 	Set History Limit…	Postavi ograničenje historije…
 	Open a document to see its history.	Otvorite dokument da vidite njegovu historiju.
 	Apply Data Set	Primijeni skup podataka
@@ -3160,6 +3163,7 @@ theme	Appearance	Izgled
 	Redefine Symbol	Ponovo definiši simbol
 	Remove Brush Stroke	Ukloni potez četkicom
 	Replace Symbol	Zamijeni simbol
+	Reset Transformation	Vrati transformaciju na početno
 	Select All Instances	Odaberi sve instance
 	Symbol Sprayer	Raspršivač simbola
 	Symbolism Tool	Alat simbolizam
@@ -3630,6 +3634,8 @@ theme	Appearance	Izgled
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
+	Search Preferences	Pretraga postavki
+	No settings found	Nema pronađenih postavki
 	Scale Corners	Skaliraj uglove
 	Scale Cursor Proportional to UI	Skaliraj kursor proporcionalno interfejsu
 	Scale Strokes & Effects	Skaliraj poteze i efekte
@@ -3650,6 +3656,7 @@ theme	Appearance	Izgled
 	Snapping Tolerance	Tolerancija hvatanja
 	Spacing Guides	Vodilice razmaka
 	Invoke Distance Guides	Pozovi vodiče udaljenosti
+	Snap to Last Location	Prilijepi uz posljednju lokaciju
 	Spanish	Španski
 	Subdivisions	Podjele
 	Templates Folder	Folder predložaka
@@ -4635,6 +4642,7 @@ imageTrace	Outline	Obris
 @msg	nothing to save: the document has no visible art	nema ničeg za čuvanje: dokument nema vidljiv crtež
 @msg	nothing to undo	nema ničeg za poništavanje
 @msg	no history to clear	nema historije za brisanje
+@msg	no history state {v}	nema stanja historije {v}
 @msg	nothing to warp	nema ničeg za iskrivljenje
 @msg	nothing to wrap	nema ničeg za omotavanje
 @msg	object {0} cannot have children	objekat {0} ne može imati djecu
@@ -4881,6 +4889,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} sliku nije moguće dekodirati: prikazuje se kao prekriženi okvir|{n} slike nije moguće dekodirati: prikazuju se kao prekriženi okviri|{n} slika nije moguće dekodirati: prikazuju se kao prekriženi okviri
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}

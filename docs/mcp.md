@@ -446,7 +446,7 @@ opens the picker through `run_command` with the remote backend.
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. With `copy`, the first step duplicates. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. `graph.column {design, columnType: vertical\|uniform\|repeating\|sliding, each, fractions: chop\|scale}` draws the columns or bars of the series picked with Group Selection (or `seriesIndexes`, or all of them) with a graph design saved by `graph.design`; with no `design` it returns the series' current design and options. Type in the design that holds a `%` followed by two digits shows each column's value, with at least the first digit's places before the decimal point and the second digit's places after it. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. |
-| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
+| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted `index` uses the current state. An `index` that names no state is an error and changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
 
 For example, create editable Japanese area type with the engine's vertical writing mode:
 
@@ -533,6 +533,21 @@ its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.
+
+On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
+`appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
+`appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer` and `appearance.copyFrom` store the paint,
+weight and opacity of the topmost visible fill and stroke on the graph. When the graph is drawn again, columns, bars,
+wedges, areas, markers and legend swatches take the stored fill and stroke. A thin line takes the stored stroke and has
+no fill. A Filled Lines band takes the stored fill, or the stored stroke when no fill is stored and that stroke has
+paint, and has a 0.25 pt black outline, so these commands do not store a stroke paint or weight for a series that
+draws a band. They still store a stroke opacity set on a band, and the band's outline takes it. Graph
+designs keep their own paint. A row that had no paint before the command and has none after it does not change what the
+graph stores. `paint.setFill`, `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other
+store the topmost row of the kind even when it is hidden, and store a stroke set on a band.
+`stroke.set`, `paint.editGradient`, `paint.swap`, `paint.default`, graphic styles and the recolor commands do not store a
+series' paint. An `appearance.*` command given a series group's id edits the group's own rows, and the graph does not
+store them.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
@@ -1702,6 +1717,13 @@ already walks Image Trace. Short agent entry points:
   `symbol.selectInstances {name}`, `symbol.delete {name | names, expandInstances?}` (`names` deletes several in one
   undo step). `symbol.new` and `symbol.duplicate {name, newName?}` trim the white space around the
   name they are given, as `symbol.options` trims `newName`; a blank one gives "New Symbol" or "<name> copy".
+- Reset Transformation (the Symbols panel menu, and Reset on the Control bar while symbol instances are selected):
+  `symbol.instance.resetTransform {ids?}` gives the selected symbol instances, in groups too, their symbol's own
+  scale again, without rotation, shear or reflection, as one undo step. VectorCraft's own rules: each instance keeps
+  the center of its bounding box in place; other objects, instances in perspective and instances already at their
+  symbol's scale are left as they are, and no undo step is added when nothing changes; an id that names no object, or
+  objects without a symbol instance, is an error. It returns `{ids}`, the instances it changed. The menu item and the
+  button are enabled only while a selected instance would change.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
@@ -3210,8 +3232,9 @@ the preference `japaneseCropMarks` is on or `style: "japanese"` is given.
 PDF export draws printer's marks and bleed itself (the Save PDF dialog's Marks and Bleeds section):
 `document.exportPdf {marks: {trim, registration, colorBars, pageInfo, kind, weight, offset}, bleed: {useDocument, top,
 bottom, left, right}}`. Each page's TrimBox is its artboard, its BleedBox the artboard grown by the bleed (the
-document's with `useDocument`, set by `document.setup {bleed}`; the art there is kept) and its MediaBox the bleed box
-grown to hold the marks (the art is clipped to the bleed box). Trim marks, registration targets and the page
+document's with `useDocument`, set by `document.setup {bleed}`; the art there is kept; a PDF/X file with no bleed on a
+side where the document's bleed has one is written as asked and comes back with a warning) and its MediaBox the bleed
+box grown to hold the marks (the art is clipped to the bleed box). Trim marks, registration targets and the page
 information (title, artboard, export date in UTC) are drawn in Registration (`/Separation /All`) outside the bleed;
 the colour bars are process, spot and black-tint patches. Layers whose Print option is off (`layer.setProps
 {printable: false}`) are left out unless `includeNonPrinting` (or `createLayers`) is on.
@@ -3399,6 +3422,20 @@ They list such a command while the user has changed its shortcut (`overridden: t
 `shortcuts.set` can change or clear it. When every menu bar item that runs a command gives it the same params, a
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
+
+`shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
+Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
+and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
+rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per row, with the name, a
+tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut ends after the tab.
+Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that cannot be written,
+returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's [Export keyboard
+shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
+page describes saving the list from the Keyboard Shortcuts dialog as a text file, and does not describe its layout.
+
+```json
+{"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
+```
 
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
 `object.distribute`, `object.distributeSpacing` and `select.allOnArtboard` calls it runs without `artboard`, as it does
@@ -3620,6 +3657,11 @@ Guides change where a snapped point lands:
   object under the pointer (the gap between their facing edges on an axis on which they lie apart, else the offsets
   of their two edges on it) or, over no object, to the left, right, top and bottom edges of the artboard under the
   pointer: measured lines labelled in the General unit. Off, Alt-hovering shows none.
+- `snapToLastLocation` (Snap to Last Location, off by default): with Smart Guides on, a selection moved by dragging
+  (Selection, Group Selection or Direct Selection tool / `pointer_gesture` with `selection`, Shift too) goes back to
+  where the move began while the move is no longer than `snappingTolerance`, labeled "last location"; farther, it
+  snaps as before. An Alt copy is not pulled back onto its original, and with View › Snap to Grid or Snap to Pixel on
+  the move snaps to the grid or to whole pixels instead. A value that is not a boolean is refused.
 
 The Snap to Glyph options (the desktop app's Character panel menu › Show Snap to Glyph Options; View › Snap to Glyph
 is the desktop app's): `view.snapToGlyph.options {baseline?, xHeight?, bounds?, proximity?, angular?, anchors?}` (or
@@ -3830,6 +3872,12 @@ first; no spaces), stored back as the object name.
 `typeSizeIncrement`, `baselineShiftIncrement`) with `measure: "general"|"type"`; they are kept in points and also take
 a string with a unit. Unit names: `Points`, `Picas`, `Inches`, `Millimeters`, `Centimeters`, `Pixels`, `Feet & Inches`,
 `Meters`, `Yards`, `Feet` (the preferences use `points`, `picas`, … `feetInches`, `meters`, `yards`, `feet`).
+`edit.preferences {category?}` opens the Preferences dialog (`preferences`) with its search field focused. Its
+`__search` field (`ui.dialog.set`) holds the search text: while it has text, the category list is replaced by the
+settings whose label, section or category contains it, ignoring case, in the interface language or in English, or by
+"No settings found". Choosing a setting sets `__category` to its category, sets `__found` to its key (the row is
+highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F focuses the field again; Escape in the
+field with text clears it, and Escape in the empty field closes the dialog.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
@@ -5096,7 +5144,11 @@ turn it with the object while its path geometry is still baked, so after a rotat
 stay square to it, as in the reference app. `object.rotate {angle, absolute: true}` turns the selection to an angle
 (the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
 point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
-square to the page. `object.resetBoundingBox` squares the box again without moving the art.
+square to the page. `object.resetBoundingBox` squares the box again without moving the art. It also squares every
+object inside the selected ones: the children of groups, compound paths, clip groups, blends, envelopes, repeats and
+intertwines, and the art of linked opacity masks (an unlinked mask's art keeps its angle). Ungroup, Release Clipping
+Mask, Release Compound Path, Blend Expand, Release Envelope, Release Repeat, Release Intertwine and Release Opacity Mask
+then bring back boxes square to the page.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}

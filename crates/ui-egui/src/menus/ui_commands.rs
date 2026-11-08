@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
     ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
+    (
+        "shortcuts.exportText",
+        "Export Keyboard Shortcuts as Text…",
+        "",
+        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+    ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
         "ui.shortcutImportDialog",

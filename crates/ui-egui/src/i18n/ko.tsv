@@ -1571,6 +1571,8 @@ digits	Malayalam	말라얄람어
 	Export Document	문서 내보내기
 	Export EPS	EPS 내보내기
 	Export Keyboard Shortcuts…	단축키 내보내기…
+	Export Keyboard Shortcuts as Text…	단축키를 텍스트로 내보내기…
+	Export Text…	텍스트 내보내기…
 	Export Option	내보내기 옵션
 	Export PDF	PDF 내보내기
 	Export PDF Presets	PDF 프리셋 내보내기
@@ -1762,6 +1764,7 @@ digits	Malayalam	말라얄람어
 	Step Backward	한 단계 뒤로
 	Step Forward	한 단계 앞으로
 	Clear History	히스토리 지우기
+	New Document from State	상태에서 새 문서 만들기
 	Set History Limit…	히스토리 한도 설정…
 	History States	히스토리 상태
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2739,6 +2742,7 @@ mark-style	Japanese	일본식
 	Replace:	바꾸기:
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
+	Reset Transformation	변형 재설정
 	Replace With Font	바꿀 글꼴
 	Replace With Font From	바꿀 글꼴 목록
 	System	시스템
@@ -2753,6 +2757,8 @@ mark-style	Japanese	일본식
 	Reset OpenType Features	OpenType 기능 재설정
 	Reset Panel	패널 재설정
 	Reset Preferences	환경 설정 재설정
+	Search Preferences	환경 설정 검색
+	No settings found	설정을 찾을 수 없음
 	Reset Profiles	프로필 재설정
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Reset to Default	기본값으로 재설정
@@ -3053,6 +3059,7 @@ mark-style	Japanese	일본식
 	Spaces	공백
 	Spacing Guides	간격 안내선
 	Invoke Distance Guides	거리 안내선 호출
+	Snap to Last Location	마지막 위치에 스냅
 	Spacing:	간격:
 	Spanish	Español
 	Specify:	지정:
@@ -4093,6 +4100,7 @@ theme	Appearance	외관
 @msg	nothing to redo	다시 실행할 항목이 없습니다
 @msg	nothing to undo	실행 취소할 항목이 없습니다
 @msg	no history to clear	지울 히스토리가 없습니다
+@msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
@@ -4664,6 +4672,7 @@ theme	Appearance	외관
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	이미지 {n}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}

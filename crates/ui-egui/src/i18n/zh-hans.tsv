@@ -1030,6 +1030,8 @@
 	Export for Screens Settings	导出为屏幕所用格式设置
 	Export for Screens…	导出为屏幕所用格式…
 	Export Keyboard Shortcuts…	导出键盘快捷键…
+	Export Keyboard Shortcuts as Text…	将键盘快捷键导出为文本…
+	Export Text…	导出文本…
 	Export Option	导出选项
 	Export PDF	导出 PDF
 	Export PDF Presets	导出 PDF 预设
@@ -1394,6 +1396,7 @@ file-filter	Templates	模板
 	Step Backward	后退一步
 	Step Forward	前进一步
 	Clear History	清除历史记录
+	New Document from State	从状态新建文档
 	Set History Limit…	设置历史记录上限…
 	History States	历史记录步数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2641,6 +2644,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	将其替换为其他文件，或忽略：其图像继续显示随文档保存的预览。
 	Replace Spine	替换脊线
 	Replace Symbol	替换符号
+	Reset Transformation	重置变换
 	Replace With Font	替换为字体
 	Replace With Font From	替换字体来源
 	System	系统
@@ -2657,6 +2661,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset OpenType Features	重置 OpenType 特性
 	Reset Panel	重置面板
 	Reset Preferences	重置首选项
+	Search Preferences	搜索首选项
+	No settings found	未找到设置
 	Reset Profiles	重置配置文件
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
@@ -3115,6 +3121,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Spaces	空格
 	Spacing Guides	间距参考线
 	Invoke Distance Guides	调用距离参考线
+	Snap to Last Location	对齐上一位置
 	Spacing:	间距：
 	Spanish	西班牙语
 	Specified Distance	指定距离
@@ -3900,6 +3907,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to redo	没有可重做的操作
 @msg	nothing to undo	没有可撤销的操作
 @msg	no history to clear	没有可清除的历史记录
+@msg	no history state {v}	没有历史记录状态 {v}
 @msg	Expand Appearance: the selection has a basic appearance	扩展外观：所选对象只有基本外观
 @msg	select (or target) objects whose appearance isn't basic	请选择 (或定位) 外观不是基本外观的对象
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 处没有效果
@@ -4453,6 +4461,7 @@ imageTrace	Outline	轮廓
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	无法解码 {n} 张图像：它们显示为打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 个链接图像已在磁盘上更改：“更新链接”可显示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 个在磁盘上更改的链接文件
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文档设置了出血，但此 PDF/X 文件未包含：请打开“使用文档的出血设置”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已导出 {what}，有 {n} 条注释：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 个字体文件现已位于 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 个字体文件现已位于 {folder}；有 {failed} 个无法添加：{reason}

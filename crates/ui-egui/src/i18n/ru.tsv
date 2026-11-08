@@ -1087,6 +1087,8 @@ font-technology	Variable	Вариативные
 	Export for Screens Settings	Параметры экспорта для экранов
 	Export for Screens…	Экспортировать для экранов…
 	Export Keyboard Shortcuts…	Экспортировать сочетания клавиш…
+	Export Keyboard Shortcuts as Text…	Экспортировать сочетания клавиш как текст…
+	Export Text…	Экспорт текста…
 	Export Option	Параметр экспорта
 	Export PDF	Экспортировать PDF
 	Export PDF Presets	Экспортировать наборы PDF
@@ -1458,6 +1460,7 @@ file-filter	Templates	Шаблоны
 	Step Backward	Шаг назад
 	Step Forward	Шаг вперёд
 	Clear History	Очистить историю
+	New Document from State	Новый документ из состояния
 	Set History Limit…	Задать предел истории…
 	History States	Состояния истории
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2765,6 +2768,7 @@ digits	Malayalam	Малаялам
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замените его другим файлом или игнорируйте: его изображения продолжат показывать предварительный просмотр, сохранённый с документом.
 	Replace Spine	Заменить остов
 	Replace Symbol	Заменить символ
+	Reset Transformation	Сбросить трансформацию
 	Replace With Font	Заменить шрифтом
 	Replace With Font From	Заменить шрифтом из
 	System	Система
@@ -2781,6 +2785,8 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Сбросить функции OpenType
 	Reset Panel	Сбросить панель
 	Reset Preferences	Сбросить настройки
+	Search Preferences	Поиск в настройках
+	No settings found	Настройки не найдены
 	Reset Profiles	Сбросить профили
 	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
@@ -3277,6 +3283,7 @@ digits	Malayalam	Малаялам
 	Spaces	Пробелы
 	Spacing Guides	Направляющие интервалов
 	Invoke Distance Guides	Вызывать направляющие расстояний
+	Snap to Last Location	Привязать к последнему положению
 	Spacing:	Интервал:
 	Spanish	Испанский
 	Specified Distance	Заданное расстояние
@@ -4413,6 +4420,7 @@ axis	Both	Оба
 @msg	nothing to save: the document has no visible art	нечего сохранять: в документе нет видимого рисунка
 @msg	nothing to undo	нечего отменять
 @msg	no history to clear	нет истории для очистки
+@msg	no history state {v}	нет состояния истории {v}
 @msg	nothing to warp	нечего деформировать
 @msg	nothing to wrap	нечего обтекать
 @msg	object {0} cannot have children	объект {0} не может иметь потомков
@@ -4661,6 +4669,7 @@ axis	Both	Оба
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	не удалось декодировать {n} изображение: оно показано как перечёркнутая рамка|не удалось декодировать {n} изображения: они показаны как перечёркнутые рамки|не удалось декодировать {n} изображений: они показаны как перечёркнутые рамки
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}

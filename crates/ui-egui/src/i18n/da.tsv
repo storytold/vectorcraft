@@ -878,6 +878,8 @@ lighting	Light	Lys
 	Expand Layers Panel Rows	Udvid rækker i lagpanelet
 	Export CSS…	Eksportér CSS…
 	Export Keyboard Shortcuts…	Eksportér tastaturgenveje…
+	Export Keyboard Shortcuts as Text…	Eksportér tastaturgenveje som tekst…
+	Export Text…	Eksportér tekst…
 	File Info Dialog	Dialogboks til filoplysninger
 	Go to Artboard	Gå til tegnebræt
 	Graphic Style Options…	Indstillinger for grafisk typografi…
@@ -1544,6 +1546,7 @@ digits	Malayalam	Malayalam
 	Step Backward	Et trin tilbage
 	Step Forward	Et trin frem
 	Clear History	Ryd historik
+	New Document from State	Nyt dokument fra tilstand
 	Set History Limit…	Angiv historikgrænse…
 	Open a document to see its history.	Åbn et dokument for at se dets historik.
 	Abutting	Stødende
@@ -2943,6 +2946,7 @@ theme	Appearance	Udseende
 	Redefine Symbol	Omdefinér symbol
 	Remove Brush Stroke	Fjern penselstrøg
 	Replace Symbol	Erstat symbol
+	Reset Transformation	Nulstil transformation
 	Select All Instances	Markér alle forekomster
 	Symbol Sprayer	Symbolsprøjter
 	Symbolism Tool	Symbolværktøj
@@ -3399,6 +3403,8 @@ theme	Appearance	Udseende
 	Real-time Drawing and Editing	Tegning og redigering i realtid
 	Render Threads (-1 = Automatic)	Renderingstråde (-1 = automatisk)
 	Reset Preferences	Nulstil indstillinger
+	Search Preferences	Søg i præferencer
+	No settings found	Ingen indstillinger fundet
 	Scale Corners	Skalér hjørner
 	Scale Cursor Proportional to UI	Skalér markør proportionalt med brugergrænsefladen
 	Scale Strokes & Effects	Skalér konturer & effekter
@@ -3419,6 +3425,7 @@ theme	Appearance	Udseende
 	Snapping Tolerance	Snap-tolerance
 	Spacing Guides	Afstandshjælpelinjer
 	Invoke Distance Guides	Aktivér hjælpelinjer for afstandsmåling
+	Snap to Last Location	Fastgør til sidste placering
 	Spanish	Spansk
 	Subdivisions	Underinddelinger
 	Templates Folder	Skabelonmappe
@@ -4337,6 +4344,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to save: the document has no visible art	intet at gemme: dokumentet har ingen synlig grafik
 @msg	nothing to undo	intet at fortryde
 @msg	no history to clear	ingen historik at rydde
+@msg	no history state {v}	ingen historiktilstand {v}
 @msg	nothing to warp	intet at forvride
 @msg	nothing to wrap	intet at ombryde
 @msg	object {0} cannot have children	objektet {0} kan ikke have underobjekter
@@ -4562,6 +4570,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} billede kunne ikke afkodes og vises som en overkrydset boks|{n} billeder kunne ikke afkodes og vises som overkrydsede bokse
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linket billede er ændret på disken: Opdatér links viser den nye version|{n} linkede billeder er ændret på disken: Opdatér links viser de nye versioner
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Opdaterede {n} linket fil ændret på disken|Opdaterede {n} linkede filer ændret på disken
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet angiver et udløb, som denne PDF/X-fil udelader: slå „Brug dokumentets udløbsindstillinger“ til
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksporterede {what} med {n} note: {first}|Eksporterede {what} med {n} noter: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} skrifttypefil er nu i {folder}|{n} skrifttypefiler er nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil er nu i {folder}; {failed} kunne ikke tilføjes: {reason}|{n} skrifttypefiler er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
