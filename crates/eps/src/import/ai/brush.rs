@@ -34,14 +34,15 @@
 //!   keeps the defaults and its paths their drawn look).
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
-//!     rotation follows the path (14).
+//!     rotation follows the path (14), and 1 Tints (1).
 //!   - Art: 1 Tints (2).
 //!   - Pattern: its scale as a factor (3).
 //! - A Bristle brush's parameters start with 8 numbers: two codes, then the stiffness, bristle
 //!   thickness, density, paint opacity and bristle length as fractions and the size in
 //!   millimeters.
 //! - The art is a `%AI8_BeginBrushPattern` section: its name as a string, then the art (read by
-//!   [`super::read`]).
+//!   [`super::read`]), usually in a group after its frame, an unpainted rectangle around it. A frame
+//!   at the art's bounds isn't kept ([`without_frame`]); a wider one is.
 //!
 //! What isn't read keeps its default: the Art brush's other options, the pattern brush's tiles
 //! (which slot is which tile isn't known) and the colorization of the other brushes, which is left
@@ -73,6 +74,9 @@ const TOOLS: [(&str, Tool); 5] = [
 pub(super) const MAX_BRUSHES: usize = 4096;
 /// Most brush art sections read from one file (a pattern brush has up to five).
 pub(super) const MAX_BRUSH_ART: usize = 5 * MAX_BRUSHES;
+/// Most named colors kept from one brush art section, and brought in from the art of one file's
+/// brushes, each name once per section: the rest are left out.
+pub(super) const MAX_BRUSH_ART_COLORS: usize = 20_000;
 /// Most [`art_weight`] copied into the brushes of one file, each brush counting its own copy.
 const MAX_BRUSH_ART_NODES: usize = 250_000;
 
@@ -326,7 +330,8 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                         scatter,
                         rotation,
                         rotation_relative_to_path: *p14 == 1.0,
-                        colorization: Colorization::None,
+                        // The first of the 15 numbers: 1 is Tints.
+                        colorization: if n.first() == Some(&1.0) { Colorization::Tints } else { Colorization::None },
                         modes: Some(modes),
                         ..Scatter::default()
                     };
@@ -478,4 +483,80 @@ pub(super) fn finish_brushes_within(
 /// The note for brushes [`finish_brushes`] left out.
 pub(super) fn left_out_note(n: usize) -> String {
     format!("brushes VectorCraft can't read yet were left out of the Brushes panel ({n})")
+}
+
+/// Is `n` a frame: an unnamed, unpainted rectangle with nothing of its own (shown, unlocked, at full
+/// opacity in Normal, with no effects, note, mask or other settings), a path of one subpath whose
+/// anchors, without handles, are its four corners in order around it: closed, with the first again
+/// at the end or not, or open with the first again at the end?
+fn unpainted_rectangle(n: &Node) -> bool {
+    let NodeKind::Path { path, guide: false, clipping: false, .. } = &n.kind else { return false };
+    let ([sp], Some(b)) = (path.subpaths.as_slice(), n.geometric_bounds()) else { return false };
+    let corner = |p: kurbo::Point| (p.x == b.x0 || p.x == b.x1) && (p.y == b.y0 || p.y == b.y1);
+    let mut corners: Vec<kurbo::Point> = vec![];
+    for a in &sp.anchors {
+        if !corners.contains(&a.p) {
+            corners.push(a.p);
+        }
+    }
+    let last_repeats = sp.anchors.len() == 5 && sp.anchors.first().map(|a| a.p) == sp.anchors.last().map(|a| a.p);
+    // Each corner to the next goes along a side, not across: one coordinate stays.
+    let sides = corners.len() == 4
+        && (0..4).all(|i| match (corners.get(i), corners.get((i + 1) % 4)) {
+            (Some(a), Some(b)) => (a.x == b.x) != (a.y == b.y),
+            _ => false,
+        });
+    n.name.is_none()
+        && *n.extras() == vectorcraft_doc::NodeExtras::default()
+        && n.visible
+        && !n.locked
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.knockout == vectorcraft_doc::Knockout::Neutral
+        && !n.knockout_shape
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.paint().is_none())
+        && ((sp.closed && sp.anchors.len() == 4) || last_repeats)
+        && sides
+        && b.width() > 0.0
+        && b.height() > 0.0
+        && sp.anchors.iter().all(|a| a.h_in == a.p && a.h_out == a.p && corner(a.p))
+}
+
+/// Brush art `art` without its frame: a group whose first object is an unpainted rectangle around
+/// the rest, exactly (within 1/1000 pt), loses that rectangle, and a group without a look or state
+/// of its own (hidden, locked, isolation, knockout, opacity, blend mode, name, appearance, or a mask,
+/// note or other setting) that is left with one object is that object. A frame wider than the art
+/// is kept.
+pub(super) fn without_frame(art: Node) -> Node {
+    let NodeKind::Group { children, clip: false } = &art.kind else { return art };
+    let Some((first, rest)) = children.split_first() else { return art };
+    let around = rest.iter().filter_map(|n| n.geometric_bounds()).reduce(|a, b| a.union(b));
+    let exact = match (around, first.geometric_bounds()) {
+        (Some(a), Some(f)) => [a.x0 - f.x0, a.y0 - f.y0, a.x1 - f.x1, a.y1 - f.y1].iter().all(|d| d.abs() <= 1e-3),
+        _ => false,
+    };
+    if !exact || !unpainted_rectangle(first) {
+        return art;
+    }
+    let plain = art.opacity >= 1.0
+        && art.visible
+        && !art.locked
+        && !art.isolate
+        && art.knockout == vectorcraft_doc::Knockout::Neutral
+        && !art.knockout_shape
+        && art.blend == vectorcraft_color::BlendMode::Normal
+        && art.name.is_none()
+        && *art.extras() == vectorcraft_doc::NodeExtras::default()
+        && art.appearance.effects.is_empty()
+        && art.appearance.items.is_empty();
+    if let ([only], true) = (rest, plain) {
+        return Node::clone(only);
+    }
+    let mut out = art.clone();
+    if let Some(c) = out.children_mut() {
+        c.remove(0);
+    }
+    out
 }
