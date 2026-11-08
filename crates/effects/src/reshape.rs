@@ -658,12 +658,13 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
     for e in fx {
         let Some(bounds) = art.geometric_bounds() else { break };
         let params = merged_params(&e.id, &e.params);
-        // Placed gradients follow a Transform effect and Free Distort ([`crate::Carry`]): under
-        // Free Distort (`boxes`) each path's move and scale from its bounds before the effect to
-        // its bounds after it. Under that and the other effects, the placed gradients of type's
-        // outlines in `art` (`outline_text`) move and scale with the outlines' bounds.
+        // Placed gradients follow a Transform effect, Free Distort and the Warp effects
+        // ([`crate::Carry`]): under Free Distort and Warp (`boxes`) each path's move and scale from
+        // its bounds before the effect to its bounds after it. Under those and the other effects,
+        // the placed gradients of type's outlines in `art` (`outline_text`) move and scale with
+        // the outlines' bounds.
         let follows = crate::Carry::follows(&e.id, &params, bounds, seed);
-        let boxes = follows && e.id == "distort.freeDistort";
+        let boxes = follows && crate::Carry::by_bounds(&e.id);
         let mut outlines = vec![];
         if !follows || boxes {
             type_outline_bounds(art, &mut outlines);
@@ -734,8 +735,8 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
             rebase_type_outlines(art, &mut outlines.into_iter());
         }
         // What paints the art as a whole, and the own fills and strokes of the groups inside it,
-        // follow their bounds under Free Distort (they stay when no path changed them). Each stays
-        // when a path under it that its bounds measure kept its shape (past the budget).
+        // follow their bounds under Free Distort and Warp (they stay when no path changed them).
+        // Each stays when a path under it that its bounds measure kept its shape (past the budget).
         let mut after = vec![];
         let held = (!groups.is_empty() || !kept_ids.is_empty()) && group_marks(art, &mut vec![], &kept_ids, &mut after).1;
         if !groups.is_empty() {
