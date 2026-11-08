@@ -157,7 +157,146 @@ fn pdf_compatible_files_carry_a_pdf() {
     assert!(pdf.starts_with(b"%PDF"));
     let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
     assert_eq!(info["pages"], 3);
-    assert!(vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({})).unwrap()["dataBase64"])).is_none());
+    assert!(
+        vectorcraft_format::pdf_content(&bytes_of(&s.execute("file.saveCopy", &json!({"pdfCompatible": false})).unwrap()["dataBase64"])).is_none()
+    );
+}
+
+/// A native save is portable to the other apps by default. The option is still an explicit
+/// opt-out, and a remembered opt-out survives later saves of the document.
+#[test]
+fn native_saves_carry_all_artboards_as_pdf_by_default() {
+    let mut s = three_boards();
+    for compress in [false, true] {
+        let result = s.execute("file.saveCopy", &json!({"compress": compress})).unwrap();
+        let file = bytes_of(&result["dataBase64"]);
+        let pdf = vectorcraft_format::pdf_content(&file).expect("the default native save carries a PDF");
+        let info = s.execute("document.pdfInfo", &json!({"dataBase64": vectorcraft_format::base64_encode(&pdf)})).unwrap();
+        assert_eq!(info["pages"], 3);
+        assert_eq!(vectorcraft_format::load(&file).unwrap().artboards.len(), 3);
+    }
+    let dir = Folder::new("pdf-opt-out");
+    let path = dir.file("compact.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 60, "y": 10, "width": 10, "height": 10})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none());
+    let options = s.execute("file.formatOptions", &json!({"format":"vectorcraft"})).unwrap();
+    assert_eq!(options["options"]["pdfCompatible"]["value"], false);
+    s.execute("document.save", &json!({"compress": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none());
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    assert_eq!(s.doc().unwrap().save_options["pdfCompatible"], false);
+    let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+    assert_eq!(options["options"]["pdfCompatible"]["value"], false);
+    s.execute("document.save", &json!({})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none());
+    s.execute("document.save", &json!({"pdfCompatible": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some());
+}
+
+#[test]
+fn native_saves_without_artboards_keep_the_editable_document() {
+    let mut s = three_boards();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).artboards.clear();
+    let result = s.execute("file.saveCopy", &json!({})).unwrap();
+    let file = bytes_of(&result["dataBase64"]);
+    let restored = vectorcraft_format::load(&file).unwrap();
+    assert!(restored.artboards.is_empty());
+    assert_eq!(restored.node_count(), s.doc().unwrap().doc.node_count());
+    assert!(vectorcraft_format::pdf_content(&file).is_none());
+    s.execute("document.open", &json!({"name": "no-artboards.vectorcraft", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+    assert_eq!(s.doc().unwrap().save_options["pdfCompatible"], true);
+    s.execute("artboard.new", &json!({"x": 0, "y": 0, "width": 100, "height": 80})).unwrap();
+    let result = s.execute("file.saveCopy", &json!({})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes_of(&result["dataBase64"])).is_some());
+}
+
+#[test]
+fn native_template_saves_keep_the_document_pdf_preference() {
+    let mut s = three_boards();
+    let dir = Folder::new("template-pdf-preference");
+    s.execute("file.saveAs", &json!({"path": dir.file("compact.vectorcraft"), "pdfCompatible": false, "version": 3})).unwrap();
+    let options = s.execute("file.formatOptions", &json!({"format": "template"})).unwrap();
+    assert_eq!(options["options"]["pdfCompatible"]["value"], false, "the save dialog must offer the same retained choice");
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "template"})).unwrap();
+    let bytes = bytes_of(&r["dataBase64"]);
+    assert!(vectorcraft_format::pdf_content(&bytes).is_none());
+    assert_eq!(
+        vectorcraft_format::load_file(&bytes).unwrap().info.version,
+        vectorcraft_format::VERSION,
+        "unrelated format options are not carried over"
+    );
+    let r = s.execute("file.saveAsTemplate", &json!({"format": "template", "pdfCompatible": true})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes_of(&r["dataBase64"])).is_some());
+}
+
+#[test]
+fn a_default_native_save_keeps_its_pdf_after_another_document_opts_out() {
+    let dir = Folder::new("default-native-pdf-choice");
+    for (index, options) in [json!({}), json!({"options":{"pdfCompatible":null}})].into_iter().enumerate() {
+        let mut s = three_boards();
+        let path = dir.file(&format!("first-{index}.vectorcraft"));
+        let mut params = options.as_object().unwrap().clone();
+        params.insert("path".into(), json!(path));
+        s.execute("file.saveAs", &Value::Object(params)).unwrap();
+        assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some());
+        s.execute("file.new", &json!({"width": 10, "height": 10})).unwrap();
+        s.execute("file.saveAs", &json!({"path":dir.file(&format!("other-{index}.vectorcraft")),"pdfCompatible":false})).unwrap();
+        s.execute("document.activate", &json!({"index":0})).unwrap();
+        s.execute("document.save", &json!({})).unwrap();
+        assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some(), "the first document keeps the PDF it was saved with");
+        assert_eq!(s.doc().unwrap().save_options.get("pdfCompatible"), Some(&json!(true)));
+    }
+}
+
+#[test]
+fn a_null_nested_pdf_option_keeps_the_saved_opt_out() {
+    let dir = Folder::new("null-nested-pdf-option");
+    let mut s = three_boards();
+    let path = dir.file("compact.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": false})).unwrap();
+    s.execute("document.save", &json!({"options": {"pdfCompatible": null}})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_none(), "null leaves the saved choice");
+    assert_eq!(s.doc().unwrap().save_options.get("pdfCompatible"), Some(&json!(false)));
+}
+
+#[test]
+fn reopening_native_files_keeps_each_files_pdf_compatibility() {
+    let dir = Folder::new("pdf-reopened-options");
+    let mut s = three_boards();
+    let pdf = dir.file("portable.vectorcraft");
+    let compact = dir.file("compact.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": pdf, "pdfCompatible": true})).unwrap();
+    s.execute("file.saveAs", &json!({"path": compact, "pdfCompatible": false})).unwrap();
+    s.execute("file.new", &json!({"width": 20, "height": 20})).unwrap();
+    let copy = s.execute("file.saveCopy", &json!({})).unwrap();
+    assert!(vectorcraft_format::pdf_content(&bytes_of(&copy["dataBase64"])).is_none(), "new files use the last native preference");
+    for (path, expected) in [(&pdf, true), (&compact, false)] {
+        s.execute("document.open", &json!({"path": path})).unwrap();
+        let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+        assert_eq!(options["options"]["pdfCompatible"]["value"], expected);
+        s.execute("document.save", &json!({})).unwrap();
+        assert_eq!(vectorcraft_format::pdf_content(&std::fs::read(path).unwrap()).is_some(), expected);
+    }
+}
+
+#[test]
+fn reverting_native_files_updates_their_pdf_compatibility() {
+    let dir = Folder::new("pdf-revert-options");
+    for saved in [false, true] {
+        let mut s = three_boards();
+        let path = dir.file(if saved { "with-pdf.vectorcraft" } else { "compact.vectorcraft" });
+        s.execute("file.saveAs", &json!({"path": path, "pdfCompatible": saved})).unwrap();
+        let replacement = s.execute("file.saveCopy", &json!({"pdfCompatible": !saved})).unwrap();
+        std::fs::write(&path, bytes_of(&replacement["dataBase64"])).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 70, "y": 20, "width": 8, "height": 8})).unwrap();
+        s.execute("file.revert", &json!({})).unwrap();
+        let options = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
+        assert_eq!(options["options"]["pdfCompatible"]["value"], !saved);
+        s.execute("document.save", &json!({})).unwrap();
+        assert_eq!(vectorcraft_format::pdf_content(&std::fs::read(&path).unwrap()).is_some(), !saved);
+    }
 }
 
 #[test]
@@ -429,7 +568,7 @@ fn format_options_list_the_save_options() {
         assert_eq!(v["options"][k]["value"], value, "{k}");
     }
     let v = s.execute("file.formatOptions", &json!({"format": "vectorcraft"})).unwrap();
-    assert_eq!((v["options"]["pdfCompatible"]["value"].as_bool(), v["options"]["range"]["value"].is_null()), (Some(false), true));
+    assert_eq!((v["options"]["pdfCompatible"]["value"].as_bool(), v["options"]["range"]["value"].is_null()), (Some(true), true));
     // Saved with them, a document remembers them for Save.
     let dir = Folder::new("remember");
     let path = dir.file("r.vectorcraft");

@@ -347,10 +347,12 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
-    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
-    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
-    // shows stays open.
-    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
         if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }

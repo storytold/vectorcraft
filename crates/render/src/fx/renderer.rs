@@ -10,6 +10,26 @@ use super::{
     effects, fill_rule, peniko,
 };
 
+#[cfg(test)]
+thread_local! {
+    /// How many silhouettes of drop shadows and outer glows renderers on this thread have drawn:
+    /// one per shadow or glow raster made ([`Renderer::shadow_raster`]) and per one drawn through a
+    /// filter layer ([`Renderer::draw_shadow_filter`]).
+    static SILHOUETTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`SILHOUETTES`] of this thread.
+#[cfg(test)]
+pub(super) fn silhouettes() -> u64 {
+    SILHOUETTES.get()
+}
+
+/// Adds one to [`SILHOUETTES`].
+#[cfg(test)]
+fn note_silhouette() {
+    SILHOUETTES.set(SILHOUETTES.get().saturating_add(1));
+}
+
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
     /// silhouette `paint` draws is rendered once into a small crop, blurred and tinted on the CPU,
@@ -125,6 +145,8 @@ impl Renderer {
                 let decoded = crate::paint::decode_failures();
                 let outer_image_left_out = self.image_left_out.replace(false);
                 let pattern_images_left_out = crate::pattern::images_left_out();
+                #[cfg(test)]
+                note_silhouette();
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 let failed = crate::paint::decode_failures() - decoded;
                 let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
@@ -183,6 +205,7 @@ impl Renderer {
                 (image, x0, y0, scale, moved, cropped)
             }
         };
+        self.stats.view_sized += usize::from(cropped.is_some() || scale != 1.0);
         Some(Shadow { image, at: Affine::translate((x, y)) * Affine::scale(scale), mode, moved, cropped })
     }
 
@@ -229,6 +252,8 @@ impl Renderer {
         // The offset moves the content rather than the filter: vello_cpu drops layer content
         // that lies entirely outside the viewport before filtering.
         let reach = reach + Vec2::new(dx, dy);
+        #[cfg(test)]
+        note_silhouette();
         self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));

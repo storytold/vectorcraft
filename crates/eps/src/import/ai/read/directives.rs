@@ -121,7 +121,11 @@ impl<'a> Reader<'a> {
         }
         if m == "BeginArtStyles" {
             let section = self.section("EndArtStyles")?;
-            self.styles = crate::import::ai::style::art_styles(section);
+            // GUARDS: a definition's art takes the file's art styles and hands them back, so a
+            // section inside it would replace the file's own.
+            if self.subreader_depth == 0 {
+                self.styles = crate::import::ai::style::art_styles(section);
+            }
             return Ok(());
         }
         if m == "BeginArtStyleList" {
@@ -376,9 +380,11 @@ impl<'a> Reader<'a> {
         let mut sub = Reader::new(section);
         sub.subreader_depth = self.subreader_depth + 1;
         sub.pattern = Some(PatternHead::default());
-        // The gradients defined so far and the names given, lent (and those it defines kept).
+        // The gradients and art styles defined so far and the names given, lent (and the gradients
+        // it defines kept).
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -387,6 +393,7 @@ impl<'a> Reader<'a> {
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
+        self.styles = std::mem::take(&mut sub.styles);
         // Unread art in the definition, hidden or not, leaves the tile incomplete.
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
@@ -406,6 +413,7 @@ impl<'a> Reader<'a> {
         sub.pattern = Some(PatternHead { taken: true, name: def.name.clone(), tile: Some(def.tile) });
         sub.gradients = std::mem::take(&mut self.gradients);
         sub.global_names = std::mem::take(&mut self.global_names);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.nodes = self.nodes;
         sub.template = self.template;
         self.lend_budgets(&mut sub);
@@ -420,6 +428,7 @@ impl<'a> Reader<'a> {
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
         self.global_names = std::mem::take(&mut sub.global_names);
+        self.styles = std::mem::take(&mut sub.styles);
         let whole = read.is_ok()
             && sub.unsupported.is_empty()
             && sub.unknown.is_empty()
@@ -495,6 +504,20 @@ impl<'a> Reader<'a> {
             return;
         };
         let art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        // The objects of the art linked to graphic styles, by their ids in the document.
+        if !sub.style_links.is_empty() {
+            let mut ids = HashMap::new();
+            for (read, kept) in frame.children.iter().zip(&art) {
+                pair_ids(read, kept, &mut ids, 0);
+            }
+            for (id, style) in &sub.style_links {
+                if let Some(new) = ids.get(id)
+                    && self.style_links.len() < MAX_NODES
+                {
+                    self.style_links.push((*new, style.clone()));
+                }
+            }
+        }
         // Fills and the tables look the pattern up by its name in the file; the document has it by
         // the name it shows.
         let mut def = PatternDef::new(&self.global_names.define(Global::Pattern, &head.name), art);
@@ -730,8 +753,10 @@ impl<'a> Reader<'a> {
         // In a space of its own (y down), with no head to take.
         sub.pattern = Some(PatternHead { taken: true, ..PatternHead::default() });
         sub.subreader_depth = self.subreader_depth + 1;
-        // The gradients and patterns defined so far, and which patterns are in the version 7 form, lent.
+        // The gradients, art styles and patterns defined so far, and which patterns are in the
+        // version 7 form, lent.
         sub.gradients = std::mem::take(&mut self.gradients);
+        sub.styles = std::mem::take(&mut self.styles);
         sub.pattern_tiles = std::mem::take(&mut self.pattern_tiles);
         sub.v7_patterns = std::mem::take(&mut self.v7_patterns);
         sub.global_names = std::mem::take(&mut self.global_names);
@@ -742,6 +767,7 @@ impl<'a> Reader<'a> {
         self.take_back_budgets(&mut sub);
         self.nodes = sub.nodes;
         self.gradients = std::mem::take(&mut sub.gradients);
+        self.styles = std::mem::take(&mut sub.styles);
         self.pattern_tiles = std::mem::take(&mut sub.pattern_tiles);
         self.v7_patterns = std::mem::take(&mut sub.v7_patterns);
         self.global_names = std::mem::take(&mut sub.global_names);
@@ -761,7 +787,8 @@ impl<'a> Reader<'a> {
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),
             _ => Some(Node::group(self.doc.alloc_id(), art)),
-        };
+        }
+        .map(brush::without_frame);
         let Some(node) = node else { return };
         self.brush_art.insert(name.clone(), node);
         let mut colors = BrushArtColors { spots: sub.spots, stop_spots: sub.stop_spots, cmyk: sub.cmyk_colors, rgb: sub.rgb_colors };

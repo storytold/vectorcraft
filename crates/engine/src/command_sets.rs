@@ -27,8 +27,9 @@ pub const FIT_ACTIVE_ARTBOARD: [&str; 2] = ["artboard.fitToArt", "artboard.fitTo
 /// [`ON_ACTIVE_ARTBOARD`] and [`FIT_ACTIVE_ARTBOARD`] commands and to a batch; the artboards the
 /// Artboard tool had selected for its commands; the view's center the app passes to Edit Symbol);
 /// an action leaves them out ([`Session::journal_for_action`]).
-const REPLAY_ONLY: [(&str, &str); 21] = [
+const REPLAY_ONLY: [(&str, &str); 22] = [
     ("file.new", "created"),
+    ("edit.newDocumentFromState", "created"),
     ("document.save", "modified"),
     ("file.saveAs", "modified"),
     ("edit.pasteInPlace", "artboard"),
@@ -71,6 +72,11 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
         }
     }
 }
+
+/// Journaled commands that write a file and change nothing in the document: with an object of a
+/// dynamic symbol instance's art selected, they read the instance as queries do
+/// ([`crate::Session::execute`]).
+pub(crate) const JOURNALED_READS: &[&str] = &["css.export"];
 
 /// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
 /// its checks), then running as on the selection: the result and the selection afterwards are the

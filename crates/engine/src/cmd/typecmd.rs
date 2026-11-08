@@ -16,15 +16,21 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -139,8 +145,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step.
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
     s.edit("Text Orientation", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -296,6 +304,18 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+}
+
+/// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
+/// ([`vectorcraft_text::take_kept_layout`]) instead of laying the object out again.
+pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
+    t.normalize_paras();
+    auto_height(t);
+    let stamp = vectorcraft_text::LayoutStamp::now();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    t.cached_bounds = Some(lay.bounds);
+    t.cached_baselines = lay.baselines();
+    vectorcraft_text::keep_layout(t, stamp, lay);
 }
 
 /// The text-space bounds of area type's frame, when Auto Size can fit it: a rectangle (one

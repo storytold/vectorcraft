@@ -25,6 +25,8 @@ impl Session {
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
             vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
         });
+        // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
+        vectorcraft_text::register_envelope_ink();
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
@@ -40,6 +42,8 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -79,6 +83,7 @@ impl Session {
             batch_stash: None,
             batch_steps: None,
             batch_paint_docs: Vec::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -107,6 +112,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
@@ -335,7 +341,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

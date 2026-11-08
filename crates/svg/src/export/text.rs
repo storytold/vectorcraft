@@ -235,6 +235,12 @@ impl Writer<'_> {
                 self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // A reader turns each `<textPath>` glyph with the path, as Rainbow does: Skew, 3D
+            // Ribbon, Stair Step and Gravity keep their look as outlines.
+            if t.path_effect != vectorcraft_doc::PathEffect::Rainbow {
+                self.warn("type on a path with an effect other than Rainbow is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // It cannot hang glyphs outside the start bracket either.
             if hangs_on_path(t, &lay) {
                 self.warn("type on a path with glyphs hanging outside its brackets is outlined to keep its look");

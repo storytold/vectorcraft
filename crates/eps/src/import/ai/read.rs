@@ -46,6 +46,10 @@
 //!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
+//!   The dictionary after a placed PDF or `.ai` file has the page shown, from 1, in
+//!   `AI11 PlacedPDFPageIndex` and its box in `AI11 PlacedPDFCropTo` (0 Art, 1 Crop, 2 Trim, 3 Bleed,
+//!   4 Media, 5 Bounding Box): each is a placed document of that page and box, showing the preview
+//!   until its file is found. A value outside those leaves it a linked image.
 //!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
 //!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
 //!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
@@ -112,7 +116,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer, Unit,
+    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
@@ -138,14 +142,19 @@ pub use document::{
     BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
-pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+pub(crate) use ops::read_art_style;
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{IMAGE_TOO_LARGE, PlacedPage};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
 mod legacy_text;
+
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
 
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]
@@ -180,9 +189,13 @@ pub struct Structure {
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
     pub placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// The placed files that are pages of PDF or `.ai` files.
+    pub placed_pages: Vec<PlacedPage>,
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The warped text objects, checked against their drawn looks once their type is laid out.
+    pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
@@ -431,6 +444,9 @@ struct Reader<'a> {
     image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
     place: Option<Place>,
+    /// The placed files just read, until the dictionary after each: at most one for each depth of
+    /// frames, the innermost last.
+    placed_tails: Vec<PlacedTail>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
     /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
@@ -495,10 +511,13 @@ struct Reader<'a> {
     envelope_art: Option<Node>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
-    /// How many more envelopes this import may draw to check ([`super::envelope::drawn_alike`]).
+    /// How many more envelopes and warped text objects this import may draw to check
+    /// ([`super::envelope::drawn_alike`]).
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
+    warped_type: Vec<super::envelope::WarpedLook>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -544,6 +563,8 @@ struct Reader<'a> {
     placeholders: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// See [`Structure::placed_pages`].
+    placed_pages: Vec<PlacedPage>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
@@ -629,6 +650,9 @@ impl<'a> Reader<'a> {
     }
 
     fn new(data: &'a [u8]) -> Self {
+        // An envelope's saved margins and its check against its drawn art measure type by its
+        // glyphs, as the app maps it.
+        vectorcraft_text::register_envelope_ink();
         let mut doc = Document::new(1.0, 1.0);
         doc.layers.clear();
         Self {
@@ -700,6 +724,7 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            warped_type: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
@@ -718,6 +743,8 @@ impl<'a> Reader<'a> {
             restyled: vec![],
             placeholders: vec![],
             placed_elsewhere: vec![],
+            placed_pages: vec![],
+            placed_tails: vec![],
             unread_elsewhere: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),

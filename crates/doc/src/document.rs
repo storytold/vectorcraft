@@ -68,6 +68,7 @@ impl Document {
             print_setup,
             assets,
             svg_scripts,
+            svg_filters,
             puppet,
             new_art,
             dimensions,
@@ -135,6 +136,7 @@ impl Document {
             && *print_setup == other.print_setup
             && *assets == other.assets
             && *svg_scripts == other.svg_scripts
+            && *svg_filters == other.svg_filters
             && match (puppet, &other.puppet) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (a, b) => a.is_none() && b.is_none(),
@@ -245,6 +247,7 @@ impl Document {
             print_setup: None,
             assets: vec![],
             svg_scripts: vec![],
+            svg_filters: vec![],
             puppet: None,
             new_art: Default::default(),
             dimensions: false,
@@ -352,6 +355,7 @@ impl Document {
             }
             false
         }
+        crate::id_index::note_tree_walk();
         let mut p = vec![];
         find(&self.layers, id, &mut p).then_some(p)
     }
@@ -393,6 +397,7 @@ impl Document {
             });
         }
         if !want.is_empty() {
+            crate::id_index::note_tree_walk();
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);
