@@ -1,4 +1,4 @@
-use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
@@ -136,6 +136,10 @@ pub(crate) fn graph_dialog(app: &mut VectorcraftApp, id: &str) -> Result<Value, 
 
 pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
+        return;
+    }
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
         return;
     }
     if SUBJECT_COMMANDS.contains(&id)
