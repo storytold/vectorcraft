@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Lighting Preset",
             [],
             None,
-            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index; one undo step → {ids}",
+            "{index: int, preset: standard|diffuse|topLeft|right, item?: appearance item index|null (omitted: the active item, else the object's), ids?|id?: [..], target?: object|contents, aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} replace an applied 3D effect's light rig and ambient with an original lighting preset; preserve shading, geometry and view; all targets must have a 3D effect at index other than Extrude & Bevel (Classic), which has no lighting presets; one undo step → {ids}",
             has_doc,
             lighting_preset
         ),
@@ -440,6 +440,13 @@ fn lighting_preset(s: &mut Session, p: &Value) -> Result<Value> {
         let effect = n.appearance.effects_at(slot).and_then(|fx| fx.get(index));
         if !effect.is_some_and(|e| effects::is_three_d(&e.id)) {
             return Err(bad(C, format!("object {} needs a 3D effect at index {index}", id.0)));
+        }
+        // Extrude & Bevel (Classic) has no lighting presets; its lights are set in its own options.
+        if effect.is_some_and(|e| e.id == effects::CLASSIC_EXTRUDE) {
+            return Err(bad(
+                C,
+                format!("object {}: Extrude & Bevel (Classic) at index {index} has no lighting presets; set its lights with effect.setParams", id.0),
+            ));
         }
     }
     let mut options = p.clone();

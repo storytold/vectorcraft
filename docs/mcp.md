@@ -2137,8 +2137,9 @@ See [Revolve](revolve.md) for the scope and limitations.
 `effect.lightingPreset {index: int, preset: "standard" | "diffuse" | "topLeft" | "right", item?, ids?, target?}`
 replaces the lighting rig and ambient of an existing Revolve, Extrude & Bevel, Inflate or Rotate
 effect. `item: null` addresses object-level effects; an item index addresses a fill/stroke's
-effects. All targets must have a 3D effect at `index`, otherwise nothing changes. The operation
-is one undo step and preserves Shading, geometry, source paint and the view.
+effects. All targets must have a 3D effect at `index`, otherwise nothing changes. Extrude & Bevel
+(Classic) has no lighting presets: a target with it at `index` is an error, nothing changes, and
+`effect.setParams` sets its lights. The operation is one undo step and preserves Shading, geometry, source paint and the view.
 
 The four original rigs use one white front light at 80% intensity. Standard keeps the existing
 default; Diffuse uses 100% Softness and 35% Ambient Light, Top Left uses Rotation 135 and Height
