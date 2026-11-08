@@ -96,6 +96,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
 mod save_changes;
@@ -113,6 +114,7 @@ pub(crate) mod simplify_slider;
 pub mod slices;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
@@ -349,6 +351,7 @@ registry! {
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
+    SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
@@ -381,6 +384,8 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
+    SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
@@ -474,7 +479,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
 /// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
-/// and Dim Images, as its checkbox does).
+/// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
+/// one picked from its menu does, and the preset it shows follows the DXF options set this way.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -485,7 +491,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
     }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
 }
 
 /// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
@@ -547,6 +557,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }
+        if d.kind == safe_mode::STOPPED {
+            safe_mode::cancel_stopped(app);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -588,13 +601,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
-/// (one dialog at a time).
+/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
+    safe_mode::reopen(app);
     missing_fonts::open_next(app);
 }
 

@@ -101,6 +101,21 @@ fn convolve_matrices_ok(xml: &roxmltree::Document) -> Result<(), SvgError> {
     Ok(())
 }
 
+/// The SVG filters of SVG text `svg` ([`vectorcraft_effects::svg_filter::filters_of`]), read with
+/// the limits on depth and entities that [`import`] reads documents with: up to `room`, leaving
+/// out the names `taken` says.
+pub(crate) fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Result<(Vec<(String, String)>, usize), SvgError> {
+    let too_deep = || SvgError::TooDeep(depth::MAX_ELEMENT_DEPTH);
+    if depth::prescan(svg).too_deep {
+        return Err(too_deep());
+    }
+    let xml = parse(svg)?;
+    if depth::height(&xml, depth::MAX_ELEMENT_DEPTH).is_none() {
+        return Err(too_deep());
+    }
+    Ok(vectorcraft_effects::svg_filter::filters_of(&xml, svg, room, taken))
+}
+
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
 pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Result<(Document, Vec<String>), SvgError> {
     // Before anything reads the tree: the XML reader, usvg, and what is made of its tree, all by
@@ -160,6 +175,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers),
         files,
         non_scaling: found.non_scaling,
         data: found.data,
@@ -318,6 +334,8 @@ struct Importer {
     pattern_suffixes: HashMap<String, usize>,
     /// Blend modes of the shadows and glows our export wrote, by filter id ([`fx::blends`]).
     blends: HashMap<String, String>,
+    /// Each `<filter>` element as written, by id ([`fx::sources`]).
+    filter_sources: HashMap<String, fx::Source>,
     /// The files `<image>` elements link to.
     files: files::Files,
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).

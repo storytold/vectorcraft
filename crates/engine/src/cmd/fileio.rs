@@ -19,6 +19,7 @@
 //! - `metafile`: EMF and WMF export, open and place.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
+//! - `mesh3d`: 3D assets as OBJ, glTF, USDA and USDZ mesh files (`assets.export3D`).
 //!
 //! [`FORMATS`] is the single list of formats (append-only); open dialogs use [`open_filters`],
 //! agents query `document.formats`.
@@ -35,6 +36,7 @@ pub(crate) mod imagemap;
 mod importer;
 mod legacy_ai;
 mod load;
+mod mesh3d;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
 mod heifread;
 mod jp2read;
@@ -77,6 +79,8 @@ pub use load::{
     read_for_open, texture_image,
 };
 pub use load::{losses_summary, overwrite_losses};
+pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
+pub(crate) use mesh3d::{mesh_file_names, mesh_files};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;

@@ -1086,6 +1086,14 @@ font-technology	Variable	Variables
 	Export As SVG…	Exportar como SVG…
 	Export Asset	Exportar recurso
 	Export Assets	Exportar recursos
+	Export 3D Object	Exportar objeto 3D
+	3D Export Format	Formato de exportación 3D
+	Export 3D Assets	Exportar recursos 3D
+@msg	{what} can't be exported in 3D: {e}	{what} no se puede exportar en 3D: {e}
+@msg	asset {id} isn't a 3D asset	el recurso {id} no es un recurso 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	el recurso {id} es un recurso 3D: lo escribe assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	todavía no hay recursos 3D: reúna primero un objeto con un efecto 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	seleccione un objeto con un efecto 3D (o indique sus id)
 	Export As…	Exportar como…
 	Export CSS	Exportar CSS
 	Export CSS…	Exportar CSS…
@@ -1717,6 +1725,7 @@ font-technology	Variable	Variables
 	Report copied	Informe copiado
 	Line {line}	Línea {line}
 	Line {line}: {name}: {status}	Línea {line}: {name}: {status}
+	Read Action Set File	Leer archivo de conjunto de acciones
 	Read Shortcut Set File	Leer archivo de conjunto de métodos abreviados
 	Import Matches	Asociaciones de importación
 	Remember Import Matches	Recordar asociaciones de importación
@@ -3979,7 +3988,7 @@ axis	Both	Ambos
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	no hay ninguna biblioteca `{id}`
 @msg	select some type first	selecciona primero algún texto
-@msg	kerning must be a number, "auto", or "optical"	El interletraje debe ser un número, «auto» u «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning debe ser un número, «auto» u «optical»
 @msg	the selection has no gradient fill	la selección no tiene un degradado de relleno
 @msg	the selection has no gradient stroke	la selección no tiene un degradado de trazo
 @msg	the selection has no pattern fill	la selección no tiene un motivo de relleno
@@ -4206,9 +4215,9 @@ axis	Both	Ambos
 @msg	bad shortcut	atajo no válido
 @msg	bad stream length	longitud de flujo no válida
 @msg	bad trailer	trailer no válido
-@msg	balance must be between 0 and 100	el equilibrio debe estar entre 0 y 100
+@msg	balance must be between 0 and 100	balance debe estar entre 0 y 100
 @msg	batch step {_1} (`{id}`) failed: {e}	falló el paso {_1} del lote (`{id}`): {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	el brillo debe ser dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness debe ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	no se puede codificar el documento: {0}
 @msg	can't parse shortcut `{c}`	no se puede interpretar el atajo `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	no se puede interpretar el atajo `{s}` de `{k}`
@@ -4233,7 +4242,7 @@ axis	Both	Ambos
 @msg	compound paths can only contain paths	los trazados compuestos solo pueden contener trazados
 @msg	compressed (RLE) bitmaps can't be read yet	todavía no se pueden leer mapas de bits comprimidos (RLE)
 @msg	damaged	dañado
-@msg	decimals must be {_1}–{_2} (got {_3})	los decimales deben ser {_1}–{_2} (se recibió {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals debe ser {_1}–{_2} (se recibió {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	divide en 1 a {MAX_PIECES} sectores
 @msg	effect {k} is `{_1}`, not `{id}`	el efecto {k} es `{_1}`, no `{id}`
 @msg	empty brush stroke	trazo de pincel vacío
@@ -4358,6 +4367,8 @@ axis	Both	Ambos
 @msg	no such action set	no existe ese conjunto de acciones
 @msg	the action sets changed; nothing was deleted	los conjuntos de acciones han cambiado; no se ha eliminado nada
 @msg	no action set to save	no hay ningún conjunto de acciones que guardar
+@msg	the action set file can't be read in full	el archivo de conjunto de acciones no se puede leer completo
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
 @msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones
@@ -4432,7 +4443,7 @@ axis	Both	Ambos
 @msg	replace: the object to replace was changed or deleted	replace: se modificó o eliminó el objeto que se iba a reemplazar
 @msg	pattern missing	falta el motivo
 @msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
-@msg	percent must be above 0 and at most 6400, not {p}	el porcentaje debe ser mayor que 0 y como máximo 6400, no {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent debe ser mayor que 0 y como máximo 6400, no {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	elige un color, degradado o motivo para guardarlo como muestra
 @msg	plane must be left, right or ground	plane debe ser left, right o ground
 @msg	plug-in ABI: {0}	ABI del plugin: {0}
@@ -4453,8 +4464,8 @@ axis	Both	Ambos
 @msg	result would exceed the canvas (coordinates out of range)	el resultado excedería el lienzo (coordenadas fuera de rango)
 @msg	objects can't be nested more than 32 deep	los objetos no pueden anidarse a más de 32 niveles
 @msg	the SVG's elements are nested more than {0} deep	los elementos del SVG están anidados a más de {0} niveles
-@msg	scale must be a number from {_1} to {_2}, not {_3}	la escala debe ser un número de {_1} a {_2}, no {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	la escala debe ser un número de {_1} a {_2}, no {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale debe ser un número de {_1} a {_2}, no {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale debe ser un número de {_1} a {_2}, no {s}
 @msg	select (or target) objects whose appearance isn't basic	selecciona (o apunta a) objetos cuya apariencia no sea básica
 @msg	select a Live Paint group	selecciona un grupo de pintura interactiva
 @msg	select a blend	selecciona una fusión
@@ -4875,6 +4886,9 @@ axis	Both	Ambos
 	Bottom Right	Abajo a la derecha
 	Edge	Borde
 	System Title Bar	Barra de título del sistema
+	VectorCraft Title Bar on Every Desktop	Barra de título de VectorCraft en todos los escritorios
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mientras está definida, la variable de entorno VECTORCRAFT_TITLEBAR elige la barra de título.
+	System Title Bar takes precedence over this option while it is on.	Mientras está activada, Barra de título del sistema tiene prioridad sobre esta opción.
 	Value Axis	Eje de valores
 	On Left Side	En el lado izquierdo
 	On Right Side	En el lado derecho
@@ -6348,6 +6362,7 @@ breakText	Glyphs	Glifos
 	Reset Symbol Instance	Restablecer instancia de símbolo
 @msg	type must be static or dynamic, not {v}	type debe ser static o dynamic, no {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` es un símbolo estático: primero establezca su tipo de símbolo en Dinámico
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	De un trazado, trazado compuesto o texto seleccionado en una instancia de símbolo solo se puede cambiar el color sólido del relleno y del trazo
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
@@ -6463,3 +6478,25 @@ breakText	Glyphs	Glifos
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de importación declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	solo un plugin de exportación o de importación declara `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	un plugin de importación siempre recibe el presupuesto de una importación: omita `budget`
+
+# Safe Mode
+	Safe Mode…	Modo seguro…
+	Safe Mode	Modo seguro
+	Help › Safe Mode…	Ayuda › Modo seguro…
+	Enable on Re-launch	Activar en el próximo inicio
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	El último inicio de VectorCraft se detuvo mientras se cargaba el plugin {name}. Puede que no sea la causa.
+	Disable and Continue	Desactivar y continuar
+	Start Normally	Iniciar normalmente
+	Start in Safe Mode	Iniciar en modo seguro
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft está en modo seguro: ningún plugin se carga ni se ejecuta hasta que se inicie normalmente.
+	Disabled plug-ins	Plugins desactivados
+	No plug-ins are disabled.	No hay plugins desactivados.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	El modo seguro está activado: los plugins no se cargan ni se ejecutan hasta que VectorCraft se inicie normalmente
+@msg	give `id` or `file` (see plugin.safeMode)	indica `id` o `file` (consulta plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	ese plugin no está desactivado (consulta plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	No se pudieron guardar los plugins desactivados para el próximo inicio
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandir apariencia: un efecto de plugin de la selección no se puede expandir en modo seguro
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Alinear con cuadrícula de píxeles
+@msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles

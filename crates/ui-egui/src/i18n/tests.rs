@@ -1674,9 +1674,10 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Copied the CSS of 1 object", "Copied the CSS of 2 objects"),
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
+    ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
 ];
 
-/// The link, font and export status messages name a count of 1 in the singular and other counts in
+/// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
 /// the plural, and every complete catalog translates both, in the form its plural rule picks.
 #[test]
 fn counted_status_messages_take_the_plural_form() {
@@ -2204,6 +2205,151 @@ fn translated_messages_keep_the_double_quoted_values_of_their_english() {
         }
     }
     assert!(missing.is_empty(), "{} rows drop a double-quoted value:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// Whether `text` holds `word` with no ASCII letter, digit or underscore right before or after it,
+/// so `true` counts in `true이거나` but not in `untrue`.
+fn holds_ascii_word(text: &str, word: &str) -> bool {
+    let joins = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back().is_none_or(|c| !joins(c));
+        let after = text[at + word.len()..].chars().next().is_none_or(|c| !joins(c));
+        before && after
+    })
+}
+
+/// The literal values `true`, `false` and `null` that `s` names outside its backticked and
+/// double-quoted spans.
+fn bare_literals(s: &str) -> Vec<&'static str> {
+    let mut outside = String::new();
+    let mut quoted = false;
+    for part in s.split('`').step_by(2) {
+        for (i, piece) in part.split('"').enumerate() {
+            if i > 0 {
+                quoted = !quoted;
+            }
+            if !quoted {
+                outside.push_str(piece);
+                outside.push(' ');
+            }
+        }
+    }
+    ["true", "false", "null"].into_iter().filter(|lit| holds_ascii_word(&outside, lit)).collect()
+}
+
+#[test]
+fn bare_literals_finds_true_false_and_null_outside_backticks_and_quotes() {
+    assert_eq!(bare_literals("clip must be true or false"), ["true", "false"]);
+    assert_eq!(bare_literals("`leading` must be from 0.1 to 5000, or null for Auto"), ["null"]);
+    assert_eq!(bare_literals(r#"`true` is "false", not untrue"#), Vec::<&str>::new());
+    assert!(holds_ascii_word("true이거나", "true"));
+    assert!(!holds_ascii_word("isTrue or falsey", "false"));
+}
+
+/// A translated status or error message keeps each `true`, `false` and `null` its English text
+/// names without backticks, spelled as the English spells it, since that is the value a command
+/// reads.
+#[test]
+fn translated_messages_keep_the_bare_literals_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for lit in bare_literals(english) {
+                    if !holds_ascii_word(form, lit) {
+                        missing.push(format!("{}: {lit} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a bare true, false or null:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// Messages that name parameter keys and values without backticks, each with the names a
+/// translation keeps as written in the English.
+const NAMED_KEYS: &[(&str, &[&str])] = &[
+    ("a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard", &["useArtboards"]),
+    ("a name names one asset: give multiple: false, or one object", &["multiple"]),
+    ("a theme is already called {name} (replace: \"{name}\" overwrites it)", &["replace"]),
+    ("action is required", &["action"]),
+    ("anchor must name a registered panel", &["anchor"]),
+    ("antiAlias `{id}`: none, art or type", &["antiAlias", "none", "art", "type"]),
+    ("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{v}`", &["axis"]),
+    ("balance must be between 0 and 100", &["balance"]),
+    ("before must name a panel", &["before"]),
+    ("brightness must be dark|mediumDark|mediumLight|light", &["brightness", "dark", "mediumDark", "mediumLight", "light"]),
+    ("clip must be true or false", &["clip"]),
+    ("collapsed must be true or false", &["collapsed"]),
+    ("column must be true or a number from 1", &["column"]),
+    ("column: true floats the whole column and takes no onto, above or below", &["column", "onto", "above", "below"]),
+    ("control must be fillStroke, coloring, drawMode or screenMode", &["control", "fillStroke", "coloring", "drawMode", "screenMode"]),
+    ("decimals must be {_1}–{_2} (got {_3})", &["decimals"]),
+    ("detect must be true or false", &["detect"]),
+    ("give origin: [x, y], or reset: true", &["origin", "reset"]),
+    ("global must be true or false", &["global"]),
+    ("group must be true or false", &["group"]),
+    ("icon must be true or false", &["icon"]),
+    ("included must be true or false", &["included"]),
+    ("index must be a number or first, previous, next or last", &["index", "first", "previous", "next", "last"]),
+    ("index must be a number or first, previous, next or last, not `{other}`", &["index", "first", "previous", "next", "last"]),
+    ("index must be ≥ 0", &["index"]),
+    ("kerning must be a number, \"auto\", or \"optical\"", &["kerning"]),
+    ("lang must be one of {_1}", &["lang"]),
+    ("layers must be true or false", &["layers"]),
+    ("member is for order front, forward, backward or back", &["member", "order", "front", "forward", "backward", "back"]),
+    ("mode is set, add or toggle, not `{other}`", &["mode", "set", "add", "toggle"]),
+    ("names is empty", &["names"]),
+    ("on must be true or false", &["on"]),
+    ("onto must name a floating panel", &["onto"]),
+    ("others must be true or false", &["others"]),
+    ("page must be a whole number from 1", &["page"]),
+    ("panel is not in a dock group", &["panel"]),
+    ("panel must name a registered panel", &["panel"]),
+    ("paths must be strings", &["paths"]),
+    ("percent must be above 0 and at most 6400, not {p}", &["percent"]),
+    ("plane must be left, right or ground", &["plane", "left", "right", "ground"]),
+    ("precision must be from 0.001 to 10 pt", &["precision"]),
+    ("rect is [x, y, width, height] in points", &["rect"]),
+    ("scale must be a number from {_1} to {_2}, not {_3}", &["scale"]),
+    ("scale must be a number from {_1} to {_2}, not {s}", &["scale"]),
+    ("show must be true or false", &["show"]),
+    ("span: \"selection\" places a linear or radial gradient, not a freeform one", &["span"]),
+    ("thickness must be from 0.01 to 5000 pt", &["thickness"]),
+    ("title can't be empty", &["title"]),
+    ("view is required", &["view"]),
+    ("width must be positive", &["width"]),
+    ("zone must be a string", &["zone"]),
+    ("zone must be tab, center, left, right, top or bottom", &["zone", "tab", "center", "left", "right", "top", "bottom"]),
+    ("`dither` applies to gradient fills (stroke: false)", &["stroke"]),
+    ("`strokeMode` applies to strokes (stroke: true)", &["stroke"]),
+];
+
+/// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as
+/// a whole word, and every message in the table is still in a catalog.
+#[test]
+fn translated_messages_keep_the_keys_and_values_their_english_names() {
+    let mut missing = Vec::new();
+    let mut seen = vec![false; NAMED_KEYS.len()];
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg") {
+            let Some(at) = NAMED_KEYS.iter().position(|(english, _)| english == src) else { continue };
+            seen[at] = true;
+            for name in NAMED_KEYS[at].1 {
+                if !holds_ascii_word(tr, name) {
+                    missing.push(format!("{}: {name} in {src:?} -> {tr:?}", l.code));
+                }
+            }
+        }
+    }
+    let stale: Vec<&str> = NAMED_KEYS.iter().zip(&seen).filter(|(_, seen)| !**seen).map(|((english, _), _)| *english).collect();
+    assert!(stale.is_empty(), "no catalog translates {stale:?}");
+    assert!(missing.is_empty(), "{} rows drop a key or value their English names:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
