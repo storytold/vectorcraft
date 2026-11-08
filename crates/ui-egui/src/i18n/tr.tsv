@@ -6406,6 +6406,16 @@ breakText	Glyphs	Glifler
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin
+@msg	{key} cannot be set on a guide	{key} bir kılavuzda ayarlanamaz
+@msg	{key} cannot be set on a blend	{key} bir karışımda ayarlanamaz
+@msg	{key} cannot be set on an envelope	{key} bir zarfta ayarlanamaz
+@msg	{key} cannot be set on a gradient mesh	{key} bir degrade örgüde ayarlanamaz
+@msg	{key} cannot be set on a Repeat	{key} bir tekrarda ayarlanamaz
+@msg	{key} cannot be set on a placed document	{key} yerleştirilmiş bir belgede ayarlanamaz
+@msg	{key} cannot be set on an Intertwine group	{key} bir iç içe geçirme grubunda ayarlanamaz
+@msg	stroke cannot be set on a symbol instance	stroke bir sembol örneğinde ayarlanamaz
+@msg	fill on a symbol instance must be a solid color or none	bir sembol örneğinin fill değeri düz renk veya none olmalıdır
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}, Şekle Dönüştür veya Anahat Nesnesi efekti olmayan bir görüntüde ayarlanamaz
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice ve/veya type verin
 	Text Flow	Metin Akışı
 	By Rows	Satırlara Göre
