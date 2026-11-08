@@ -1018,6 +1018,10 @@ impl Spine {
         for i in 0..n {
             let c = sp.segment(i);
             let end = self.anchor_length(i + 1).unwrap_or(self.length());
+            if end <= start {
+                // Skip segments whose flattened end is not greater than start
+                continue;
+            }
             if s <= end || i + 1 == n {
                 let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
                 let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
