@@ -67,20 +67,29 @@ pub(super) fn color_op(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
         "x" => named(vals, Some(false)),
         "xx" => named(vals, None),
         "xk" => named(vals, None).map(|(p, n)| (p, n.map(|n| Named { spot: false, ..n }))),
-        "xs" | "xz" => registration(vals),
+        "xs" | "xz" => registration(op, vals),
         _ => None,
     }
+}
+
+fn is_registration(name: &str) -> bool {
+    matches!(name, vectorcraft_color::swatch::REGISTRATION | "Registration" | "/All" | "All" | "/[Registration]")
 }
 
 /// `c m y k (name) tint x` or `c m y k [r g b | L a b] (name) tint type Xx` (type 1: RGB, 2: Lab);
 /// `rgb` forces RGB or CMYK.
 fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
-    let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
+    let at = vals.iter().rposition(|v| matches!(v, V::Str(_) | V::Name(_)))?;
     let name = vals.get(at)?.text()?;
     let before: Vec<f32> = vals.get(..at)?.iter().filter_map(V::num).map(|v| v as f32).collect();
     let after: Vec<f32> = vals.get(at + 1..)?.iter().filter_map(V::num).map(|v| v as f32).collect();
     let unit = |v: f32| v.clamp(0.0, 1.0);
     let tint = 1.0 - unit(*after.first()?);
+    if is_registration(&name) {
+        let full = Color::cmyk(1.0, 1.0, 1.0, 1.0);
+        let paint = Paint::Solid { color: full.tinted(tint), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint };
+        return Some((paint, None));
+    }
     let n = before.len();
     let kind = after.get(1).copied();
     let color = if rgb.unwrap_or(kind == Some(1.0)) {
@@ -102,9 +111,20 @@ fn named(vals: &[V], rgb: Option<bool>) -> Option<(Paint, Option<Named>)> {
 
 /// `… (name) tint Xs` / `… (name) tint type Xz`: the built-in Registration swatch at the tint (its
 /// own colour, whatever values the operands give).
-fn registration(vals: &[V]) -> Option<(Paint, Option<Named>)> {
-    let at = vals.iter().rposition(|v| matches!(v, V::Str(_)))?;
-    let tint = 1.0 - vals.get(at + 1).and_then(V::num).unwrap_or(0.0).clamp(0.0, 1.0) as f32;
+fn registration(op: &str, vals: &[V]) -> Option<(Paint, Option<Named>)> {
+    let at = vals.iter().rposition(|v| matches!(v, V::Str(_) | V::Name(_)));
+    let tint = if let Some(i) = at {
+        1.0 - vals.get(i + 1).and_then(V::num).unwrap_or(0.0).clamp(0.0, 1.0) as f32
+    } else {
+        let mut nums = vals.iter().rev().filter_map(V::num);
+        let t = if op.eq_ignore_ascii_case("xz") {
+            let _type = nums.next();
+            nums.next().unwrap_or(0.0)
+        } else {
+            nums.next().unwrap_or(0.0)
+        };
+        1.0 - t.clamp(0.0, 1.0) as f32
+    };
     let full = Color::cmyk(1.0, 1.0, 1.0, 1.0);
     Some((Paint::Solid { color: full.tinted(tint), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint }, None))
 }
@@ -512,6 +532,29 @@ mod tests {
         let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
         v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.0)]);
         assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if tint == 1.0));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(1.0)]);
+        assert!(
+            matches!(color_op("Xs", &v), Some((Paint::Solid { tint, color, .. }, None)) if tint == 0.0 && color == Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0))
+        );
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Name("All".into()), V::Num(1.0)]);
+        assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if tint == 0.0));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Str(b"[Registration]".to_vec()), V::Num(0.2), V::Num(0.0)]);
+        let (p, named) = color_op("Xx", &v).unwrap();
+        assert!(named.is_none());
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "[Registration]" && (tint - 0.8).abs() < 1e-6));
+        let mut v = nums(&[1.0, 1.0, 1.0, 1.0]);
+        v.extend([V::Name("All".into()), V::Num(0.5), V::Num(0.0)]);
+        let (p, named) = color_op("Xx", &v).unwrap();
+        assert!(named.is_none());
+        assert!(matches!(p, Paint::Solid { swatch: Some(s), tint, .. } if s == "[Registration]" && (tint - 0.5).abs() < 1e-6));
+        // Name-free Xs and Xz operands
+        let v = nums(&[1.0, 1.0, 1.0, 1.0, 0.3]);
+        assert!(matches!(color_op("Xs", &v), Some((Paint::Solid { tint, .. }, None)) if (tint - 0.7).abs() < 1e-6));
+        let v = nums(&[1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.2, 1.0]);
+        assert!(matches!(color_op("Xz", &v), Some((Paint::Solid { tint, .. }, None)) if (tint - 0.8).abs() < 1e-6));
     }
 
     #[test]
@@ -524,6 +567,14 @@ mod tests {
         v.push(V::Str(b"MySpot".to_vec()));
         v.push(V::Num(0.4));
         let (p, named) = color_op("x", &v).unwrap();
+        let named = named.unwrap();
+        assert_eq!(named.name, "MySpot");
+        assert!((named.tint - 0.6).abs() < 1e-6);
+        assert!(matches!(p, Paint::Solid { swatch: Some(_), .. }));
+        let mut v_name = nums(&[0.0, 0.5, 1.0, 0.0]);
+        v_name.push(V::Name("MySpot".into()));
+        v_name.push(V::Num(0.4));
+        let (p, named) = color_op("x", &v_name).unwrap();
         let named = named.unwrap();
         assert_eq!(named.name, "MySpot");
         assert!((named.tint - 0.6).abs() < 1e-6);

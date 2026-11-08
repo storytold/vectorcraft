@@ -36,8 +36,15 @@
 //! Tool)` or `(Adobe ArtOnPath Brush Tool)`, with its stroke's style and the brush's settings for
 //! the object as entries (see [`super::brush`]).
 //!
+//! A stroke aligned inside or outside its path (Stroke panel › Align Stroke,
+//! https://helpx.adobe.com/illustrator/desktop/draw-and-paint/use-strokes/stroke-panel-options.html)
+//! is its own basic filter too, `(Adobe Stroke Offset)`, with its stroke's style and
+//! `StrokeOffsetInside` (1: inside, 0: outside, as its `DisplayString` names it) as entries.
+//! Without that entry, or with it as anything but a `/Bool` 0 or 1, which side it paints isn't
+//! known and the style isn't plain (its objects keep their drawn look).
+//!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too; strokes with a Calligraphic or Art brush too), each with its own
+//! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
 //! effects; others keep their drawn look. Effect › Pathfinder effects (`(Adobe Pathfinder)` in the
@@ -47,12 +54,12 @@ use std::collections::HashMap;
 
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, WidthProfile};
+use vectorcraft_doc::{Dash, Effect, Knockout, LineCap, LineJoin, StrokeAlign, WidthProfile};
 use vectorcraft_effects::is_pathfinder;
 
 use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
-use super::obj::V;
+use super::obj::{self, V};
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
@@ -78,6 +85,8 @@ const BAS_RELIEF: &str = "PSAdapter_plugin_BsRl";
 const SHAPE_EFFECTS: &str = "Adobe Shape Effects"; // brand-ok: the filter's name in the files
 const PATHFINDER: &str = "Adobe Pathfinder"; // brand-ok: the filter's name in the files
 
+/// A stroke aligned inside or outside its path (Stroke panel › Align Stroke).
+const STROKE_OFFSET: &str = "Adobe Stroke Offset"; // brand-ok: the filter's name in the files
 const CALLIGRAPHIC: &str = "Adobe Calligraphic Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
 const ART_BRUSH: &str = "Adobe ArtOnPath Brush Tool"; // brand-ok: the filter's and plug-in's name in the files
 
@@ -211,6 +220,8 @@ pub(super) enum StyleItem {
         miter: f64,
         dash: Option<Dash>,
         profile: Option<WidthProfile>,
+        /// Which side of the path it paints (centred, or inside or outside a closed path).
+        align: StrokeAlign,
         /// A brush: its name, and its settings for this object.
         brush: Option<(String, PathBrush)>,
     },
@@ -421,6 +432,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
+                b"All" | b"[Registration]" | b"Registration" => operands.push(V::Name(obj::text(n))),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
                 b"Part" => in_basic = false,
@@ -594,7 +606,8 @@ fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
 fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
     let last = vals.iter().rev().find_map(V::num);
     match op {
-        "Xa" | "k" | "g" | "x" | "Xk" | "XA" | "K" | "G" | "X" | "XK" => {
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
+        | "xz" => {
             let Some((p, _)) = paint::color_op(op, vals) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
                 f.fill = Some(p);
@@ -1211,27 +1224,47 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
             (None, None, Some(p)) => Ok(Some(StyleItem::Fill(p.clone()))),
             (None, None, None) => Err(()),
         },
-        STROKE if !f.paints.0 => Ok(None),
-        // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
-        // and the pattern, fitted, between them.
-        STROKE if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) => Err(()),
-        STROKE => match &f.stroke {
-            Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
-                paint: p.clone(),
-                width: f.width,
-                cap: f.cap,
-                join: f.join,
-                miter: f.miter,
-                dash: f.dash.clone(),
-                profile: width_profile(&f.arrays),
-                brush: None,
-            })),
-            _ => Err(()),
-        },
+        STROKE => stroke_item(f, StrokeAlign::Center),
         CALLIGRAPHIC => calligraphic_stroke(f).map(Some).ok_or(()),
+        STROKE_OFFSET => offset_stroke(f),
         ART_BRUSH => art_stroke(f).map(Some).ok_or(()),
         _ => Err(()),
     }
+}
+
+/// A stroke filter `f`'s stroke, painting on side `align` of its path: `Ok(None)` when it paints
+/// nothing, `Err` when it paints in a way this doesn't read.
+fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> {
+    if !f.paints.0 {
+        return Ok(None);
+    }
+    // Dashes aligned to corners and path ends draw as the look's pieces: a solid end at each end
+    // and the pattern, fitted, between them.
+    if f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0) {
+        return Err(());
+    }
+    match &f.stroke {
+        Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
+            paint: p.clone(),
+            width: f.width,
+            cap: f.cap,
+            join: f.join,
+            miter: f.miter,
+            dash: f.dash.clone(),
+            profile: width_profile(&f.arrays),
+            align,
+            brush: None,
+        })),
+        _ => Err(()),
+    }
+}
+
+/// A Stroke Offset filter `f`: a stroke whose own style is in its dictionary, aligned inside its
+/// path when `StrokeOffsetInside` is 1 and outside when it is 0 (its `DisplayString` says which).
+/// `Err` when that switch is missing or not a switch, or for a stroke [`paint_item`] doesn't read.
+fn offset_stroke(f: &Filter) -> Result<Option<StyleItem>, ()> {
+    let inside = switch(f, "StrokeOffsetInside", Kind::Bool)?.ok_or(())?;
+    stroke_item(f, if inside { StrokeAlign::Inside } else { StrokeAlign::Outside })
 }
 
 /// A Calligraphic brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a
@@ -1261,6 +1294,7 @@ fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
         miter: f.miter,
         dash: None,
         profile: None,
+        align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
     })
 }
@@ -1339,6 +1373,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         miter: f.miter,
         dash: None,
         profile: None,
+        align: StrokeAlign::Center,
         brush: Some((name.clone(), PathBrush::Art)),
     })
 }
@@ -1383,7 +1418,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => {}
-                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => match paint_item(c) {
+                FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH => match paint_item(c) {
                     Ok(Some(StyleItem::Stroke { .. })) => under.strokes = true,
                     Ok(Some(StyleItem::Pattern { .. })) => under.patterns = true,
                     _ => {}
@@ -1397,7 +1432,7 @@ impl Builder<'_> {
             let c = &filters[k];
             match c.name.as_str() {
                 _ if c.compound => self.plain = false,
-                FILL | STROKE | CALLIGRAPHIC | ART_BRUSH => {
+                FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH => {
                     paints += 1;
                     look.visible &= c.visible;
                     match paint_item(c) {
@@ -1518,7 +1553,7 @@ fn style(filters: &[Filter]) -> ArtStyle {
         let f = &filters[id];
         match f.name.as_str() {
             STACK if f.compound => b.stack(id, &mut st),
-            FILL | STROKE | CALLIGRAPHIC | ART_BRUSH | CHAIN => {
+            FILL | STROKE | STROKE_OFFSET | CALLIGRAPHIC | ART_BRUSH | CHAIN => {
                 if let Some((item, look)) = b.item(id) {
                     st.items.push(item);
                     st.looks.push(look);

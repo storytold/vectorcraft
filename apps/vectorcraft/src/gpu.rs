@@ -310,7 +310,7 @@ fn pci_ids(device_id: &str) -> Option<(u32, u32)> {
     let field = |key: &str| {
         device_id.split(['\\', '&']).find_map(|part| {
             let (name, hex) = part.split_at_checked(key.len())?;
-            if name.eq_ignore_ascii_case(key) { u32::from_str_radix(hex, 16).ok() } else { None }
+            if name.eq_ignore_ascii_case(key) && hex.bytes().all(|b| b.is_ascii_hexdigit()) { u32::from_str_radix(hex, 16).ok() } else { None }
         })
     };
     Some((field("VEN_")?, field("DEV_")?))

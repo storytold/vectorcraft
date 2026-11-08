@@ -1,7 +1,8 @@
 //! Type → Find Font…: the fonts the document uses (missing ones marked), Find (select the text
 //! using a font), Change / Change All to another font from the list Replace With Font From shows
 //! (the document's fonts, the recent fonts or every installed font), and Find in Folder… (the
-//! missing fonts' files, in the Missing Fonts dialog: `ui.findFontsInFolder`).
+//! missing fonts' files, in the Missing Fonts dialog: `ui.findFontsInFolder`). Find In limits Find
+//! to the active artboard or the selected layers.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -23,9 +24,10 @@ pub fn open_on_missing(app: &mut VectorcraftApp) {
     open_at(app, first.unwrap_or(0));
 }
 
-/// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen, and
-/// System's font ([`system_family`]) to change to.
+/// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen,
+/// System's font ([`system_family`]) to change to, and the last Find In choice (Document at first).
 fn open_at(app: &mut VectorcraftApp, selected: usize) {
+    let find_in = FIND_IN.iter().find(|f| **f == app.ui.find_font_in).copied().unwrap_or("document");
     let used = fonts(app);
     let source = "system";
     let rows = replacement_rows(app, source, &used);
@@ -33,7 +35,7 @@ fn open_at(app: &mut VectorcraftApp, selected: usize) {
     let style = rows.iter().find(|r| r.family.eq_ignore_ascii_case(&family)).map(|r| r.style.clone()).unwrap_or_default();
     app.ui.dialog = Some(Dialog::new(
         "findFont",
-        json!({ "selected": selected, "family": family, "style": style, "selectionOnly": false, "replaceFrom": source, "rows": rows_json(&rows) }),
+        json!({ "selected": selected, "family": family, "style": style, "selectionOnly": false, "replaceFrom": source, "rows": rows_json(&rows), "findIn": find_in }),
     ));
 }
 
@@ -210,6 +212,42 @@ fn set_source(app: &VectorcraftApp, d: &mut Dialog, source: &str, used: &[Value]
     d.fields.insert("style".into(), json!(pick.map(|r| r.style.clone()).unwrap_or_default()));
 }
 
+/// Find In's choices (the `findIn` field): the whole document, the active artboard, or the layers
+/// highlighted in the Layers panel (else the current layer).
+const FIND_IN: [&str; 3] = ["document", "artboard", "layers"];
+const FIND_IN_LABELS: [&str; 3] = ["Document", "Artboard", "Layers"];
+
+/// The `scope` Find passes `select.font` for Find In choice `find_in`. A document without
+/// artboards, or without a layer to look in, is looked through whole.
+fn find_scope(app: &VectorcraftApp, find_in: &str) -> Value {
+    let Some(st) = app.session.active() else { return json!("document") };
+    let n = st.doc.artboards.len();
+    match find_in {
+        "artboard" if n > 0 => json!({ "artboards": [crate::panels::artboards::selected(app, n)] }),
+        "layers" => {
+            let is_layer = |id: &vectorcraft_doc::NodeId| st.doc.node(*id).is_some_and(vectorcraft_doc::Node::is_layer);
+            let mut layers: Vec<u64> = st.highlighted_rows().into_iter().filter(is_layer).map(|id| id.0).collect();
+            if layers.is_empty() {
+                layers.extend(st.current_layer().map(|id| id.0));
+            }
+            if layers.is_empty() { json!("document") } else { json!({ "layers": layers }) }
+        }
+        _ => json!("document"),
+    }
+}
+
+/// Run the dialog's button `button` (find, change or changeAll) on the document font `from`.
+fn run_button(app: &mut VectorcraftApp, d: &Dialog, button: &str, from: &Value) -> Result<Value, String> {
+    match button {
+        "find" => {
+            let scope = find_scope(app, &d.str("findIn"));
+            app.run("select.font", json!({ "family": from["family"], "style": from["style"], "scope": scope }))
+        }
+        "change" => change(app, d, from, false),
+        _ => change(app, d, from, true),
+    }
+}
+
 fn fonts(app: &mut VectorcraftApp) -> Vec<Value> {
     app.session.execute("text.fonts", &json!({})).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default()
 }
@@ -342,6 +380,14 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         }
         ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            widgets::field_label(ui, tl!("Find In"));
+            let at = FIND_IN.iter().position(|s| *s == d.str("findIn")).unwrap_or(0);
+            if let Some(i) = widgets::dropdown_named(ui, "ff-find-in", Some(tl!("Find In")), FIND_IN_LABELS[at], &FIND_IN_LABELS, 120.0) {
+                d.fields.insert("findIn".into(), json!(FIND_IN[i]));
+            }
+        });
+        ui.add_space(6.0);
         // An empty list (Recent before any font was applied) leaves nothing to change to.
         let replace = sel < list.len() && can_replace(&d, families.as_deref());
         ui.horizontal(|ui| {
@@ -362,14 +408,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         });
     });
+    app.ui.find_font_in = d.str("findIn");
     let sel = d.fields.get("selected").and_then(Value::as_u64).unwrap_or(0) as usize;
     if let (Some(a), Some(from)) = (act, list.get(sel)) {
-        let r = match a {
-            "find" => app.run("select.font", json!({ "family": from["family"], "style": from["style"] })),
-            "change" => change(app, &d, from, false),
-            _ => change(app, &d, from, true),
-        };
-        match r {
+        match run_button(app, &d, a, from) {
             // The rows are a snapshot: the document's fonts and the recent fonts have moved on.
             Ok(_) if a != "find" => {
                 let used = fonts(app);
@@ -431,6 +473,48 @@ mod tests {
         assert_eq!(from["missing"], true);
         change(&mut app, &d, &from, true).unwrap();
         assert_eq!(fonts(&mut app)[0]["family"], "Source Sans 3");
+    }
+
+    /// Find In passes Find the active artboard, or the selected layers (else the current
+    /// layer), as `select.font`'s scope.
+    #[test]
+    fn find_in_limits_find_to_the_artboard_or_the_layers() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 200, "y": 0, "width": 100, "height": 100})).unwrap();
+        let text = |app: &mut VectorcraftApp, x: i32| {
+            app.session.execute("text.create", &json!({"x": x, "y": 40, "text": "Hi", "font": "Inter"})).unwrap()["id"].as_u64().unwrap()
+        };
+        let first = text(&mut app, 10);
+        let layer = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let second = text(&mut app, 210);
+        let third = text(&mut app, 20);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // Choose Find In on the open dialog, draw a frame, then press Find.
+        let find = |app: &mut VectorcraftApp, find_in: &str| {
+            open(app);
+            app.ui.dialog.as_mut().unwrap().fields.insert("findIn".into(), json!(find_in));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+            out.textures_delta.clear();
+            let d = app.ui.dialog.clone().unwrap();
+            let from = fonts(app).into_iter().find(|f| f["family"] == "Inter").unwrap();
+            run_button(app, &d, "find", &from).unwrap();
+            let mut ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+            ids.sort_unstable();
+            ids
+        };
+        open(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "document");
+        assert_eq!(find(&mut app, "document"), [first, second, third]);
+        // Without a view, the active artboard is the first.
+        assert_eq!(find(&mut app, "artboard"), [first, third]);
+        assert_eq!(find_scope(&app, "layers"), json!({ "layers": [layer] }));
+        assert_eq!(find(&mut app, "layers"), [second, third]);
+        // Closing and opening the dialog again keeps the last choice.
+        app.ui.dialog = None;
+        open(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "layers");
     }
 
     /// Change All leaves locked text in its font, and the status bar says so.
