@@ -938,6 +938,8 @@ lighting	Light	Svjetlo
 	Expand Layers Panel Rows	Proširi redove panela slojeva
 	Export CSS…	Izvezi CSS…
 	Export Keyboard Shortcuts…	Izvezi prečice na tastaturi…
+	Export Keyboard Shortcuts as Text…	Izvezi prečice na tastaturi kao tekst…
+	Export Text…	Izvezi tekst…
 	File Info Dialog	Dijalog informacija o datoteci
 	Go to Artboard	Idi na radnu ploču
 	First Artboard	Prva radna ploča
@@ -4881,6 +4883,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} sliku nije moguće dekodirati: prikazuje se kao prekriženi okvir|{n} slike nije moguće dekodirati: prikazuju se kao prekriženi okviri|{n} slika nije moguće dekodirati: prikazuju se kao prekriženi okviri
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
@@ -5725,6 +5728,19 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Playback Options…	Opcije reprodukcije…
+	Insert Stop…	Umetni zaustavljanje…
+	Insert Stop	Umetni zaustavljanje
+	Record Stop	Snimi zaustavljanje
+	Allow Continue	Dozvoli nastavak
+	Continue	Nastavi
+	Continue Action	Nastavi akciju
+	Delete Action Step	Izbriši korak akcije
+	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
+	Stop: {message}	Zaustavljanje: {message}
+@msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
+@msg	message must be text	message mora biti tekst
+@msg	allowContinue must be true or false	allowContinue mora biti true ili false
+@msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
 	Playback Options	Opcije reprodukcije
 	Accelerated	Ubrzano
 	Step by Step	Korak po korak

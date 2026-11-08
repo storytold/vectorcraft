@@ -22,6 +22,7 @@ mod fontdb;
 pub mod hyphen;
 mod justify;
 mod kashida;
+mod kept;
 mod layout;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
@@ -43,6 +44,7 @@ pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
+pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, fit_first_line, layout, layout_with, scaled};
 pub use vectorcraft_doc::TextObject;

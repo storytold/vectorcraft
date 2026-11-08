@@ -1903,6 +1903,20 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
+/// alone and in the status bar's note.
+#[test]
+fn pdfx_bleed_warning_is_translated() {
+    let w = vectorcraft_engine::cmd::fileio::pdf::BLEED_LEFT_OUT;
+    let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+    // A catalog's `{a}: {b}` row can translate the colon alone, so the check looks for the English words.
+    for lang in Lang::all().filter(|l| l.code() != Lang::EN.code()) {
+        for shown in [message(lang, w), message(lang, &status)] {
+            assert!(!shown.contains("leaves out") && !shown.contains("turn on"), "{}: {shown}", lang.code());
+        }
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
@@ -2060,6 +2074,47 @@ fn shared_param_check_errors_show_their_values_as_given() {
             assert!(as_given, "{}: {shown}", lang.code());
         }
     }
+}
+
+/// The spans of `s` between pairs of backticks, such as a parameter key or a command id; none when
+/// its backticks don't pair up.
+fn backticked(s: &str) -> Vec<&str> {
+    let parts: Vec<&str> = s.split('`').collect();
+    if parts.len().is_multiple_of(2) {
+        return Vec::new();
+    }
+    parts.into_iter().skip(1).step_by(2).filter(|t| !t.is_empty()).collect()
+}
+
+#[test]
+fn backticked_finds_the_spans_between_paired_backticks() {
+    assert_eq!(backticked("`ids` must be an array, see `plugin.list`"), ["ids", "plugin.list"]);
+    assert_eq!(backticked("no backticks"), Vec::<&str>::new());
+    assert_eq!(backticked("a lone ` backtick"), Vec::<&str>::new());
+}
+
+/// A translated row keeps each backticked span of its English text, in backticks and as the
+/// English spells it: the span names a parameter key, a command id or a placeholder, which the
+/// command reads as written.
+#[test]
+fn translations_keep_the_backticked_names_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in &entries {
+            let plural = ctx == "@plural" || ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for token in backticked(english) {
+                    if !form.contains(&format!("`{token}`")) {
+                        missing.push(format!("{}: `{token}` in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a backticked name:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists

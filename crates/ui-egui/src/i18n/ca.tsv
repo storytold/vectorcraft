@@ -1466,6 +1466,8 @@
 	Export for Screens Settings	Configuració d’exportació per a pantalles
 	Export for Screens…	Exporta per a pantalles…
 	Export Keyboard Shortcuts…	Exporta les dreceres de teclat…
+	Export Keyboard Shortcuts as Text…	Exporta les dreceres de teclat com a text…
+	Export Text…	Exporta el text…
 	Export Layer	Exporta la capa
 	Export Library	Exporta la biblioteca
 	Export Library…	Exporta la biblioteca…
@@ -3803,6 +3805,19 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Playback Options…	Opcions de reproducció…
+	Insert Stop…	Insereix una aturada…
+	Insert Stop	Insereix una aturada
+	Record Stop	Enregistra una aturada
+	Allow Continue	Permet continuar
+	Continue	Continua
+	Continue Action	Continua l’acció
+	Delete Action Step	Suprimeix el pas de l’acció
+	Press Play Current Selection in the Actions panel to go on.	Per continuar, premeu «Reprodueix la selecció actual» al tauler Accions.
+	Stop: {message}	Aturada: {message}
+@msg	no action is waiting at a stop	cap acció no espera en una aturada
+@msg	message must be text	message ha de ser text
+@msg	allowContinue must be true or false	allowContinue ha de ser true o false
+@msg	Batch cannot play an action with a stop	Lot no pot reproduir una acció amb una aturada
 	Playback Options	Opcions de reproducció
 	Accelerated	Accelerada
 	Step by Step	Pas a pas
@@ -5461,6 +5476,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no s’ha pogut descodificar {n} imatge i es mostra com a caixa creuada|no s’han pogut descodificar {n} imatges i es mostren com a caixes creuades
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imatge enllaçada ha canviat al disc: Actualitza els enllaços mostra la versió nova|{n} imatges enllaçades han canviat al disc: Actualitza els enllaços mostra les versions noves
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	S’ha actualitzat {n} fitxer enllaçat que ha canviat al disc|S’han actualitzat {n} fitxers enllaçats que han canviat al disc
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	el document defineix un sangrat que aquest fitxer PDF/X omet: activeu «Utilitza la configuració de sangrat del document»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	S’ha exportat {what} amb {n} nota: {first}|S’ha exportat {what} amb {n} notes: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fitxer de tipus de lletra ja és a {folder}|{n} fitxers de tipus de lletra ja són a {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fitxer de tipus de lletra ja és a {folder}; {failed} no s’han pogut afegir: {reason}|{n} fitxers de tipus de lletra ja són a {folder}; {failed} no s’han pogut afegir: {reason}

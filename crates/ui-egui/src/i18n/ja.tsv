@@ -1581,6 +1581,8 @@ digits	Malayalam	マラヤーラム数字
 	Export Document	ドキュメントを書き出し
 	Export EPS	EPS を書き出し
 	Export Keyboard Shortcuts…	キーボードショートカットを書き出し…
+	Export Keyboard Shortcuts as Text…	キーボードショートカットをテキストで書き出し…
+	Export Text…	テキストを書き出し…
 	Export Option	書き出しオプション
 	Export PDF	PDF を書き出し
 	Export PDF Presets	PDF プリセットを書き出し
@@ -4737,6 +4739,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ドキュメントに設定された裁ち落としがこの PDF/X ファイルには含まれません: 「ドキュメントの裁ち落とし設定を使用」をオンにしてください
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -5499,6 +5502,19 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Playback Options…	再生オプション…
+	Insert Stop…	停止を挿入…
+	Insert Stop	停止を挿入
+	Record Stop	停止を記録
+	Allow Continue	続行を許可
+	Continue	続行
+	Continue Action	アクションを続行
+	Delete Action Step	アクションステップを削除
+	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
+	Stop: {message}	停止: {message}
+@msg	no action is waiting at a stop	停止で待機中のアクションはありません
+@msg	message must be text	message にはテキストを指定してください
+@msg	allowContinue must be true or false	allowContinue には true または false を指定してください
+@msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Playback Options	再生オプション
 	Accelerated	高速
 	Step by Step	ステップ実行

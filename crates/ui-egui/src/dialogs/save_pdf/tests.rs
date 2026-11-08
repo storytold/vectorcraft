@@ -126,6 +126,17 @@ fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     assert!(r["warnings"].is_array());
 }
 
+/// The Summary's warnings are translated as far as the catalog has them: a warning without a row
+/// keeps its words, and a colon in it can still take the catalog's punctuation.
+#[test]
+fn summary_warnings_are_translated() {
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    let shown = warning_line(fr, vectorcraft_engine::cmd::fileio::pdf::BLEED_LEFT_OUT);
+    assert!(shown.starts_with("⚠ ") && !shown.contains("leaves out"), "{shown}");
+    assert_eq!(warning_line(fr, "no row for this note"), "⚠ no row for this note");
+    assert_eq!(warning_line(fr, "no row: for this note"), "⚠ no row\u{a0}: for this note");
+}
+
 /// A placed image whose pixel data can't be decoded is left out of the PDF, and the status bar
 /// shows the note raster exports give.
 #[test]

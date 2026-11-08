@@ -314,7 +314,7 @@ pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     if main.on_hover_text(tl!("Trace the image with the Default preset")).clicked() {
         trace_with(app, "Default");
     }
-    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| preset_list(app, ui, "")).and_then(|r| r.inner) {
+    if let Some(p) = egui::Popup::menu(&arrow).show(|ui| widgets::menu_scroll(ui, |ui| preset_list(app, ui, ""))).and_then(|r| r.inner) {
         trace_with(app, &p);
     }
 }

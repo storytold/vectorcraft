@@ -26,6 +26,25 @@ pub(crate) fn keeps_shape_plans() -> bool {
     KEEP_SHAPE_PLANS.load(Ordering::SeqCst)
 }
 
+std::thread_local! {
+    /// How many layouts this thread has started ([`layouts_on_this_thread`]).
+    static LAYOUTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn count_layout() {
+    LAYOUTS.with(|n| n.set(n.get() + 1));
+}
+
+/// How many layouts this thread has started.
+pub fn layouts_on_this_thread() -> u64 {
+    LAYOUTS.with(std::cell::Cell::get)
+}
+
+/// Drop every layout kept for a first frame, so that a test can draw what laying out again draws.
+pub fn drop_kept_layouts() {
+    crate::kept::drop_kept_layouts();
+}
+
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";
 

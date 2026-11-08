@@ -851,7 +851,7 @@ fn summary(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>, has_do
         Err(_) if !has_doc => {}
         Err(e) => {
             heading(ui, tl!("Error"));
-            ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
+            ui.label(egui::RichText::new(super::save_pdf::warning_line(crate::i18n::current(), e)).color(t.text));
         }
     }
     heading(ui, tl!("Options"));

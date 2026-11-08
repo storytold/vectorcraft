@@ -159,6 +159,106 @@ fn typing_into_a_hex_field_commits_it() {
     }
 }
 
+/// Keyboard focus selects a hex field's digits. A pasted code replaces them wherever the caret is,
+/// hex digits that fit edit them in place, and a paste that is not a color leaves them as they were.
+/// Typing digit by digit is not affected.
+#[test]
+fn a_paste_into_a_hex_field_replaces_or_edits_its_digits() {
+    let hex = Cell::new(None);
+    let hex_id = Cell::new(egui::Id::NULL);
+    let draw = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex_id.set(ui.scope_id().with("hex"));
+        hex.set(widgets::hex_field(ui, "hex", "FF8000"));
+        red
+    };
+    let (tab, end) = (|| key(Key::Tab, Modifiers::NONE), || key(Key::End, Modifiers::NONE));
+    let paste = |text: &str| vec![Event::Paste(text.into())];
+    let digit = |text: &str| vec![Event::Text(text.into())];
+    // Its name, the events after the field has the focus, the text they leave and what Tab commits.
+    type Case<'a> = (&'a str, Vec<Vec<Event>>, &'a str, Option<&'a str>);
+    let select_left = |n: usize| std::iter::once(end()).chain(std::iter::repeat_n(key(Key::ArrowLeft, Modifiers::SHIFT), n)).collect::<Vec<_>>();
+    let cases: [Case; 25] = [
+        ("three selected, three digits", vec![select_left(3), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("three characters, caret, three digits", vec![digit("FF8"), paste("ABC")], "FF8ABC", Some("FF8ABC")),
+        ("five characters, two selected, three digits", vec![digit("12345"), select_left(2), paste("ABC")], "123ABC", Some("123ABC")),
+        ("two characters, caret, three digits", vec![digit("12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("four selected, three digits", vec![select_left(4), paste("0f0")], "0f0", Some("00ff00")),
+        ("selected digits", vec![paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code", vec![vec![end()], paste("00FF00")], "00FF00", Some("00FF00")),
+        ("caret, a code with #", vec![vec![end()], paste("#00ff00")], "00ff00", Some("00ff00")),
+        ("caret, three digits", vec![vec![end()], paste("0f0")], "0f0", Some("00ff00")),
+        ("caret, a line break after the code", vec![vec![end()], paste("#00FF00\n")], "00FF00", Some("00FF00")),
+        ("caret, a word", vec![vec![end()], paste("hello")], "FF8000", None),
+        ("caret, too few digits", vec![vec![end()], paste("12")], "FF8000", None),
+        ("selected digits, too many digits", vec![paste("12345678")], "FF8000", None),
+        ("part selected, digits that fit", vec![select_left(2), paste("AB")], "FF80AB", Some("FF80AB")),
+        ("typed # and two digits, four digits", vec![digit("#12"), paste("3456")], "#123456", Some("123456")),
+        ("typed # and three digits, three digits", vec![digit("#FFF"), paste("ABC")], "#FFFABC", Some("FFFABC")),
+        ("typed # and two digits, three digits", vec![digit("#12"), paste("ABC")], "ABC", Some("AABBCC")),
+        ("typed #, two digits", vec![digit("#"), paste("12")], "#12", Some("12")),
+        ("empty field, two digits", vec![vec![key(Key::Backspace, Modifiers::NONE)], paste("12")], "12", Some("12")),
+        ("the same color in other letters", vec![paste("ff8000")], "ff8000", None),
+        ("typed digit by digit", ["0", "0", "F", "F", "0", "0"].map(digit).to_vec(), "00FF00", Some("00FF00")),
+        ("typed with #", vec![digit("#00FF00")], "#00FF00", Some("00FF00")),
+        ("typed in part", vec![digit("00")], "00", Some("00")),
+        ("typed three digits with #", vec![digit("#0f0")], "#0f0", Some("00ff00")),
+        ("typed three letters that are not digits", vec![digit("xyz")], "xyz", Some("xyz")),
+    ];
+    for (name, events, shows, commits) in cases {
+        let mut f = Field::new();
+        f.frame(vec![], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![tab()], &draw);
+        f.frame(vec![], &draw);
+        let selected = egui::TextEdit::load_state(&f.ctx, hex_id.get()).and_then(|st| st.cursor.char_range()).map(|r| r.as_sorted_char_range());
+        assert_eq!(selected.map(|r| (r.start.0, r.end.0)), Some((0, 6)), "{name}: keyboard focus selects the digits");
+        for events in events {
+            f.frame(events, &draw);
+            assert_eq!(hex.take(), None, "{name}: nothing is committed before Tab");
+        }
+        assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some(shows), "{name}: the text");
+        f.frame(vec![tab()], &draw);
+        assert_eq!(hex.take().as_deref(), commits, "{name}: what Tab commits");
+    }
+    // Escape drops a pasted code.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![key(Key::Escape, Modifiers::NONE)], &draw);
+    assert_eq!(hex.take(), None, "Escape commits nothing");
+    f.frame(vec![], &draw);
+    assert_eq!(f.ctx.data(|d| d.get_temp::<String>(hex_id.get())).as_deref(), Some("FF8000"), "the field shows its color again");
+    // A press outside the field commits in the frame of the press, before the press acts.
+    let mut f = Field::new();
+    f.frame(vec![], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(vec![tab()], &draw);
+    f.frame(paste("00FF00"), &draw);
+    let away = Pos2::new(390.0, 190.0);
+    f.frame(vec![Event::PointerMoved(away)], &draw);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![Event::PointerButton { pos: away, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }], &draw);
+    assert_eq!(hex.take().as_deref(), Some("00FF00"), "the press commits");
+    // Three digits that spell the color the field holds commit nothing.
+    let same = |ui: &mut egui::Ui| {
+        let red = widgets::plain_field(ui, "red", 255.0, "", 0, 80.0);
+        hex.set(widgets::hex_field(ui, "hex", "AABBCC"));
+        red
+    };
+    let mut f = Field::new();
+    f.frame(vec![], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(vec![tab()], &same);
+    f.frame(paste("abc"), &same);
+    assert_eq!(hex.take(), None);
+    f.frame(vec![tab()], &same);
+    assert_eq!(hex.take(), None, "abc over AABBCC commits nothing");
+}
+
 /// #1692: the Stroke panel's dash and gap fields ([`widgets::opt_field`]) are blank while the
 /// selected objects' dashes differ. Tab out of the dash after typing into it gives the gap the
 /// focus; the gap then shows the dash's length, which the committed dash repeats as its gap. Tab
