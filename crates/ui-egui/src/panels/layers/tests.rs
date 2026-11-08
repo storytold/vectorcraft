@@ -211,6 +211,67 @@ fn two_rects() -> (VectorcraftApp, NodeId, [NodeId; 2]) {
     (app, layer, [NodeId(a), NodeId(b)])
 }
 
+/// The painted names one headless frame of the panel draws italic.
+fn italic_names(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    fn collect(shape: &egui::Shape, names: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) => {
+                if t.galley.job.sections.iter().any(|s| s.format.italics) {
+                    names.push(t.galley.text().to_string());
+                }
+            }
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, names)),
+            _ => {}
+        }
+    }
+    let mut names = Vec::new();
+    out.shapes.iter().for_each(|c| collect(&c.shape, &mut names));
+    names
+}
+
+/// A layer whose Layer Options › Print is off has its name italic in the panel (#5739), as the
+/// reference application shows it; a printing layer's name stays upright, and unticking Print again
+/// makes it upright.
+#[test]
+fn a_layer_that_does_not_print_has_its_name_italic() {
+    let (mut app, layer, _) = two_rects();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "a printing layer's name is upright");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": false})).unwrap();
+    assert!(italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print off: its name is italic");
+    app.session.execute("layer.setProps", &json!({"ids": [layer.0], "printable": true})).unwrap();
+    assert!(!italic_names(&mut app, &ctx).iter().any(|n| n == "Layer 1"), "Print on again: upright again");
+}
+
+#[test]
+fn closing_a_document_releases_only_its_layer_thumbnails() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let first = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(first)));
+
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let second = app.session.active().unwrap().uid;
+    frame(&mut app, &ctx, vec![], false);
+    assert!(THUMBS.with(|c| c.borrow().cached(second)));
+
+    // Close the first document the way File › Close does (Don't Save), with no panel drawn after.
+    assert_eq!(app.run("file.close", json!({"index": 0})).unwrap(), json!({"pending": crate::unsaved::KIND}));
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.session.documents().iter().all(|d| d.uid != first), "the first document closed");
+    THUMBS.with(|c| {
+        let thumbs = c.borrow();
+        assert!(!thumbs.cached(first), "closed document textures are released");
+        assert!(thumbs.cached(second), "open document textures stay cached");
+    });
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
@@ -237,6 +298,42 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let after = renders();
     frame(&mut app, &ctx, vec![], false);
     assert_eq!(renders(), after, "once");
+}
+
+#[test]
+fn the_row_thumbnails_follow_the_document_shown_and_none_once_it_closes() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let showing = || THUMBS.with(|c| c.borrow().showing);
+    frame(&mut app, &ctx, vec![], false);
+    let first = app.session.active().map(|st| st.uid);
+    assert_eq!(showing(), first);
+    // With no thumbnails drawn, the panel still tells which document it shows.
+    let p = &mut app.ui.layers_panel;
+    (p.thumb_layers, p.thumb_groups, p.thumb_objects) = (false, false, false);
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    let second = app.session.active().map(|st| st.uid);
+    assert_ne!(second, first);
+    assert_eq!(showing(), second, "the new document's rows are drawn");
+    for _ in 0..2 {
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    }
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(showing(), None, "no document is shown once both close");
+
+    // The Links panel alone does the same.
+    let links = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::links::show(app, ui));
+        out.textures_delta.clear();
+    };
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), app.session.active().map(|st| st.uid));
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    links(&mut app);
+    assert_eq!(showing(), None, "the Links panel shows no document");
 }
 
 #[test]
@@ -370,6 +467,66 @@ fn shift_enter_renames_a_layer_and_keeps_the_field_open() {
     frame(&mut app, &ctx, vec![], false);
     assert_eq!(name(&app), "Sea", "typing replaced it, and Enter applies that");
     assert!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).is_none(), "and closes the field");
+}
+
+/// Rename (`ui.rename`, F2) opens the name field on the selected object's row, as a
+/// double-click on the name does: Enter renames it in one undo step.
+#[test]
+fn rename_opens_the_name_field_of_the_selected_object() {
+    let (mut app, _, [a, _]) = two_rects();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let name = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(a).unwrap().display_name();
+    let before = name(&app);
+    app.session.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let opened = app.run("ui.rename", json!({})).unwrap();
+    assert_eq!(opened, json!({"id": a.0, "name": before}));
+    assert_eq!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())), Some((a.0, before.clone())), "the field opens on its row");
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame(&mut app, &ctx, vec![], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert!(ctx.memory(|m| m.has_focus(rename_id().with("field"))), "with the keyboard");
+    frame(&mut app, &ctx, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Sun".into())], false);
+    frame(&mut app, &ctx, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(name(&app), "Sun");
+    app.session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(name(&app), before, "one undo step");
+}
+
+/// Rename (`ui.rename`) has no default key (F2 is Cut's alternate on Windows and Linux): it is listed in Keyboard Shortcuts,
+/// where a key can be assigned to it.
+#[test]
+fn rename_has_no_default_key() {
+    use crate::shortcut_editor::{command_for_key, default_command_shortcut};
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+    assert_eq!(default_command_shortcut("ui.rename"), None);
+    assert_ne!(command_for_key("F2"), Some("ui.rename"));
+    let (mut app, _, _) = two_rects();
+    let listed = app.run("shortcuts.list", json!({"query": "ui.rename"})).unwrap();
+    let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
+    assert_eq!(rows, [json!("Rename")], "Keyboard Shortcuts lists it");
+}
+
+/// Without a selection Rename names the current layer; it refuses several objects and a row the
+/// panel doesn't list, and opens nothing then.
+#[test]
+fn rename_names_the_current_layer_and_refuses_several_or_hidden_rows() {
+    let (mut app, layer, [a, b]) = two_rects();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    let open = |ctx: &egui::Context| ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|r| r.0);
+    assert_eq!(app.run("ui.rename", json!({})).unwrap()["id"], json!(layer.0), "nothing selected: the current layer");
+    ctx.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
+    app.session.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert!(app.run("ui.rename", json!({})).is_err(), "two objects");
+    assert_eq!(open(&ctx), None);
+    app.ui.layers_panel.layers_only = true;
+    assert!(app.run("ui.rename", json!({"id": a.0})).is_err(), "Show Layers Only lists no object rows");
+    assert_eq!(open(&ctx), None);
+    assert!(app.run("ui.rename", json!({"id": 999_999})).is_err(), "no such object");
+    assert_eq!(app.run("ui.rename", json!({"id": layer.0})).unwrap()["id"], json!(layer.0));
+    assert_eq!(open(&ctx), Some(layer.0));
 }
 
 #[test]
@@ -1590,4 +1747,39 @@ fn a_canvas_selection_reveals_its_active_layer() {
     assert!(shown(&mut app, &top));
     app.session.active_mut().unwrap().active_layer = doc.layer_of(NodeId(rects[0]));
     assert!(shown(&mut app, &top) && !shown(&mut app, &bottom), "the highlighted row keeps the view");
+}
+
+/// #4820: an open blend lists its spine below its key objects, and a click on the spine's row
+/// selects the blend (whose spine Direct Selection edits); a locked blend's spine row selects
+/// nothing, and searching leaves the row out.
+#[test]
+fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 300, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    let b = run(&mut app, "shape.rectangle", json!({"x": 200, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap();
+    run(&mut app, "select.set", json!({"ids": [a, b]}));
+    let blend = NodeId(run(&mut app, "object.blend.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let st = app.session.active().unwrap();
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let kinds: Vec<(u64, bool)> = rows.iter().map(|r| (r.node.id.0, r.spine)).collect();
+    assert_eq!(kinds[1..], [(blend.0, false), (b, false), (a, false), (blend.0, true)], "the spine row comes last in the blend");
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
+    assert!(!rows.iter().any(|r| r.spine), "no spine row while searching");
+    // Rows top down: the layer, the blend, both keys (with target circles), then the spine.
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    let spine_row = egui::pos2(150.0, circles[3].y + (circles[3].y - circles[2].y));
+    let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.to_vec();
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert_eq!(selected(&app), [blend], "its row selects the blend");
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::SHIFT);
+    assert!(selected(&app).is_empty(), "Shift-click takes it out again");
+    run(&mut app, "layer.setProps", json!({"ids": [blend.0], "locked": true}));
+    click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
+    assert!(selected(&app).is_empty(), "a locked blend's spine can't be selected");
 }

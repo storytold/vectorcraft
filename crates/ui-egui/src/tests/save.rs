@@ -232,12 +232,30 @@ fn a_document_reopens_at_its_saved_view() {
     // Moving around afterwards isn't an edit.
     app.view_mut().unwrap().zoom = 0.5;
     assert!(!app.session.active().unwrap().is_dirty());
+    // Reopened: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
     io::open_path(&mut app, &path).unwrap();
     let v = *app.view().unwrap();
     assert_eq!((v.zoom, v.center, v.rotation, v.fitted), (3.0, Point::new(70.0, 40.0), 30.0, true));
     // A document without a saved view is fitted on first display.
     app.run("file.new", json!({})).unwrap();
     assert!(!app.view().unwrap().fitted);
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn a_saved_ai_file_reopens_on_the_artboard_active_when_saved() {
+    let d = dir("ai-artboard");
+    let path = d.join("a.ai").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    app.sync_views();
+    app.view_mut().unwrap().artboard = 1;
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.close", json!({})).unwrap();
+    let r = io::open_path(&mut app, &path).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(app.view().map(|v| v.artboard), Some(1), "{r}");
     let _ = std::fs::remove_dir_all(d);
 }
 

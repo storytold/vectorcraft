@@ -3,7 +3,8 @@
 //! preferences. OK sets them with `tool.setOption {tool, values}`. The Pencil also has `liveFit`
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
-//! Fields: `tool`; `fidelity` (points; Pencil, Paintbrush, Smooth and Blob Brush), `fill` (Pencil and
+//! Fields: `tool`; `fidelity` (screen pixels for the Pencil and Paintbrush, points for Smooth and
+//! Blob Brush), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
@@ -166,16 +167,19 @@ fn blob_size(ui: &mut egui::Ui, d: &mut Dialog) {
 fn fidelity(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let v = d.f64("fidelity", 1.5);
-    let rail = (vectorcraft_tools::draw2::min_fidelity(&d.str("tool")), FIDELITY_MAX);
+    let tool = d.str("tool");
+    let rail = (vectorcraft_tools::draw2::min_fidelity(&tool), FIDELITY_MAX);
+    // The Pencil's and the Paintbrush's Fidelity is on screen, the same at any zoom (#5729).
+    let unit = if matches!(tool.as_str(), "pencil" | "paintbrush") { "px" } else { "pt" };
     let rail_w = label_w(ui);
     let mut new = None;
     ui.label(egui::RichText::new(tl!("Fidelity:")).size(12.5).color(t.text));
     ui.horizontal(|ui| {
-        let shown = widgets::SliderValue::field(v, rail.0..=rail.1, "pt", 2).with_step(fidelity_step);
+        let shown = widgets::SliderValue::field(v, rail.0..=rail.1, unit, 2).with_step(fidelity_step);
         let (x, _, keyed) =
             widgets::color_slider_stepped(ui, "freehand-fidelity", tl!("Fidelity:"), Some(shown), fidelity_at(v, rail), rail_w, &|_| t.input_border);
         new = x.map(|x| fidelity_from(x, rail)).or(keyed);
-        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, "pt", 2, FIELD_W, fidelity_step) {
+        if let Some(x) = widgets::range_field_stepped(ui, "freehand-fidelity-field", v, rail.0..=100.0, unit, 2, FIELD_W, fidelity_step) {
             new = Some(x);
         }
     });
@@ -253,16 +257,16 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 const TIP_PREVIEW: f32 = 64.0;
 
 /// The Blob Brush's tip preview: a square with the tip at its Angle and Roundness and a line along
-/// its long axis (a drag in the square sets the Angle), and beside it three dabs of the tip, the
-/// middle one darker.
+/// its long axis, and beside it three dabs of the tip, the middle one darker. A click or a drag in
+/// the square points the Angle at the pointer and gives the square the keyboard focus; screen
+/// readers get it as the Angle slider, and its keys step the Angle as a dialog slider's do
+/// ([`widgets::stepped_area`]) within -180° to 180°.
 fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(CONTENT_W, TIP_PREVIEW), egui::Sense::hover());
     let square = egui::Rect::from_min_size(rect.min, egui::vec2(TIP_PREVIEW, TIP_PREVIEW));
-    let response = ui.interact(square, ui.scope_id().with("freehand-tip-angle"), egui::Sense::drag());
-    if response.dragged()
-        && let Some(p) = response.interact_pointer_pos()
-    {
+    let response = ui.interact(square, ui.scope_id().with("freehand-tip-angle"), egui::Sense::click_and_drag());
+    if let Some((p, _)) = widgets::pointer_phase(&response) {
         let delta = p - square.center();
         if delta.length_sq() > 1.0 {
             d.fields.insert("angle".into(), json!(f64::from((-delta.y).atan2(delta.x)).to_degrees().round()));
@@ -271,6 +275,11 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(square, 2.0, t.input);
     painter.rect_stroke(square, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // After the square's frame, so the focus outline draws over it.
+    let shown = widgets::SliderValue::field(d.f64("angle", 0.0), -180.0..=180.0, "°", 0);
+    if let Some(a) = widgets::stepped_area(ui, &response, tl!("Angle"), Some(shown)) {
+        d.fields.insert("angle".into(), json!(a));
+    }
     let a = d.f64("angle", 0.0).clamp(-180.0, 180.0).to_radians();
     // The long axis on screen (y down: a positive angle tilts it up to the right) and the short one.
     let u = egui::vec2(a.cos() as f32, -a.sin() as f32);

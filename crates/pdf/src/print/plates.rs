@@ -9,20 +9,25 @@ use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
-use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
+use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, PrintInk, PrintSettings};
 
 /// The inks of a separation of `doc`: the process inks, then one per spot swatch (none when
-/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning for
-/// each option naming no ink.
+/// spots print as process), with the options of [`super::PrintOutput::inks`]; and a warning
+/// naming the options that name no ink.
 pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<String>) {
     let out = &set.output;
+    // Options by ink name, the first for a name winning: looked up, not searched for each ink.
+    let mut options = std::collections::HashMap::new();
+    for o in &out.inks {
+        options.entry(o.name.as_str()).or_insert(o);
+    }
     let list: Vec<PrintInk> = plates(doc)
         .into_iter()
         .filter(|p| !(p.spot && out.spots_to_process))
         .map(|p| {
-            let o = out.inks.iter().find(|i| i.name == p.name);
+            let o = options.get(p.name.as_str()).copied();
             PrintInk {
                 print: o.is_none_or(|o| o.print),
                 frequency: o.and_then(|o| o.frequency).unwrap_or(DEFAULT_FREQUENCY),
@@ -32,16 +37,26 @@ pub fn print_inks(doc: &Document, set: &PrintSettings) -> (Vec<PrintInk>, Vec<St
             }
         })
         .collect();
-    let warnings = out
-        .inks
-        .iter()
-        .filter(|i| !list.iter().any(|p| p.name == i.name))
-        .map(|i| {
-            format!("there is no ink named `{}` to print (inks: {})", i.name, list.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", "))
-        })
-        .collect();
+    // One warning for all the options naming no ink, each list cut short: the options and the
+    // inks both come from the file.
+    let names: BTreeSet<&str> = list.iter().map(|p| p.name.as_str()).collect();
+    let unknown: Vec<&str> = out.inks.iter().map(|i| i.name.as_str()).filter(|n| !names.contains(n)).collect();
+    let warnings = if unknown.is_empty() {
+        vec![]
+    } else {
+        let few = |all: Vec<&str>| {
+            let more = all.len().saturating_sub(MAX_NAMED);
+            let shown = all.into_iter().take(MAX_NAMED).map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ");
+            if more > 0 { format!("{shown} and {more} more") } else { shown }
+        };
+        let inks = few(list.iter().map(|p| p.name.as_str()).collect());
+        vec![format!("there is no ink named {} to print (inks: {inks})", few(unknown))]
+    };
     (list, warnings)
 }
+
+/// The most names a warning of [`print_inks`] lists.
+const MAX_NAMED: usize = 10;
 
 /// The colour settings separations of `doc` convert with: the document's colour spaces
 /// ([`crate::output::document_cms`]), with the printer profile as their CMYK profile when it is a
@@ -105,7 +120,7 @@ impl<'a> Separator<'a> {
         for n in nodes {
             darken_overprints(n, discard_white);
             self.node(plate, Arc::make_mut(n));
-            keep_colorized_pixels(n, &mut colorized);
+            keep_colorized_pixels(n, &d.images, &mut colorized);
         }
         // A colorized image's pixels say where its color prints, on every plate: they are kept
         // under their own key, and only the color is separated.
@@ -138,13 +153,20 @@ fn colorized_key(key: &str) -> String {
 }
 
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
-/// `keys`.
-fn keep_colorized_pixels(n: &mut Arc<Node>, keys: &mut BTreeSet<String>) {
+/// `keys`. An image whose pixels in `images` don't take its colorize paint
+/// ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it shows.
+fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
     let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
     if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
+    if colorized(node)
+        && let NodeKind::Image(im) = &node.kind
+        && images.get(&im.key).is_some_and(|b| !b.takes_colorize())
+    {
+        node.extras_mut().colorize = None;
+    }
     if colorized(node)
         && let NodeKind::Image(im) = &mut node.kind
     {
@@ -153,7 +175,7 @@ fn keep_colorized_pixels(n: &mut Arc<Node>, keys: &mut BTreeSet<String>) {
     }
     if let Some(ch) = node.children_mut() {
         for c in ch.iter_mut() {
-            keep_colorized_pixels(c, keys);
+            keep_colorized_pixels(c, images, keys);
         }
     }
 }

@@ -16,13 +16,13 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_geom::Rect;
 
-use super::super::{NodeId, Result, Session, bad, str_param};
+use super::super::{EngineError, NodeId, Result, Session, bad, bool_or, str_param};
 use super::encode::single_artboard;
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names, encode_with_warnings, unique_file_names,
-    with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names_keeping_dots, create_dir, distinct_names_by, encode_with_warnings, merge,
+    unique_file_names_keeping_dots, with_black_output, writable, write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -277,7 +277,7 @@ impl Row {
 
 /// The settings the Asset Export panel shares with the dialog: what is exported, not which art
 /// or where to.
-pub(crate) const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
+pub const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
 
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]
@@ -289,6 +289,8 @@ struct ScreenParams {
     zip: bool,
     full_document: bool,
     include_bleed: bool,
+    /// Include Artboard Fill: the artboards' background colors behind the art (default on).
+    include_artboard_fill: Option<bool>,
     subfolders: bool,
     preset: Option<String>,
     prefix: Option<String>,
@@ -488,14 +490,42 @@ pub(crate) fn check_settings(s: &Session, p: &Value) -> Result<()> {
     rows_of(s, p, ScreenParams::of(p)?.preset.as_deref()).map(|_| ())
 }
 
+/// `name` the way a case-insensitive file system compares names: lower-cased, then each character
+/// upper-cased where its upper case is one character. Names with the same lower case give the
+/// same key, and so do `ΟΣ`, `ος` and `οσ` (`ΟΣ`); `ᾈ` and `ᾀ` give `ᾀ`, and `ß` stays `ß`.
+/// Dotless `ı` stays `ı`, as NTFS and Unicode case folding outside Turkic languages keep it apart
+/// from `i` and `I`.
+fn fold(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| {
+            if c == 'ı' {
+                return c;
+            }
+            let mut upper = c.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(u), None) => u,
+                _ => c,
+            }
+        })
+        .collect()
+}
+
 /// The file names (and bytes) an export wrote, or the files it returns.
 #[derive(Default)]
 struct Output {
-    /// Lower-case relative names already used, with what wrote each (two identical rows write
-    /// one file; different files that would share a name get `-2`, `-3`…).
+    /// Relative names already used, by their [`fold`]ed spelling, with what wrote each (two
+    /// identical rows write one file; different files that would share a name get `-2`, `-3`…).
     taken: std::collections::HashMap<String, String>,
-    /// Sub-folders already made.
+    /// Each sub-folder as the first file in it spells it, by its [`fold`]ed name.
+    folders: std::collections::HashMap<String, String>,
+    /// Sub-folders already made, by their [`fold`]ed names.
     made: HashSet<String>,
+    /// For each [`fold`]ed name asked for, the number to try next: many files given one name
+    /// would otherwise try `-2`, `-3`… from the start each time.
+    next: std::collections::HashMap<String, u64>,
+    /// Each [`fold`]ed name asked for with the file (`key`) that got a name from it.
+    claimed: HashSet<(String, String)>,
     /// `(relative name, bytes)` kept to return or zip (empty when written to a folder).
     kept: Vec<(String, Vec<u8>)>,
     /// The paths written.
@@ -503,13 +533,26 @@ struct Output {
 }
 
 impl Output {
-    /// The name the file `key` writes as `name` takes: `name`, else (with `number`) `name-2`,
-    /// `name-3`… when another file has it; `None` when the same file (`key`) was written as `name`
-    /// already, or, without `number`, when any file was (the first row wins, as Export for Screens
-    /// always did when no name pattern is given).
-    fn claim(&mut self, name: &str, key: &str, number: bool) -> Option<String> {
-        let (base, ext) = name.rsplit_once('.').map_or((name, ""), |(b, e)| (b, e));
-        for n in 1.. {
+    /// The name the file `key` writes as `name` takes: `name`, else `name-2`, `name-3`… when
+    /// another file has it, with or without a name pattern; `None` when the same file (`key`) was
+    /// written as `name` already. Names are compared without case, and a sub-folder keeps the
+    /// spelling of the first file put in it.
+    fn claim(&mut self, name: &str, key: &str) -> Option<String> {
+        let name = match name.rsplit_once('/') {
+            Some((dir, file)) => {
+                let dir = self.folders.entry(fold(dir)).or_insert_with(|| dir.to_string());
+                format!("{dir}/{file}")
+            }
+            None => name.to_string(),
+        };
+        let asked = (fold(&name), key.to_string());
+        // The same file under the same name again: it has its name already.
+        if self.claimed.contains(&asked) {
+            return None;
+        }
+        let (base, ext) = name.rsplit_once('.').map_or((name.as_str(), ""), |(b, e)| (b, e));
+        let start = self.next.get(&asked.0).copied().unwrap_or(1);
+        for n in start.. {
             let candidate = if n == 1 {
                 name.to_string()
             } else if ext.is_empty() {
@@ -517,11 +560,13 @@ impl Output {
             } else {
                 format!("{base}-{n}.{ext}")
             };
-            match self.taken.get(&candidate.to_lowercase()) {
-                Some(k) if k == key || !number => return None,
+            match self.taken.get(&fold(&candidate)) {
+                Some(k) if k == key => return None,
                 Some(_) => continue,
                 None => {
-                    self.taken.insert(candidate.to_lowercase(), key.to_string());
+                    self.taken.insert(fold(&candidate), key.to_string());
+                    self.next.insert(asked.0.clone(), n + 1);
+                    self.claimed.insert(asked);
                     return Some(candidate);
                 }
             }
@@ -541,7 +586,7 @@ impl Output {
         match folder {
             Some(dir) if !keep => {
                 if let Some((sub, _)) = name.rsplit_once('/')
-                    && self.made.insert(sub.to_lowercase())
+                    && self.made.insert(fold(sub))
                 {
                     create_dir(&format!("{dir}/{sub}"))?;
                 }
@@ -579,7 +624,7 @@ pub struct ScreenExportPreset {
 
 /// What a preset keeps: the formats, their settings, the naming and the folders; not which art
 /// (it changes with the document) nor where to (unless given).
-pub const PRESET_KEYS: [&str; 13] = [
+pub const PRESET_KEYS: [&str; 14] = [
     "formats",
     "settings",
     "preset",
@@ -590,6 +635,7 @@ pub const PRESET_KEYS: [&str; 13] = [
     "folders",
     "subfolders",
     "includeBleed",
+    "includeArtboardFill",
     "antiAlias",
     "folder",
     "fullDocument",
@@ -624,7 +670,7 @@ fn find_preset(s: &Session, name: &str) -> Option<ScreenExportPreset> {
 }
 
 /// `p` over the settings of its `exportPreset`, when it names one (its own keys win).
-fn with_preset(s: &Session, p: &Value) -> Result<Value> {
+pub(super) fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     let Some(name) = str_param(p, "exportPreset") else { return Ok(p.clone()) };
     let preset = find_preset(s, name).ok_or_else(|| bad(C, format!("no export preset `{name}` (see document.exportPresets.list)")))?;
     let mut merged = preset.settings;
@@ -634,24 +680,47 @@ fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     Ok(Value::Object(merged))
 }
 
-pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
+/// The rows of `document.exportPresets.list`: the built-in presets, then `saved`, each
+/// `{name, builtIn, settings}`.
+pub fn preset_list(saved: &[ScreenExportPreset]) -> Value {
     let row = |p: &ScreenExportPreset, built_in: bool| json!({"name": p.name, "builtIn": built_in, "settings": p.settings});
-    let rows: Vec<Value> =
-        builtin_presets().iter().map(|p| row(p, true)).chain(s.prefs.screen_export_presets.iter().map(|p| row(p, false))).collect();
-    Ok(json!({ "presets": rows }))
+    Value::Array(builtin_presets().iter().map(|p| row(p, true)).chain(saved.iter().map(|p| row(p, false))).collect())
+}
+
+pub(super) fn presets_list(s: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({ "presets": preset_list(&s.prefs.screen_export_presets) }))
+}
+
+/// The [`PRESET_KEYS`] of `given`, refused as an error of command `cmd` when an export would
+/// refuse them.
+fn preset_settings(s: &Session, cmd: &str, given: &Map<String, Value>) -> Result<Map<String, Value>> {
+    let settings: Map<String, Value> = given.iter().filter(|(k, _)| PRESET_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    // Refuse what an export would refuse, now rather than when the preset is used.
+    check_settings(s, &Value::Object(settings.clone())).map_err(|e| bad(cmd, e.to_string()))?;
+    Folders::of(&ScreenParams::of(&Value::Object(settings.clone()))?).map_err(|e| bad(cmd, e.to_string()))?;
+    let mut settings = settings;
+    remove_passwords(&mut settings);
+    Ok(settings)
+}
+
+/// The longest export preset name kept (characters), as for asset names (`assets::MAX_NAME`).
+const MAX_PRESET_NAME: usize = 255;
+
+/// `name` trimmed and at most [`MAX_PRESET_NAME`] characters long (`None` when empty), as
+/// `assets::clean_name` keeps an asset name.
+fn preset_name(name: &str) -> Option<String> {
+    let n: String = name.trim().chars().take(MAX_PRESET_NAME).collect();
+    (!n.is_empty()).then_some(n)
 }
 
 pub(super) fn presets_save(s: &mut Session, p: &Value) -> Result<Value> {
     const SAVE: &str = "document.exportPresets.save";
-    let name = str_param(p, "name").map(str::trim).filter(|n| !n.is_empty()).ok_or_else(|| bad(SAVE, "give the preset a name"))?.to_string();
+    let name = str_param(p, "name").and_then(preset_name).ok_or_else(|| bad(SAVE, "give the preset a name"))?;
     if builtin_presets().iter().any(|b| b.name == name) {
         return Err(bad(SAVE, format!("`{name}` is a built-in preset: save under another name")));
     }
     let given = p.get("settings").and_then(Value::as_object).ok_or_else(|| bad(SAVE, "settings is an object of document.exportForScreens params"))?;
-    let settings: Map<String, Value> = given.iter().filter(|(k, _)| PRESET_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
-    // Refuse what an export would refuse, now rather than when the preset is used.
-    check_settings(s, &Value::Object(settings.clone())).map_err(|e| bad(SAVE, e.to_string()))?;
-    Folders::of(&ScreenParams::of(&Value::Object(settings.clone()))?).map_err(|e| bad(SAVE, e.to_string()))?;
+    let settings = preset_settings(s, SAVE, given)?;
     let preset = ScreenExportPreset { name: name.clone(), settings };
     let created = match s.prefs.screen_export_presets.iter_mut().find(|q| q.name == name) {
         Some(slot) => {
@@ -680,12 +749,185 @@ pub(super) fn presets_delete(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "deleted": name }))
 }
 
+/// What `document.exportPresets.export` writes and `document.exportPresets.import` reads.
+#[derive(Serialize, Deserialize)]
+struct PresetFile {
+    format: String,
+    #[serde(default)]
+    presets: Vec<ScreenExportPreset>,
+}
+
+/// The `format` of an export presets file, also its extension.
+pub const PRESET_FILE_FORMAT: &str = "vcexportpresets";
+
+/// The extensions of export presets files (opening one imports it).
+pub const PRESET_FILE_EXTS: &[&str] = &[PRESET_FILE_FORMAT];
+
+/// The most presets one file imports.
+const MAX_IMPORT: usize = 1000;
+
+/// The most bytes in an export presets file.
+const MAX_PRESET_FILE_BYTES: usize = 4 << 20;
+
+pub(super) fn presets_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const EXPORT: &str = "document.exportPresets.export";
+    // A file holds no more presets than an import reads.
+    let too_many = || bad(EXPORT, format!("more than {MAX_IMPORT} presets"));
+    let presets = match p.get("names") {
+        Some(Value::Array(names)) if names.len() > MAX_IMPORT => return Err(too_many()),
+        Some(Value::Array(names)) => {
+            let find = |n: &Value| {
+                let n = n.as_str().ok_or_else(|| bad(EXPORT, "`names` lists preset names"))?;
+                find_preset(s, n).ok_or_else(|| bad(EXPORT, format!("no export preset `{n}` (see document.exportPresets.list)")))
+            };
+            names.iter().map(find).collect::<Result<Vec<_>>>()?
+        }
+        None | Some(Value::Null) => s.prefs.screen_export_presets.clone(),
+        Some(_) => return Err(bad(EXPORT, "`names` is a list of preset names")),
+    };
+    if presets.is_empty() {
+        return Err(bad(EXPORT, "no saved export presets to export (name built-in ones in `names`)"));
+    }
+    if presets.len() > MAX_IMPORT {
+        return Err(too_many());
+    }
+    let count = presets.len();
+    let text = serde_json::to_string_pretty(&PresetFile { format: PRESET_FILE_FORMAT.into(), presets }).map_err(|e| bad(EXPORT, e.to_string()))?;
+    if text.len() > MAX_PRESET_FILE_BYTES {
+        return Err(bad(EXPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
+    }
+    match str_param(p, "path") {
+        Some(path) => {
+            write_file(path, text.as_bytes())?;
+            Ok(json!({"path": path, "count": count}))
+        }
+        None => Ok(json!({"data": text, "count": count})),
+    }
+}
+
+pub(super) fn presets_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const IMPORT: &str = "document.exportPresets.import";
+    let bytes = match (str_param(p, "path"), str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::read_file_head(path, MAX_PRESET_FILE_BYTES + 1)?,
+        (None, Some(text), _) => {
+            if text.len() > MAX_PRESET_FILE_BYTES {
+                return Err(bad(IMPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
+            }
+            text.as_bytes().to_vec()
+        }
+        (None, None, Some(b64)) => {
+            if b64.bytes().filter(|b| !b.is_ascii_whitespace()).count() > MAX_PRESET_FILE_BYTES.div_ceil(3) * 4 {
+                return Err(bad(IMPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
+            }
+            vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(IMPORT, "bad dataBase64"))?
+        }
+        _ => return Err(bad(IMPORT, "give `path`, `data` or `dataBase64`")),
+    };
+    if bytes.len() > MAX_PRESET_FILE_BYTES {
+        return Err(bad(IMPORT, format!("export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes")));
+    }
+    let file: PresetFile = serde_json::from_slice(&bytes).map_err(|e| bad(IMPORT, format!("not an export presets file: {e}")))?;
+    if file.format != PRESET_FILE_FORMAT {
+        return Err(bad(IMPORT, format!("not an export presets file (format `{}`)", file.format)));
+    }
+    if file.presets.len() > MAX_IMPORT {
+        return Err(bad(IMPORT, format!("more than {MAX_IMPORT} presets")));
+    }
+    // Settings a hand-edited file may carry are refused as document.exportPresets.save refuses
+    // them, before any preset is added.
+    let mut presets = vec![];
+    for q in file.presets {
+        let settings = preset_settings(s, IMPORT, &q.settings).map_err(|e| match e {
+            EngineError::BadParams { msg, .. } => bad(IMPORT, format!("`{}`: {msg}", q.name)),
+            e => e,
+        })?;
+        let name = preset_name(&q.name).unwrap_or_else(|| "Export Preset".to_string());
+        presets.push((name, settings));
+    }
+    let replace = bool_or(p, "replace", false);
+    let saved = &mut s.prefs.screen_export_presets;
+    let saved_before = saved.len();
+    // A built-in name, or a saved one that stays, gets a number.
+    let mut taken: std::collections::HashSet<String> =
+        builtin_presets().into_iter().map(|b| b.name).chain(saved.iter().map(|q| q.name.clone())).collect();
+    let mut imported = vec![];
+    for (base, settings) in presets {
+        if replace && let Some(slot) = saved.iter_mut().take(saved_before).find(|q| q.name == base) {
+            slot.settings = settings;
+            imported.push(base);
+            continue;
+        }
+        let mut name = super::import_name(&base, |n| taken.contains(n));
+        if name.chars().count() > MAX_PRESET_NAME {
+            // A number after a long name stays within the limit: the name is cut to leave room for
+            // a space and the longest number.
+            let short: String = base.chars().take(MAX_PRESET_NAME - 21).collect();
+            let short = short.trim_end();
+            name = super::import_name(short, |n| n == short || taken.contains(n));
+        }
+        taken.insert(name.clone());
+        saved.push(ScreenExportPreset { name: name.clone(), settings });
+        imported.push(name);
+    }
+    Ok(json!({ "imported": imported }))
+}
+
+/// `settings` (a document's export settings) with export preset `name` applied as the Asset
+/// Export panel applies one: its formats (or mobile/density `preset`), its format settings over
+/// the ones there, its prefix (none when it has none), its folders (`folders`, or `subfolders`)
+/// with Create Sub-folders on for a folder per row, and its anti-aliasing.
+pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<String, Value>, name: &str) -> Result<()> {
+    let preset = find_preset(s, name).ok_or_else(|| bad(cmd, format!("no export preset `{name}` (see document.exportPresets.list)")))?.settings;
+    if let Some(formats) = preset.get("formats") {
+        settings.insert("formats".into(), formats.clone());
+        settings.remove("preset");
+    } else if let Some(p) = preset.get("preset") {
+        settings.insert("preset".into(), p.clone());
+        settings.remove("formats");
+    }
+    if let Some(given) = preset.get("settings").and_then(Value::as_object) {
+        let all = settings.entry("settings").or_insert_with(|| json!({}));
+        if !all.is_object() {
+            *all = json!({});
+        }
+        if let Some(all) = all.as_object_mut() {
+            for (id, o) in given {
+                match (all.get_mut(id).and_then(Value::as_object_mut), o.as_object()) {
+                    (Some(mine), Some(o)) => mine.extend(o.iter().map(|(k, v)| (k.clone(), v.clone()))),
+                    _ => _ = all.insert(id.clone(), o.clone()),
+                }
+            }
+        }
+    }
+    match preset.get("prefix") {
+        Some(prefix) => _ = settings.insert("prefix".into(), prefix.clone()),
+        None => _ = settings.remove("prefix"),
+    }
+    // Its `folders` (Export for Screens shows it; empty is none, as an export reads it), else its
+    // `subfolders` (a folder per row or none). Create Sub-folders is on for a folder per row, as
+    // the dialog sets it.
+    let folders = preset
+        .get("folders")
+        .and_then(Value::as_str)
+        .map(|f| if f.is_empty() { "none" } else { f })
+        .or_else(|| preset.get("subfolders").and_then(Value::as_bool).map(|b| if b { "rows" } else { "none" }));
+    if let Some(f) = folders {
+        settings.insert("folders".into(), json!(f));
+        settings.insert("subfolders".into(), json!(f == "rows"));
+    }
+    if let Some(aa) = preset.get("antiAlias") {
+        settings.insert("antiAlias".into(), aa.clone());
+    }
+    Ok(())
+}
+
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
-/// so do different files the `name` pattern gives one name. The reply's `warnings` lists every
-/// warning the encoders give for the files, each once.
+/// so do different files that would share a name, with or without the `name` pattern. The reply's
+/// `warnings` lists every warning the encoders give for the files, each once.
 pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
+    check_passwords(p)?;
     let o = ScreenParams::of(p)?;
     let rows = rows_of(s, p, o.preset.as_deref())?;
     o.one_source()?;
@@ -708,7 +950,9 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
     // Appearance of Black › Printing / Exporting for RGB raster rows.
-    let rows = rows.into_iter().map(|r| Row { options: with_black_output(s, &r.options), ..r }).collect();
+    // Include Artboard Fill off: the encoders leave the background colors out.
+    let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
+    let rows = rows.into_iter().map(|r| Row { options: merge(with_black_output(s, &r.options), fill.clone()), ..r }).collect();
     let export = ScreenExport { cmd: C, o, rows, naming, items };
     match &mut s.screens_hand_off {
         Some(slot) => {
@@ -775,11 +1019,14 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     let mut out = Output::default();
     // The encoders' warnings for every file, each once.
     let mut warnings: Vec<String> = Vec::new();
+    // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
+    // written on a page of their own bounds, which it doesn't grow.
+    let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, notes) = vectorcraft_doc::cancel::quiet(|| encode_with_warnings(doc, format, options))?;
         for w in notes {
-            if !warnings.contains(&w) {
+            if !(bleed_on_page && w == super::pdf::BLEED_LEFT_OUT) && !warnings.contains(&w) {
                 warnings.push(w);
             }
         }
@@ -813,7 +1060,7 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
             });
             let (sub, file) = naming.file(document.as_ref().unwrap_or(item), index, files, r);
             let name = sub.map_or_else(|| file.clone(), |d| format!("{d}/{file}"));
-            let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key), o.name.is_some()) else { continue };
+            let Some(name) = out.claim(&name, &format!("{}|{}", item.stem, r.key)) else { continue };
             let bytes = if let Some(boards) = single {
                 let mut options = r.options.clone();
                 options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
@@ -830,6 +1077,10 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
                     .entry(b)
                     .or_insert_with(|| {
                         let mut d = single_artboard(&item.doc, item.region, &item.name);
+                        // It keeps its background color.
+                        if let (Some(a), Some(from)) = (d.artboards.first_mut(), item.doc.artboards.get(b)) {
+                            a.color = from.color;
+                        }
                         super::save::keep_art_on(&mut d, item.region);
                         Arc::new(d)
                     })
@@ -929,10 +1180,11 @@ fn items(
         }
         isolated(doc, &doc.paint_order(ids.iter().copied()), name).map(|(d, r)| (Arc::new(d), r))
     };
-    // Each item's stem follows Windows' file-naming rules, and no two items share one.
-    let safe = |stems: Vec<String>| distinct_names(stems.iter().map(|s| safe_file_name(s)));
+    // Each item's stem follows Windows' file-naming rules, and no two items share one, compared as
+    // the item folders are (`fold`).
+    let safe = |stems: Vec<String>| distinct_names_by(stems.iter().map(|s| safe_file_name(s)), fold);
     let named = |pieces: Vec<(String, Arc<Document>, Option<usize>, Rect)>, fallback: &str| -> Vec<Item> {
-        let stems = safe(unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
+        let stems = safe(unique_file_names_keeping_dots(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
         pieces
             .into_iter()
             .zip(stems)
@@ -958,6 +1210,9 @@ fn items(
         let mut pieces = vec![];
         for id in ids {
             let a = doc.asset(*id).ok_or_else(|| bad(C, format!("no asset {id} (see assets.list)")))?;
+            if a.format_3d.is_some() {
+                return Err(bad(C, format!("asset {id} is a 3D asset: assets.export3D writes it")));
+            }
             let (d, r) = alone(&a.nodes, &a.name).ok_or_else(|| bad(C, format!("asset `{}` has no art to export", a.name)))?;
             pieces.push((a.name.clone(), d, Some(0), r));
         }
@@ -1006,7 +1261,7 @@ fn items(
     if boards.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
-    let stems = safe(artboard_file_names(doc, &boards));
+    let stems = safe(artboard_file_names_keeping_dots(doc, &boards));
     Ok(boards
         .into_iter()
         .zip(stems)
@@ -1029,9 +1284,61 @@ fn remember(s: &mut Session, p: &Value) {
     let _ = store_settings(s, settings);
 }
 
+/// The PDF passwords an export may be given (`security` of a PDF row or of `settings.pdf`).
+const PASSWORD_KEYS: [&str; 2] = ["openPassword", "permissionsPassword"];
+
+/// Left where [`remove_passwords`] took a password out: an export of these settings is refused
+/// until a password is given again ([`check_passwords`]), rather than written unprotected.
+const PASSWORD_REQUIRED: &str = "passwordRequired";
+
+/// `settings` without the PDF passwords anywhere in them: settings kept in the document (which
+/// native saves write) or in the preferences hold the export's choices, never its secrets, as
+/// the PDF settings themselves are saved without them. Where one was given, [`PASSWORD_REQUIRED`]
+/// says so.
+fn remove_passwords(settings: &mut Map<String, Value>) {
+    let mut removed = false;
+    for key in PASSWORD_KEYS {
+        removed |= settings.remove(key).is_some_and(|v| v.as_str().is_none_or(|p| !p.is_empty()));
+    }
+    if removed {
+        settings.insert(PASSWORD_REQUIRED.into(), Value::Bool(true));
+    }
+    for v in settings.values_mut() {
+        remove_passwords_in(v);
+    }
+}
+
+/// Refuse export params `v` that hold settings whose PDF passwords were left out
+/// ([`PASSWORD_REQUIRED`]) without a password given again.
+fn check_passwords(v: &Value) -> Result<()> {
+    match v {
+        Value::Object(m) => {
+            let given = PASSWORD_KEYS.iter().any(|k| m.get(*k).and_then(Value::as_str).is_some_and(|p| !p.is_empty()));
+            if m.get(PASSWORD_REQUIRED) == Some(&Value::Bool(true)) && !given {
+                return Err(bad(
+                    C,
+                    "the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected",
+                ));
+            }
+            m.values().try_for_each(check_passwords)
+        }
+        Value::Array(items) => items.iter().try_for_each(check_passwords),
+        _ => Ok(()),
+    }
+}
+
+fn remove_passwords_in(v: &mut Value) {
+    match v {
+        Value::Object(m) => remove_passwords(m),
+        Value::Array(items) => items.iter_mut().for_each(remove_passwords_in),
+        _ => {}
+    }
+}
+
 /// Make `settings` the document's export settings. Not an undo step (like the settings of any
 /// export); the document has changed only if they differ.
-pub(crate) fn store_settings(s: &mut Session, settings: Map<String, Value>) -> Result<()> {
+pub(crate) fn store_settings(s: &mut Session, mut settings: Map<String, Value>) -> Result<()> {
+    remove_passwords(&mut settings);
     let st = s.doc_mut()?;
     if st.doc.export_settings != settings {
         Arc::make_mut(&mut st.doc).export_settings = settings;
@@ -1047,7 +1354,26 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ScreenSize, safe_file_name};
+    use super::{Output, ScreenSize, safe_file_name};
+
+    /// Files given one name are numbered in turn, each numbering going on from the last one (so
+    /// thousands of them don't each try every number used before), and a file asking again for
+    /// the name it got is told it has it.
+    #[test]
+    fn taken_names_are_numbered_from_the_last_number() {
+        let mut out = Output::default();
+        assert_eq!(out.claim("a.png", "1").as_deref(), Some("a.png"));
+        assert_eq!(out.claim("A.png", "2").as_deref(), Some("A-2.png"));
+        assert_eq!(out.claim("a-3.png", "x").as_deref(), Some("a-3.png"));
+        assert_eq!(out.claim("a.png", "3").as_deref(), Some("a-4.png"));
+        assert_eq!(out.claim("a.png", "2"), None);
+        assert_eq!(out.claim("a.png", "1"), None);
+        assert_eq!(out.claim("sub/a.png", "1").as_deref(), Some("sub/a.png"));
+        for k in 0..20_000 {
+            assert!(out.claim("same.png", &k.to_string()).is_some());
+        }
+        assert_eq!(out.claim("same.png", "last").as_deref(), Some("same-20001.png"));
+    }
 
     #[test]
     fn size_parse_refuses_signs_and_exponents() {
@@ -1068,5 +1394,23 @@ mod tests {
         assert_eq!(safe_file_name("COM1 .png"), "COM1-.png");
         assert_eq!(safe_file_name("lpt9  .png"), "lpt9-.png");
         assert_eq!(safe_file_name("My CON .png"), "My CON .png");
+    }
+
+    /// The settings an export leaves in the document keep its PDF security choices but not its
+    /// passwords, in a row or in `settings.pdf`.
+    #[test]
+    fn stored_settings_leave_out_pdf_passwords() {
+        let mut s = crate::Session::new();
+        s.execute("file.new", &serde_json::json!({"width": 100, "height": 100})).unwrap();
+        let given = serde_json::json!({
+            "formats": [{"format": "pdf", "security": {"openPassword": "open sesame", "permissionsPassword": "owner", "printing": "low"}}],
+            "settings": {"pdf": {"security": {"openPassword": "open sesame", "copy": false}}},
+        });
+        super::store_settings(&mut s, given.as_object().unwrap().clone()).unwrap();
+        let kept = serde_json::Value::Object(s.doc().unwrap().doc.export_settings.clone());
+        assert!(!kept.to_string().contains("Password"), "{kept}");
+        assert_eq!(kept["formats"][0]["security"]["printing"], "low");
+        assert_eq!(kept["settings"]["pdf"]["security"]["copy"], false);
+        assert_eq!(kept["formats"][0]["security"]["passwordRequired"], true);
     }
 }

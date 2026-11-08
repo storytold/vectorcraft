@@ -135,6 +135,18 @@ pub(crate) fn combo_menu<R>(
     width: f32,
     menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
 ) -> Option<R> {
+    combo_menu_field(ui, id, current, width, menu).1
+}
+
+/// [`combo_menu`], also returning the closed field's response (the font family field reads the
+/// mouse wheel turned over it).
+pub(crate) fn combo_menu_field<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: &str,
+    width: f32,
+    menu: impl FnOnce(craft_ui::combo::Menu<'_>) -> Option<R>,
+) -> (Response, Option<R>) {
     let t = Tokens::get(ui.ctx());
     let label = take_previous_label(ui);
     egui::Frame::NONE
@@ -148,7 +160,8 @@ pub(crate) fn combo_menu<R>(
                 egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&resp));
                 ui.memory_mut(|m| m.stop_text_input());
             }
-            menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside))
+            let shown = menu(craft_ui::combo::Menu::new(ui, &resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside));
+            (resp, shown)
         })
         .inner
 }
@@ -204,7 +217,7 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     let ctx = &resp.ctx;
     let id = resp.id.with("popover");
     let frame = ctx.cumulative_frame_nr();
-    let was_open = ctx.data(|d| d.get_temp::<u64>(id)).is_some_and(|f| f + 1 >= frame);
+    let was_open = popover_is_open(ctx, resp.id);
     let mut open = if toggle {
         !was_open
     } else {
@@ -233,17 +246,38 @@ pub fn popover<R>(resp: &Response, toggle: bool, content: impl FnOnce(&mut Ui) -
     inner
 }
 
-/// Records where the bottom bars (status and hint bars) start this frame, so menus can stop above
-/// them (#2086). Without bars it is the bottom of the window.
-pub fn set_menu_floor(ctx: &egui::Context, y: f32) {
-    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("menu_floor"), y));
+/// Whether the popover for this anchor was open in the latest completed frame.
+pub(crate) fn popover_is_open(ctx: &egui::Context, anchor: egui::Id) -> bool {
+    let frame = ctx.cumulative_frame_nr();
+    ctx.data(|d| d.get_temp::<u64>(anchor.with("popover"))).is_some_and(|f| f + 1 >= frame)
 }
 
-/// The height a menu list may take: from `top` down to `floor` less a small gap, at least 120 pt.
-pub fn menu_room(floor: f32, top: f32) -> f32 {
+/// Records where the bottom bars (the status and hint bars, and the Control bar docked at the
+/// bottom) start this frame in the window being drawn, so its menus can stop above them (#2086).
+/// Without bars it is the bottom of the window.
+pub fn set_menu_floor(ctx: &egui::Context, y: f32) {
+    let id = menu_floor_id(ctx);
+    ctx.data_mut(|d| d.insert_temp(id, y));
+}
+
+/// The floor's key: egui viewports share one context, and each OS window has its own bottom edge.
+fn menu_floor_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::unique("menu_floor").with(ctx.viewport_id())
+}
+
+/// Where menus of the window being drawn stop: its recorded floor, or its bottom edge when nothing
+/// recorded one, as in a floating panel's OS window.
+pub(crate) fn menu_floor(ctx: &egui::Context) -> f32 {
+    let id = menu_floor_id(ctx);
+    ctx.data(|d| d.get_temp::<f32>(id)).unwrap_or_else(|| ctx.content_rect().bottom())
+}
+
+/// The height a menu list may take: from `top` down to `floor` less a small gap, at least 120 pt,
+/// and never more than `tallest`, the most that fits in the window.
+pub fn menu_room(floor: f32, top: f32, tallest: f32) -> f32 {
     const BOTTOM_GAP: f32 = 12.0;
     const MIN_HEIGHT: f32 = 120.0;
-    (floor - top - BOTTOM_GAP).max(MIN_HEIGHT)
+    (floor - top - BOTTOM_GAP).max(MIN_HEIGHT).min(tallest)
 }
 
 /// The scroll bar of a menu's list: slim, in a column of its own beside the items, so it never
@@ -252,13 +286,14 @@ pub fn list_scroll_style() -> egui::style::ScrollStyle {
     egui::style::ScrollStyle { bar_width: 6.0, bar_inner_margin: 2.0, ..egui::style::ScrollStyle::solid() }
 }
 
-/// The body of a menu or popup list: as tall as its items up to the bottom bars of the window, and
-/// scrolling only past that, so long menus (Window, Effect, a panel's menu) stay reachable on
-/// small windows. Its scroll bar has a column of its own, so it never covers the shortcuts or the
-/// submenu arrows (#2086).
+/// The body of a menu or popup list: as tall as its items up to the bottom bars of the window it
+/// opens in, and scrolling only past that, so long menus (Window, Effect, a panel's menu) stay
+/// reachable on small windows and in a floating panel's short OS window. Its scroll bar has a column
+/// of its own, so it never covers the shortcuts or the submenu arrows (#2086, #5347).
 pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    let floor = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::unique("menu_floor"))).unwrap_or_else(|| ui.ctx().content_rect().bottom());
-    let room = menu_room(floor, ui.next_widget_position().y);
+    let ctx = ui.ctx();
+    let tallest = (ctx.content_rect().height() - egui::Frame::popup(ui.style()).total_margin().sum().y).max(0.0);
+    let room = menu_room(menu_floor(ctx), ui.next_widget_position().y, tallest);
     ui.scope(|ui| {
         ui.spacing_mut().scroll = list_scroll_style();
         // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to

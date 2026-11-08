@@ -1,7 +1,7 @@
 use super::params::{Method, Mode, TraceParams};
 #[cfg(test)]
 use super::pipeline::bw_tones;
-use super::pipeline::{TracedPath, is_ignored};
+use super::pipeline::{TracedPath, drops_color, is_ignored};
 use super::raster::Raster;
 use super::{
     AtomicUsize, Crack, Loop, Ordering, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, centerline, contour, fit, logo, shapes,
@@ -13,6 +13,9 @@ use super::{denoise, quantize};
 /// What tracing one colour layer needs.
 pub(crate) struct Layers<'a> {
     pub(crate) q: &'a Quantized,
+    /// The label each layer traces a pixel as: `q.labels`, or with Ignore Color for the background
+    /// only, those with the background [`TRANSPARENT`]. Edges are placed by `q.labels`.
+    pub(crate) traced: &'a [u16],
     /// Each palette entry's layer, bottom (0) up.
     pub(crate) rank: &'a [usize],
     pub(crate) params: &'a TraceParams,
@@ -36,9 +39,10 @@ pub(crate) struct Layers<'a> {
 
 impl Layers<'_> {
     /// Ignore White: white is no part of any layer (stacked layers reach under the layers above
-    /// them, and must not reach under white that is left out).
+    /// them, and must not reach under white that is left out). With `ignore_background` the
+    /// background is [`TRANSPARENT`] in `traced`, and the color's other areas are traced.
     fn ignored(&self, label: u16) -> bool {
-        self.params.ignore_white && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
+        drops_color(self.params) && self.q.palette.get(label as usize).is_some_and(|c| is_ignored(*c, self.ignore))
     }
     /// The region across a crack, for cutting outlines at their junctions: the outside pixel's
     /// colour. Stacked layers end on many colours at once and share no edge: one neighbour.
@@ -270,7 +274,7 @@ impl Layers<'_> {
         let (thin, lines) = if params.strokes {
             // The ink the lines are read against: the layer's colour; Black and White's own black.
             let ink = if params.mode == Mode::BlackAndWhite { [self.bw_tones[usize::from(ci == 1)]; 3] } else { color.map(f64::from) };
-            centerline::lines(&self.q.labels, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, self.img, ink, &self.style)
+            centerline::lines(self.traced, u16::try_from(ci).unwrap_or(TRANSPARENT), w, h, params.stroke_width, self.img, ink, &self.style)
         } else {
             (vec![], vec![])
         };
@@ -288,7 +292,7 @@ impl Layers<'_> {
         let (bw, bh) = (x1 - x0, y1 - y0);
         let mut mask = Vec::with_capacity(bw * bh);
         for y in y0..y1 {
-            let row = self.q.labels.get(y * w + x0..y * w + x1)?;
+            let row = self.traced.get(y * w + x0..y * w + x1)?;
             mask.extend(row.iter().enumerate().map(|(k, &l)| l != TRANSPARENT && !thin.get(y * w + x0 + k).copied().unwrap_or(false) && part(l)));
         }
         // Overlapping: a part of the mask with no pixel of this color holds only colors above it,
@@ -331,7 +335,9 @@ impl Layers<'_> {
                 }
             }
         }
-        for comp in comps {
+        // One component's paths: a pure function of its loops and the shared read-only state, so components are fitted in
+        // parallel and then added in order.
+        let fit_comp = |comp: &contour::Component| -> Option<(PathData, Option<TracedShape>)> {
             // (`hard`: some of the outline has no anti-aliasing, and is known less exactly.)
             let hard = std::cell::Cell::new(false);
             // (Each loop fitted, and whether its own outline is hard.)
@@ -355,7 +361,7 @@ impl Layers<'_> {
                 hard.set(hard.get() || is_hard);
                 Some((sp, is_hard))
             };
-            let Some((outer, _)) = fit(&comp.outer) else { continue };
+            let (outer, _) = fit(&comp.outer)?;
             let mut subs = vec![outer];
             for hole in &comp.holes {
                 if hole.area2.abs() / 2 < min_hole && params.noise > 0 {
@@ -398,9 +404,16 @@ impl Layers<'_> {
                 _ => None,
             };
             let path = shape.map_or_else(|| PathData::new(subs), |s| s.path());
-            if !add(path, comp.pixels, area_stroke, shape, false) {
-                return None;
-            }
+            Some((path, shape))
+        };
+        // In chunks, so that the anchor budget still stops the work early: a hostile image is refused after fitting at most
+        // the rest of one chunk, not after every component is fitted.
+        let accepted = fit_in_chunks(&comps, FIT_CHUNK, fit_comp, |comp, fitted| {
+            let Some((path, shape)) = fitted else { return true };
+            add(path, comp.pixels, area_stroke, shape, false)
+        });
+        if !accepted {
+            return None;
         }
         for line in lines {
             if !add(line.path, line.pixels, Some(line.width), None, line.square) {
@@ -424,6 +437,7 @@ pub(crate) fn shift_probe(img: &Raster, params: &TraceParams) -> Vec<[f64; 4]> {
     let gradients = vec![None; n];
     let job = Layers {
         q: &q,
+        traced: &q.labels,
         rank: &rank,
         params,
         img,
@@ -450,6 +464,24 @@ pub(crate) fn shift_probe(img: &Raster, params: &TraceParams) -> Vec<[f64; 4]> {
         }
     }
     out
+}
+
+/// How many components of a layer are fitted at a time (see `fit_in_chunks`).
+const FIT_CHUNK: usize = 256;
+
+/// `fit` of each of `items` over the available cores, `chunk` items at a time, each result handed to `accept` in item
+/// order. Stops after the chunk in which `accept` returns false, and says whether it never did.
+fn fit_in_chunks<T: Sync, R: Send>(items: &[T], chunk: usize, fit: impl Fn(&T) -> R + Sync, mut accept: impl FnMut(&T, R) -> bool) -> bool {
+    for part in items.chunks(chunk.max(1)) {
+        // (A few components are not worth starting threads for.)
+        let fitted = if part.len() < 16 { part.iter().map(&fit).collect() } else { parallel_map(part, &fit) };
+        for (item, result) in part.iter().zip(fitted) {
+            if !accept(item, result) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// `f` of each of `items`, in order, spread over the available cores.
@@ -491,4 +523,51 @@ pub(crate) fn parallel_map_at_most<T: Sync, R: Send>(at_a_time: usize, items: &[
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn parallel_map_at_most<T: Sync, R: Send>(_: usize, items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     items.iter().map(f).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fit_in_chunks_keeps_the_order_and_stops_at_the_first_refusal() {
+        let items: Vec<usize> = (0..1000).collect();
+        let fitted = AtomicUsize::new(0);
+        let mut seen = vec![];
+        let all = fit_in_chunks(
+            &items,
+            16,
+            |&i| {
+                fitted.fetch_add(1, Ordering::Relaxed);
+                i * 2
+            },
+            |&i, r| {
+                assert_eq!(r, i * 2);
+                seen.push(i);
+                seen.len() <= 10
+            },
+        );
+        assert!(!all);
+        // Items come in order, up to and including the one refused.
+        assert_eq!(seen, (0..=10).collect::<Vec<_>>());
+        // The early stop is kept: only the chunk holding the refusal was fitted, not the other 984 items.
+        assert_eq!(fitted.load(Ordering::Relaxed), 16);
+    }
+
+    #[test]
+    fn fit_in_chunks_accepts_everything_in_order() {
+        let items: Vec<usize> = (0..1000).collect();
+        let mut out = vec![];
+        assert!(fit_in_chunks(
+            &items,
+            7,
+            |&i| i + 1,
+            |_, r| {
+                out.push(r);
+                true
+            }
+        ));
+        assert_eq!(out, (1..=1000).collect::<Vec<_>>());
+        assert!(fit_in_chunks(&[] as &[usize], 7, |&i| i, |_, _| false));
+    }
 }

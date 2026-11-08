@@ -84,6 +84,7 @@ impl Renderer {
             if c.mask.is_some() || self.offscreen_fits(ctx, r, c.isolated) {
                 return self.group_offscreen(ctx, f, c, r, draw);
             }
+            self.stats.view_sized += 1;
         }
         if c.mask.is_some() {
             // Its backdrop out of reach (or not needed), a masked group starts from transparency.

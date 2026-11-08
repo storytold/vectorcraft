@@ -24,6 +24,7 @@ pub mod intertwine;
 pub mod meshblend;
 pub mod meshedit;
 pub mod mirror;
+pub mod nineslice;
 pub mod objects_on_path;
 pub mod params;
 pub mod pathtype;
@@ -56,15 +57,17 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
-pub use input::{Action, Mods, PointerEvent, PointerKind, ToolKey};
+pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
 /// Visual feedback drawn by the UI in screen space (coordinates here are document space).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Overlay {
     /// Marquee / rubber band rectangle.
     Marquee(Rect),
+    /// Selection-tool marquee, with its effective rule and pointer position for feedback.
+    SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
     /// A line segment (smart guide, handle line).
@@ -122,6 +125,12 @@ pub trait Tool: Send {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action>;
     fn key(&mut self, _cx: &ToolContext, _key: ToolKey, _mods: Mods) -> Vec<Action> {
         vec![]
+    }
+    /// The press in progress is dropped (a long touch, a canceled touch, a second finger): the
+    /// engine has undone its interaction and sends a release after this. By default the tool takes
+    /// Escape, as during a drag.
+    fn drop_press(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.key(cx, ToolKey::Escape, Mods::default())
     }
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
@@ -316,7 +325,7 @@ pub(crate) const MAX_STROKE_SAMPLES: usize = 100_000;
 /// `n / PREVIEW_ALL_UNTIL` samples. Each preview carries every sample so far, so previewing at
 /// every sample cost the square of the stroke's length (a gesture of many drags sent at once
 /// spent seconds); this way it is about `PREVIEW_ALL_UNTIL` per sample.
-const PREVIEW_ALL_UNTIL: usize = 1000;
+pub(crate) const PREVIEW_ALL_UNTIL: usize = 1000;
 
 /// Whether a drag that made the stroke `n` samples long previews it ([`PREVIEW_ALL_UNTIL`]).
 pub(crate) fn previews_at(n: usize) -> bool {
@@ -338,6 +347,28 @@ pub(crate) mod testutil {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         d.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Appearance::default_art())).unwrap();
+        (d, id)
+    }
+
+    /// A live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
+    /// (Attributes › Show Center) is at (150, 150), and a press in the middle of it hits no art.
+    pub fn doc_with_live_rect() -> (Document, NodeId) {
+        use vectorcraft_doc::{LiveShape, NodeKind};
+        let shape = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        };
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
         (d, id)
     }
 
@@ -453,6 +484,7 @@ pub(crate) mod testutil {
             revision: (0, 0),
             selection: s,
             zoom: 1.0,
+            marquee_mode: MarqueeMode::Touching,
             isolation: None,
             paint: p,
             outline: false,
@@ -479,6 +511,7 @@ pub(crate) mod testutil {
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            typed_from_keyboard: false,
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
@@ -496,6 +529,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,
@@ -503,10 +537,13 @@ pub(crate) mod testutil {
             transform_tools_guides: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            precise_cursors: false,
+            global_edit: &[],
         }
     }
 }
@@ -529,6 +566,7 @@ mod cursor_tests {
         let away = Point::new(400.0, 400.0);
         for (id, c) in [
             ("lasso", Cursor::Lasso),
+            (addons::enclosing_lasso::ID, Cursor::Lasso),
             ("magicWand", Cursor::MagicWand),
             ("paintbrush", Cursor::Paintbrush),
             ("blobBrush", Cursor::BlobBrush),
@@ -553,7 +591,13 @@ mod cursor_tests {
         ] {
             assert_eq!(cursor_at(id, &d, away), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
-            assert_eq!(c.stand_in(), Some(if id == "mesh" { Cursor::PenAdd } else { Cursor::Crosshair }), "{id}");
+            // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it.
+            let stand_in = match id {
+                "mesh" => Some(Cursor::PenAdd),
+                "blobBrush" | "eraser" => None,
+                _ => Some(Cursor::Crosshair),
+            };
+            assert_eq!(c.stand_in(), stand_in, "{id}");
         }
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.

@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Weak};
 
 use vectorcraft_doc::ImageBlob;
+use vectorcraft_doc::cmyk::Inks;
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
 
@@ -33,7 +34,14 @@ fn default_budget() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_budget() -> usize {
-    physical_memory().filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
+    budget_for_reading(physical_memory())
+}
+
+/// The default budget for a reading of the installed memory: [`IMAGE_CACHE_MAX`] when `memory` is
+/// `None` or 0, otherwise [`budget_for`] it.
+#[cfg(not(target_arch = "wasm32"))]
+fn budget_for_reading(memory: Option<u64>) -> usize {
+    memory.filter(|&m| m > 0).map_or(IMAGE_CACHE_MAX, budget_for)
 }
 
 /// The default budget on a machine with `memory` bytes installed: a quarter of it, and at most a
@@ -212,6 +220,8 @@ pub(crate) struct ImageKey {
     pub plates: u64,
     /// Halved this many times ([`half`]).
     pub mip: u8,
+    /// A [`TILE`]-pixel square of the pixels (column, row), when only part of them is made.
+    pub tile: Option<(u16, u16)>,
 }
 
 /// A blob's content key and whether it holds CMYK inks, worked out once per blob allocation, and
@@ -480,21 +490,71 @@ pub fn newly_undecodable<'a>(blobs: impl IntoIterator<Item = &'a ImageBlob>) -> 
 /// `pm` at half the size (rounded up), each pixel the mean of the 2×2 it covers (the last row and
 /// column repeat on odd sizes).
 pub(crate) fn half(pm: &Pixmap) -> Pixmap {
-    let (w, h) = (pm.width() as usize, pm.height() as usize);
+    let (data, ow, oh) = half_with(pm.data(), pm.width().into(), pm.height().into(), PremulRgba8 { r: 0, g: 0, b: 0, a: 0 }, |q| PremulRgba8 {
+        r: mean(q.map(|p| p.r)),
+        g: mean(q.map(|p| p.g)),
+        b: mean(q.map(|p| p.b)),
+        a: mean(q.map(|p| p.a)),
+    });
+    Pixmap::from_parts(data, ow as u16, oh as u16)
+}
+
+/// CMYK image ink amounts `inks` at half the size, as [`half`] halves pixels: each ink the mean
+/// of the 2×2 it covers. `None` only if the halved size were no CMYK image's, which a halved
+/// image's never is.
+pub(crate) fn half_inks(inks: &Inks) -> Option<Inks> {
+    let (w, h) = (usize::try_from(inks.width).ok()?, usize::try_from(inks.height).ok()?);
+    let (data, ow, oh) =
+        half_with(inks.data.as_chunks::<4>().0, w, h, [0; 4], |q| std::array::from_fn(|c| mean(q.map(|p| p.get(c).copied().unwrap_or(0)))));
+    Inks::new(u32::try_from(ow).ok()?, u32::try_from(oh).ok()?, data.into_flattened())
+}
+
+/// `w`×`h` texels `src` at half the size (rounded up, at least 1×1), each the `mean` of the 2×2
+/// it covers (the last row and column repeat on odd sizes; `blank` stands in for texels `src`
+/// is short of), and that size.
+fn half_with<T: Copy>(src: &[T], w: usize, h: usize, blank: T, mean: impl Fn([T; 4]) -> T) -> (Vec<T>, usize, usize) {
     let (ow, oh) = (w.div_ceil(2).max(1), h.div_ceil(2).max(1));
-    let src = pm.data();
-    let at = |x: usize, y: usize| {
-        src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(PremulRgba8 { r: 0, g: 0, b: 0, a: 0 })
-    };
-    let mut data = Vec::with_capacity(ow * oh);
-    for y in 0..oh {
-        for x in 0..ow {
-            let q = [at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)];
-            let mean = |c: fn(&PremulRgba8) -> u8| ((q.iter().map(|p| u32::from(c(p))).sum::<u32>() + 2) / 4) as u8;
-            data.push(PremulRgba8 { r: mean(|p| p.r), g: mean(|p| p.g), b: mean(|p| p.b), a: mean(|p| p.a) });
+    let at = |x: usize, y: usize| src.get(y.min(h.saturating_sub(1)) * w + x.min(w.saturating_sub(1))).copied().unwrap_or(blank);
+    let data = (0..oh)
+        .flat_map(|y| (0..ow).map(move |x| (x, y)))
+        .map(|(x, y)| mean([at(2 * x, 2 * y), at(2 * x + 1, 2 * y), at(2 * x, 2 * y + 1), at(2 * x + 1, 2 * y + 1)]))
+        .collect();
+    (data, ow, oh)
+}
+
+/// The mean of four channel values, rounded to nearest.
+fn mean(v: [u8; 4]) -> u8 {
+    ((v.iter().map(|&c| u32::from(c)).sum::<u32>() + 2) / 4) as u8
+}
+
+/// The side of the squares whose colours are made one by one when only part of an image's
+/// pixels show ([`ImageKey::tile`]): a large photo zoomed in on is separated, colorized or proofed
+/// only where it shows.
+pub(crate) const TILE: u32 = 1024;
+
+/// The `w`×`h` pixels of `pm` from (`x`, `y`). `None` unless they lie inside `pm`.
+pub(crate) fn crop(pm: &Pixmap, x: u32, y: u32, w: u32, h: u32) -> Option<Pixmap> {
+    let (pw, ph) = (u32::from(pm.width()), u32::from(pm.height()));
+    if w == 0 || h == 0 || x.checked_add(w)? > pw || y.checked_add(h)? > ph {
+        return None;
+    }
+    let (stride, x, w) = (pw as usize, x as usize, w as usize);
+    let rows = pm.data().chunks_exact(stride).skip(y as usize).take(h as usize);
+    let data: Vec<PremulRgba8> = rows.flat_map(|row| row.get(x..x + w).unwrap_or_default().iter().copied()).collect();
+    (data.len() == w * h as usize).then(|| Pixmap::from_parts(data, w as u16, h as u16))
+}
+
+/// `src` copied into `dst` with its top left at (`x`, `y`), as far as `dst` reaches.
+pub(crate) fn paste(dst: &mut Pixmap, src: &Pixmap, x: usize, y: usize) {
+    let (dw, sw) = (usize::from(dst.width()), usize::from(src.width()));
+    let dst_rows = dst.data_mut().chunks_exact_mut(dw).skip(y);
+    for (to, from) in dst_rows.zip(src.data().chunks_exact(sw)) {
+        let row = to.get_mut(x..).unwrap_or_default();
+        let n = row.len().min(from.len());
+        if let (Some(to), Some(from)) = (row.get_mut(..n), from.get(..n)) {
+            to.copy_from_slice(from);
         }
     }
-    Pixmap::from_parts(data, ow as u16, oh as u16)
 }
 
 /// Pixels `pm` colorized with `rgb`: each pixel takes the color, as opaque as the pixel is dark
@@ -532,7 +592,7 @@ mod tests {
     use super::*;
 
     fn key(content: &str) -> ImageKey {
-        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0 }
+        ImageKey { content: content.into(), adjust: None, grey: false, tint: None, ink: Ink::Display, luts: (0, 0), plates: 0, mip: 0, tile: None }
     }
 
     #[test]
@@ -582,6 +642,50 @@ mod tests {
         assert_eq!(budget_for(16 << 30), 4 << 30);
         assert_eq!(budget_for(64 << 30), 16 << 30, "no fixed ceiling");
         assert_eq!(budget_for(2 << 30), 512 << 20);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn budget_follows_the_memory_reading() {
+        assert_eq!(budget_for_reading(Some(2 << 30)), 512 << 20);
+        assert_eq!(budget_for_reading(Some(8 << 30)), 2 << 30);
+        assert_eq!(budget_for_reading(Some(64 << 30)), 16 << 30);
+        assert_eq!(budget_for_reading(None), IMAGE_CACHE_MAX, "memory that can't be read");
+        assert_eq!(budget_for_reading(Some(0)), IMAGE_CACHE_MAX, "memory that reads as 0");
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn images_past_the_budget_drop_the_least_recently_used() {
+        // 16 MiB installed (16 GiB scaled down): a 4 MiB budget, room for four 512 × 512 images.
+        let mut s = ImageStore::new(budget_for_reading(Some(16 << 20)));
+        for k in ["a", "b", "c", "d"] {
+            drop(s.insert(key(k), Arc::new(Pixmap::new(512, 512))));
+        }
+        assert_eq!(s.bytes(), 4 << 20, "four images fill the budget exactly");
+        assert!(["a", "b", "c", "d"].iter().all(|k| s.peek(&key(k)).is_some()));
+        drop(s.insert(key("e"), Arc::new(Pixmap::new(512, 512))));
+        assert_eq!(s.bytes(), 4 << 20);
+        assert!(s.peek(&key("a")).is_none(), "the oldest image is dropped");
+        assert!(["b", "c", "d", "e"].iter().all(|k| s.peek(&key(k)).is_some()));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn an_image_larger_than_the_budget_is_kept_only_while_drawn() {
+        // 16 MiB installed: a 4 MiB budget. A 1,100 × 1,000 image takes 4.2 MiB.
+        let budget = budget_for_reading(Some(16 << 20));
+        let mut s = ImageStore::new(budget);
+        assert!(!s.keep(key("big"), Arc::new(Pixmap::new(1100, 1000))), "not kept for a later frame");
+        assert_eq!(s.bytes(), 0);
+        drop(s.insert(key("small"), Arc::new(Pixmap::new(512, 512))));
+        let drawn = s.insert(key("big"), Arc::new(Pixmap::new(1100, 1000)));
+        assert!(s.peek(&key("big")).is_some(), "kept while drawn");
+        assert!(s.peek(&key("small")).is_none(), "the other image is dropped to make room");
+        drop(drawn);
+        s.set_budget(budget);
+        assert!(s.peek(&key("big")).is_none(), "dropped once nothing draws it");
+        assert_eq!(s.bytes(), 0);
     }
 
     #[test]

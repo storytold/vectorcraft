@@ -8,15 +8,22 @@
 
 mod about;
 pub mod action_batch;
+pub mod action_new;
+pub mod action_playback;
 pub mod action_set_options;
+pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
+pub mod brush_delete;
 pub mod brush_options;
+pub mod bullets_numbering;
+pub mod char_style_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
+pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
 pub mod dimension;
@@ -54,16 +61,19 @@ pub mod justification;
 pub mod layer_options;
 pub mod layers_panel_options;
 pub mod liquify;
+pub mod live_paint_bucket;
 pub mod live_paint_gaps;
 pub mod live_paint_selection;
 pub mod missing_fonts;
 pub mod missing_links;
 pub(crate) mod modal;
+pub mod navigator_panel_options;
 pub mod new_brush;
 pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
+pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
 pub(crate) mod path_ops;
@@ -84,8 +94,11 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
-mod revolve;
+pub mod relink;
+pub mod rename_artboards;
+pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
 mod save_changes;
@@ -103,11 +116,14 @@ pub(crate) mod simplify_slider;
 pub mod slices;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
+pub mod symbol_delete;
 pub mod symbol_options;
 pub mod symbolism_options;
+pub mod tate_chu_yoko;
 mod text_export;
 pub mod text_import;
 mod tiff_bmp_tga;
@@ -129,10 +145,11 @@ pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES,
 pub use export_as::open as open_export_as;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
-    KIND as EXPORT_FOR_SCREENS, formats as screen_formats, open_assets as open_export_for_screens_assets, saved_options as screen_saved_options,
-    saved_rows as screen_saved_rows,
+    KIND as EXPORT_FOR_SCREENS, PresetPick as ScreenPresetPick, export_preset as screen_export_preset, formats as screen_formats,
+    import_presets as screen_import_presets, open_assets as open_export_for_screens_assets, preset_list as screen_preset_list,
+    saved_options as screen_saved_options, saved_rows as screen_saved_rows,
 };
-pub(crate) use form::{humanize, number_list_text, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
 pub(crate) use new_document::preset_name;
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub use png_options::open as open_raster_options;
@@ -175,6 +192,8 @@ pub(crate) struct DialogSpec {
     pub confirm: fn(&mut VectorcraftApp, &Dialog) -> DialogResult,
     /// The OK button's label. None: no OK button, Enter does nothing and Cancel reads "Close".
     pub ok: Option<&'static str>,
+    /// The Cancel button's label when it is not "Cancel" ("No"). Only with an `ok`.
+    pub cancel: Option<&'static str>,
     /// An extra button left of Cancel that sets `discard: true` and confirms ("Don't Save").
     pub discard: Option<&'static str>,
     /// A button left of Cancel, as (label, field), that sets `field: true` and confirms, as OK
@@ -199,6 +218,9 @@ pub(crate) struct DialogSpec {
     pub ok_label: Option<fn(&VectorcraftApp) -> &'static str>,
     /// Can OK (or Enter) apply the dialog as it is? None: always. The body says why not.
     pub ok_enabled: Option<fn(&VectorcraftApp, &Dialog) -> bool>,
+    /// What a dialog draws at the left end of its button row, level with the buttons, instead of
+    /// in its body (Transform Each's Preview checkbox).
+    pub footer_left: Option<fn(&mut egui::Ui, &mut Dialog)>,
 }
 
 impl DialogSpec {
@@ -217,6 +239,7 @@ impl DialogSpec {
             Ok(Value::Null)
         },
         ok: Some("OK"),
+        cancel: None,
         discard: None,
         alternate: None,
         reset: None,
@@ -227,6 +250,7 @@ impl DialogSpec {
         passes: |_, _| false,
         ok_label: None,
         ok_enabled: None,
+        footer_left: None,
     };
 
     /// A dialog that draws its own window and confirms through its module.
@@ -286,9 +310,12 @@ registry! {
     Preferences: ["preferences"] => DialogSpec::window(crate::prefs_dialog::show, |app, _| crate::prefs_dialog::confirm(app)),
     Shortcuts: ["shortcuts"] => DialogSpec::window(crate::shortcut_editor::show, |app, _| crate::shortcut_editor::confirm(app)),
     Workspaces: ["newWorkspace", "manageWorkspaces"] => DialogSpec::window(crate::workspaces::show, |app, _| crate::workspaces::confirm(app)),
+    NewToolbar: [crate::custom_toolbars::KIND] => DialogSpec::window(crate::custom_toolbars::show_dialog, |app, _| crate::custom_toolbars::confirm(app)),
+    ManageToolbars: [crate::custom_toolbars::MANAGE] => DialogSpec::window(crate::custom_toolbars::show_manage, |app, _| crate::custom_toolbars::confirm_manage(app)),
     FindFont: ["findFont"] => DialogSpec::window(crate::find_font::show, |app, _| crate::find_font::confirm(app)),
     SwatchOptions: [swatch_options::KIND] => swatch_options::SPEC,
     Confirm: [confirm::KIND] => confirm::SPEC,
+    BrushDelete: [brush_delete::KIND] => brush_delete::SPEC,
     Message: [confirm::MESSAGE] => confirm::MESSAGE_SPEC,
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
@@ -300,6 +327,7 @@ registry! {
     GradientStop: ["gradientStop"] => gradient_stop::SPEC,
     ColorPicker: [color_picker::KIND] => color_picker::SPEC,
     GraphicStyleOptions: [graphic_style_options::KIND] => graphic_style_options::SPEC,
+    CharStyleOptions: [char_style_options::KIND] => char_style_options::SPEC,
     NewTextStyle: [new_text_style::KIND] => new_text_style::SPEC,
     EffectExists: [effect::EXISTS] => effect::EXISTS_SPEC,
     ColorGuideOptions: [color_guide_options::KIND] => color_guide_options::SPEC,
@@ -321,9 +349,13 @@ registry! {
     Corners: [corners::KIND] => corners::SPEC,
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
+    BulletsAndNumbering: [bullets_numbering::KIND] => bullets_numbering::SPEC,
+    TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
+    SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
@@ -344,13 +376,20 @@ registry! {
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
+    Relink: [relink::KIND] => relink::SPEC,
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
+    ActionNew: [action_new::KIND] => action_new::SPEC,
+    ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
+    ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
+    ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
+    SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
@@ -369,14 +408,18 @@ registry! {
     LiquifyOptions: [liquify::KIND] => liquify::SPEC,
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
+    ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
+    DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,
+    DeleteUsedSymbol: [symbol_delete::USED] => symbol_delete::USED_SPEC,
     SymbolismOptions: [symbolism_options::KIND] => symbolism_options::SPEC,
     PerspectiveGridPresets: [perspective_presets::KIND] => perspective_presets::SPEC,
     PerspectiveGridOptions: [perspective_options::KIND] => perspective_options::SPEC,
     BlendOptions: [blend_options::KIND] => blend_options::SPEC,
     LivePaintGaps: [live_paint_gaps::KIND] => live_paint_gaps::SPEC,
     LivePaintSelectionOptions: [live_paint_selection::KIND] => live_paint_selection::SPEC,
+    LivePaintBucketOptions: [live_paint_bucket::KIND] => live_paint_bucket::SPEC,
     BrushOptions: [brush_options::KIND] => brush_options::SPEC,
     NewBrush: [new_brush::KIND] => new_brush::SPEC,
     EditSelection: [edit_selection::KIND] => edit_selection::SPEC,
@@ -384,10 +427,19 @@ registry! {
     PerspectivePlane: [perspective_plane::KIND] => perspective_plane::SPEC,
     LayerOptions: [layer_options::KIND] => layer_options::SPEC,
     LayersPanelOptions: [layers_panel_options::KIND] => layers_panel_options::SPEC,
+    NavigatorPanelOptions: [navigator_panel_options::KIND] => navigator_panel_options::SPEC,
     PathfinderOptions: [pathfinder_options::KIND] => pathfinder_options::SPEC,
     RearrangeArtboards: [rearrange_artboards::KIND] => rearrange_artboards::SPEC,
+    RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
-    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE] => crate::addons::arrange::SPEC,
+    DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
+    NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
+    SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
+    TextTweaker: [crate::addons::typetools::KIND] => crate::addons::typetools::SPEC,
+    SelectByArtboards: [crate::addons::select::KIND] => crate::addons::select::SPEC,
+    SelectByLinkStatus: [crate::addons::select::link_status::KIND] => crate::addons::select::link_status::SPEC,
+    ArrangeTools: [crate::addons::arrange::GRID, crate::addons::arrange::REPLACE, crate::addons::arrange::SIZE, crate::addons::arrange::OPACITY, crate::addons::arrange::SORT] => crate::addons::arrange::SPEC,
     ShortcutImport: [shortcut_import::KIND] => DialogSpec::window(shortcut_import::show, shortcut_import::confirm),
 }
 
@@ -397,6 +449,7 @@ pub fn button_labels() -> Vec<&'static str> {
     let mut v = vec!["Cancel", "Close"];
     for spec in std::iter::once(&DialogSpec::FORM).chain(DialogKind::ALL.iter().map(|k| k.spec())) {
         v.extend(spec.ok);
+        v.extend(spec.cancel);
         v.extend(spec.discard);
         v.extend(spec.alternate.map(|(label, _)| label));
         v.extend(spec.reset.map(|_| "Reset"));
@@ -426,12 +479,26 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 }
 
 /// Set `field` of `d` to `value` for `ui.dialog.set`, as the dialog's own control for it does: a
-/// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is.
+/// Pattern Brush Options corner tile set this way is saved by OK, as one chosen from its menu is,
+/// an Edit Data Set field set this way is no longer the row's empty text value, and a Layer
+/// Options setting set this way for several rows is sent to every row (Template also sets Lock
+/// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
+/// one picked from its menu does, and the preset it shows follows the DXF options set this way.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
     }
+    if d.kind == variables::KIND {
+        variables::note_set(d, &field);
+    }
+    if d.kind == layer_options::KIND {
+        layer_options::note_set(d, &field, &value);
+    }
+    let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);
+    if let Some(field) = dxf {
+        dxf_options::note_set(d, &field);
+    }
 }
 
 /// The fields `ui.dialog.set` can set on `d`, sorted, without the `__` ones: those it holds,
@@ -463,11 +530,39 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
     d.fields.get(PARENT).and_then(|v| serde::Deserialize::deserialize(v).ok())
 }
 
+/// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
+/// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
+/// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
+/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
+pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
+        transform_each::field_set(app, field, old);
+        return Ok(());
+    }
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
+    match field {
+        "exportPreset" => export_for_screens::preset_set(app),
+        "subfolders" | "subfolderBy" => {
+            if d.fields.get(field) != old {
+                d.fields.remove("__itemFolders");
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
     missing_fonts::requeue_replaced(app);
     if let Some(d) = app.ui.dialog.take() {
+        if d.kind == swatch_conflict::KIND {
+            crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == safe_mode::STOPPED {
+            safe_mode::cancel_stopped(app);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -509,12 +604,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
-/// (one dialog at a time).
+/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
+    crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
+    safe_mode::reopen(app);
     missing_fonts::open_next(app);
 }
 
@@ -533,6 +631,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
     confirm::show_waiting(app);
@@ -638,7 +737,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             let label = if resets {
                 "Reset"
             } else if spec.ok.is_some() {
-                "Cancel"
+                spec.cancel.unwrap_or("Cancel")
             } else {
                 "Close"
             };
@@ -657,10 +756,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ui.add_space(28.0);
                 discard = widgets::secondary_button(ui, label).clicked();
             }
+            // The row runs right to left: a left-to-right layout in the room left of the buttons
+            // puts its control at the row's left end.
+            if let Some(left) = spec.footer_left {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| left(ui, &mut d));
+            }
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
-    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
     if discard {

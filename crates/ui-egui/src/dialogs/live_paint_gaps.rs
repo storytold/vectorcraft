@@ -15,7 +15,7 @@ use vectorcraft_doc::{GapSize, LAYER_COLORS};
 use vectorcraft_geom::{BezPath, Point};
 use vectorcraft_tools::Overlay;
 
-use super::tile_edge_color::resolve;
+use super::tile_edge_color::{checked, has_alpha, resolve};
 use super::{DialogSpec, form};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
@@ -116,7 +116,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     });
     ui.add_space(6.0);
     form::check(ui, d, "closeGaps", tl!("Close Gaps With Paths"));
-    let p = params(d);
+    let mut p = params(d);
+    // OK refuses a color with an alpha part, so the preview leaves each group's own color.
+    if has_alpha(&d.str("color")) {
+        p["color"] = Value::Null;
+    }
     if let Some(r) = form::preview_result(app, ui, d, "Gap Options", CMD, p) {
         d.fields.insert(GAPS.into(), r["gaps"].clone());
     }
@@ -127,6 +131,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    checked(&d.str("color"))?;
     form::commit_preview(app, CMD, params(d))
 }
 
@@ -134,7 +139,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 /// off or another dialog is open).
 pub(crate) fn overlays(app: &VectorcraftApp) -> Vec<Overlay> {
     let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == KIND && d.bool("preview")) else { return vec![] };
-    let [r, g, b, _] = resolve(&d.str("color")).unwrap_or(Color::BLACK).to_rgba8(1.0);
+    let [r, g, b, _] = checked(&d.str("color")).unwrap_or(Color::BLACK).to_rgba8(1.0);
     let gaps = d.fields.get(GAPS).and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
     gaps.iter()
         .filter_map(|gap| {
@@ -256,5 +261,58 @@ mod tests {
         app.run("ui.livePaintGapOptions", json!({})).unwrap();
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.str("size"), d.f64("custom", 0.0)), ("large".to_string(), GapSize::LARGE));
+    }
+
+    /// A Gap Preview Color with an alpha part is refused and leaves the group's options as they
+    /// were; `#rrggbb` still sets them.
+    #[test]
+    fn a_color_with_an_alpha_part_is_refused() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let g = app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!("#ff000080"));
+        d.fields.insert("detect".into(), json!(true));
+        let depth = app.session.doc().unwrap().history.undo.len();
+        let err = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
+        assert!(app.ui.dialog.is_some(), "the dialog stays open");
+        assert_eq!((options(&app, g), app.session.doc().unwrap().history.undo.len()), (GapOptions::default(), depth), "nothing changes");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(options(&app, g).color, [0xff, 0, 0]);
+    }
+
+    /// With Preview on, a Gap Preview Color with an alpha part is not previewed: the group keeps
+    /// its own color, the gaps draw in black, OK refuses the color and Cancel rolls the preview back.
+    #[test]
+    fn a_color_with_an_alpha_part_is_not_previewed() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        // An open path round a square, its end 2 pt short of its start.
+        let anchors = [(0, 0), (100, 0), (100, 100), (0, 100), (0, 2)].map(|(x, y)| json!({"x": x, "y": y}));
+        let p = app.run("path.create", json!({ "anchors": anchors })).unwrap();
+        app.run("select.set", json!({"ids": [p["id"]]})).unwrap();
+        let g = app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap();
+        let own = options(&app, g).color;
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("preview".into(), json!(true));
+        d.fields.insert("detect".into(), json!(true));
+        d.fields.insert("color".into(), json!("#ff000080"));
+        let depth = app.session.doc().unwrap().history.undo.len();
+        frame(&mut app);
+        assert_eq!((options(&app, g).detect, options(&app, g).color), (true, own), "the group keeps its own color");
+        let shown = overlays(&app);
+        assert!(matches!(&shown[..], [Overlay::Path { color: [0, 0, 0], .. }]), "{shown:?}");
+        let err = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert_eq!(err, "`#ff000080` is not a colour (#rrggbb or a preset name)");
+        assert!(app.ui.dialog.is_some(), "the dialog stays open");
+        crate::dialogs::cancel(&mut app);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        assert_eq!((options(&app, g), undo), (GapOptions::default(), depth), "Cancel rolls the preview back");
     }
 }

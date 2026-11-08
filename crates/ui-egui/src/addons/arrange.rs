@@ -1,7 +1,7 @@
 //! Arrange Tools in the interface: its submenu (Object › Plug-ins › Arrange Tools); the dialogs of
-//! Arrange in Grid, Replace with Top Object and Set Size of Each, which preview on the canvas and
-//! run their `addon.arrange.*` command on OK; and Zoom to Selection ([`ZOOM`]), which fits the
-//! active view to the selection.
+//! Arrange in Grid, Replace with Top Object, Set Size of Each, Randomize Opacity and Sort Objects,
+//! which preview on the canvas and run their `addon.arrange.*` command on OK; Group Overlapping
+//! Objects; and Zoom to Selection ([`ZOOM`]), which fits the active view to the selection.
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -18,15 +18,21 @@ pub const ZOOM: &str = "addon.arrange.zoomSelection";
 pub const GRID: &str = "arrangeGrid";
 pub const REPLACE: &str = "arrangeReplace";
 pub const SIZE: &str = "arrangeSize";
+pub const OPACITY: &str = "arrangeOpacity";
+pub const SORT: &str = "arrangeSort";
 /// Each dialog's kind, command and heading.
-const DIALOGS: [(&str, &str, &str); 3] = [
+const DIALOGS: [(&str, &str, &str); 5] = [
     (GRID, "addon.arrange.grid", "Arrange in Grid"),
     (REPLACE, "addon.arrange.replace", "Replace with Top Object"),
     (SIZE, "addon.arrange.size", "Set Size of Each"),
+    (OPACITY, "addon.arrange.randomizeOpacity", "Randomize Opacity"),
+    (SORT, "addon.arrange.sort", "Sort Objects"),
 ];
 /// The widths and heights Set Size of Each takes (pt), and the gaps Arrange in Grid takes.
 const SIZES: std::ops::RangeInclusive<f64> = 0.001..=1e6;
 const GAPS: std::ops::RangeInclusive<f64> = -1e6..=1e6;
+/// The seeds the Randomize Opacity dialog offers.
+const SEEDS: u64 = 1_000_000;
 const LABEL_W: f32 = 110.0;
 const FIELD_W: f32 = 90.0;
 
@@ -38,6 +44,9 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Swap Objects and Sizes", "addon.arrange.swap", json!({ "size": true })),
         Item::Cmd("Replace with Top Object…", "addon.arrange.replace", Value::Null),
         Item::Cmd("Set Size of Each…", "addon.arrange.size", Value::Null),
+        Item::Cmd("Group Overlapping Objects", "addon.arrange.groupOverlapping", json!({})),
+        Item::Cmd("Randomize Opacity…", "addon.arrange.randomizeOpacity", Value::Null),
+        Item::Cmd("Sort Objects…", "addon.arrange.sort", Value::Null),
         Item::Sep,
         Item::Cmd("Zoom to Selection", ZOOM, json!({})),
     ]
@@ -56,6 +65,13 @@ pub(crate) fn dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static str, Va
             "gapX": 10, "gapY": 10, "centerOnArtboard": false,
         }),
         REPLACE => json!({ "fit": "keep", "keep": false, "scaleStrokes": strokes }),
+        // A new seed each time the document has changed, so running it again varies the result.
+        OPACITY => json!({ "min": 30, "max": 100, "seed": st.revision % SEEDS }),
+        // The random order's seed (not shown): new whenever the document has changed, so each run
+        // shuffles anew while Preview and OK agree.
+        SORT => json!({
+            "by": "area", "apply": "stacking", "order": "ascending", "distribute": false, "seed": st.revision % SEEDS, "scaleStrokes": strokes,
+        }),
         // The first selected object's size, as the command measures it (a side it lacks: the least).
         _ => {
             let b = st.selection.objects.first().and_then(|id| app.session.transform_box(&[*id])).map_or((100.0, 100.0), |b| {
@@ -75,7 +91,11 @@ pub(crate) const SPEC: DialogSpec = DialogSpec {
     confirm,
     preview: true,
     min_width: 320.0,
-    ok_enabled: Some(|_, d| d.kind != SIZE || d.bool("__width") || d.bool("__height")),
+    ok_enabled: Some(|_, d| match d.kind.as_str() {
+        SIZE => d.bool("__width") || d.bool("__height"),
+        OPACITY => d.f64("min", 0.0) <= d.f64("max", 100.0),
+        _ => true,
+    }),
     ..DialogSpec::FORM
 };
 
@@ -124,6 +144,41 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             form::choice(ui, d, "fit", tl!("Size:"), widths, &fits);
             form::check(ui, d, "keep", tl!("Keep Original"));
             form::check(ui, d, "scaleStrokes", tl!("Scale Strokes & Effects"));
+        }
+        OPACITY => {
+            for (key, label) in [("min", tl!("Minimum:")), ("max", tl!("Maximum:"))] {
+                widgets::label_row(ui, label, LABEL_W, |ui| {
+                    if let Some(v) = widgets::range_field(ui, ("arrange", key), d.f64(key, 0.0), 0.0..=100.0, "%", 0, FIELD_W) {
+                        d.fields.insert(key.into(), json!(v));
+                    }
+                });
+            }
+            widgets::label_row(ui, tl!("Seed:"), LABEL_W, |ui| {
+                if let Some(v) = widgets::range_field(ui, ("arrange", "seed"), d.f64("seed", 0.0), 0.0..=(SEEDS - 1) as f64, "", 0, FIELD_W) {
+                    d.fields.insert("seed".into(), json!(v as u64));
+                }
+            });
+        }
+        SORT => {
+            let attributes = [
+                ("width", "Width"),
+                ("height", "Height"),
+                ("area", "Area"),
+                ("x", "X Position"),
+                ("y", "Y Position"),
+                ("opacity", "Opacity"),
+                ("stacking", "Stacking Order"),
+            ];
+            form::choice(ui, d, "by", tl!("Sort By:"), widths, &attributes);
+            form::choice(ui, d, "apply", tl!("Apply To:"), widths, &attributes);
+            let orders = [("ascending", "Small to Large"), ("descending", "Large to Small"), ("random", "Random")];
+            form::choice(ui, d, "order", tl!("Order:"), widths, &orders);
+            // Stacking order only trades places; only sizes scale strokes.
+            let apply = d.str("apply");
+            ui.add_enabled_ui(apply != "stacking", |ui| form::check(ui, d, "distribute", tl!("Distribute Evenly")));
+            ui.add_enabled_ui(matches!(apply.as_str(), "width" | "height" | "area"), |ui| {
+                form::check(ui, d, "scaleStrokes", tl!("Scale Strokes & Effects"));
+            });
         }
         _ => {
             egui::Grid::new("arrange-size").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {

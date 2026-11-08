@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
+use vectorcraft_doc::links::missing_placeholder;
 
 use super::{Edits, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
@@ -60,22 +61,6 @@ pub(in crate::import) struct Linked {
     pub link: LinkInfo,
     /// The file wasn't read: the bytes are a placeholder.
     pub missing: bool,
-}
-
-/// The side of the placeholder image, in pixels.
-const MARKER: u32 = 64;
-
-/// The placeholder of a missing linked image: a light tile, crossed out (drawn here).
-fn marker() -> Option<Vec<u8>> {
-    let last = MARKER - 1;
-    let img = image::RgbaImage::from_fn(MARKER, MARKER, |x, y| {
-        let edge = x == 0 || y == 0 || x == last || y == last;
-        let cross = x.abs_diff(y) <= 1 || (x + y).abs_diff(last) <= 1;
-        image::Rgba(if edge || cross { [200, 60, 60, 255] } else { [236, 236, 236, 255] })
-    });
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
-    Some(png)
 }
 
 /// `s` with `%XX` escapes decoded (an href is a URL).
@@ -159,7 +144,7 @@ impl Files {
                 };
                 let source = source.or_else(|why| {
                     warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
-                    let bytes = Arc::new(placeholder.get_or_insert_with(marker).clone().ok_or(why)?);
+                    let bytes = Arc::new(placeholder.get_or_insert_with(missing_placeholder).clone().ok_or(why)?);
                     files.links.insert(key(&bytes), Linked { link: LinkInfo::new(path), missing: true });
                     Ok::<_, &str>(Source::Raster(ImageKind::PNG, bytes))
                 });
@@ -478,11 +463,5 @@ mod tests {
         };
         assert!(!read("2147483647"));
         assert!(read("1"));
-    }
-
-    #[test]
-    fn the_placeholder_is_a_png() {
-        let png = marker().unwrap();
-        assert_eq!(image::load_from_memory(&png).unwrap().width(), MARKER);
     }
 }
