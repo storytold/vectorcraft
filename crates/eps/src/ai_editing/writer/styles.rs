@@ -18,8 +18,7 @@ use super::{Writer, Xy, blend_code, compound_path, hide};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str =
-    "on a large canvas, no art styles are written: objects with live effects keep only their geometry effects in the editing data for other apps";
+pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, no art styles or graphic styles are written: objects with live effects are written with their geometry effects applied to the artwork, where they can no longer be edited, and their other effects are left out of the editing data for other apps";
 pub(in crate::ai_editing) const GRAPHIC_STYLES: &str = "graphic styles and links to them are left out of the editing data for other apps";
 
 /// Does `doc` have graphic styles other than a new document's, or an object in its layers, opacity
