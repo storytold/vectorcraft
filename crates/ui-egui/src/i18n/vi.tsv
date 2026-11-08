@@ -963,6 +963,9 @@ font-technology	Variable	Biến thiên
 	Do Not Move	Không di chuyển
 	Do you want to save the changes you made to “{name}”?	Bạn có muốn lưu các thay đổi đã thực hiện với “{name}”?
 	Dock Panel	Neo bảng
+	Dock to Top	Neo lên trên
+	Dock to Bottom	Neo xuống dưới
+	Dock Control Bar	Neo thanh điều khiển
 	Document	Tài liệu
 	Document Color Mode	Chế độ màu tài liệu
 	Document Info	Thông tin tài liệu

@@ -819,6 +819,9 @@
 	Put back in the toolbar	Vrátit do panelu nástrojů
 	Float Panel	Plovoucí panel
 	Dock Panel	Ukotvit panel
+	Dock to Top	Ukotvit nahoru
+	Dock to Bottom	Ukotvit dolů
+	Dock Control Bar	Ukotvit ovládací panel
 	Float Tool Group	Plovoucí skupina nástrojů
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.

@@ -448,6 +448,18 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "window.control" => flag(&mut app.ui.control_bar),
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        "window.control.dock" => {
+            let key = "edge";
+            let edges = crate::chrome::CONTROL_BAR_EDGES;
+            match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
+                Some(i) => {
+                    app.ui.control_bar_bottom = i == 1;
+                    Ok(json!({ key: edges[i] }))
+                }
+                None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
+            }
+        }
         "window.toolbar" => flag(&mut app.ui.toolbar),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
