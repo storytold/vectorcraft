@@ -120,7 +120,7 @@ const ONE_FILE_WARNING: &str = "each data set saves over the same file, which ke
 /// `path`; a Save step without a `path` when the document has a file of its own (saved, and not
 /// converted from an older version or restored by Data Recovery) and the step gives no `format` or
 /// the document's own; an Export for Screens step whose `folder`, given or from its
-/// `exportPreset`, names a folder, whatever the overrides.
+/// `exportPreset`, names a folder, when Override Export does not give each data set its own folder.
 /// Other steps return their data instead of writing a file.
 pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
     if p.get("source").and_then(Value::as_str) != Some("datasets") {
@@ -150,8 +150,8 @@ pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
             "document.export" | "document.exportSelection" => !export && path,
             // The batch does not point these exports into `destinationFolder`.
             "document.exportPdf" | "document.exportEps" | "document.exportDxf" | "document.exportForWeb" | "document.exportForOffice" => path,
-            // Override Export sets `path`, which Export for Screens does not read: its `folder` stays.
-            "document.exportForScreens" => super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
+            // Override Export gives Export for Screens a folder for each data set; otherwise its `folder` stays.
+            "document.exportForScreens" => !export && super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
             _ => false,
         }
     })
@@ -1965,7 +1965,15 @@ mod tests {
         assert!(!batch_overwrites_one_file(&saved, &save(Some("svg"))), "another format without a path: the data comes back");
         assert!(!with(json!({"commands": [{"command": "file.saveCopy", "params": {"folder": "/x"}}]})), "a folder alone: the data comes back");
         let screens = json!([{"command": "document.exportForScreens", "params": {"folder": "/x"}}]);
-        assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "commands": screens})), "Override Export leaves its folder");
+        assert!(
+            !with(json!({"destination": "folder", "destinationFolder": "/out", "commands": screens})),
+            "Override Export gives each data set its own folder"
+        );
+        assert!(
+            with(json!({"destination": "folder", "destinationFolder": "/out", "overrideExport": false, "commands": screens})),
+            "without Override Export the step keeps its folder"
+        );
+        assert!(with(json!({"commands": screens})), "without a destination folder the step keeps its folder");
         assert!(!with(json!({"commands": [{"command": "document.exportForScreens", "params": {}}]})));
         let preset = json!([{"command": "document.exportForScreens", "params": {"exportPreset": "Logo Package"}}]);
         assert!(!with(json!({"commands": preset})), "a preset without a folder: the data comes back");
