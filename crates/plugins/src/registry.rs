@@ -45,11 +45,13 @@ pub fn approved(plugin: &Plugin) -> bool {
     !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.permissions()))
 }
 
-/// Installs `plugin`, replacing one with the same id.
+/// Installs `plugin`, replacing one with the same id. The revision changes while the set is locked,
+/// so a caller that reads the new [`revision`] and then [`list`]s always finds the plug-in.
 pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     let p = Arc::new(plugin);
-    PLUGINS.write().unwrap_or_else(|e| e.into_inner()).insert(p.id().to_string(), p.clone());
+    plugins.insert(p.id().to_string(), p.clone());
     p
 }
 

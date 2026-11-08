@@ -324,6 +324,11 @@ pub fn command_specs() -> Vec<&'static CommandSpec> {
     }
     let specs: Vec<&'static CommandSpec> =
         registry::list().iter().flat_map(|p| p.manifest().commands.iter().map(|c| spec_of(p, c)).collect::<Vec<_>>()).collect();
+    // When a plug-in was installed or removed during the listing, the list may not match
+    // `revision`. It is returned without being cached, and the next call lists again.
+    if registry::revision() != revision {
+        return specs;
+    }
     let mut l = LISTED.write().unwrap_or_else(|e| e.into_inner());
     if l.specs.len() != specs.len() || l.specs.iter().zip(&specs).any(|(a, b)| !std::ptr::eq(*a, *b)) {
         l.generation += 1;
