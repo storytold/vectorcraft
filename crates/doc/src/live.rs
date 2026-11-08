@@ -53,8 +53,9 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
-    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, envelope_bounds, envelope_content_boxes,
-    envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin, smooth_handles,
+    EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
+    envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
+    set_type_ink, smooth_handles,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{

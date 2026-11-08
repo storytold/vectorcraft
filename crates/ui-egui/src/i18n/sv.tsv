@@ -2644,6 +2644,14 @@ digits	Malayalam	Malayalam
 	Relink	Länka om
 	Relink Linked Files to the Document	Länka om länkade filer till dokumentet
 	Relink to Folder…	Länka om till mapp…
+	Each Link Separately	Varje länk separat
+	Selected Instances	Markerade instanser
+	All Instances	Alla instanser
+	Missing Links from This Folder	Saknade länkar från den här mappen
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} är inte each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each och paths hör ihop: paths listar poster med ids och path i stället för ids, path och folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths behöver path och ids (objekt-id:n som ingen annan post har)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tar path: de andra saknade länkarna söks i den filens mapp
 	Relink…	Länka om…
 	Find Linked Files	Sök länkade filer
 	Find Linked Files in Folder…	Sök länkade filer i mapp…
@@ -2761,6 +2769,7 @@ digits	Malayalam	Malayalam
 	Rotate Tool	Rotationsverktyg
 	Rotate View Tool	Verktyget Rotera vy
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
+	Hold a Tool Shortcut to Use the Tool Temporarily	Håll ned ett verktygs kortkommando för att använda verktyget tillfälligt
 	Rotate…	Rotera…
 	Rotation	Rotation
 	Roughen…	Ojämn…
@@ -5836,6 +5845,33 @@ axis	Y Axis	Y-axel
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt körs medan dokumentet ritas, så den kan inte vara `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ett exportinsticksprogram får alltid en exports budget: utelämna `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	”{_1}” begär en stor beräkningsbudget (varje körning upp till {minutes} minuter och {times} gånger de vanliga instruktionerna): installera det med `allowHeavy: true` när användaren har godkänt
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
+	ID: {id}	ID: {id}
+	Version: {version}	Version: {version}
+	File SHA-256: {hash}	Filens SHA-256: {hash}
+	Read the objects it is given	Läsa objekten den får
+	Change, add and delete objects in the document	Ändra, lägga till och ta bort objekt i dokumentet
+	Keep data of its own with the document	Spara egna data med dokumentet
+	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
+	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
+	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `progress` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera `env.vc_progress`, `env.vc_cancelled` och `env.vc_log` (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
+@msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ett plugin av typen `{_1}` behöver behörigheten `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	högst {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	behörigheten `{shown}` gäller inte ett plugin av typen `{_1}`
+@msg	permission `{shown}` is listed twice	behörigheten `{shown}` står två gånger
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	behörigheten `{shown}` är reserverad för ett senare plugin-API; den här värden beviljar den inte
+@msg	unknown permission `{shown}`	okänd behörighet `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” begär behörigheterna {asked}: installera det med en `grant` som listar dem när användaren har godkänt
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” beviljades inte `{p}`, som dess utdata behöver: ingenting ändrades
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulen har inte den SHA-256 som `hash` anger: ingenting installerades
 # Actions panel: action sets (#3712).
 	New Set…	Ny uppsättning…
 	New Set	Ny uppsättning
@@ -7737,7 +7773,6 @@ digits	Hindi	Hindi
 @msg	the library has no item `{other}`	biblioteket har inget objekt `{other}`
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
-@msg	the module imports `{_1}.{_2}`, but plug-ins get no host imports (no WASI, files or network)	modulen importerar `{_1}.{_2}`, men plugins får inga värdimporter (ingen WASI, inga filer eller nätverk)
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt

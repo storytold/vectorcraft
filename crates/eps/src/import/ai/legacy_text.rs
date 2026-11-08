@@ -3,8 +3,8 @@
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
 //! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`, and §15.3.4's writing direction `TV`,
-//! Roman character rotation `Tv` and Kumi blocks `Ty TY`), the paint style, and the characters (`Tx`, `Tj`,
-//! overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
+//! Roman character rotation `Tv`, Kumi blocks `Ty TY` and binding punctuation `Tg`), the paint
+//! style, and the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
 //! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use craft_pdf::interpret::hayro_cmap::{BfString, CMap, CMapName, load_embedded};
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{Burasagari, CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
 use vectorcraft_geom::AnchorKind;
 
 use super::super::obj::V;
@@ -868,6 +868,19 @@ impl Reader<'_> {
             "Tq" => {
                 if let Some(on) = n0.and_then(flag) {
                     st.para.roman_hanging = on;
+                }
+            }
+            // `bindrepeat Tg` (§15.3.4): 1 and 3 turn binding punctuation on, and 0 and 2 turn it
+            // off. VectorCraft's own mapping opens it on as Burasagari's Force setting and off as no
+            // Burasagari. The repeat character (2 and 3) is not kept.
+            "Tg" => {
+                let burasagari = match n0 {
+                    Some(1.0 | 3.0) => Some(Burasagari::Forced),
+                    Some(0.0 | 2.0) => Some(Burasagari::None),
+                    _ => None,
+                };
+                if let Some(b) = burasagari {
+                    st.para.burasagari = b;
                 }
             }
             // `hyphenate limitHyphLines minLeadHyphen minTailHyphen maxHyphLines Th`, kept to the

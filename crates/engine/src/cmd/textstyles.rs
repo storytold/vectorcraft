@@ -12,7 +12,7 @@ use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, Te
 
 use super::clipboard::resources::import_text_styles;
 use super::typecmd::{refresh_bounds, text_targets};
-use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
+use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, index, object_param, ok, str_param};
 
 pub const NORMAL_CHAR: &str = "[Normal Character Style]";
 pub const NORMAL_PARA: &str = "[Normal Paragraph Style]";
@@ -439,10 +439,11 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
 
 /// The selected text's attributes: the first selected character for a nonempty range,
 /// the insertion style at a lone `start`, or the first selected text object's first run.
-/// Paragraph capture always samples the paragraph at `start`.
-fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<String, Value>>> {
+/// Paragraph capture always samples the paragraph at `start`. An `id` that isn't an object id is
+/// an error under the `verb` command of `kind`.
+fn selection_attrs(s: &Session, p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, Value>>> {
     let d = &s.doc()?.doc;
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", &kind.cmd(verb))? {
         Some(id) => Some(id),
         None => text_targets(s, &json!({}), "").ok().and_then(|v| v.first().copied()),
     };
@@ -464,14 +465,14 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
 /// The selected text's character (`para`: paragraph) attributes, every one of them: what a
 /// library keeps of a text style. `None` without text selected.
 pub(crate) fn selected_style_attrs(s: &Session, para: bool) -> Result<Option<Map<String, Value>>> {
-    selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char })
+    selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char }, "new")
 }
 
 /// The attributes `charStyle.new` (`para`: `paraStyle.new`) would give a style made now from
 /// `target` (its `id`, `start` and `end`; empty for the selected objects). `None` without text
 /// there.
 pub fn target_style_attrs(s: &Session, target: &Value, para: bool) -> Option<Map<String, Value>> {
-    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }).ok().flatten()
+    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }, "new").ok().flatten()
 }
 
 /// The attributes a new character or paragraph style receives when no text is selected.
@@ -644,7 +645,7 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 /// (`charStyle.duplicate`), which `attrs` keeps as [`attrs_param`] keeps the target text's.
 fn new_from(s: &mut Session, p: &Value, kind: Kind, copied: Option<&Map<String, Value>>) -> Result<Value> {
     let c = kind.cmd("new");
-    let target = selection_attrs(s, p, kind)?;
+    let target = selection_attrs(s, p, kind, "new")?;
     let attrs = match attrs_param(&s.doc()?.doc, p, kind, "new", copied.or(target.as_ref()))? {
         Some(a) => a,
         None => match target {
@@ -685,8 +686,9 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let style_name = (name != kind.normal()).then(|| name.clone());
     // A Type tool range or whole text objects.
     let text_range = super::typecmd::TextRange::parse(p, &c)?;
-    let range = id_param(p, "id").filter(|_| text_range.is_some());
-    let ids = match range.or_else(|| id_param(p, "id")) {
+    let given = object_param(p, "id", &c)?;
+    let range = given.filter(|_| text_range.is_some());
+    let ids = match given {
         Some(id) => vec![id],
         None => text_targets(s, p, &c)?,
     };
@@ -767,7 +769,7 @@ fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, V
 
 fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "redefine")?.to_string();
-    let attrs = selection_attrs(s, p, kind)?.ok_or_else(|| bad(&kind.cmd("redefine"), "select text to redefine the style from"))?;
+    let attrs = selection_attrs(s, p, kind, "redefine")?.ok_or_else(|| bad(&kind.cmd("redefine"), "select text to redefine the style from"))?;
     redefine_to(s, kind, &name, attrs, "redefine")
 }
 

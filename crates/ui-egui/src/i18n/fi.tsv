@@ -1295,6 +1295,7 @@ lighting	Light	Valo
 	Rotate Tool	Kiertotyökalu
 	Rotate View Tool	Näkymän kiertotyökalu
 	Trackpad Gesture to Rotate View	Kierrä näkymää ohjauslevyn eleellä
+	Hold a Tool Shortcut to Use the Tool Temporarily	Käytä työkalua tilapäisesti pitämällä sen pikanäppäintä painettuna
 	Rotate View	Kierrä näkymää
 	Rounded Rectangle Tool	Pyöristetyn suorakulmion työkalu
 	Scale Tool	Skaalaustyökalu
@@ -2053,6 +2054,14 @@ digits	Malayalam	Malajalam
 	Location	Sijainti
 	No images	Ei kuvia
 	Relink to Folder…	Linkitä uudelleen kansioon…
+	Each Link Separately	Jokainen linkki erikseen
+	Selected Instances	Valitut esiintymät
+	All Instances	Kaikki esiintymät
+	Missing Links from This Folder	Puuttuvat linkit tästä kansiosta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} ei ole each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each ja paths kuuluvat yhteen: paths luettelee merkinnät, joissa on ids ja path, ids:n, path:n ja folder:n sijaan
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-merkintä {i} tarvitsee path- ja ids-arvot (objektitunnukset, joita millään muulla merkinnällä ei ole)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder ottaa path-arvon: muita puuttuvia linkkejä haetaan tämän tiedoston kansiosta
 	Show Missing	Näytä puuttuvat
 	Sort by Status	Lajittele tilan mukaan
 	Clear Overrides	Tyhjennä ohitukset
@@ -5843,6 +5852,33 @@ axis	Y Axis	Y-akseli
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): asenna se asetuksella `allowHeavy: true`, kun käyttäjä hyväksyy
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Asennetaanko ”{name}”, joka pyytää näitä käyttöoikeuksia?
+	ID: {id}	Tunnus: {id}
+	Version: {version}	Versio: {version}
+	File SHA-256: {hash}	Tiedoston SHA-256: {hash}
+	Read the objects it is given	Lukea sille annetut objektit
+	Change, add and delete objects in the document	Muuttaa, lisätä ja poistaa asiakirjan objekteja
+	Keep data of its own with the document	Tallentaa omia tietojaan asiakirjaan
+	Change how the objects its effect is applied to are drawn	Muuttaa sitä, miten objektit, joihin sen tehostetta on käytetty, piirretään
+	Write the document as a file in its own format	Kirjoittaa asiakirjan tiedostoksi omassa muodossaan
+	Show its progress, see Cancel and write log lines	Näyttää edistymisensä, havaita peruutuksen ja kirjoittaa lokirivejä
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	käyttöoikeus `progress` vaatii laajennus-API:n tason {PROGRESS_API}: anna `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduuli tuo kohteen `env.{name}` eri tyyppisenä kuin isäntä: isännän tyyppi on {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	moduuli tuo kohteen `env.{name}`, jota laajennus saa käyttää vain laajennus-API:n tasolla {PROGRESS_API} (`api` {PROGRESS_API}) ja käyttöoikeudella `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	moduuli tuo kohteen `{from}.{name}`, jota isäntä ei tarjoa: laajennus saa tuoda vain kohteet `env.vc_progress`, `env.vc_cancelled` ja `env.vc_log` (laajennus-API:n taso 2) eikä mitään WASIa, tiedostoja tai verkkoa
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
+@msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
+@msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	enintään {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	käyttöoikeus `{shown}` ei koske lajin `{_1}` laajennusta
+@msg	permission `{shown}` is listed twice	käyttöoikeus `{shown}` on lueteltu kahdesti
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
+@msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	”{name}” ei saanut käyttöoikeutta `{p}`, jota sen tulos tarvitsee: mitään ei muutettu
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduulilla ei ole `hash`-kentän SHA-256-arvoa: mitään ei asennettu
 # Actions panel: action sets (#3712).
 	New Set…	Uusi sarja…
 	New Set	Uusi sarja

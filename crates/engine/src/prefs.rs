@@ -58,6 +58,9 @@ pub struct Prefs {
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
     pub trackpad_rotate_view: bool,
+    /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
+    /// tool active before comes back; a quick press chooses the tool for good.
+    pub hold_tool_keys: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -366,6 +369,7 @@ impl Default for Prefs {
             zoom_with_mouse_wheel: false,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
+            hold_tool_keys: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             object_selection_by_path_only: false,

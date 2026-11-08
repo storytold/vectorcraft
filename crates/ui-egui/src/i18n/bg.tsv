@@ -2638,6 +2638,14 @@ digits	Malayalam	Малаялам
 	Relink	Свързване наново
 	Relink Linked Files to the Document	Свързване наново на свързаните файлове към документа
 	Relink to Folder…	Свързване наново към папка…
+	Each Link Separately	Всяка връзка поотделно
+	Selected Instances	Избраните екземпляри
+	All Instances	Всички екземпляри
+	Missing Links from This Folder	Липсващите връзки от тази папка
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не е each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each и paths вървят заедно: paths изброява записи с ids и path вместо ids, path и folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	записът {i} в paths изисква path и ids (идентификатори на обекти, които няма друг запис)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder приема path: в папката на този файл се търсят другите липсващи връзки
 	Relink…	Свързване наново…
 	Find Linked Files	Търсене на свързани файлове
 	Find Linked Files in Folder…	Търсене на свързани файлове в папка…
@@ -2755,6 +2763,7 @@ digits	Malayalam	Малаялам
 	Rotate Tool	Инструмент „Завъртане“
 	Rotate View Tool	Инструмент „Завъртане на изглед“
 	Trackpad Gesture to Rotate View	Завъртане на изгледа с жест на тракпада
+	Hold a Tool Shortcut to Use the Tool Temporarily	Задържане на клавиша на инструмент за временното му използване
 	Rotate…	Завъртане…
 	Rotation	Завъртане
 	Roughen…	Грапавост…
@@ -5697,6 +5706,17 @@ axis	Y Axis	Y ос
 	The plug-in is computing…	Приставката изчислява…
 	Inspect Plug-in	Проверка на приставка
 	Cancel Plug-in Run	Отказ от изпълнението на приставката
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	File SHA-256: {hash}	SHA-256 на файла: {hash}
+	Read the objects it is given	Четене на обектите, които получава
+	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
+	Keep data of its own with the document	Съхраняване на собствени данни в документа
+	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
+	Write the document as a file in its own format	Записване на документа като файл в собствен формат
+	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор

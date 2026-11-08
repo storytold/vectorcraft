@@ -360,13 +360,13 @@ impl<'a> Reader<'a> {
             "TO" => self.end_text(hidden)?,
             // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
             "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
-            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "TV" | "Tv" | "Ty" | "TY" | "Xb" | "Xe"
-            | "XB" => {
+            "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "TV" | "Tv" | "Ty" | "TY" | "Tg" | "Xb"
+            | "Xe" | "XB" => {
                 self.text_attr(w, &vals);
             }
-            // Attributes the reader doesn't keep (kerning pairs, line breaking, binding punctuation
-            // and Japanese layout rules) and final-form positions (§15.3).
-            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TG" | "Tg" | "Tu" | "Xu" => {}
+            // Attributes the reader doesn't keep (kerning pairs, line breaking and Japanese layout
+            // rules) and final-form positions (§15.3).
+            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TG" | "Tu" | "Xu" => {}
             // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
             // reader takes `Te` with any number of operands.
             "TM" | "Te" => {}

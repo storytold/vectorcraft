@@ -6264,6 +6264,7 @@ dependencies = [
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-js",
  "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
@@ -6330,6 +6331,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-testkit",
+]
+
+[[package]]
+name = "vectorcraft-js"
+version = "0.21.0"
+dependencies = [
+ "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]
@@ -6413,8 +6422,10 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "log",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "vectorcraft-color",
  "vectorcraft-doc",

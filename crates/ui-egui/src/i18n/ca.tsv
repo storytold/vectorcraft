@@ -3325,6 +3325,14 @@ digits	Malayalam	Malaiàlam
 	Relink	Torna a enllaçar
 	Relink Linked Files to the Document	Torna a enllaçar els fitxers enllaçats al document
 	Relink to Folder…	Torna a enllaçar a una carpeta…
+	Each Link Separately	Cada enllaç per separat
+	Selected Instances	Instàncies seleccionades
+	All Instances	Totes les instàncies
+	Missing Links from This Folder	Enllaços que falten d’aquesta carpeta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} no és each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths van junts: paths llista entrades amb ids i path, en lloc d’ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	l’entrada {i} de paths necessita path i ids (identificadors d’objecte que cap altra entrada no tingui)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder pren path: a la carpeta d’aquest fitxer es cerquen els altres enllaços que falten
 	Relink…	Torna a enllaçar…
 	Reload Plug-ins	Recarrega els complements
 	Remember Import Matches	Recorda les coincidències d’importació
@@ -4429,6 +4437,7 @@ digits	Malayalam	Malaiàlam
 	Tracing Result with Outlines	Resultat del traçat amb contorns
 	Tracking	Espaiat
 	Trackpad Gesture to Rotate View	Gesticulació del trackpad per girar la vista
+	Hold a Tool Shortcut to Use the Tool Temporarily	Mantén premuda la drecera d’una eina per usar-la temporalment
 	Trademark Symbol	Símbol de marca comercial
 	Transform	Transforma
 	Transform Again	Transforma de nou
@@ -5833,6 +5842,33 @@ digits	Malayalam	Malaiàlam
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): instal·la’l amb `allowHeavy: true` quan l’usuari hi estigui d’acord
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instal·la «{name}», que demana aquests permisos?
+	ID: {id}	ID: {id}
+	Version: {version}	Versió: {version}
+	File SHA-256: {hash}	SHA-256 del fitxer: {hash}
+	Read the objects it is given	Llegir els objectes que rep
+	Change, add and delete objects in the document	Canviar, afegir i suprimir objectes del document
+	Keep data of its own with the document	Desar dades pròpies amb el document
+	Change how the objects its effect is applied to are drawn	Canviar com es dibuixen els objectes als quals s’aplica el seu efecte
+	Write the document as a file in its own format	Escriure el document com un fitxer en un format propi
+	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `progress` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el mòdul importa `env.{name}` amb un tipus diferent del de l’amfitrió: el de l’amfitrió és {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
+@msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	com a màxim {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	el permís `{shown}` no s’aplica a un complement del tipus `{_1}`
+@msg	permission `{shown}` is listed twice	el permís `{shown}` apareix dues vegades
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
+@msg	unknown permission `{shown}`	permís desconegut `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a «{name}» no se li ha concedit `{p}`, que la seva sortida necessita: no s’ha canviat res
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	el mòdul no té el SHA-256 que indica `hash`: no s’ha instal·lat res
 @msg	“{name}” is not a file	«{name}» no és un fitxer
 axis	Both	Tots dos
 axis	Horizontal	Horitzontal

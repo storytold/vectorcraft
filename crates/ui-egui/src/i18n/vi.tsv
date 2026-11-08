@@ -3007,6 +3007,14 @@ mark-style	Japanese	Kiểu Nhật
 	Relink	Liên kết lại
 	Relink Linked Files to the Document	Liên kết lại các tệp liên kết với tài liệu
 	Relink to Folder…	Liên kết lại vào thư mục…
+	Each Link Separately	Từng liên kết riêng
+	Selected Instances	Các phiên bản đã chọn
+	All Instances	Tất cả phiên bản
+	Missing Links from This Folder	Liên kết thiếu từ thư mục này
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} không phải each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each và paths đi cùng nhau: paths liệt kê các mục có ids và path, thay cho ids, path và folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	mục {i} của paths cần path và ids (ID đối tượng mà không mục nào khác có)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder nhận path: các liên kết thiếu khác được tìm trong thư mục của tệp đó
 	Relink…	Liên kết lại…
 	Reload Plug-ins	Tải lại plug-in
 	Remove	Gỡ
@@ -3147,6 +3155,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rotate Tool	Công cụ Xoay
 	Rotate View Tool	Công cụ Xoay chế độ xem
 	Trackpad Gesture to Rotate View	Xoay chế độ xem bằng cử chỉ trên bàn di chuột
+	Hold a Tool Shortcut to Use the Tool Temporarily	Giữ phím tắt của công cụ để tạm thời dùng công cụ đó
 	Rotate…	Xoay…
 	Rotation	Góc xoay
 	Rotation relative to:	Xoay tương đối với:
@@ -5410,6 +5419,33 @@ axis	Y Axis	Trục Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	hiệu ứng trực tiếp chạy trong lúc tài liệu được vẽ nên không thể là `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	plug-in xuất luôn nhận ngân sách của một lần xuất: hãy bỏ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” yêu cầu ngân sách tính toán lớn (mỗi lần chạy tới {minutes} phút và gấp {times} lần số lệnh thông thường): hãy cài đặt với `allowHeavy: true` khi người dùng đồng ý
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Cài đặt “{name}”, plug-in yêu cầu các quyền này?
+	ID: {id}	ID: {id}
+	Version: {version}	Phiên bản: {version}
+	File SHA-256: {hash}	SHA-256 của tệp: {hash}
+	Read the objects it is given	Đọc các đối tượng được trao cho nó
+	Change, add and delete objects in the document	Thay đổi, thêm và xóa đối tượng trong tài liệu
+	Keep data of its own with the document	Lưu dữ liệu riêng cùng tài liệu
+	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
+	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
+	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `progress` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập `env.vc_progress`, `env.vc_cancelled` và `env.vc_log` (API plug-in cấp 2), không có WASI, tệp hay mạng
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
+@msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in loại `{_1}` cần quyền `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	tối đa {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	quyền `{shown}` không áp dụng cho plug-in loại `{_1}`
+@msg	permission `{shown}` is listed twice	quyền `{shown}` được liệt kê hai lần
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
+@msg	unknown permission `{shown}`	quyền không xác định `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” yêu cầu các quyền {asked}: hãy cài đặt với `grant` liệt kê chúng khi người dùng đồng ý
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” chưa được cấp `{p}`, quyền mà đầu ra của nó cần: không có gì thay đổi
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	mô-đun không có SHA-256 mà `hash` cho biết: không có gì được cài đặt
 # Actions panel: action sets (#3712).
 	New Set…	Bộ mới…
 	New Set	Bộ mới
