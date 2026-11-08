@@ -134,16 +134,23 @@ mod types;
 
 pub(crate) use art::join_and;
 use art::preview_png;
-pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
+pub use document::{
+    BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
+};
 pub(crate) use document::{slot_frame, slot_of};
+pub(crate) use ops::read_art_style;
 pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
 mod legacy_text;
+
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
 
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]
@@ -181,6 +188,8 @@ pub struct Structure {
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The warped text objects, checked against their drawn looks once their type is laid out.
+    pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
@@ -250,7 +259,7 @@ pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structu
 /// content, the prolog, resources, sections it skips (such as symbols and the text document) or
 /// what follows the trailer. The palette the reader keeps is the last one outside those and the
 /// sections it reads on their own.
-fn swatch_names(data: &[u8]) -> ShownNames {
+fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
     /// The sections the reader reads on their own whose definitions and colors it keeps.
     const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
     /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
@@ -277,8 +286,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     let mut skip: Option<(&str, &str, usize, Option<usize>)> = None;
     let mut section: Option<(&str, &str, usize, bool)> = None;
     let (mut palette_at, mut palette) = (None, None);
+    // Where the first art styles section starts, and that section.
+    let (mut styles_at, mut styles) = (None, None);
     // A pattern's name is the first string of its definition.
     let mut head = false;
+    // ASCII85 data in comment lines is skipped past, as the reader skips it.
+    let mut dictionaries = ops::Dictionaries::default();
+    // The scan's state where the versioned content being skipped starts, to go back to.
+    let mut versioned = None;
     loop {
         let before = lex.offset();
         let Some(t) = lex.next_token() else {
@@ -286,11 +301,14 @@ fn swatch_names(data: &[u8]) -> ShownNames {
             match skip.take() {
                 Some((.., Some(at))) => {
                     lex.seek(at);
+                    dictionaries = versioned.take().unwrap_or_default();
                     continue;
                 }
                 _ => break,
             }
         };
+        let markers = skip.map(|s| (s.0, s.1)).or(palette_at.map(|_| ("", "EndPalette"))).or(section.map(|s| (s.0, s.1)));
+        dictionaries.pass(&t.tok, &mut lex, markers);
         match &t.tok {
             Tok::Comment(c) => {
                 let line = String::from_utf8_lossy(c);
@@ -306,12 +324,16 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                     }
                 } else if m.starts_with("Alternate_Content") && section.is_none_or(|s| s.3) {
                     skip = Some(("Begin_Content_if_version_gt", "End_Versioned_Content", 0, Some(lex.offset())));
+                    versioned = Some(dictionaries.clone());
                 } else if m == "%BeginProlog" {
                     skip = Some(("", "%EndProlog", 0, None));
                 } else if m == "%BeginResource" {
                     skip = Some(("", "%EndResource", 0, None));
                 } else if let Some((begin, end, depth, _)) = section.as_mut() {
                     if closes(begin, end, depth, m) {
+                        if let Some(at) = styles_at.take().filter(|_| *begin == "BeginArtStyles") {
+                            styles = Some(lex.slice(at, before));
+                        }
                         section = None;
                     }
                 } else if m == "BeginPalette" {
@@ -319,6 +341,9 @@ fn swatch_names(data: &[u8]) -> ShownNames {
                 } else if let Some((begin, end)) = types::SKIPPED.iter().find(|(b, _)| *b == m) {
                     section = Some((begin, end, 0, READ_APART.contains(begin)));
                     head = m == "BeginPattern";
+                    if m == "BeginArtStyles" && styles.is_none() {
+                        styles_at = Some(lex.offset());
+                    }
                 } else if matches!(m, "%PageTrailer" | "%Trailer") {
                     break;
                 }
@@ -350,7 +375,18 @@ fn swatch_names(data: &[u8]) -> ShownNames {
     }
     palette.own_names().for_each(|n| names.reserve(n));
     colors.names.iter().for_each(|n| names.reserve(n));
-    names
+    (names, styles)
+}
+
+/// What the brushes and brush art read so far give a brushed stroke.
+#[derive(Default)]
+struct BrushesKept {
+    /// The counts of brushes and art sections when this was worked out.
+    read: (usize, usize),
+    /// Which of [`Reader::brush_drafts`] are kept as brushes.
+    kept: Vec<bool>,
+    /// The art an Art brush draws as the file does.
+    bending: HashSet<String>,
 }
 
 struct Reader<'a> {
@@ -448,6 +484,12 @@ struct Reader<'a> {
     warnings: Vec<String>,
     /// Objects read as their drawn look (several fills or strokes, effects, brushes).
     drawn_looks: usize,
+    /// The objects read as their drawn look in the art of [`Reader::brush_art`], by name: counted in
+    /// [`Reader::drawn_looks`] once a brush that is kept uses the art.
+    brush_art_looks: HashMap<String, usize>,
+    /// The objects read as their drawn look in the art of the patterns kept, by the name the document
+    /// has the pattern by: a pattern defined again counts only its last definition.
+    pattern_looks: HashMap<String, usize>,
     /// Nodes read from `%_` lines.
     hidden_ids: HashSet<NodeId>,
     /// The blend part each object's dictionary names (`ShapeBlendPathType`, `ShapeBlendPathID`).
@@ -460,10 +502,13 @@ struct Reader<'a> {
     envelope_art: Option<Node>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
-    /// How many more envelopes this import may draw to check ([`super::envelope::drawn_alike`]).
+    /// How many more envelopes and warped text objects this import may draw to check
+    /// ([`super::envelope::drawn_alike`]).
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
+    warped_type: Vec<super::envelope::WarpedLook>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -476,11 +521,12 @@ struct Reader<'a> {
     layer_state: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a mesh or blend had before an `Xy` right after its end, which is the layer's
     /// instead when the layer's `LB` follows rather than their own `6 () XW`.
-    mesh_undo: Option<(f32, BlendMode, bool, Knockout)>,
+    mesh_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
-    /// Painted copies of clipping paths that have a fill (drawn under what they clip).
+    /// The fills of compound clipping paths whose subpaths paint differently, as compound paths of their own (drawn
+    /// under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
     looks: HashSet<NodeId>,
@@ -552,8 +598,12 @@ struct Reader<'a> {
     brush_drafts: Vec<super::brush::BrushDraft>,
     /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
     brush_art: HashMap<String, Node>,
+    /// The colors of the art in [`Reader::brush_art`], by name.
+    brush_art_colors: HashMap<String, BrushArtColors>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
+    /// What the brushes and brush art read so far give a brushed stroke.
+    brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
     /// The graph being read (see [`Reader::graph_record`]).
@@ -576,14 +626,22 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
 
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
-    /// get in the document found first ([`swatch_names`]).
+    /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
+    /// before the art styles section use them too.
     fn with_names(data: &'a [u8]) -> Self {
         let mut r = Self::new(data);
-        r.global_names = swatch_names(data);
+        let (names, styles) = swatch_names(data);
+        r.global_names = names;
+        if let Some(section) = styles {
+            r.styles = super::style::art_styles(section);
+        }
         r
     }
 
     fn new(data: &'a [u8]) -> Self {
+        // An envelope's saved margins and its check against its drawn art measure type by its
+        // glyphs, as the app maps it.
+        vectorcraft_text::register_envelope_ink();
         let mut doc = Document::new(1.0, 1.0);
         doc.layers.clear();
         Self {
@@ -645,6 +703,8 @@ impl<'a> Reader<'a> {
             color_model: None,
             warnings: Vec::new(),
             drawn_looks: 0,
+            brush_art_looks: HashMap::new(),
+            pattern_looks: HashMap::new(),
             hidden_ids: HashSet::new(),
             blend_roles: HashMap::new(),
             blend_record: None,
@@ -653,6 +713,7 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            warped_type: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
@@ -693,7 +754,9 @@ impl<'a> Reader<'a> {
             brush_order: None,
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
+            brush_art_colors: HashMap::new(),
             brush_art_sections: 0,
+            brushes_kept: BrushesKept::default(),
             brushes_unread: 0,
             graph: None,
             multi_mask: None,

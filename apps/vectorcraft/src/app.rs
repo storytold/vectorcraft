@@ -51,6 +51,9 @@ impl eframe::App for App {
         // A pen contact with the barrel button held presses the secondary button (Windows Ink).
         #[cfg(windows)]
         windows_stylus::raw_input_hook(raw);
+        // The characters Alt + keypad codes typed (#5108).
+        #[cfg(windows)]
+        super::windows_alt_codes::raw_input_hook(raw);
         file_access::unconfined(|| self.app.raw_input_hook(ctx, raw));
         // A mouse-up that never reached the window (#4326) is delivered once AppKit reports
         // that no mouse button is down.
@@ -121,6 +124,13 @@ impl App {
                 bring_window_forward(ctx);
             }
             open_files(&mut self.app, files);
+        }
+        let (now, zoom) = (ctx.input(|i| i.time), ctx.zoom_factor());
+        if let Some(w) = &self.winit_window
+            && window::monitors_due(self.monitors_listed, now, zoom)
+        {
+            self.app.services.dock_monitors = window::dock_monitors(w, zoom);
+            self.monitors_listed = Some((now, zoom));
         }
         self.app.tick(ctx);
         if self.pending_maximize {

@@ -516,8 +516,46 @@ fn pathfinder_add_is_read_as_its_effect() {
 }
 
 #[test]
-fn pathfinder_commands_other_than_add_keep_the_drawn_look() {
-    for command in 1..=12 {
+fn each_pathfinder_command_is_read_as_its_effect() {
+    // GUARDS: only `Command` 0 (Add) was read; a group with any other operation came in as its drawn look.
+    let ids = [
+        (1, "pathfinder.intersect"),
+        (2, "pathfinder.exclude"),
+        (3, "pathfinder.subtract"),
+        (4, "pathfinder.minusBack"),
+        (5, "pathfinder.divide"),
+        (6, "pathfinder.outline"),
+        (7, "pathfinder.trim"),
+        (8, "pathfinder.merge"),
+        (9, "pathfinder.crop"),
+        (10, "pathfinder.hardMix"),
+    ];
+    for (command, id) in ids {
+        let st = group_style(&[pathfinder(&pathfinder_keys(&command.to_string(), "0.5"))]);
+        assert!(st.plain && st.simple && st.pathfinder, "{command}: {st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{command}: {st:?}") };
+        assert_eq!((e.id.as_str(), &e.params, e.visible), (id, &json!({}), true), "{command}");
+    }
+}
+
+#[test]
+fn soft_mix_is_read_with_its_mixing_rate() {
+    for (mix, rate) in [("0.5", 50.0), ("0.3", 30.0), ("0.01", 1.0), ("1", 100.0)] {
+        let st = group_style(&[pathfinder(&pathfinder_keys("11", mix))]);
+        assert!(st.plain && st.simple && st.pathfinder, "{mix}: {st:?}");
+        let [e] = st.effects.as_slice() else { panic!("{mix}: {st:?}") };
+        assert_eq!((e.id.as_str(), &e.params), ("pathfinder.softMix", &json!({"mixingRate": rate})), "{mix}");
+    }
+    // A rate the effect doesn't take keeps the drawn look.
+    for mix in ["0", "0.005", "1.5", "-0.5", "1e999"] {
+        let st = group_style(&[pathfinder(&pathfinder_keys("11", mix))]);
+        assert!(!st.plain && !st.pathfinder && st.effects.is_empty(), "{mix}: {st:?}");
+    }
+}
+
+#[test]
+fn trap_and_unknown_pathfinder_commands_keep_the_drawn_look() {
+    for command in [12, 13, 40] {
         let st = group_style(&[pathfinder(&pathfinder_keys(&command.to_string(), "0.5"))]);
         assert!(!st.plain && !st.pathfinder && st.effects.is_empty(), "{command}: {st:?}");
     }
@@ -623,7 +661,15 @@ fn pathfinder_settings_this_does_not_read_keep_the_drawn_look() {
         ("unpainted art kept", add.replace("1 /Bool (ExtractUnpainted)", "0 /Bool (ExtractUnpainted)")),
         ("other trap tint", add.replace("0.4 /Real (TrapTint)", "0.25 /Real (TrapTint)")),
         ("Mix on Add", add.replace("0.5 /Real (Mix)", "0.3 /Real (Mix)")),
+        ("Mix on Intersect", pathfinder_keys("1", "0.3")),
+        ("Mix on Hard Mix", pathfinder_keys("10", "0.3")),
         ("Mix as a bool", add.replace("0.5 /Real (Mix)", "1 /Bool (Mix)")),
+        ("Soft Mix with Mix as an int", pathfinder_keys("11", "0.5").replace("0.5 /Real (Mix)", "1 /Int (Mix)")),
+        ("Soft Mix without Mix", pathfinder_keys("11", "0.5").replace("0.5 /Real (Mix) ,\n", "")),
+        ("Soft Mix with other Precision", pathfinder_keys("11", "0.3").replace("10 /Real (Precision)", "5 /Real (Precision)")),
+        ("Intersect with other Precision", pathfinder_keys("1", "0.5").replace("10 /Real (Precision)", "5 /Real (Precision)")),
+        ("Divide keeping unpainted art", pathfinder_keys("5", "0.5").replace("1 /Bool (ExtractUnpainted)", "0 /Bool (ExtractUnpainted)")),
+        ("Command twice, Intersect then Add", add.replace("0 /Int (Command)", "1 /Int (Command) ,\n0 /Int (Command)")),
     ];
     for (case, keys) in cases {
         let st = group_style(&[pathfinder(&keys)]);
@@ -1139,4 +1185,33 @@ fn convert_to_shape_settings_that_arent_read_keep_the_drawn_look() {
     let data =
         format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", &[compound("Stack Style Filter", &[item])]));
     assert!(!art_styles(data.as_bytes())["Odd"].plain);
+}
+
+/// A style as a writer checks it: the reader's appearance, with a gradient fill as the object's own,
+/// and nothing for styles it doesn't read.
+#[test]
+fn a_style_is_read_as_a_writer_checks_it() {
+    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
+    let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
+    let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
+    let data = style(&[stack, blend(1, 0.5)]);
+    let own = Paint::solid(vectorcraft_color::Color::WHITE);
+    let got = read(&data, Some(&own)).unwrap();
+    assert_eq!(got.appearance.items.len(), 1);
+    assert_eq!(got.appearance.items[0].paint(), &own);
+    assert!(got.simple && !got.pathfinder);
+    // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
+    assert!(read(&data, None).is_none());
+    let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
+    assert!(read(&pattern, None).is_none());
+    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
+    // Damaged text: every cut of the style, and stray bytes, without a panic.
+    for cut in 0..data.len() {
+        let _ = read(data.get(..cut).unwrap_or_default(), Some(&own));
+    }
+    for junk in ["(", ")", ";", "/KnownStyle :\n(Odd) /Name ,\n;;;;", "/KnownStyle :\n(Odd) /Name ,\n/Array : 1 /Real , ; (x) ,"] {
+        let _ = read(junk, Some(&own));
+    }
 }

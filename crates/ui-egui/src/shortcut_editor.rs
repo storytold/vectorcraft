@@ -453,8 +453,8 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Commands whose params are all optional that do nothing, or fail, when a key press runs them
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
-/// and the library and data set loaders a file, which their panel menu items ask for.
-const NEEDS_A_PARAM: [&str; 16] = [
+/// and the library, data set and text style loaders a file, which their panel menu items ask for.
+const NEEDS_A_PARAM: [&str; 19] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -471,6 +471,9 @@ const NEEDS_A_PARAM: [&str; 16] = [
     "brush.loadLibrary",
     "dataset.import",
     "variable.loadLibrary",
+    "charStyle.load",
+    "paraStyle.load",
+    "textStyle.loadAll",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
@@ -700,6 +703,25 @@ pub fn import_json(v: &Value) -> Result<(String, Overrides), String> {
     Ok((v.get("set").and_then(Value::as_str).map_or(CUSTOM, set_name).to_string(), out))
 }
 
+/// Export Text: the set's name, then the dialog's Tools and Menu Commands lists in its order, one
+/// row per line with the name and the shortcuts as the dialog shows them, separated by a tab. A
+/// row with no shortcut ends after the tab.
+pub fn export_text(set: &str, overrides: &Overrides) -> String {
+    let km = keymap_with(overrides);
+    let backtick = backtick_text();
+    let shown_set = if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set };
+    let mut out = format!("{}\n{} {shown_set}\n", tl!("Keyboard Shortcuts"), tl!("Set:"));
+    for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
+        out += &format!("\n{}\n", tl!(heading));
+        for e in entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)) {
+            let name = if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) };
+            let sc = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+            out += &format!("{name}\t{sc}\n");
+        }
+    }
+    out
+}
+
 // ---------- UI commands ----------
 
 pub fn open(app: &mut VectorcraftApp) {
@@ -724,22 +746,35 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(json!({"overrides": app.ui.shortcut_overrides.len()}))
 }
 
+/// The string `p` gives for `key`, or `None` when `p` leaves it out or gives null. Any other
+/// value, such as `5`, is an error: "`{key}` must be a string".
+fn text_param(p: &Value, key: &str) -> Result<Option<String>, String> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v.clone())),
+        Some(_) => Err(format!("`{key}` must be a string")),
+    }
+}
+
 /// `shortcuts.*` UI commands. `None` = not ours.
 pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
-    let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
+    let s = |k: &str| text_param(p, k);
     let r = match id {
         "edit.keyboardShortcuts" => {
             open(app);
             Ok(Value::Null)
         }
         "shortcuts.set" => {
-            let key = s("id").unwrap_or_default();
+            let (key, shortcut, force) = match (s("id"), s("shortcut"), crate::menus::opt_bool(p, "force")) {
+                (Ok(key), Ok(shortcut), Ok(force)) => (key.unwrap_or_default(), shortcut, force.unwrap_or(false)),
+                (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return Some(Err(e)),
+            };
             let mut ov = app.ui.shortcut_overrides.clone();
             let r = if p.get("shortcut").is_some_and(Value::is_null) {
                 reset_one(&mut ov, &key);
                 Ok(vec![])
             } else {
-                assign(&mut ov, &key, s("shortcut").as_deref(), p.get("force").and_then(Value::as_bool).unwrap_or(false))
+                assign(&mut ov, &key, shortcut.as_deref(), force)
             };
             r.map(|removed| {
                 app.ui.shortcut_overrides = ov;
@@ -749,7 +784,10 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             })
         }
         "shortcuts.list" => {
-            let q = s("query").unwrap_or_default().to_lowercase();
+            let q = match s("query") {
+                Ok(q) => q.unwrap_or_default().to_lowercase(),
+                Err(e) => return Some(Err(e)),
+            };
             let km = keymap_with(&app.ui.shortcut_overrides);
             let ov = km.overrides();
             Ok(Value::Array(
@@ -770,23 +808,28 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             sync(&app.ui);
             Ok(Value::Null)
         }
-        "shortcuts.preset" => match s("name").as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p))) {
-            Some((n, p)) => {
+        "shortcuts.preset" => match s("name").map(|n| n.as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p)))) {
+            Ok(Some((n, p))) => {
                 app.ui.shortcut_overrides = p;
                 app.ui.shortcut_set = n;
                 sync(&app.ui);
                 Ok(Value::Null)
             }
-            None => Err(format!("unknown preset (one of {})", PRESETS.join(", "))),
+            Ok(None) => Err(format!("unknown preset (one of {})", PRESETS.join(", "))),
+            Err(e) => Err(e),
         },
         "shortcuts.export" => {
+            let path = match s("path") {
+                Ok(path) => path,
+                Err(e) => return Some(Err(e)),
+            };
             let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
             let pick = crate::FilePick {
                 filters: vec![crate::FilePick::filter("Shortcut sets", &["json"])],
                 ..crate::FilePick::named("VectorCraft Shortcuts.json")
             };
-            let path = s("path").or_else(|| crate::picks::save(app, &pick));
+            let path = path.or_else(|| crate::picks::save(app, &pick));
             match path {
                 Some(path) => match app.services.write.as_mut() {
                     Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
@@ -800,15 +843,44 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 },
             }
         }
+        "shortcuts.exportText" => {
+            let path = match p.get("path") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(path)) => Some(path.clone()),
+                Some(_) => {
+                    let key = "path";
+                    return Some(Err(format!("`{key}` must be a string")));
+                }
+            };
+            let text = export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
+            let pick =
+                crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt"])], ..crate::FilePick::named("VectorCraft Shortcuts.txt") };
+            match path.or_else(|| crate::picks::save(app, &pick)) {
+                Some(path) => match app.services.write.as_mut() {
+                    Some(w) => w(&path, text.as_bytes()).map(|_| json!({"path": path})),
+                    None => Err("no file writer".into()),
+                },
+                // Its save dialog is open: the file is written when it answers.
+                None if app.file_dialog_open() => Err("cancelled".into()),
+                None => match app.services.download.as_mut() {
+                    Some(dl) => dl("VectorCraft Shortcuts.txt", text.as_bytes()).map(|()| Value::Null),
+                    None => Ok(json!({"text": text})),
+                },
+            }
+        }
         "shortcuts.import" => {
             let data = if let Some(v) = p.get("data") {
                 Ok(v.clone())
             } else {
+                let path = match s("path") {
+                    Ok(path) => path,
+                    Err(e) => return Some(Err(e)),
+                };
                 let pick = crate::FilePick {
                     filters: vec![crate::FilePick::filter("Shortcut sets", crate::dialogs::shortcut_import::IMPORT_EXTS)],
                     ..Default::default()
                 };
-                let path = s("path").or_else(|| crate::picks::open(app, &pick));
+                let path = path.or_else(|| crate::picks::open(app, &pick));
                 // A `.kys` file is read by Import Shortcut Set, up to its reader's cap.
                 if let Some(path) = path.as_deref().filter(|p| crate::dialogs::shortcut_import::is_kys(p)) {
                     return Some(crate::dialogs::shortcut_import::command(app, &json!({ "path": path })));
@@ -946,6 +1018,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             if ui.button(tl!("Export…")).clicked() {
                 d.fields.insert("__export".into(), json!(true));
+            }
+            if ui.button(tl!("Export Text…")).clicked() {
+                d.fields.insert("__exportText".into(), json!(true));
             }
             if ui.button(tl!("Reset to Defaults")).clicked() {
                 km.to_mut().reset_all();
@@ -1090,6 +1165,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     let import = d.fields.remove("__import").is_some();
     let export = d.fields.remove("__export").is_some();
+    let export_text = d.fields.remove("__exportText").is_some();
     app.ui.dialog = Some(d);
     // Their file dialogs, shown off the UI thread, import into or export from the dialog as it is
     // when they answer.
@@ -1098,6 +1174,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if export {
         crate::picks::button(app, export_from_dialog);
+    }
+    if export_text {
+        crate::picks::button(app, export_text_from_dialog);
     }
     if cancel {
         app.ui.dialog = None;
@@ -1137,6 +1216,16 @@ fn import_into_dialog(app: &mut VectorcraftApp) {
 
 /// The dialog's Export…: its working set, as edited so far.
 fn export_from_dialog(app: &mut VectorcraftApp) {
+    export_dialog_set(app, "shortcuts.export");
+}
+
+/// The dialog's Export Text…: its working set, as edited so far, as a text file.
+fn export_text_from_dialog(app: &mut VectorcraftApp) {
+    export_dialog_set(app, "shortcuts.exportText");
+}
+
+/// Runs `command` on the dialog's working set and set name.
+fn export_dialog_set(app: &mut VectorcraftApp, command: &str) {
     if !shortcuts_dialog(app) {
         app.status(crate::picks::dialog_gone());
         return;
@@ -1144,7 +1233,7 @@ fn export_from_dialog(app: &mut VectorcraftApp) {
     let (ov, set) = app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), d.str("set"))).unwrap_or_default();
     let saved = std::mem::replace(&mut app.ui.shortcut_overrides, ov);
     let saved_set = std::mem::replace(&mut app.ui.shortcut_set, set);
-    if let Some(Err(e)) = run_command(app, "shortcuts.export", &json!({})) {
+    if let Some(Err(e)) = run_command(app, command, &json!({})) {
         app.status(e);
     }
     app.ui.shortcut_overrides = saved;
@@ -1453,6 +1542,82 @@ mod tests {
         assert!(import_json(&json!({})).is_err());
     }
 
+    /// An Export Text line: the row's name as the dialog shows it, a tab and `shortcut`.
+    fn text_row(key: &str, shortcut: &str) -> String {
+        let e = entry(key).unwrap_or_else(|| panic!("no entry {key}"));
+        if e.is_tool || e.group.is_empty() { format!("{}\t{shortcut}", e.label) } else { format!("{} › {}\t{shortcut}", e.group, e.label) }
+    }
+
+    /// Export Text writes the set's name, then the Tools and the Menu Commands rows in the dialog's
+    /// order, each with its shortcut as the dialog shows it.
+    #[test]
+    fn export_text_lists_the_dialogs_rows_with_their_shortcuts() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
+        let text = export_text("VectorCraft Defaults", &ov);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[..4], ["Keyboard Shortcuts", "Set: VectorCraft Defaults", "", "Tools"]);
+        let menu_at = lines.iter().position(|l| *l == "Menu Commands").expect("a Menu Commands section");
+        assert_eq!(lines[menu_at - 1], "", "a blank line before Menu Commands");
+        let km = keymap_with(&ov);
+        let names = |tools: bool| -> Vec<String> {
+            entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| text_row(&e.key, "")).collect()
+        };
+        let names_of = |rows: &[&str]| -> Vec<String> { rows.iter().map(|l| format!("{}\t", l.split('\t').next().unwrap_or_default())).collect() };
+        assert_eq!(names_of(&lines[4..menu_at - 1]), names(true), "the Tools rows, in the dialog's order");
+        assert_eq!(names_of(&lines[menu_at + 1..]), names(false), "the Menu Commands rows, in the dialog's order");
+        let pen = menus::pretty_shortcut(default_of("tool:pen").expect("the Pen tool has a default key"));
+        assert!(lines[4..menu_at].contains(&text_row("tool:pen", &pen).as_str()), "{text}");
+        let prefs = menus::pretty_shortcut(&effective_with(&km, "edit.preferences").expect("the shortcut set"));
+        assert!(prefs.ends_with('9'), "{prefs}");
+        assert!(lines[menu_at..].contains(&text_row("edit.preferences", &prefs).as_str()), "{text}");
+        assert!(text.ends_with('\n'));
+    }
+
+    /// A command without a shortcut is listed with nothing after the tab: one without a default key
+    /// and one whose shortcut the set clears.
+    #[test]
+    fn export_text_lists_a_command_without_a_shortcut_with_an_empty_shortcut() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "");
+        assert!(default_of("align.horizontalLeft").is_none());
+        let text = export_text(CUSTOM, &ov);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[1], "Set: Custom");
+        for key in ["align.horizontalLeft", "edit.preferences"] {
+            assert!(lines.contains(&text_row(key, "").as_str()), "{key}: {text}");
+        }
+    }
+
+    /// `shortcuts.exportText` writes the set's name as the set was named, and a path that can't be
+    /// written or isn't a string gives an error and writes nothing.
+    #[test]
+    fn export_text_command_writes_the_sets_name_and_rejects_a_bad_path() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, String)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            if path.starts_with("/missing/") {
+                return Err(format!("can't write {path}"));
+            }
+            w.borrow_mut().push((path.to_string(), String::from_utf8(b.to_vec()).map_err(|e| e.to_string())?));
+            Ok(())
+        }));
+        app.run("shortcuts.import", json!({"data": export_json("Studio", &Overrides::new())})).unwrap();
+        assert_eq!(app.run("shortcuts.exportText", json!({"path": "/sets/Studio.txt"})), Ok(json!({"path": "/sets/Studio.txt"})));
+        assert_eq!(
+            app.run("shortcuts.exportText", json!({"path": "/missing/dir/Studio.txt"})),
+            Err("can't write /missing/dir/Studio.txt".to_string())
+        );
+        assert_eq!(app.run("shortcuts.exportText", json!({"path": 5})), Err("`path` must be a string".to_string()));
+        let files = written.borrow();
+        let [(path, text)] = files.as_slice() else { panic!("{files:?}") };
+        assert_eq!(path, "/sets/Studio.txt");
+        assert!(text.starts_with("Keyboard Shortcuts\nSet: Studio\n\nTools\n"), "{text}");
+        assert_eq!(*text, export_text("Studio", &Overrides::new()));
+    }
+
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
     /// to a command, through both Cancel and OK.
     #[test]
@@ -1689,5 +1854,29 @@ mod tests {
         let mut ov = Overrides::new();
         assign(&mut ov, "object.isolate", Some("Cmd+Alt+Shift+F11"), false).unwrap();
         assert_eq!(effective_in(&ov, "object.isolate").as_deref(), Some("Cmd+Alt+Shift+F11"));
+    }
+
+    /// `shortcuts.set`, `shortcuts.list` and `shortcuts.preset` reject a supplied param of the wrong
+    /// type with an error naming it, and change nothing; an omitted or null param keeps its default.
+    #[test]
+    fn shortcut_commands_reject_a_param_of_the_wrong_type() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let set = app.ui.shortcut_set.clone();
+        for (id, p, err) in [
+            ("shortcuts.set", json!({"id": 5, "shortcut": "Cmd+Alt+Shift+F11"}), "`id` must be a string"),
+            ("shortcuts.set", json!({"id": "object.isolate", "shortcut": 7}), "`shortcut` must be a string"),
+            ("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": "yes"}), "`force` must be true or false"),
+            ("shortcuts.list", json!({"query": 5}), "`query` must be a string"),
+            ("shortcuts.preset", json!({"name": true}), "`name` must be a string"),
+        ] {
+            assert_eq!(app.run(id, p.clone()), Err(err.to_string()), "{id} {p}");
+            assert!(app.ui.shortcut_overrides.is_empty(), "{id} {p}");
+            assert_eq!(app.ui.shortcut_set, set, "{id} {p}");
+        }
+        let all = app.run("shortcuts.list", json!({})).unwrap();
+        assert_eq!(app.run("shortcuts.list", json!({"query": null})), Ok(all));
+        let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
+        assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
+        assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
     }
 }
