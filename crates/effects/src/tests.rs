@@ -180,6 +180,24 @@ fn warp_zero_bend_is_identity_ish() {
     }
 }
 
+/// `warp::bends` says a warp moves placed gradients exactly when the warp moves the outline:
+/// Arc leaves the outline as it is under a bend of 0.0001 % and moves it above that, and the other
+/// styles move it at any bend.
+#[test]
+fn warp_bends_when_the_warp_moves_the_outline() {
+    // A star: Fisheye moves nothing on the edge of the box, where an ellipse or a rectangle lies.
+    let oval = shapes::star(Point::new(51.7, 34.3), 40.9, 17.3, 5, 7.0);
+    for (s, _) in WARP_STYLES {
+        let id = format!("warp.{s}");
+        let flat = run(&id, json!({"bend": 0}), &oval);
+        for bend in [0.0, 1e-5, -1e-5, 0.9e-4, -0.9e-4, 1.1e-4, -1.1e-4] {
+            let p = json!({ "bend": bend });
+            let moved = run(&id, p.clone(), &oval) != flat;
+            assert_eq!(crate::warp::bends(&id, &p), moved, "{id} at {bend} %");
+        }
+    }
+}
+
 #[test]
 fn warp_arc_bends_the_top_edge() {
     let out = run("warp.arc", json!({"bend": 50}), &square());

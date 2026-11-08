@@ -206,7 +206,7 @@ pub(crate) fn whole_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<
 /// Run a command's implementation without the enablement check or journaling.
 pub(crate) fn run_raw(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
     let c = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
-    (c.run)(s, p)
+    super::run_spec(s, c, p)
 }
 
 /// Merge the undo entries pushed since the history had `from` entries into one labelled step.

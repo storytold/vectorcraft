@@ -1,8 +1,10 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-08 · **Change:** minor (Character Styles panel: a double-click on a style's row opens its Character Style Options; the dialog keeps a fixed width and scrolls its sections, so its buttons stay on screen) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (numeric fields step on wheel hover without taking keyboard focus, #5949) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
+
+Numeric fields step on wheel hover without taking keyboard focus (#5949). Arrow keys still require focus; modifiers, units, limits, mixed values and existing rounding stay in the shared stepping path. Headless regressions in `tests/numfields.rs` cover hovered unfocused fields, focused fields, trackpad accumulation and panel scroll exclusion. Scores and estimates unchanged.
 
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
@@ -183,6 +185,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-09 | minor | Numeric fields step on wheel hover without taking focus; keyboard focus and existing rounding rules remain (#5949). Scores and estimates unchanged. |
 | 2026-11-07 | minor | M2: with the Pen or Curvature tool, Edit › Copy and Cut take the anchors and segments a Cmd/Ctrl-lent Direct Selection picked, not the whole path (#6123); estimates unchanged |
 | 2026-11-06 | minor | M2: a shape just drawn moves by its centre point (Show Center) and turns from the rotate zone just outside a bounding-box corner with its tool still active, as the Selection tool's gestures do (#5477); estimates unchanged. |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
