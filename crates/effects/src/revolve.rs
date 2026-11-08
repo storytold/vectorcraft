@@ -228,8 +228,9 @@ pub(crate) fn expand_revolve_art(n: &Node) -> Option<Node> {
 
 /// The surfaces [`revolve_art`] draws, as meshes ([`crate::three_d_meshes`]): with the effect on
 /// the object, one in its top visible fill (else its stroke); with it on fills and strokes, one for
-/// each of them.
-pub(crate) fn revolve_meshes(n: &Node) -> Result<Vec<crate::SolidMesh>, String> {
+/// each of them. Each mesh adds its triangles to `total` as it is built, and the first that takes
+/// `total` past `limit` stops with an error before the next is built.
+pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
     let path = profile(n).ok_or("Revolve currently requires a path or compound path")?;
     let ctx = GeomContext::of(n);
     let mesh = |path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<crate::SolidMesh, String> {
@@ -250,7 +251,9 @@ pub(crate) fn revolve_meshes(n: &Node) -> Result<Vec<crate::SolidMesh>, String> 
             .find(|i| matches!(i, AppearanceItem::Fill(_)) && crate::paints(i))
             .or_else(|| n.appearance.items.iter().rev().find(|i| crate::paints(i)))
             .ok_or("the revolved object has no fill or stroke")?;
-        return Ok(vec![mesh(&path, fx, item)?]);
+        let mut out = vec![];
+        crate::solids::keep_mesh(&mut out, total, mesh(&path, fx, item)?, limit)?;
+        return Ok(out);
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
     let mut out = vec![];
@@ -259,7 +262,7 @@ pub(crate) fn revolve_meshes(n: &Node) -> Result<Vec<crate::SolidMesh>, String> 
             && let Some(fx) = item.effects().get(index)
         {
             let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
-            out.push(mesh(&p, fx, item)?);
+            crate::solids::keep_mesh(&mut out, total, mesh(&p, fx, item)?, limit)?;
         }
     }
     Ok(out)

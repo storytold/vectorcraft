@@ -597,7 +597,7 @@ pub(super) fn join(s: &mut Session, p: &Value) -> Result<Value> {
         },
     };
 
-    if let Some(ids) = ids_param(p, "ids") {
+    if let Some(ids) = ids_param(p, "ids", C)? {
         if ends.is_some() && ids.len() > 2 {
             return Err(bad(C, "`ends` applies to joining exactly two paths"));
         }
@@ -1101,7 +1101,7 @@ fn average_join_ends(s: &Session, p: &Value, c: &str) -> Result<Option<[End; 2]>
     let doc = &st.doc;
     let subpath = |id: NodeId, si: usize| doc.node(id)?.path_data()?.subpaths.get(si).filter(|sp| !sp.closed && !sp.anchors.is_empty());
     let last = |sp: &SubPath| sp.anchors.len().saturating_sub(1);
-    let ids = ids_param(p, "ids");
+    let ids = ids_param(p, "ids", c)?;
     let ends = if ids.is_none() && !st.selection.anchors.is_empty() {
         let picked: Vec<End> = st.selection.anchors.iter().flat_map(|(&id, set)| set.iter().map(move |&(si, ai)| (id, si, ai))).collect();
         match picked.as_slice() {

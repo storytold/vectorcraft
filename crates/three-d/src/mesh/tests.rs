@@ -263,6 +263,23 @@ fn inflate_puffs_the_front_toward_the_viewer() {
 }
 
 #[test]
+fn inflate_builds_each_solid_as_it_is_reached() {
+    let (mut a, mut b) = (BezPath::new(), BezPath::new());
+    square(&mut a, 0.0, 0.0, 100.0, false);
+    square(&mut b, 120.0, 0.0, 100.0, false);
+    let ((pa, _), (pb, _)) = (shape(&a), shape(&b));
+    let built = || crate::solid::INFLATED.with(|n| n.get());
+    let start = built();
+    let mut meshes =
+        inflate_meshes(&[(&pa, FillRule::NonZero), (&pb, FillRule::NonZero)], Rect::new(0.0, 0.0, 220.0, 100.0), Inflate::default(), front());
+    assert_eq!(built(), start, "no solid is built before the first mesh is asked for");
+    assert!(meshes.next().is_some_and(|m| m.is_ok_and(|m| !m.is_empty())));
+    assert_eq!(built(), start + 1, "the second solid waits until it is reached");
+    assert!(meshes.next().is_some_and(|m| m.is_ok_and(|m| !m.is_empty())));
+    assert_eq!(built(), start + 2);
+}
+
+#[test]
 fn an_empty_shape_makes_an_empty_mesh() {
     let p = PathData::new(vec![]);
     let m = plane_mesh(&p, FillRule::NonZero, Rect::new(0.0, 0.0, 10.0, 10.0), front()).unwrap();

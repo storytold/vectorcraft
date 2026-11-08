@@ -34,7 +34,9 @@
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
-//!   become an RGBA PNG.
+//!   become an RGBA PNG. Images larger than 2^25 pixels keep their samples' channels (1-bit gray as
+//!   a 1-bit PNG), and are averaged down past a target size ([`raster`]); past the hard limits, one
+//!   is a box that the page's art replaces when there is a page ([`read_over_page`]).
 //! - Linked images in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF` with the
 //!   operands `XI` takes and no samples. Each is a linked image of that file showing a placeholder
 //!   over the image's place until its file is found. An `XF` without a file name before it, or
@@ -134,6 +136,7 @@ mod document;
 mod masks;
 mod on_path;
 mod ops;
+mod raster;
 mod types;
 
 pub(crate) use art::join_and;
@@ -143,10 +146,12 @@ pub use document::{
 };
 pub(crate) use document::{slot_frame, slot_of};
 pub(crate) use ops::read_art_style;
+#[cfg(test)]
+pub(crate) use raster::with_image_limits;
+pub use types::PlacedPage;
 use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
-pub use types::{IMAGE_TOO_LARGE, PlacedPage};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
@@ -235,19 +240,32 @@ pub(super) fn remember_xml_id(xml_ids: &mut HashMap<String, Option<NodeId>>, byt
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
 /// keep the reduced one, which the PDF import reads as it is (#2031).
 pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, false)
+}
+
+/// [`read`] for a file whose page art replaces the objects the reader doesn't read (see
+/// [`Reader::unread_box`]): an image past the hard limits ([`raster::Limits`]) is then such an
+/// object, where [`read`] leaves it out with a note.
+pub(crate) fn read_over_page(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, true)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structure, String> {
     let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     r.run()?;
     r.finish()
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
 /// data): the program's header gives the author and the custom colors the editing data's header
-/// doesn't.
-pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structure, String> {
+/// doesn't. `page_art`: as [`read_over_page`] reads a file.
+pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool) -> Result<Structure, String> {
     let header = Reader::header_of(ps);
     let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     // The program's custom colors have swatches of their names, which no gradient or pattern takes.
     for n in &header.custom_colors {
         r.global_names.reserve(&n.name);
@@ -587,6 +605,8 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The file has page art to replace the objects that aren't read ([`read_over_page`]).
+    page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
@@ -756,6 +776,7 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            page_art: false,
             canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,

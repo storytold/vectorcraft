@@ -777,7 +777,8 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         stamp_doc_dates(Arc::make_mut(&mut snapshot), at);
     }
     // A native file records its links' paths relative to where it is written.
-    let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, p));
+    let base = crate::cmd::links::LinkBase::of(st);
+    let relative = plan.path.as_deref().filter(|_| is_native(plan.format)).and_then(|p| crate::cmd::links::with_relative_paths(&own, base, p));
     let doc = relative.map_or(own, Arc::new);
     let mut params = plan.options.clone();
     if is_svg(plan.format) {

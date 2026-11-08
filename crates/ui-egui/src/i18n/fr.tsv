@@ -368,6 +368,13 @@ font-technology	Variable	Variables
 	Apply Bullets	Appliquer les puces
 	Numbered List	Liste numérotée
 	Apply Numbers	Appliquer la numérotation
+	Bullets and Numbering…	Puces et numérotation…
+	Numbers	Numéros
+	Level:	Niveau :
+	Bullet Character:	Caractère de puce :
+	Number Style:	Style de numéro :
+	Left Indent:	Retrait gauche :
+	First Line Indent:	Retrait de première ligne :
 	Convert to Text	Convertir en texte
 	Filled Dot	Point plein
 	Dash	Tiret
@@ -3455,6 +3462,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Paramètres Tate-chu-yoko…
 	Tate-chu-yoko Settings	Paramètres Tate-chu-yoko
+	Composite Fonts…	Polices composites…
+	Composite Fonts	Polices composites
+	Export Composite Fonts	Exporter des polices composites
+	Import Composite Fonts	Importer des polices composites
+	Delete Font	Supprimer la police
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Chiffres
+	Scale at Center	Mettre à l’échelle depuis le centre
 	Up/Down:	Haut/bas :
 	Left/Right:	Gauche/droite :
 	Temperature	Température
@@ -4724,6 +4740,7 @@ axis	Both	Les deux
 @msg	an image VectorCraft can't read was left out	une image que VectorCraft ne peut pas lire a été ignorée
 @msg	graphs come in as plain art, without their data or settings	les graphes sont importés comme illustration ordinaire, sans leurs données ni leurs réglages
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	une image incorporée de {_1} × {_2} pixels a été réduite à {_3} × {_4} pixels pour conserver les calques
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
@@ -4805,6 +4822,7 @@ axis	Both	Les deux
 @msg	object ids are non-negative integers, not {v}	les identifiants d’objet sont des entiers positifs ou nuls, pas {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} doit être un tableau d’identifiants d’objet, entiers positifs ou nuls
 @msg	invalid object id {value}: expected a non-negative integer	identifiant d’objet {value} non valide (un entier positif ou nul est attendu)
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrée {index} de `{key}` vaut {value}, pas un identifiant d’objet (entier positif ou nul)
 @msg	no such object id {value}	aucun objet ne porte l’identifiant {value}
 @msg	id {value} is a layer, not an object	l’identifiant {value} désigne un calque, pas un objet
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’identifiant {value} désigne un calque, pas un objet ; déplacez les calques avec layer.move
@@ -5856,6 +5874,9 @@ axis	Y Axis	Axe Y
 	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
 	ID: {id}	ID : {id}
 	Version: {version}	Version : {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installer « {name} » à la place du module externe qui a le même ID ?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ce fichier n’est pas le module externe installé auparavant avec cet ID. Il reçoit les réglages et le cache conservés pour cet ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	« {name} » est un autre module que le module externe d’ID {_1} et recevrait les réglages et le cache conservés pour celui-ci : installez-le avec `replace: true` une fois que l’utilisateur l’accepte
 	File SHA-256: {hash}	SHA-256 du fichier : {hash}
 	Read the objects it is given	Lire les objets qui lui sont transmis
 	Change, add and delete objects in the document	Modifier, ajouter et supprimer des objets du document
@@ -5863,10 +5884,13 @@ axis	Y Axis	Axe Y
 	Change how the objects its effect is applied to are drawn	Modifier le rendu des objets auxquels son effet est appliqué
 	Write the document as a file in its own format	Écrire le document dans un fichier à son propre format
 	Show its progress, see Cancel and write log lines	Afficher sa progression, détecter l’annulation et écrire des lignes de journal
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `progress` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
+	Keep settings of its own	Conserver ses propres réglages
+	Keep a cache of its own, which you can clear	Conserver son propre cache, que vous pouvez vider
+	Clear Plug-in Cache	Vider le cache du module externe
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `{permission}` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	le module importe `env.{name}` avec un autre type que celui de l’hôte : celui de l’hôte est {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que `env.vc_progress`, `env.vc_cancelled` et `env.vc_log` (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que les fonctions `env.vc_*` que liste docs/plugins.md (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` est réservé à un effet dynamique (`kind` "effect") avec `api` 2
 @msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations

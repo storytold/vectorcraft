@@ -121,6 +121,7 @@ pub use text::{
     RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
     WrapShape,
 };
+pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -195,6 +196,9 @@ pub struct Document {
     /// Paragraph styles (besides the built-in [Normal Paragraph Style]).
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub para_styles: Shared<Vec<TextStyleDef>>,
+    /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub composite_fonts: Shared<Vec<CompositeFont>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,

@@ -365,6 +365,13 @@ font-technology	Variable	Вариативные
 	Apply Bullets	Применить маркеры
 	Numbered List	Нумерованный список
 	Apply Numbers	Применить нумерацию
+	Bullets and Numbering…	Маркеры и нумерация…
+	Numbers	Номера
+	Level:	Уровень:
+	Bullet Character:	Символ маркера:
+	Number Style:	Стиль нумерации:
+	Left Indent:	Отступ слева:
+	First Line Indent:	Отступ первой строки:
 	Convert to Text	Преобразовать в текст
 	Filled Dot	Закрашенная точка
 	Dash	Тире
@@ -3494,6 +3501,15 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Composite Fonts…	Составные шрифты…
+	Composite Fonts	Составные шрифты
+	Export Composite Fonts	Экспорт составных шрифтов
+	Import Composite Fonts	Импорт составных шрифтов
+	Delete Font	Удалить шрифт
+	Kanji	Кандзи
+	Kana	Кана
+	Numerals	Цифры
+	Scale at Center	Масштабировать от центра
 	Up/Down:	Вверх/вниз:
 	Left/Right:	Влево/вправо:
 	Temperature	Температура
@@ -4773,6 +4789,7 @@ axis	Both	Оба
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	встроенное изображение {_1} × {_2} пикселей уменьшено до {_3} × {_4} пикселей, чтобы сохранить слои
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, меняющий направление письма внутри текстового объекта, открывается в направлении своего первого символа
@@ -4836,6 +4853,7 @@ axis	Both	Оба
 @msg	object ids are non-negative integers, not {v}	идентификаторы объектов — неотрицательные целые числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} должно быть массивом идентификаторов объектов, которые являются неотрицательными целыми числами
 @msg	invalid object id {value}: expected a non-negative integer	недопустимый идентификатор объекта {value}: ожидается неотрицательное целое число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	элемент {index} в `{key}` равен {value}, а не идентификатору объекта (неотрицательному целому числу)
 @msg	no such object id {value}	объект с идентификатором {value} не существует
 @msg	id {value} is a layer, not an object	идентификатор {value} относится к слою, а не к объекту
 @msg	id {value} is a layer, not an object; move layers with layer.move	идентификатор {value} относится к слою, а не к объекту; перемещайте слои с помощью layer.move
@@ -5472,6 +5490,9 @@ axis	Y Axis	Ось Y
 	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
 	ID: {id}	ID: {id}
 	Version: {version}	Версия: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Установить «{name}» вместо модуля с тем же ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Этот файл не является модулем, установленным ранее с этим ID. Он получит настройки и кэш, сохранённые для этого ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	«{name}» отличается от модуля с ID {_1} и получил бы сохранённые для него настройки и кэш: установите его с `replace: true`, когда пользователь согласится
 	File SHA-256: {hash}	SHA-256 файла: {hash}
 	Read the objects it is given	Читать переданные ему объекты
 	Change, add and delete objects in the document	Изменять, добавлять и удалять объекты в документе
@@ -5479,10 +5500,13 @@ axis	Y Axis	Ось Y
 	Change how the objects its effect is applied to are drawn	Изменять то, как рисуются объекты, к которым применён его эффект
 	Write the document as a file in its own format	Записывать документ в файл собственного формата
 	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `progress` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
+	Keep settings of its own	Хранить собственные настройки
+	Keep a cache of its own, which you can clear	Хранить собственный кэш, который можно очистить
+	Clear Plug-in Cache	Очистить кэш модуля
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `{permission}` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только `env.vc_progress`, `env.vc_cancelled` и `env.vc_log` (уровень API модулей 2), без WASI, файлов и сети
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только функции `env.vc_*`, перечисленные в docs/plugins.md (уровень API модулей 2), без WASI, файлов и сети
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` допустим только для динамического эффекта (`kind` "effect") с `api` 2
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
