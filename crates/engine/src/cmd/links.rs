@@ -24,11 +24,12 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
 use vectorcraft_doc::{Appearance, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions};
-use vectorcraft_geom::{Affine, Rect, shapes};
+use vectorcraft_geom::{Affine, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, id_param, ids_param, str_param};
@@ -49,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. One undo step → {updated: [ids], missing: [ids]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. The images and placed documents inside symbols, graph designs, patterns and opacity masks that show the same content are read again too (by default also those only that art shows); they have no ids to list. One undo step → {updated: [ids], missing: [ids]}",
             has_doc,
             update
         ),
@@ -483,23 +484,183 @@ fn read_for(f: &mut Found, g: &Group, cmd: &str) -> Result<Read> {
     Ok(Read::Document(f.link(&bytes, &g.link), src))
 }
 
-/// Objects `ids` show what was read (see [`install`], [`install_document`]).
-fn install_read(d: &mut Document, ids: &[NodeId], read: Read, force: Option<Preserve>) -> Result<()> {
+/// Objects `ids` show what was read (see [`install`], [`install_document`]), and with `also`, the
+/// objects outside the layer tree that show group `also`'s content.
+fn install_read(d: &mut Document, ids: &[NodeId], read: Read, force: Option<Preserve>, also: Option<&Group>) -> Result<()> {
+    let also = also.map(|g| (g.link.path.as_str(), g.key.as_str()));
     match read {
-        Read::Image(r) => install(d, ids, r, force),
-        Read::Document(link, src) => install_document(d, ids, &link, &src, force),
+        Read::Image(r) => install(d, ids, r, force, also),
+        Read::Document(link, src) => install_document(d, ids, &link, &src, force, also),
+    }
+}
+
+/// Is `n` a linked image (or, with `document`, a placed document) of the file at `path` showing
+/// content `key`?
+fn shows(n: &Node, (path, key): (&str, &str), document: bool) -> bool {
+    match &n.kind {
+        NodeKind::Image(im) => !document && im.key == key && im.link.as_ref().is_some_and(|l| l.path == path),
+        NodeKind::PlacedDocument(p) => document && p.key == key && p.link.path == path,
+        _ => false,
+    }
+}
+
+/// The clipping path of `clip`: its room as a rectangle in its frame.
+fn clip_shape((frame, room): Clip) -> PathData {
+    shapes::rectangle(Rect::new(0.0, 0.0, room.0, room.1)).transformed(frame)
+}
+
+/// Remakes the linked objects outside the layer tree (in symbols, graph designs, patterns and
+/// opacity masks, where [`Document::node`] finds no ids) that `pick` holds for.
+struct Nested<'a> {
+    pick: &'a dyn Fn(&Node) -> bool,
+    /// The object an object becomes, and the clip it takes ([`placed_xf`]).
+    make: &'a mut dyn FnMut(&Node) -> (Node, Option<Clip>),
+    /// The next node id for a clip group (taken from the document after the walk).
+    next: u64,
+}
+
+impl Nested<'_> {
+    /// Every root of `d`: the layers (whose own objects are left alone), then the art of symbols,
+    /// graph designs and patterns.
+    fn run(mut self, d: &mut Document) {
+        let first = d.peek_next_id();
+        self.next = first;
+        for l in d.layers.iter_mut() {
+            self.update(l, false);
+        }
+        for root in d.symbols.iter_mut().map(|s| &mut s.art).chain(d.graph_designs.iter_mut().map(|g| &mut g.art)) {
+            self.root(root);
+        }
+        for root in d.patterns.iter_mut().flat_map(|p| &mut p.art) {
+            self.root(root);
+        }
+        for _ in first..self.next {
+            d.alloc_id();
+        }
+    }
+
+    /// The art at a root outside the layer tree (a symbol's, graph design's or pattern's art, or
+    /// mask art).
+    fn root(&mut self, n: &mut Arc<Node>) {
+        if !(self.pick)(n) {
+            return self.update(n, true);
+        }
+        let (new, clip) = (self.make)(n);
+        let mut new = Arc::new(new);
+        self.update(&mut new, true);
+        *n = match clip {
+            Some(clip) => Arc::new(self.clip_group(new, clip)),
+            None => new,
+        };
+    }
+
+    /// `n` (outside the layer tree when `nested`) with the picked objects under it remade; it stays
+    /// the same node when none is there, and only the nodes on the way to one are copied.
+    fn update(&mut self, n: &mut Arc<Node>, nested: bool) {
+        let mask = n.extras().mask.as_ref().and_then(|m| {
+            let mut art = Arc::clone(&m.art);
+            self.root(&mut art);
+            (!Arc::ptr_eq(&art, &m.art)).then_some(art)
+        });
+        let mut slots: Vec<(usize, Arc<Node>)> = vec![];
+        if let Some(children) = n.children() {
+            // A clip group holding just the object: its clipping path changes.
+            let clip_path = match (&n.kind, &children[..]) {
+                (NodeKind::Group { clip: true, .. }, [c, _]) if matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c),
+                _ => None,
+            };
+            for (i, c) in children.iter().enumerate() {
+                if !(nested && (self.pick)(c)) {
+                    let mut new = Arc::clone(c);
+                    self.update(&mut new, nested);
+                    if !Arc::ptr_eq(&new, c) {
+                        slots.push((i, new));
+                    }
+                    continue;
+                }
+                let (new, clip) = (self.make)(c);
+                let mut new = Arc::new(new);
+                self.update(&mut new, true);
+                match (clip, clip_path) {
+                    (None, _) => slots.push((i, new)),
+                    (Some(clip), Some(path)) if i == 1 => {
+                        let mut path = Node::clone(path);
+                        if let NodeKind::Path { path: p, .. } = &mut path.kind {
+                            *p = clip_shape(clip);
+                        }
+                        slots.extend([(0, Arc::new(path)), (1, new)]);
+                    }
+                    (Some(clip), _) => {
+                        let group = self.clip_group(new, clip);
+                        slots.push((i, Arc::new(group)));
+                    }
+                }
+            }
+        }
+        if mask.is_none() && slots.is_empty() {
+            return;
+        }
+        let n = Arc::make_mut(n);
+        if let (Some(art), Some(m)) = (mask, n.extras_if_any().and_then(|e| e.mask.as_mut())) {
+            m.art = art;
+        }
+        if let Some(children) = n.children_mut() {
+            for (i, c) in slots {
+                if let Some(slot) = children.get_mut(i) {
+                    *slot = c;
+                }
+            }
+        }
+    }
+
+    /// A clip group of `object` clipped to `clip`, as [`clip_image`] makes one in the layers.
+    fn clip_group(&mut self, object: Arc<Node>, clip: Clip) -> Node {
+        let (path_id, group_id) = (NodeId(self.next), NodeId(self.next + 1));
+        self.next += 2;
+        let none = vectorcraft_color::Paint::None;
+        let mut path = Node::path(path_id, clip_shape(clip), Appearance::basic(none.clone(), none, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut path.kind {
+            *clipping = true;
+        }
+        Node::new(group_id, NodeKind::Group { children: vec![Arc::new(path), object], clip: true })
     }
 }
 
 /// Placed documents `ids` show `src`, read from the file `link` points at, each placed as its
-/// Placement Options say (`force`: as that Preserve choice says, whatever they say).
-fn install_document(d: &mut Document, ids: &[NodeId], link: &LinkInfo, src: &super::place::document::Source, force: Option<Preserve>) -> Result<()> {
+/// Placement Options say (`force`: as that Preserve choice says, whatever they say); with `also`
+/// (a file's path and the content shown), so do the placed documents outside the layer tree that
+/// show that content.
+fn install_document(
+    d: &mut Document,
+    ids: &[NodeId],
+    link: &LinkInfo,
+    src: &super::place::document::Source,
+    force: Option<Preserve>,
+    also: Option<(&str, &str)>,
+) -> Result<()> {
     let mut clips = vec![];
     let (w, h) = (src.frame.width(), src.frame.height());
+    let placed = |p: &PlacedDocument| {
+        let o = PlacementOptions { preserve: force.unwrap_or(p.placement.preserve), ..p.placement };
+        placed_xf(p.xf, (p.width, p.height), (1.0, 1.0), (w, h), (1.0, 1.0), o)
+    };
+    if let Some(also) = also {
+        let pick = |n: &Node| shows(n, also, true);
+        let mut make = |n: &Node| {
+            let mut n = n.clone();
+            let mut clip = None;
+            if let NodeKind::PlacedDocument(p) = &mut n.kind {
+                let (xf, c) = placed(p);
+                (p.key, p.width, p.height, p.xf, p.link) = (src.key.clone(), w, h, xf, link.clone());
+                clip = c;
+            }
+            (n, clip)
+        };
+        Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
+    }
     for id in ids {
         let Some(NodeKind::PlacedDocument(p)) = d.node(*id).map(|n| &n.kind) else { continue };
-        let o = PlacementOptions { preserve: force.unwrap_or(p.placement.preserve), ..p.placement };
-        let (xf, clip) = placed_xf(p.xf, (p.width, p.height), (1.0, 1.0), (w, h), (1.0, 1.0), o);
+        let (xf, clip) = placed(p);
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::PlacedDocument(p) = &mut n.kind
         {
@@ -565,8 +726,8 @@ fn placed_xf(xf: Affine, old: (f64, f64), old_pt: (f64, f64), new: (f64, f64), n
 
 /// Clip image `id` of `d` to `room` in `frame`: the clipping path of the clip group holding just
 /// it changes, else the image goes into a new clip group.
-fn clip_image(d: &mut Document, id: NodeId, (frame, room): Clip) -> Result<()> {
-    let path = shapes::rectangle(Rect::new(0.0, 0.0, room.0, room.1)).transformed(frame);
+fn clip_image(d: &mut Document, id: NodeId, clip: Clip) -> Result<()> {
+    let path = clip_shape(clip);
     let clip_path = d.parent_of(id).and_then(|p| match &d.node(p)?.kind {
         NodeKind::Group { children, clip: true } => match &children[..] {
             [c, im] if im.id == id && matches!(c.kind, NodeKind::Path { clipping: true, .. }) => Some(c.id),
@@ -602,14 +763,33 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     let path = fileio::document_path(path, doc_path).map_err(|r| EngineError::Other(format!("the image `{path}` isn't followed: {r}")))?;
     let bytes = read_file(&path)?;
     let read = (link_info(&path, &bytes), linked_image(&bytes)?);
-    install(d, &[id], read, Some(Preserve::Bounds))
+    install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
 /// Image objects `ids` show the file read for `link` (`img`), each placed as its Placement
-/// Options say (`force`: as that Preserve choice says, whatever they say).
-fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>) -> Result<()> {
+/// Options say (`force`: as that Preserve choice says, whatever they say); with `also` (a file's
+/// path and the content shown), so do the images outside the layer tree that show that content.
+fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
     let new_pt = super::place::pt_per_px(img.ppi);
     let mut clips = vec![];
+    if let Some(also) = also {
+        // Every image picked shows content `also.1`, so one resolution serves them all.
+        let old_pt = file_pt(d, also.1);
+        let pick = |n: &Node| shows(n, also, false);
+        let mut make = |n: &Node| {
+            let mut n = n.clone();
+            let mut clip = None;
+            if let NodeKind::Image(im) = &mut n.kind {
+                let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
+                let size = |w: u32, h: u32| (w as f64, h as f64);
+                let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
+                (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
+                clip = c;
+            }
+            (n, clip)
+        };
+        Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
+    }
     for id in ids {
         let Some(NodeKind::Image(im)) = d.node(*id).map(|n| &n.kind) else { continue };
         let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
@@ -678,6 +858,9 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
     // of other keys linking to the same file share them, rather than each reading, decoding and
     // keeping a copy of its own.
     let mut read_images: BTreeMap<String, (ImageBlob, String)> = BTreeMap::new();
+    // (the path as it was, the content shown, a placed document?, the link now) of each file found
+    // away from its path or read again.
+    let mut moved: Vec<(String, String, bool, LinkInfo)> = vec![];
     for g in groups(d, None) {
         let row = rows(std::iter::once(&g), doc_path);
         let unread = g.document.is_none() && g.link.hash.is_none() && g.link.size.is_none() && previewing(d, &g.key);
@@ -685,7 +868,8 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
         match probe(&g, doc_path) {
             (Status::Missing, _) => out.missing.extend(row),
             (Status::Modified, Some(mut f)) if update || unread => {
-                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, unread.then_some(Preserve::Bounds))) {
+                let force = unread.then_some(Preserve::Bounds);
+                match read_for(&mut f, &g, "document.open").and_then(|read| install_read(d, &g.ids, read, force, Some(&g))) {
                     Ok(()) if unread => {}
                     Ok(()) => out.updated.extend(row),
                     Err(_) => out.missing.extend(row),
@@ -697,7 +881,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                 let read = if stale(d, &g) { Some(read_for(&mut f, &g, "document.open")) } else { None };
                 match read {
                     Some(Ok(read)) => {
-                        if install_read(d, &g.ids, read, Some(Preserve::Bounds)).is_err() {
+                        if install_read(d, &g.ids, read, Some(Preserve::Bounds), Some(&g)).is_err() {
                             out.missing.extend(row);
                         }
                     }
@@ -709,6 +893,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                         };
                         if link != g.link {
                             set_links(d, &g.ids, &link);
+                            moved.push((g.link.path.clone(), g.key.clone(), true, link));
                         }
                     }
                 }
@@ -720,6 +905,7 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                     let link = f.link_hashed(hash, &g.link);
                     if link != g.link {
                         set_links(d, &g.ids, &link);
+                        moved.push((g.link.path.clone(), g.key.clone(), false, link));
                     }
                     continue;
                 }
@@ -745,10 +931,33 @@ pub fn resolve(d: &mut Document, doc_path: Option<&str>, update: bool, low_res_p
                 };
                 if link != g.link {
                     set_links(d, &g.ids, &link);
+                    moved.push((g.link.path.clone(), g.key.clone(), false, link));
                 }
             }
             (Status::Ok, None) => {}
         }
+    }
+    // The objects in symbols, graph designs, patterns and opacity masks that show the same file and
+    // content, which have no ids here, whatever else their links hold.
+    if !moved.is_empty() {
+        let mut by_path: BTreeMap<String, Vec<(String, bool, LinkInfo)>> = BTreeMap::new();
+        for (path, key, document, new) in moved {
+            by_path.entry(path).or_default().push((key, document, new));
+        }
+        let new = |n: &Node| {
+            let (l, key, document) = linked(n)?;
+            let m = by_path.get(&l.path)?;
+            m.iter().find(|(k, doc, _)| k == key && *doc == document.is_some()).map(|(_, _, new)| new)
+        };
+        let pick = |n: &Node| new(n).is_some();
+        let mut make = |n: &Node| {
+            let mut out = n.clone();
+            if let (Some(link), Some(l)) = (new(n), link_mut(&mut out)) {
+                *l = link.clone();
+            }
+            (out, None)
+        };
+        Nested { pick: &pick, make: &mut make, next: 0 }.run(d);
     }
     out
 }
@@ -772,35 +981,31 @@ fn set_links(d: &mut Document, ids: &[NodeId], link: &LinkInfo) {
 }
 
 /// Placed documents of the document saved at `path` (document `saved` of `s`) in the other open
-/// documents: read again from the new file, each as one Update Links step of its document.
+/// documents, in the layers, symbols, graph designs, patterns and opacity masks: read again from
+/// the new file, each as one Update Links step of its document.
 pub(crate) fn refresh_placed(s: &mut Session, saved: u64, path: &str) {
     let path = absolute_path(path);
-    let targets: Vec<(usize, Vec<u64>)> = s
+    let targets: Vec<usize> = s
         .documents()
         .iter()
         .enumerate()
         .filter(|(_, st)| st.uid != saved)
-        .filter_map(|(i, st)| {
-            let mut ids = vec![];
-            st.doc.walk(|n| {
-                if let NodeKind::PlacedDocument(p) = &n.kind
-                    && p.link.path == path
-                {
-                    ids.push(n.id.0);
-                }
-            });
-            (!ids.is_empty()).then_some((i, ids))
+        .filter(|(_, st)| {
+            let mut placed = false;
+            st.doc.visit_placed(|_, p| placed |= p.link.path == path);
+            placed
         })
+        .map(|(i, _)| i)
         .collect();
     if targets.is_empty() {
         return;
     }
     // Each document is updated as the active one, without switching tools.
     let back = s.active;
-    for (i, ids) in targets {
+    for i in targets {
         s.active = Some(i);
         // A file that can't be read leaves what its objects show: links.check reports it.
-        let _ = update(s, &json!({ "ids": ids }));
+        let _ = update_where(s, None, Some(&path));
     }
     s.active = back;
 }
@@ -826,28 +1031,20 @@ fn relative_path(target: &Path, base: &Path) -> Option<String> {
 }
 
 /// `d` as saved to `dest`: the links' paths relative to its folder written in; `None` when they
-/// are already.
+/// are already. Links in the layers, symbols, graph designs, patterns and opacity masks are all set.
 pub fn with_relative_paths(d: &Document, dest: &str) -> Option<Document> {
     let dest = absolute_path(dest);
     let dir = Path::new(&dest).parent()?;
-    let mut changes = vec![];
-    d.walk(|n| {
-        if let Some((l, _, _)) = linked(n) {
-            let r = relative_path(Path::new(&l.path), dir);
-            if r != l.relative {
-                changes.push((n.id, r));
-            }
-        }
-    });
-    if changes.is_empty() {
+    let relative = |l: &LinkInfo| relative_path(Path::new(&l.path), dir);
+    let outdated = |l: &LinkInfo| relative(l) != l.relative;
+    let mut changed = false;
+    d.visit_images(|_, im| changed |= im.link.as_ref().is_some_and(outdated));
+    d.visit_placed(|_, p| changed |= outdated(&p.link));
+    if !changed {
         return None;
     }
     let mut d = d.clone();
-    for (id, r) in changes {
-        if let Some(l) = d.node_mut(id).and_then(link_mut) {
-            l.relative = r;
-        }
-    }
+    d.update_links_where(outdated, |l| l.relative = relative(l));
     Some(d)
 }
 
@@ -898,24 +1095,32 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
+    update_where(s, ids_param(p, "ids"), None)
+}
+
+/// Update Links in the active document of `s` for objects `ids` (default: the linked files that
+/// changed or show their preview), or with `path`, for the placed documents of the file at `path`
+/// whatever their status. The objects in symbols, graph designs, patterns and opacity masks that
+/// show the same content are read again too, and have no ids to report.
+fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -> Result<Value> {
     let st = s.doc()?;
-    let ids = ids_param(p, "ids");
     let (mut reads, mut missing) = (vec![], vec![]);
-    for g in groups(&st.doc, ids.as_deref()).into_iter().filter(|g| !g.ids.is_empty()) {
+    let asked = ids.is_some() || path.is_some();
+    for g in groups(&st.doc, ids.as_deref()).into_iter().filter(|g| path.is_none_or(|p| g.document.is_some() && g.link.path == p)) {
         match probe(&g, st.path.as_deref()) {
             (Status::Missing, _) | (_, None) => missing.extend(ids_json(&g.ids)),
-            // Unchanged and showing the file: nothing to read unless asked for by id.
-            (Status::Ok, Some(_)) if ids.is_none() && !stale(&st.doc, &g) => {}
+            // Unchanged and showing the file: nothing to read unless asked for.
+            (Status::Ok, Some(_)) if !asked && !stale(&st.doc, &g) => {}
             // Unreadable as an image (or a document) counts as missing.
             (_, Some(mut f)) => match read_for(&mut f, &g, "links.update") {
-                Ok(read) => reads.push((g.ids, read)),
+                Ok(read) => reads.push((g, read)),
                 Err(_) => missing.extend(ids_json(&g.ids)),
             },
         }
     }
-    let updated: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
+    let updated: Vec<u64> = reads.iter().flat_map(|(g, _)| ids_json(&g.ids)).collect();
     if !reads.is_empty() {
-        s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, None)))?;
+        s.edit("Update Links", |d, _| reads.into_iter().try_for_each(|(g, read)| install_read(d, &g.ids, read, None, Some(&g))))?;
     }
     Ok(json!({ "updated": updated, "missing": missing }))
 }
@@ -1033,7 +1238,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let relinked: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
     if !reads.is_empty() {
-        s.edit("Relink", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve)))?;
+        s.edit("Relink", |d, _| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve, None)))?;
     }
     not_found.sort();
     not_found.dedup();
@@ -1292,7 +1497,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if !done.is_empty() || !documents.is_empty() {
         s.edit("Embed", |d, _| {
             for (ids, read) in reads {
-                install(d, &ids, read, Some(Preserve::Bounds))?;
+                install(d, &ids, read, Some(Preserve::Bounds), None)?;
             }
             for id in &done {
                 if let Some(Node { kind: NodeKind::Image(im), .. }) = d.node_mut(*id) {
@@ -1349,7 +1554,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     let img = linked_image(&bytes)?;
     write_file(&path, &bytes)?;
     let read = (link_info(&path, &bytes), img);
-    s.edit("Unembed", |d, _| install(d, &[id], read, Some(Preserve::Bounds)))?;
+    s.edit("Unembed", |d, _| install(d, &[id], read, Some(Preserve::Bounds), None))?;
     Ok(json!({ "id": id.0, "path": path }))
 }
 

@@ -891,6 +891,36 @@ fn saving_a_document_refreshes_the_open_documents_that_place_it() {
     assert_eq!(s.active_index(), Some(child), "the saved document stays active");
 }
 
+/// Placed documents inside a symbol and a pattern of another open document are read again when
+/// their file is saved, as one in the layers is.
+#[test]
+fn saving_a_document_refreshes_its_placed_copies_inside_symbols_and_patterns() {
+    let dir = Folder::new("placed-refresh-nested");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("symbol.new", &json!({"name": "Logo", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &src);
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let parent = s.active_index().unwrap();
+    let mut in_layers = 0;
+    s.doc().unwrap().doc.walk(|n| in_layers += usize::from(matches!(n.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(in_layers, 0, "no placed document in the layers");
+    s.execute("document.open", &json!({"path": src})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#1414e6"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let hash = Some(vectorcraft_doc::links::hash_bytes(&std::fs::read(&src).unwrap()));
+    let doc = &s.documents()[parent];
+    assert_eq!(doc.history.undo.last().unwrap().label, "Update Links");
+    assert!(near(centre_colour(&doc.doc), BLUE), "the symbol's instance shows the saved version");
+    let mut hashes = vec![];
+    doc.doc.visit_placed(|_, p| hashes.push(p.link.hash.clone()));
+    assert_eq!(hashes, [hash.clone(), hash], "the symbol's, then the pattern's");
+}
+
 #[test]
 fn link_info_gives_the_artboards_size_not_pixels() {
     let dir = Folder::new("placed-info");

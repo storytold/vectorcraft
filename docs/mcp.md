@@ -4323,9 +4323,11 @@ is mixed with middle gray by its alpha.
 
 A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,
 modification time and hash, and keeps a low-resolution preview (at most 256 px a side): a `.vectorcraft` save writes
-the preview instead of the pixels, plus the path relative to the saved file. `document.open` reads
+the preview instead of the pixels, plus the path relative to the saved file. Links inside symbols, graph designs,
+patterns and opacity masks are saved with their relative paths too. `document.open` reads
 the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
-(so a folder moved with its links still opens). Only files on this computer, or on the network share the document is
+(so a folder moved with its links still opens), and each link, in the layers or inside that art, takes the path where
+its file was found. Only files on this computer, or on the network share the document is
 on, are looked at: a path to another computer, a device or a URL counts as missing. On Windows, a document opened from
 a mapped drive (`Z:\…`) is on the share the drive is mapped to, and links on that share (`\\server\share\…`) are
 looked at. A link on a drive mapped to another share (`Y:\…`) counts as missing, from a document on this computer too.
@@ -4335,7 +4337,11 @@ The result lists `missingLinks`
 path isn't followed) when it isn't. The desktop app also checks the active document's links when its window
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
-another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. A PNG, JPEG,
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
+`links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
+documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
+those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it
+again for the placed documents of it inside that art in the other open documents. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
 showed. Without a file system (the web), linked images show their previews. A link whose path has a colon and no `/`
