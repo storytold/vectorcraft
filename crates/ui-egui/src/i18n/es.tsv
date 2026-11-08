@@ -84,6 +84,11 @@
 	3 Color Job…	Trabajo a 3 colores…
 	30° Angles	Ángulos de 30°
 	3D and Materials	3D y materiales
+	Plane	Plano
+	Extrude	Extrusión
+	Revolve	Revolución
+	Inflate	Inflar
+	Select objects, then pick an object type to give them a 3D effect.	Seleccione objetos y luego elija un tipo de objeto para darles un efecto 3D.
 	3D Ribbon	Cinta 3D
 	45° Angles	Ángulos de 45°
 	60° Angles	Ángulos de 60°
@@ -284,6 +289,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Mostrar líneas en cruz
 	Show Video Safe Areas	Mostrar áreas seguras de video
 	Video Ruler Pixel Aspect Ratio:	Proporción de píxel de las reglas de video:
+	Fade Region Outside Artboard	Atenuar región fuera de la mesa de trabajo
+	Update While Dragging	Actualizar al arrastrar
 	Hide Video Rulers	Ocultar reglas de video
 	Background Contents	Contenido de fondo
 	Background Contents:	Contenido de fondo:
@@ -1378,6 +1385,8 @@ font-technology	Variable	Variables
 	Grays	Grises
 	Grays and Neutrals	Grises y neutros
 	Grayscale	Escala de grises
+	High Color	Muchos colores
+	Low Color	Pocos colores
 	Grayscale images	Imágenes en escala de grises
 	Greek & Cyrillic	Griego y cirílico
 	Green	Verde
@@ -1829,6 +1838,9 @@ font-technology	Variable	Variables
 	Live Paint Selection Tool	Herramienta Selección de pintura interactiva
 	Live Shape Properties	Propiedades de forma dinámica
 	Load Color Profile…	Cargar perfil de color…
+	Load Character Styles…	Cargar estilos de carácter…
+	Load Paragraph Styles…	Cargar estilos de párrafo…
+	Load All Styles…	Cargar todos los estilos…
 	Remove Color Profile…	Quitar perfil de color…
 	Load Image into Clipboard	Cargar imagen en el portapapeles
 	Load Metafile into Clipboard	Cargar metarchivo en el portapapeles
@@ -3936,6 +3948,9 @@ axis	Both	Ambos
 	Put back in the toolbar	Devolver a la barra de herramientas
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
+	Dock to Top	Anclar arriba
+	Dock to Bottom	Anclar abajo
+	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
@@ -4745,6 +4760,7 @@ axis	Both	Ambos
 	Perspective Distort	Distorsión de perspectiva
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` es la referencia a un paso {r}, que solo `run` y `command_batch` resuelven
 @msg	`ids` must be an array of object ids, not {v}	`ids` debe ser una lista de identificadores de objeto, no {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` debe ser una lista de colores, no {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` debe ser una lista de índices de puntos de ancla, no {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: el resultado del paso {i} no tiene ese valor (escriba $$ para un $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: no hay ningún paso {i} antes de este (los pasos se cuentan desde 0; escriba $$ para un $ literal)
@@ -6198,6 +6214,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Hueco 5
 
 @msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objetos de texto deformados que se importaron como arte, no como texto editable: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	los objetos que se dibujaban de forma distinta a la página del propio archivo se importaron como el arte de la página: {_1}
 
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.

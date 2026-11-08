@@ -25,6 +25,32 @@ pub fn is_three_d(id: &str) -> bool {
     id == crate::REVOLVE || SOLIDS.contains(&id)
 }
 
+/// The 3D and Materials panel's object types and the effect that draws each: (type, effect id).
+/// Plane keeps the art flat, which is what Rotate draws.
+pub const THREE_D_TYPES: [(&str, &str); 4] = [("plane", ROTATE), ("extrude", EXTRUDE), ("revolve", crate::REVOLVE), ("inflate", INFLATE)];
+
+/// The parameters of 3D effect `to` for an effect `from` with `params`, as switching the object
+/// type keeps them: every setting `to` takes keeps its value from `params` (the defaults of `from`
+/// under them), each rotation angle wrapped into -180° to 180° when `to` is not Revolve, and the
+/// settings only `to` takes start at their defaults. Settings `to` does not take are dropped.
+pub fn three_d_params_as(from: &str, params: &Value, to: &str) -> Value {
+    let current = crate::merged_params(from, params);
+    let mut out = crate::default_params(to).and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    for (key, value) in out.iter_mut() {
+        if let Some(v) = current.get(key) {
+            value.clone_from(v);
+        }
+    }
+    if to != crate::REVOLVE {
+        for key in ["rotationX", "rotationY", "rotationZ"] {
+            if let Some(a) = out.get(key).and_then(Value::as_f64).filter(|a| !(-180.0..=180.0).contains(a)) {
+                out.insert(key.into(), serde_json::json!((a + 180.0).rem_euclid(360.0) - 180.0));
+            }
+        }
+    }
+    Value::Object(out)
+}
+
 fn solid(fx: &[Effect]) -> Option<(usize, &Effect)> {
     fx.iter().enumerate().find(|(_, e)| e.visible && SOLIDS.contains(&e.id.as_str()))
 }

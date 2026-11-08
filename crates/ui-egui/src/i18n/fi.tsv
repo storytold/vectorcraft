@@ -453,6 +453,11 @@
 	Document Raster Effects Settings…	Asiakirjan rasteritehosteiden asetukset…
 	Vector Effects	Vektoritehosteet
 	3D and Materials	3D ja materiaalit
+	Plane	Taso
+	Extrude	Pursota
+	Revolve	Pyöräytä
+	Inflate	Täytä ilmalla
+	Select objects, then pick an object type to give them a 3D effect.	Valitse objektit ja valitse sitten objektityyppi, niin niille tulee 3D-tehoste.
 	Extrude & Bevel…	Pursota ja viistä…
 	Revolve…	Pyöräytä…
 	Inflate…	Täytä ilmalla…
@@ -807,6 +812,9 @@
 	Put back in the toolbar	Palauta työkaluriviin
 	Float Panel	Kelluta paneeli
 	Dock Panel	Telakoi paneeli
+	Dock to Top	Telakoi ylös
+	Dock to Bottom	Telakoi alas
+	Dock Control Bar	Telakoi ohjauspalkki
 	Float Tool Group	Kelluta työkaluryhmä
 	Services	Palvelut
 	Hide VectorCraft	Piilota VectorCraft
@@ -2533,6 +2541,8 @@ digits	Malayalam	Malajalam
 	Show Cross Hairs	Näytä hiusristikko
 	Show Video Safe Areas	Näytä videon turva-alueet
 	Video Ruler Pixel Aspect Ratio:	Videoviivainten kuvapisteen kuvasuhde:
+	Fade Region Outside Artboard	Himmennä piirtoalustan ulkopuolinen alue
+	Update While Dragging	Päivitä vedettäessä
 	Hide Video Rulers	Piilota videoviivaimet
 	Client-side (.html)	Asiakaspuoli (.html)
 	Color Reduction:	Värien vähennys:
@@ -3169,6 +3179,9 @@ theme	Appearance	Ulkoasu
 	Convert Document Color Mode	Muunna asiakirjan väritila
 	Gamut Warning	Väriavaruusvaroitus
 	Load Color Profile…	Lataa väriprofiili…
+	Load Character Styles…	Lataa merkkityylit…
+	Load Paragraph Styles…	Lataa kappaletyylit…
+	Load All Styles…	Lataa kaikki tyylit…
 	Remove Color Profile…	Poista väriprofiili…
 	Plates	Erottelut
 	Spot Color	Spottiväri
@@ -3789,6 +3802,8 @@ axis	Both	Molemmat
 	Center	Keskitä
 	Transform in Perspective	Muunna perspektiivissä
 	Grayscale	Harmaasävy
+	High Color	Paljon värejä
+	Low Color	Vähän värejä
 	Embed	Upota
 	Star	Tähti
 	Power Saving (integrated)	Virransäästö (integroitu)
@@ -4927,6 +4942,7 @@ imageTrace	Outline	Ääriviiva
 @msg	No linked files to look for	Ei etsittäviä linkitettyjä tiedostoja
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` on vaiheviittaus {r}, jonka vain `run` ja `command_batch` ratkaisevat
 @msg	`ids` must be an array of object ids, not {v}	`ids` on oltava objektitunnusten taulukko, ei {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` on oltava värien taulukko, ei {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` on oltava ankkuri-indeksien taulukko, ei {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: vaiheen {i} tuloksessa ei ole tällaista arvoa (kirjoita $$, jos tarkoitat merkkiä $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: ennen tätä ei ole vaihetta {i} (vaiheet numeroidaan 0:sta; kirjoita $$, jos tarkoitat merkkiä $)
@@ -6286,6 +6302,7 @@ breakText	Glyphs	Merkit
 	Gap 5	Väli 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ne tuotiin sivun piirroksena
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	vääristetyt tekstiobjektit, jotka tuotiin piirroksena eikä muokattavana tekstinä: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objektit, jotka piirtyivät eri tavoin kuin tiedoston oma sivu, tuotiin sivun piirroksena: {_1}
 
 @msg	You must choose a side pattern.	Valitse sivukuvio.

@@ -148,6 +148,11 @@
 	32 bit	32 बिट
 	32 bits/pixel	32 बिट्स/पिक्सेल
 	3D and Materials	3D और मटीरियल्स
+	Plane	समतल
+	Extrude	एक्सट्रूड
+	Revolve	रिवॉल्व
+	Inflate	फुलाएँ
+	Select objects, then pick an object type to give them a 3D effect.	ऑब्जेक्ट्स सिलेक्ट करें, फिर उन्हें 3D इफ़ेक्ट देने के लिए एक ऑब्जेक्ट टाइप चुनें।
 	3D Box	3D बॉक्स
 	3D Box Tool	3D बॉक्स टूल
 	3D Lighting Preset	3D लाइटिंग प्रीसेट
@@ -1300,6 +1305,9 @@
 	Do Not Scale	स्केल न करें
 	Do you want to save the changes you made to “{name}”?	क्या आप "{name}" में किए गए परिवर्तनों को सेव करना चाहते हैं?
 	Dock Panel	पैनल डॉक करें
+	Dock to Top	ऊपर डॉक करें
+	Dock to Bottom	नीचे डॉक करें
+	Dock Control Bar	नियंत्रण बार डॉक करें
 	Document	डॉक्यूमेंट
 	Document Color Mode	डॉक्यूमेंट रंग मोड
 	Document Health Check	डॉक्यूमेंट स्वास्थ्य जांच
@@ -1968,6 +1976,8 @@
 	Grays	ग्रे
 	Grays and Neutrals	ग्रे और तटस्थ
 	Grayscale	ग्रेस्केल
+	High Color	अधिक रंग
+	Low Color	कम रंग
 	Grayscale images	ग्रेस्केल इमेज
 	Grayscale Images	ग्रे स्केल इमेज
 	Greek & Cyrillic	ग्रीक & Cyrillic
@@ -5093,6 +5103,8 @@
 	Video 3840×2160	वीडियो 3840 × 2160
 	Video Banner 2560×1440	वीडियो बैनर 2560 × 1440
 	Video Ruler Pixel Aspect Ratio:	वीडियो शासक पिक्सेल दृष्टि अनुपात:
+	Fade Region Outside Artboard	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें
+	Update While Dragging	खींचते समय अपडेट करें
 	Video Thumbnail 1280×720	वीडियो थंबनेल 1280 × 720
 	View	व्यू
 	View {n}	{n}
@@ -5541,6 +5553,7 @@
 @msg	`id` must be a node id	`id` एक नोड आईडी होना चाहिए
 @msg	`id` must be an object id, not {v}	`id` एक ऑब्जेक्ट आईडी होना चाहिए, नहीं {v}
 @msg	`ids` must be an array of object ids, not {v}	`ids` को ऑब्जेक्ट आईडी की ऐरे होना चाहिए, {v} नहीं
+@msg	`colors` must be an array of colors, not {v}	`colors` को रंगों की ऐरे होना चाहिए, {v} नहीं
 @msg	`ids` must name Objects on Path groups or objects in them	`ids` को ऑब्जेक्ट्स ऑन पाथ समूह या उनके ऑब्जेक्ट बताने चाहिए
 @msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` में अधिकतम {MAX_INSPECT_IDS} आईडी हो सकती हैं
 @msg	`imageMap` must be none, rectangle or polygon	`imageMap` होना चाहिए कोई नहीं, आयत या बहुभुज
@@ -6866,6 +6879,7 @@
 @msg	objects can't be nested more than 32 deep	ऑब्जेक्ट्स को 32 से अधिक गहराई तक घोंसला नहीं किया जा सकता है
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	एक मिश्रण, लिफ़ाफ़ाफ़ा, दोहराने या अंतर्जातीय समूह के अंदर ऑब्जेक्ट्स को एक पाथ से जोड़ा नहीं जा सकता है
 @msg	objects must be none, move or copy	objects: ऑब्जेक्टएं कोई नहीं, चाल या प्रतिलिपि होना चाहिए
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	मोड़े गए टेक्स्ट ऑब्जेक्ट जो संपादन योग्य टेक्स्ट के बजाय कला के रूप में आए: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	उन ऑब्जेक्ट्स को जो फ़ाइल के स्वयं के पृष्ठ से अलग-अलग तरीके से आकर्षित होते हैं, उनकी कला के रूप में आया: {_1}
 @msg	objects were left out	ऑब्जेक्ट्स को छोड़ दिया गया था
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	कई भराव या स्ट्रोक, इफ़ेक्ट या ब्रश के साथ ऑब्जेक्टएं उनके ड्रॉइंग लुक ({_1}) के रूप में आईं: उनकी उपस्थिति अभी तक संपादन योग्य नहीं है

@@ -487,6 +487,11 @@ digits	Malayalam	マラヤーラム数字
 	Document Raster Effects Settings…	ドキュメントのラスタライズ効果設定…
 	Vector Effects	ベクター効果
 	3D and Materials	3D とマテリアル
+	Plane	平面
+	Extrude	押し出し
+	Revolve	回転体
+	Inflate	膨張
+	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
 	Revolve…	回転体…
 	Inflate…	膨張…
@@ -1029,6 +1034,8 @@ digits	Malayalam	マラヤーラム数字
 	Show Cross Hairs	十字線を表示
 	Show Video Safe Areas	ビデオセーフエリアを表示
 	Video Ruler Pixel Aspect Ratio:	ビデオ定規のピクセル縦横比:
+	Fade Region Outside Artboard	アートボードの外側を暗く表示
+	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
 	Background Contents:	背景のカラー:
@@ -1729,6 +1736,8 @@ digits	Malayalam	マラヤーラム数字
 	Graphics: {adapter}	グラフィックス: {adapter}
 	Grays	グレー
 	Grayscale	グレースケール
+	High Color	多色
+	Low Color	少色
 	Flat Logo	フラットロゴ
 	Grayscale images	グレースケールイメージ
 	Green	グリーン
@@ -2084,6 +2093,9 @@ digits	Malayalam	マラヤーラム数字
 	Live Paint Selection Tool	ライブペイント選択ツール
 	Live Shape Properties	ライブシェイプのプロパティ
 	Load Color Profile…	カラープロファイルを読み込む…
+	Load Character Styles…	文字スタイルを読み込み…
+	Load Paragraph Styles…	段落スタイルを読み込み…
+	Load All Styles…	すべてのスタイルを読み込み…
 	Remove Color Profile…	カラープロファイルを削除…
 	Load Image into Clipboard	画像をクリップボードに読み込む
 	Load Metafile into Clipboard	メタファイルをクリップボードに読み込む
@@ -3920,6 +3932,9 @@ axis	Both	両方
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
+	Dock to Top	上部にドッキング
+	Dock to Bottom	下部にドッキング
+	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
@@ -4828,6 +4843,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
@@ -5941,6 +5957,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	編集可能なテキストではなくアートとして読み込んだワープのテキストオブジェクト: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。

@@ -78,6 +78,11 @@
 	3 Color Job…	Завдання з 3 кольорами…
 	30° Angles	Кути 30°
 	3D and Materials	3D та матеріали
+	Plane	Площина
+	Extrude	Видавлювання
+	Revolve	Обертання
+	Inflate	Надування
+	Select objects, then pick an object type to give them a 3D effect.	Виділіть об’єкти, потім виберіть тип об’єкта, щоб надати їм 3D-ефект.
 	3D Ribbon	3D-стрічка
 	45° Angles	Кути 45°
 	60° Angles	Кути 60°
@@ -278,6 +283,8 @@ font-technology	Variable	Варіативні
 	Show Cross Hairs	Показати перехрестя
 	Show Video Safe Areas	Показати безпечні зони відео
 	Video Ruler Pixel Aspect Ratio:	Співвідношення сторін пікселя відео-лінійок:
+	Fade Region Outside Artboard	Затемнювати ділянку поза монтажною областю
+	Update While Dragging	Оновлювати під час перетягування
 	Hide Video Rulers	Приховати відео-лінійки
 	Background Contents	Вміст фону
 	Background Contents:	Вміст фону:
@@ -1384,6 +1391,8 @@ file-filter	Templates	Шаблони
 	Grays	Сірі
 	Grays and Neutrals	Сірі та нейтральні
 	Grayscale	Відтінки сірого
+	High Color	Багато кольорів
+	Low Color	Мало кольорів
 	Grayscale images	Зображення у відтінках сірого
 	Greek & Cyrillic	Грецька та кирилиця
 	Green	Зелений
@@ -1852,6 +1861,9 @@ file-filter	Templates	Шаблони
 	Live Paint Selection Tool	Інструмент «Виділення швидкої заливки»
 	Live Shape Properties	Властивості динамічної фігури
 	Load Color Profile…	Завантажити профіль кольору…
+	Load Character Styles…	Завантажити стилі символів…
+	Load Paragraph Styles…	Завантажити стилі абзаців…
+	Load All Styles…	Завантажити всі стилі…
 	Remove Color Profile…	Видалити профіль кольору…
 	Load Image into Clipboard	Завантажити зображення в буфер обміну
 	Load Metafile into Clipboard	Завантажити метафайл у буфер обміну
@@ -3967,6 +3979,9 @@ axis	Both	Обидві
 	Put back in the toolbar	Повернути на панель інструментів
 	Float Panel	Від’єднати панель
 	Dock Panel	Прикріпити панель
+	Dock to Top	Прикріпити вгорі
+	Dock to Bottom	Прикріпити внизу
+	Dock Control Bar	Прикріпити панель керування
 	Drag to float the toolbar	Перетягніть, щоб від’єднати панель інструментів
 	Drag to the window's left edge to dock	Перетягніть до лівого краю вікна для прикріплення
 	Float Tool Group	Від’єднати групу інструментів
@@ -4771,6 +4786,7 @@ axis	Both	Обидві
 	Exit	Вийти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — це посилання на крок {r}, яке розв’язують лише `run` і `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` має бути масивом ідентифікаторів об’єктів, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` має бути масивом кольорів, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` має бути масивом індексів опорних точок, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: у результаті кроку {i} немає такого значення (щоб написати сам $, введіть $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед цим кроком немає кроку {i} (кроки рахуються з 0; щоб написати сам $, введіть $$)
@@ -5856,6 +5872,7 @@ breakText	Glyphs	Гліфи
 	Gap 5	Проміжок 5
 
 @msg	{_1}: they came in as the page's art	{_1}: їх імпортовано як графіку сторінки
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	деформовані текстові об’єкти, імпортовані як графіка, а не як редагований текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	об’єкти, що малювалися інакше, ніж власна сторінка файлу, імпортовано як графіку сторінки: {_1}
 
 @msg	You must choose a side pattern.	Виберіть бічний візерунок.

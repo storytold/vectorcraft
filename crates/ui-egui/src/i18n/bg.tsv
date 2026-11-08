@@ -70,6 +70,11 @@
 	3 Color Job…	Задача с 3 цвята…
 	30° Angles	Ъгли от 30°
 	3D and Materials	3D и материали
+	Plane	Равнина
+	Extrude	Избутване
+	Revolve	Завъртане около ос
+	Inflate	Издуване
+	Select objects, then pick an object type to give them a 3D effect.	Изберете обекти, след това изберете тип обект, за да им придадете 3D ефект.
 	3D Ribbon	3D лента
 	45° Angles	Ъгли от 45°
 	60° Angles	Ъгли от 60°
@@ -271,6 +276,8 @@ font-technology	Variable	Променливи
 	Show Cross Hairs	Показване на кръстосани линии
 	Show Video Safe Areas	Показване на безопасните видеозони
 	Video Ruler Pixel Aspect Ratio:	Пропорция на пиксела на видеолинийките:
+	Fade Region Outside Artboard	Затъмняване на областта извън работната област
+	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
 	Background Contents:	Съдържание на фона:
@@ -1329,6 +1336,8 @@ font-technology	Variable	Променливи
 	Grays	Сиви
 	Grays and Neutrals	Сиви и неутрални
 	Grayscale	Черно-бяло
+	High Color	Много цветове
+	Low Color	Малко цветове
 	Grayscale images	Черно-бели изображения
 	Greek & Cyrillic	Гръцки и кирилица
 	Green	Зелено
@@ -1764,6 +1773,9 @@ font-technology	Variable	Променливи
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
 	Live Shape Properties	Свойства на динамична фигура
 	Load Color Profile…	Зареждане на файлов цвят…
+	Load Character Styles…	Зареждане на стилове на знаци…
+	Load Paragraph Styles…	Зареждане на стилове на абзац…
+	Load All Styles…	Зареждане на всички стилове…
 	Remove Color Profile…	Премахване на цветови профил…
 	Load Image into Clipboard	Зареждане на изображение в клипборда
 	Load Metafile into Clipboard	Зареждане на метафайл в клипборда
@@ -3848,6 +3860,9 @@ axis	Both	И двете
 	Put back in the toolbar	Връщане в лентата с инструменти
 	Float Panel	Плаващ панел
 	Dock Panel	Закотвен панел
+	Dock to Top	Закотвяне горе
+	Dock to Bottom	Закотвяне долу
+	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
 	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
@@ -4609,6 +4624,7 @@ axis	Both	И двете
 	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` трябва да бъде масив от цветове, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: резултатът от стъпка {i} няма такава стойност (напишете $$ за литерален знак $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: няма стъпка {i} преди тази (стъпките се броят от 0; напишете $$ за литерален знак $)
@@ -6106,6 +6122,7 @@ breakText	Glyphs	Глифи
 	Gap 5	Разстояние 5
 
 @msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	изкривени текстови обекти, внесени като изображение, а не като редактируем текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
 
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.

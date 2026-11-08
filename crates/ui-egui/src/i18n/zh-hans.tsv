@@ -26,6 +26,11 @@
 	3 Color Job…	3 色作业…
 	30° Angles	30° 角
 	3D and Materials	3D 与材质
+	Plane	平面
+	Extrude	突出
+	Revolve	回转
+	Inflate	膨胀
+	Select objects, then pick an object type to give them a 3D effect.	选择对象，然后选取一种对象类型，为其添加 3D 效果。
 	3D Ribbon	3D 缎带
 	45° Angles	45° 角
 	60° Angles	60° 角
@@ -230,6 +235,8 @@
 	Show Cross Hairs	显示十字线
 	Show Video Safe Areas	显示视频安全区域
 	Video Ruler Pixel Aspect Ratio:	视频标尺像素长宽比：
+	Fade Region Outside Artboard	调暗画板外的区域
+	Update While Dragging	拖动时更新
 	Hide Video Rulers	隐藏视频标尺
 	Background Contents	背景内容
 	Background Contents:	背景内容：
@@ -1326,6 +1333,8 @@ file-filter	Templates	模板
 	Grays	灰度级数
 	Grays and Neutrals	灰色和中性色
 	Grayscale	灰度
+	High Color	多色
+	Low Color	少色
 	Flat Logo	扁平徽标
 	Grayscale images	灰度图像
 	Greek & Cyrillic	希腊文与西里尔文
@@ -1740,6 +1749,9 @@ file-filter	Templates	模板
 	Live Paint Selection Tool	实时上色选择工具
 	Live Shape Properties	实时形状属性
 	Load Color Profile…	载入颜色配置文件…
+	Load Character Styles…	载入字符样式…
+	Load Paragraph Styles…	载入段落样式…
+	Load All Styles…	载入所有样式…
 	Remove Color Profile…	移除颜色配置文件…
 	Load Image into Clipboard	将图像载入剪贴板
 	Load Metafile into Clipboard	将图元文件载入剪贴板
@@ -4541,6 +4553,7 @@ imageTrace	Outline	轮廓
 @msg	No linked files to look for	没有要查找的链接文件
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` 必须是由锚点索引组成的数组，而不是 {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`：步骤 {i} 的结果中没有此值 (要表示 $ 本身，请写 $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`：此步骤之前没有步骤 {i} (步骤从 0 开始计数；要表示 $ 本身，请写 $$)
@@ -5042,6 +5055,9 @@ axis	Both	两者
 	Put back in the toolbar	放回工具栏
 	Float Panel	浮动面板
 	Dock Panel	停放面板
+	Dock to Top	停放到顶部
+	Dock to Bottom	停放到底部
+	Dock Control Bar	停放控制栏
 	Drag to float the toolbar	拖动以浮动工具栏
 	Drag to the window's left edge to dock	拖到窗口左边缘以停放
 	Float Tool Group	浮动工具组
@@ -6097,6 +6113,7 @@ breakText	Glyphs	字形
 	Gap 5	间隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作为页面图稿导入
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	作为图稿而非可编辑文字导入的变形文字对象：{_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	与文件自身页面绘制不同的对象已作为页面图稿导入：{_1}
 
 @msg	You must choose a side pattern.	必须选择侧边图案。

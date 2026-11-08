@@ -93,7 +93,7 @@ pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
 pub mod rename_artboards;
-mod revolve;
+pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
 pub mod saturate;
 pub mod save_brush_library;

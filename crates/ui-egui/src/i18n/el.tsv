@@ -66,6 +66,11 @@
 	3 Color Job…	Εργασία τριών χρωμάτων…
 	30° Angles	Γωνίες 30°
 	3D and Materials	3D και υλικά
+	Plane	Επίπεδο
+	Extrude	Εξώθηση
+	Revolve	Περιστροφή γύρω από άξονα
+	Inflate	Φούσκωμα
+	Select objects, then pick an object type to give them a 3D effect.	Επιλέξτε αντικείμενα και, στη συνέχεια, έναν τύπο αντικειμένου για να τους δώσετε εφέ 3D.
 	3D Ribbon	Τρισδιάστατη κορδέλα
 	45° Angles	Γωνίες 45°
 	60° Angles	Γωνίες 60°
@@ -262,6 +267,8 @@ font-technology	Variable	Μεταβλητές
 	Show Cross Hairs	Εμφάνιση σταυρονήματος
 	Show Video Safe Areas	Εμφάνιση ασφαλών περιοχών βίντεο
 	Video Ruler Pixel Aspect Ratio:	Αναλογία διαστάσεων pixel χαράκων βίντεο:
+	Fade Region Outside Artboard	Σκίαση περιοχής εκτός πίνακα σχεδίασης
+	Update While Dragging	Ενημέρωση κατά τη μεταφορά
 	Hide Video Rulers	Απόκρυψη χαράκων βίντεο
 	Background Contents	Περιεχόμενα φόντου
 	Background Contents:	Περιεχόμενο φόντου:
@@ -1299,6 +1306,8 @@ font-technology	Variable	Μεταβλητές
 	Grays	Γκρι τόνοι
 	Grays and Neutrals	Γκρι και ουδέτεροι τόνοι
 	Grayscale	Κλίμακα του γκρι
+	High Color	Πολλά χρώματα
+	Low Color	Λίγα χρώματα
 	Grayscale images	Εικόνες σε κλίμακα του γκρι
 	Greek & Cyrillic	Ελληνικά και κυριλλικά
 	Green	Πράσινο
@@ -2139,6 +2148,9 @@ axis	Vertical	Κατακόρυφα
 axis	Both	Και τα δύο
 	Float Panel	Αιωρούμενο πάνελ
 	Dock Panel	Αγκύρωση πάνελ
+	Dock to Top	Αγκύρωση επάνω
+	Dock to Bottom	Αγκύρωση κάτω
+	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
 @msg	kerning must be a number, "auto", or "optical"	Η διαγραμμάτωση πρέπει να είναι αριθμός, «auto» ή «optical»
@@ -2639,6 +2651,9 @@ theme	Appearance	Εμφάνιση
 	Live Paint Selection Tool	Επιλογή δυναμικής βαφής (Live Paint Selection Tool)
 	Live Shape Properties	Ιδιότητες δυναμικού σχήματος
 	Load Color Profile…	Φόρτωση προφίλ χρώματος…
+	Load Character Styles…	Φόρτωση στυλ χαρακτήρων…
+	Load Paragraph Styles…	Φόρτωση στυλ παραγράφων…
+	Load All Styles…	Φόρτωση όλων των στυλ…
 	Remove Color Profile…	Αφαίρεση προφίλ χρώματος…
 	Load Image into Clipboard	Φόρτωση εικόνας στο πρόχειρο
 	Load Metafile into Clipboard	Φόρτωση μετααρχείου στο πρόχειρο
@@ -4706,6 +4721,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	ICF Box	Πλαίσιο ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	το `id` είναι η αναφορά βήματος {r}, την οποία αναλύουν μόνο τα `run` και `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	το `ids` πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων, όχι {v}
+@msg	`colors` must be an array of colors, not {v}	το `colors` πρέπει να είναι πίνακας χρωμάτων, όχι {v}
 @msg	`corners` must be an array of anchor indices, not {v}	το `corners` πρέπει να είναι πίνακας δεικτών αγκύρωσης, όχι {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: το αποτέλεσμα του βήματος {i} δεν έχει τέτοια τιμή (γράψτε $$ για κυριολεκτικό $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: δεν υπάρχει βήμα {i} πριν από αυτό (η αρίθμηση αρχίζει από 0· γράψτε $$ για κυριολεκτικό $)
@@ -6208,6 +6224,7 @@ breakText	Glyphs	Γλύφοι
 	Gap 5	Διάκενο 5
 
 @msg	{_1}: they came in as the page's art	{_1}: εισήχθησαν ως γραφικά της σελίδας
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	παραμορφωμένα αντικείμενα κειμένου που εισήχθησαν ως γραφικά, όχι ως επεξεργάσιμο κείμενο: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	τα αντικείμενα που σχεδιάστηκαν διαφορετικά από την ίδια τη σελίδα του αρχείου εισήχθησαν ως γραφικά της σελίδας: {_1}
 
 @msg	You must choose a side pattern.	Πρέπει να επιλέξετε πλευρικό μοτίβο.

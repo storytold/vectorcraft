@@ -480,6 +480,11 @@ digits	Malayalam	말라얄람어
 	Document Raster Effects Settings…	문서 래스터 효과 설정…
 	Vector Effects	벡터 효과
 	3D and Materials	3D 및 재질
+	Plane	평면
+	Extrude	돌출
+	Revolve	회전체
+	Inflate	부풀리기
+	Select objects, then pick an object type to give them a 3D effect.	개체를 선택한 다음 개체 유형을 골라 3D 효과를 적용하십시오.
 	Extrude & Bevel…	돌출 및 경사…
 	Revolve…	회전체…
 	Inflate…	부풀리기…
@@ -1019,6 +1024,8 @@ digits	Malayalam	말라얄람어
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
 	Video Ruler Pixel Aspect Ratio:	비디오 눈금자 픽셀 종횡비:
+	Fade Region Outside Artboard	아트보드 외부 영역 어둡게 표시
+	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
 	Background Contents:	배경 내용:
@@ -1719,6 +1726,8 @@ digits	Malayalam	말라얄람어
 	Graphics: {adapter}	그래픽: {adapter}
 	Grays	회색 계열
 	Grayscale	그레이스케일
+	High Color	많은 색상
+	Low Color	적은 색상
 	Flat Logo	단색 로고
 	Grayscale images	그레이스케일 이미지
 	Green	녹색
@@ -2074,6 +2083,9 @@ digits	Malayalam	말라얄람어
 	Live Paint Selection Tool	라이브 페인트 선택 도구
 	Live Shape Properties	라이브 모양 속성
 	Load Color Profile…	색상 프로파일 불러오기…
+	Load Character Styles…	문자 스타일 불러오기…
+	Load Paragraph Styles…	단락 스타일 불러오기…
+	Load All Styles…	모든 스타일 불러오기…
 	Remove Color Profile…	색상 프로파일 제거…
 	Load Image into Clipboard	이미지를 클립보드로 불러오기
 	Load Metafile into Clipboard	메타파일을 클립보드로 불러오기
@@ -3904,6 +3916,9 @@ axis	Both	양쪽
 	Put back in the toolbar	도구 모음으로 되돌리기
 	Float Panel	패널 분리
 	Dock Panel	패널 고정
+	Dock to Top	위쪽에 고정
+	Dock to Bottom	아래쪽에 고정
+	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
 	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
@@ -4755,6 +4770,7 @@ theme	Appearance	외관
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
+@msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
 @msg	`corners` must be an array of anchor indices, not {v}	`corners`는 {v}이(가) 아니라 앵커 인덱스 배열이어야 합니다
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: 단계 {i}의 결과에 해당 값이 없습니다(문자 그대로의 $는 $$로 쓰세요)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: 이 단계 앞에 단계 {i}이(가) 없습니다(단계는 0부터 셉니다. 문자 그대로의 $는 $$로 쓰세요)
@@ -5837,6 +5853,7 @@ breakText	Glyphs	글리프
 	Gap 5	간격 5
 
 @msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	편집 가능한 문자가 아닌 아트로 가져온 왜곡된 문자 오브젝트: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
 
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.

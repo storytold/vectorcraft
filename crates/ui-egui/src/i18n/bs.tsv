@@ -448,6 +448,11 @@
 	Document Raster Effects Settings…	Postavke rasterskih efekata dokumenta…
 	Vector Effects	Vektorski efekti
 	3D and Materials	3D i materijali
+	Plane	Ravan
+	Extrude	Istiskivanje
+	Revolve	Rotaciono tijelo
+	Inflate	Napuhni
+	Select objects, then pick an object type to give them a 3D effect.	Odaberite objekte, zatim odaberite vrstu objekta da im date 3D efekat.
 	Extrude & Bevel…	Istiskivanje i zakošenje…
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -809,6 +814,9 @@
 	Put back in the toolbar	Vrati u traku s alatima
 	Float Panel	Odvoji panel
 	Dock Panel	Usidri panel
+	Dock to Top	Usidri na vrh
+	Dock to Bottom	Usidri na dno
+	Dock Control Bar	Usidri kontrolnu traku
 	Float Tool Group	Odvoji grupu alata
 	Services	Usluge
 	Hide VectorCraft	Sakrij VectorCraft
@@ -2559,6 +2567,8 @@ digits	Malayalam	Malajalam
 	Show Cross Hairs	Prikaži končanicu
 	Show Video Safe Areas	Prikaži sigurne oblasti za video
 	Video Ruler Pixel Aspect Ratio:	Omjer stranica piksela video ravnala:
+	Fade Region Outside Artboard	Zatamni područje izvan radne ploče
+	Update While Dragging	Ažuriraj tokom povlačenja
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
@@ -3824,6 +3834,8 @@ axis	Both	Obje
 	Center	Sredina
 	Transform in Perspective	Transformiši u perspektivi
 	Grayscale	Nijanse sive
+	High Color	Mnogo boja
+	Low Color	Malo boja
 	Embed	Ugradi
 	Star	Zvijezda
 	Power Saving (integrated)	Ušteda energije (integrisana)
@@ -4967,6 +4979,7 @@ imageTrace	Outline	Obris
 @msg	No linked files to look for	Nema povezanih datoteka za traženje
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je referenca na korak {r}, koju razrješavaju samo `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` mora biti niz ID-ova objekata, a ne {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` mora biti niz boja, a ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` mora biti niz indeksa sidara, a ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: rezultat koraka {i} nema takvu vrijednost (napišite $$ za doslovni $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: prije ovog nema koraka {i} (koraci se broje od 0; napišite $$ za doslovni $)
@@ -6140,6 +6153,7 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	iskrivljeni tekstualni objekti uvezeni kao ilustracija, a ne kao tekst koji se može uređivati: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.

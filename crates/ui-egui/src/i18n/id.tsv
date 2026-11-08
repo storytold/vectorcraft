@@ -414,6 +414,11 @@
 	Document Raster Effects Settings…	Pengaturan efek raster dokumen…
 	Vector Effects	Efek vektor
 	3D and Materials	3D dan material
+	Plane	Bidang
+	Extrude	Ekstrusi
+	Revolve	Revolusi
+	Inflate	Gelembungkan
+	Select objects, then pick an object type to give them a 3D effect.	Pilih objek, lalu pilih jenis objek untuk memberinya efek 3D.
 	Extrude & Bevel…	Ekstrusi & bevel…
 	Revolve…	Revolusi…
 	Inflate…	Gelembungkan…
@@ -753,6 +758,9 @@
 	Put back in the toolbar	Kembalikan ke bilah alat
 	Float Panel	Mengambangkan panel
 	Dock Panel	Tambatkan panel
+	Dock to Top	Tambatkan ke atas
+	Dock to Bottom	Tambatkan ke bawah
+	Dock Control Bar	Tambatkan bilah kontrol
 	Float Tool Group	Mengambangkan grup alat
 	Services	Layanan
 	Hide VectorCraft	Sembunyikan VectorCraft
@@ -2377,6 +2385,8 @@ digits	Malayalam	Malayalam
 	Show Cross Hairs	Tampilkan garis silang
 	Show Video Safe Areas	Tampilkan area aman video
 	Video Ruler Pixel Aspect Ratio:	Rasio aspek piksel penggaris video:
+	Fade Region Outside Artboard	Redupkan wilayah di luar artboard
+	Update While Dragging	Perbarui saat menyeret
 	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
@@ -2974,6 +2984,9 @@ theme	Appearance	Tampilan
 	Convert Document Color Mode	Konversi mode warna dokumen
 	Gamut Warning	Peringatan gamut
 	Load Color Profile…	Muat profil warna…
+	Load Character Styles…	Muat gaya karakter…
+	Load Paragraph Styles…	Muat gaya paragraf…
+	Load All Styles…	Muat semua gaya…
 	Plates	Pelat
 	Spot Color	Warna spot
 	Add to Swatches	Tambahkan ke Swatches
@@ -3593,6 +3606,8 @@ axis	Both	Keduanya
 	Center	Tengah
 	Transform in Perspective	Transformasi dalam perspektif
 	Grayscale	Skala abu-abu
+	High Color	Banyak warna
+	Low Color	Sedikit warna
 	Embed	Sematkan
 	Star	Bintang
 	Power Saving (integrated)	Hemat daya (terintegrasi)
@@ -4653,6 +4668,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Tidak ada berkas tertaut untuk dicari
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` adalah referensi langkah {r}, yang hanya diselesaikan oleh `run` dan `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` harus berupa array id objek, bukan {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` harus berupa array warna, bukan {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` harus berupa array indeks jangkar, bukan {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: hasil langkah {i} tidak memiliki nilai seperti itu (tulis $$ untuk $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: tidak ada langkah {i} sebelum langkah ini (langkah dihitung mulai dari 0; tulis $$ untuk $ literal)
@@ -6120,6 +6136,7 @@ breakText	Glyphs	Glif
 	Gap 5	Jarak 5
 
 @msg	{_1}: they came in as the page's art	{_1}: diimpor sebagai gambar halaman
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objek teks dengan Warp yang diimpor sebagai gambar, bukan sebagai teks yang dapat diedit: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objek yang tergambar berbeda dari halaman file itu sendiri diimpor sebagai gambar halaman: {_1}
 
 @msg	You must choose a side pattern.	Anda harus memilih pola sisi.

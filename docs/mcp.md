@@ -410,7 +410,7 @@ Lines start with no fill and a visible stroke.
 The Fill/Stroke proxy commands run through `run_command`: `paint.invert` and `paint.complement` recolor the active
 proxy, including a grayscale image's colorized fill, while keeping each color's model. `paint.lastColor` /
 `paint.lastGradient` re-apply the last solid color or gradient, and `paint.recent` returns the recent colors that every
-paint command (and the eyedropper) feeds.
+paint command (and the eyedropper) feeds: up to 30, newest first and each once, kept across documents for the session.
 `paint.proxies` returns what the proxies show: the fill and stroke, which one is active, and whether the selected
 objects' fills or strokes differ (`fillMixed` / `strokeMixed`, drawn as a "?" proxy).
 
@@ -662,6 +662,10 @@ them. `grays: "black"` puts RGB greys with R = G = B on the black plate instead,
 Convert to Grayscale before the switch would give); other colors convert as usual. The reply's `changed` counts the
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
+`edit.colorSettings`, `file.documentColorMode`, `color.convert`, `color.gamutCheck`, `color.loadProfile`,
+`color.removeProfile`, `view.proofSetup`, `view.proofColors`, `view.overprintPreview`, `view.separationsPreview` and
+`swatch.setSpot` reject a param of the wrong type, such as `"bpc": "no"`, `"on": 1`, `"to": 5` or `"colors": "#fff"`,
+and change nothing. Omitting a param or giving null keeps its default.
 
 SVG import keeps what the canvas edits live. `<pattern>` becomes a pattern swatch. A `<symbol>` with `<use>` becomes a
 symbol (named after its `data-name`, else its id) with an instance per `<use>`; a `<use>` that shows it differently
@@ -836,6 +840,9 @@ empty `boxes`, and `thumbnail: 1` shows what that page prints. A page whose `Use
 opens at its size in points, the file's numbers times the `UserUnit` (one above 75,000 counts as 75,000), and
 `document.pdfInfo` gives its size and boxes in points too. A `.ai` whose editing data has its artboards in the units of
 such a page opens from that data at the page's size.
+`document.open`, `file.place` and `document.pdfInfo` reject a `cropTo`, `crop`, `password`, `colorMode` or `textAs`
+that is not a string, and `document.pdfInfo` rejects a `thumbnailSize` that is not a number. The error names the param,
+and nothing opens or is placed. Leaving a param out or giving null keeps its default.
 Imported colours keep their model:
 DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
 and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too). CMYK images
@@ -1226,6 +1233,14 @@ in `object.envelope.makeWithWarp`, `resetWithWarp` and `options`, also when an `
 in `object.envelope.resetWithMesh`; `antiAlias`, `distortAppearance`, `distortLinearGradients` and
 `distortPatternFills` in `object.envelope.options`; and `editing` in `object.envelope.editContents`. A null is read as
 a key left out.
+
+`object.envelope.makeWithWarp`, `resetWithWarp` and `options` refuse a `style` that is not a string with
+`` `style` must be a string `` and a name that is no warp style with `` unknown warp style `foo` ``, and an
+`orientation` other than `horizontal` or `vertical`, a number or `true` included, with
+`` `orientation` must be one of horizontal, vertical ``. `object.envelope.options` refuses a `preserveShape` that is
+not a string with `` `preserveShape` must be a string ``, and checks the warp keys when no envelope or only mesh
+envelopes are selected, too. Each leaves the document, its undo history and the options new envelopes start with as
+they were. A null is read as a key left out.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key, and leave the document and its undo history as they were:
@@ -1767,7 +1782,9 @@ already walks Image Trace. Short agent entry points:
   what that kind of corner draws when the brush has no `outer_corner` or `inner_corner` art for it: `none` draws no
   corner tile, and `autoCentered`, `autoBetween`, `autoSliced` and `autoOverlap` make one from the side tile. Without
   a source, the corner draws the other kind of corner's art. `brush.options {params: {outer_corner: null}}` removes
-  the art. Pattern Brush Options also accepts `side_tile`, `outer_corner_tile`, `inner_corner_tile`,
+  the art. Outer and inner corner art are both drawn as the corner that joins a side tile on its right to one below
+  it. The brush turns each corner tile so that those two arms meet the sides at the corner: 90° from one corner to
+  the next on a rectangle, and halfway between the two sides at other angles. Pattern Brush Options also accepts `side_tile`, `outer_corner_tile`, `inner_corner_tile`,
   `start_tile` and `end_tile` in `params`. Each takes `none`, `original` or the name of a pattern
   swatch in the active document, and `{"pattern": "<name>"}` names a swatch even when its name is one of those
   words. Corner tiles also take `autoCentered`, `autoBetween`, `autoSliced` and `autoOverlap`. A swatch choice copies its whole art and tile frame into the brush. `original`
@@ -2204,6 +2221,21 @@ The document stores their numeric settings; manual edits remain possible through
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.lightingPreset","params":{"index":0,"item":null,"preset":"topLeft"}}}
+```
+
+## 3D object type
+
+`effect.setParams {index: int, threeDType: "plane" | "extrude" | "revolve" | "inflate", params?, item?, ids?, aligned?}`
+changes an applied 3D effect into Rotate, Extrude & Bevel, Revolve or Inflate in place, as the object types of
+**Window › 3D and Materials** do ([3D and Materials panel](three-d.md#3d-and-materials-panel)). The settings both
+effects take keep their values (rotation angles are wrapped into -180..180 when the new type is not Revolve), the
+settings only the new effect takes start at its defaults, and `params` then merge into the new effect's settings,
+checked as that effect's. It is one undo step. Any other `threeDType` value, or an effect at `index` that is not a
+3D effect, is an error and changes nothing. The type the effect already has, with no `params`, `visible` or
+`warpStyle`, changes nothing, records no undo step and returns `{ids: []}`.
+
+```json
+{"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"threeDType":"inflate","params":{"volume":70}}}}
 ```
 
 ## Extrude & Bevel, Inflate and Rotate
@@ -3955,6 +3987,12 @@ with an `index` it closes the document and all its views. `window.nextDocument` 
 through the views in tab order and add `view` to their reply for a document with more than one view. `ui.inspect`
 reports `windows` (every window as `[document index, view number]`, in tab order), `currentWindow` and each pane's
 `view`. Views are not saved.
+`window.control.dock {edge}` (desktop app) docks the Control bar to the top of the window, under the menu bar
+(`edge: "top"`, the default), or to its bottom (`"bottom"`), and returns `{edge}`. The bar's panel menu runs it with
+Dock to Top and Dock to Bottom, the edge in use checked, and so does a drag of the bar's gripper, which docks the bar at
+the edge the pointer is released nearer and shows a band along that edge while it moves. The edge is kept with the
+workspace, and a workspace saved without it docks the bar at the top. Another `edge`, or none, fails with "`edge` must
+be one of top, bottom" and leaves the bar where it is.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"A4","orientation":"landscape","artboards":4,"artboardLayout":{"columns":2},"bleed":9}}}
@@ -4196,6 +4234,16 @@ is the width of one video pixel over its height, which `view.videoRulers` counts
 the native format keep both (written only when on or not 1), and `inspect_document` adds `showVideoSafeAreas: true` and
 `videoRulerPixelAspectRatio` to an artboard that has them.
 
+Artboard Options' Global checkboxes are application preferences, not artboard properties: `fadeRegionOutsideArtboard`
+(Fade Region Outside Artboard) and `artboardUpdateWhileDragging` (Update While Dragging), both on by default
+(`prefs.set {values: {fadeRegionOutsideArtboard: false}}`; also Edit › Preferences › General › Artboard Options). With
+the first on, the canvas draws everything outside the artboards darker while the Artboard tool is active, the pasteboard
+and the art on it: each color channel at 60% of its value, VectorCraft's own amount. With the second off, that area
+draws as usual while the Artboard tool moves or resizes an artboard and darker again when the drag ends. When crossing
+artboards would leave more than 4,096 separate rectangles in view, only the area outside the box around all the
+artboards draws darker. Presentation Mode, exports and print do not change. The user guide describes both checkboxes under Artboard options
+(https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf).
+
 ```json
 {"name":"run_command","arguments":{"command":"artboard.copy","params":{"index":0}}}
 {"name":"run_command","arguments":{"command":"edit.paste","params":{}}}
@@ -4307,9 +4355,11 @@ is mixed with middle gray by its alpha.
 
 A placed image linked to its file (`file.place {path}`, Link on) records the file's absolute path, its size,
 modification time and hash, and keeps a low-resolution preview (at most 256 px a side): a `.vectorcraft` save writes
-the preview instead of the pixels, plus the path relative to the saved file. `document.open` reads
+the preview instead of the pixels, plus the path relative to the saved file. Links inside symbols, graph designs,
+patterns and opacity masks are saved with their relative paths too. `document.open` reads
 the linked files again, looking for each at its path, then at its relative path and by name in the document's folder
-(so a folder moved with its links still opens). Only files on this computer, or on the network share the document is
+(so a folder moved with its links still opens), and each link, in the layers or inside that art, takes the path where
+its file was found. Only files on this computer, or on the network share the document is
 on, are looked at: a path to another computer, a device or a URL counts as missing. On Windows, a document opened from
 a mapped drive (`Z:\…`) is on the share the drive is mapped to, and links on that share (`\\server\share\…`) are
 looked at. A link on a drive mapped to another share (`Y:\…`) counts as missing, from a document on this computer too.
@@ -4319,7 +4369,11 @@ The result lists `missingLinks`
 path isn't followed) when it isn't. The desktop app also checks the active document's links when its window
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
-another file (or each at the file of its name in a folder); images keep their bounds, one undo step each. A PNG, JPEG,
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
+`links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
+documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
+those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it
+again for the placed documents of it inside that art in the other open documents. A PNG, JPEG,
 GIF or WebP file whose pixels can't be read is not shown: `links.relink` fails with "the image's pixels can't be
 read", and `links.update`, or `document.open` when it reads the file, lists it as missing, its images keeping what they
 showed. Without a file system (the web), linked images show their previews. A link whose path has a colon and no `/`
@@ -5894,7 +5948,18 @@ paragraph at `start`; `paraStyle.list` counts paragraphs as uses, and `charStyle
 the layers, opacity masks, symbols, graph designs, pattern tiles and the art of brushes. `charStyle.unused` and
 `paraStyle.unused` (Select All Unused in the Character Styles and Paragraph Styles panel menus) list the styles with no
 uses, in panel order and never the Normal style, and the panel highlights them; `charStyle.delete` and
-`paraStyle.delete` take `{names}` to delete several styles in one undo step. A Return the Type tool types (or `text.editRange`
+`paraStyle.delete` take `{names}` to delete several styles in one undo step. `charStyle.load` and `paraStyle.load`
+(Load Character Styles… and Load Paragraph Styles… in the panel menus, where `ui.loadCharStyles` and
+`ui.loadParaStyles` pick the file) copy the styles of that kind from another document VectorCraft opens (`path`, `data`
+or `dataBase64`), and `textStyle.loadAll` (Load All Styles…, `ui.loadAllStyles`) copies both kinds, each in one undo
+step. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
+either kind that type in those patterns and symbols is set in, come along as Paste brings those of pasted type; a global or spot color whose name the document gives another color
+is the document's. A loaded style that is the same as the style of
+its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The
+document's styles and the type that uses them keep their attributes, and the file's Normal styles are not loaded. The
+reply lists the names `added` and `existing` in the document and the names `skipped` in the file (a style whose
+attributes do not read or are out of the range `charStyle.new` takes, or whose name is empty); `textStyle.loadAll`
+replies `{charStyles, paraStyles}`, and `charStyle.load` and `paraStyle.load` list only the styles of their own kind. A Return the Type tool types (or `text.editRange`
 inserting `\n`) continues the style of the paragraph it splits; deleting a break keeps the first paragraph's style;
 `text.setText` gives every paragraph the first one's attributes. Threaded text keeps each paragraph's attributes as
 the story re-flows (a paragraph split between frames has them in both).
@@ -6428,7 +6493,19 @@ shows, and so do the click-to-size dialogs (`perspective.draw` with `at`: the cl
 
 `object.blend.make` blends the selected objects (or `ids`) into a live blend. Spacing and orientation default to
 what `object.blend.options` set with no blend selected (`object.blend.info` reads them: `target: "defaults"`),
-else Smooth Color and Align to Page. `starts` gives, per object, the anchor of its first subpath the blend starts
+else Smooth Color and Align to Page. Smooth Color counts the steps between each pair of keys on its own, from the
+keys' colors and visible bounds rather than along the spine. The counts below are VectorCraft's own values. The
+colors compared are each key's solid fill and stroke, the fills and strokes of two text objects' runs at the same fraction of their characters, and
+those of two groups' members paired in order. When they differ, the count is 255 times the largest change of one
+channel as a fraction of its range, a half step rounding down, from 1 to 254. An RGB channel's range is 256 values,
+so pure red to pure blue makes 254 steps. CMYK and gray count by their percentages, two tints of the same swatch by
+their tints, and colors in different spaces (or Lab) by their RGB values over 255. The count is then at most eight
+per point of the largest of the keys' widths and heights and the distance between their centers along either axis,
+and when a key has no bounds it is the color count alone. When the colors match, a solid paint meets no paint, or a
+key holds a gradient or a pattern, the count is the largest distance between the keys' corresponding visible
+bounding-box edges divided by their mean width (left and right edges) or height (top and bottom), rounded, less one,
+from 1 to 1000. Keys with no width or no height are measured by their other side, keys with neither in points, and
+keys without bounds make 1 step. `starts` gives, per object, the anchor of its first subpath the blend starts
 from (as the Blend tool's clicks on anchor points do; an open path's last anchor runs it the other way). With the
 Blend tool, `press_key` Escape drops the object clicked first and stops the next click adding to the blend
 just made; the document and the selection stay as they are. A blend
