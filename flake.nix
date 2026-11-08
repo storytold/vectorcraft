@@ -130,6 +130,9 @@
             pname = "vectorcraft";
             cargoBuildFlags = [ "-p" "vectorcraft" ];
             buildInputs = commonDeps;
+            nativeBuildInputs = common.nativeBuildInputs ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              pkgs.makeWrapper
+            ];
             runtimeDependencies = with pkgs; [
               # No dependencies for non Linux possible
             ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
@@ -146,6 +149,13 @@
               libxi
               libxcb
             ];
+            postInstall = (common.postInstall or "") + pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+              wrapProgram $out/bin/vectorcraft \
+                --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (with pkgs; [
+                  libGL vulkan-loader wayland libxkbcommon
+                  libx11 libxcursor libxrandr libxi libxcb
+                ])}"
+            '';
             meta = commonMeta // { description = "Vector illustration; an open-source, modern vector art application, built in pure Rust."; };
           });
           vectorcraft-cli = pkgs.rustPlatform.buildRustPackage (common // {
