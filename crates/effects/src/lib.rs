@@ -98,7 +98,9 @@ mod params;
 
 pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
 pub(crate) use geometry::{Budget, apply_one};
-pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
+pub use geometry::{
+    Carry, GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_bez_carrying, apply_geometry_carrying, apply_geometry_with,
+};
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
