@@ -378,6 +378,104 @@ fn a_groups_transform_and_free_distort_move_the_gradients_placed_on_its_paths() 
     assert!(near(s, Point::new(0.0, 5.0)) && near(e, Point::new(20.0, 5.0)), "{s:?} {e:?}");
 }
 
+/// A group's Warp effect moves and scales the gradient placed on each of its paths from that path's
+/// bounds before the warp to its bounds after it, not by the group's bounds.
+#[test]
+fn a_groups_warp_moves_the_gradients_placed_on_its_paths_by_each_paths_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = |x: f64| GradientGeom { start: (x + 2.0, 3.0).into(), end: (x + 8.0, 3.0).into(), aspect: 1.0, focal: None };
+    let placed = |x: f64| Paint::Gradient(Box::new(GradientPaint { geom: Some(geom(x)), ..ramp.clone() }));
+    let square = |id: u64, x: f64| {
+        Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::basic(placed(x), Paint::None, 0.0)))
+    };
+    for style in ["arc", "bulge", "rise", "twist"] {
+        let mut g = Node::group(NodeId(10), vec![square(1, 0.0), square(2, 20.0)]);
+        g.appearance.effects.push(Effect { id: format!("warp.{style}"), params: serde_json::json!({"bend": 40.0}), visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        let mut moved = false;
+        for (i, x) in [0.0, 20.0].into_iter().enumerate() {
+            let m = &art.children().unwrap()[i];
+            let b = m.geometric_bounds().unwrap();
+            let follow = |p: Point| Point::new(b.x0 + (p.x - x) / 10.0 * b.width(), b.y0 + p.y / 10.0 * b.height());
+            let Paint::Gradient(gp) = m.appearance.fill_paint() else { panic!("a gradient") };
+            let got = gp.geom.unwrap();
+            let want = geom(x);
+            assert!(
+                got.start.distance(follow(want.start)) < 1e-6 && got.end.distance(follow(want.end)) < 1e-6,
+                "warp.{style} path {i}: {got:?} in {b:?}"
+            );
+            moved |= got.start.distance(want.start) > 0.1;
+        }
+        assert!(moved, "warp.{style} moves a gradient");
+    }
+}
+
+/// Under a group's Warp effect, the group's own placed gradient follows the group's bounds, a
+/// nested group's own placed gradient follows the nested group's bounds, and a compound path's
+/// placed gradient follows the compound path's bounds, each from before the warp to after it.
+#[test]
+fn a_groups_warp_moves_its_own_a_nested_groups_and_a_compound_paths_gradients_by_their_bounds() {
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (12.0, 4.0).into(), end: (26.0, 4.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    let own_fill = |n: &mut Node| n.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(placed.clone())));
+    let follow = |p: Point, from: Rect, to: Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    for style in ["arc", "bulge", "rise", "flag"] {
+        let mut inner = Node::group(NodeId(5), vec![sq(1, 0.0, Color::BLACK)]);
+        own_fill(&mut inner);
+        let ring = vec![
+            Arc::new(Node::path(NodeId(6), shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 14.0)), Appearance::default())),
+            Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(23.0, 3.0, 27.0, 7.0)), Appearance::default())),
+        ];
+        let mut compound = Node::new(NodeId(3), NodeKind::Compound { children: ring, rule: FillRule::EvenOdd });
+        compound.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
+        let mut g = Node::group(NodeId(10), vec![Arc::new(inner), Arc::new(compound), sq(2, 40.0, Color::BLACK)]);
+        own_fill(&mut g);
+        let mut before = std::collections::HashMap::new();
+        g.walk(&mut |c: &Node| {
+            before.insert(c.id, c.geometric_bounds().unwrap());
+        });
+        g.appearance.effects.push(Effect { id: format!("warp.{style}"), params: serde_json::json!({"bend": 40.0}), visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        // The bounds after the warp of the group, the nested group and the compound path (the paths
+        // a group's own fill paints carry the group's id).
+        let mut after = std::collections::HashMap::new();
+        art.walk(&mut |c: &Node| {
+            if matches!(c.kind, NodeKind::Group { .. } | NodeKind::Compound { .. }) {
+                after.entry(c.id).or_insert_with(|| c.geometric_bounds().unwrap());
+            }
+        });
+        let mut checked = vec![];
+        art.walk(&mut |c: &Node| {
+            if ![NodeId(3), NodeId(5), NodeId(10)].contains(&c.id) {
+                return;
+            }
+            for item in &c.appearance.items {
+                let Paint::Gradient(gp) = item.paint() else { continue };
+                let (from, to) = (before[&c.id], after[&c.id]);
+                assert_ne!(from, to, "warp.{style} {:?}: the warp changes the bounds", c.id);
+                let got = gp.geom.unwrap();
+                let (s, e) = (follow(geom.start, from, to), follow(geom.end, from, to));
+                assert!(
+                    got.start.distance(s) < 1e-6 && got.end.distance(e) < 1e-6,
+                    "warp.{style} {:?}: {got:?}, want {s:?} {e:?} ({from:?} to {to:?})",
+                    c.id
+                );
+                checked.push(c.id);
+            }
+        });
+        checked.sort();
+        checked.dedup();
+        assert_eq!(checked, vec![NodeId(3), NodeId(5), NodeId(10)], "warp.{style}");
+    }
+}
+
 /// A group nested in a group with a Transform effect or Free Distort keeps its own placed gradient
 /// on its members: the Transform's map moves it, and Free Distort moves and scales it from the
 /// nested group's bounds before the effect to its bounds after it.

@@ -2283,7 +2283,8 @@ counts as a value left out except for `recolor.apply`'s `model` and a `map` row'
 
 Groups and layers carry fills, strokes and effects of their own, as in the reference app: their fills and strokes
 paint every member's geometry, and their effects apply to the members as one piece (one combined drop shadow; a
-Transform or Warp moves or bends the whole group). Their Contents row (type: Characters) is a slot in the stack:
+Transform or Warp moves or bends the whole group; under a Warp, the gradient placed on each path inside moves and scales
+from that path's bounds to its warped bounds). Their Contents row (type: Characters) is a slot in the stack:
 fills and strokes above it paint over the members (characters), those below under them; new items go above it
 (on an image, below it).
 `appearance.moveItem {"from": "contents", "to": n}` puts the row above the bottom `n` items, and an item move takes

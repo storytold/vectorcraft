@@ -858,6 +858,37 @@ fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
 }
 
 #[test]
+fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let draw = |paint: &GradientPaint, e: Effect| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = vec![e];
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    // Placed from the square's left edge to its right edge, the gradient is drawn as one fitted to
+    // the square is: after a warp both run from the warped outline's left edge to its right edge.
+    let placed = GradientPaint {
+        geom: Some(GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(60.0, 50.0), aspect: 1.0, focal: None }),
+        ..ramp.clone()
+    };
+    for (style, params) in [("arc", json!({"bend": 50})), ("fisheye", json!({"bend": 60})), ("rise", json!({"bend": 40, "horizontal": 50}))] {
+        let e = fx(&format!("warp.{style}"), params);
+        let (got, want) = (draw(&placed, e.clone()), draw(&ramp, e));
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (got.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style}: worst channel difference {worst}");
+    }
+}
+
+#[test]
 fn darkness_subtracts_from_rgb_before_shadow_opacity() {
     for opacity in [50.0, 100.0] {
         let mut n = Node::path(

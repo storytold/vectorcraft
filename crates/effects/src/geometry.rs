@@ -175,9 +175,10 @@ pub fn apply_geometry_bez_carrying(effects: &[Effect], path: &BezPath, bounds: R
 }
 
 /// How placed gradients follow geometry effects. The Transform effect without copies maps them as
-/// it maps the object (with copies, `crate::reshape` gives each copy its own). Free Distort moves
-/// and scales them from the object's bounds before the effect to its bounds after it. For the
-/// other geometry effects it is empty. It does not change gradients fitted to the object.
+/// it maps the object (with copies, `crate::reshape` gives each copy its own). Free Distort and
+/// the Warp effects move and scale them from the object's bounds before the effect to its bounds
+/// after it. For the other geometry effects it is empty. It does not change gradients fitted to
+/// the object.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Carry(Vec<CarryStep>);
 
@@ -193,9 +194,10 @@ enum CarryStep {
 
 impl Carry {
     /// Does effect `id` with merged params `p` on geometry with reference box `b` (`seed` for
-    /// Random) move placed gradients? Free Distort does unless it leaves every corner in place;
-    /// the Transform effect does without copies (with copies the original stays where it is, and
-    /// `crate::reshape` gives each copy its own gradients).
+    /// Random) move placed gradients? Free Distort does unless it leaves every corner in place, a
+    /// Warp effect unless it has no bend and no distortion, and the Transform effect does without
+    /// copies (with copies the original stays where it is, and `crate::reshape` gives each copy
+    /// its own gradients).
     pub(crate) fn follows(id: &str, p: &Value, b: Rect, seed: u64) -> bool {
         match id {
             "distort.transform" => {
@@ -209,8 +211,15 @@ impl Carry {
                     [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].iter().zip(&corners).all(|(a, c)| c.distance((*a).into()) <= tol);
                 !still && corners.iter().all(|c| c.x.is_finite() && c.y.is_finite())
             }
+            _ if id.starts_with("warp.") => crate::warp::bends(id, p),
             _ => false,
         }
+    }
+
+    /// Does effect `id` move placed gradients from each path's bounds before it to its bounds
+    /// after it, rather than by one map for the whole object?
+    pub(crate) fn by_bounds(id: &str) -> bool {
+        id == "distort.freeDistort" || id.starts_with("warp.")
     }
 
     /// How placed gradients follow effect `id` (as [`Self::follows`]) on an object whose geometric
