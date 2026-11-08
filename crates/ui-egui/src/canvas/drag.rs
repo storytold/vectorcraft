@@ -413,6 +413,10 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     vectorcraft_engine::UiRequest::HeldPress { doc, pos, tool } => {
                         let index = doc.and_then(|uid| app.session.documents().iter().position(|d| d.uid == uid));
                         pressed_with(app, index, pos, tool);
+                        // The selection tool Cmd lent has the press now, so its drag can carry art to another tab.
+                        if let Some(ctx) = app.ui_ctx.clone() {
+                            crate::document_drag::begin(app, &ctx, pos);
+                        }
                     }
                 }
             }
