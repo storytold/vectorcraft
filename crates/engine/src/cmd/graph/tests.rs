@@ -1010,6 +1010,21 @@ fn a_stroke_set_on_a_filled_line_band_does_not_repaint_it() {
     assert_eq!(redrawn_band(&mut s, id), (was, Paint::solid(vectorcraft_color::Color::BLACK), 0.25));
 }
 
+/// An opacity set on a Filled Lines band's stroke row is kept, without a stroke paint, and goes on the band's thin black
+/// outline when the graph is drawn again.
+#[test]
+fn a_stroke_opacity_set_on_a_filled_line_band_goes_on_its_outline() {
+    let (mut s, id, band) = band_graph();
+    let row = top_row(&s, band, false);
+    s.execute("appearance.setItem", &json!({"ids": [band.0], "index": row, "opacity": 30})).unwrap();
+    let kept = spec(&s, id).series_paints.first().cloned().unwrap_or_default();
+    assert_eq!((kept.stroke.is_none(), kept.stroke_opacity), (true, Some(0.3)));
+    let (_, outline, width) = redrawn_band(&mut s, id);
+    assert_eq!((outline, width), (Paint::solid(vectorcraft_color::Color::BLACK), 0.25));
+    let band = series_parts(&s, id, 0)[0].clone();
+    assert_eq!(band.appearance.stroke().unwrap().opacity, 0.3);
+}
+
 /// A Filled Lines band's stroke row removed with the Appearance panel or set to None with `paint.setStroke` leaves the
 /// band its color: an empty stored stroke is not a color for the band.
 #[test]
