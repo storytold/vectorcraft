@@ -5819,6 +5819,19 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Playback Options…	Uppspelningsalternativ…
+	Insert Stop…	Infoga stopp…
+	Insert Stop	Infoga stopp
+	Record Stop	Spela in stopp
+	Allow Continue	Tillåt fortsättning
+	Continue	Fortsätt
+	Continue Action	Fortsätt åtgärd
+	Delete Action Step	Radera åtgärdssteg
+	Press Play Current Selection in the Actions panel to go on.	Fortsätt genom att trycka på Spela upp aktuell markering i panelen Åtgärder.
+	Stop: {message}	Stopp: {message}
+@msg	no action is waiting at a stop	ingen åtgärd väntar vid ett stopp
+@msg	message must be text	message måste vara text
+@msg	allowContinue must be true or false	allowContinue måste vara true eller false
+@msg	Batch cannot play an action with a stop	Batch kan inte spela upp en åtgärd med ett stopp
 	Playback Options	Uppspelningsalternativ
 	Accelerated	Accelererad
 	Step by Step	Steg för steg
