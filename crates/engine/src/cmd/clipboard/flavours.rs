@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageObject, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Point};
 
-use super::super::fileio;
 use super::super::place::pt_per_px;
+use super::super::{fileio, links};
 use super::{Clipboard, CommandSpec, Result, Session, always, bad, cmd, f64_or, has_doc, looks_like_svg, point_param, str_param};
 
 /// Plain text: a type-only copy's text, else the SVG markup (Include SVG Code).
@@ -125,6 +125,10 @@ pub struct Flavour {
 
 /// Longest side (px) of the PNG Copy offers: larger art is scaled down to fit.
 const COPY_PNG_SIDE: f64 = 4096.0;
+/// The smallest scale (pixels a point) the PNG encoder renders at.
+const MIN_COPY_PNG_SCALE: f64 = 0.01;
+/// What Copy says when the art is too large for its PNG.
+const TOO_LARGE_FOR_PNG: &str = "The art is too large to copy as a picture: other apps get no PNG of it";
 /// Most bytes of text `clipboard.importText` takes.
 const MAX_TEXT: usize = 1 << 20;
 /// Most bytes of images the SVG markup may embed and still go out as plain text. A paste reads the
@@ -178,7 +182,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Image into Clipboard",
             [],
             None,
-            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste",
+            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
             has_doc,
             import_image
         ),
@@ -187,7 +191,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Text into Clipboard",
             [],
             None,
-            "{text, center?: [x, y]} replace the clipboard with point text of `text` (one paragraph per line; trailing line breaks dropped) in the default type style, centred on `center` (default: the first artboard) → {count}; then run edit.paste",
+            "{text, center?: [x, y], table?: true} replace the clipboard with point text of `text` (one paragraph per line; trailing line breaks dropped) in the default type style, centred on `center` (default: the first artboard) → {count}; then run edit.paste. Cells copied from a spreadsheet (tab-separated, at least two columns, every row with the same number of cells, cells in double quotes may hold tabs and line breaks; at most 1000 rows, 256 columns and 20,000 cells) become a group \"Table\": point type for each cell that holds text, in columns as wide as their widest cell and rows as tall as their tallest, over a group \"Gridlines\" of 0.5 pt black lines around every cell → {count, rows, columns}; table: false pastes them as plain text",
             has_doc,
             import_text
         ),
@@ -282,18 +286,30 @@ impl Clipboard {
 
     /// The MIME types of [`Self::flavours`], without making them.
     pub fn flavour_types(&self, svg: bool, pdf: bool) -> Vec<&'static str> {
-        if self.is_empty() {
+        if !self.has_art() {
             return vec![];
         }
         let text = (svg && self.image_bytes() <= COPY_TEXT_IMAGE_BYTES) || self.nodes.iter().all(type_only);
         // Art without an area (a lone guide-like line) has no page or picture.
         let area = self.bounds().is_some_and(|b| b.width() > 0.0 && b.height() > 0.0);
-        [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area)].into_iter().filter_map(|(m, on)| on.then_some(m)).collect()
+        [(TEXT, text), (SVG, svg), (PDF, pdf && area), (PNG, area && self.png_scale().is_some())]
+            .into_iter()
+            .filter_map(|(m, on)| on.then_some(m))
+            .collect()
+    }
+
+    /// The scale (pixels a point) of the PNG Copy offers: at most [`COPY_PNG_SIDE`] pixels a side,
+    /// and `None` when even [`MIN_COPY_PNG_SCALE`], the encoder's smallest, can't bring it that small
+    /// (rather than a PNG of up to a gigabyte of pixels).
+    fn png_scale(&self) -> Option<f64> {
+        let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
+        Some((COPY_PNG_SIDE / side).min(1.0)).filter(|s| *s >= MIN_COPY_PNG_SCALE)
     }
 
     /// What Copy offers other apps, best first, with Include SVG Code (`svg`) and On Copy: PDF
     /// (`pdf`) as given (see `clipboard.flavours`). A [`Flavour`] that can't be made (art too large
-    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side.
+    /// to render) is left out; the PNG is scaled down to at most [`COPY_PNG_SIDE`] pixels a side, and
+    /// left out when even [`MIN_COPY_PNG_SCALE`] can't bring it that small.
     pub fn flavours(&self, svg: bool, pdf: bool) -> Vec<Flavour> {
         self.flavours_with_warnings(svg, pdf).0
     }
@@ -305,6 +321,9 @@ impl Clipboard {
         let svg = types.contains(&SVG).then(|| self.svg()).flatten();
         let mut out = vec![];
         let mut warnings: Vec<String> = vec![];
+        if !self.is_empty() && self.png_scale().is_none() {
+            warnings.push(TOO_LARGE_FOR_PNG.to_string());
+        }
         let mut keep = |(bytes, notes): (Vec<u8>, Vec<String>)| {
             for w in notes {
                 if !warnings.contains(&w) {
@@ -318,11 +337,10 @@ impl Clipboard {
                 TEXT => self.text().or_else(|| svg.clone()).map(String::into_bytes),
                 SVG => svg.clone().map(String::into_bytes),
                 PDF => self.pdf().inspect_err(|e| log::warn!("clipboard PDF: {e}")).ok().flatten().map(&mut keep),
-                _ => {
-                    let side = self.bounds().map_or(1.0, |b| b.width().max(b.height()));
-                    let scale = (COPY_PNG_SIDE / side).clamp(0.01, 1.0);
-                    self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten().map(|(png, _, _, notes)| keep((png, notes)))
-                }
+                _ => self
+                    .png_scale()
+                    .and_then(|scale| self.png(scale).inspect_err(|e| log::warn!("clipboard PNG: {e}")).ok().flatten())
+                    .map(|(png, _, _, notes)| keep((png, notes))),
             };
             out.extend(data.map(|data| Flavour { mime, data }));
         }
@@ -413,12 +431,38 @@ fn flavours(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "flavours": s.clipboard_flavour_types() }))
 }
 
+/// A bitmap read as `clipboard.importImage` reads its `dataBase64` ([`read_image`]), for
+/// [`Session::import_image_read`].
+pub struct ImageRead(fileio::RasterImage);
+
+/// Read `bytes` as `clipboard.importImage` reads its `dataBase64`, on any thread: the formats it
+/// stores as PNG are decoded and encoded here.
+pub fn read_image(bytes: &[u8]) -> Result<ImageRead> {
+    let mut img = fileio::raster_image(bytes).map_err(|e| bad("clipboard.importImage", e.to_string()))?;
+    img.blob = links::readable_and_kept(img.blob, links::kept_unread(bytes), false).map_err(|e| bad("clipboard.importImage", e.to_string()))?;
+    Ok(ImageRead(img))
+}
+
+impl Session {
+    /// `clipboard.importImage` with `p` (its `mime` and `center`) for an image [`read_image`] read
+    /// (off the UI thread in the desktop app), which it loads instead of reading `dataBase64`.
+    pub fn import_image_read(&mut self, read: ImageRead, p: &Value) -> Result<Value> {
+        self.image_hand_off = Some(read);
+        let r = self.execute("clipboard.importImage", p);
+        self.image_hand_off = None;
+        r
+    }
+}
+
 fn import_image(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "clipboard.importImage";
     if let Some(m) = str_param(p, "mime").filter(|m| !m.starts_with("image/") || *m == SVG) {
         return Err(bad(C, format!("`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText")));
     }
-    let img = fileio::raster_image(&data_param(p, C)?).map_err(|e| bad(C, e.to_string()))?;
+    let ImageRead(img) = match s.image_hand_off.take() {
+        Some(read) => read,
+        None => read_image(&data_param(p, C)?)?,
+    };
     let (sx, sy) = pt_per_px(img.ppi);
     let (w, h) = (img.width, img.height);
     let image = ImageObject {
@@ -447,9 +491,24 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
     if text.trim().is_empty() {
         return Err(bad(C, "the text is empty"));
     }
-    let mut t = TextObject::point(Point::ZERO, text, super::super::create::new_type_style(s, &Value::Null));
-    t.system_layout = s.doc()?.doc.setup.system_layout;
-    crate::cmd::typecmd::refresh_bounds(&mut t);
+    let style = super::super::create::new_type_style(s, &Value::Null);
+    let system_layout = s.doc()?.doc.setup.system_layout;
+    let layout = |t: &mut TextObject| {
+        t.system_layout = system_layout;
+        crate::cmd::typecmd::refresh_bounds(t);
+    };
+    let table = match p.get("table").filter(|v| !v.is_null()) {
+        None => true,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, "table must be true or false"))?,
+    };
+    // Cells copied from a spreadsheet paste as a table of type over gridlines.
+    if let Some(rows) = table.then(|| super::table::parse(text)).flatten() {
+        let n = super::table::table(&rows, &style, layout);
+        let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
+        return Ok(json!({ "count": count, "rows": rows.len(), "columns": rows.first().map_or(0, Vec::len) }));
+    }
+    let mut t = TextObject::point(Point::ZERO, text, style);
+    layout(&mut t);
     let n = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
     let count = s.load_clipboard(Clipboard { nodes: vec![n], ..Default::default() }, p)?;
     Ok(json!({ "count": count }))

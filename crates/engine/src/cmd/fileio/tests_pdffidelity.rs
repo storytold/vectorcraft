@@ -141,6 +141,8 @@ fn load_options_read_text_and_layers() {
     assert!(o.is_partial(), "without its hidden layers, Save doesn't write the file back");
     let d = LoadOptions::default();
     assert_eq!((d.text_as, d.layers, d.is_partial()), (TextAs::Text, true, false));
+    let n = LoadOptions { native: false, ..Default::default() };
+    assert!(n.is_partial(), "without the document it carries, Save doesn't write the file back");
 }
 
 #[test]

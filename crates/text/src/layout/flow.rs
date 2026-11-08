@@ -34,9 +34,17 @@ fn compose_para(
     let may_hang = para.burasagari != Burasagari::None && sg.iter().any(hangs);
     // A tab's width depends on where it falls in its line, which the composer's fixed glyph widths
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
-    // The tab after a list marker always starts the first line and has a fixed width.
+    // The tab of a list marker is on the first line, with the marker, and has a fixed width.
     let has_tab = sg.iter().any(|g| g.ch == '\t' && g.len > 0);
-    if composer != Composer::EveryLine || pen.regions.is_none() || sg.len() < 2 || sg.len() > MAX_COMPOSE_GLYPHS || may_hang || has_tab {
+    let has_soft_break = sg.iter().any(|g| g.ch == '\u{2028}');
+    if composer != Composer::EveryLine
+        || pen.regions.is_none()
+        || sg.len() < 2
+        || sg.len() > MAX_COMPOSE_GLYPHS
+        || may_hang
+        || has_tab
+        || has_soft_break
+    {
         return None;
     }
     let m = Metrics::of(&sg[0]);
@@ -58,7 +66,7 @@ fn compose_para(
     // indents of a right-to-left list ([`line_indents`]) keep.
     while widths.len() < sg.len() {
         let first = widths.is_empty();
-        let ind_l = para.left_indent + if first && !continued { para.first_line_indent } else { 0.0 };
+        let ind_l = para.laid_out_left_indent() + if first && !continued { para.first_line_indent } else { 0.0 };
         // Only the first line's first word is known here. Later lines are placed as the composed
         // lines need: each fits its width, so its first word does too.
         let word = if first { word_width(sg, 0) } else { 0.0 };
@@ -96,11 +104,11 @@ fn compose_para(
 }
 
 /// The list marker of each of the paragraphs `paras` of `t` (None for none): bullets, and numbers
-/// counted through consecutive list paragraphs from [`TextObject::list_count`], as
+/// counted per level through consecutive list paragraphs from [`TextObject::list_counts`], as
 /// [`vectorcraft_doc::text::ParaList::next_marker`] counts them.
 pub(super) fn list_markers(t: &TextObject, paras: &[Range<usize>]) -> Vec<Option<String>> {
-    let mut count = t.list_count;
-    paras.iter().enumerate().map(|(pi, pr)| vectorcraft_doc::text::ParaList::next_marker(t.para_at(pi).list, pr.is_empty(), &mut count)).collect()
+    let mut counts = t.list_counts();
+    paras.iter().enumerate().map(|(pi, pr)| vectorcraft_doc::text::ParaList::next_marker(t.para_at(pi).list, pr.is_empty(), &mut counts)).collect()
 }
 
 /// Whether paragraph `para` (right to left when `rtl`) has its indents mirrored: a horizontal
@@ -112,9 +120,10 @@ fn mirrors_indents(para: &ParaStyle, rtl: bool, vertical: bool) -> bool {
 /// The indents at the left and at the right of a line of paragraph `para` (its first line when
 /// `first`). With `mirror` ([`mirrors_indents`]) the left and first-line indents are measured from
 /// the right and the right indent from the left: the bullet of a right-to-left list hangs at the
-/// right, and the lines it wraps to line up with the text after the bullet.
+/// right, and the lines it wraps to line up with the text after the bullet. A list level past the
+/// first adds to the left indent ([`ParaStyle::laid_out_left_indent`]), mirrored with it.
 fn line_indents(para: &ParaStyle, first: bool, mirror: bool) -> (f64, f64) {
-    let start = para.left_indent + if first { para.first_line_indent } else { 0.0 };
+    let start = para.laid_out_left_indent() + if first { para.first_line_indent } else { 0.0 };
     if mirror { (para.right_indent, start) } else { (start, para.right_indent) }
 }
 
@@ -224,11 +233,12 @@ fn prepare_paragraph<'a, 'text>(
         }
     }
     let pm = {
-        let (asc, desc, _) = style_metrics(cx.db, cx.style_at(pr.start));
+        let face = cx.face_at(pr.start);
+        let (asc, desc, _) = style_metrics(face.as_deref(), cx.style_at(pr.start));
         let lead = auto_leading(cx.style_at(pr.start));
         let style = cx.style_at(pr.start);
-        let (cap, xh) = cap_x_heights(cx.db, style);
-        let centre = cx.db.style_face(style).map_or(EM_CENTER, |face| face.ideographic_centre());
+        let (cap, xh) = cap_x_heights(face.as_deref(), style);
+        let centre = face.map_or(EM_CENTER, |face| face.ideographic_centre());
         Metrics { asc, desc, lead, cap, xh, top: (centre + 0.5) * style.size * style.v_scale / 100.0 }
     };
     if pi > 0 {
@@ -382,7 +392,15 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
     let mut hyphen_run = 0;
     let mut line_in_paragraph = 0;
     let mut index = 0;
+    let mut emitted_empty_continuation = false;
     loop {
+        let pm = if index >= n
+            && let Some(last) = paragraph.sg.last()
+        {
+            Metrics::of(last)
+        } else {
+            paragraph.pm
+        };
         let mut placement = PlacementContext {
             para: paragraph.para,
             pr: &paragraph.pr,
@@ -390,7 +408,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
             continued: paragraph.continued,
             rtl: paragraph.rtl,
             mirror: paragraph.mirror,
-            pm: paragraph.pm,
+            pm,
             composed: &paragraph.composed,
             hyphen_run,
             hyphen_limit: paragraph.hyphen_limit,
@@ -402,12 +420,18 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         hyphen_run = if position.hyph && position.end > index { hyphen_run + 1 } else { 0 };
         pen.pending = 0.0;
         let geometry = prepare_line_geometry(cx, t, &paragraph, position, index);
-        let justification = justify_flow_line(cx.vertical, cx.text, &paragraph, &geometry);
+        let justification = justify_flow_line(cx, &paragraph, &geometry);
         emit_flow_line(cx, pen, &paragraph, &geometry, &justification);
         line_in_paragraph += 1;
         index = geometry.position.end;
         if index >= n {
-            break;
+            if emitted_empty_continuation {
+                break;
+            }
+            emitted_empty_continuation = paragraph.sg.last().is_some_and(|g| g.ch == '\u{2028}');
+            if !emitted_empty_continuation {
+                break;
+            }
         }
     }
     pen.pending += paragraph.para.space_after;
@@ -422,7 +446,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         if paragraph.regions.is_some() { (position.x0 + position.ind_l, position.x1 - position.ind_r) } else { (position.x0, position.x1) };
     let width = ax1 - ax0;
     let mut trimmed = position.end;
-    while trimmed > index && sg[trimmed - 1].is_space() {
+    while trimmed > index && (sg[trimmed - 1].is_space() || sg[trimmed - 1].ch == '\u{2028}') {
         trimmed -= 1;
     }
     let hyphen = (position.hyph && position.end > index).then(|| hyphen_glyph(&sg[position.end - 1]));
@@ -521,7 +545,7 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     // Justification adds nothing to the list marker's glyphs.
     let mut held = held;
     held.extend(index..paragraph.marker.min(body));
-    let last_of_para = position.end >= n;
+    let last_of_para = position.end >= n || position.end.checked_sub(1).and_then(|i| sg.get(i)).is_some_and(|g| g.ch == '\u{2028}');
     LineGeometry {
         position,
         index,
@@ -569,7 +593,7 @@ fn flow_line_flex(glyph: usize, flex: &[Flex], held: &[usize], hung: &[usize]) -
     value
 }
 
-fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
+fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &LineGeometry) -> LineJustification {
     let para = paragraph.para;
     let sg = &paragraph.sg;
     let (held, hung) = (&line.held, &line.hung);
@@ -607,8 +631,8 @@ fn justify_flow_line(vertical: bool, text: &str, paragraph: &ParagraphData<'_, '
     };
     // Insert Kashidas: the Arabic words of a horizontal line take its room on kashidas,
     // and the word spaces and gaps take what is left.
-    let kashidas = if justify && !vertical && room > line.render_width + EPS {
-        kashida::plan(text, sg, line.index..line.body, para.kashida, room - line.render_width)
+    let kashidas = if justify && !cx.vertical && room > line.render_width + EPS {
+        kashida::plan(cx.text, sg, line.index..line.body, para.kashida, room - line.render_width, |byte| cx.style_at(byte).kashidas)
     } else {
         Vec::new()
     };
@@ -700,7 +724,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         let mut scale = 1.0;
         let mut leader = "";
         if glyph.ch == '\t' {
-            // The tab after a list marker keeps the width `prepend_marker` gave it.
+            // The tab of a list marker keeps the width `prepend_marker` gave it.
             if glyph.len > 0 {
                 (advance, leader) = tab_advance(&para.tabs, tab_origin, x - tab_shift, &sg[glyph_index + 1..trimmed.max(glyph_index + 1)]);
             }
@@ -741,7 +765,7 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         if glyph_index < paragraph.marker {
             let at = cx.out.glyphs.len();
             marker_glyphs = Some(marker_glyphs.map_or(at..at + 1, |range: Range<usize>| range.start.min(at)..range.end.max(at + 1)));
-            if glyph_index + 1 == paragraph.marker {
+            if glyph.ch == '\t' {
                 marker_tab = at;
             }
         }
@@ -786,16 +810,21 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         } else {
             position.m.first_baseline(pen.fb, pen.fb_min)
         },
-        start: if index < sg.len() { sg[index].byte } else { paragraph.pr.start },
-        end: if line.last_of_para { paragraph.pr.end } else { sg[position.end].byte },
+        start: if index < sg.len() { sg[index].byte } else { paragraph.pr.end },
+        end: if position.end >= sg.len() { paragraph.pr.end } else { sg[position.end].byte },
         glyph_start,
         glyph_end: cx.out.glyphs.len(),
         avail: if paragraph.regions.is_some() { (ax0, ax1) } else { (start_x, x_end) },
         region: if paragraph.regions.is_some() { pen.ri } else { 0 },
     });
     pen.settled(position.baseline, position.m);
-    // Further spans of this line band share the settled baseline.
-    for queued in &mut pen.queued {
-        queued.0 = position.baseline;
+    let forced_break = position.end > index && sg.get(position.end - 1).is_some_and(|g| g.ch == '\u{2028}');
+    if forced_break {
+        pen.queued.clear();
+    } else {
+        // Further spans of this line band share the settled baseline.
+        for queued in &mut pen.queued {
+            queued.0 = position.baseline;
+        }
     }
 }

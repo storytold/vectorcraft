@@ -107,10 +107,14 @@ impl BrushLibrary {
     /// `name`: the brushes and every resource their art uses.
     pub fn from_document(src: &Document, names: &[String], name: String) -> std::result::Result<Self, String> {
         let all = brush::library(src);
-        if let Some(n) = names.iter().find(|n| !all.iter().any(|b| b.name == **n)) {
+        // Names looked up in sets: scanning the lists for each brush made a library of N brushes
+        // cost N² comparisons.
+        let have: HashSet<&str> = all.iter().map(|b| b.name.as_str()).collect();
+        if let Some(n) = names.iter().find(|n| !have.contains(n.as_str())) {
             return Err(format!("no brush `{n}`"));
         }
-        let picked = all.iter().filter(|b| names.is_empty() || names.contains(&b.name));
+        let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
+        let picked = all.iter().filter(|b| names.is_empty() || wanted.contains(b.name.as_str()));
         let clip = Clipboard::gather(src, picked.map(|b| stroke(&b.name)).collect());
         let mut doc = clip.to_document();
         for l in &mut doc.layers {
@@ -120,7 +124,8 @@ impl BrushLibrary {
         }
         // The brushes picked and those their art paints with, in the panel order of the document
         // they came from.
-        let brushes: Vec<Brush> = all.into_iter().filter(|b| clip.brushes.iter().any(|c| c.name == b.name)).collect();
+        let kept: HashSet<&str> = clip.brushes.iter().map(|c| c.name.as_str()).collect();
+        let brushes: Vec<Brush> = all.iter().filter(|b| kept.contains(b.name.as_str())).cloned().collect();
         brush::store(&mut doc, &brushes);
         doc.title = name.clone();
         Ok(Self { name, brushes, doc })
@@ -335,7 +340,7 @@ fn scatter_shapes() -> BrushLibrary {
         a.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(gold))));
         a
     });
-    doc.symbols.push(Symbol { name: "Sparkle".into(), art: Arc::new(sparkle) });
+    doc.symbols.push(Symbol { dynamic: false, name: "Sparkle".into(), art: Arc::new(sparkle) });
     let instance = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Sparkle".into(), xf: Affine::scale(0.3) });
     let random = |a: f64, b: f64| (a, b);
     let base = Scatter { colorization: Colorization::Tints, ..Default::default() };

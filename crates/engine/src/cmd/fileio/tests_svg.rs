@@ -50,7 +50,7 @@ fn every_option_changes_the_output() {
     changed(&mut s, json!({"svg": {"styling": "css"}}), &|o| o.contains("<style>") && o.contains("class=\"cls-1\""));
     changed(&mut s, json!({"objectIds": "minimal"}), &|o| !o.contains(" id=\""));
     changed(&mut s, json!({"objectIds": "unique"}), &|o| o.contains(" id=\"u") && o.contains("-Layer_1\""));
-    changed(&mut s, json!({"decimals": 1}), &|o| o.contains("M10.1 ") && !o.contains("10.123"));
+    changed(&mut s, json!({"decimals": 1}), &|o| o.contains("x=\"10.1\"") && !o.contains("10.123"));
     changed(&mut s, json!({"decimals": 6}), &|o| o.contains("10.123456"));
     changed(&mut s, json!({"minify": true}), &|o| !o.trim_end().contains('\n') && !o.contains("<?xml"));
     changed(&mut s, json!({"responsive": true}), &|o| !o.contains(" width=\"200\"") && o.contains("viewBox=\"0 0 200 100\""));
@@ -218,13 +218,17 @@ fn save_writes_svg_and_remembers_its_options() {
     s.execute("shape.ellipse", &json!({"x": 100, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("document.save", &json!({})).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.contains("<style>") && text.matches("<path").count() == 2, "Save reuses the options: {text}");
+    assert!(text.contains("<style>") && vectorcraft_testkit::svg_shapes(&text) == 2, "Save reuses the options: {text}");
     assert!(s.execute("document.save", &json!({"path": dir.join("x.png").to_string_lossy()})).is_err(), "PNG is an export");
     // A native save switches back.
     let native = dir.join("doc.vectorcraft").to_string_lossy().to_string();
     s.execute("document.save", &json!({"path": native})).unwrap();
     assert!(vectorcraft_format::sniff(&std::fs::read(&native).unwrap()));
-    assert!(s.doc().unwrap().save_options.is_empty(), "a native save remembers no options");
+    assert_eq!(
+        Value::Object(s.doc().unwrap().save_options.clone()),
+        json!({"pdfCompatible":true}),
+        "a native save retains its PDF choice without SVG options"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -356,7 +360,12 @@ fn svg_darkness_uses_rendered_shadow_in_non_srgb_working_space() {
             .env(CHILD, "1")
             .output()
             .unwrap();
-        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
         return;
     }
     use vectorcraft_color::{Color, Paint, cms};

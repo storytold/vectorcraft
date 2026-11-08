@@ -42,9 +42,14 @@ fn placed(s: &mut Session, path: &Path) -> u64 {
     place(s, &path.to_string_lossy()).0
 }
 
-/// `links.findFiles {}` once the search ended (10 seconds at most).
+/// How long a test waits for a search to end or to read a file. The wait only ends a test whose
+/// search never ends. A machine busy with other builds can hold a walker for seconds. It is shorter than a
+/// search's default `maxSeconds` of 60, which would end a search that does not end by itself.
+const WAIT: Duration = Duration::from_secs(30);
+
+/// `links.findFiles {}` once the search ended ([`WAIT`] at most).
 fn finished(s: &mut Session) -> Value {
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     loop {
         let r = s.execute("links.findFiles", &json!({})).unwrap();
         if r["state"] != "searching" || Instant::now() > until {
@@ -116,6 +121,67 @@ fn files_found_are_ranked_by_what_the_link_saved() {
     let photo_row = r["links"].as_array().unwrap().iter().find(|l| l["name"] == "photo.png").unwrap();
     assert_eq!((&photo_row["ids"], &photo_row["files"][0]["size"]), (&json!([photo_id]), &json!(photo.len())));
     assert_eq!(photo_row["path"], json!(root.join("orig/photo.png")));
+}
+
+/// A link saved as a classic Mac OS path (`Disk:Folder:file`) is looked for by its file name, and
+/// the files found are ranked by the folder names they share with that path.
+#[test]
+fn a_classic_mac_path_is_found_by_its_name_and_folders() {
+    let root = folder("classic");
+    let mut s = session_for(&root);
+    let photo = png(50, 30, BLUE);
+    write(&root.join("orig/photo.png"), &photo);
+    let id = placed(&mut s, &root.join("orig/photo.png"));
+    s.edit("classic path", |d, _| {
+        if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+            im.link.as_mut().unwrap().path = "Old Disk:Art:Images:photo.png".into();
+        }
+        Ok(())
+    })
+    .unwrap();
+    std::fs::remove_dir_all(root.join("orig")).unwrap();
+    // Other files of the name (a search ends once it finds the same file).
+    let search = root.join("search");
+    let mut changed = photo.clone();
+    *changed.last_mut().unwrap() ^= 1;
+    write(&search.join("a/photo.png"), &changed);
+    write(&search.join("z/Art/Images/photo.png"), &changed);
+    s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+    let r = finished(&mut s);
+    assert_eq!(r["state"].as_str(), Some("done"), "{r}");
+    let files = [("search/z/Art/Images/photo.png", "name", false), ("search/a/photo.png", "name", false)];
+    assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)));
+}
+
+/// The folders a saved path shares with a file found are counted after its parent components are
+/// resolved: `Art::` in a classic Mac OS path and `Art/..` in any other path go back to `Projects`.
+#[test]
+fn parent_components_in_a_saved_path_are_resolved_before_ranking() {
+    for (tag, saved) in [("classic-up", "Old Disk:Projects:Art::photo.png"), ("slash-up", "/old/Projects/Art/../photo.png")] {
+        let root = folder(tag);
+        let mut s = session_for(&root);
+        let photo = png(50, 30, BLUE);
+        write(&root.join("orig/photo.png"), &photo);
+        let id = placed(&mut s, &root.join("orig/photo.png"));
+        s.edit("saved path", |d, _| {
+            if let NodeKind::Image(im) = &mut d.node_mut(NodeId(id)).unwrap().kind {
+                im.link.as_mut().unwrap().path = saved.into();
+            }
+            Ok(())
+        })
+        .unwrap();
+        std::fs::remove_dir_all(root.join("orig")).unwrap();
+        let search = root.join("search");
+        let mut changed = photo.clone();
+        *changed.last_mut().unwrap() ^= 1;
+        write(&search.join("Art/photo.png"), &changed);
+        write(&search.join("Projects/photo.png"), &changed);
+        s.execute("links.findFiles", &json!({"folder": search})).unwrap();
+        let r = finished(&mut s);
+        assert_eq!(r["state"].as_str(), Some("done"), "{saved}: {r}");
+        let files = [("search/Projects/photo.png", "name", false), ("search/Art/photo.png", "name", false)];
+        assert_eq!(found(&r, "photo.png", &root), files.map(|(p, k, c)| (p.to_string(), k.to_string(), c)), "{saved}");
+    }
 }
 
 /// Without `ids`, a search looks for the files that can't be found; with them, for those objects'
@@ -206,7 +272,7 @@ fn stop_ends_only_the_search_it_names() {
     let search = findfiles::start(root.clone(), s.search_rules.clone(), Limits::default(), 1, 2, Arc::new(Blocked(Mutex::new(rx)))).unwrap();
     let links = vec![Sought { name: "a.png".into(), path: "/gone/a.png".into(), ids: vec![], size: None, hash: None }];
     s.link_search = Some(LinkSearch { id: 7, folder: root.to_string_lossy().into_owned(), links, sizes: Arc::default(), search });
-    let until = Instant::now() + Duration::from_secs(10);
+    let until = Instant::now() + WAIT;
     while s.execute("links.findFiles", &json!({})).unwrap()["searched"]["read"] != 1 && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(2));
     }

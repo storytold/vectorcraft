@@ -376,13 +376,18 @@ fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Value,
 /// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
 /// once. An error shows in the status bar.
 pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
-    if crate::placing::available(app) {
-        if let Err(e) = crate::placing::start(app, p, false) {
-            app.status(e);
+    // Read within the automation roots of whoever loaded the cursor, even on a click of the person
+    // at the keyboard: an agent's queue reaches no file it wasn't given.
+    let roots = app.session.place_queue_roots();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        if crate::placing::available(app) {
+            if let Err(e) = crate::placing::start(app, p, false) {
+                app.status(e);
+            }
+        } else {
+            let _ = engine(app, "file.place", p);
         }
-    } else {
-        let _ = engine(app, "file.place", p);
-    }
+    });
 }
 
 /// The cursor's thumbnails from `file.place.queue`'s reply `r`.
@@ -615,7 +620,7 @@ fn link_menu(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64, linked: bool)
     }
     if widgets::menu_item(ui, tl!("Update Link"), linked, false) {
         let msg = match app.run("links.update", json!({ "ids": [id] })) {
-            Ok(v) => format!("Updated {} image(s)", v["updated"].as_array().map_or(0, Vec::len)),
+            Ok(v) => crate::panels::links::updated_status(v["updated"].as_array().map_or(0, Vec::len)),
             Err(e) => e,
         };
         app.status(msg);

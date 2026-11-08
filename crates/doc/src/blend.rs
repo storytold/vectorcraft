@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
-use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, SubPath, Vec2};
+use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
@@ -196,7 +196,11 @@ pub fn lerp_paint(a: &Paint, b: &Paint, t: f32) -> Paint {
 /// so dashes open out of a solid line; patterns of different lengths repeat to a common one.
 fn lerp_dash(x: Option<&Dash>, y: Option<&Dash>, t: f64) -> Option<Dash> {
     let solid_like = |d: &Dash| Dash {
-        pattern: d.pattern.chunks(2).flat_map(|c| [c.iter().sum::<f64>(), 0.0]).take(d.pattern.len().max(2)).collect(),
+        // An odd pattern repeats twice per period, so pair up the doubled one to keep every gap closed.
+        pattern: if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() }
+            .chunks(2)
+            .flat_map(|c| [c.iter().sum::<f64>(), 0.0])
+            .collect(),
         offset: d.offset,
         align_corners: d.align_corners,
     };
@@ -695,6 +699,34 @@ fn compound(path: PathData, rule: FillRule, counts: &[usize], total: usize) -> N
 /// Interpolate text `x` → `y` into `o` (a copy of the nearer): the transform by its parts, an
 /// area frame anchor by anchor, and each run's colours, stroke weight and size from the runs at
 /// the same place (by character) of both.
+/// The run of `of` at fraction `u` of its characters.
+fn run_at(of: &TextObject, u: f64) -> Option<&crate::text::TextRun> {
+    let total: usize = of.runs.iter().map(|r| r.text.chars().count()).sum();
+    let target = (u * total as f64) as usize;
+    let mut seen = 0;
+    for r in &of.runs {
+        seen += r.text.chars().count();
+        if seen > target {
+            return Some(r);
+        }
+    }
+    of.runs.last()
+}
+
+/// The fraction of the characters of `runs` at the middle of each run.
+fn run_middles(runs: &[crate::text::TextRun]) -> Vec<f64> {
+    let total: usize = runs.iter().map(|r| r.text.chars().count()).sum::<usize>().max(1);
+    let mut start = 0usize;
+    runs.iter()
+        .map(|r| {
+            let len = r.text.chars().count();
+            let u = (start as f64 + len as f64 / 2.0) / total as f64;
+            start += len;
+            u
+        })
+        .collect()
+}
+
 fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64, tc: f64) {
     o.xf = lerp_affine(x.xf, y.xf, t);
     if let (crate::text::TextKind::Area { frame: f }, crate::text::TextKind::Area { frame: fx }, crate::text::TextKind::Area { frame: fy }) =
@@ -702,27 +734,10 @@ fn lerp_text(o: &mut TextObject, x: &TextObject, y: &TextObject, t: f64, tc: f64
     {
         *f = lerp_path(fx, fy, t);
     }
-    // The run of `of` at fraction `u` of its characters.
-    fn run_at(of: &TextObject, u: f64) -> Option<&crate::text::TextRun> {
-        let total: usize = of.runs.iter().map(|r| r.text.chars().count()).sum();
-        let target = (u * total as f64) as usize;
-        let mut seen = 0;
-        for r in &of.runs {
-            seen += r.text.chars().count();
-            if seen > target {
-                return Some(r);
-            }
-        }
-        of.runs.last()
-    }
-    let total: usize = o.runs.iter().map(|r| r.text.chars().count()).sum::<usize>().max(1);
-    let mut start = 0usize;
     let tf = tc as f32;
     let mut resized = false;
-    for r in &mut o.runs {
-        let len = r.text.chars().count();
-        let u = (start as f64 + len as f64 / 2.0) / total as f64;
-        start += len;
+    let middles = run_middles(&o.runs);
+    for (r, u) in o.runs.iter_mut().zip(middles) {
         let (Some(rx), Some(ry)) = (run_at(x, u), run_at(y, u)) else { continue };
         let (sx, sy) = (&rx.style, &ry.style);
         r.style.fill = lerp_paint(&sx.fill, &sy.fill, tf);
@@ -748,33 +763,115 @@ pub fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
 // Step counts
 // =====================================================================================
 
-/// Largest channel difference (0..1) between the solid colours of two objects' top fill and stroke.
-fn color_distance(a: &Node, b: &Node) -> f32 {
-    let mut d = 0.0f32;
-    let mut cmp = |x: &Paint, y: &Paint| {
-        let cols = |p: &Paint| -> Vec<Color> {
-            match p {
-                Paint::Solid { color, .. } => vec![*color],
-                Paint::Gradient(g) => g.gradient.stops.iter().map(|s| s.color).collect(),
-                _ => vec![],
-            }
-        };
-        let (cx, cy) = (cols(x), cols(y));
-        for (i, c) in cx.iter().enumerate() {
-            if let Some(o) = cy.get(i).or(cy.first()) {
-                let (p, q) = (c.to_rgb(), o.to_rgb());
-                for k in 0..3 {
-                    d = d.max((p[k] - q[k]).abs());
-                }
-            }
-        }
+/// Largest channel difference between two solid colors, as a fraction of the channel's range: two
+/// tints of the same swatch by their tints, RGB by its 0 to 255 values over 256, CMYK and gray by
+/// their percentages, and colors in different spaces (or Lab) by the difference of their RGB
+/// values over 255. A solid paint against no paint, or anything that isn't solid, differs by 0:
+/// [`lerp_paint`] switches such paints halfway rather than mixing them.
+fn paint_difference(x: &Paint, y: &Paint) -> f64 {
+    let (Paint::Solid { color: p, swatch: sp, tint: tp }, Paint::Solid { color: q, swatch: sq, tint: tq }) = (x, y) else {
+        return 0.0;
     };
-    cmp(&a.appearance.fill_paint(), &b.appearance.fill_paint());
-    cmp(&a.appearance.stroke_paint(), &b.appearance.stroke_paint());
-    d
+    if sp.is_some() && sp == sq && tp != tq {
+        return f64::from((tp - tq).abs());
+    }
+    let most = |a: &[f32], b: &[f32]| a.iter().zip(b).fold(0.0f64, |m, (u, v)| m.max(f64::from((u - v).abs())));
+    match (p, q) {
+        (Color::Rgb { r, g, b }, Color::Rgb { r: r2, g: g2, b: b2 }) => most(&[*r, *g, *b], &[*r2, *g2, *b2]) * 255.0 / 256.0,
+        (Color::Cmyk { c, m, y, k }, Color::Cmyk { c: c2, m: m2, y: y2, k: k2 }) => most(&[*c, *m, *y, *k], &[*c2, *m2, *y2, *k2]),
+        (Color::Gray { k }, Color::Gray { k: k2 }) => most(&[*k], &[*k2]),
+        _ => most(&p.to_rgb(), &q.to_rgb()),
+    }
 }
 
-/// Number of intermediate steps between two keys `len` apart (along the spine).
+/// Largest difference (see [`paint_difference`]) between pairs of fills and strokes, or `None`
+/// when any of them is a gradient or a pattern.
+fn paints_difference(pairs: &[(&Paint, &Paint)]) -> Option<f64> {
+    let mut d = 0.0f64;
+    for (x, y) in pairs {
+        if [x, y].iter().any(|p| matches!(p, Paint::Gradient(_) | Paint::Pattern { .. })) {
+            return None;
+        }
+        d = d.max(paint_difference(x, y));
+    }
+    Some(d)
+}
+
+/// Largest channel difference (0..1, see [`paint_difference`]) between the solid colors of two
+/// keys: their top fill and stroke, the runs of two text objects paired as [`lerp_text`] pairs
+/// them, and the members of two groups paired as [`Lerp::new`] pairs them. `None` when any of
+/// these holds a gradient or a pattern, whose steps Smooth Color counts by distance.
+fn color_distance(a: &Node, b: &Node) -> Option<f64> {
+    let mut d =
+        paints_difference(&[(&a.appearance.fill_paint(), &b.appearance.fill_paint()), (&a.appearance.stroke_paint(), &b.appearance.stroke_paint())])?;
+    match (&a.kind, &b.kind) {
+        (NodeKind::Group { children: ca, clip: k1 }, NodeKind::Group { children: cb, clip: k2 }) if k1 == k2 && !(*k1 && ca.len() != cb.len()) => {
+            for (x, y) in ca.iter().zip(cb) {
+                d = d.max(color_distance(x, y)?);
+            }
+        }
+        (NodeKind::Text(x), NodeKind::Text(y)) => {
+            // The runs `lerp_text` pairs: those of `x` and of `y` at the middle of each run of either.
+            for u in run_middles(&x.runs).into_iter().chain(run_middles(&y.runs)) {
+                let (Some(rx), Some(ry)) = (run_at(x, u), run_at(y, u)) else { continue };
+                d = d.max(paints_difference(&[(&rx.style.fill, &ry.style.fill), (&rx.style.stroke, &ry.style.stroke)])?);
+            }
+        }
+        _ => {}
+    }
+    d.is_finite().then_some(d)
+}
+
+/// Smooth Color's steps between two keys by distance: the largest distance between their
+/// corresponding visible bounding-box edges, in mean key widths (left and right edges) or heights
+/// (top and bottom), rounded, less one, from 1 to 1000. Keys with no width are measured in their
+/// mean height across as well, keys with no height in their mean width, and keys with neither in
+/// points.
+fn spatial_steps(ba: Rect, bb: Rect) -> usize {
+    let (w, h) = ((ba.width() + bb.width()) / 2.0, (ba.height() + bb.height()) / 2.0);
+    let size = |s: f64, other: f64| {
+        if s > 1e-9 {
+            s
+        } else if other > 1e-9 {
+            other
+        } else {
+            1.0
+        }
+    };
+    let (w, h) = (size(w, h), size(h, w));
+    let q = ((ba.x0 - bb.x0).abs().max((ba.x1 - bb.x1).abs()) / w).max((ba.y0 - bb.y0).abs().max((ba.y1 - bb.y1).abs()) / h);
+    if !q.is_finite() {
+        return 1;
+    }
+    ((q + 0.5).floor() - 1.0).clamp(1.0, 1000.0) as usize
+}
+
+/// `255 × d` steps for a color difference `d` (see [`color_distance`]), a half step rounding down,
+/// from 1 to 254.
+fn level_steps(d: f64) -> f64 {
+    // The tolerance keeps a difference that lands on a half step (128 of 256 RGB values gives
+    // 127.5), stored as an `f32`, from rounding up.
+    (255.0 * d - 0.5 - 1e-4).ceil().clamp(1.0, 254.0)
+}
+
+/// Smooth Color's steps between two keys whose colors differ by `d` (see [`color_distance`]):
+/// [`level_steps`], and at most eight per point of the largest of the keys' widths and heights
+/// and the distance between their centers along either axis.
+fn color_steps(d: f64, ba: Rect, bb: Rect) -> usize {
+    let by_color = level_steps(d);
+    let (ca, cb) = (ba.center(), bb.center());
+    let reach = [(ca.x - cb.x).abs(), (ca.y - cb.y).abs(), ba.width(), ba.height(), bb.width(), bb.height()].into_iter().fold(0.0f64, f64::max);
+    let by_density = (8.0 * reach + 0.5).floor().clamp(1.0, 254.0);
+    if !by_density.is_finite() {
+        return by_color as usize;
+    }
+    by_color.min(by_density) as usize
+}
+
+/// Number of intermediate steps between two keys. Specified Distance counts along the spine, `len`
+/// long between them. Smooth Color counts from the keys' colors and visible bounds, whatever the
+/// spine: keys whose colors differ make [`color_steps`] ([`level_steps`] when either key has no
+/// bounds), and others make [`spatial_steps`] (1 when either key has no bounds).
 pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> usize {
     match spacing {
         BlendSpacing::Steps(n) => n.clamp(1, 1000) as usize,
@@ -783,17 +880,14 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
             ((len / d).round() as i64 - 1).clamp(0, 1000) as usize
         }
         BlendSpacing::SmoothColor => {
-            let cd = color_distance(a, b);
-            if cd > 1.0 / 255.0 {
-                ((cd * 255.0 / 2.0).ceil() as usize).clamp(1, 256)
-            } else {
-                // Same colours: base the count on the distance between the objects.
-                let (ba, bb) = (a.geometric_bounds(), b.geometric_bounds());
-                let dist = match (ba, bb) {
-                    (Some(x), Some(y)) => (x.x0 - y.x0).abs().max((x.x1 - y.x1).abs()).max((x.y0 - y.y0).abs()).max((x.y1 - y.y1).abs()),
-                    _ => len,
-                };
-                ((dist / 2.0).ceil() as usize).clamp(1, 256)
+            let bounds = a.visual_bounds().zip(b.visual_bounds());
+            match (color_distance(a, b), bounds) {
+                // Colors that differ by less than a thousandth of a step count as the same.
+                (Some(d), Some((ba, bb))) if d * 255.0 > 1e-3 => color_steps(d, ba, bb),
+                (Some(d), None) if d * 255.0 > 1e-3 => level_steps(d) as usize,
+                // Same colors, gradients and patterns: the distance between the objects.
+                (_, Some((ba, bb))) => spatial_steps(ba, bb),
+                (_, None) => 1,
             }
         }
     }
@@ -857,6 +951,52 @@ impl Spine {
     /// Arc length at anchor `i`.
     pub fn anchor_length(&self, i: usize) -> Option<f64> {
         self.anchors.get(i).copied()
+    }
+    /// Arc length of the point of the spine nearest `p`. An open spine's end segments run on past
+    /// its ends as lines, so the result is below 0 before the start and above [`Spine::length`]
+    /// beyond the end. With `from`, the arc length of an earlier point a drag followed, each point
+    /// counts as farther by half its distance along the spine from there, so a pointer passing
+    /// near another part of the spine stays on the part it follows. Where two points count as
+    /// near as each other, the one earlier along the spine counts.
+    pub fn length_near(&self, p: Point, from: Option<f64>) -> f64 {
+        self.nearest(p, from).map_or(0.0, |(_, s)| s)
+    }
+    /// [`Spine::length_near`] with how near the point counts: its distance from `p`, plus half its
+    /// distance along the spine from `from`. `None` for a point that is not finite.
+    pub fn nearest(&self, p: Point, from: Option<f64>) -> Option<(f64, f64)> {
+        if !p.x.is_finite() || !p.y.is_finite() {
+            return None;
+        }
+        let last = self.pts.len().saturating_sub(2);
+        let mut best: Option<(f64, f64)> = None;
+        for (i, (w, c)) in self.pts.windows(2).zip(&self.cum).enumerate() {
+            let [a, b] = [w[0], w[1]];
+            let d = b - a;
+            let l2 = d.dot(d);
+            if !l2.is_finite() || l2 <= 0.0 {
+                continue;
+            }
+            let t = (p - a).dot(d) / l2;
+            let t = match (self.closed, i == 0, i == last) {
+                (false, true, true) => t,
+                (false, true, false) => t.min(1.0),
+                (false, false, true) => t.max(0.0),
+                _ => t.clamp(0.0, 1.0),
+            };
+            let s = c + t * l2.sqrt();
+            let dist = p.distance(a + d * t) + from.filter(|f| f.is_finite()).map_or(0.0, |f| self.apart(s, f) / 2.0);
+            if dist.is_finite() && best.is_none_or(|(b, _)| dist < b) {
+                best = Some((dist, s));
+            }
+        }
+        best
+    }
+    /// How far apart arc lengths `s` and `f` are along the spine: the shorter way round a closed
+    /// spine, across its first anchor.
+    pub fn apart(&self, s: f64, f: f64) -> f64 {
+        let len = self.length();
+        let d = (s - f).abs();
+        if self.closed && len > 0.0 { d.rem_euclid(len).min(len - d.rem_euclid(len)) } else { d }
     }
     /// Point and tangent angle (radians) at arc-length fraction `f` (0..1).
     pub fn at(&self, f: f64) -> (Point, f64) {
@@ -1025,6 +1165,27 @@ impl Rail {
     }
 }
 
+/// A box round everything a blend of `keys` can paint once [`Rail::place`] puts its keys and steps
+/// on its spine, turned to it with Align to Path: the spine's box grown by three times the farthest
+/// any key paints from its centre. A step's shape lies within that distance of the point on the
+/// spine it is moved to, and so does its own centre, which it turns about. `None` when nothing
+/// moves.
+pub(crate) fn rail_reach(keys: &[Arc<Node>], spec: &BlendSpec, symbols: Option<&crate::SymbolBoxes>) -> Option<Rect> {
+    if spec.spine.is_none() && spec.orientation != BlendOrientation::AlignToPath {
+        return None;
+    }
+    let spine = blend_spine(keys, spec)?.0.bounds()?;
+    let radius = keys
+        .iter()
+        .filter_map(|k| {
+            let (c, b) = (center_of(k), k.visual(symbols)?);
+            let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x0, b.y1), Point::new(b.x1, b.y1)];
+            Some(corners.into_iter().map(|q| (q - c).hypot()).fold(0.0, f64::max))
+        })
+        .fold(0.0, f64::max);
+    Some(spine.inflate(3.0 * radius, 3.0 * radius))
+}
+
 // =====================================================================================
 // Blend evaluation
 // =====================================================================================
@@ -1077,13 +1238,19 @@ fn requested_steps(keys: &[Arc<Node>], spec: &BlendSpec, rail: Option<&Rail>) ->
         .collect()
 }
 
-/// Most steps `spacing` makes between two keys, whatever their size and distance
-/// ([`blend_step_count`]'s clamps).
-fn most_steps(spacing: BlendSpacing) -> usize {
+/// Most steps `spacing` makes between keys `a` and `b`, whatever their size and distance
+/// ([`blend_step_count`]'s clamps). A copy of a blend is moved and scaled, never recolored
+/// ([`Shape::Other`]), so Smooth Color between colors that differ makes no more than their color
+/// change asks for, whatever the copy's scale or rotation. By distance, a copy turned by Align to
+/// Path can measure its edges differently, so it counts as up to 1000.
+fn most_steps(a: &Node, b: &Node, spacing: BlendSpacing) -> usize {
     match spacing {
         BlendSpacing::Steps(n) => n.clamp(1, 1000) as usize,
         BlendSpacing::Distance(_) => 1000,
-        BlendSpacing::SmoothColor => 256,
+        BlendSpacing::SmoothColor => match color_distance(a, b) {
+            Some(d) if d * 255.0 > 1e-3 => level_steps(d) as usize,
+            _ => 1000,
+        },
     }
 }
 
@@ -1111,8 +1278,8 @@ struct StepCount {
 impl StepCount {
     /// Steps the blends in `n` make in all when drawn, each keeping to [`MAX_BLEND_STEPS`].
     /// `copy`: `n` is part of a blend's step, a copy moved and scaled into place. A blend spaced
-    /// by distance (or by distance where the colours match) makes more steps scaled up, so a
-    /// copy counts the most its spacing can make between each pair, an upper bound for any scale.
+    /// by distance, or by Smooth Color, can make more steps scaled up, so a copy counts the most
+    /// its spacing can make between each pair ([`most_steps`]), an upper bound for any scale.
     fn node(&mut self, n: &Node, copy: bool) -> usize {
         let at = (std::ptr::from_ref(n) as usize, copy);
         if let Some(&known) = self.known.get(&at) {
@@ -1178,7 +1345,11 @@ impl StepCount {
     fn most(&mut self, keys: &[Arc<Node>], spec: &BlendSpec) -> usize {
         let inside = self.nodes(keys, true);
         let each = self.steps(keys);
-        let demand = each.iter().map(|&c| c.saturating_mul(most_steps(spec.spacing))).fold(0, usize::saturating_add);
+        let most = keys.windows(2).map(|w| match w {
+            [a, b] => most_steps(a, b, spec.spacing),
+            _ => 0,
+        });
+        let demand = each.iter().zip(most).map(|(&c, m)| c.saturating_mul(m)).fold(0, usize::saturating_add);
         inside.saturating_add(demand.min(MAX_BLEND_STEPS.saturating_sub(inside)))
     }
 }
@@ -1424,6 +1595,12 @@ mod tests {
     }
 
     #[test]
+    fn odd_dash_blends_to_solid_with_closed_gaps() {
+        let d = lerp_dash(Some(&Dash { pattern: vec![2.0, 3.0, 4.0], ..Default::default() }), None, 1.0).unwrap();
+        assert!(d.pattern.iter().skip(1).step_by(2).all(|g| *g == 0.0), "{:?}", d.pattern);
+    }
+
+    #[test]
     fn copied_steps_get_new_members() {
         let rect = |x: f64| Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default()));
         let a = Node::new(NodeId(1), NodeKind::Group { children: vec![rect(0.0), rect(20.0)], clip: true });
@@ -1556,5 +1733,181 @@ mod tests {
         // Within the budget, every step stays.
         assert_eq!(blend_steps(&keys[..50], &spec), vec![1000; 49]);
         assert_eq!(fit_steps(&[10, 20], &[1, 1], MAX_BLEND_STEPS), vec![0, 0]);
+    }
+
+    /// A key for the Smooth Color tests: a rectangle of `size` (width, height) centered on `c`,
+    /// with `fill`, and `stroke` at `width`.
+    fn smooth_key(c: (f64, f64), size: (f64, f64), fill: Paint, stroke: Paint, width: f64) -> Node {
+        let ((cx, cy), (w, h)) = (c, size);
+        let rect = Rect::new(cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0);
+        Node::path(NodeId(1), shapes::rectangle(rect), Appearance::basic(fill, stroke, width))
+    }
+
+    /// Smooth Color's steps between two filled `size` rectangles centered on `a` and `b`.
+    fn smooth(a: (f64, f64), b: (f64, f64), size: (f64, f64), fill_a: Color, fill_b: Color) -> usize {
+        let key = |c, fill| smooth_key(c, size, Paint::solid(fill), Paint::None, 0.0);
+        blend_step_count(&key(a, fill_a), &key(b, fill_b), BlendSpacing::SmoothColor, a.0.max(b.0) - a.0.min(b.0))
+    }
+
+    /// Smooth Color counts 255 steps for a full change of the channel that changes most, a half
+    /// step rounding down: RGB values over 256, CMYK and gray in percent, a spot color by its
+    /// tint, colors in different spaces by their RGB values over 255, a fill or a stroke,
+    /// whichever changes more.
+    #[test]
+    fn smooth_color_counts_a_step_per_level_of_color_change() {
+        let (a, b, size) = ((50.0, 150.0), (250.0, 150.0), (20.0, 20.0));
+        let black = Color::rgb8(0, 0, 0);
+        for (level, steps) in [(1, 1), (2, 2), (5, 5), (64, 64), (127, 127), (128, 127), (129, 128), (200, 199), (254, 253), (255, 254)] {
+            assert_eq!(smooth(a, b, size, black, Color::rgb8(level, 0, 0)), steps, "black to red {level}");
+            assert_eq!(smooth(a, b, size, black, Color::rgb8(level, level, level)), steps, "black to gray {level}");
+        }
+        assert_eq!(smooth(a, b, size, Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255)), 254);
+        assert_eq!(smooth(a, b, size, black, Color::rgb8(64, 128, 0)), 127, "the channel that changes most");
+        assert_eq!(smooth(a, b, size, Color::rgb8(17, 42, 93), Color::rgb8(91, 147, 220)), 127);
+        for (percent, steps) in [(0.2, 1), (1.0, 3), (5.0, 13), (10.0, 25), (25.0, 64), (50.0, 127), (100.0, 254)] {
+            let p = percent / 100.0;
+            assert_eq!(smooth(a, b, size, Color::cmyk(0.0, 0.0, 0.0, 0.0), Color::cmyk(p, 0.0, 0.0, 0.0)), steps, "cyan {percent}%");
+            assert_eq!(smooth(a, b, size, Color::gray(0.0), Color::gray(p)), steps, "gray {percent}%");
+        }
+        let spot = |tint: f32| Paint::Solid { color: Color::rgb8(255, 0, 0).tinted(tint), swatch: Some("Spot".into()), tint };
+        let key = |c, fill| smooth_key(c, size, fill, Paint::None, 0.0);
+        assert_eq!(blend_step_count(&key(a, spot(1.0)), &key(b, spot(0.5)), BlendSpacing::SmoothColor, 200.0), 127, "a tint of 50%");
+        let stroked = |c, fill: Color, stroke: Color| smooth_key(c, size, Paint::solid(fill), Paint::solid(stroke), 1.0);
+        let (red, blue) = (Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255));
+        assert_eq!(blend_step_count(&stroked(a, red, black), &stroked(b, red, blue), BlendSpacing::SmoothColor, 200.0), 254, "the stroke changes");
+        let outline = |c, stroke: Color| smooth_key(c, size, Paint::None, Paint::solid(stroke), 1.0);
+        assert_eq!(blend_step_count(&outline(a, red), &outline(b, blue), BlendSpacing::SmoothColor, 200.0), 254, "strokes alone");
+        assert_eq!(smooth(a, b, size, Color::rgb8(255, 255, 127), Color::cmyk(0.0, 0.0, 0.0, 0.0)), 128, "RGB against CMYK white");
+        assert_eq!(smooth(a, b, size, Color::rgb8(255, 255, 127), Color::rgb8(255, 255, 255)), 127, "RGB against RGB white");
+    }
+
+    /// Smooth Color reads the colors of group members paired in order and of text runs, and
+    /// counts a solid paint against no paint by distance, since such a paint switches halfway
+    /// instead of mixing.
+    #[test]
+    fn smooth_color_reads_the_colors_inside_groups_and_text() {
+        let (red, blue) = (Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255));
+        let square = |x: f64, c: Color| Arc::new(smooth_key((x, 150.0), (20.0, 20.0), Paint::solid(c), Paint::None, 0.0));
+        let group = |x: f64, top: Color| Node::new(NodeId(1), NodeKind::Group { children: vec![square(x, red), square(x, top)], clip: false });
+        let steps = |a: &Node, b: &Node| blend_step_count(a, b, BlendSpacing::SmoothColor, 200.0);
+        assert_eq!(steps(&group(50.0, red), &group(250.0, blue)), 254, "groups whose members change color");
+        assert_eq!(steps(&group(50.0, red), &group(250.0, red)), 9, "groups of the same colors");
+        let text = |x: f64, c: Color| {
+            let style = crate::CharStyle { fill: Paint::solid(c), ..Default::default() };
+            Node::new(NodeId(1), NodeKind::Text(Box::new(crate::TextObject::point(Point::new(x, 150.0), "Hi", style))))
+        };
+        assert_eq!(steps(&text(50.0, red), &text(250.0, blue)), 254, "text whose runs change color");
+        let mut two_runs = text(250.0, red);
+        if let NodeKind::Text(t) = &mut two_runs.kind {
+            let style = crate::CharStyle { fill: Paint::solid(blue), ..t.runs[0].style.clone() };
+            t.runs.push(crate::text::TextRun::new("Hi", style));
+        }
+        assert_eq!(steps(&text(50.0, red), &two_runs), 254, "a run that turns blue against one red run");
+        let empty = |x: f64| smooth_key((x, 150.0), (20.0, 20.0), Paint::None, Paint::None, 0.0);
+        assert_eq!(steps(&smooth_key((50.0, 150.0), (20.0, 20.0), Paint::solid(red), Paint::None, 0.0), &empty(250.0)), 9, "a fill against none");
+        let nothing = |c: Color| Node::path(NodeId(1), PathData::new(vec![]), Appearance::basic(Paint::solid(c), Paint::None, 0.0));
+        assert_eq!(steps(&nothing(red), &nothing(blue)), 254, "keys without bounds whose colors differ");
+        assert_eq!(steps(&nothing(red), &nothing(red)), 1, "keys without bounds of the same color");
+    }
+
+    /// Smooth Color makes at most eight steps per point of the largest of the keys' widths and
+    /// heights and the distance between their centers along either axis.
+    #[test]
+    fn smooth_color_makes_at_most_eight_steps_a_point() {
+        let (red, blue) = (Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255));
+        for (dx, steps) in [(0.0, 160), (20.0, 160), (20.1, 161), (25.0, 200), (31.5, 252), (40.0, 254)] {
+            assert_eq!(smooth((50.0, 150.0), (50.0 + dx, 150.0), (20.0, 20.0), red, blue), steps, "{dx} pt apart");
+        }
+        assert_eq!(smooth((100.0, 150.0), (100.0, 175.0), (20.0, 20.0), red, blue), 200, "25 pt apart vertically");
+        assert_eq!(smooth((100.0, 150.0), (100.0, 150.0), (5.0, 5.0), red, blue), 40, "5 pt squares on each other");
+        assert_eq!(smooth((100.0, 150.0), (100.0, 150.0), (25.0, 5.0), red, blue), 200, "the longer side counts");
+        assert_eq!(smooth((100.0, 150.0), (100.0, 150.0), (1.0, 1.0), red, blue), 8);
+    }
+
+    /// Smooth Color between keys of the same colors counts the largest distance between their
+    /// corresponding visible edges in mean key widths or heights, rounded, less one; so do keys
+    /// with gradients, whatever their colors.
+    #[test]
+    fn smooth_color_between_the_same_colors_counts_by_distance() {
+        let red = Color::rgb8(255, 0, 0);
+        let same = |a, b, size| smooth(a, b, size, red, red);
+        for (dx, steps) in [(25.0, 1), (50.0, 2), (100.0, 4), (200.0, 9), (400.0, 19), (800.0, 39)] {
+            assert_eq!(same((50.0, 150.0), (50.0 + dx, 150.0), (20.0, 20.0)), steps, "20 pt squares {dx} pt apart");
+        }
+        for (side, steps) in [(5.0, 39), (10.0, 19), (40.0, 4), (80.0, 2)] {
+            assert_eq!(same((50.0, 150.0), (250.0, 150.0), (side, side)), steps, "{side} pt squares");
+        }
+        assert_eq!(same((50.0, 150.0), (250.0, 150.0), (80.0, 10.0)), 2, "wide");
+        assert_eq!(same((50.0, 150.0), (250.0, 150.0), (10.0, 80.0)), 19, "tall");
+        assert_eq!(same((50.0, 250.0), (250.0, 50.0), (20.0, 20.0)), 9, "diagonal");
+        assert_eq!(same((50.0, 250.0), (250.0, 50.0), (80.0, 10.0)), 19, "wide and diagonal");
+        assert_eq!(same((50.0, 150.0), (1050.0, 150.0), (1.0, 1.0)), 999);
+        assert_eq!(same((50.0, 150.0), (1052.0, 150.0), (1.0, 1.0)), 1000, "at most 1000");
+        assert_eq!(same((50.0, 150.0), (50.0, 150.0), (20.0, 20.0)), 1, "at least one");
+        assert_eq!(same((50.0, 150.0), (250.0, 150.0), (0.0, 20.0)), 9, "vertical lines, measured in their height");
+        assert_eq!(same((50.0, 150.0), (50.0, 350.0), (20.0, 0.0)), 9, "horizontal lines, measured in their width");
+        assert_eq!(same((50.0, 150.0), (60.0, 150.0), (0.0, 0.0)), 9, "points, measured in points");
+        let key = |c, size, stroke: f64| smooth_key(c, size, Paint::solid(red), Paint::solid(Color::BLACK), stroke);
+        let wide =
+            blend_step_count(&key((50.0, 150.0), (10.0, 20.0), 0.0), &key((250.0, 150.0), (80.0, 20.0), 0.0), BlendSpacing::SmoothColor, 200.0);
+        assert_eq!(wide, 4, "keys of different widths");
+        let strokes =
+            blend_step_count(&key((50.0, 150.0), (20.0, 20.0), 1.0), &key((250.0, 150.0), (20.0, 20.0), 10.0), BlendSpacing::SmoothColor, 200.0);
+        assert_eq!(strokes, 7, "strokes widen the visible edges");
+        let gradient = |a: Color, b: Color| {
+            Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+                Default::default(),
+                vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)],
+            ))))
+        };
+        let shaded = |c, fill| smooth_key(c, (20.0, 20.0), fill, Paint::None, 0.0);
+        let blue = Color::rgb8(0, 0, 255);
+        for (from, to) in [(gradient(red, blue), gradient(red, blue)), (gradient(red, blue), gradient(blue, red))] {
+            assert_eq!(blend_step_count(&shaded((50.0, 150.0), from), &shaded((250.0, 150.0), to), BlendSpacing::SmoothColor, 200.0), 9);
+        }
+    }
+
+    /// A Smooth Color blend counts each pair of keys on its own.
+    #[test]
+    fn smooth_color_counts_each_pair_of_keys() {
+        let key = |x: f64, c: Color| Arc::new(smooth_key((x, 150.0), (20.0, 20.0), Paint::solid(c), Paint::None, 0.0));
+        let (red, blue) = (Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255));
+        let spec = BlendSpec::default();
+        assert_eq!(blend_steps(&[key(50.0, red), key(150.0, red), key(250.0, blue)], &spec), vec![4, 254]);
+        assert_eq!(blend_steps(&[key(50.0, red), key(150.0, blue), key(250.0, red)], &spec), vec![254, 254]);
+    }
+
+    /// A Smooth Color blend between different colors inside another blend's keys counts as the
+    /// steps its colors ask for, so the outer blend keeps the steps it asks for within
+    /// [`MAX_BLEND_STEPS`]: 200 steps, each a copy making 254 more. The copies keep their keys'
+    /// colors, also halfway between a red-to-blue and a blue-to-red blend.
+    #[test]
+    fn a_smooth_color_blend_in_a_key_counts_its_color_steps() {
+        let (red, blue) = (Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255));
+        let key = |x: f64, c: Color| smooth_key((x, 150.0), (20.0, 20.0), Paint::solid(c), Paint::None, 0.0);
+        let inner = |x: f64, from: Color, to: Color| blend_of(key(x, from), key(x + 100.0, to), BlendSpacing::SmoothColor);
+        let outer = blend_of(inner(0.0, red, blue), inner(500.0, red, blue), BlendSpacing::Steps(200));
+        let (keys, spec) = blend_parts(&outer).unwrap();
+        assert_eq!(blend_steps(keys, spec), vec![200]);
+        let crossed = blend_of(inner(0.0, red, blue), inner(500.0, blue, red), BlendSpacing::Steps(199));
+        let (keys, spec) = blend_parts(&crossed).unwrap();
+        assert_eq!(blend_steps(keys, spec), vec![199]);
+        let drawn = blend_expand(keys, spec);
+        let Some(NodeKind::Blend { children, .. }) = drawn.get(100).map(|n| &n.kind) else { panic!("a copy of a blend halfway") };
+        let fills: Vec<_> = children.iter().map(|k| k.appearance.fill_paint().color()).collect();
+        assert!(fills == [Some(red), Some(blue)] || fills == [Some(blue), Some(red)], "{fills:?}");
+    }
+
+    /// A Smooth Color blend between the same colors inside another blend's keys counts as up to
+    /// 1000 steps, which a copy turned to a path can ask for: 200 steps of copies of it come
+    /// down to 99.
+    #[test]
+    fn a_smooth_color_blend_of_the_same_colors_in_a_key_counts_up_to_1000_steps() {
+        let red = Color::rgb8(255, 0, 0);
+        let key = |x: f64| smooth_key((x, 150.0), (20.0, 20.0), Paint::solid(red), Paint::None, 0.0);
+        let inner = |x: f64| blend_of(key(x), key(x + 100.0), BlendSpacing::SmoothColor);
+        let outer = blend_of(inner(0.0), inner(500.0), BlendSpacing::Steps(200));
+        let (keys, spec) = blend_parts(&outer).unwrap();
+        assert_eq!(blend_steps(keys, spec), vec![99]);
     }
 }

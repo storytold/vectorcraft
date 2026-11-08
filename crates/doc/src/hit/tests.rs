@@ -38,6 +38,39 @@ fn unfilled_interior_misses() {
     assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
 }
 
+#[test]
+fn long_plain_stroke_hits_its_middle_and_curved_end() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&(0..=4097).map(|i| Point::new(i as f64 * 10.0, 0.0)).collect::<Vec<_>>(), false);
+    sp.anchors[4096].h_out = Point::new(40960.0, 100.0);
+    sp.anchors[4097].h_in = Point::new(40970.0, 100.0);
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(40970.0, 100.0)));
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(0.0, 100.0)));
+    let path = vectorcraft_geom::PathData::single(sp);
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(Some(l), 0, Node::path(id, path, look)).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for point in [Point::new(20485.0, 0.0), Point::new(40965.0, 75.0)] {
+        assert_eq!(hit_test(&d, point, HitOptions::default()).map(|h| h.kind), Some(HitKind::Stroke));
+        assert_eq!(hit_test(&d, point, outline).map(|h| h.kind), Some(HitKind::Outline));
+    }
+    assert!(hit_test(&d, Point::new(20485.0, 50.0), HitOptions::default()).is_none());
+}
+
+#[test]
+fn coincident_anchors_remain_hittable_as_an_outline() {
+    let mut d = Document::new(200.0, 200.0);
+    let id = d.alloc_id();
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(50.0, 50.0); 2], false));
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(d.layers.first().map(|l| l.id), 0, Node::path(id, path, look)).unwrap();
+    let at = Point::new(50.0, 50.0);
+    assert_eq!(hit_test(&d, at, HitOptions::default()).map(|h| h.kind), Some(HitKind::Outline));
+    assert_eq!(hit_test(&d, at, HitOptions { outline: true, ..Default::default() }).map(|h| h.kind), Some(HitKind::Outline));
+}
+
 /// #1103: a marquee drawn over a background picks what is on it, not the background, whose
 /// outline it doesn't touch.
 #[test]
@@ -75,6 +108,148 @@ fn half_clipped(d: &mut Document) -> (Node, Node) {
     let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Appearance::default_art());
     (mask, art)
+}
+
+/// The art a mask hides counts only for a selected object: there a click hits nothing, and the
+/// selection tools grab the selection by that art. Not where the art shows (the click hits it),
+/// beyond the art, for the clip group selected as a whole, nor for art a click can't hit (locked,
+/// hidden, outside the isolated container). A layer's clipping mask hides art as a clip group's
+/// does.
+#[test]
+fn a_selected_objects_art_hidden_by_a_mask_is_found_under_the_pointer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, shown, beyond) = (Point::new(150.0, 50.0), Point::new(50.0, 50.0), Point::new(250.0, 50.0));
+    let opt = HitOptions::default();
+    assert!(hit_test(&d, hidden, opt).is_none());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[]), None);
+    assert_eq!(selected_hidden_at(&d, shown, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, beyond, opt, &[art_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(g), ..opt }, &[art_id]), Some(art_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(art_id), ..opt }, &[art_id]), Some(art_id));
+    let other = d.add_layer(Some("Other"));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(other), ..opt }, &[art_id]), None);
+    for change in [|n: &mut Node| n.locked = true, |n: &mut Node| n.visible = false] {
+        let mut d = d.clone();
+        change(d.node_mut(art_id).unwrap());
+        assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), None);
+    }
+    // A layer's clipping mask.
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let art_id = art.id;
+    d.insert(Some(l), 0, mask).unwrap();
+    d.insert(Some(l), 1, art).unwrap();
+    d.node_mut(l).unwrap().set_clips(true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[art_id]), Some(art_id));
+}
+
+/// A selected group's own art is what a click would hit in it: not a hidden or locked child, nor
+/// art its own clipping mask hides, all under the pointer where an outer mask hides them.
+#[test]
+fn a_selected_groups_hidden_art_counts_only_where_a_click_would_hit_it() {
+    // An outer clip group masking to the left half (0..100); the selected group inside it holds
+    // `child` (100..200 × 0..100, under the pointer at (150, 50)) and `shown` (inside the mask).
+    let build = |change: &dyn Fn(&mut Node, &mut Node)| {
+        let mut d = Document::new(300.0, 200.0);
+        let l = d.layers[0].id;
+        let outer_mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+        let mut child = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+        let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+        let (gid, cid) = (d.alloc_id(), d.alloc_id());
+        let mut group = Node::group(gid, vec![Arc::new(shown)]);
+        change(&mut group, &mut child);
+        if let NodeKind::Group { children, .. } = &mut group.kind {
+            children.push(Arc::new(child));
+        }
+        let mut clip = Node::group(cid, vec![Arc::new(outer_mask), Arc::new(group)]);
+        clip.set_clips(true);
+        d.insert(Some(l), 0, clip).unwrap();
+        (d, gid)
+    };
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    let (d, g) = build(&|_, _| {});
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), Some(g));
+    let (d, g) = build(&|_, child| child.visible = false);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a hidden child");
+    let (d, g) = build(&|_, child| child.locked = true);
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "a locked child");
+    // The selected group is a clip group too, whose own mask (its first child, 10..40) leaves
+    // `child` out.
+    let (d, g) = build(&|group, _| group.set_clips(true));
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[g]), None, "its own mask");
+}
+
+/// A selected guide path where a mask hides it counts only while guides can be clicked: not
+/// while they are locked or hidden (`skip_guides`), as a click on it then hits nothing.
+#[test]
+fn a_selected_guide_hidden_by_a_mask_counts_only_while_guides_can_be_clicked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, mut art) = half_clipped(&mut d);
+    if let NodeKind::Path { guide, .. } = &mut art.kind {
+        *guide = true;
+    }
+    let (g, guide_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[guide_id]), Some(guide_id));
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { skip_guides: true, ..opt }, &[guide_id]), None);
+}
+
+/// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
+/// while those shapes can be clicked (Construction mode, with them isolated), however deep it
+/// lies in them.
+#[test]
+fn a_selected_path_in_a_shaper_groups_hidden_shapes_counts_only_in_construction_mode() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // The outer clip group masks to 0..100; the path, 100..200, lies in the Shaper group's
+    // original shapes (its first child), under (150, 50).
+    let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    let path = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 0.0, 200.0, 100.0)), Appearance::default_art());
+    let path_id = path.id;
+    let mut sources = Node::group(d.alloc_id(), vec![Arc::new(path)]);
+    sources.name = Some(crate::shaper::SOURCES.into());
+    let sources_id = sources.id;
+    let face = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 40.0, 40.0)), Appearance::default_art());
+    let mut shaper = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+    shaper.extras_mut().shaper = Some(Box::default());
+    let mut clip = Node::group(d.alloc_id(), vec![Arc::new(mask), Arc::new(shaper)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
+    assert_eq!(selected_hidden_at(&d, hidden, opt, &[path_id]), None);
+    assert_eq!(selected_hidden_at(&d, hidden, HitOptions { scope: Some(sources_id), ..opt }, &[path_id]), Some(path_id));
+}
+
+/// On a layer whose Preview is off, a click hits art in outline: a selected object's hidden art
+/// counts on its outline, not inside its fill.
+#[test]
+fn a_selected_objects_hidden_art_on_a_preview_off_layer_counts_on_its_outline() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    if let NodeKind::Layer { preview, .. } = &mut d.node_mut(l).unwrap().kind {
+        *preview = false;
+    }
+    let opt = HitOptions::default();
+    assert_eq!(selected_hidden_at(&d, Point::new(150.0, 50.0), opt, &[art_id]), None, "inside the fill");
+    assert_eq!(selected_hidden_at(&d, Point::new(200.0, 50.0), opt, &[art_id]), Some(art_id), "on the outline");
 }
 
 /// #2345: a marquee touches a clip group only where its art shows. Over the clipped-away
@@ -285,6 +460,151 @@ fn a_marquee_meets_blends_and_envelopes_by_their_box() {
         assert_eq!(marquee(&d, r, None, false), vec![id]);
         assert_eq!(marquee(&d, r, None, true), vec![id]);
     }
+}
+
+/// A click just outside a blend's bounds, in the reach of its keys' strokes, tests only the steps
+/// whose own reach holds the point, not every step of the evaluated blend.
+#[test]
+fn a_click_in_a_blends_stroke_band_tests_only_the_steps_that_reach_it() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    // 10 pt circles with 4 pt strokes, y 295 to 305, from x 10 to x 890: 200 steps about 4.3 pt apart.
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let count = |p: Point| {
+        LEAVES_TESTED.with(|c| c.set(0));
+        let h = hit_test(&d, p, HitOptions::default()).map(|h| h.leaf);
+        (h, LEAVES_TESTED.with(std::cell::Cell::get))
+    };
+    // On the steps' strokes halfway between the keys, 4 pt above the bounds: a few steps reach it.
+    let (h, tested) = count(Point::new(450.0, 291.0));
+    assert_eq!(h, Some(blend));
+    assert!(tested < 20, "{tested} objects tested");
+    // In the corner of the reach, outside every stroke: nothing hits.
+    let (h, tested) = count(Point::new(6.0, 291.0));
+    assert_eq!(h, None);
+    assert!(tested < 20, "{tested} objects tested");
+}
+
+/// An intertwine group in a live object's evaluated art (a blend key a spine moves) hits by its
+/// members.
+#[test]
+fn evaluated_art_hits_an_intertwine_group_by_its_members() {
+    let d = Document::new(200.0, 200.0);
+    let square = Arc::new(Node::path(NodeId(7), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art()));
+    let group = Node::new(NodeId(8), NodeKind::Intertwine { children: vec![square] });
+    let symbols = d.symbol_boxes();
+    assert_eq!(hit_any(&group, Point::new(10.0, 10.0), HitOptions::default(), &symbols), Some(HitKind::Fill));
+    assert_eq!(hit_any(&group, Point::new(50.0, 50.0), HitOptions::default(), &symbols), None);
+}
+
+/// The pointer moving in a blend's stroke band evaluates the blend once, and again after the blend
+/// or a symbol of the document changes.
+#[test]
+fn clicks_in_a_blends_stroke_band_evaluate_it_once_until_it_changes() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0, 452.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 1);
+    // 100 steps 8.7 pt apart: a step still reaches (450, 291).
+    if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(blend).map(|n| &mut n.kind) {
+        spec.spacing = crate::live::BlendSpacing::Steps(100);
+    }
+    assert_eq!(hit_test(&d, Point::new(450.0, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    assert_eq!(evaluated(), before + 2);
+    let art = circle(d.alloc_id(), 0.0);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "dot".into(), art });
+    hit_test(&d, Point::new(450.0, 291.0), HitOptions::default());
+    assert_eq!(evaluated(), before + 3);
+    hit_test(&d, Point::new(450.0, 291.0), HitOptions::default());
+    assert_eq!(evaluated(), before + 3);
+}
+
+/// Evaluated art larger than [`LIVE_KEPT_SIZE`] is not kept: each click in the blend's stroke band
+/// evaluates it again.
+#[test]
+fn evaluated_art_past_the_kept_size_is_not_kept() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    // A 10 pt circle drawn with 2,000 anchors: 202 objects of 2,000 anchors each with 200 steps.
+    let circle = |id, x: f64| {
+        let points: Vec<Point> = (0..2000)
+            .map(|i| {
+                let a = f64::from(i) * std::f64::consts::TAU / 2000.0;
+                Point::new(x + 5.0 + 5.0 * a.cos(), 300.0 + 5.0 * a.sin())
+            })
+            .collect();
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+        Arc::new(Node::path(id, path, stroked.clone()))
+    };
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// While the document's symbols hold a placed document, whose art changes when its file is read,
+/// each click in a blend's stroke band evaluates the blend again.
+#[test]
+fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let stroked = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    let circle = |id, x: f64| Arc::new(Node::path(id, shapes::ellipse(Rect::new(x, 295.0, x + 10.0, 305.0)), stroked.clone()));
+    let blend = d.alloc_id();
+    let keys = vec![circle(d.alloc_id(), 10.0), circle(d.alloc_id(), 880.0)];
+    let spec = crate::live::BlendSpec { spacing: crate::live::BlendSpacing::Steps(200), ..Default::default() };
+    d.insert(Some(l), 0, Node::new(blend, NodeKind::Blend { children: keys, spec: Box::new(spec) })).unwrap();
+    let placed = crate::PlacedDocument {
+        link: crate::LinkInfo::new("/art/logo.vectorcraft"),
+        key: "logo".into(),
+        bounding: false,
+        page_box: crate::PageBox::Crop,
+        width: 80.0,
+        height: 40.0,
+        xf: vectorcraft_geom::Affine::IDENTITY,
+        placement: Default::default(),
+    };
+    let art = Arc::new(Node::new(d.alloc_id(), NodeKind::PlacedDocument(Box::new(placed))));
+    d.symbols.push(crate::Symbol { dynamic: false, name: "logo".into(), art });
+    let evaluated = || LIVE_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    for x in [448.0, 450.0] {
+        assert_eq!(hit_test(&d, Point::new(x, 291.0), HitOptions::default()).map(|h| h.leaf), Some(blend));
+    }
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// A kept evaluation is the evaluation of the object only while the fonts and plug-ins
+/// ([`LiveInputs`]) are as they were.
+#[test]
+fn a_kept_evaluation_is_stale_after_the_live_inputs_change() {
+    let d = Document::new(100.0, 100.0);
+    let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let e = EvaluatedLive { node: n.clone(), symbols: vec![], patterns: vec![], inputs: 7, art: std::rc::Rc::new(vec![]), size: 0 };
+    assert!(e.is_of(&d, &n, 7));
+    assert!(!e.is_of(&d, &n, 8));
 }
 
 /// A rectangle (40, 40)–(140, 140) clipping a filled 200 × 200 square drawn over its edges, in a
@@ -699,7 +1019,7 @@ fn objects_at_matches_repeated_hits_on_random_documents() {
 fn objects_at_finds_symbol_instances_by_their_art() {
     let mut d = Document::new(200.0, 200.0);
     let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(100.0, 60.0, 140.0, 80.0)), Appearance::default_art());
-    d.symbols.push(crate::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let (layer, top, inner, group) = (d.layers[0].id, d.alloc_id(), d.alloc_id(), d.alloc_id());
     let instance = |id, dy: f64| Node::new(id, NodeKind::SymbolInstance { symbol: "Far".into(), xf: vectorcraft_geom::Affine::translate((0.0, dy)) });
     d.insert(Some(layer), 0, instance(top, 0.0)).unwrap();
@@ -832,4 +1152,349 @@ fn visible_sampling_reads_locked_art_and_layers_but_excludes_hidden_art() {
     d.node_mut(a).unwrap().visible = true;
     d.node_mut(l).unwrap().visible = false;
     assert!(hit_test_visible(&d, p, HitOptions::default()).is_none());
+}
+
+/// Deterministic xorshift in 0..1.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> f64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 % 1_000_000) as f64 / 1_000_000.0
+    }
+}
+
+/// A closed blob of `n` smooth anchors round `c` (radius about `r`), turning either way, with
+/// handles long enough that its control points reach past its curves.
+fn blob(rng: &mut Rng, c: Point, r: f64, n: usize, clockwise: bool) -> vectorcraft_geom::SubPath {
+    use vectorcraft_geom::{Anchor, Vec2};
+    let anchors = (0..n)
+        .map(|i| {
+            let k = if clockwise { i as f64 } else { (n - i) as f64 };
+            let a = k / n as f64 * std::f64::consts::TAU;
+            let rr = r * (0.6 + 0.8 * rng.next());
+            let p = c + Vec2::new(a.cos(), a.sin()) * rr;
+            let t = Vec2::new(-a.sin(), a.cos()) * (if clockwise { 1.0 } else { -1.0 }) * rr * (0.2 + 1.3 * rng.next());
+            Anchor::smooth(p, p + t)
+        })
+        .collect();
+    vectorcraft_geom::SubPath::new(anchors, true)
+}
+
+/// A document with one compound path of `members` blobs (some of them holes), its id and the
+/// members' paths.
+fn compound_doc(members: usize, rule: vectorcraft_geom::FillRule, appearance: Appearance) -> (Document, NodeId, Vec<vectorcraft_geom::PathData>) {
+    let mut d = Document::new(800.0, 800.0);
+    let l = d.layers[0].id;
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    let mut paths = vec![];
+    let mut children = vec![];
+    for i in 0..members {
+        let c = Point::new(20.0 + rng.next() * 600.0, 20.0 + rng.next() * 600.0);
+        let r = 3.0 + rng.next() * 9.0;
+        let pd = vectorcraft_geom::PathData::single(blob(&mut rng, c, r, 3 + i % 4, i % 3 != 0));
+        children.push(Arc::new(Node::path(d.alloc_id(), pd.clone(), Appearance::default())));
+        paths.push(pd);
+    }
+    let id = d.alloc_id();
+    let mut compound = Node::new(id, NodeKind::Compound { children, rule });
+    compound.appearance = appearance.into();
+    d.insert(Some(l), 0, compound).unwrap();
+    (d, id, paths)
+}
+
+/// What a click on compound path `n` gave before compound paths were culled by their control
+/// points and their members near the click: the whole path assembled (`full`), culled by its
+/// reach measured along the curves.
+fn compound_hit_before(n: &Node, full: &vectorcraft_geom::BezPath, p: Point, opt: HitOptions) -> Option<HitKind> {
+    let NodeKind::Compound { rule, .. } = &n.kind else { return None };
+    if !n.reach_bounds().is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+        return None;
+    }
+    if !opt.outline && n.appearance.stroke_hit(full, *rule, p, opt.tol) {
+        return Some(HitKind::Stroke);
+    }
+    if stroke_contains(full, 0.0, opt.tol, p) {
+        return Some(HitKind::Outline);
+    }
+    (!opt.outline && !opt.path_only && fill_contains(full, *rule, p)).then_some(HitKind::Fill)
+}
+
+/// The points a test clicks for `paths`: random ones over them and past them, and, for some
+/// members, their anchors, points just over the tolerance from them, and the corners and edge
+/// midpoints of their control and curve boxes, on them and grown by the tolerance.
+fn probe_points(paths: &[vectorcraft_geom::PathData], tol: f64, random: usize, every: usize) -> Vec<Point> {
+    let all = paths.iter().filter_map(vectorcraft_geom::PathData::control_bounds).reduce(|a, b| a.union(b)).unwrap().inflate(30.0, 30.0);
+    let mut rng = Rng(7);
+    let mut pts: Vec<Point> = (0..random).map(|_| Point::new(all.x0 + rng.next() * all.width(), all.y0 + rng.next() * all.height())).collect();
+    for pd in paths.iter().step_by(every) {
+        for a in pd.subpaths.iter().flat_map(|sp| &sp.anchors) {
+            pts.extend([a.p, Point::new(a.p.x + tol, a.p.y), Point::new(a.p.x, a.p.y - tol), Point::new(a.p.x + tol * 1.0001, a.p.y)]);
+        }
+        for b in [pd.control_bounds().unwrap(), pd.bounds().unwrap()] {
+            for b in [b, b.inflate(tol, tol)] {
+                let (cx, cy) = (b.center().x, b.center().y);
+                pts.extend(
+                    [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1), (cx, b.y0), (cx, b.y1), (b.x0, cy), (b.x1, cy)]
+                        .map(|(x, y)| Point::new(x, y)),
+                );
+            }
+        }
+    }
+    pts
+}
+
+/// A compound path of thousands of members hits exactly as it did when it was assembled
+/// whole for every click: at random points, on and next to anchors, and on the edges of the
+/// members' boxes (control points' and curves', with and without the tolerance), for both fill
+/// rules, in outline mode and with Object Selection by Path Only.
+#[test]
+fn culled_compound_hits_as_the_whole_path() {
+    use vectorcraft_geom::FillRule;
+    for (rule, opt) in [
+        (FillRule::NonZero, HitOptions::default()),
+        (FillRule::EvenOdd, HitOptions { tol: 0.5, ..Default::default() }),
+        (FillRule::NonZero, HitOptions { outline: true, tol: 1.0, ..Default::default() }),
+        (FillRule::EvenOdd, HitOptions { path_only: true, ..Default::default() }),
+    ] {
+        let (d, id, paths) = compound_doc(2000, rule, Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+        let n = d.node(id).unwrap();
+        let full = n.stroke_path().unwrap();
+        // The whole path's box grown by the tolerance. Before, a point on its far edges (right
+        // and bottom: `Rect::contains` leaves them out) never hit, even exactly `tol` from the
+        // outline; now it hits there as on the near edges. Those points are clicked too, and
+        // checked against the distance alone.
+        let far = vectorcraft_geom::Shape::bounding_box(&full).inflate(opt.tol, opt.tol);
+        let mut pts = probe_points(&paths, opt.tol, 200, 120);
+        let rightmost = paths.iter().filter_map(vectorcraft_geom::PathData::bounds).max_by(|a, b| a.x1.total_cmp(&b.x1)).unwrap();
+        pts.push(Point::new(far.x1, rightmost.center().y));
+        let (mut hits, mut kinds) = (0, HashSet::new());
+        for p in pts {
+            let before = compound_hit_before(n, &full, p, opt);
+            let now = hit_test(&d, p, opt);
+            if p.x == far.x1 || p.y == far.y1 {
+                let outline = vectorcraft_geom::hit::distance_to_outline(&full, p) <= opt.tol;
+                assert_eq!(now.is_some(), outline || before.is_some(), "{rule:?} {opt:?} on the far edge at {p:?}");
+                continue;
+            }
+            assert_eq!(now.as_ref().map(|h| (h.leaf, h.kind)), before.map(|k| (id, k)), "{rule:?} {opt:?} at {p:?}");
+            hits += usize::from(before.is_some());
+            kinds.extend(before.map(|k| format!("{k:?}")));
+        }
+        // The points reach both hits and misses, and the outline as well as the fill.
+        assert!(hits > 100, "{rule:?} {opt:?}: {hits} hits");
+        assert!(kinds.contains("Outline"), "{rule:?} {opt:?}: {kinds:?}");
+    }
+}
+
+/// A wide stroke paints far past a path's control points: clicks on it there still hit, for a
+/// path and for a compound path (whose strokes are measured along all of it), exactly as when
+/// they were culled by their reach measured along the curves.
+#[test]
+fn wide_strokes_hit_past_the_control_points() {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 40.0);
+    // A zigzag 10 pt high whose 40 pt stroke reaches 20 pt (more at its mitred turns) past it.
+    let zig = PathData::single(SubPath::new(
+        [(100.0, 100.0), (110.0, 110.0), (120.0, 100.0), (130.0, 110.0)].map(|(x, y)| Anchor::corner(Point::new(x, y))).to_vec(),
+        false,
+    ));
+    let path = d.alloc_id();
+    d.insert(Some(l), 0, Node::path(path, zig.clone(), stroke.clone())).unwrap();
+    // A compound path of two small rings with the same stroke, further along.
+    let mut rng = Rng(3);
+    let members: Vec<Arc<Node>> = [Point::new(250.0, 250.0), Point::new(262.0, 250.0)]
+        .into_iter()
+        .map(|c| Arc::new(Node::path(d.alloc_id(), PathData::single(blob(&mut rng, c, 4.0, 4, true)), Appearance::default())))
+        .collect();
+    let compound = d.alloc_id();
+    let mut node = Node::new(compound, NodeKind::Compound { children: members, rule: vectorcraft_geom::FillRule::NonZero });
+    node.appearance = stroke.into();
+    d.insert(Some(l), 9, node).unwrap();
+    let symbols = d.symbol_boxes();
+    let opt = HitOptions::default();
+    for id in [path, compound] {
+        let n = d.node(id).unwrap();
+        let full = n.stroke_path().unwrap();
+        let control = match &n.kind {
+            NodeKind::Path { path, .. } => path.control_bounds().unwrap(),
+            _ => n.children().unwrap().iter().filter_map(|m| m.path_data()?.control_bounds()).reduce(|a, b| a.union(b)).unwrap(),
+        };
+        let (mut outside, mut checked) = (0, 0);
+        let area = control.inflate(40.0, 40.0);
+        for i in 0..=80 {
+            for j in 0..=80 {
+                let p = Point::new(area.x0 + area.width() * f64::from(i) / 80.0, area.y0 + area.height() * f64::from(j) / 80.0);
+                let before = match &n.kind {
+                    NodeKind::Path { .. } => n
+                        .reach_bounds_with(&symbols)
+                        .is_none_or(|b| b.inflate(opt.tol, opt.tol).contains(p))
+                        .then(|| hit_leaf(n, p, opt, &symbols))
+                        .flatten(),
+                    _ => compound_hit_before(n, &full, p, opt),
+                };
+                let now = hit_test(&d, p, opt).filter(|h| h.leaf == id).map(|h| h.kind);
+                assert_eq!(now, before, "{id:?} at {p:?}");
+                checked += 1;
+                outside += usize::from(before == Some(HitKind::Stroke) && !control.contains(p));
+            }
+        }
+        assert!(outside > 50, "{id:?}: {outside} of {checked} points hit the stroke outside the control points' box");
+    }
+}
+
+/// The box a click is culled by holds the object's reach for paths and compound paths (it is
+/// measured by their control points, which hold their curves, and grown by the same stroke reach),
+/// so culling by it never turns away a click the reach let through. (Up to rounding: where a curve's
+/// extreme is an anchor, the two boxes measure the same point in different ways.)
+#[test]
+fn cull_box_holds_the_reach_of_paths_and_compound_paths() {
+    const E: f64 = 1e-9;
+    let holds =
+        |outer: Rect, inner: Rect| outer.x0 - E <= inner.x0 && outer.y0 - E <= inner.y0 && inner.x1 <= outer.x1 + E && inner.y1 <= outer.y1 + E;
+    let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 12.0);
+    let (mut d, id, _) = compound_doc(200, vectorcraft_geom::FillRule::NonZero, stroke.clone());
+    let path_id = d.alloc_id();
+    let symbols = d.symbol_boxes();
+    let n = d.node(id).unwrap();
+    let mut checked = 0;
+    for node in std::iter::once(n).chain(n.children().unwrap().iter().map(|m| &**m)) {
+        let (cull, reach) = (cull_reach(node, &symbols).unwrap(), node.reach_bounds_with(&symbols).unwrap());
+        assert!(holds(cull, reach), "{:?}: {cull:?} does not hold {reach:?}", node.id);
+        checked += 1;
+    }
+    // A stroked plain path, its handles reaching past its curves.
+    let mut rng = Rng(11);
+    let path = Node::path(path_id, vectorcraft_geom::PathData::single(blob(&mut rng, Point::new(50.0, 50.0), 20.0, 5, true)), stroke);
+    let (cull, reach) = (cull_reach(&path, &symbols).unwrap(), path.reach_bounds_with(&symbols).unwrap());
+    assert!(holds(cull, reach), "{cull:?} does not hold {reach:?}");
+    assert_eq!(checked, 201);
+}
+
+/// In a dynamic symbol's art, a layer with a clipping mask clips its objects as a clip group does:
+/// Direct Selection picks an object only where the mask shows it, and outlines it there.
+#[test]
+fn an_object_a_clipping_layer_in_symbol_art_hides_is_not_picked_there() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
+    if let NodeKind::Layer { children, .. } = &mut layer.kind {
+        *children = vec![Arc::new(mask), Arc::new(art)];
+    }
+    layer.set_clips(true);
+    let root = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Clipped".into(), art: Arc::new(root) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let n = d.node(inst).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), Some(vec![0, 1]), "where the mask shows the art");
+    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 50.0), opt), None, "where the mask hides it");
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[0, 1]).unwrap());
+    assert!((b.x1 - 100.0).abs() < 1e-6, "the outline is cut to the mask: {b:?}");
+    // Its outline inside the group around the layer is cut too.
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[0]).unwrap());
+    assert!((b.x1 - 100.0).abs() < 1e-6, "the layer's outline is cut to the mask: {b:?}");
+}
+
+/// In a dynamic symbol's art that placing through its 9-slice guides could make more than
+/// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
+/// canvas draws nothing of it. At the art's natural size the same art is picked.
+#[test]
+fn symbol_art_past_the_object_limit_picks_nothing() {
+    use vectorcraft_color::{Gradient, GradientPaint};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+    let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; 1_800]));
+    let mut mask = crate::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; 1_800]), true);
+    mask.linked = false;
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    // Drawn in six cells, each with its own copy of the mask's 3,240,000 squares.
+    let mut big = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    big.extras_mut().mask = Some(Box::new(mask));
+    let plain = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 50.0, 100.0, 100.0)), Appearance::default_art());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(plain), Arc::new(big)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Big".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Big", Some(crate::SymbolNineSlice::default()));
+    let scaled = d.alloc_id();
+    let natural = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    d.insert(Some(l), 0, Node::new(scaled, NodeKind::SymbolInstance { symbol: "Big".into(), xf })).unwrap();
+    d.insert(Some(l), 0, Node::new(natural, NodeKind::SymbolInstance { symbol: "Big".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    assert!(d.place_symbol_art("Big", &d.symbols[0].art, xf).is_none(), "the art is past the limit");
+    let opt = HitOptions::default();
+    let n = d.node(scaled).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(100.0, 110.0), opt), None, "the plain square");
+    assert_eq!(symbol_part_at(&d, n, Point::new(100.0, 40.0), opt), None, "the masked path");
+    assert!(symbol_part_outline(&d, n, &[0]).is_none());
+    assert!(symbol_part_outline(&d, n, &[1]).is_none());
+    let n = d.node(natural).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 75.0), opt), Some(vec![0]));
+    assert!(symbol_part_outline(&d, n, &[0]).is_some());
+}
+
+/// A clip group that lies in one 9-slice cell is moved by that cell as one piece, everything in it
+/// included, so an object in it is picked and outlined there even when placing that object through
+/// the guides on its own would pass [`crate::MAX_SYMBOL_NODES`] objects.
+#[test]
+fn objects_of_a_clip_group_in_one_cell_are_placed_with_it() {
+    use vectorcraft_color::{Gradient, GradientPaint};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+    let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; 1_800]));
+    let mut mask = crate::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; 1_800]), true);
+    mask.linked = false;
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    let mut big = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    big.extras_mut().mask = Some(Box::new(mask));
+    let clip = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art());
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(big.clone())]);
+    group.set_clips(true);
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(group)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Corner".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Corner", Some(crate::SymbolNineSlice::default()));
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Corner".into(), xf })).unwrap();
+    let m = d.symbol_slice_map("Corner", xf).unwrap();
+    assert!(m.most_placed(&big, &d) > crate::MAX_SYMBOL_NODES, "the object alone is past the limit");
+    assert!(d.place_symbol_art("Corner", &d.symbols[0].art, xf).is_some(), "the art is drawn");
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(10.0, 10.0), HitOptions::default()), Some(vec![1, 1]));
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[1, 1]).unwrap());
+    assert!((b.x1 - 20.0).abs() < 1e-6 && (b.y1 - 20.0).abs() < 1e-6, "cut to the clip in its corner: {b:?}");
+}
+
+/// In a dynamic symbol's art, Direct Selection does not pick a Shaper group's original shapes,
+/// which the canvas does not draw: a click over an original shape whose face the group erased
+/// picks nothing, and a click over the face it shows picks the face.
+#[test]
+fn a_shaper_groups_original_shapes_in_symbol_art_are_not_picked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0));
+    let a = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+    let b = Node::path(d.alloc_id(), square(50.0), Appearance::default_art());
+    let mut sources = Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)]);
+    sources.name = Some(crate::shaper::SOURCES.into());
+    sources.opacity = 0.0;
+    let mut face = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+    face.name = Some(format!("{}0", crate::shaper::FILL_PREFIX));
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+    group.extras_mut().shaper = Some(Box::default());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(group)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Shaped".into(), art: Arc::new(root) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let n = d.node(inst).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(symbol_part_at(&d, n, Point::new(130.0, 50.0), opt), None, "over the erased original shape");
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), Some(vec![0, 1]), "over the shown face");
 }

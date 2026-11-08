@@ -293,9 +293,10 @@ pub fn is_live(n: &Node) -> bool {
     )
 }
 
-/// Mesh tessellation as filled quad paths (no stroke), `n`×`n` per patch.
+/// Mesh tessellation as flat-filled paths (no stroke): each patch cut `n`×`n`, its quads joined
+/// where the colour hardly changes ([`GradientMesh::pieces`]).
 pub fn mesh_quad_nodes(m: &GradientMesh, n: usize) -> Vec<Node> {
-    m.quads(n)
+    m.pieces(n)
         .into_iter()
         .map(|q| {
             let mut ap = Appearance::default();

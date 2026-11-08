@@ -20,7 +20,7 @@ mod tabs;
 
 #[cfg(test)]
 use control_bar::ISOLATION_BUTTON;
-pub use control_bar::{AnchorControls, anchor_buttons, anchor_controls, control_bar};
+pub use control_bar::{AnchorControls, CONTROL_BAR_EDGES, anchor_buttons, anchor_controls, control_bar};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
@@ -28,8 +28,9 @@ pub use status_bar::status_bar;
 #[cfg(test)]
 use status_bar::{StatusReadoutWidths, status_readouts};
 #[cfg(test)]
-use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_title};
-pub use tabs::{doc_tabs, isolation_bar};
+use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title};
+pub use tabs::{doc_tabs, isolation_bar, step_document};
+pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
 /// The application bar's height, in points (compact, as in PhotoCraft).
 pub const APP_BAR_HEIGHT: f32 = 32.0;
@@ -76,7 +77,16 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let full = ui.max_rect();
             let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
-            let room = right.width();
+            // In Safe Mode, a label that stays in the bar whatever document is open, and opens
+            // Help › Safe Mode; the other controls fit in the room it leaves, and the workspace
+            // switcher (also under Window › Workspace) goes when a minimal one doesn't fit.
+            let safe = vectorcraft_plugins::safe_mode::active().then(|| egui::RichText::new(tl!("Safe Mode")).color(t.warning).size(12.0));
+            let safe_w = safe.as_ref().map_or(0.0, |label| {
+                let text = ui.painter().layout_no_wrap(label.text().to_string(), egui::FontId::proportional(12.0), t.warning);
+                text.size().x + 2.0 * ui.spacing().button_padding.x + 8.0 + ui.spacing().item_spacing.x
+            });
+            let room = (right.width() - safe_w).max(0.0);
+            let switcher = safe.is_none() || room >= 64.0 + 8.0;
             // Built-in workspace names translate; the user's own stay as typed.
             let ws_name =
                 if crate::workspaces::is_builtin(&app.ui.workspace) { tl!(&app.ui.workspace).to_string() } else { app.ui.workspace.clone() };
@@ -85,23 +95,31 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let gap = ui.spacing().item_spacing.x;
             // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
             let icon = 28.0;
-            let search = room >= 64.0 + 8.0 + gap + icon;
+            let search = switcher && room >= 64.0 + 8.0 + gap + icon;
             let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
             let discord = search && room >= ws_w + 8.0 + gap + icon + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
-            let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
-            ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
-            ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
-            icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
-            let wresp = wresp.on_hover_text(tl!("Switch workspace"));
-            egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
-            ui.add_space(8.0);
+            if switcher {
+                let (wr, wresp) = ui.allocate_exact_size(vec2(ws_w, WIDGET_H), Sense::click());
+                ui.painter().rect_filled(wr, CornerRadius::same(4), if wresp.hovered() { t.hover } else { t.panel });
+                ui.painter().with_clip_rect(wr.shrink2(vec2(4.0, 0.0))).galley(wr.left_center() + vec2(10.0, -ws.size().y / 2.0), ws, t.text);
+                icons::paint(ui, "chevron-down", egui::Rect::from_center_size(wr.right_center() - vec2(12.0, 0.0), vec2(12.0, 12.0)), t.text_dim);
+                let wresp = wresp.on_hover_text(tl!("Switch workspace"));
+                egui::Popup::menu(&wresp).show(|ui| crate::workspaces::popup(app, ui));
+                ui.add_space(8.0);
+            }
+            if let Some(label) = safe {
+                if ui.add(egui::Button::new(label).frame(false)).on_hover_text(tl!("Safe Mode…")).clicked() {
+                    app.run("help.safeMode", json!({})).ok();
+                }
+                ui.add_space(8.0);
+            }
             // Search → command palette (its shortcut opens it too).
             if search {
                 let tip = match menus::shortcut_of("help.commandPalette") {
-                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::pretty_shortcut(sc)),
+                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::shown_shortcut(sc)),
                     None => tl!("Search commands and tools").to_string(),
                 };
                 if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {
@@ -128,23 +146,27 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// Whether the window shows the system's title bar instead of the app drawing its own: Windows
-/// and Linux with Preferences › User Interface › System Title Bar. macOS always has system
-/// decorations, but keeps the in-app brand mark, so it never counts as system mode here; nor
-/// does the web build (the browser tab has no document title), nor an embedder that never
-/// turned the preference on.
+/// Whether the window shows the system's title bar instead of the app drawing its own
+/// ([`VectorcraftApp::desktop_frame`]): Windows with Preferences › User Interface › System Title
+/// Bar, and Linux whenever the desktop draws the frame, with or without the preference. The
+/// preference is read when the app starts, so changing it later does not change this. macOS
+/// always has system decorations, but keeps the in-app brand mark, so it never counts as system
+/// mode here; nor does the web build (the browser tab has no document title), nor an embedder
+/// without a window of its own.
 pub fn system_title_bar(app: &VectorcraftApp) -> bool {
-    !app.custom_titlebar && app.session.prefs.system_title_bar && !cfg!(any(target_os = "macos", target_arch = "wasm32"))
+    app.desktop_frame && !app.custom_titlebar && !cfg!(any(target_os = "macos", target_arch = "wasm32"))
 }
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
 /// marks unsaved changes, like the `*` in the document tabs), or just the app name with no
-/// document open.
+/// document open; in Safe Mode, followed by "(Safe Mode)".
 pub fn window_title(app: &VectorcraftApp) -> String {
-    app.session
+    let title = app
+        .session
         .active()
         .map(|d| format!("{}{} \u{2014} VectorCraft", if d.is_dirty() { "*" } else { "" }, d.title()))
-        .unwrap_or_else(|| "VectorCraft".into())
+        .unwrap_or_else(|| "VectorCraft".into());
+    if vectorcraft_plugins::safe_mode::active() { format!("{title} ({})", tl!("Safe Mode")) } else { title }
 }
 
 /// Keep the OS window title (and the taskbar / Alt-Tab entry) on the active file. Sends
@@ -157,6 +179,23 @@ pub fn sync_window_title(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // One more frame: a new title makes AppKit lay its title bar out again, putting the window
         // buttons back where it keeps them until the next frame centres them on the bar (#968).
         ctx.request_repaint();
+    }
+}
+
+/// Full Screen Mode and Presentation Mode fill the screen (#4365: the taskbar and the window's
+/// frame stayed): the window goes full screen when one of them starts, and back when a mode with
+/// the menu bar returns. A window that was full screen already stays so.
+pub fn sync_fullscreen(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let want = app.ui.screen_mode >= 2;
+    let is = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+    if want && !is && !app.fullscreen_for_mode {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+        app.fullscreen_for_mode = true;
+    } else if !want && app.fullscreen_for_mode {
+        if is {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+        }
+        app.fullscreen_for_mode = false;
     }
 }
 

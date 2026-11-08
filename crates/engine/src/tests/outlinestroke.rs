@@ -73,12 +73,14 @@ fn arrowheads_are_part_of_the_outline() {
     assert_eq!(path_of(&n).subpaths.len(), 1, "line and head are one shape");
 }
 
+/// Outline Stroke of a Lens-profile line covers 7/12 of the full-width rectangle.
 #[test]
-fn a_lens_profile_outlines_to_half_the_rectangle() {
+fn a_lens_profile_outlines_to_seven_twelfths_of_the_rectangle() {
     let mut s = session();
     line(&mut s, json!({"weight": 10, "profile": "lens"}));
     let n = outline(&mut s);
-    assert!(near(area(&n), 0.5 * 10.0 * 100.0, 2.0), "{}", area(&n));
+    // Each half of the lens swells on a cubic, flat at the middle (#5714).
+    assert!(near(area(&n), 7.0 / 12.0 * 10.0 * 100.0, 2.0), "{}", area(&n));
 }
 
 #[test]
@@ -122,6 +124,36 @@ fn every_stroke_is_outlined_in_paint_order() {
     s.execute("edit.undo", &json!({})).unwrap();
     let d = &s.doc().unwrap().doc;
     assert_eq!(d.layers[0].children().unwrap()[0].appearance.items.len(), 3);
+}
+
+/// The art that stands for an outlined path keeps the path's hidden, locked and knockout-shape
+/// states, so a hidden member of a selected group stays hidden.
+#[test]
+fn outlined_art_keeps_the_hidden_locked_and_knockout_shape_states() {
+    let mut s = session();
+    // A filled and stroked square (a fill copy and an outline) and a stroked line (one outline).
+    let sq = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 100, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    let ln = line(&mut s, json!({"weight": 4}));
+    s.execute("select.set", &json!({"ids": [sq.0, ln.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.edit("t", |d, _| {
+        d.node_mut(sq).unwrap().visible = false;
+        let l = d.node_mut(ln).unwrap();
+        l.locked = true;
+        l.knockout_shape = true;
+        Ok(())
+    })
+    .unwrap();
+    let g = outline(&mut s);
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 2);
+    let (sq, ln) = (&ch[0], &ch[1]);
+    assert!(!sq.visible && !sq.locked, "the square's art stays hidden: {sq:?}");
+    assert_eq!(sq.children().map(|c| c.len()), Some(2), "a fill copy and the outline");
+    assert!(sq.children().unwrap().iter().all(|c| c.visible && !c.locked), "showing it shows all of it: {sq:?}");
+    assert!(ln.visible && ln.locked && ln.knockout_shape, "the line's outline stays locked: {ln:?}");
 }
 
 /// The live effect on a stroke item outlines that stroke (its own weight), not the top stroke.

@@ -114,16 +114,180 @@ pub fn apply_geometry_with(effects: &[Effect], path: &PathData, bounds: Rect, ct
     apply_geometry_within(effects, path, bounds, ctx, Budget::EFFECTS)
 }
 
+/// Does effect `e` safely commute with pure translation when it is terminal?
+/// Only positive offsets with round joins commute exactly with pure translations for non-zero fills (#4145).
+fn is_terminal_offset_eligible(e: &Effect) -> bool {
+    if e.id != "path.offsetPath" {
+        return false;
+    }
+    let p = merged_params(&e.id, &e.params);
+    util::join(&p, "joins") == vectorcraft_pathops::Join::Round && util::num(&p, "offset", 10.0) >= 0.0
+}
+
+/// Optimize a list of visible geometry effects: move pure-translation Transform effects with
+/// copies after a terminal Offset Path effect when the effective style is safe (NonZero fill and
+/// no stroke), so that the offset path is evaluated once on the base path rather than on dozens
+/// of overlapping copies, avoiding combinatorial explosions in the planar sweep (#4145).
+pub(crate) fn optimize_geometry_effects<'a>(effects: &[&'a Effect], style_safe: bool) -> Vec<&'a Effect> {
+    let mut out: Vec<&'a Effect> = effects.to_vec();
+    if !style_safe || out.len() < 2 {
+        return out;
+    }
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for i in 0..out.len().saturating_sub(1) {
+            let e1 = out[i];
+            if e1.id == "distort.transform" {
+                let p1 = merged_params(&e1.id, &e1.params);
+                if let Some((_, copies)) = crate::distort::transform_move(&p1)
+                    && copies > 0
+                    && is_terminal_offset_eligible(out[i + 1])
+                    && out.get(i + 2..).is_some_and(|tail| tail.iter().all(|e| e.id == "distort.transform"))
+                {
+                    out.swap(i, i + 1);
+                    changed = true;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// [`apply_geometry_with`] whose effects keep to `budget`, raised to what `path` costs where that
 /// is more.
 pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext, budget: Budget) -> PathData {
+    apply_geometry_carrying_within(effects, path, bounds, ctx, budget, None)
+}
+
+/// [`apply_geometry_with`], and the [`Carry`] that moves the object's gradients along with the
+/// effects that move the object as a whole.
+pub fn apply_geometry_carrying(effects: &[Effect], path: &PathData, bounds: Rect, ctx: &GeomContext) -> (PathData, Carry) {
+    let mut carry = Carry::default();
+    let out = apply_geometry_carrying_within(effects, path, bounds, ctx, Budget::EFFECTS, Some(&mut carry));
+    (out, carry)
+}
+
+/// [`apply_geometry_carrying`] on kurbo paths.
+pub fn apply_geometry_bez_carrying(effects: &[Effect], path: &BezPath, bounds: Rect, ctx: &GeomContext) -> (BezPath, Carry) {
+    let (out, carry) = apply_geometry_carrying(effects, &PathData::from_bezpath(path), bounds, ctx);
+    (out.to_bezpath(), carry)
+}
+
+/// How placed gradients follow geometry effects. The Transform effect without copies maps them as
+/// it maps the object (with copies, `crate::reshape` gives each copy its own). Free Distort moves
+/// and scales them from the object's bounds before the effect to its bounds after it. For the
+/// other geometry effects it is empty. It does not change gradients fitted to the object.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Carry(Vec<CarryStep>);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CarryStep {
+    Affine(vectorcraft_geom::Affine),
+    /// From box `from` to box `to` (strokes: their stroke-inflated boxes).
+    Boxes {
+        from: Rect,
+        to: Rect,
+    },
+}
+
+impl Carry {
+    /// Does effect `id` with merged params `p` on geometry with reference box `b` (`seed` for
+    /// Random) move placed gradients? Free Distort does unless it leaves every corner in place;
+    /// the Transform effect does without copies (with copies the original stays where it is, and
+    /// `crate::reshape` gives each copy its own gradients).
+    pub(crate) fn follows(id: &str, p: &Value, b: Rect, seed: u64) -> bool {
+        match id {
+            "distort.transform" => {
+                let (m, copies) = distort::transform_map(b, p, seed);
+                copies == 0 && m != vectorcraft_geom::Affine::IDENTITY && m.is_finite()
+            }
+            "distort.freeDistort" => {
+                let corners = distort::free_distort_corners(b, p);
+                let tol = 1e-9 * b.width().hypot(b.height()).max(1.0);
+                let still =
+                    [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].iter().zip(&corners).all(|(a, c)| c.distance((*a).into()) <= tol);
+                !still && corners.iter().all(|c| c.x.is_finite() && c.y.is_finite())
+            }
+            _ => false,
+        }
+    }
+
+    /// How placed gradients follow effect `id` (as [`Self::follows`]) on an object whose geometric
+    /// bounds are `from` before the effect and `to` after it; empty when they stay in place.
+    pub(crate) fn of(id: &str, p: &Value, b: Rect, from: Option<Rect>, to: Option<Rect>, seed: u64) -> Carry {
+        if !Self::follows(id, p, b, seed) {
+            return Carry::default();
+        }
+        let step = match id {
+            "distort.transform" => Some(CarryStep::Affine(distort::transform_map(b, p, seed).0)),
+            _ => match (from, to) {
+                (Some(from), Some(to)) if from != to && [to.x0, to.y0, to.x1, to.y1].iter().all(|v| v.is_finite()) => {
+                    Some(CarryStep::Boxes { from, to })
+                }
+                _ => None,
+            },
+        };
+        Carry(step.into_iter().collect())
+    }
+
+    /// Does it leave gradients where they are?
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Does it move any of the gradients of `ap` (those drawn at a place in document space, a
+    /// freeform gradient's own points included)? Callers check first, so an appearance shared with
+    /// other objects is not copied for nothing.
+    pub fn moves(&self, ap: &Appearance) -> bool {
+        !self.0.is_empty() && ap.has_positioned_gradient()
+    }
+
+    /// Move the placed gradients of `ap` along, through each step in turn.
+    pub fn apply(&self, ap: &mut Appearance) {
+        if !self.moves(ap) {
+            return;
+        }
+        for s in &self.0 {
+            match *s {
+                CarryStep::Affine(m) => ap.transform_gradients(m),
+                CarryStep::Boxes { from, to } => crate::reshape::follow_boxes(ap, from, to),
+            }
+        }
+    }
+
+    pub(crate) fn push(&mut self, more: Carry) {
+        self.0.extend(more.0);
+    }
+}
+
+/// [`apply_geometry_within`], adding to `carry` how gradients follow each effect.
+pub(crate) fn apply_geometry_carrying_within(
+    effects: &[Effect],
+    path: &PathData,
+    bounds: Rect,
+    ctx: &GeomContext,
+    budget: Budget,
+    mut carry: Option<&mut Carry>,
+) -> PathData {
     // `budget` raised to what `path` costs, measured once, and only for a path that has geometry
     // effects.
+    let has_stroke = match (ctx.item, ctx.appearance) {
+        (Some(idx), Some(app)) => match app.items.get(idx) {
+            Some(AppearanceItem::Stroke(s)) => !s.paint.is_none() && s.width > 0.0,
+            Some(AppearanceItem::Fill(_)) => false,
+            None => ctx.stroke.is_some_and(|s| !s.paint.is_none() && s.width > 0.0),
+        },
+        _ => ctx.stroke.is_some_and(|s| !s.paint.is_none() && s.width > 0.0),
+    };
+    let style_safe = ctx.rule == FillRule::NonZero && !has_stroke;
+    let visible_fx: Vec<&Effect> = effects.iter().filter(|e| e.visible && is_geometry(&e.id)).collect();
+    let fx = optimize_geometry_effects(&visible_fx, style_safe);
     let mut limit = None;
     let mut cur = path.clone();
     let mut b = bounds;
     let mut first = true;
-    for e in effects.iter().filter(|e| e.visible && is_geometry(&e.id)) {
+    for e in fx {
         if !first {
             b = cur.bounds().unwrap_or(b);
         }
@@ -134,6 +298,9 @@ pub(crate) fn apply_geometry_within(effects: &[Effect], path: &PathData, bounds:
         let p = merged_params(&e.id, &e.params);
         let limit = *limit.get_or_insert_with(|| budget.at_least(Budget::of(path)));
         if let Some(next) = apply_one(&e.id, &p, &cur, b, ctx, limit) {
+            if let Some(c) = carry.as_deref_mut() {
+                c.push(Carry::of(&e.id, &p, b, cur.bounds(), next.bounds(), ctx.seed));
+            }
             cur = next;
         }
     }
@@ -214,6 +381,7 @@ fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomCont
         "convertToShape.rectangle" | "convertToShape.roundedRectangle" | "convertToShape.ellipse" => stylize::convert_to_shape(id, b, p),
         "stylize.roundCorners" => stylize::round_corners(path, num(p, "radius", 10.0)),
         "stylize.scribble" => stylize::scribble(path, b, p),
+        _ if id.starts_with(crate::addons::path::PREFIX) => crate::addons::path::apply(id, p, path, max),
         _ => match id.strip_prefix("warp.").and_then(WarpStyle::from_id) {
             Some(style) => warp::warp(path, b, style, p, max),
             None => path.clone(),

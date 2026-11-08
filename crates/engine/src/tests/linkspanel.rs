@@ -68,7 +68,8 @@ fn an_image_too_large_to_draw_is_reported() {
 
 /// A gray image is counted as RGBA, 4 bytes a pixel: 23,171 × 23,170 1-bit pixels decode to 537 MB
 /// of gray and are 2,147,488,280 bytes as RGBA, past the 2 GiB allowance (shown at reduced size);
-/// 23,170 × 23,170 are 2,147,395,600 bytes, within it.
+/// 23,170 × 23,170 are 2,147,395,600 bytes, within it. The file within the allowance holds no
+/// pixels, so Place decodes it and refuses it without the note.
 #[test]
 fn a_gray_image_too_large_as_rgba_is_reported_on_place() {
     const NOTE: &str = "an image of 23171 × 23170 pixels is shown at reduced size";
@@ -78,10 +79,12 @@ fn a_gray_image_too_large_as_rgba_is_reported_on_place() {
     write(&within, &png_header(23_170, 23_170));
     let mut s = session();
     assert_eq!(run(&mut s, "file.place", json!({"path": over, "at": [200, 150], "link": false}))["warnings"], json!([NOTE]));
-    assert_eq!(run(&mut s, "file.place", json!({"path": within, "at": [20, 20], "link": false}))["warnings"], json!([]));
+    assert_eq!(run(&mut s, "file.place.info", json!({"path": within}))["warnings"], json!([]), "the image within the allowance has nothing to say");
+    let e = s.execute("file.place", &json!({"path": within, "at": [20, 20], "link": false})).unwrap_err();
+    assert_eq!(e.to_string(), "the image's pixels can't be read");
     let l = run(&mut s, "links.list", json!({}));
     let notes: Vec<&Value> = l["links"].as_array().unwrap().iter().map(|r| &r["note"]).collect();
-    assert_eq!(notes, [&Value::Null, &json!(NOTE)], "top first: the image within the allowance has nothing to say");
+    assert_eq!(notes, [&json!(NOTE)]);
 }
 
 /// File › Open says the same of a gray image past the allowance as RGBA, and nothing of one within it.
@@ -182,6 +185,24 @@ fn unembed_writes_the_bytes_and_links_to_them() {
     assert!(s.execute("links.unembed", &json!({"id": id.0, "path": dir.file("photo.psd")})).is_err(), "not a format it writes");
 }
 
+/// An embedded image whose pixels can't be read (a document stores its bytes without decoding
+/// them) is not unembedded, and no file is written.
+#[test]
+fn unembed_of_pixels_that_cant_be_read_writes_no_file() {
+    let dir = Folder::new("unembed-unread");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let id = place_embedded(&mut s, &pic);
+    let key = image(&s, id).key;
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.insert(key, vectorcraft_doc::ImageBlob::png(png_header(60, 30)));
+    let out = dir.file("out.png");
+    let e = s.execute("links.unembed", &json!({"id": id.0, "path": out})).unwrap_err();
+    assert!(e.to_string().ends_with("the image's pixels can't be read"), "{e}");
+    assert!(!std::path::Path::new(&out).exists(), "no file left behind");
+    assert!(image(&s, id).link.is_none());
+}
+
 #[test]
 fn go_to_selects_the_image() {
     let dir = Folder::new("goto");
@@ -255,6 +276,24 @@ fn link_info_has_the_file_and_placement_details() {
     let embedded = place_embedded(&mut s, &pic);
     let i = run(&mut s, "links.info", json!({"id": embedded.0}));
     assert_eq!((i["status"].as_str(), i["linked"].as_bool(), i["fileName"].as_str()), (Some("embedded"), Some(false), None));
+}
+
+/// Link Info reads within the opener's roots for an unconfined caller, and never past a confined
+/// caller's own roots.
+#[test]
+fn link_info_stays_within_the_asking_callers_roots() {
+    let dir = Folder::new("info-roots");
+    let other = Folder::new("info-other");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let roots = |p: &std::path::Path| crate::file_access::AutomationRoots::new(&[p], &[]).unwrap().unwrap();
+    s.active_mut().unwrap().opened_by = Some(roots(&dir.0));
+    assert_eq!(run(&mut s, "links.info", json!({"id": id.0}))["status"], "ok");
+    let narrow = roots(&other.0);
+    let i = crate::file_access::confine(Some(&narrow), || run(&mut s, "links.info", json!({"id": id.0})));
+    assert_ne!(i["status"], "ok", "{i}");
 }
 
 /// A 600×300 pt image at the centre of the artboard, its placement options set to `options`,

@@ -16,8 +16,8 @@ use vectorcraft_pathops::{BoolOp, PathfinderOp};
 use super::edit::selected_roots;
 use super::expand::{fill_shape, reshaped, seeded};
 use super::{
-    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_multi, has_selection, number_or,
-    str_param, switch_or,
+    CommandSpec, EngineError, Result, Session, always, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
+    number_or, str_param, switch_or,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -91,7 +91,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Pathfinder"],
             None,
             "{ids?: [id…] (selected first; default: the selection), precision?: pt 0.001..10, removeRedundantPoints?: bool, removeUnpainted?: bool (default: the Pathfinder Options, see object.pathfinder.options; the values used join the journal entry)} operate on the selected objects (back → front) → {ids}",
-            has_multi,
+            has_selection,
             |s, p| run_pf(s, p, PathfinderOp::Crop)
         ),
         cmd!(
@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outline Stroke",
             ["Object", "Path"],
             None,
-            "{} replace stroked paths with filled outlines → {ids}",
+            "{} replace stroked paths with filled outlines; a dimension whose lines are outlined, or selected with the art it measures when that art is outlined, becomes a plain group of its art → {ids}",
             has_selection,
             outline_stroke
         ),
@@ -154,7 +154,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{tolerance?: pt (1), level?: 0..100 (the Simplify slider, in place of tolerance: 0 fewest anchor points, 50 is 1 pt, every 10 levels halves or doubles it), auto?: bool (Auto-Simplify: the lowest level whose tolerance is at most 1/400 of the selection's longer side, or 100 when that side is under 12.5 pt), cornerAngle?: deg (30), straightLines?: bool, wholePaths?: bool (false: a path with segments direct-selected, or between direct-selected anchors, simplifies only each run of them between its end anchors, which stay as they are, and keeps the runs selected; true simplifies those paths whole)} → {ids, before, after} anchor counts, and the level used with level or auto",
-            has_selection,
+            has_selected_path,
             simplify
         ),
         cmd!(
@@ -162,18 +162,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth…",
             ["Object", "Path"],
             None,
-            "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step → {ids, before, after} anchor counts, and the level used",
-            has_selection,
+            "{level?: 0..100 (50; the Smooth slider: 0 minimum smoothing, the path staying within 0.1% of its longer side, 100 maximum: smoothed along its length by up to 5% of it and refitted with curves within up to 2.5% of it, corners kept only where the path turns back, never with more anchor points), auto?: bool (Auto-Smooth: level 50), ids?: [id…] (default: the selection)} smooth each path under the objects, compound path members included, as one undo step; without ids, a path with anchor points or segments direct-selected smooths only the sections between them, which stay selected → {ids, before, after} anchor counts, and the level used",
+            has_selected_path,
             smooth
         ),
-        cmd!("object.path.addAnchorPoints", "Add Anchor Points", ["Object", "Path"], None, "{} → {ids}", has_selection, add_anchor_points),
+        cmd!("object.path.addAnchorPoints", "Add Anchor Points", ["Object", "Path"], None, "{} → {ids}", has_selected_path, add_anchor_points),
         cmd!(
             "object.path.divideObjectsBelow",
             "Divide Objects Below",
             ["Object", "Path"],
             None,
             "{} cut the objects below with the selected path (which is removed) → {ids}",
-            has_selection,
+            has_selected_path,
             divide_objects_below
         ),
         cmd!(
@@ -182,7 +182,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{rows?: 2, columns?: 2, gutter?: pt (12; rowGutter?, columnGutter?: one of the two), totalHeight?, totalWidth?: pt (the grid's size; the selected paths' when left out), height?, width?: pt (each row's and column's size, which then sets the total), addGuides?: false (ruler guides along the row and column edges)} one grid of rectangles over the selected paths replaces them, painted as the topmost one → {ids, guides: count}",
-            has_selection,
+            has_selected_path,
             split_into_grid
         ),
         cmd!(
@@ -227,7 +227,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 
 /// Paint identity carried through a Pathfinder operation.
 #[derive(Clone, Debug, PartialEq)]
-struct Style {
+pub(crate) struct Style {
     appearance: Appearance,
     opacity: f32,
     blend: BlendMode,
@@ -237,10 +237,16 @@ impl Style {
     fn of(n: &Node) -> Self {
         Style { appearance: (*n.appearance).clone(), opacity: n.opacity, blend: n.blend }
     }
-    fn apply(&self, n: &mut Node) {
+    pub(crate) fn apply(&self, n: &mut Node) {
         n.appearance = self.appearance.clone().into();
         n.opacity = self.opacity;
         n.blend = self.blend;
+    }
+    /// The style of a shape drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend
+    /// mode when it is not Normal.
+    pub(crate) fn within(self, n: &Node) -> Self {
+        let blend = if n.blend == BlendMode::Normal { self.blend } else { n.blend };
+        Style { opacity: self.opacity * n.opacity, blend, ..self }
     }
 }
 
@@ -268,7 +274,7 @@ pub(crate) fn text_outline(t: &TextObject) -> PathData {
     PathData::from_bezpath(&lay.to_bezpath()).transformed(t.xf)
 }
 
-fn style_of(n: &Node) -> Style {
+pub(crate) fn style_of(n: &Node) -> Style {
     match &n.kind {
         NodeKind::Text(t) => Style { appearance: t.first_style().appearance(), opacity: n.opacity, blend: n.blend },
         _ => Style::of(n),
@@ -295,13 +301,44 @@ fn each_leaf(n: &Node, f: &mut impl FnMut(&Node)) {
     }
 }
 
+/// [`leaves`] as a Pathfinder operation takes them: a compound shape is one shape, the area it
+/// draws painted as it is, with the symbol instances among its members as their symbols' art from
+/// `d` (its members as they are past a live Pathfinder's budget).
+pub(crate) fn pf_leaves(d: &Document, n: &Node, out: &mut Vec<Node>) {
+    match &n.kind {
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            let hook = |c: &Node| vectorcraft_render::effects::outline_object(Some(d), c);
+            match vectorcraft_render::effects::compound_shape_art(n, Some(&hook)) {
+                Some(art) => out.push(art),
+                None => children.iter().for_each(|c| pf_leaves(d, c, out)),
+            }
+        }
+        _ => leaves(n, out),
+    }
+}
+
 /// How many shapes a Pathfinder operation takes from `n` selected alone: its leaf shapes, however
-/// deep its groups nest (an expanded stroke is a group inside the group, #1635).
+/// deep its groups nest (an expanded stroke is a group inside the group, #1635). Inside a compound
+/// shape, a blend, an envelope or another live object and a symbol instance count as one shape
+/// each, as its area takes the art they draw.
 pub fn shape_count(n: &Node) -> usize {
     // Counted without copying the shapes: the panel asks every frame.
-    let mut count = 0;
-    each_leaf(n, &mut |_| count += 1);
-    count
+    fn count(n: &Node, in_shape: bool, total: &mut usize) {
+        match &n.kind {
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+                let in_shape = in_shape || n.is_compound_shape();
+                for c in children {
+                    count(c, in_shape, total);
+                }
+            }
+            NodeKind::SymbolInstance { .. } if in_shape => *total += 1,
+            _ if in_shape && vectorcraft_doc::live::is_live(n) => *total += 1,
+            _ => each_leaf(n, &mut |_| *total += 1),
+        }
+    }
+    let mut total = 0;
+    count(n, false, &mut total);
+    total
 }
 
 /// A node for `path`: a plain path for one subpath, else a compound path.
@@ -555,7 +592,7 @@ fn run_pf(s: &mut Session, p: &Value, op: PathfinderOp) -> Result<Value> {
         for id in &roots {
             let n = d.node(*id).ok_or(EngineError::NoNode(*id))?;
             let mut lv = vec![];
-            leaves(n, &mut lv);
+            pf_leaves(d, n, &mut lv);
             if lv.is_empty() {
                 continue;
             }
@@ -734,7 +771,14 @@ fn offset_path(s: &mut Session, p: &Value) -> Result<Value> {
                 let Some((path, rule)) = node_path(l) else { continue };
                 paths = true;
                 let base = if matches!(l.kind, NodeKind::Compound { .. }) && path.is_closed() { po::normalize(&path, rule) } else { path };
-                let off = po::offset_path(&base, delta, join, miter);
+                let off = match po::try_offset_path(&base, delta, join, miter) {
+                    Ok(p) => p,
+                    Err(po::PathOpsError::NonFinite) => continue,
+                    Err(po::PathOpsError::TooComplex) => {
+                        return Err(EngineError::Other("Offset Path: the path is too complex to offset".into()));
+                    }
+                    Err(e) => return Err(EngineError::Other(format!("Offset Path: {e}"))),
+                };
                 if off.is_empty() {
                     continue;
                 }
@@ -872,20 +916,22 @@ pub(crate) fn outline_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Br
     let l = reshaped.as_ref().unwrap_or(l);
     let (path, rule) = node_path(l)?;
     let ctx = GeomContext::of(l);
+    // A fill belongs to the source path, whether open or closed. Converting its stroke
+    // preserves that fill on a separate copy (including compound member geometry).
     let mut parts: Vec<Node> = vec![];
     let mut fills: Vec<AppearanceItem> = vec![];
     for item in &l.appearance.items {
         match item {
             AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => {
                 let shaped = f.effects.iter().any(seeded).then(|| path.bounds().and_then(|b| fill_shape(l, item, &path, b))).flatten();
-                let Some((shape, ..)) = shaped else {
+                let Some((shape, _, _, moved)) = shaped else {
                     fills.push(item.clone());
                     continue;
                 };
                 if !fills.is_empty() {
                     parts.push(styled_copy(d, l, std::mem::take(&mut fills)));
                 }
-                let mut plain = item.clone();
+                let mut plain = moved;
                 plain.effects_mut().retain(|e| !is_geometry(&e.id));
                 parts.push(styled_copy(d, &shape, vec![plain]));
             }
@@ -929,11 +975,13 @@ fn outline_member_strokes(d: &mut Document, brushes: &[vectorcraft_brush::Brush]
 }
 
 /// A plain copy of path `l` (new ids, no transparency, name or mask) painted with `items`.
+/// The copy is shown and unlocked.
 pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>) -> Node {
     let mut f = d.reid(l);
     f.appearance = Appearance { items, ..Default::default() }.into();
     f.opacity = 1.0;
     f.blend = BlendMode::Normal;
+    (f.visible, f.locked, f.knockout_shape) = (true, false, false);
     f.name = None;
     f.extras_mut().mask = None;
     if let NodeKind::Path { live, .. } = &mut f.kind {
@@ -944,7 +992,7 @@ pub(crate) fn styled_copy(d: &mut Document, l: &Node, items: Vec<AppearanceItem>
 
 /// What stands for object `l` once its appearance became `parts` (paint order): the one part (in a
 /// group when it has effects of its own) or a group of them, with `l`'s transparency, name, opacity
-/// mask and effects. `None` without parts.
+/// mask, effects, and hidden, locked and knockout-shape states. `None` without parts.
 pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Option<Node> {
     let root = match parts.len() {
         0 => return None,
@@ -952,6 +1000,7 @@ pub(crate) fn assemble(d: &mut Document, l: &Node, mut parts: Vec<Node>) -> Opti
         _ => Node::group(d.alloc_id(), parts.into_iter().map(Arc::new).collect()),
     };
     let mut root = with_transparency(d, root, l.opacity, l.blend);
+    (root.visible, root.locked, root.knockout_shape) = (l.visible, l.locked, l.knockout_shape);
     root.name = l.name.clone();
     root.extras_mut().mask = l.extras().mask.clone();
     root.appearance.effects = l.appearance.effects.clone();
@@ -986,6 +1035,8 @@ pub(crate) fn replace_leaves(d: &mut Document, root: NodeId, mut f: impl FnMut(&
 fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Outline Stroke", |d, sel| {
+        let before = d.clone();
+        let mut ended = super::dimension::end_links(d, &roots);
         let brushes = vectorcraft_brush::library(d);
         let mut new_sel = vec![];
         let mut changed = 0;
@@ -994,6 +1045,9 @@ fn outline_stroke(s: &mut Session, _: &Value) -> Result<Value> {
             new_sel.push(id);
             changed += n;
         }
+        // A dimension whose source was outlined stays plain: its link no longer fits that art.
+        ended.retain(|e| e.source_kept(&before, d));
+        super::dimension::restore_unchanged(d, ended);
         if changed == 0 {
             return Err(EngineError::Other("Outline Stroke: no stroked paths selected".into()));
         }
@@ -1127,6 +1181,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
         tolerance: tolerance.clamp(1e-4, 1e4),
         corner_angle_deg: num_param(p, "cornerAngle").unwrap_or(30.0).clamp(0.0, 180.0),
         straight_lines: bool_or(p, "straightLines", false),
+        smooth: 0.0,
     };
     let whole = bool_or(p, "wholePaths", false);
     // A path with segments direct-selected simplifies only their runs, and keeps those runs (and the
@@ -1137,13 +1192,7 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
             return (po::simplify_with(path, &opts), None);
         };
         let part = po::simplify_part(path, &picked, &opts);
-        let mut kept: BTreeSet<AnchorRef> = anchors.into_iter().flatten().filter_map(|a| part.anchors.get(a).copied()).collect();
-        for &(si, i) in &part.segments {
-            let m = part.path.subpaths.get(si).map_or(1, |sp| sp.anchors.len().max(1));
-            kept.extend([(si, i), (si, (i + 1) % m)]);
-        }
-        let segs = segments.map(|_| part.segments.clone());
-        (part.path, Some((kept, segs)))
+        refitted_part(part, anchors, segments)
     })?;
     let mut out = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after });
     if let Some(l) = level {
@@ -1152,14 +1201,39 @@ fn simplify(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// A path with only the runs of `part` refitted, and what stays direct-selected: the anchors it had
+/// selected that are still there, and the refitted runs (their anchors, and their segments when
+/// segments were selected).
+fn refitted_part(
+    part: po::SimplifiedPart,
+    anchors: Option<&BTreeSet<AnchorRef>>,
+    segments: Option<&BTreeSet<SegmentRef>>,
+) -> (PathData, PartSelection) {
+    let mut kept: BTreeSet<AnchorRef> = anchors.into_iter().flatten().filter_map(|a| part.anchors.get(a).copied()).collect();
+    for &(si, i) in &part.segments {
+        let m = part.path.subpaths.get(si).map_or(1, |sp| sp.anchors.len().max(1));
+        kept.extend([(si, i), (si, (i + 1) % m)]);
+    }
+    let segs = segments.map(|_| part.segments.clone());
+    (part.path, Some((kept, segs)))
+}
+
 /// Object › Path › Smooth (`object.path.smooth`): [`po::smooth_level`] on each path under the
 /// objects given or selected, as one undo step; Auto-Smooth (`auto`) uses [`po::SMOOTH_AUTO_LEVEL`].
+/// A path with anchor points or segments direct-selected (and no `ids` given) smooths only the runs
+/// between them, which stay selected, as Simplify does.
 fn smooth(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.path.smooth";
     let level = number_or(p, "level", po::SMOOTH_AUTO_LEVEL, C)?.round().clamp(0.0, 100.0);
     let level = if switch_or(p, "auto", false, C)? { po::SMOOTH_AUTO_LEVEL } else { level };
+    let given = p.get("ids").is_some_and(|v| !v.is_null());
     let roots = checked_ids_or_selection(s, p, C)?;
-    let (ids, before, after) = edit_paths(s, &roots, "Smooth", |path, _, _| (po::smooth_level(path, level), None))?;
+    let (ids, before, after) = edit_paths(s, &roots, "Smooth", |path, anchors, segments| {
+        let Some(picked) = selected_segments(path, anchors, segments).filter(|_| !given) else {
+            return (po::smooth_level(path, level), None);
+        };
+        refitted_part(po::simplify_part(path, &picked, &po::smooth_options(path, level)), anchors, segments)
+    })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "before": before, "after": after, "level": level }))
 }
 

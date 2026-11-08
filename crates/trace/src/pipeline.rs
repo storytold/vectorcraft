@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
 use super::layers::{Layers, parallel_map_at_most};
 use super::params::{Method, Mode, TraceParams};
 use super::raster::{Raster, TraceError};
@@ -57,6 +59,79 @@ pub(crate) fn is_ignored(c: [u8; 3], target: Option<[u8; 3]>) -> bool {
     }
 }
 
+/// Whether Ignore Color leaves out every area of its color (not only the background).
+pub(crate) fn drops_color(params: &TraceParams) -> bool {
+    params.ignore_white && !params.ignore_background
+}
+
+/// Ignore Color, background only: clears to [`TRANSPARENT`] every area of a label `ignored` leaves
+/// out that reaches the image's edge, through neighbors above, below and to either side. It fills
+/// one run of a row at a time, and fills from one edge pixel at a time.
+pub(crate) fn clear_background(labels: &mut [u16], w: usize, h: usize, ignored: &[bool]) {
+    let (last_row, last_col) = (h.saturating_sub(1) * w, w.saturating_sub(1));
+    let mut seeds = Vec::new();
+    for edge in (0..w).flat_map(|x| [x, last_row + x]).chain((0..h).flat_map(|y| [y * w, y * w + last_col])) {
+        seeds.push(edge);
+        fill_left_out(labels, w, h, ignored, &mut seeds);
+    }
+}
+
+/// Clears to [`TRANSPARENT`] the left-out areas that `seeds` reach, and empties `seeds`.
+fn fill_left_out(labels: &mut [u16], w: usize, h: usize, ignored: &[bool], seeds: &mut Vec<usize>) {
+    let left_out = |labels: &[u16], i: usize| labels.get(i).is_some_and(|&l| ignored.get(l as usize).copied().unwrap_or(false));
+    while let Some(i) = seeds.pop() {
+        if !left_out(labels, i) {
+            continue;
+        }
+        // The run of left-out pixels along the row through `i`.
+        let row = i - i % w;
+        let (mut a, mut b) = (i, i + 1);
+        while a > row && left_out(labels, a - 1) {
+            a -= 1;
+        }
+        while b < row + w && left_out(labels, b) {
+            b += 1;
+        }
+        if let Some(run) = labels.get_mut(a..b) {
+            run.fill(TRANSPARENT);
+        }
+        // A seed at the start of each run of left-out pixels next to it in the rows above and below.
+        for next in [row.checked_sub(w), Some(row + w).filter(|&r| r < w * h)].into_iter().flatten() {
+            let mut inside = false;
+            for x in a - row..b - row {
+                let here = left_out(labels, next + x);
+                if here && !inside {
+                    seeds.push(next + x);
+                }
+                inside = here;
+            }
+        }
+    }
+}
+
+/// A box of pixels: `(x0, y0, x1, y1)`, the far sides excluded.
+type PixelBox = (usize, usize, usize, usize);
+
+/// Each of `n` palette entries' pixel count in `labels`, and the box its pixels lie in within
+/// `traced` (`labels` with Ignore Color's background [`TRANSPARENT`]). A layer is traced within its
+/// box, so a color whose background is left out is traced within the box of its remaining areas.
+pub(crate) fn label_extents(labels: &[u16], traced: &[u16], w: usize, n: usize) -> (Vec<usize>, Vec<Option<PixelBox>>) {
+    let mut counts = vec![0usize; n];
+    for &l in labels {
+        if let Some(c) = counts.get_mut(l as usize) {
+            *c += 1;
+        }
+    }
+    let mut boxes: Vec<Option<PixelBox>> = vec![None; n];
+    for (i, &l) in traced.iter().enumerate() {
+        if let Some(b) = boxes.get_mut(l as usize) {
+            let (x, y) = (i % w, i / w);
+            *b = Some(b.map_or((x, y, x + 1, y + 1), |b| (b.0.min(x), b.1.min(y), b.2.max(x + 1), b.3.max(y + 1))));
+        }
+    }
+    (counts, boxes)
+}
+
 /// Trace `img` with `params`. Failures (an image Logo mode refuses, say) give an empty result: use
 /// [`trace_within`] to see why.
 pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
@@ -68,11 +143,24 @@ pub fn trace(img: &Raster, params: &TraceParams) -> TraceResult {
 /// than `max_anchors` anchor points (a photo traced at high fidelity can make millions). The
 /// colour layers are traced in parallel where threads are available.
 pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
+    trace_watched(img, params, max_anchors, &|_, _| true)
+}
+
+/// [`trace_within`], telling `steps` how far it has got: `steps(done, total)` after each stage
+/// that prepares the colour layers (`total` 0 while they aren't known yet) and after each colour
+/// layer, from whichever thread traced it. Once `steps` answers `false` the trace stops at the
+/// next stage or layer with [`TraceError::Cancelled`].
+pub fn trace_watched(
+    img: &Raster,
+    params: &TraceParams,
+    max_anchors: usize,
+    steps: &(dyn Fn(u64, u64) -> bool + Sync),
+) -> Result<TraceResult, TraceError> {
     let (w, h) = (img.width as usize, img.height as usize);
     if w == 0 || h == 0 || w.checked_mul(h).and_then(|n| n.checked_mul(4)) != Some(img.rgba.len()) {
         return Ok(TraceResult::default());
     }
-    let mut out = trace_paths(img, params, max_anchors)?;
+    let mut out = trace_paths(img, params, max_anchors, steps)?;
     if params.auto_grouping {
         // Abutting areas cannot overlap; stacked layers, Logo's shapes and stroked lines can.
         let stacked = params.method == Method::Overlapping || params.mode == Mode::Logo || params.strokes;
@@ -81,9 +169,12 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
     Ok(out)
 }
 
-fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result<TraceResult, TraceError> {
+fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: &(dyn Fn(u64, u64) -> bool + Sync)) -> Result<TraceResult, TraceError> {
     let (w, h) = (img.width as usize, img.height as usize);
+    // After each stage before the colour layers, whose number isn't known yet.
+    let go_on = || if steps(0, 0) { Ok(()) } else { Err(TraceError::Cancelled) };
     if params.mode == Mode::Logo {
+        go_on()?;
         return logo::trace_logo(img, params, max_anchors);
     }
     // The colour Ignore Color leaves out, if not white.
@@ -94,6 +185,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // A photo is traced from a copy with its noise smoothed away (see `smooth`).
     let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img)).then(|| smooth::smoothed(img));
     let img = smoothed.as_ref().unwrap_or(img);
+    go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.
     // Grayscale finds them in the image's grays (as its flat colours are), so their stops are gray.
     let grays = (params.gradients && params.mode == Mode::Grayscale).then(|| {
@@ -106,6 +198,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     });
     let traced_as = grays.as_ref().unwrap_or(img);
     let found = (params.gradients && params.mode != Mode::BlackAndWhite).then(|| gradient::detect(traced_as)).filter(|f| !f.1.is_empty());
+    go_on()?;
     let without = found.as_ref().map(|(of, _)| {
         let mut rest = img.clone();
         for (p, &g) in rest.rgba.as_chunks_mut::<4>().0.iter_mut().zip(of) {
@@ -116,6 +209,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
         rest
     });
     let (mut q, rare) = quantize::quantize_keeping(without.as_ref().unwrap_or(img), params);
+    go_on()?;
     // The semi-transparent edge of a cut-out image traces as the color beside it.
     if matches!(params.mode, Mode::Color | Mode::Grayscale) {
         quantize::settle_cut_edges(&mut q, img, params.mode == Mode::Grayscale);
@@ -138,16 +232,24 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // Noise clears specks, not the regions of a rare colour Automatic kept on purpose.
     let keep: Vec<bool> = q.palette.iter().map(|c| rare.contains(c)).collect();
     quantize::denoise_keeping(&mut q.labels, w, h, params.noise as usize, &keep);
-    // Pixel count per palette entry, and the box its pixels lie in.
-    let mut counts = vec![0usize; q.palette.len()];
-    let mut boxes: Vec<Option<(usize, usize, usize, usize)>> = vec![None; q.palette.len()];
-    for (i, &l) in q.labels.iter().enumerate() {
-        if let (Some(c), Some(b)) = (counts.get_mut(l as usize), boxes.get_mut(l as usize)) {
-            *c += 1;
-            let (x, y) = (i % w, i / w);
-            *b = Some(b.map_or((x, y, x + 1, y + 1), |b| (b.0.min(x), b.1.min(y), b.2.max(x + 1), b.3.max(y + 1))));
+    go_on()?;
+    // Ignore Color, background only: the labels traced, with the ignored color's areas that reach
+    // the edge left out. Its other areas are traced with the rest. Edges are still placed by
+    // `q.labels`, as when the whole color is left out.
+    let cleared = (params.ignore_white && params.ignore_background).then(|| {
+        let ignored: Vec<bool> = q.palette.iter().map(|&c| is_ignored(c, ignore)).collect();
+        let mut labels = q.labels.clone();
+        clear_background(&mut labels, w, h, &ignored);
+        labels
+    });
+    // Whether any of a palette entry's pixels are left after the background.
+    let mut remains = vec![false; q.palette.len()];
+    for &l in cleared.iter().flatten() {
+        if let Some(r) = remains.get_mut(l as usize) {
+            *r = true;
         }
     }
+    let (counts, boxes) = label_extents(&q.labels, cleared.as_deref().unwrap_or(&q.labels), w, q.palette.len());
     // Layers bottom → top: largest area first.
     let mut order: Vec<usize> = (0..q.palette.len()).filter(|&i| counts[i] > 0).collect();
     order.sort_by(|a, b| counts[*b].cmp(&counts[*a]).then(a.cmp(b)));
@@ -169,10 +271,11 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     for (r, &i) in order.iter().enumerate() {
         rank[i] = r;
     }
-    let layers: Vec<(usize, usize)> =
-        order.iter().copied().enumerate().filter(|&(_, ci)| !(params.ignore_white && is_ignored(q.palette[ci], ignore))).collect();
+    let dropped = |ci: usize| params.ignore_white && is_ignored(q.palette[ci], ignore) && !remains.get(ci).copied().unwrap_or(false);
+    let layers: Vec<(usize, usize)> = order.iter().copied().enumerate().filter(|&(_, ci)| !dropped(ci)).collect();
     let job = Layers {
         q: &q,
+        traced: cleared.as_deref().unwrap_or(&q.labels),
         rank: &rank,
         params,
         img,
@@ -194,7 +297,26 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize) -> Result
     // freed before the trace starts.)
     let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
     let at_a_time = ((512 << 20) / (largest * 10)).max(1);
-    for (paths, &(_, ci)) in parallel_map_at_most(at_a_time, &layers, |&(r, ci)| job.layer(r, ci)).into_iter().zip(&layers) {
+    let total = layers.len() as u64;
+    if !steps(0, total) {
+        return Err(TraceError::Cancelled);
+    }
+    // Once stopped, the layers not started yet are skipped.
+    let (done, stopped) = (AtomicU64::new(0), AtomicBool::new(false));
+    let traced = parallel_map_at_most(at_a_time, &layers, |&(r, ci)| {
+        if stopped.load(Ordering::Relaxed) {
+            return None;
+        }
+        let paths = job.layer(r, ci);
+        if !steps(done.fetch_add(1, Ordering::Relaxed) + 1, total) {
+            stopped.store(true, Ordering::Relaxed);
+        }
+        paths
+    });
+    if stopped.load(Ordering::Relaxed) {
+        return Err(TraceError::Cancelled);
+    }
+    for (paths, &(_, ci)) in traced.into_iter().zip(&layers) {
         let paths = paths.ok_or(TraceError::TooComplex { max: max_anchors })?;
         // A layer with no paths adds no color to the palette.
         if paths.is_empty() {

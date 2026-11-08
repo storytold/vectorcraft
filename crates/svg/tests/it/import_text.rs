@@ -52,6 +52,46 @@ fn close(a: f64, b: f64, tol: f64) -> bool {
 }
 
 #[test]
+fn metadata_ids_preserve_the_original_text_cascade() {
+    for (rules, text, color) in [
+        ("text:not(.x){fill:red!important} text{fill:blue!important}", r#"<text y="20">Hi</text>"#, (255, 0, 0)),
+        ("#t{fill:blue} [id]{fill:red}", r#"<text id="t" y="20">Hi</text>"#, (0, 0, 255)),
+        ("#holder{fill:blue} g[id]{fill:red}", r#"<g id="holder"><text y="20"><tspan>Hi</tspan></text></g>"#, (0, 0, 255)),
+    ] {
+        for metadata in [false, true] {
+            let attribute = if metadata { r#" data-note="kept""# } else { "" };
+            let doc = open(&format!(r#"<style>{rules} rect[id]{{fill:black}}</style>{text}<rect width="5" height="5"{attribute}/>"#));
+            let expected = Paint::solid(vectorcraft_color::Color::rgb8(color.0, color.1, color.2));
+            assert_eq!(only_text(&doc).runs[0].style.fill, expected, "{rules}, metadata {metadata}");
+        }
+    }
+}
+
+#[test]
+fn metadata_ids_preserve_text_preprocessing_and_relative_styles() {
+    for body in [
+        r#"<style>g{font-size:10px} text{font-size:2em} tspan{font-size:1.5em}</style><g transform="translate(4 5)"><text y="20">A<tspan>B</tspan></text></g>"#,
+        r#"<style>text{display:none;fill:red}</style><text y="20">Hidden</text>"#,
+        r#"<style>text{transform:translate(10px,20px)}</style><text y="20">Moved</text>"#,
+        r##"<defs><path id="p" d="M0 20L150 20"/></defs><text font-size="12"><textPath href="#p">Path</textPath></text>"##,
+    ] {
+        let load = |attribute: &str| {
+            let doc = open(&format!(r#"<style>rect[id]{{fill:black}}</style>{body}<rect width="5" height="5"{attribute}/>"#));
+            art(&doc)
+                .into_iter()
+                .filter_map(|n| match &n.kind {
+                    NodeKind::Text(t) => Some((n.visible, serde_json::to_value(t).unwrap())),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let expected = load("");
+        assert!(!expected.is_empty(), "{body}");
+        assert_eq!(load(r#" data-note="kept""#), expected, "{body}");
+    }
+}
+
+#[test]
 fn text_keeps_its_z_order_between_shapes() {
     let d = open(r#"<rect width="10" height="10"/><text x="5" y="20">Hi</text><rect y="30" width="10" height="10"/>"#);
     let kinds: Vec<&str> = art(&d)
@@ -247,6 +287,13 @@ fn font_variation_settings_become_variable_font_settings() {
     for c in ['c', 'f'] {
         assert!(axes(c).is_empty(), "{c}: {:?}", axes(c));
     }
+}
+
+#[test]
+fn comment_markers_inside_css_strings_are_not_comments() {
+    let d = open(r#"<style>text { font-family: "A/*B"; fill: red }</style><text y="10">x</text>"#);
+    let t = only_text(&d);
+    assert_eq!(t.first_style().fill.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
 }
 
 #[test]
@@ -645,4 +692,41 @@ fn flowed_text_that_cannot_be_read_is_reported() {
     for id in ["none", "huge", "far"] {
         assert!(w.iter().any(|w| w.contains(id) && w.contains("flowRoot")), "{id}: {w:?}");
     }
+}
+
+/// Total advance of a single-line text.
+fn advance(t: &TextObject) -> f64 {
+    layout(FontDb::global(), t).glyphs.iter().map(|g| g.advance).sum()
+}
+
+/// SVG 1.1 §10.9.1: `textLength` fits the characters to that advance, by spacing them out
+/// (`lengthAdjust="spacing"`, the default) or by stretching them (`spacingAndGlyphs`).
+/// https://www.w3.org/TR/SVG11/text.html#TextElementTextLengthAttribute
+#[test]
+fn text_length_fits_the_advance() {
+    let natural = advance(only_text(&open(r#"<text x="20" y="100" font-size="20">Hello World</text>"#)));
+    for adjust in ["spacingAndGlyphs", "spacing"] {
+        for want in [50.0, 150.0, 300.0] {
+            let (d, w) = import_with_report(&svg(&format!(
+                r#"<text x="20" y="100" font-size="20" textLength="{want}" lengthAdjust="{adjust}">Hello World</text>"#
+            )))
+            .unwrap();
+            assert!(w.is_empty(), "{w:?}");
+            let t = only_text(&d);
+            assert_eq!(t.plain_text(), "Hello World");
+            let got = advance(t);
+            assert!(close(got, want, 0.05), "{adjust} {want}: {got} (natural {natural})");
+            let scaled = t.runs.iter().all(|r| close(r.style.h_scale, 100.0 * want / natural, 0.5));
+            assert_eq!(scaled, adjust == "spacingAndGlyphs", "{adjust} {want}: {:?}", t.runs);
+        }
+    }
+    // On a tspan, only its characters are fitted; units and percentages of the viewport resolve.
+    let t = open(r#"<text x="20" y="100" font-size="20">Hi <tspan textLength="25%">there</tspan>!</text>"#);
+    let t = only_text(&t);
+    let lay = layout(FontDb::global(), t);
+    let span: f64 = lay.glyphs.iter().filter(|g| (3..8).contains(&g.byte)).map(|g| g.advance).sum();
+    assert!(close(span, 100.0, 0.05), "{span}");
+    // A negative length is ignored.
+    let t = open(r#"<text x="20" y="100" font-size="20" textLength="-5">Hello World</text>"#);
+    assert!(close(advance(only_text(&t)), natural, 1e-6));
 }

@@ -165,6 +165,10 @@ fn turns(set: &PrintSettings, (w, h): (f64, f64), flipped: bool) -> (Affine, (f6
     (v, (w, h))
 }
 
+fn too_many_pages() -> PdfError {
+    PdfError::BadSetting(format!("the job would print more than {} pages", super::MAX_PAGES))
+}
+
 /// The pages of `doc` (whose layers are those that print) as `set` lays them out, the tiles of
 /// each artboard when tiling, and warnings (art that doesn't fit the imageable area).
 pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<String>) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
@@ -174,6 +178,10 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
     let origin = set.tile_origin.placed.then_some((set.tile_origin.x, set.tile_origin.y));
     let (mut pages, mut grids) = (vec![], vec![]);
     for (artboard, r) in regions(doc, set)? {
+        // The job is refused past MAX_PAGES (copies and inks only add to it): stop making pages here.
+        if pages.len() > super::MAX_PAGES {
+            return Err(too_many_pages());
+        }
         let what = artboard.map_or_else(|| "The art".to_string(), |i| format!("Artboard {}", i + 1));
         if !(r.width() > 0.0 && r.height() > 0.0) {
             warnings.push(format!("{what} has no area and was left out"));
@@ -297,6 +305,9 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let (x, y) = (grid.0 + c * step.0, grid.1 + rw * step.1);
             Rect::new(x, y, x + tile.0, y + tile.1)
         };
+        if pages.len() + pick.len() > super::MAX_PAGES {
+            return Err(too_many_pages());
+        }
         for &t in &pick {
             let w = window(t);
             let view = turn * Affine::translate((at.0 - w.x0, at.1 - w.y0));

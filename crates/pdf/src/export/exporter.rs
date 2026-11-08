@@ -14,6 +14,9 @@ pub(super) const MAX_PATTERN_DEPTH: u32 = 4;
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
+/// The warning for an image whose placement cannot be written.
+pub(super) const UNWRITABLE_IMAGE: &str = "an image couldn't be written and is missing from the picture";
+
 impl<'a> Exporter<'a> {
     /// An exporter of `doc` writing images as `set` says; layers whose Print option is off are
     /// left out.
@@ -23,6 +26,7 @@ impl<'a> Exporter<'a> {
             symbols: doc.symbol_boxes().quick().with_brush_art(),
             warnings: vec![],
             images: HashMap::new(),
+            image_left_out: None,
             brushes: None,
             knockout: doc.page_knockout,
             lab_spots: vec![],
@@ -41,6 +45,7 @@ impl<'a> Exporter<'a> {
             layers: false,
             layer_index: crate::forms::pdf_layers(doc).iter().enumerate().map(|(i, l)| (address(l.node), i)).collect(),
             in_layer: 0,
+            paper: Rect::ZERO,
             symbol_nodes: 0,
             overprint: false,
             overprinted: false,
@@ -169,9 +174,10 @@ pub(super) fn q(v: f32) -> u8 {
 pub(super) fn color(c: &Color) -> krilla::color::Color {
     match *c {
         Color::Rgb { r, g, b } => rgb::Color::new(q(r), q(g), q(b)).into(),
-        Color::Cmyk { c, m, y, k } => cmyk::Color::new(q(c), q(m), q(y), q(k)).into(),
+        // Inks and grey keep their values: C75 is written as 0.75, not 191/255.
+        Color::Cmyk { c, m, y, k } => cmyk::Color::new_f32(c, m, y, k).into(),
         // VectorCraft grey is ink coverage (0 = white); PDF DeviceGray is lightness.
-        Color::Gray { k } => luma::Color::new(q(1.0 - k)).into(),
+        Color::Gray { k } => luma::Color::new_f32(1.0 - k).into(),
         Color::Lab { .. } => {
             let [r, g, b] = c.to_rgb();
             rgb::Color::new(q(r), q(g), q(b)).into()

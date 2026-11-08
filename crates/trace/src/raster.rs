@@ -15,6 +15,9 @@ pub enum TraceError {
         "this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset"
     )]
     TooComplex { max: usize },
+    /// The caller of [`crate::trace_watched`] stopped the trace.
+    #[error("the trace was cancelled")]
+    Cancelled,
 }
 
 /// The most pixels an image to trace may have (64 megapixels: 256 MB decoded); larger images are
