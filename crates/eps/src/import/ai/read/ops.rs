@@ -1304,7 +1304,31 @@ mod tests {
         assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(moved)]), &st));
         // Nor one whose member draws a Pathfinder result in place of its own members.
         merged.appearance.effects.push(vectorcraft_effects::new_effect("pathfinder.add", &serde_json::json!({})).unwrap());
-        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(merged)]), &st));
+        assert!(!group_paints(&Node::group(NodeId(3), vec![Arc::new(merged.clone())]), &st));
+        // An effect that is hidden doesn't reshape the member: the group still takes its fill.
+        for e in &mut merged.appearance.effects {
+            e.visible = false;
+        }
+        assert!(group_paints(&Node::group(NodeId(3), vec![Arc::new(merged)]), &st));
+    }
+
+    /// A clipping group, and a compound shape, don't take a fill of their own: they keep their drawn look.
+    #[test]
+    fn a_clipping_group_or_a_compound_shape_takes_no_fill_of_its_own() {
+        use crate::import::ai::style::{ArtStyle, StyleItem};
+        use vectorcraft_color::Color;
+        let st = ArtStyle { simple: true, items: vec![StyleItem::Fill(Paint::solid(Color::rgb(0.0, 0.0, 1.0)))], ..ArtStyle::default() };
+        let members = || vec![square(1, Paint::solid(Color::rgb(1.0, 0.0, 0.0))), square(2, Paint::solid(Color::rgb(1.0, 0.0, 0.0)))];
+        assert!(group_paints(&Node::group(NodeId(3), members()), &st));
+        let mut clipping = Node::group(NodeId(3), members());
+        if let NodeKind::Group { clip, .. } = &mut clipping.kind {
+            *clip = true;
+        }
+        assert!(!group_paints(&clipping, &st));
+        let mut compound = Node::group(NodeId(3), members());
+        compound.extras_mut().compound_shape = true;
+        assert!(compound.is_compound_shape());
+        assert!(!group_paints(&compound, &st));
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.

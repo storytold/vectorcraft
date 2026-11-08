@@ -5396,6 +5396,63 @@ fn a_group_with_its_own_fill_comes_in_as_the_group_with_that_fill() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// A group's own stroke, and its own fill and stroke, come in live too, above or below the members
+/// as the style's contents row lists them.
+#[test]
+fn a_group_with_its_own_stroke_or_fill_and_stroke_comes_in_with_them_where_the_style_lists_them() {
+    // A group style of `top_first` rows: a blue fill, a green 2 pt stroke, the contents.
+    fn style(name: &str, top_first: &[&str]) -> String {
+        let part = |p: &&str| match *p {
+            "fill" => "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                       /FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+                .to_string(),
+            "stroke" => "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+                         /StrokeStyle : 0 R\n1 0 1 0 0 1 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n"
+                .to_string(),
+            _ => "/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n".to_string(),
+        };
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n;\n",
+            top_first.iter().map(part).collect::<String>()
+        )
+    }
+    let hidden = |x: f64| rect_path(x, 0.0, x + 10.0, 10.0).replace('\n', "\n%_");
+    let look = format!("0 0 0 0 0 0 1 Xa\n{}f\n{}f\n", rect_path(0.0, 0.0, 10.0, 10.0), rect_path(20.0, 0.0, 30.0, 10.0));
+    let group = |style: &str| format!("0 Ae\nu\n{look}U\n%_0 Ae\n%_u\n%_{RED}%_{}f\n%_{}f\n%_U\n1 ({style}) XW\n", hidden(0.0), hidden(20.0));
+    let (blue, green) = (Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+    // Each: the style's rows (top first), the group's items (bottom first), and how many paint below.
+    type Case<'a> = (&'a [&'a str], &'a [(&'a str, Color)], Option<usize>);
+    let cases: [Case; 3] = [
+        (&["stroke", "contents"], &[("stroke", green)], None),
+        (&["stroke", "contents", "fill"], &[("fill", blue), ("stroke", green)], Some(1)),
+        (&["contents", "stroke", "fill"], &[("fill", blue), ("stroke", green)], Some(2)),
+    ];
+    for (rows, items, below) in cases {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", style("Own", rows), layer(&group("Own"))));
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{rows:?}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{rows:?}: {a:#?}");
+        assert!(matches!(a[0].kind, NodeKind::Group { clip: false, .. }), "{rows:?}: the group, not its look: {a:#?}");
+        assert_eq!(a[0].children().map(|c| c.len()), Some(2), "{rows:?}");
+        let got: Vec<_> = a[0]
+            .appearance
+            .items
+            .iter()
+            .map(|i| match i {
+                AppearanceItem::Fill(f) => ("fill", f.paint.color()),
+                AppearanceItem::Stroke(s) => {
+                    assert_eq!(s.width, 2.0, "{rows:?}");
+                    ("stroke", s.paint.color())
+                }
+            })
+            .collect();
+        let want: Vec<_> = items.iter().map(|(k, c)| (*k, Some(*c))).collect();
+        assert_eq!(got, want, "{rows:?}");
+        assert_eq!(a[0].appearance.contents_index, below, "{rows:?}");
+    }
+}
+
 #[test]
 fn a_group_with_a_listed_style_is_linked() {
     let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
