@@ -160,7 +160,8 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape or Cmd+Enter (e.g. when double-clicked from a selection tool).
+    /// The tool that was active before type editing began, which Escape and Cmd+Enter return to.
+    /// Clicks that move editing to other text keep it.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -396,7 +397,7 @@ impl TypeTool {
         out
     }
 
-    /// Stop editing and go back to the tool used before double-clicking into type (or to the
+    /// Stop editing and go back to the tool that was active before type editing began (or to the
     /// Selection tool), and leave the type selected.
     fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
         let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
