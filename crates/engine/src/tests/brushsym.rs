@@ -1422,25 +1422,29 @@ fn reset_transformation_keeps_the_center_of_art_away_from_the_origin() {
     assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
 }
 
-/// A stored natural size that is not positive (from a damaged file) does not flatten the instance:
-/// Reset Transformation gives it the art's own size, as drawing the symbol does.
+/// A stored natural size that is not positive (from a damaged file: zero or negative on either
+/// side) does not flatten or mirror the instance: Reset Transformation gives it the art's own
+/// size, as drawing the symbol does.
 #[test]
 fn reset_transformation_ignores_a_stored_size_that_is_not_positive() {
-    let mut s = session();
-    let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
-    let art = node(&s, r);
-    s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
-    let st = s.doc_mut().unwrap();
-    let d = std::sync::Arc::make_mut(&mut st.doc);
-    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
-    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({"Flat": [0.0, 20.0]}));
-    let layer = d.layers[0].id;
-    let id = d.alloc_id();
-    let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
-    d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
-    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]));
-    let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
-    assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{after:?}");
+    for size in [json!([0.0, 20.0]), json!([-20.0, 20.0]), json!([20.0, -5.0]), json!([-20.0, -20.0])] {
+        let mut s = session();
+        let r = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+        let art = node(&s, r);
+        s.execute("edit.clear", &json!({"ids": [r.0]})).unwrap();
+        let st = s.doc_mut().unwrap();
+        let d = std::sync::Arc::make_mut(&mut st.doc);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Flat".into(), art: std::sync::Arc::new(art) });
+        d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.to_string(), json!({ "Flat": size }));
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((100.0, 100.0)) * vectorcraft_geom::Affine::rotate(0.5);
+        d.insert(Some(layer), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Flat".into(), xf })).unwrap();
+        assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [id.0]})).unwrap()["ids"], json!([id.0]), "{size}");
+        let after = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        assert!((after.width() - 20.0).abs() < 1e-9 && (after.height() - 20.0).abs() < 1e-9, "{size}: {after:?}");
+        assert!(close_xf(xf_of(&s, id).with_translation(vectorcraft_geom::Vec2::ZERO), vectorcraft_geom::Affine::IDENTITY), "{size}: not mirrored");
+    }
 }
 
 /// Reset Transformation adds no undo step for an instance already at its symbol's scale or for
@@ -1473,6 +1477,14 @@ fn reset_transformation_leaves_unchanged_instances_and_refuses_bad_ids() {
     let before = undo_len(&s);
     assert_eq!(s.execute("symbol.instance.resetTransform", &json!({"ids": [projected.0]})).unwrap()["ids"], json!([]));
     assert!(undo_len(&s) == before && close_xf(xf_of(&s, projected), xf), "an instance in perspective stays as it was");
+    // Selected with a turned instance, the instance in perspective still stays as it was, and only
+    // the other one is reset and returned, in one undo step.
+    select(&mut s, &[inst, projected]);
+    assert_eq!(s.execute("symbol.instance.resetTransform", &json!({})).unwrap()["ids"], json!([inst.0]));
+    assert_eq!(undo_len(&s), before + 1, "one undo step");
+    assert!(close_xf(xf_of(&s, projected), xf), "the instance in perspective stays as it was");
+    let reset = xf_of(&s, inst).with_translation(vectorcraft_geom::Vec2::ZERO);
+    assert!(close_xf(reset, s.doc().unwrap().doc.symbol_natural_xf(&name)), "the turned instance is reset: {reset:?}");
 }
 
 /// New Symbol and Duplicate Symbol trim the name they are given, as Symbol Options trims
