@@ -455,6 +455,158 @@ fn on_path_effects_orient_glyphs() {
     assert_eq!(PathEffect::parse("stair step"), Some(PathEffect::StairStep));
 }
 
+/// Type on a straight path from (0, 50) to (500, 50), one run per style: how far each glyph's
+/// baseline lies below the path under each Align to Path option, or with `ink` the middle of its
+/// drawn outline.
+fn path_align_drops(db: &FontDb, styles: &[CharStyle], vertical: bool, ink: bool) -> Vec<(vectorcraft_doc::PathAlign, Vec<f64>)> {
+    use vectorcraft_doc::PathAlign;
+    let mut line = BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    let mut t = point("", style(12.0));
+    t.runs = styles.iter().map(|st| TextRun::new("x", st.clone())).collect();
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.vertical = vertical;
+    [PathAlign::Baseline, PathAlign::Ascender, PathAlign::Center, PathAlign::Descender]
+        .into_iter()
+        .map(|align| {
+            t.path_align = align;
+            let drop = |g: &PositionedGlyph| {
+                let b = g.outline.bounding_box();
+                if ink { (b.y0 + b.y1) * 0.5 - 50.0 } else { g.origin.y - 50.0 }
+            };
+            (align, layout(db, &t).glyphs.iter().map(drop).collect())
+        })
+        .collect()
+}
+
+/// Align to Path moves each glyph's baseline off the path by its own face, size and vertical
+/// scale: Ascender by the top of an em box centered on the cap height, Center by half the height
+/// of the top of the H in whole thousandths of an em, Descender up by the bottom of the font's
+/// bounding box. Without an OS/2 cap height, the em box is centered on the lower of the tops of H
+/// and O; without an H, Center takes half the OS/2 cap height. A face with no cap height and no H
+/// or O takes an em box from 0.12 em below the baseline to 0.88 em above it and, with a bounding
+/// box above the baseline, its descent. Leading and horizontal scale do not count.
+#[test]
+fn on_path_align_runs_each_glyph_by_its_own_metrics() {
+    use crate::test_fonts::{PATH_ALIGN_BARE_FAMILY, PATH_ALIGN_CAPITAL_FAMILY, PATH_ALIGN_LOWER_FAMILY, PATH_ALIGN_ROMAN_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    for family in [PATH_ALIGN_ROMAN_FAMILY, PATH_ALIGN_BARE_FAMILY, PATH_ALIGN_LOWER_FAMILY, PATH_ALIGN_CAPITAL_FAMILY] {
+        db.add_font(path_align_font(family).unwrap());
+    }
+    let bare = db.face(PATH_ALIGN_BARE_FAMILY, "Regular").unwrap();
+    let bare_descent = bare.vertical_metrics().1 / bare.units_per_em();
+    let st = |family: &str, size: f64| CharStyle { font_family: family.into(), ..style(size) };
+    let styles = [
+        st(PATH_ALIGN_ROMAN_FAMILY, 20.0),
+        st(PATH_ALIGN_ROMAN_FAMILY, 40.0),
+        CharStyle { v_scale: 200.0, ..st(PATH_ALIGN_ROMAN_FAMILY, 20.0) },
+        CharStyle { h_scale: 200.0, leading: Some(90.0), ..st(PATH_ALIGN_ROMAN_FAMILY, 20.0) },
+        st(PATH_ALIGN_BARE_FAMILY, 20.0),
+        st(PATH_ALIGN_LOWER_FAMILY, 20.0),
+        st(PATH_ALIGN_CAPITAL_FAMILY, 20.0),
+    ];
+    // Per em: the cap height is 0.66 em, the H 0.656 em tall, the bounding box's bottom -0.295 em;
+    // the lower face's H is 0.668 em tall and its O 0.656 em; the capital face's em box runs from
+    // its `BASE` table's `ideo` at -0.15 em.
+    for (align, drops) in path_align_drops(&db, &styles, false, false) {
+        let (roman, bare, lower, capital) = match align {
+            PathAlign::Baseline => (0.0, 0.0, 0.0, 0.0),
+            PathAlign::Ascender => ((0.66 + 1.0) / 2.0, 0.88, (0.656 + 1.0) / 2.0, 0.85),
+            PathAlign::Center => (0.328, 0.38, 0.334, 0.33),
+            PathAlign::Descender => (-0.295, -bare_descent, -0.295, -0.295),
+        };
+        let want = [roman * 20.0, roman * 40.0, roman * 40.0, roman * 20.0, bare * 20.0, lower * 20.0, capital * 20.0];
+        assert!(drops.len() == 7 && drops.iter().zip(want).all(|(d, w)| (d - w).abs() < 1e-6), "{align:?}: {drops:?}, want {want:?}");
+    }
+}
+
+/// The em box whose top Ascender runs along the path, by the kind of face: a `BASE` table's
+/// ideographic baseline, unless its roman baseline lies below it; in a face with a Chinese,
+/// Japanese or Korean code page, a typographic box that holds the ink of 永 and is one em tall or
+/// leaves margins within 197/65,536 em of each other, else a ┼ one em tall, else an em box
+/// centered on the ink of 永; else 0.88 em. Center measures the H, not the OS/2 cap height (0.7 em
+/// in the heights face).
+#[test]
+fn on_path_align_finds_the_em_box_of_each_kind_of_face() {
+    use crate::test_fonts::{
+        HEIGHT_FAMILY, PATH_ALIGN_BASE_FAMILY, PATH_ALIGN_CROSS_FAMILY, PATH_ALIGN_DAMAGED_FAMILY, PATH_ALIGN_HHEA_FAMILY,
+        PATH_ALIGN_IDEOGRAPH_FAMILY, PATH_ALIGN_MARGINS_FAMILY, PATH_ALIGN_NONE_FAMILY, PATH_ALIGN_TYPO_FAMILY, PATH_ALIGN_UNEVEN_FAMILY,
+        height_font, path_align_font,
+    };
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    let families = [
+        PATH_ALIGN_BASE_FAMILY,
+        PATH_ALIGN_IDEOGRAPH_FAMILY,
+        PATH_ALIGN_CROSS_FAMILY,
+        PATH_ALIGN_TYPO_FAMILY,
+        PATH_ALIGN_HHEA_FAMILY,
+        PATH_ALIGN_NONE_FAMILY,
+        PATH_ALIGN_MARGINS_FAMILY,
+        PATH_ALIGN_UNEVEN_FAMILY,
+        PATH_ALIGN_DAMAGED_FAMILY,
+    ];
+    for family in families {
+        db.add_font(path_align_font(family).unwrap());
+    }
+    db.add_font(height_font(true).unwrap());
+    let styles: Vec<CharStyle> = families.iter().chain([&HEIGHT_FAMILY]).map(|f| CharStyle { font_family: (*f).into(), ..style(10.0) }).collect();
+    let drops = path_align_drops(&db, &styles, false, false);
+    let of = |align: PathAlign| drops.iter().find(|(a, _)| *a == align).map(|(_, d)| d.clone()).unwrap();
+    // BASE -150 + one em; Japanese: the ⌠'s ink -51 to 949 centered, the | from -250 to 750, the
+    // typographic box -100 to 900, the `hhea` box -100 to 900 under an empty typographic box,
+    // nothing, the typographic box -101 to 1,002 (margins 3/1,000 em apart), the ink centered
+    // under a box -101 to 1,003 (4/1,000 em apart); a damaged BASE table's face by its cap height
+    // 660; the heights face's BASE `idtp` 880.
+    let want = [0.85, 0.949, 0.75, 0.9, 0.9, 0.88, 1.002, 0.949, 0.83, 0.88].map(|em| em * 10.0);
+    let ascender = of(PathAlign::Ascender);
+    assert!(ascender.len() == 10 && ascender.iter().zip(want).all(|(d, w)| (d - w).abs() < 1e-6), "{ascender:?}, want {want:?}");
+    let center = of(PathAlign::Center);
+    assert!((center[9] - 3.28).abs() < 1e-6, "{center:?}");
+}
+
+/// A variable font's instance takes its em box from the typographic box its `MVAR` table varies:
+/// from -100 to 900 in Regular, from 0 to 1,000 in Bold.
+#[test]
+fn on_path_align_takes_a_variable_font_instances_em_box() {
+    use crate::test_fonts::{PATH_ALIGN_VARIABLE_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_VARIABLE_FAMILY).unwrap());
+    let st = |font_style: &str| CharStyle { font_family: PATH_ALIGN_VARIABLE_FAMILY.into(), font_style: font_style.into(), ..style(10.0) };
+    let drops = path_align_drops(&db, &[st("Regular"), st("Bold")], false, false);
+    let ascender = drops.iter().find(|(a, _)| *a == PathAlign::Ascender).map(|(_, d)| d.clone()).unwrap();
+    assert!(ascender.len() == 2 && (ascender[0] - 9.0).abs() < 1e-6 && (ascender[1] - 10.0).abs() < 1e-6, "{ascender:?}");
+}
+
+/// In vertical type, Align to Path moves the glyphs half an em, with their horizontal scale and not
+/// their vertical scale, for Ascender and Descender, and leaves them on the path for Center: their
+/// baselines and their drawn outlines both.
+#[test]
+fn on_path_align_in_vertical_type_moves_half_an_em() {
+    use crate::test_fonts::{PATH_ALIGN_ROMAN_FAMILY, path_align_font};
+    use vectorcraft_doc::PathAlign;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_ROMAN_FAMILY).unwrap());
+    let st = CharStyle { font_family: PATH_ALIGN_ROMAN_FAMILY.into(), ..style(20.0) };
+    let styles = [st.clone(), CharStyle { h_scale: 200.0, ..st.clone() }, CharStyle { v_scale: 200.0, ..st }];
+    for ink in [false, true] {
+        let baseline = path_align_drops(&db, &styles, true, ink).first().map(|(_, d)| d.clone()).unwrap();
+        for (align, drops) in path_align_drops(&db, &styles, true, ink) {
+            let half = match align {
+                PathAlign::Ascender => 10.0,
+                PathAlign::Descender => -10.0,
+                _ => 0.0,
+            };
+            let want = [half, half * 2.0, half];
+            let moved: Vec<f64> = drops.iter().zip(&baseline).map(|(d, b)| d - b).collect();
+            assert!(moved.len() == 3 && moved.iter().zip(want).all(|(m, w)| (m - w).abs() < 1e-6), "{align:?}, ink {ink}: {moved:?}, want {want:?}");
+        }
+    }
+}
+
 #[test]
 fn on_path_circle_and_overflow() {
     let circle = kurbo::Circle::new((0.0, 0.0), 100.0).to_path(0.1);
