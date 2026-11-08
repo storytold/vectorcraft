@@ -409,8 +409,9 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Installed plug-ins stay installed after a restart (#2541). The module is written first and its
     // grant only once it is there; when the grant can't be written, the store gets the module it
-    // held back, so the module and grant kept there always belong together. A stored module that
-    // can't be read back isn't replaced by one that needs a grant.
+    // held back. A failed write of that module is only logged, and the grant then doesn't cover
+    // the new module. A stored module that can't be read back isn't replaced by one that needs a
+    // grant.
     let previous = s.stored_plugin_bytes(plugin.id());
     let mut stored = (previous.is_ok() || !m.asks_permissions()) && s.store_plugin(plugin.id(), &bytes);
     if m.asks_permissions() {
