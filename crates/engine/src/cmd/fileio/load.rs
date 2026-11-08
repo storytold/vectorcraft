@@ -570,7 +570,7 @@ impl ReadFile {
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
     let mut loaded = load_with(name, bytes, &opts)?;
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path.as_deref(), update_links, low_res_proxy_eps);
+    let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
 }
@@ -590,7 +590,8 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
+    let base = crate::cmd::links::LinkBase::file(path);
+    let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
     open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
@@ -629,6 +630,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     // writes .ai that way).
     let partial = format.id == "pdf" && opts.is_partial();
     let lossy_ai = format.id == "ai" && !restored;
+    let read_from = path.clone();
     let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
     let saves_back = path.is_some();
     let converted = saves_back && converted && s.prefs.append_converted;
@@ -648,6 +650,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     st.converted = converted;
     st.imported_from = source_path;
     st.import_losses = losses;
+    st.links_from = read_from;
     let opened = &s.documents()[index];
     let (title, file_info_title) = (opened.title(), opened.doc.title.clone());
     Ok(super::merge(

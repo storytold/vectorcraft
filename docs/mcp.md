@@ -4595,6 +4595,14 @@ its file was found. Only files on this computer, or on the network share the doc
 on, are looked at: a path to another computer, a device or a URL counts as missing. On Windows, a document opened from
 a mapped drive (`Z:\…`) is on the share the drive is mapped to, and links on that share (`\\server\share\…`) are
 looked at. A link on a drive mapped to another share (`Y:\…`) counts as missing, from a document on this computer too.
+The links of an open document keep their relative paths from the file it was opened from (for a `.ai` file another
+app wrote, that file), also after a save to another folder. When a link's file is not at its path, a save and Package
+write the path relative to the new file of the place the file is found, or for a missing file of the place that
+relative path names, and a document made with New Document from State keeps the same places, so a document moved while
+its linked files were missing finds them once they are back in that folder. In the open document, a link
+is looked for at its path, then at its relative path from the folder of the file the document was opened from and from
+the document's own folder, then by name in those two folders. A link found away from its path takes the relative path
+of the place it was found.
 The result lists `missingLinks`
 (their images show the preview), `modifiedLinks` (left as they were; read again only with the preference
 `updateLinks: "automatically"`, then they are in `updatedLinks`), each as `{name, path, ids}`, with `refused` (why the
