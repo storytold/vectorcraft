@@ -1060,6 +1060,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     // A style with one gradient fill: the object's own gradient, placed as the object's fill is.
     let gradients = st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count();
     let own_gradient = object.appearance.fill().filter(|f| matches!(f.paint, Paint::Gradient(_)));
+    let blurred = st.effects.iter().any(|e| e.id == "blur.gaussian");
     // A style's gradients are written in a space of the object's bounds that isn't documented; its
     // drawn look has each where the app placed it.
     let mut placed = HashMap::new();
@@ -1075,6 +1076,10 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     (_, 1, Some(own)) if !slot => own.paint.clone(),
                     (Some(p), ..) => p.clone(),
                     (None, 1, Some(own)) => own.paint.clone(),
+                    // A blurred object's drawn look is an image, which places no gradient: fitted to
+                    // the object instead, the style's gradient would paint elsewhere than the file
+                    // has it (its own placement isn't documented), so other objects than type keep it.
+                    _ if !slot && blurred => return None,
                     _ => {
                         let gradient = name.as_ref().and_then(|n| paints.gradients.get(n))?;
                         let mut g = vectorcraft_color::gradient::GradientPaint::new(gradient.clone());

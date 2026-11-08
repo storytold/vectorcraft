@@ -5657,6 +5657,65 @@ fn a_group_with_a_listed_style_is_linked() {
     assert_eq!(a[0].extras().graphic_style, Some(1));
 }
 
+/// The filter of a Gaussian Blur of `radius`.
+fn gaussian_blur(radius: f64) -> String {
+    format!(
+        "/BasicFilter :\n(Adobe PSL Gaussian Blur) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{radius} /Real (blur) ,\n; /Dict ;\n /Part ,\n"
+    )
+}
+
+#[test]
+fn objects_with_a_gaussian_blur_come_in_as_themselves_unless_a_style_gradient_needs_placing() {
+    // GUARDS: a Gaussian Blur left every object but type as its drawn look (an image), not editable.
+    let blurred_fill = fill_style_with("Soft", "0 0 0 0 0 0 1 Xa\n", &gaussian_blur(4.0));
+    let blurred_gradient = fill_style_with("SoftG", "Bb\n2 (G) 0 0 30 1 1 0 0 1 0 0 1 Bg\n0 BB\n", &gaussian_blur(4.0));
+    let blurred = format!(
+        "/KnownStyle :\n(Blur) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n{};\n",
+        gaussian_blur(6.0)
+    );
+    let defs =
+        "%AI5_BeginGradient: (G)\n(G) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let look = format!("0 Ae\nu\n{RED}{}f\nU\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let read_with = |object: &str| {
+        let r =
+            read_ok(&format!("{}{defs}{}", styles_and_list(&[blurred_fill.clone(), blurred_gradient.clone(), blurred.clone()], &[]), layer(object)));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        (a[0].clone(), r.warnings.iter().any(|w| w.contains("drawn look")))
+    };
+    let effects = |n: &Node| n.appearance.effects.iter().map(|e| (e.id.clone(), e.params["radius"].as_f64())).collect::<Vec<_>>();
+    // A path with a fill of the style's colour.
+    let (path, drawn) = read_with(&format!("{look}%_{hidden_rect}f\n1 (Soft) XW\n"));
+    assert!(matches!(path.kind, NodeKind::Path { .. }) && !drawn, "{path:#?}");
+    assert_eq!(fill(&path).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(effects(&path), [("blur.gaussian".to_string(), Some(4.0))]);
+    // A group with no fills of its own blurs its members together.
+    let (group, drawn) = read_with(&format!("{look}%_0 Ae\n%_u\n%_{hidden_rect}f\n%_U\n1 (Blur) XW\n"));
+    assert!(matches!(group.kind, NodeKind::Group { .. }) && !drawn, "{group:#?}");
+    assert_eq!(effects(&group), [("blur.gaussian".to_string(), Some(6.0))]);
+    // The style's own gradient: the image the drawn look is places no gradient, so it stays.
+    let (kept, drawn) = read_with(&format!("{look}%_{hidden_rect}f\n1 (SoftG) XW\n"));
+    assert!(drawn && !matches!(kept.kind, NodeKind::Path { .. }), "{kept:#?}");
+    // The object's own gradient is placed in art space, as without the blur.
+    let own = format!("{look}%_Bb\n%_1 (G) 0 0 0 1 1 0 0 1 0 0 Bg\n%_10 0 0 10 5 5 Xm\n%_{hidden_rect}f\n%_0 BB\n1 (SoftG) XW\n");
+    let (path, drawn) = read_with(&own);
+    assert!(matches!(path.kind, NodeKind::Path { .. }) && !drawn, "{path:#?}");
+    assert!(matches!(fill(&path), Paint::Gradient(g) if g.geom.is_some()));
+    assert_eq!(effects(&path), [("blur.gaussian".to_string(), Some(4.0))]);
+    // Type takes the style's gradient fitted to it, blurred: its drawn look can't be retyped.
+    let own: String = "/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n7 /StoryIndex ,\n;\n".lines().map(|l| format!("%_{l}\n")).collect();
+    let type_look = format!(
+        "0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n{RED}{}f\nU\n0 0 Xd\n6 () XW\n",
+        rect_path(0.0, 0.0, 10.0, 10.0)
+    );
+    let (slot, drawn) = read_with(&format!("{type_look}{own}1 (SoftG) XW\n"));
+    assert!(slot_of(slot.name.as_deref()).is_some() && !drawn, "the type, not its look: {slot:#?}");
+    assert!(matches!(fill(&slot), Paint::Gradient(g) if g.geom.is_none() && g.angle == 30.0), "{slot:#?}");
+    assert_eq!(effects(&slot), [("blur.gaussian".to_string(), Some(4.0))]);
+}
+
 #[test]
 fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
     let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
