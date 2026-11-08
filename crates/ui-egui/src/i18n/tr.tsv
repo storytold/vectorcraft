@@ -6363,6 +6363,7 @@ breakText	Glyphs	Glifler
 	Reset Symbol Instance	Sembol Örneğini Sıfırla
 @msg	type must be static or dynamic, not {v}	type static veya dynamic olmalıdır, {v} değil
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` statik bir semboldür: önce Sembol Türünü Dinamik olarak ayarlayın
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Bir sembol örneğinde seçilen yolun, bileşik yolun veya yazının yalnızca dolgu ve konturunun düz rengi değiştirilebilir
 @msg	path must be a list of child indices	path alt öğe dizinlerinden oluşan bir liste olmalıdır
 @msg	no object at path {shown} in the symbol's art	sembolün çiziminde {shown} yolunda nesne yok
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity ve/veya blend verin

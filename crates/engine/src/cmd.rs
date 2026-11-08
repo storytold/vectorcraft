@@ -590,11 +590,16 @@ pub(crate) fn object_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Nod
 }
 
 /// Objects a command targets: its `ids`, else its `id` as `ids` of one ([`named_ids`]), else the
-/// selection. An `ids` or `id` that isn't an object id is an error, never the selection.
+/// selection. An `ids` or `id` that isn't an object id is an error, never the selection. The
+/// selection is refused while an object of a dynamic symbol instance's art is selected, as by
+/// [`edit::selected_roots`].
 pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     match named_ids(p)? {
         Some(ids) => Ok(ids),
-        None => Ok(s.doc()?.selection.objects.clone()),
+        None => {
+            edit::refuse_symbol_part(s)?;
+            Ok(s.doc()?.selection.objects.clone())
+        }
     }
 }
 

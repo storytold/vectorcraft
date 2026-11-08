@@ -82,9 +82,10 @@ fn groups_of(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     out
 }
 
-/// The Objects on Path groups of the selection ([`groups_of`]).
+/// The Objects on Path groups of the selection ([`groups_of`]). None while an object of a dynamic
+/// symbol instance's art is selected.
 fn selected_groups(s: &Session) -> Vec<NodeId> {
-    s.active().map(|st| groups_of(&st.doc, &st.selection.objects)).unwrap_or_default()
+    s.active().filter(|st| st.selection.symbol_part.is_none()).map(|st| groups_of(&st.doc, &st.selection.objects)).unwrap_or_default()
 }
 
 /// The groups a command acts on: those of `ids` when given, otherwise those of the selection.
@@ -102,6 +103,7 @@ fn target_groups(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 fn has_objects_on_path(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_groups(s).is_empty() { Err("select an Objects on Path group".into()) } else { Ok(()) }
 }
 

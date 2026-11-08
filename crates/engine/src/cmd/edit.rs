@@ -157,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut); refused while an object of a symbol instance's art is selected",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -166,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy; with an object of a symbol instance's art selected, the instance is copied whole → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -220,7 +220,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides)",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -829,16 +829,38 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 }
 
 /// Selected top-level objects in paint order, dropping any whose ancestor is also selected.
+///
+/// Refused with [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art
+/// is selected ([`super::brushsym::selected_part`]): only the paint commands change that object,
+/// and only its solid fill and stroke, so a command that gathers the selection here leaves the
+/// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+}
+
+/// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
+/// for the commands that read the selected objects without [`selected_roots`]. A command that
+/// changes nothing in the document ([`Session::reading`]) reads the instance instead.
+pub(crate) fn refuse_symbol_part(s: &Session) -> Result<()> {
+    if !s.reading && s.doc()?.selection.symbol_part.is_some() { Err(super::brushsym::part_only()) } else { Ok(()) }
+}
+
+/// [`refuse_symbol_part`] as a command's `enabled` check: the command is dimmed, and refused with
+/// [`super::brushsym::part_only`]'s message, while an object of a dynamic symbol instance's art is
+/// selected.
+pub(crate) fn no_symbol_part(s: &Session) -> std::result::Result<(), String> {
+    if !s.reading && s.active().is_some_and(|st| st.selection.symbol_part.is_some()) { Err(super::brushsym::part_only().to_string()) } else { Ok(()) }
 }
 
 /// [`selected_roots`] for the commands that move or reshape the art (Move, Transform, Rotate…): a
 /// path of a compound path selected on its own (Group Selection, or in the isolated compound path)
 /// is an object of its own, so the hole of a ring moves without the ring (#2441). Paint and the
-/// rest still go to the compound path, which holds the paint.
+/// rest still go to the compound path, which holds the paint. Refused while an object of a symbol
+/// instance's art is selected, as [`selected_roots`] is: it moves with its instance only.
 pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     Ok(roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_, _| true))
 }
@@ -847,8 +869,10 @@ pub(crate) fn selected_roots_to_transform(s: &Session) -> Result<Vec<NodeId>> {
 /// ([`super::inside_isolation`]): `root` itself and objects outside it are left out before the
 /// objects held by another selected object are dropped. A selected path of a compound path stands
 /// for its compound unless the compound is `root` or `members` is set (as in
-/// [`selected_roots_to_transform`]).
+/// [`selected_roots_to_transform`]). Refused while an object of a symbol instance's art is
+/// selected, as [`selected_roots`] is.
 pub(crate) fn selected_roots_inside(s: &Session, root: NodeId, members: bool) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
     let st = s.doc()?;
     let ids = st.selection.in_paint_order(&st.doc).into_iter().filter(|id| super::inside_isolation(&st.doc, root, *id)).collect();
     Ok(roots_within(&st.doc, ids, |compound, _| members || compound == root))
@@ -925,6 +949,7 @@ fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
     }
+    // With an object of a dynamic symbol instance's art selected, the instance is copied.
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
     // Selected ruler guides come along (#3226), as canvas guides: their layer and artboard stay
@@ -965,6 +990,7 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
         return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
     }
+    refuse_symbol_part(s)?;
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {
         copy(s, p)?;
@@ -1038,6 +1064,10 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
+    // An object of a symbol instance's art can't be removed from the instance alone.
+    if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
+        return Err(super::brushsym::part_only());
+    }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
         return super::path::delete_anchors(s, p);
