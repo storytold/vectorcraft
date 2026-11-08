@@ -459,7 +459,7 @@ fn formats_query_lists_readers_writers_and_options() {
     );
     assert!(ids("readable").contains(&"tiff".to_string()) && ids("readable").contains(&"ait".to_string()));
     let png = r["formats"].as_array().unwrap().iter().find(|f| f["id"] == "png").unwrap();
-    assert_eq!(png["options"]["scale"]["default"], 1);
+    assert_eq!(png["options"]["scale"]["default"], Value::Null);
     assert_eq!(r["openExtensions"].as_array().unwrap().len(), OPEN_EXTS.len());
 }
 
@@ -680,7 +680,9 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
     s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
     for (name, compress) in [("a.vectorcraft", false), ("b.vectorcraft", true), ("c.vctemplate", true)] {
         let path = d.join(name).to_string_lossy().to_string();
-        let p = json!({"path": path, "compress": compress});
+        // A PDF-compatible file's PDF is dated to the second it is written, so the byte comparison
+        // uses files without one.
+        let p = json!({"path": path, "compress": compress, "pdfCompatible": false});
         let r = s.execute("file.saveCopy", &p).unwrap();
         let written = std::fs::read(&path).unwrap();
         assert_eq!(r["bytes"], written.len(), "{r}");
@@ -690,6 +692,17 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
         assert_eq!(written, job.encode().unwrap().files[0].1, "{name}");
         assert_eq!(vectorcraft_format::load(&written).unwrap().template, name.ends_with("vctemplate"));
     }
+    // A save with the default options streams a file that carries its PDF.
+    let path = d.join("d.vectorcraft").to_string_lossy().to_string();
+    let p = json!({"path": path});
+    let r = s.execute("file.saveCopy", &p).unwrap();
+    let written = std::fs::read(&path).unwrap();
+    assert_eq!(r["bytes"], written.len(), "{r}");
+    assert!(vectorcraft_format::pdf_content(&written).is_some());
+    let plan = save_plan(&s, SaveMode::Copy, &p).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    assert!(job.streams());
+    assert!(vectorcraft_format::pdf_content(&job.encode().unwrap().files[0].1).is_some());
     // A writer that fails: the save fails with its error.
     let plan = save_plan(&s, SaveMode::Copy, &json!({"path": "/x/y.vectorcraft"})).unwrap();
     let job = save_job(&mut s, plan).unwrap();

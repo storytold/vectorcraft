@@ -189,8 +189,10 @@ fn has_selection_or_ids(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)
 }
 
+/// The repeats of the selection: selected ones, and those around a selected object. None while
+/// an object of a dynamic symbol instance's art is selected.
 fn selected_repeats(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
@@ -207,6 +209,7 @@ fn selected_repeats(s: &Session) -> Vec<NodeId> {
 
 fn has_repeat(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_repeats(s).is_empty() { Err("select a repeat".into()) } else { Ok(()) }
 }
 
@@ -377,18 +380,22 @@ pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
     if editing(s).is_some() {
         s.end_text_edit();
     }
-    let name = s.edit("Done Editing Pattern", |d, sel| {
-        let (pe, art) = leave_edit(d, sel)?;
-        if let Some(def) = d.pattern_mut(&pe.pattern) {
-            def.art = art;
-            if def.size_tile_to_art {
-                def.fit_tile_to_art();
-            }
-        }
-        Ok(pe.pattern)
-    })?;
+    let name = s.edit("Done Editing Pattern", finish_edit)?;
     after_edit_mode(s, None)?;
     Ok(json!({ "name": name }))
+}
+
+/// Leave pattern editing mode in `d`, storing the editing layer's art as the pattern's tile art
+/// (resizing the tile to the art when the pattern does so) → the pattern's name.
+pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<String> {
+    let (pe, art) = leave_edit(d, sel)?;
+    if let Some(def) = d.pattern_mut(&pe.pattern) {
+        def.art = art;
+        if def.size_tile_to_art {
+            def.fit_tile_to_art();
+        }
+    }
+    Ok(pe.pattern)
 }
 
 fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {

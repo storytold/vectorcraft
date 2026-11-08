@@ -1,6 +1,6 @@
 use super::labels::{label_field, name_field, take_previous_label};
 use super::numeric::{STEP_DECIMALS, field_text, round_to, step_to_multiple};
-use super::text::{after_shift_enter, select_all, shift_enter_keeps_focus};
+use super::text::{after_shift_enter, select_all, select_all_on_focus, shift_enter_keeps_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
 /// Drag phase of a live slider/handle: previews while dragging, commits on release.
@@ -42,6 +42,9 @@ pub struct SliderValue {
     /// steps from `value` (±1 for an arrow, ±10 with Shift or Page Up/Down). `None` steps to whole
     /// numbers.
     pub step: Option<fn(f64, f64) -> f64>,
+    /// The places the field shows, which a screen reader's set-value action rounds to; `None`
+    /// keeps the number it sets.
+    pub decimals: Option<usize>,
 }
 
 /// Two values are the same when they show the same number, range and text, whatever their keys' steps
@@ -55,20 +58,20 @@ impl PartialEq for SliderValue {
 impl SliderValue {
     /// `value` on a rail over `range`, without a text.
     pub fn number(value: f64, range: std::ops::RangeInclusive<f64>) -> Self {
-        Self { value, range, text: None, step: None }
+        Self { value, range, text: None, step: None, decimals: None }
     }
 
     /// `value` on a rail over `range` as [`plain_field`] shows it with `suffix` and at most
     /// `decimals` places: the number it shows (`value` rounded) and its text.
     pub fn field(value: f64, range: std::ops::RangeInclusive<f64>, suffix: &str, decimals: usize) -> Self {
         let number = field_text(value, "", decimals);
-        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None }
+        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None, decimals: Some(decimals) }
     }
 
     /// `value` on a rail over `range`, with `text`, for a field that writes its own text (a length
     /// in the document's unit, an egui `DragValue`).
     pub fn text(value: f64, range: std::ops::RangeInclusive<f64>, text: String) -> Self {
-        Self { value, range, text: Some(text), step: None }
+        Self { value, range, text: Some(text), step: None, decimals: None }
     }
 
     /// This value, stepped by the keys with `step` instead of to whole numbers (see
@@ -119,8 +122,11 @@ pub fn color_slider_valued(
 /// While it has the focus, → and ↑ raise the number `shown` holds to the next whole number and ←
 /// and ↓ lower it to the next whole number, Shift with an arrow, Page Up and Page Down add or take
 /// ten, and Home and End set the start and the end of `shown`'s range. Screen readers' increment
-/// and decrement actions step the number as → and ← do. A number past the range steps from the
-/// range's nearer end, and no step goes past either end. With `shown` `None` (a blank field), or
+/// and decrement actions step the number as → and ← do, and their set-value action sets it within
+/// the range they get (the range, extended to a number past its end), rounded to
+/// [`SliderValue::decimals`] (a value that is not a finite number leaves it as it is). A number
+/// past the range steps from the range's nearer end, and no step goes past
+/// either end. With `shown` `None` (a blank field), or
 /// in a disabled `ui`, the keys and actions leave the rail as it is. Returns the new value from 0
 /// to 1 that a click or a drag gives, its phase, and the number in `shown`'s units that a key or
 /// an action gives.
@@ -167,6 +173,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
     let stepped = shown.filter(|_| ui.is_enabled()).and_then(|s| {
         ui.ctx().accesskit_node_builder(id, |node| {
             node.set_numeric_value_step(1.0);
+            node.add_action(egui::accesskit::Action::SetValue);
             node.add_action(egui::accesskit::Action::Increment);
             node.add_action(egui::accesskit::Action::Decrement);
         });
@@ -185,7 +192,7 @@ fn slider_keys(ui: &Ui, resp: &Response, shown: Option<SliderValue>) -> Option<f
 /// The number of slider `id` (`s`) after this frame's keys while it is `focused`, and after screen
 /// readers' actions on it ([`color_slider_stepped`]); `None` when they leave it as it was.
 fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f64> {
-    use egui::accesskit::Action;
+    use egui::accesskit::{Action, ActionData};
     use egui::{Event, Key};
     let (lo, hi) = (*s.range.start(), *s.range.end());
     if !lo.is_finite() || !hi.is_finite() || hi <= lo {
@@ -235,11 +242,27 @@ fn rail_step(ui: &Ui, id: egui::Id, focused: bool, s: &SliderValue) -> Option<f6
             ui.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
         }
     }
+    // A set-value request is rounded to the field's places when it has them and otherwise kept as
+    // asked; only the keys' and the steps' numbers are rounded to `STEP_DECIMALS`.
+    let mut exact = false;
     ui.input(|i| {
         let n = i.num_accesskit_action_requests(id, Action::Increment) as f64 - i.num_accesskit_action_requests(id, Action::Decrement) as f64;
         v = by(v, n).clamp(lo, hi);
+        // The last set-value request this frame.
+        let set = i.accesskit_action_requests(id, Action::SetValue).last().and_then(|request| match request.data {
+            Some(ActionData::NumericValue(value)) if value.is_finite() => Some(value),
+            _ => None,
+        });
+        if let Some(value) = set {
+            // The number the field would show, as `SliderValue::field` reads it.
+            let shown = s.decimals.map_or(value, |d| field_text(value, "", d).parse().unwrap_or(value));
+            // The range screen readers get (`slider_info`), which takes in a number past the rail.
+            v = shown.clamp(lo.min(s.value), hi.max(s.value));
+            end = true;
+            exact = true;
+        }
     });
-    (v != from || (end && v != s.value)).then_some(round_to(v, STEP_DECIMALS).clamp(lo, hi))
+    (v != from || (end && v != s.value)).then_some(if exact { v } else { round_to(v, STEP_DECIMALS).clamp(lo, hi) })
 }
 
 /// The rail of [`color_slider_valued`] with the id `id`: its response, the new value from 0 to 1
@@ -409,48 +432,167 @@ pub fn hex_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>
     let label = take_previous_label(ui);
     ui.label(egui::RichText::new("#").size(15.0).color(t.text));
     let id = id_with(ui.scope_id(), id);
+    hex_text(ui, id, hex, |ui, buf, editing| {
+        let resp = egui::Frame::NONE
+            .fill(t.input)
+            .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
+            .corner_radius(5)
+            .inner_margin(egui::Margin::symmetric(6, 4))
+            .show(ui, |ui| {
+                // As tall as the other fields (26 points with the margin), whatever the font's line
+                // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
+                ui.spacing_mut().interact_size.y = 18.0;
+                ui.set_height(18.0);
+                ui.add(
+                    egui::TextEdit::singleline(buf)
+                        .id(id)
+                        .frame(egui::Frame::NONE)
+                        .align(egui::Align2::LEFT_CENTER)
+                        .desired_width(62.0)
+                        .char_limit(HEX_FIELD_CHARS)
+                        .font(egui::FontId::proportional(12.5))
+                        .text_color(t.text_strong),
+                )
+            })
+            .inner;
+        name_field(label_field(resp, label), name)
+    })
+}
+
+/// The most characters a hex field's text box holds: six digits and a `#`.
+pub(crate) const HEX_FIELD_CHARS: usize = 7;
+
+/// What happens to a paste into a hex field.
+#[derive(Debug, PartialEq, Eq)]
+enum HexPaste {
+    /// Hex digits that leave at most six digits with the text that stays: the text box inserts them.
+    Insert,
+    /// A full color code: its digits replace the field's, wherever the caret is.
+    Replace(String),
+    /// Anything else: the field stays as it was.
+    Ignore,
+}
+
+/// What a paste of `text` does to a hex field in which `kept` characters stay, not counting a typed `#`
+/// that stays. `whole` says the paste goes over all of the field's text. A code has three or six digits
+/// with or without `#`, and spaces and line breaks around it are ignored. Bare digits that do not go over
+/// the whole text are inserted when the result has at most six digits, except that three digits are
+/// inserted only when exactly three digits stay. Bare digits are not inserted when `before_hash` says the
+/// caret is before a `#` that stays. Any other code replaces the field's text, and any other paste is
+/// ignored.
+fn hex_paste(text: &str, kept: usize, whole: bool, before_hash: bool) -> HexPaste {
+    let code = text.trim();
+    let digits = code.strip_prefix('#').unwrap_or(code);
+    if digits.is_empty() || digits.len() > 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        HexPaste::Ignore
+    } else if digits == text && !whole && !before_hash && kept + digits.len() <= 6 && (digits.len() != 3 || kept == 3) {
+        HexPaste::Insert
+    } else if matches!(digits.len(), 3 | 6) {
+        HexPaste::Replace(digits.to_string())
+    } else {
+        HexPaste::Ignore
+    }
+}
+
+/// Takes this frame's pastes into hex field `id` from the events before its text box reads them, and
+/// applies each one that replaces `buf`, with the caret after the new digits. Returns whether one did.
+fn take_hex_paste(ui: &Ui, id: egui::Id, buf: &mut String) -> bool {
+    if !ui.memory(|m| m.has_focus(id)) {
+        return false;
+    }
+    let mut state = egui::TextEdit::load_state(ui.ctx(), id).unwrap_or_default();
+    let (start, selected) = state.cursor.char_range().map_or((0, 0), |r| {
+        let r = r.as_sorted_char_range();
+        (r.start.0, r.end.0 - r.start.0)
+    });
+    let replaced = ui.input_mut(|i| take_hex_pastes(&mut i.events, buf, start, selected));
+    if replaced {
+        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(buf.len()))));
+        state.store(ui.ctx(), id);
+    }
+    replaced
+}
+
+/// Removes the pastes from `events` that [`hex_paste`] does not leave to the text box, in order, and
+/// applies each one that replaces `buf`. The caret is at character `start` with `selected` characters
+/// selected. A replacement also drops the bare-digit pastes kept from earlier in the frame, which the text
+/// box would otherwise insert into the new digits. Returns whether a paste replaced `buf`.
+fn take_hex_pastes(events: &mut Vec<egui::Event>, buf: &mut String, start: usize, mut selected: usize) -> bool {
+    let mut replaced = false;
+    let mut kept_events = Vec::with_capacity(events.len());
+    for e in events.drain(..) {
+        let egui::Event::Paste(text) = &e else {
+            kept_events.push(e);
+            continue;
+        };
+        let len = buf.chars().count();
+        let hash = buf.starts_with('#') && start > 0;
+        let before_hash = buf.starts_with('#') && start == 0 && selected == 0;
+        match hex_paste(text, len.saturating_sub(selected + usize::from(hash)), selected > 0 && selected >= len, before_hash) {
+            HexPaste::Insert => kept_events.push(e),
+            HexPaste::Replace(digits) => {
+                *buf = digits;
+                selected = 0;
+                replaced = true;
+                kept_events.retain(|k| !matches!(k, egui::Event::Paste(_)));
+            }
+            HexPaste::Ignore => {}
+        }
+    }
+    *events = kept_events;
+    replaced
+}
+
+/// `digits` with a three-digit code written out as six by doubling each digit. Other text is unchanged.
+fn full_hex(digits: &str) -> String {
+    if digits.len() == 3 && digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        digits.chars().flat_map(|c| [c, c]).collect()
+    } else {
+        digits.to_string()
+    }
+}
+
+/// The text and commit rules of a hex field `id` showing `hex`; `draw` draws its text box with the
+/// text and whether the field has the focus. A click or keyboard focus selects the digits, a pasted
+/// code replaces them ([`hex_paste`]), and Enter, Shift+Enter (which keeps the focus outside dialogs),
+/// a press elsewhere and focus loss commit them. Returns the digits, without `#` and with a three-digit
+/// code written out as six, on commit when they were typed into the field and differ from `hex`.
+pub(crate) fn hex_text(ui: &mut Ui, id: egui::Id, hex: &str, draw: impl FnOnce(&mut Ui, &mut String, bool) -> Response) -> Option<String> {
     let editing = ui.memory(|m| m.has_focus(id));
+    // A press outside the field ends its editing in this frame, so the text typed is committed
+    // before the press acts, as in the numeric fields.
+    if editing
+        && let Some(at) = ui.input(|i| i.pointer.primary_pressed().then(|| i.pointer.interact_pos()).flatten())
+        && ui.ctx().read_response(id).is_some_and(|r| !r.rect.contains(at))
+    {
+        ui.memory_mut(|m| m.surrender_focus(id));
+    }
     // Until the user types into it, the field shows `hex` as it is now, also while it has the
     // focus. Tab can give it the focus in the frame another field commits an edit, before the edit
     // changes `hex`; the text from before that edit is not committed when the focus moves on
-    // (#1692).
+    // (#1692). A field drawn before this one can take the focus on a press, so `editing` is already
+    // false in the frame the field reports `lost_focus`: the text typed is still taken then. Escape
+    // drops it.
     let edited_id = id.with("edited");
-    let edited = editing && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
+    let had_focus = ui.memory(|m| m.had_focus_last_frame(id)) && !ui.input(|i| i.key_pressed(egui::Key::Escape));
+    let edited = (editing || had_focus) && ui.data_mut(|d| d.get_temp::<bool>(edited_id)).unwrap_or(false);
     let mut buf: String = if edited { ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| hex.to_string()) } else { hex.to_string() };
     if after_shift_enter(ui, id) {
         select_all(ui, id, &buf);
     }
     let kept = shift_enter_keeps_focus(ui, id);
-    let resp = egui::Frame::NONE
-        .fill(t.input)
-        .stroke(Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-        .corner_radius(5)
-        .inner_margin(egui::Margin::symmetric(6, 4))
-        .show(ui, |ui| {
-            // As tall as the other fields (26 points with the margin), whatever the font's line
-            // height: egui 0.37 gives a TextEdit the theme's interact height, so lower it here too.
-            ui.spacing_mut().interact_size.y = 18.0;
-            ui.set_height(18.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut buf)
-                    .id(id)
-                    .frame(egui::Frame::NONE)
-                    .align(egui::Align2::LEFT_CENTER)
-                    .desired_width(62.0)
-                    .char_limit(7)
-                    .font(egui::FontId::proportional(12.5))
-                    .text_color(t.text_strong),
-            )
-        })
-        .inner;
-    let resp = name_field(label_field(resp, label), name);
-    let commit = (resp.lost_focus() || kept) && buf != hex;
+    let pasted = take_hex_paste(ui, id, &mut buf);
+    let resp = draw(ui, &mut buf, editing);
+    select_all_on_focus(ui, &resp, &buf);
+    let digits = full_hex(buf.strip_prefix('#').unwrap_or(&buf));
+    let commit = (resp.lost_focus() || kept) && !digits.eq_ignore_ascii_case(hex);
+    let committed = commit.then_some(digits);
     let focused = ui.memory(|m| m.has_focus(id));
     ui.data_mut(|d| {
-        d.insert_temp(id, buf.clone());
-        d.insert_temp(edited_id, (edited || resp.changed()) && focused && !kept);
+        d.insert_temp(edited_id, (edited || pasted || resp.changed()) && focused && !kept);
+        d.insert_temp(id, buf);
     });
-    commit.then_some(buf)
+    committed
 }
 
 /// Position of hue `h` (degrees) and saturation `s` on a wheel of radius `r` around `c`.
@@ -627,4 +769,56 @@ pub fn region_texture(
     let img = renderer.render_region(doc, region, scale, true);
     let color = crate::canvas::color_image(&img);
     ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}
+
+#[cfg(test)]
+mod hex_paste_tests {
+    use super::{HexPaste, hex_paste, take_hex_pastes};
+
+    fn paste(text: &str) -> egui::Event {
+        egui::Event::Paste(text.into())
+    }
+
+    /// A paste with the caret before a `#` that stays never inserts bare digits ahead of it.
+    #[test]
+    fn bare_digits_are_not_inserted_before_a_hash_that_stays() {
+        assert_eq!(hex_paste("c", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("c", 3, false, true), HexPaste::Ignore);
+        assert_eq!(hex_paste("fff", 3, false, false), HexPaste::Insert);
+        assert_eq!(hex_paste("fff", 3, false, true), HexPaste::Replace("fff".into()));
+    }
+
+    /// Field text, caret, selected characters, pastes, text after, and pastes left for the text box.
+    type Case = (&'static str, usize, usize, &'static [&'static str], &'static str, usize);
+
+    #[test]
+    fn pastes_at_the_start_of_a_hash_field_and_over_it() {
+        let cases: [Case; 5] = [
+            ("#ab", 0, 0, &["fff"], "fff", 0),
+            ("#ab", 0, 0, &["c"], "#ab", 0),
+            ("#ab", 0, 1, &["c"], "#ab", 1),
+            ("#ab", 0, 3, &["fff"], "fff", 0),
+            ("#ab", 1, 0, &["c"], "#ab", 1),
+        ];
+        for (text, start, selected, pastes, after, left) in cases {
+            let mut buf = text.to_string();
+            let mut events: Vec<egui::Event> = pastes.iter().map(|p| paste(p)).collect();
+            take_hex_pastes(&mut events, &mut buf, start, selected);
+            assert_eq!((buf.as_str(), events.len()), (after, left), "{text:?} caret {start} selected {selected} pasting {pastes:?}");
+        }
+    }
+
+    /// A replacing paste drops the digits kept from earlier pastes in the same frame.
+    #[test]
+    fn a_replacing_paste_drops_earlier_inserts_in_the_frame() {
+        let mut buf = "a".to_string();
+        let mut events = vec![paste("b"), egui::Event::Text("x".into()), paste("fff")];
+        assert!(take_hex_pastes(&mut events, &mut buf, 1, 0));
+        assert_eq!(buf, "fff");
+        assert_eq!(events.len(), 1, "only the typed text is left");
+        let mut buf = "ab".to_string();
+        let mut events = vec![paste("c"), paste("d")];
+        assert!(!take_hex_pastes(&mut events, &mut buf, 2, 0));
+        assert_eq!((buf.as_str(), events.len()), ("ab", 2), "inserts alone stay for the text box");
+    }
 }

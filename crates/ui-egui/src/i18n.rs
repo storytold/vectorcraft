@@ -66,7 +66,7 @@ fn plural_czech(n: u64) -> usize {
     }
 }
 
-/// French: 0 and 1 are `one` (« 0 calque »), everything else `other`.
+/// French and Hindi integer counts: 0 and 1 are `one`, everything else `other`.
 fn plural_french(n: u64) -> usize {
     usize::from(n > 1)
 }
@@ -97,8 +97,18 @@ fn plural_polish(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 27] = [
+pub static LANGUAGES: [LangInfo; 28] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
+    // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
+    // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
+    LangInfo {
+        code: "hi",
+        name: "हिन्दी",
+        source: include_str!("i18n/hi.tsv"),
+        plural: plural_french,
+        complete_menus: true,
+        catalog: OnceLock::new(),
+    },
     // Greek: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `el-*` locale (including `el-GR` and `el-CY`) resolves here.
     LangInfo {

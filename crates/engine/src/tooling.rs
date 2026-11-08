@@ -117,6 +117,8 @@ impl Session {
         // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
+        // `switch_tool` returns early for the tool already active.
+        self.select_whole_instance(id);
         if again {
             let acts = self.with_tool_cx(view, |t, cx| t.chosen_again(cx));
             self.apply_actions(acts)?;
@@ -131,8 +133,9 @@ impl Session {
         if self.tool.id() == id {
             return Ok(());
         }
-        // Sampling type keeps its highlighted characters as the target. Capture before the
-        // Type tool deactivates (which commits typing and clears its editing state).
+        // Sampling type keeps its highlighted characters as the target, and a whole story that
+        // Select All selected. Capture before the Type tool deactivates (which commits typing and
+        // clears its editing state).
         let is_type = |id: &str| matches!(id, "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath");
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
@@ -146,14 +149,30 @@ impl Session {
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
+            self.select_whole_instance(id);
         }
         Ok(())
+    }
+
+    /// The selection tools other than Direct Selection pick whole objects: with one of them chosen,
+    /// an object selected in a symbol instance's art gives way to the instance. The revision
+    /// changes with it, so panels that cache by revision show the instance.
+    fn select_whole_instance(&mut self, id: &str) {
+        if id != "directSelection"
+            && vectorcraft_tools::catalog::is_selection_tool(id)
+            && let Some(st) = self.active_mut()
+            && st.selection.symbol_part.take().is_some()
+        {
+            st.revision += 1;
+        }
     }
 
     /// The selection tool Cmd lends tool `id` for a drag: the one chosen last; until one is,
     /// Direct Selection to the tools that edit anchors (the Pen) and Selection to the others.
     /// Cmd+Alt lends Group Selection while Direct Selection is active. Cmd still lends the last
     /// selection tool from other tools (Alt on the lent Direct Selection gesture stays copy/subtract).
+    /// Cmd alone lends Direct Selection the Selection tool, whose bounding box transforms the
+    /// object (#3901; <https://community.adobe.com/t5/illustrator-discussions/handles-disappar-on-shape-with-direct-selection-tool/m-p/14848662>).
     /// Perspective Selection keeps Cmd+Alt drags to copy objects on their perspective plane.
     /// None for the other selection tools and the view tools.
     fn lent_tool(&self, id: &str, mods: &Mods) -> Option<&'static str> {
@@ -161,8 +180,8 @@ impl Session {
         if matches!(id, "hand" | "zoom" | "rotateView") {
             return None;
         }
-        if id == "directSelection" && mods.cmd && mods.alt {
-            return Some("groupSelection");
+        if id == "directSelection" && mods.cmd {
+            return Some(if mods.alt { "groupSelection" } else { "selection" });
         }
         if id == "perspectiveSelection" && mods.cmd && mods.alt {
             return None;
@@ -171,6 +190,16 @@ impl Session {
             return None;
         }
         Some(self.last_selection_tool.unwrap_or(if edits_anchors(id) { "directSelection" } else { "selection" }))
+    }
+
+    /// The selection tool a press with `mods` would borrow from the active tool
+    /// ([`Self::lend_selection_tool`]), as [`Self::cursor`] shows it: the canvas also shows what
+    /// that tool shows (Direct Selection with Cmd held shows the bounding box).
+    pub fn lent_tool_id(&self, mods: &Mods) -> Option<&'static str> {
+        if !mods.cmd || self.lender.is_some() {
+            return None;
+        }
+        self.lent_tool(self.tool.id(), mods)
     }
 
     /// A press with Cmd held (Ctrl elsewhere) and any other tool than a selection tool: the
@@ -187,6 +216,8 @@ impl Session {
             // Fails only without a document, and then there is no typing to keep.
             let _ = crate::cmd::settle_interaction(self);
         }
+        // The Selection and Group Selection tools act on the instance whole.
+        self.select_whole_instance(id);
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
@@ -306,6 +337,11 @@ impl Session {
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
             selection_tolerance: self.prefs.selection_tolerance,
+            marquee_mode: match self.prefs.marquee_selection.as_str() {
+                "enclosed" => vectorcraft_tools::MarqueeMode::Enclosed,
+                "directional" => vectorcraft_tools::MarqueeMode::Directional,
+                _ => vectorcraft_tools::MarqueeMode::Touching,
+            },
             anchor_size: self.prefs.anchor_size,
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
@@ -319,6 +355,7 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            typed_lists: self.prefs.typed_lists,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
             anchor_path_labels: self.prefs.anchor_path_labels,
@@ -326,6 +363,7 @@ impl Session {
             transform_tools_guides: self.prefs.transform_tools_guides,
             spacing_guides: self.prefs.spacing_guides,
             distance_guides: self.prefs.distance_guides,
+            snap_to_last_location: self.prefs.snap_to_last_location,
             snapping_tolerance: self.prefs.snapping_tolerance,
             construction_angles: if self.prefs.construction_guides {
                 vectorcraft_tools::guides::construction_angles(&self.prefs.construction_angles)
@@ -563,6 +601,11 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
+        // A key that cancels a gesture may put back options the gesture changed (Escape on an
+        // arc, spiral or grid drag): keep them.
+        if acts.contains(&Action::Cancel) {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 
@@ -861,9 +904,22 @@ impl Session {
 
     /// End the Type tool's text editing before a command saves the art of an editing layer (pattern
     /// editing's Done, Stop Editing Opacity Mask): point type its click placed that is still empty is
-    /// discarded first, so it is not saved into the pattern tile or the mask.
+    /// discarded first, so it is not saved into the pattern tile or the mask. A selection tool that a
+    /// Cmd press lent is given back first, so the Type tool behind it ends its edit too; a drag of the
+    /// lent tool is kept as its own step, as its release would keep it.
     pub(crate) fn end_text_edit(&mut self) {
-        if self.in_tool_actions || !self.tool.wants_text() {
+        if self.in_tool_actions {
+            return;
+        }
+        if self.lender.is_some() {
+            if let Err(e) = self.apply_actions(vec![Action::Commit]) {
+                log::warn!("keeping the lent tool's drag before ending the text edit: {e}");
+            }
+            if let Err(e) = self.give_back_tool(self.last_view) {
+                log::warn!("giving back the lent tool before ending the text edit: {e}");
+            }
+        }
+        if !self.tool.wants_text() {
             return;
         }
         let acts = self.with_tool_cx(self.last_view, |t, cx| t.deactivate(cx));
@@ -1015,23 +1071,13 @@ impl Session {
 /// `crates/ui-egui/src/canvas/outline.rs`). Past it the selection's bounds are drawn instead.
 const FEEDBACK_MAX_POINTS: usize = 100_000;
 
-/// The outline of every selected object, or the selection's bounds when the outlines have more than
-/// [`FEEDBACK_MAX_POINTS`] points.
+/// The outlines of every selected object, a group's members each with their own, or the selection's
+/// bounds when the outlines' points and the objects evaluated to make them come to more than
+/// [`FEEDBACK_MAX_POINTS`].
 fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    let mut left = FEEDBACK_MAX_POINTS;
-    let mut outlines = vec![];
-    for &id in &selection.objects {
-        let Some((path, _)) = doc.node(id).and_then(|n| vectorcraft_render::drawn_outline(doc, n)) else { continue };
-        let points = path.elements().iter().filter(|el| !matches!(el, kurbo::PathEl::ClosePath)).count();
-        let Some(l) = left.checked_sub(points) else {
-            return doc
-                .bounds_of(&selection.objects, true)
-                .map(|b| Overlay::Path { path: vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false })
-                .into_iter()
-                .collect();
-        };
-        left = l;
-        outlines.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false });
-    }
-    outlines
+    let nodes = selection.objects.iter().filter_map(|&id| doc.node(id));
+    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS).unwrap_or_else(|| {
+        doc.bounds_of(&selection.objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect()
+    });
+    outlines.into_iter().map(|path| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false }).collect()
 }

@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use egui::{Color32, Sense, Ui, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
-use vectorcraft_engine::cmd::textstyles;
+use vectorcraft_engine::cmd::{fileio, textstyles};
 
 use super::character::{end_typing, text_editing, text_style};
 use super::memo::Memo;
@@ -191,6 +191,18 @@ fn target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
     p
 }
 
+/// [`target`] for applying a style: after Select All in threaded text, all the text of every
+/// frame of the story.
+fn apply_target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
+    match super::character::text_story(app) {
+        Some(story) if text_editing(app).is_some() => {
+            p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>());
+            p
+        }
+        _ => target(app, kind, p),
+    }
+}
+
 /// Open New Character Style (`Kind::Para`: New Paragraph Style) to name a style made from the
 /// selected text: `ui.newCharStyle` and `ui.newParaStyle`.
 pub(crate) fn open_new(app: &mut VectorcraftApp, kind: Kind) -> Result<Value, String> {
@@ -277,7 +289,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
         sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
         // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel.
         if has_text && !(m.shift || m.command) {
-            let p = target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
+            let p = apply_target(app, kind, json!({ "name": name, "clearOverrides": m.alt }));
             app.run(&format!("{}.apply", kind.prefix()), p).ok();
         }
     }
@@ -327,7 +339,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
 
 /// The panel menu. Select All Unused highlights the styles no text uses (`charStyle.unused`,
 /// `paraStyle.unused`), Duplicate copies every highlighted style and highlights the copies, and
-/// Delete deletes every highlighted style but the Normal style.
+/// Delete deletes every highlighted style but the Normal style. Load Character Styles… (Load
+/// Paragraph Styles…) and Load All Styles… add the styles of a document picked in an open dialog
+/// ([`load`]); they are off without an open document or an open dialog.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let all = styles(app, kind);
     let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
@@ -364,7 +378,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if menu_item(ui, tl!("Clear Overrides"), sel.is_some() && has_text, false)
         && let Some(n) = &sel
     {
-        app.run(&format!("{p}.apply"), target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
+        app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
     }
     if menu_item(ui, &crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]), sel.is_some() && has_text, false)
         && let Some(n) = &sel
@@ -382,6 +396,37 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
         }
     }
+    ui.separator();
+    // As commands, so a file dialog shown off the UI thread loads the styles when it answers.
+    let can_load = app.session.active().is_some() && app.services.pick_open.is_some();
+    let one = if kind == Kind::Char {
+        (tl!("Load Character Styles…"), "ui.loadCharStyles")
+    } else {
+        (tl!("Load Paragraph Styles…"), "ui.loadParaStyles")
+    };
+    for (label, cmd) in [one, (tl!("Load All Styles…"), "ui.loadAllStyles")] {
+        if menu_item(ui, label, can_load, false)
+            && let Err(e) = app.run(cmd, json!({}))
+        {
+            app.status(e);
+        }
+    }
+}
+
+/// Load Character Styles…, Load Paragraph Styles… and Load All Styles… (`ui.loadCharStyles`,
+/// `ui.loadParaStyles`, `ui.loadAllStyles`): the engine command `load` (`charStyle.load`,
+/// `paraStyle.load`, `textStyle.loadAll`) on the document at `path`, else on one picked in an open
+/// dialog. A cancelled dialog loads nothing.
+pub(crate) fn load(app: &mut VectorcraftApp, load: &str, path: Option<String>) -> Result<Value, String> {
+    let path = match path {
+        Some(path) => path,
+        None => {
+            let pick = crate::FilePick { filters: crate::FilePick::filters(fileio::open_filters()), ..Default::default() };
+            let Some(path) = crate::picks::open(app, &pick) else { return Ok(Value::Null) };
+            path
+        }
+    };
+    app.run(load, json!({ "path": path }))
 }
 
 #[cfg(test)]

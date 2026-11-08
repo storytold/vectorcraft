@@ -444,6 +444,40 @@ fn text_on_path_roundtrip() {
     assert!(close_rect(doc_path, PathData::from_bezpath(&curve).bounds().unwrap(), 0.01), "{doc_path:?}");
 }
 
+/// Centred and right-aligned type on a path anchors where the layout aligns it: the middle or the
+/// end of its span, wrapped on a closed path. It reads back drawn where it was.
+#[test]
+fn aligned_text_on_path_anchors_within_its_span() {
+    use vectorcraft_doc::Justify;
+    use vectorcraft_geom::Shape;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    let circle = vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 60.0).to_path(0.01);
+    let drawn = |t: &TextObject| t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
+    for (path, start, justify, offset) in [
+        (&curve, 0.25, Justify::Center, "62.5%"),
+        (&curve, 0.25, Justify::Right, "100%"),
+        (&curve, 0.25, Justify::Left, "25%"),
+        (&circle, 0.7, Justify::Center, "20%"),
+    ] {
+        let mut d = Document::new(200.0, 200.0);
+        let mut t = TextObject::point(Point::ZERO, "Aligned", CharStyle { size: 14.0, ..CharStyle::default() });
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(path), start, end: None };
+        t.para.justify = justify;
+        let before = drawn(&t);
+        let id = d.alloc_id();
+        let d = doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(svg.contains(&format!("startOffset=\"{offset}\"")), "{justify:?} at {start}: {svg}");
+        if path == &curve {
+            let r = import(&svg).unwrap();
+            let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+            assert!(close_rect(drawn(t), before, 0.5), "{justify:?}: {:?} {before:?}", drawn(t));
+        }
+    }
+}
+
 /// An end bracket, Align to Path or Spacing, which `<textPath>` can't express, keep their look as
 /// outlines (#429).
 #[test]
@@ -464,6 +498,32 @@ fn text_on_path_options_svg_cannot_express_are_outlined() {
         let id = d.alloc_id();
         let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
         assert!(!svg.contains("<textPath"), "{set}: {svg}");
+    }
+}
+
+/// Type on a path with Skew, 3D Ribbon, Stair Step or Gravity, whose glyphs a `<textPath>` would
+/// turn with the path as Rainbow does, keeps its look as outlines, with spacing or without it;
+/// Rainbow stays a `<textPath>`.
+#[test]
+fn text_on_path_effects_svg_cannot_express_are_outlined() {
+    use vectorcraft_doc::PathEffect;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    for effect in PathEffect::ALL {
+        for spacing in [0.0, 4.0] {
+            let mut d = Document::new(200.0, 200.0);
+            let mut t = TextObject::point(Point::ZERO, "On a curve", CharStyle { size: 14.0, ..CharStyle::default() });
+            t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+            t.path_effect = effect;
+            t.path_spacing = spacing;
+            let id = d.alloc_id();
+            let (svg, warnings) =
+                vectorcraft_svg::export_with_report(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+            let live = effect == PathEffect::Rainbow && spacing == 0.0;
+            assert_eq!(svg.contains("<textPath"), live, "{effect:?} {spacing}: {svg}");
+            assert_eq!(warnings.iter().any(|w| w.contains("outlined")), !live, "{effect:?} {spacing}: {warnings:?}");
+        }
     }
 }
 

@@ -361,3 +361,17 @@ fn damaged_files_are_refused_with_a_message() {
         assert!(!is_pxr(&bad), "{bad:?}");
     }
 }
+
+#[test]
+fn tile_pointers_into_the_header_or_table_are_refused() {
+    // Tile data follows the tile pointer table, which ends at byte 520 in a one-tile picture.
+    let rgb = one(head(2, 1, RGB, 2), &[1, 2, 3, 4, 5, 6]);
+    for pointer in [4u32, 511, 512, 519] {
+        let mut inside = rgb.clone();
+        inside[512..516].copy_from_slice(&pointer.to_le_bytes());
+        let e = raster_image(&inside).err().expect("refused").to_string();
+        assert_eq!(e, "the Pixar file's image data is damaged", "a pointer to byte {pointer}");
+    }
+    // A pointer at the table's end reads.
+    assert_eq!(pixels(&rgb), [[1, 2, 3, 255], [4, 5, 6, 255]]);
+}

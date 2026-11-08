@@ -34,9 +34,12 @@ impl Default for View {
 }
 
 impl View {
-    /// The view a document opens at: the one it was saved with, else fitted on first display.
+    /// The view a document opens at: the one it was saved with, else fitted on first display, on
+    /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
+    /// else the first.
     pub fn of(st: &vectorcraft_engine::DocState) -> Self {
-        st.view.as_ref().and_then(Self::saved).unwrap_or_default()
+        let artboard = st.doc.opened_artboard.and_then(|id| st.doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
+        Self { artboard, ..st.view.as_ref().and_then(Self::saved).unwrap_or_default() }
     }
 
     /// The view `v` saved (the one a document was saved with, or a View → New View… one), within
@@ -201,6 +204,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
+    (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
@@ -325,6 +329,18 @@ impl Dialog {
     }
 }
 
+/// The last Replace Font request whose warning the status bar shows, to refresh it as the
+/// document changes.
+#[derive(Clone, Debug)]
+pub struct ReplaceFontWarning {
+    pub document_uid: u64,
+    pub revision: u64,
+    pub request: serde_json::Value,
+    pub selection: Option<Vec<u64>>,
+    pub text: String,
+    pub styles: Vec<(String, String)>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
@@ -355,6 +371,9 @@ pub struct UiState {
     #[serde(skip)]
     pub transient_focus: bool,
     pub control_bar: bool,
+    /// The Control bar is docked to the bottom of the window instead of the top
+    /// (`window.control.dock`).
+    pub control_bar_bottom: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -366,6 +385,10 @@ pub struct UiState {
     /// starts under the selection at every launch.
     #[serde(skip)]
     pub task_bar_place: TaskBarPlace,
+    /// The Pathfinder panel's Shape Mode buttons make a compound shape on a click, and give the
+    /// permanent Pathfinder result on Alt-click (off, the default: the other way round).
+    #[serde(default)]
+    pub shape_modes_compound: bool,
     /// The locked objects under the pointer at the last right-click on the canvas, with the
     /// document's `uid`: the context menu's Unlock submenu lists them while the menu is open. Not
     /// saved.
@@ -378,6 +401,15 @@ pub struct UiState {
     /// is open. Not saved.
     #[serde(skip)]
     pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
+    /// What the last right-click on the canvas with the Artboard tool measured, for the context menu
+    /// while it is open ([`crate::panels::artboards::MenuFacts`]). Not saved.
+    #[serde(skip)]
+    pub context_artboards: Option<crate::panels::artboards::MenuFacts>,
+    /// Which link statuses the active document's images and placed documents have, for Select ›
+    /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
+    /// [`crate::addons::select::link_status::refresh`]). Not saved.
+    #[serde(skip)]
+    pub link_statuses: crate::addons::select::link_status::Present,
     /// Last tool shown in each toolbar slot (keyed by the slot's first tool id).
     #[serde(default)]
     pub slot_tool: std::collections::BTreeMap<String, String>,
@@ -428,9 +460,14 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
-    /// docked at the window's left edge.
+    /// docked at the window's left edge, or beside the canvas with [`Self::tools_beside_canvas`].
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
+    /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
+    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    #[serde(default)]
+    pub tools_beside_canvas: bool,
     pub status_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -452,6 +489,9 @@ pub struct UiState {
     /// Last tool shown for each toolbar group (flyout selection sticks).
     pub group_tool: Vec<String>,
     pub status: String,
+    /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
+    #[serde(skip)]
+    pub replace_font_warning: Option<ReplaceFontWarning>,
     pub palette_open: bool,
     pub palette_query: String,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
@@ -496,6 +536,12 @@ pub struct UiState {
     /// adds a new action, as after Begin Recording.
     #[serde(skip)]
     pub recording_into: Option<u64>,
+    /// How actions play (Actions panel menu › Playback Options…), kept with the UI preferences.
+    #[serde(default, deserialize_with = "crate::panels::actions::deserialize_playback")]
+    pub action_playback: crate::panels::actions::PlaybackOptions,
+    /// The playback at Step by Step or Pause For in progress, if any. Not saved.
+    #[serde(skip)]
+    pub action_playing: Option<crate::panels::actions::Playing>,
     /// Keyboard shortcut overrides: command id, `tool:<id>` or `panel:<id>` → chord ("" = none),
     /// stored in the form every earlier version reads.
     #[serde(default, with = "crate::keymap::stored")]
@@ -587,6 +633,11 @@ pub struct UiState {
     /// place, [`crate::dialogs::settle`] puts the document back at the front of `pending_fonts`.
     #[serde(skip)]
     pub fonts_dialog: Option<u64>,
+    /// The plug-in (`{id, file, name, label}`) the last launch was loading when it stopped, while
+    /// the user has not chosen what to do about it. When another dialog takes the choice's place,
+    /// [`crate::dialogs::settle`] opens the choice again once no dialog is open.
+    #[serde(skip)]
+    pub stopped_plugin: Option<Value>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -645,6 +696,9 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
+    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
+    #[serde(default)]
+    pub navigator_panel: crate::panels::navigator::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
     /// Search All text does.
     #[serde(skip)]
@@ -921,13 +975,17 @@ impl Default for UiState {
             transient_panel: None,
             transient_focus: false,
             control_bar: false,
+            control_bar_bottom: false,
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
             task_bar: true,
             task_bar_place: TaskBarPlace::default(),
+            shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
+            context_artboards: None,
+            link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],
             toolbar_edits: ToolbarEdits::default(),
@@ -944,6 +1002,7 @@ impl Default for UiState {
             docking_generation: 0,
             dock_width: None,
             toolbar_pos: None,
+            tools_beside_canvas: false,
             status_bar: true,
             dock: true,
             tab_hid: None,
@@ -954,6 +1013,7 @@ impl Default for UiState {
             flyout: None,
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             status: String::new(),
+            replace_font_warning: None,
             palette_open: false,
             palette_query: String::new(),
             screen_mode: 0,
@@ -967,6 +1027,8 @@ impl Default for UiState {
             action_sets_selected: vec![],
             recording: None,
             recording_into: None,
+            action_playback: Default::default(),
+            action_playing: None,
             shortcut_overrides: Default::default(),
             shortcut_set: default_shortcut_set(),
             workspace: default_workspace(),
@@ -992,6 +1054,7 @@ impl Default for UiState {
             made_text_style: vec![],
             pending_fonts: vec![],
             fonts_dialog: None,
+            stopped_plugin: None,
             dialog_search: None,
             links_search: None,
             dxf_options: Value::Null,
@@ -1007,6 +1070,7 @@ impl Default for UiState {
             home: None,
             trace_hold_source: None,
             layers_panel: Default::default(),
+            navigator_panel: Default::default(),
             layers_filter: Default::default(),
             image_trace_advanced: true,
             image_trace_preview: true,
@@ -1157,6 +1221,30 @@ mod tests {
         assert_eq!(zoom_from_display_percent(100.0, false), 1.0);
         assert_eq!(zoom_label(b, true), "100%");
         assert_eq!(next_zoom_with_display(b, true, true), zoom_from_display_percent(150.0, true));
+    }
+
+    #[test]
+    fn a_document_opens_on_the_artboard_its_file_names_as_active() {
+        let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+        let first = doc.artboards[0].clone();
+        for id in [2, 3] {
+            let x0 = f64::from(id - 1) * 150.0;
+            doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+        }
+        let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        for (opened, active) in [(Some(3), 2), (None, 0), (Some(9), 0)] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            app.session.add_document(d, None);
+            app.sync_views();
+            assert_eq!(app.view().map(|v| v.artboard), Some(active), "{opened:?}");
+        }
+        // With the view the document was saved with too.
+        doc.opened_artboard = Some(2);
+        doc.last_view = Some(vectorcraft_doc::SavedView { name: String::new(), center: Point::new(400.0, 50.0), zoom: 2.0, rotation: 0.0 });
+        app.session.add_document(doc, None);
+        app.sync_views();
+        assert_eq!(app.view().map(|v| (v.artboard, v.zoom)), Some((1, 2.0)));
     }
 
     #[test]

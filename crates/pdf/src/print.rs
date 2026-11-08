@@ -338,6 +338,8 @@ impl PlannedSheet {
             clip: true,
             marks: self.marks.as_ref(),
             negative: self.negative,
+            // A printed sheet has no links to click.
+            links: false,
         }
     }
 }

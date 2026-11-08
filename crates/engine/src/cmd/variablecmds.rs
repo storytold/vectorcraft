@@ -181,6 +181,21 @@ fn not_a_target(doc: &vectorcraft_doc::Document, id: NodeId) -> String {
     }
 }
 
+/// Refuse to bind the text variable `name` to type that already has a different text variable:
+/// a type object holds one text variable. The error names the one it has (the first defined, in
+/// a document that holds two). An object already bound to `name` is not refused, and variables
+/// of other kinds are not counted.
+fn check_one_text_variable(doc: &vectorcraft_doc::Document, ids: &[NodeId], name: &str, cmd: &str) -> Result<()> {
+    for id in ids {
+        let Some(bound) = doc.variables.bindings.get(id).filter(|b| !b.contains(name)) else { continue };
+        let held = doc.variables.variables.iter().find(|v| v.kind == VariableKind::Text && bound.contains(&v.name));
+        if let Some(v) = held {
+            return Err(bad(cmd, format!("node {} already has the text variable `{}`", id.0, v.name)));
+        }
+    }
+    Ok(())
+}
+
 fn dataset_value(cmd: &str, var: &str, kind: VariableKind, v: &Value) -> Result<DataValue> {
     match kind {
         VariableKind::Text => v.as_str().map(|t| DataValue::Text(t.to_string())),
@@ -284,6 +299,9 @@ fn make_dynamic(s: &mut Session, kind: VariableKind, stem: &str) -> Result<Value
         name = format!("{base} {n}");
         n += 1;
     }
+    if kind == VariableKind::Text {
+        check_one_text_variable(doc, &ids, &name, c)?;
+    }
     s.edit("Make Dynamic", |d, _| {
         d.variables.variables.push(Variable { name: name.clone(), kind });
         for id in &ids {
@@ -345,6 +363,9 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = &s.doc()?.doc;
     let kind = doc.variables.variable(&name).map(|v| v.kind).ok_or_else(|| bad(C, format!("no variable named `{name}`")))?;
     check_bindable(doc, &ids, kind, C)?;
+    if kind == VariableKind::Text {
+        check_one_text_variable(doc, &ids, &name, C)?;
+    }
     // Binding again is not a second binding, and says so rather than counting as a change.
     let already: Vec<u64> = ids.iter().filter(|id| doc.variables.objects_of(&name).contains(id)).map(|id| id.0).collect();
     let n = edit_variables(s, "Bind Variable", |v| Ok(ids.iter().filter(|id| v.bind(**id, &name)).count()))?;
@@ -738,7 +759,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bind Variable",
             ["Window", "Variables"],
             None,
-            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art is refused. An object may hold several variables, and binding it to one it already has changes nothing → {bound, already}",
+            "{variable, ids?} bind objects (default: the selection) to a variable; text needs type, image needs an image object, graph needs a graph root, locked art is refused. A type object holds one text variable: binding it to another text variable is refused, and the error names the one it has. Variables of other kinds can share an object, and binding an object to a variable it already has changes nothing → {bound, already}",
             has_doc,
             bind
         ),
@@ -856,7 +877,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Variable Library…",
             ["Window", "Variables"],
             None,
-            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every variable of the document is deleted with its bindings and values, and every data set is deleted; then variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
+            "{path? | xml? | dataBase64?} replace the document's variables and data sets with a variable library's (XML: `variableSets` › `variableSet` › `variables` of `variable` elements with `varName` and `trait`, and `sampleDataSets` of `sampleDataSet` elements with `dataSetName`) in one undo step (none when the document already holds what the library gives). Every data set is deleted, and every variable of the document is deleted with its bindings and values except a text variable the library also declares, which keeps its bindings; then the library's other variables whose `trait` is `textcontent` are defined as text variables, unbound, and each data set takes a value for a variable from the `p` elements of the element named after it, one paragraph each. Variables of other kinds are left out and named in `skipped` and `warning`. Refused while the variables are locked when it would delete or define a variable → {variables, deleted, deletedDataSets, names, skipped, warning?}",
             has_doc,
             load_library
         ),

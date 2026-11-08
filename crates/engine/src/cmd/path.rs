@@ -10,8 +10,8 @@ use super::create::anchor_from_json;
 use super::draw2::usize_opt;
 use super::pathops::Beside;
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selection,
-    id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
+    CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_anchors, has_doc, has_selected_path,
+    has_selection, id_param, ids_param, index, number_or, ok, str_param, switch_or, targets,
 };
 use crate::EngineError;
 
@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected)",
+            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
             has_selection,
             move_anchors
         ),
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             None,
             "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
-            has_doc,
+            has_selected_path,
             reverse
         ),
         cmd!(
@@ -86,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+J"),
             "{ids?: [path, ...] (default: the selected paths; a compound path ID expands to its open member paths), subpaths?: [usize, usize] (which subpaths to join), ends?: [\"first\"|\"last\", \"first\"|\"last\"] (which end of each path to join, for two paths/subpaths; default without ids: direct-selected ends if any, else the nearest pair; default with ids: the nearest pair), to?: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours)} join two or more open paths/subpaths into one (the first keeps its id, selected), or close a single open path; without ids, direct-selected anchors lying on one another along a path merge into one anchor instead",
-            has_selection,
+            has_selected_path,
             join
         ),
         cmd!(
@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+J"),
             "{axis?: \"horizontal\"|\"vertical\"|\"both\"}",
-            has_selection,
+            has_selected_path,
             average
         ),
         cmd!(
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Object", "Path"],
             Some("Cmd+Alt+Shift+J"),
             "{to: \"corner\"|\"smooth\" (the joined anchor: corner retracts both handles, smooth pulls handles in line with the neighbours), ids?: [path, ...] (default: the selection; a compound path ID expands to its open member paths)} move two open path ends to their midpoint and join them there, as one undo step: the two direct-selected anchors when they are open path ends, else the nearest ends of the two open paths in ids or the selection (or both ends of one open path, closing it) → the joined path stays selected",
-            has_selection,
+            has_selected_path,
             average_join
         ),
         cmd!(
@@ -112,7 +112,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert Anchor Points",
             [],
             None,
-            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
+            "{to: \"corner\"|\"smooth\"} convert the direct-selected anchors (all anchors of fully selected paths, every point of a selected blend's spine; a spine from Replace Spine changes only its handles, its points and the keys' spread along it staying as they are) as one undo step: corner retracts both handles, smooth pulls handles in line with the neighbours (smooth anchors keep theirs)",
             has_selection,
             convert_anchors
         ),
@@ -226,6 +226,8 @@ fn close(s: &mut Session, p: &Value) -> Result<Value> {
 pub(crate) fn move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     let d = Vec2::new(number_or(p, "dx", 0.0, "path.moveAnchors")?, number_or(p, "dy", 0.0, "path.moveAnchors")?);
     check_switches(p, &["patterns"], "path.moveAnchors")?;
+    // An object selected in a symbol instance's art stays where the symbol puts it.
+    super::edit::refuse_symbol_part(s)?;
     // Objects selected whole move as objects, and their pattern tiles move with them when
     // `patterns` (default: General › Transform Pattern Tiles) is on.
     let whole = s.doc()?.selection.whole();
@@ -260,11 +262,19 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
                             *a = a.transform(xf);
                         }
                     }
+                    // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
+                    // to the pixel grid again after its anchors move.
+                    let top = compound_or_self(doc, *id);
+                    if let Some(n) = doc.node_mut(top) {
+                        super::object::snap_if_aligned(n);
+                    }
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
                         n.transform(xf, sc);
+                        super::object::keep_pixel_aligned(n, sc);
                     }
+                    super::object::keep_compound_aligned(doc, *id, sc);
                 }
             }
         }
@@ -306,6 +316,12 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         *a = a.transform(vectorcraft_geom::Affine::translate(pos - a.p));
+        // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps to the
+        // pixel grid again.
+        let top = compound_or_self(d, id);
+        if let Some(n) = d.node_mut(top) {
+            super::object::snap_if_aligned(n);
+        }
         Ok(())
     })?;
     ok()
@@ -335,13 +351,14 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
+        super::object::resnap(d, id);
         Ok(())
     })?;
     ok()
 }
 
 /// The compound path enclosing `id`, or `id` itself if it is not inside a compound path.
-pub(super) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
+pub(crate) fn compound_or_self(d: &Document, id: NodeId) -> NodeId {
     d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))).unwrap_or(id)
 }
 
@@ -1155,11 +1172,7 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        for id in &blends {
-            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
-            let pinned = path.clone();
-            let Some(sp) = path.subpaths.first_mut() else { continue };
+        let convert = |sp: &mut SubPath| {
             for ai in 0..sp.anchors.len() {
                 if smooth {
                     sp.smooth_anchor(ai);
@@ -1167,6 +1180,21 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
                     a.retract();
                 }
             }
+        };
+        for id in &blends {
+            let Some(NodeKind::Blend { children, spec }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            // A spine from Replace Spine keeps its points and its keys spread along it: only the
+            // handles change, and the keys are not pinned to points.
+            if vectorcraft_doc::live::blend_spine(children, spec).is_some_and(|(_, anchors)| anchors.is_none()) {
+                if let Some(sp) = spec.spine.as_mut().and_then(|p| p.subpaths.first_mut()) {
+                    convert(sp);
+                }
+                continue;
+            }
+            let Some((mut path, anchors)) = vectorcraft_doc::live::pin_spine(children, spec) else { continue };
+            let pinned = path.clone();
+            let Some(sp) = path.subpaths.first_mut() else { continue };
+            convert(sp);
             // A spine the conversion leaves as it was stays as the blend has it.
             if path != pinned {
                 spec.key_anchors = anchors.iter().map(|a| u32::try_from(*a).unwrap_or(u32::MAX)).collect();
@@ -1178,7 +1206,9 @@ fn convert_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
+pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
+    // `guides: true` (Cut, #3226): the selected ruler guides go in the same undo step.
+    let with_guides = switch_or(p, "guides", false, "path.deleteAnchors")?;
     let st = s.doc()?;
     let sel = st.selection.anchors.clone();
     let segments = st.selection.segments.clone();
@@ -1186,6 +1216,10 @@ pub(crate) fn delete_anchors(s: &mut Session, _: &Value) -> Result<Value> {
     // also catches part of another path must still delete those whole objects.
     let whole = st.selection.whole();
     s.edit("Clear", |d, selection| {
+        if with_guides {
+            let gone = selection.guides.clone();
+            d.retain_guides(selection, |i, _| !gone.contains(&i));
+        }
         let targets: BTreeSet<NodeId> = whole.into_iter().filter(|id| d.node(*id).is_some_and(|n| !n.is_layer())).collect();
         let whole_ids: Vec<NodeId> = targets
             .iter()
