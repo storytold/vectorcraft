@@ -6309,6 +6309,16 @@ breakText	Glyphs	Glify
 @msg	path must be a list of child indices	path musi być listą indeksów elementów podrzędnych
 @msg	no object at path {shown} in the symbol's art	brak obiektu w ścieżce {shown} w grafice symbolu
 @msg	give fill, stroke, opacity and/or blend	podaj fill, stroke, opacity i/lub blend
+@msg	{key} cannot be set on a guide	nie można ustawić {key} dla linii pomocniczej
+@msg	{key} cannot be set on a blend	nie można ustawić {key} dla przejścia
+@msg	{key} cannot be set on an envelope	nie można ustawić {key} dla koperty
+@msg	{key} cannot be set on a gradient mesh	nie można ustawić {key} dla siatki gradientowej
+@msg	{key} cannot be set on a Repeat	nie można ustawić {key} dla powtórzenia
+@msg	{key} cannot be set on a placed document	nie można ustawić {key} dla umieszczonego dokumentu
+@msg	{key} cannot be set on an Intertwine group	nie można ustawić {key} dla grupy przeplatania
+@msg	stroke cannot be set on a symbol instance	nie można ustawić stroke dla wystąpienia symbolu
+@msg	fill on a symbol instance must be a solid color or none	fill wystąpienia symbolu musi być jednolitym kolorem lub none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	nie można ustawić {key} dla obrazu bez efektu Konwertuj na kształt lub Kontur obiektu
 @msg	pass newName, registration, exportType, nineSlice and/or type	podaj newName, registration, exportType, nineSlice i/lub type
 	Text Flow	Przepływ tekstu
 	By Rows	Wierszami

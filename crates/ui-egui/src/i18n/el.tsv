@@ -6406,6 +6406,16 @@ breakText	Glyphs	Γλύφοι
 @msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
 @msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
 @msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
+@msg	{key} cannot be set on a guide	το {key} δεν μπορεί να οριστεί σε οδηγό
+@msg	{key} cannot be set on a blend	το {key} δεν μπορεί να οριστεί σε ανάμειξη
+@msg	{key} cannot be set on an envelope	το {key} δεν μπορεί να οριστεί σε περίβλημα
+@msg	{key} cannot be set on a gradient mesh	το {key} δεν μπορεί να οριστεί σε πλέγμα ντεγκραντέ
+@msg	{key} cannot be set on a Repeat	το {key} δεν μπορεί να οριστεί σε επανάληψη
+@msg	{key} cannot be set on a placed document	το {key} δεν μπορεί να οριστεί σε τοποθετημένο έγγραφο
+@msg	{key} cannot be set on an Intertwine group	το {key} δεν μπορεί να οριστεί σε ομάδα διαπλοκής
+@msg	stroke cannot be set on a symbol instance	το stroke δεν μπορεί να οριστεί σε στιγμιότυπο συμβόλου
+@msg	fill on a symbol instance must be a solid color or none	το fill ενός στιγμιότυπου συμβόλου πρέπει να είναι συμπαγές χρώμα ή none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	το {key} δεν μπορεί να οριστεί σε εικόνα χωρίς το εφέ «Μετατροπή σε σχήμα» ή «Μετατροπή αντικειμένου σε περιγράμματα»
 @msg	pass newName, registration, exportType, nineSlice and/or type	δώστε newName, registration, exportType, nineSlice ή/και type
 	Text Flow	Ροή κειμένου
 	By Rows	Κατά γραμμές

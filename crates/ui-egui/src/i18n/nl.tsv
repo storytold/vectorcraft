@@ -6331,6 +6331,16 @@ breakText	Glyphs	Glyphs
 @msg	path must be a list of child indices	path moet een lijst met onderliggende indexen zijn
 @msg	no object at path {shown} in the symbol's art	geen object op pad {shown} in de illustratie van het symbool
 @msg	give fill, stroke, opacity and/or blend	geef fill, stroke, opacity en/of blend op
+@msg	{key} cannot be set on a guide	{key} kan niet worden ingesteld op een hulplijn
+@msg	{key} cannot be set on a blend	{key} kan niet worden ingesteld op een vermenging
+@msg	{key} cannot be set on an envelope	{key} kan niet worden ingesteld op een envelop
+@msg	{key} cannot be set on a gradient mesh	{key} kan niet worden ingesteld op een verloopraster
+@msg	{key} cannot be set on a Repeat	{key} kan niet worden ingesteld op een herhaling
+@msg	{key} cannot be set on a placed document	{key} kan niet worden ingesteld op een geplaatst document
+@msg	{key} cannot be set on an Intertwine group	{key} kan niet worden ingesteld op een verstrengelde groep
+@msg	stroke cannot be set on a symbol instance	stroke kan niet worden ingesteld op een symboolinstantie
+@msg	fill on a symbol instance must be a solid color or none	fill van een symboolinstantie moet een egale kleur of none zijn
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan niet worden ingesteld op een afbeelding zonder het effect Converteren naar vorm of Object omtrekken
 @msg	pass newName, registration, exportType, nineSlice and/or type	geef newName, registration, exportType, nineSlice en/of type op
 	Text Flow	Tekstdoorloop
 	By Rows	Per rij

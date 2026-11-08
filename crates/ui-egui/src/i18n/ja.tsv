@@ -6139,6 +6139,16 @@ breakText	Glyphs	字形
 @msg	path must be a list of child indices	path は子のインデックスのリストにしてください
 @msg	no object at path {shown} in the symbol's art	シンボルのアートのパス {shown} にオブジェクトがありません
 @msg	give fill, stroke, opacity and/or blend	fill、stroke、opacity、blend のいずれかを指定してください
+@msg	{key} cannot be set on a guide	ガイドには {key} を設定できません
+@msg	{key} cannot be set on a blend	ブレンドには {key} を設定できません
+@msg	{key} cannot be set on an envelope	エンベロープには {key} を設定できません
+@msg	{key} cannot be set on a gradient mesh	グラデーションメッシュには {key} を設定できません
+@msg	{key} cannot be set on a Repeat	リピートには {key} を設定できません
+@msg	{key} cannot be set on a placed document	配置したドキュメントには {key} を設定できません
+@msg	{key} cannot be set on an Intertwine group	織り交ぜグループには {key} を設定できません
+@msg	stroke cannot be set on a symbol instance	シンボルインスタンスには stroke を設定できません
+@msg	fill on a symbol instance must be a solid color or none	シンボルインスタンスの fill は単色または none にしてください
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	「シェイプに変換」または「オブジェクトのアウトライン」効果のない画像には {key} を設定できません
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName、registration、exportType、nineSlice、type のいずれかを指定してください
 	Text Flow	テキストの流れ
 	By Rows	行方向

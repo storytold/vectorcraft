@@ -6092,6 +6092,16 @@ breakText	Glyphs	字符
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend
+@msg	{key} cannot be set on a guide	無法為參考線設定 {key}
+@msg	{key} cannot be set on a blend	無法為漸變設定 {key}
+@msg	{key} cannot be set on an envelope	無法為封套設定 {key}
+@msg	{key} cannot be set on a gradient mesh	無法為漸層網格設定 {key}
+@msg	{key} cannot be set on a Repeat	無法為重複設定 {key}
+@msg	{key} cannot be set on a placed document	無法為置入的文件設定 {key}
+@msg	{key} cannot be set on an Intertwine group	無法為交織群組設定 {key}
+@msg	stroke cannot be set on a symbol instance	無法為符號範例設定 stroke
+@msg	fill on a symbol instance must be a solid color or none	符號範例的 fill 必須是純色或 none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	無法為沒有「轉換為形狀」或「外框物件」效果的影像設定 {key}
 @msg	pass newName, registration, exportType, nineSlice and/or type	請提供 newName、registration、exportType、nineSlice 和/或 type
 	Text Flow	文字流向
 	By Rows	依列

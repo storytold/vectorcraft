@@ -6452,6 +6452,16 @@ breakText	Glyphs	გლიფები
 @msg	path must be a list of child indices	path უნდა იყოს შვილობილი ინდექსების სია
 @msg	no object at path {shown} in the symbol's art	სიმბოლოს გრაფიკაში გზაზე {shown} ობიექტი არ არის
 @msg	give fill, stroke, opacity and/or blend	მიუთითეთ fill, stroke, opacity და/ან blend
+@msg	{key} cannot be set on a guide	{key} ვერ დაყენდება დამხმარე ხაზზე
+@msg	{key} cannot be set on a blend	{key} ვერ დაყენდება გადასვლაზე
+@msg	{key} cannot be set on an envelope	{key} ვერ დაყენდება გარსზე
+@msg	{key} cannot be set on a gradient mesh	{key} ვერ დაყენდება გრადიენტულ ბადეზე
+@msg	{key} cannot be set on a Repeat	{key} ვერ დაყენდება გამეორებაზე
+@msg	{key} cannot be set on a placed document	{key} ვერ დაყენდება განთავსებულ დოკუმენტზე
+@msg	{key} cannot be set on an Intertwine group	{key} ვერ დაყენდება გადახლართვის ჯგუფზე
+@msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
+@msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
 @msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით

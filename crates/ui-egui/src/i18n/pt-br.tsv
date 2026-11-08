@@ -6372,6 +6372,16 @@ breakText	Glyphs	Glifos
 @msg	path must be a list of child indices	path deve ser uma lista de índices de filhos
 @msg	no object at path {shown} in the symbol's art	nenhum objeto no caminho {shown} na arte do símbolo
 @msg	give fill, stroke, opacity and/or blend	informe fill, stroke, opacity e/ou blend
+@msg	{key} cannot be set on a guide	{key} não pode ser definido em uma guia
+@msg	{key} cannot be set on a blend	{key} não pode ser definido em uma mesclagem
+@msg	{key} cannot be set on an envelope	{key} não pode ser definido em um envelope
+@msg	{key} cannot be set on a gradient mesh	{key} não pode ser definido em uma malha de gradiente
+@msg	{key} cannot be set on a Repeat	{key} não pode ser definido em uma repetição
+@msg	{key} cannot be set on a placed document	{key} não pode ser definido em um documento colocado
+@msg	{key} cannot be set on an Intertwine group	{key} não pode ser definido em um grupo entrelaçado
+@msg	stroke cannot be set on a symbol instance	stroke não pode ser definido em uma instância de símbolo
+@msg	fill on a symbol instance must be a solid color or none	o fill de uma instância de símbolo deve ser uma cor sólida ou none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} não pode ser definido em uma imagem sem o efeito Converter em Forma ou Contornar Objeto
 @msg	pass newName, registration, exportType, nineSlice and/or type	informe newName, registration, exportType, nineSlice e/ou type
 # Strings the sibling catalogs translate that pt-BR did not yet cover (translated 2026-10-31).
 	 on the canvas to create one	 na tela para criar um

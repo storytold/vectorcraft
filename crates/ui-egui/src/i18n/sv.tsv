@@ -6506,6 +6506,16 @@ breakText	Glyphs	Glyfer
 @msg	path must be a list of child indices	path måste vara en lista med underordnade index
 @msg	no object at path {shown} in the symbol's art	inget objekt vid sökvägen {shown} i symbolens bild
 @msg	give fill, stroke, opacity and/or blend	ange fill, stroke, opacity och/eller blend
+@msg	{key} cannot be set on a guide	{key} kan inte anges för en stödlinje
+@msg	{key} cannot be set on a blend	{key} kan inte anges för en blandning
+@msg	{key} cannot be set on an envelope	{key} kan inte anges för ett kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan inte anges för ett gradientnät
+@msg	{key} cannot be set on a Repeat	{key} kan inte anges för en upprepning
+@msg	{key} cannot be set on a placed document	{key} kan inte anges för ett placerat dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan inte anges för en sammanflätad grupp
+@msg	stroke cannot be set on a symbol instance	stroke kan inte anges för en symbolinstans
+@msg	fill on a symbol instance must be a solid color or none	fill för en symbolinstans måste vara en enfärgad färg eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan inte anges för en bild utan effekten Konvertera till form eller Konvertera objekt till konturer
 @msg	pass newName, registration, exportType, nineSlice and/or type	ange newName, registration, exportType, nineSlice och/eller type
 	Text Flow	Textflöde
 	By Rows	Radvis
