@@ -642,6 +642,41 @@ fn type_with_a_brush_stroke_is_drawn_as_sharp() {
     }
 }
 
+/// Strong and Crisp type in the art of a scatter brush, on an undashed path at 50% opacity, keep
+/// that opacity inside the characters: the coverage the method reshapes the edges by is drawn
+/// without the path's opacity.
+#[test]
+fn type_in_a_translucent_scatter_brush_stroke_keeps_its_opacity() {
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    let draw = |m: TypeAntiAlias| {
+        let mut d = Document::new(f64::from(W), f64::from(H));
+        let mut t = TextObject::point(Point::new(0.0, 0.0), "H", CharStyle { size: 40.0, ..Default::default() });
+        t.anti_alias = m;
+        let art = Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(t)));
+        let mut lib = vectorcraft_brush::library(&d);
+        lib.push(Brush { name: "Letters".into(), kind: BrushKind::Scatter(Scatter { art, spacing: (200.0, 200.0), ..Default::default() }) });
+        vectorcraft_brush::store(&mut d, &lib);
+        let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        if let Some(st) = ap.stroke_mut() {
+            st.brush = Some("Letters".into());
+        }
+        let line = vectorcraft_geom::shapes::line(Point::new(20.0, 45.0), Point::new(240.0, 45.0));
+        let mut n = Node::path(d.alloc_id(), line, ap);
+        n.opacity = 0.5;
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        alphas(&d, &RenderOptions::default())
+    };
+    let most = |a: &[u8]| a.iter().copied().max().unwrap_or(0);
+    let sharp = draw(TypeAntiAlias::Sharp);
+    assert!((126..=129).contains(&most(&sharp)), "half opaque: {}", most(&sharp));
+    for m in [TypeAntiAlias::Crisp, TypeAntiAlias::Strong] {
+        let drawn = draw(m);
+        assert!((126..=129).contains(&most(&drawn)), "{m:?} keeps the path's opacity: {}", most(&drawn));
+        assert_ne!(drawn, sharp, "{m:?} changes the edges");
+    }
+}
+
 /// On screen, type in a font the system doesn't have draws as Sharp draws it while Document
 /// Setup highlights substituted fonts, and with its method when nothing is highlighted.
 #[test]

@@ -484,7 +484,11 @@ impl Renderer {
                     AppearanceItem::Stroke(st) => st.opacity = 1.0,
                 }
             }
+            // The coverage leaves out the opacity folded in from the object the type is drawn in
+            // (a translucent brushed path), which the pixels already take.
+            let folded = std::mem::replace(&mut r.alpha, 1.0);
             let covered = draw(r, frame, &inked, &ink);
+            r.alpha = folded;
             for (p, c) in pm.data_mut().iter_mut().zip(covered.data()) {
                 *p = edge_pixel(*p, c.a, t.anti_alias);
             }
