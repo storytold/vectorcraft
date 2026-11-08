@@ -226,6 +226,45 @@ pub(crate) fn expand_revolve_art(n: &Node) -> Option<Node> {
     art(n, true)
 }
 
+/// The surfaces [`revolve_art`] draws, as meshes ([`crate::three_d_meshes`]): with the effect on
+/// the object, one in its top visible fill (else its stroke); with it on fills and strokes, one for
+/// each of them.
+pub(crate) fn revolve_meshes(n: &Node) -> Result<Vec<crate::SolidMesh>, String> {
+    let path = profile(n).ok_or("Revolve currently requires a path or compound path")?;
+    let ctx = GeomContext::of(n);
+    let mesh = |path: &PathData, fx: &Effect, item: &AppearanceItem| -> Result<crate::SolidMesh, String> {
+        let b = path.bounds().ok_or("Revolve requires a profile with at least two anchors")?;
+        let (paint, opacity, _) = paint_of(item);
+        let mesh = vectorcraft_three_d::revolve_mesh(path, b, revolve_options(&merged_params(REVOLVE, &fx.params)))?;
+        Ok(crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity) })
+    };
+    if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && e.id == REVOLVE) {
+        let before = n.appearance.effects.get(..index).unwrap_or_default();
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let path = geometry(&path, before, &ctx);
+        let item = n
+            .appearance
+            .items
+            .iter()
+            .rev()
+            .find(|i| matches!(i, AppearanceItem::Fill(_)) && crate::paints(i))
+            .or_else(|| n.appearance.items.iter().rev().find(|i| crate::paints(i)))
+            .ok_or("the revolved object has no fill or stroke")?;
+        return Ok(vec![mesh(&path, fx, item)?]);
+    }
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut out = vec![];
+    for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        if let Some(index) = item.effects().iter().position(|e| e.visible && e.id == REVOLVE)
+            && let Some(fx) = item.effects().get(index)
+        {
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            out.push(mesh(&p, fx, item)?);
+        }
+    }
+    Ok(out)
+}
+
 fn art(n: &Node, expand: bool) -> Option<Node> {
     if !has_revolve(n) {
         return None;

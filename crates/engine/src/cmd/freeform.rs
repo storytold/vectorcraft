@@ -92,8 +92,12 @@ impl Session {
 
     /// The freeform gradient behind the Fill (`stroke` false) or Stroke proxy, its points in
     /// document coordinates, and the length its spreads are fractions of there (see
-    /// [`Node::proxy_freeform`]).
+    /// [`Node::proxy_freeform`]). `None` while an object of a symbol instance is selected
+    /// ([`vectorcraft_doc::Selection::symbol_part`]): its points are in the symbol's coordinates.
     pub fn proxy_freeform(&self, stroke: bool) -> Option<(Freeform, f64)> {
+        if self.active()?.selection.symbol_part.is_some() {
+            return None;
+        }
         let (n, item) = self.proxy_source(stroke)?;
         n.proxy_freeform(stroke, item)
     }
