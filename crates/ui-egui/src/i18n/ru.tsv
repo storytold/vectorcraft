@@ -1172,6 +1172,7 @@ font-technology	Variable	Вариативные
 	Stroke When Editable	Редактируемая обводка
 	Fill Color	Цвет заливки
 	Fill New Type Objects With Placeholder Text	Заполнять новые текстовые объекты текстом-заполнителем
+	Start Lists From Typed Markers	Начинать списки с введённых маркеров
 	Fill Rule	Правило заливки
 	Fill with Placeholder Text	Заполнить текстом-заполнителем
 	Fill:	Заливка:
@@ -3092,6 +3093,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Выбранные образцы
 	Selected Swatches Only	Только выбранные образцы
 	Selection	Выделение
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Выделение рамкой
+	Touching	Пересекаемые
+	Fully Enclosed	Полностью внутри
+	Drag Direction	Направление перетаскивания
 	Selection & Anchor Display	Отображение выделения и опорных точек
 	Selection Only	Только выделение
 	Selection Tool	Инструмент «Выделение»
@@ -3229,6 +3235,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Имитировать цветную бумагу
 	Simulate Paper	Имитировать бумагу
 	Double Column	Двойной столбец
+	Keep Tools Beside the Canvas	Инструменты рядом с холстом
 	Single Left Quotation Mark	Одинарная открывающая кавычка
 	Single Quotes:	Одинарные кавычки:
 	Single Right Quotation Mark	Одинарная закрывающая кавычка
@@ -3825,6 +3832,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Масштаб по выделению
 	Zoom Tool	Инструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабировать колесом мыши
+	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручивать по горизонтали колесом с Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
@@ -4842,6 +4850,9 @@ axis	Both	Оба
 @msg	the Pixar file's image data is damaged	данные изображения в файле Pixar повреждены
 @msg	the JPEG 2000 file can't be read	не удается прочитать файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 содержит неподдерживаемое цветовое пространство или содержимое JPX
+@msg	the HEIC or HEIF file can't be read	не удается прочитать файл HEIC или HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
+@msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
@@ -5319,6 +5330,9 @@ lighting	Light	Свет
 @msg	too many library panels were opened in this session	в этом сеансе открыто слишком много панелей библиотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Изображение {_1} × {_2} пикселей, больше {LARGE_TRACE_SIDE} по одной стороне: трассировка выполняется, но медленнее. Стиль с меньшей точностью или уменьшенная копия изображения трассируются быстрее.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Изображение трассировано в размере {_1} × {_2} пикселей, уменьшенное с {_3} × {_4} (не более {_5} мегапикселей).
+@msg	byColor must be true or false	byColor должен иметь значение true или false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor не может разделить группы автогруппировки: трассируйте без автогруппировки
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor не может перегруппировать трассировку с действующим эффектом Pathfinder: разверните без byColor
 	Snapping	Привязка
 	Snap to Tangent	Привязать к касательной
 	Snap to Perpendicular	Привязать к перпендикуляру
@@ -6248,6 +6262,8 @@ breakText	Glyphs	Глифы
 	File + Data Set Name	Файл + имя набора данных
 	Data Set Name	Имя набора данных
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` должно быть `fileNumber`, `fileDataSetName` или `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Каждый набор данных сохраняется поверх одного и того же файла, в котором остаётся только последний набор данных.
+@msg	save the document with Save As before Save and Close	сохраните документ командой «Сохранить как» перед «Сохранить и закрыть»
 @msg	no free data set file name in destination folder	В папке назначения нет свободного имени файла для набора данных
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

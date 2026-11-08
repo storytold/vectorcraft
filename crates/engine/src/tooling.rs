@@ -319,6 +319,11 @@ impl Session {
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
             selection_tolerance: self.prefs.selection_tolerance,
+            marquee_mode: match self.prefs.marquee_selection.as_str() {
+                "enclosed" => vectorcraft_tools::MarqueeMode::Enclosed,
+                "directional" => vectorcraft_tools::MarqueeMode::Directional,
+                _ => vectorcraft_tools::MarqueeMode::Touching,
+            },
             anchor_size: self.prefs.anchor_size,
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
@@ -332,6 +337,7 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            typed_lists: self.prefs.typed_lists,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
             anchor_path_labels: self.prefs.anchor_path_labels,
@@ -577,6 +583,11 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
+        // A key that cancels a gesture may put back options the gesture changed (Escape on an
+        // arc, spiral or grid drag): keep them.
+        if acts.contains(&Action::Cancel) {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 

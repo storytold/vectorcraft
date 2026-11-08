@@ -7960,6 +7960,11 @@ swatch	White, Black	सफ़ेद, काला
 swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
+	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
+	Marquee Selection	मार्की चयन
+	Touching	स्पर्श करते हुए
+	Fully Enclosed	पूरी तरह घिरे हुए
+	Drag Direction	खींचने की दिशा
 
 # Importer plug-ins (File › Open With, document.open)
 	Open With	इसके साथ खोलें

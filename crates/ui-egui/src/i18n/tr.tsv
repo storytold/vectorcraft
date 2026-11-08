@@ -1127,6 +1127,7 @@ font-technology	Variable	Değişken
 	Merge only with selection	Yalnızca seçimle birleştir
 	Fill Color	Dolgu Rengi
 	Fill New Type Objects With Placeholder Text	Yeni Yazım Nesnelerini Yer Tutucu Metinle Doldurun
+	Start Lists From Typed Markers	Yazılan İşaretlerden Liste Başlat
 	Fill Rule	Doldurma Kuralı
 	Fill with Placeholder Text	Yer Tutucu Metinle Doldur
 	Fill:	Doldurun:
@@ -2889,6 +2890,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Seçilen Renk Örnekleri
 	Selected Swatches Only	Yalnızca Seçilen Renk Örnekleri
 	Selection	Seçim
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Dikdörtgen seçim
+	Touching	Dokunulanlar
+	Fully Enclosed	Tamamen içeride
+	Drag Direction	Sürükleme yönü
 	Selection & Anchor Display	Seçim ve Bağlantı Ekranı
 	Selection Only	Yalnızca Seçim
 	Selection Tool	Seçim Aracı
@@ -3023,6 +3029,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Renkli Kağıdı Simüle Et
 	Simulate Paper	Kağıdı Simüle Et
 	Double Column	Çift Sütun
+	Keep Tools Beside the Canvas	Araçları Tuvalin Yanında Tut
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
@@ -3602,6 +3609,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Seçimi Yakınlaştır
 	Zoom Tool	Yakınlaştırma Aracı
 	Zoom with Mouse Wheel	Fare Tekerleği ile Yakınlaştırma
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + Tekerlek ile Yatay Kaydırma
 	Scrub Numeric Fields by Dragging	Sayısal Alanları Sürükleyerek Fırçalayın
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{folder} içinde {n} dosya {note}. Paket klasörü gösterilsin mi?
 @plural	{n} linked file not found|{n} linked files not found	{n} bağlantılı dosya bulunamadı
@@ -4553,6 +4561,9 @@ axis	Both	Her İkisi
 @msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
+@msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
+@msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz
@@ -5712,6 +5723,9 @@ theme	Appearance	Görünüm
 @msg	library panel `{given}` isn't missing its library	`{given}` kitaplık panelinin kitaplığı eksik değil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Görüntü {_1} × {_2} piksel, bir kenarı {LARGE_TRACE_SIDE} değerinden büyük: izlenir, ancak daha yavaş. Daha düşük doğruluklu bir ön ayar veya görüntünün daha küçük bir kopyası daha hızlı izlenir.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Görüntü {_3} × {_4} boyutundan küçültülerek {_1} × {_2} pikselde izlendi (en fazla {_5} megapiksel).
+@msg	byColor must be true or false	byColor true veya false olmalıdır
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor, Otomatik Gruplama gruplarını bölemez: Otomatik Gruplama olmadan izleyin
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor, canlı Pathfinder efekti olan bir izlemeyi yeniden gruplayamaz: byColor olmadan genişletin
 	Gap Length:	Boşluk Uzunluğu:
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` için `library: "document"` gerekir
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` için `palette: "documentLibrary"` gerekir
@@ -6228,6 +6242,8 @@ breakText	Glyphs	Glifler
 	File + Data Set Name	Dosya + veri kümesi adı
 	Data Set Name	Veri kümesi adı
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` değeri `fileNumber`, `fileDataSetName` veya `dataSetName` olmalıdır
+	Each data set saves over the same file, which keeps only the last data set.	Her veri kümesi aynı dosyanın üzerine kaydedilir ve dosyada yalnızca son veri kümesi kalır.
+@msg	save the document with Save As before Save and Close	Kaydet ve Kapat'tan önce belgeyi Farklı Kaydet ile kaydedin
 @msg	no free data set file name in destination folder	Hedef klasörde veri kümesi için boş bir dosya adı yok
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

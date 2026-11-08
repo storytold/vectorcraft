@@ -1045,6 +1045,7 @@
 	Fill & Stroke	Preenchimento e Traçado
 	Fill Color	Cor de Preenchimento
 	Fill New Type Objects With Placeholder Text	Preencher Novos Objetos de Texto com Texto de Placeholder
+	Start Lists From Typed Markers	Iniciar Listas a Partir de Marcadores Digitados
 	Fill Rule	Regra de Preenchimento
 	Fill and Stroke	Preenchimento e Traçado
 	Fill new strokes	Preencher novos traçados
@@ -2563,6 +2564,11 @@ digits	Malayalam	Malaiala
 	Selected Swatches	Amostras Selecionadas
 	Selected Swatches Only	Somente Amostras Selecionadas
 	Selection	Seleção
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Seleção retangular
+	Touching	Objetos tocados
+	Fully Enclosed	Totalmente contidos
+	Drag Direction	Direção do arrasto
 	Selection & Anchor Display	Exibição de Seleção e Âncora
 	Selection Only	Somente Seleção
 	Selection Tool	Ferramenta Seleção
@@ -2681,6 +2687,7 @@ digits	Malayalam	Malaiala
 	Simulate Colored Paper	Simular Papel Colorido
 	Simulate Paper	Simular Papel
 	Double Column	Coluna Dupla
+	Keep Tools Beside the Canvas	Ferramentas ao Lado da Tela
 	Single Left Quotation Mark	Aspa Esquerda Única
 	Single Quotes:	Aspas Simples:
 	Single Right Quotation Mark	Aspa Direita Única
@@ -3115,6 +3122,7 @@ digits	Malayalam	Malaiala
 	Zoom Tool	Ferramenta Zoom
 	Zoom to Selection	Ampliar para a Seleção
 	Zoom with Mouse Wheel	Zoom com a Roda do Mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rolar na Horizontal com Cmd/Ctrl + Roda
 	Scrub Numeric Fields by Dragging	Ajustar Campos Numéricos Arrastando
 	[Default] is protected: New… starts an editable copy.	[Padrão] é protegido: Novo… inicia uma cópia editável.
 	[Unnamed]	[Sem Nome]
@@ -4347,6 +4355,9 @@ axis	Both	Ambos
 @msg	the Pixar file's image data is damaged	os dados de imagem do arquivo Pixar estão danificados
 @msg	the JPEG 2000 file can't be read	não é possível ler o arquivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	o arquivo JPEG 2000 contém um espaço de cores ou conteúdo JPX sem suporte
+@msg	the HEIC or HEIF file can't be read	não é possível ler o arquivo HEIC ou HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	o arquivo HEIC ou HEIF contém um tipo de imagem que não pode ser lido
+@msg	HEIC and HEIF images can't be opened in this build	imagens HEIC e HEIF não podem ser abertas nesta versão
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)
 @msg	zipped 32-bit PSD image data with prediction can't be read	dados de imagem PSD de 32 bits compactados em zip com previsão não podem ser lidos
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos
@@ -5626,6 +5637,9 @@ mark-style	Japanese	Japonesas
 @msg	too many library panels were opened in this session	foram abertos painéis de biblioteca demais nesta sessão
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A imagem tem {_1} × {_2} pixels, mais de {LARGE_TRACE_SIDE} em um lado: ela é traçada, mas mais devagar. Uma predefinição de menor fidelidade ou uma cópia menor da imagem traça mais rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A imagem foi traçada em {_1} × {_2} pixels, reduzida de {_3} × {_4} (no máximo {_5} megapixels).
+@msg	byColor must be true or false	byColor deve ser true ou false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor não pode dividir os grupos de Agrupamento Automático: trace sem Agrupamento Automático
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor não pode reagrupar um traçado com um efeito Pathfinder ativo: expanda sem byColor
 	Snapping	Ajuste
 	Snap to Tangent	Ajustar à Tangente
 	Snap to Perpendicular	Ajustar à Perpendicular
@@ -6187,6 +6201,8 @@ breakText	Glyphs	Glifos
 	File + Data Set Name	Arquivo + nome do conjunto de dados
 	Data Set Name	Nome do conjunto de dados
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` deve ser `fileNumber`, `fileDataSetName` ou `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunto de dados é salvo sobre o mesmo arquivo, que mantém apenas o último conjunto de dados.
+@msg	save the document with Save As before Save and Close	salve o documento com Salvar Como antes de Salvar e fechar
 @msg	no free data set file name in destination folder	Não há nome de arquivo livre para o conjunto de dados na pasta de destino
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

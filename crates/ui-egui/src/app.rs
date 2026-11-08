@@ -123,6 +123,7 @@ impl VectorcraftApp {
             canvas_rect: None,
             hover_doc: None,
             custom_titlebar: false,
+            desktop_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
@@ -453,7 +454,8 @@ impl VectorcraftApp {
     /// in a floating window, the tab strip's document draws as a pane.
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
-        ui.painter().rect_filled(ui.max_rect(), 0.0, t.pasteboard);
+        // Tools may already occupy the left side of this panel.
+        ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.pasteboard);
         self.canvas.windows.strip = None;
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
@@ -541,8 +543,16 @@ impl VectorcraftApp {
             widgets::set_menu_floor(&ctx, ctx.content_rect().bottom());
         }
         if self.ui.toolbar && self.ui.screen_mode < 3 {
+            tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
+        }
+        if !self.ui.tools_beside_canvas {
+            // A canvas-edge target left from before the setting was turned off docks nothing.
+            tools_float::clear_canvas_dock_zone(&ctx);
+        }
+        // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
+        if self.ui.toolbar && self.ui.screen_mode < 3 && (!self.ui.tools_beside_canvas || self.ui.toolbar_pos.is_some()) {
             toolbar::show(self, ui);
-        } else if self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
+        } else if !self.ui.toolbar && self.ui.screen_mode < 3 && self.ui.tab_hid.is_none() {
             // Window › Tools hides the Tools panel alone; Tab hides the toolbars made with New
             // Toolbar too.
             toolbar::show_custom(self, ui.ctx());

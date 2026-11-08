@@ -36,6 +36,7 @@ mod importer;
 mod legacy_ai;
 mod load;
 pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+mod heifread;
 mod jp2read;
 mod metafile;
 mod naming;
@@ -57,6 +58,7 @@ pub mod zip;
 
 use serde_json::{Value, json};
 
+pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, encode, encode_all, encode_with_warnings};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
@@ -206,6 +208,8 @@ mod tests_psd;
 #[cfg(test)]
 mod tests_psdread;
 
+#[cfg(test)]
+mod tests_heifread;
 #[cfg(test)]
 mod tests_jp2read;
 #[cfg(test)]

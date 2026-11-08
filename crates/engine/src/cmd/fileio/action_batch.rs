@@ -95,9 +95,91 @@ pub(super) fn action_batch(s: &mut Session, p: &Value) -> Result<Value> {
     };
     match source {
         "folder" => batch_folder(s, C, p, override_open, &run),
-        "datasets" => batch_datasets(s, C, &run),
+        "datasets" => {
+            let one_file = batch_overwrites_one_file(s, p);
+            let mut r = batch_datasets(s, C, &run)?;
+            if one_file {
+                r["warning"] = json!(ONE_FILE_WARNING);
+            }
+            Ok(r)
+        }
         _ => Err(bad(C, "`source` must be `folder` or `datasets`")),
     }
+}
+
+/// The `warning` of a Data Sets batch for which [`batch_overwrites_one_file`] holds.
+#[cfg(not(target_arch = "wasm32"))]
+const ONE_FILE_WARNING: &str = "each data set saves over the same file, which keeps only the last data set";
+
+/// Whether an `action.batch` with params `p` plays on data sets of the open document in `s` and
+/// writes each data set to the same file. Save and Close saves the open document over its own file
+/// after every data set, unless a Save step that Override Save points into `destinationFolder`
+/// first makes each data set's file the document's own. A step that the batch does not point into `destinationFolder` writes the
+/// same file every time when it writes one: a Save, Save As, Save a Copy, Save as Template, Export,
+/// Export Selection, PDF, EPS, DXF, Save for Web or Save for Office Documents step that gives a
+/// `path`; a Save step without a `path` when the document has a file of its own (saved, and not
+/// converted from an older version or restored by Data Recovery) and the step gives no `format` or
+/// the document's own; an Export for Screens step whose `folder`, given or from its
+/// `exportPreset`, names a folder, whatever the overrides.
+/// Other steps return their data instead of writing a file.
+pub fn batch_overwrites_one_file(s: &Session, p: &Value) -> bool {
+    if p.get("source").and_then(Value::as_str) != Some("datasets") {
+        return false;
+    }
+    let folder = p.get("destinationFolder").and_then(Value::as_str).is_some();
+    let redirected = |key: &str| folder && p.get(key).and_then(Value::as_bool).unwrap_or(true);
+    let (save, export) = (redirected("overrideSave"), redirected("overrideExport"));
+    let steps = p.get("commands").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    if p.get("destination").and_then(Value::as_str) == Some("saveAndClose") && !saves_move_to_each_file(steps, save) {
+        return true;
+    }
+    // The format of the open document's own file, which a Save step without a `path` writes.
+    let own_format = s.active().filter(|st| st.path.is_some() && !st.converted && !st.recovered).map(|st| st.format);
+    let names = |v: Option<&Value>| v.and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    steps.iter().any(|c| {
+        let params = c.get("params").cloned().unwrap_or_else(|| Value::Object(Default::default()));
+        let path = names(params.get("path"));
+        let own_file = || match params.get("format").and_then(Value::as_str).filter(|f| !f.is_empty()) {
+            None => own_format.is_some(),
+            Some(f) => own_format.is_some_and(|own| super::format(f).is_some_and(|f| f.id == own)),
+        };
+        match c.get("command").and_then(Value::as_str).unwrap_or("") {
+            "document.save" | "file.save" => !save && (path || own_file()),
+            "file.saveAs" => !save && path,
+            "file.saveCopy" | "file.saveAsTemplate" => path,
+            "document.export" | "document.exportSelection" => !export && path,
+            // The batch does not point these exports into `destinationFolder`.
+            "document.exportPdf" | "document.exportEps" | "document.exportDxf" | "document.exportForWeb" | "document.exportForOffice" => path,
+            // Override Export sets `path`, which Export for Screens does not read: its `folder` stays.
+            "document.exportForScreens" => super::screens::with_preset(s, &params).is_ok_and(|p| names(p.get("folder"))),
+            _ => false,
+        }
+    })
+}
+
+/// Whether `steps` hold a Save, Save As or `document.save` step that Override Save points at each
+/// data set's own file in the destination folder (`redirected`). Such a step makes that file the
+/// document's own, so Save and Close then saves each data set to its own file.
+fn saves_move_to_each_file(steps: &[Value], redirected: bool) -> bool {
+    redirected && steps.iter().any(|c| retargeting_save(c, true))
+}
+
+/// Whether step `c` is a Save, Save As or `document.save` that writes a file (its own `path`, or one
+/// in the destination folder when `redirected`) and makes that file the document's own: a save in
+/// the native template format writes a copy and leaves the document's file as it was.
+fn retargeting_save(c: &Value, redirected: bool) -> bool {
+    if !matches!(c.get("command").and_then(Value::as_str), Some("document.save" | "file.save" | "file.saveAs")) {
+        return false;
+    }
+    let params = c.get("params");
+    let path = params.and_then(|p| p.get("path")).and_then(Value::as_str).filter(|p| !p.is_empty());
+    let format_ok = match params.and_then(|p| p.get("format")).and_then(Value::as_str).filter(|f| !f.is_empty()) {
+        Some(f) => super::format(f).is_some_and(|f| f.id != "template"),
+        // Override Save gives the step a native file name; else its own path names the format.
+        None if redirected => true,
+        None => path.and_then(super::format_for_name).is_none_or(|f| f.id != "template"),
+    };
+    format_ok && (redirected || path.is_some())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -144,6 +226,18 @@ fn batch_datasets(s: &mut Session, cmd: &str, run: &Run<'_>) -> Result<Value> {
     }
     if names.len() > MAX_BATCH_FILES {
         return Err(bad(cmd, format!("more than {MAX_BATCH_FILES} data sets")));
+    }
+    let redirected = run.override_save && run.dest_folder.is_some();
+    // A recorded save with a file to write gives the document a file of its own before Save and Close.
+    if run.destination == "saveAndClose" && !run.steps.iter().any(|c| retargeting_save(c, redirected)) {
+        if st.path.is_none() {
+            return Err(bad(cmd, "the document has never been saved"));
+        }
+        // `save_plan` writes no file for a document converted from an older version or restored by
+        // Data Recovery.
+        if st.converted || st.recovered {
+            return Err(bad(cmd, "save the document with Save As before Save and Close"));
+        }
     }
     let doc_stem = st.path.as_deref().and_then(|p| std::path::Path::new(p).file_stem().and_then(|s| s.to_str())).unwrap_or("Untitled").to_string();
     let stems = dataset_stems(&names, &doc_stem, run.dataset_file_naming, run, &st.doc)?;
@@ -1290,6 +1384,213 @@ mod tests {
             .unwrap();
         assert_eq!(r["failed"], 0, "{r}");
         assert_eq!(file_names(&dest), ["Untitled_A-B-3.vectorcraft", "Untitled_a-b-2.vectorcraft", "Untitled_a-b.vectorcraft"], "{r}");
+    }
+
+    /// A saved document with a text object bound to `Name` and two data sets, `A` and `B`.
+    fn saved_with_two_data_sets(path: &std::path::Path) -> Session {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "A"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+        s.execute("variable.bind", &json!({"variable": "Name", "ids": [id]})).unwrap();
+        s.execute("dataset.capture", &json!({"name": "A"})).unwrap();
+        s.execute("text.setText", &json!({"ids": [id], "text": "B"})).unwrap();
+        s.execute("dataset.capture", &json!({"name": "B"})).unwrap();
+        s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+        s
+    }
+
+    fn save_and_close_over_data_sets(s: &mut Session) -> Result<Value> {
+        s.execute(
+            "action.batch",
+            &json!({"source": "datasets", "destination": "saveAndClose", "commands": [{"command": "object.unlockAll", "params": {}}]}),
+        )
+    }
+
+    #[test]
+    fn batch_save_and_close_over_data_sets_saves_each_over_the_template_and_warns() {
+        let path = tmp("save-close-sets").join("template.vectorcraft");
+        let mut s = saved_with_two_data_sets(&path);
+        std::fs::write(&path, b"stale").unwrap();
+        let r = save_and_close_over_data_sets(&mut s).unwrap();
+        assert_eq!((r["count"].as_u64(), r["failed"].as_u64()), (Some(2), Some(0)), "{r}");
+        assert_eq!(r["warning"], ONE_FILE_WARNING, "{r}");
+        assert_ne!(std::fs::read(&path).unwrap(), b"stale", "the template's file is saved over");
+        assert_eq!(file_names(path.parent().unwrap()), ["template.vectorcraft"], "{r}");
+        let st = s.doc().unwrap();
+        assert_eq!(st.doc.variables.active_dataset.as_deref(), Some("B"), "the last data set is applied");
+        assert_eq!(st.path.as_deref(), Some(path.to_string_lossy().as_ref()), "the template stays open");
+        assert!(!st.is_dirty(), "the last data set is saved");
+    }
+
+    #[test]
+    fn batch_warns_when_a_recorded_save_writes_one_file_for_every_data_set() {
+        let path = tmp("recorded-save-sets").join("template.vectorcraft");
+        let mut s = saved_with_two_data_sets(&path);
+        let save = json!([{"command": "document.save", "params": {}}]);
+        let r = s.execute("action.batch", &json!({"source": "datasets", "commands": save})).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(r["warning"], ONE_FILE_WARNING, "{r}");
+        let dest = tmp("recorded-save-dest");
+        let p = json!({"source": "datasets", "destination": "folder", "destinationFolder": dest.to_string_lossy(), "commands": save});
+        let r = s.execute("action.batch", &p).unwrap();
+        assert!(r.get("warning").is_none(), "Override Save points each save into the folder: {r}");
+        let unlock = json!({"source": "datasets", "commands": [{"command": "object.unlockAll", "params": {}}]});
+        let r = s.execute("action.batch", &unlock).unwrap();
+        assert!(r.get("warning").is_none(), "{r}");
+    }
+
+    #[test]
+    fn batch_save_and_close_after_a_redirected_save_writes_each_data_set_to_its_own_file() {
+        let save_close = |dest: &std::path::Path| {
+            json!({
+                "source": "datasets",
+                "destination": "saveAndClose",
+                "destinationFolder": dest.to_string_lossy(),
+                "commands": [{"command": "document.save", "params": {}}]
+            })
+        };
+        let path = tmp("redirected-save-close").join("template.vectorcraft");
+        let mut s = saved_with_two_data_sets(&path);
+        let bytes = std::fs::read(&path).unwrap();
+        let dest = tmp("redirected-save-close-dest");
+        let p = save_close(&dest);
+        let mut kept = p.clone();
+        kept["overrideSave"] = json!(false);
+        assert!(batch_overwrites_one_file(&s, &kept), "without Override Save the save stays on the template");
+        let r = s.execute("action.batch", &p).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert!(r.get("warning").is_none(), "{r}");
+        assert_eq!(file_names(&dest), ["template_A.vectorcraft", "template_B.vectorcraft"], "{r}");
+        assert_eq!(std::fs::read(&path).unwrap(), bytes, "the template's file stays as it was");
+        // A document never saved gets its files from the redirected save too.
+        let mut unsaved = with_data_sets(&["a", "b"]);
+        let dest = tmp("redirected-save-close-unsaved");
+        let r = unsaved.execute("action.batch", &save_close(&dest)).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert!(r.get("warning").is_none(), "{r}");
+        assert_eq!(file_names(&dest), ["Untitled_a.vectorcraft", "Untitled_b.vectorcraft"], "{r}");
+        // A template save writes a copy: Save and Close still saves over the document's own file.
+        let mut template = save_close(&dest);
+        template["commands"] = json!([{"command": "document.save", "params": {"format": "template"}}]);
+        assert!(batch_overwrites_one_file(&s, &template), "{template}");
+        let mut never = with_data_sets(&["a", "b"]);
+        let msg = never.execute("action.batch", &template).unwrap_err().to_string();
+        assert!(msg.ends_with("the document has never been saved"), "{msg}");
+        // A recorded Save As with its own path gives a never-saved document its file, the same one
+        // for every data set.
+        let one = tmp("save-as-then-close").join("one.vectorcraft");
+        let p = json!({
+            "source": "datasets",
+            "destination": "saveAndClose",
+            "commands": [{"command": "file.saveAs", "params": {"path": one.to_string_lossy()}}]
+        });
+        let r = never.execute("action.batch", &p).unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_eq!(r["warning"], ONE_FILE_WARNING, "{r}");
+        assert!(one.exists(), "{r}");
+    }
+
+    #[test]
+    fn one_file_rule_covers_save_and_close_and_steps_left_in_place() {
+        let saved = saved_with_two_data_sets(&tmp("one-file-rule").join("template.vectorcraft"));
+        let unsaved = with_data_sets(&["a"]);
+        let with = |extra: Value| {
+            let mut p = json!({"source": "datasets", "commands": [{"command": "document.export", "params": {"path": "/x/a.png"}}]});
+            for (k, v) in extra.as_object().unwrap() {
+                p[k] = v.clone();
+            }
+            batch_overwrites_one_file(&saved, &p)
+        };
+        assert!(with(json!({})), "an export with its own path");
+        assert!(!with(json!({"destination": "folder", "destinationFolder": "/out"})));
+        assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "overrideExport": false})));
+        assert!(!with(json!({"destination": "folder", "destinationFolder": "/out", "overrideSave": false})));
+        assert!(!with(json!({"source": "folder"})), "a folder source opens a file per pass");
+        assert!(with(json!({"destination": "saveAndClose", "commands": [{"command": "object.unlockAll"}]})));
+        let saved_as = json!({"commands": [{"command": "file.saveAs", "params": {"path": "/x/a.svg"}}]});
+        assert!(with(saved_as.clone()));
+        assert!(!with(json!({"destination": "folder", "destinationFolder": "/out", "commands": saved_as["commands"]})));
+        assert!(!with(json!({"commands": [{"command": "file.saveAs", "params": {}}]})), "no path: the data comes back");
+        assert!(!with(json!({"commands": [{"command": "document.export", "params": {"format": "png"}}]})), "no path: the data comes back");
+        let copy = json!([{"command": "file.saveCopy", "params": {"path": "/x/a.vectorcraft"}}]);
+        assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "commands": copy})), "Override Save leaves copies alone");
+        let save = |format: Option<&str>| {
+            let params = format.map_or(json!({}), |f| json!({"format": f}));
+            json!({"source": "datasets", "commands": [{"command": "document.save", "params": params}]})
+        };
+        assert!(batch_overwrites_one_file(&saved, &save(None)), "the document's own file");
+        assert!(batch_overwrites_one_file(&saved, &save(Some("vectorcraft"))), "the document's own format");
+        assert!(!batch_overwrites_one_file(&unsaved, &save(None)), "a document never saved has no file to write");
+        assert!(!batch_overwrites_one_file(&saved, &save(Some("svg"))), "another format without a path: the data comes back");
+        assert!(!with(json!({"commands": [{"command": "file.saveCopy", "params": {"folder": "/x"}}]})), "a folder alone: the data comes back");
+        let screens = json!([{"command": "document.exportForScreens", "params": {"folder": "/x"}}]);
+        assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "commands": screens})), "Override Export leaves its folder");
+        assert!(!with(json!({"commands": [{"command": "document.exportForScreens", "params": {}}]})));
+        let preset = json!([{"command": "document.exportForScreens", "params": {"exportPreset": "Logo Package"}}]);
+        assert!(!with(json!({"commands": preset})), "a preset without a folder: the data comes back");
+        for id in ["document.exportPdf", "document.exportEps", "document.exportDxf", "document.exportForWeb", "document.exportForOffice"] {
+            let step = json!([{"command": id, "params": {"path": "/x/a.out"}}]);
+            assert!(with(json!({"destination": "folder", "destinationFolder": "/out", "commands": step})), "{id} keeps its path");
+            assert!(!with(json!({"commands": [{"command": id, "params": {}}]})), "{id} without a path: the data comes back");
+        }
+    }
+
+    #[test]
+    fn batch_refuses_save_and_close_over_data_sets_of_a_converted_or_recovered_document() {
+        for converted in [true, false] {
+            let path = tmp(if converted { "converted-sets" } else { "recovered-sets" }).join("template.vectorcraft");
+            let mut s = saved_with_two_data_sets(&path);
+            let bytes = std::fs::read(&path).unwrap();
+            let (active, revision) = {
+                let st = s.doc_mut().unwrap();
+                if converted {
+                    st.converted = true;
+                } else {
+                    st.recovered = true;
+                }
+                (st.doc.variables.active_dataset.clone(), st.revision)
+            };
+            let msg = save_and_close_over_data_sets(&mut s).unwrap_err().to_string();
+            assert!(msg.ends_with("save the document with Save As before Save and Close"), "{msg}");
+            assert_eq!(std::fs::read(&path).unwrap(), bytes, "the file is not written");
+            let st = s.doc().unwrap();
+            assert_eq!(st.doc.variables.active_dataset, active, "no data set is selected");
+            assert_eq!(st.revision, revision, "no step runs");
+        }
+    }
+
+    #[test]
+    fn batch_refuses_save_and_close_over_data_sets_of_an_unsaved_document() {
+        let mut s = with_data_sets(&["a", "b"]);
+        let (active, revision) = {
+            let st = s.doc().unwrap();
+            (st.doc.variables.active_dataset.clone(), st.revision)
+        };
+        let msg = save_and_close_over_data_sets(&mut s).unwrap_err().to_string();
+        assert!(msg.ends_with("the document has never been saved"), "{msg}");
+        let st = s.doc().unwrap();
+        assert_eq!(st.doc.variables.active_dataset, active, "no data set is selected");
+        assert_eq!(st.revision, revision, "no step runs");
+        assert!(st.path.is_none());
+    }
+
+    #[test]
+    fn batch_save_and_close_saves_and_closes_each_source_file() {
+        let src = tmp("save-close-src");
+        let a = write_svg(&src, "a.svg", "#f00");
+        let before = std::fs::read(&a).unwrap();
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "action.batch",
+                &json!({"folder": src.to_string_lossy(), "destination": "saveAndClose", "commands": [{"command": "object.unlockAll", "params": {}}]}),
+            )
+            .unwrap();
+        assert_eq!(r["failed"], 0, "{r}");
+        assert_ne!(std::fs::read(&a).unwrap(), before, "the source file is saved over");
+        assert_eq!(file_names(&src), ["a.svg"], "{r}");
+        assert!(s.doc().is_err(), "the source file is closed");
     }
 
     #[test]

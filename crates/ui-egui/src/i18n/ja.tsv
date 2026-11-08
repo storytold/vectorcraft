@@ -213,6 +213,11 @@ digits	Malayalam	マラヤーラム数字
 	Ungroup	グループ解除
 	Lock	ロック
 	Selection	選択
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	矩形選択
+	Touching	接触するオブジェクト
+	Fully Enclosed	完全に囲まれたオブジェクト
+	Drag Direction	ドラッグ方向
 	All Artwork Above	前面のすべてのアートワーク
 	Other Layers	その他のレイヤー
 	Unlock All	すべてをロック解除
@@ -679,6 +684,7 @@ digits	Malayalam	マラヤーラム数字
 	Toolbars	ツールバー
 	Advanced	詳細
 	Double Column	2 列
+	Keep Tools Beside the Canvas	ツールをキャンバスの横に配置
 	Actions	アクション
 	Asset Export	アセットの書き出し
 	Attributes	属性
@@ -1635,6 +1641,7 @@ digits	Malayalam	マラヤーラム数字
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
+	Start Lists From Typed Markers	入力した記号からリストを開始
 	Fill Rule	塗りのルール
 	Fill and Stroke	塗りと線
 	Fill new strokes	新しいストロークに塗りを適用
@@ -3408,6 +3415,7 @@ mark-style	Japanese	日本式
 	Zoom Tool	ズームツール
 	Zoom to Selection	選択範囲にズーム
 	Zoom with Mouse Wheel	マウスホイールでズーム
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cmd/Ctrl + ホイールで横スクロール
 	Scrub Numeric Fields by Dragging	ドラッグで数値フィールドを調整
 	[Default] is protected: New… starts an editable copy.	[Default] は変更できません。「新規…」で編集できる複製を作ります。
 	[Unnamed]	[名称未設定]
@@ -4886,6 +4894,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the Pixar file's image data is damaged	Pixar ファイルの画像データが壊れています
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ファイルを読み込めません
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ファイルには未対応の色空間または JPX コンテンツがあります
+@msg	the HEIC or HEIF file can't be read	HEIC または HEIF ファイルを読み込めません
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC または HEIF ファイルには読み込めない種類の画像が含まれています
+@msg	HEIC and HEIF images can't be opened in this build	このビルドでは HEIC と HEIF の画像を開けません
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 画像が大きすぎて読み込めません（{_1} × {_2} ピクセル）
 @msg	zipped 32-bit PSD image data with prediction can't be read	予測付き ZIP 圧縮の 32 bit PSD 画像データは読み込めません
 @msg	{depth}-bit PSD files in this colour mode can't be read	このカラーモードの {depth} bit PSD ファイルは読み込めません
@@ -5367,6 +5378,9 @@ lighting	Light	ライト
 @msg	too many library panels were opened in this session	このセッションで開いたライブラリパネルが多すぎます
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	画像は {_1} × {_2} ピクセルで、一辺が {LARGE_TRACE_SIDE} を超えています。トレースはできますが、時間がかかります。忠実度の低いプリセットや画像の小さいコピーを使うと速くなります。
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	画像は {_3} × {_4} から縮小した {_1} × {_2} ピクセルでトレースされました (最大 {_5} メガピクセル)。
+@msg	byColor must be true or false	byColor は true または false にしてください
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor は自動グループ化のグループを分割できません: 自動グループ化なしでトレースしてください
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor はライブ Pathfinder 効果のあるトレースを再グループ化できません: byColor なしで拡張してください
 	Snapping	スナップ
 	Snap to Tangent	接線にスナップ
 	Snap to Perpendicular	垂線にスナップ
@@ -5955,6 +5969,8 @@ breakText	Glyphs	字形
 	File + Data Set Name	ファイル名 + データセット名
 	Data Set Name	データセット名
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` は `fileNumber`、`fileDataSetName`、`dataSetName` のいずれかである必要があります
+	Each data set saves over the same file, which keeps only the last data set.	各データセットが同じファイルに上書き保存されるため、最後のデータセットだけが残ります。
+@msg	save the document with Save As before Save and Close	「保存して閉じる」の前に「別名で保存」でドキュメントを保存してください
 @msg	no free data set file name in destination folder	保存先フォルダーに使用可能なデータセットのファイル名がありません
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
