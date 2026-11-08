@@ -21,7 +21,7 @@
 //! The files are untrusted input like any other: sizes and counts are capped, a file that does not
 //! parse is skipped with a log record, and every write is atomic.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -225,11 +225,13 @@ impl Session {
 
     /// Keep the plug-ins this session installs in `dir`, and install the ones already there (a
     /// module that doesn't load, and one that lists permissions the grants there don't grant that
-    /// very module, is skipped with a log record, and stays in `dir` with its grant).
+    /// very module, is skipped with a log record, and stays in `dir` with its grant). A grant for
+    /// an id whose module there lists no permissions is forgotten.
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         let grants = stored_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
+        let mut asks_nothing = BTreeSet::new();
         for path in list_files(&dir, PLUGIN_EXT) {
             if left == 0 {
                 log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
@@ -246,6 +248,7 @@ impl Session {
                     let m = plugin.manifest();
                     match grants.get(&m.id).filter(|g| g.covers(&m.id, plugin.hash(), &m.permissions())) {
                         Some(g) => {
+                            asks_nothing.remove(&m.id);
                             vectorcraft_plugins::registry::grant(g.clone());
                             vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
                         }
@@ -253,12 +256,20 @@ impl Session {
                     }
                 }
                 Ok(plugin) => {
+                    asks_nothing.insert(plugin.id().to_string());
                     vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string()));
                 }
                 Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
             }
         }
+        let kept = read_grants(&dir).unwrap_or_default();
         self.plugin_dir = Some(dir);
+        for id in &asks_nothing {
+            vectorcraft_plugins::registry::revoke(id);
+            if kept.grants.contains_key(id) || kept.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str())) {
+                self.store_grant(id, None);
+            }
+        }
     }
 
     /// Whether `plugin` installs without asking the user: it lists no permissions, or this very

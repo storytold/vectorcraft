@@ -133,6 +133,8 @@ pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
 
 /// [`load_folder`], loading only the files `allow` accepts, and of the plug-ins that list
 /// permissions only those `approve` accepts; the others are reported as failed with the reason.
+/// When the module a load leaves under an id lists no permissions, the process's grant for that id
+/// is forgotten.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder_where(
     dir: &std::path::Path,
@@ -164,6 +166,11 @@ pub fn load_folder_where(
             }
             Ok(p) => report.loaded.push(install(p).id().to_string()),
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
+        }
+    }
+    for id in &report.loaded {
+        if get(id).is_some_and(|p| !p.manifest().asks_permissions()) {
+            revoke(id);
         }
     }
     Ok(report)

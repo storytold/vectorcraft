@@ -336,7 +336,7 @@ fn grant_param(c: &str, p: &Value) -> Result<Option<Vec<Permission>>> {
 /// `allowHeavy` says the user agreed, and one that lists permissions the user hasn't granted this
 /// very module unless `grant` lists them all, and one whose SHA-256 isn't the `hash` given; records
 /// the grant with the module's hash, keeps it for the next start and installs it → its
-/// `plugin.list` entry.
+/// `plugin.list` entry. A module that lists no permissions ends any grant held for its id.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "plugin.install";
     let (replace, allow_heavy) = (switch_or(p, "replace", true, C)?, switch_or(p, "allowHeavy", false, C)?);
@@ -375,6 +375,10 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
         registry::grant(g.clone());
         s.store_grant(&m.id, Some(g));
+    } else {
+        // This module takes the id over, so nothing the user approved for the id applies any more.
+        registry::revoke(&m.id);
+        s.store_grant(&m.id, None);
     }
     // Installed plug-ins stay installed after a restart (#2541).
     s.store_plugin(plugin.id(), &bytes);
@@ -527,7 +531,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
+            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true: a plug-in with the same id is replaced), name?: file name (with dataBase64), allowHeavy?: bool (true once the user agreed to a heavy budget: a filter whose manifest asks for one, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (the permissions the user granted: a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; with a plug-in store attached, only the grants kept there count), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session → its plugin.list entry",
             always,
             install
         ),

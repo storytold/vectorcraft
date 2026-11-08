@@ -137,9 +137,14 @@ capability model proposed for PhotoCraft plug-ins
   `Plug-ins` folder, and covers only that module. Installing the same bytes again needs no new approval. A module with
   other bytes asks again, even when it lists the same permissions. Until it is approved, the installed module and its
   grant stay as they are; once it is, the grant records the new hash. A grant whose hash is not 64 lower-case
-  hexadecimal digits covers nothing. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
-  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
-  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  hexadecimal digits covers nothing. `plugin.remove` forgets the grant, and so does a successful `plugin.install` of a
+  module that lists no permissions under that id, so the earlier bytes need a new approval. A refused install leaves
+  the grant as it is. A stored module that lists no permissions has any grant for its id forgotten when the `Plug-ins`
+  folder is attached. The Additional Plug-ins Folder and `plugin.reload` do not change the `Plug-ins` folder: when they
+  leave a module that lists no permissions under an id, the process forgets its own grant for that id, and a grant
+  kept in `grants.json` stays with the stored module it covers. An entry of `grants.json` that this version can't use (a
+  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again,
+  replaced by a module that lists no permissions, or removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
   1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in is skipped when no grant covers its bytes and the permissions it lists. The Additional Plug-ins
