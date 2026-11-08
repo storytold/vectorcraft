@@ -219,6 +219,7 @@ impl Session {
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
         let lent = self.make_tool(id);
+        self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
     }
@@ -232,6 +233,12 @@ impl Session {
         let r = self.apply_actions(acts);
         self.keep_tool_settings();
         self.tool = lender;
+        // A gesture that left the selection as it found it (a Shift marquee over nothing) picked
+        // nothing: the selection keeps what it was, the Pen's last anchor or an earlier pick.
+        let left = self.active().map(|d| (d.uid, d.selection.clone()));
+        if left != self.selection_at_lend.take() {
+            self.lent_selection = left;
+        }
         self.after_command(None);
         r.map(drop)
     }

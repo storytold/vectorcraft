@@ -3306,6 +3306,7 @@ mark-style	Japanese	Japán
 	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus
 	Replace With Font From	Helyettesítő betűtípus forrása
+	Find In	Keresés helye
 	System	Rendszer
 	Replace “{name}”, the file this document was opened from?	Felülírod ezt a fájlt, amelyből a dokumentumot megnyitottad: „{name}”?
 	Replaces the saved preset of that name.	Felülírja az azonos nevű mentett előbeállítást.

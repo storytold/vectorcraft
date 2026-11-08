@@ -87,6 +87,60 @@ fn subpixel_dock_layout_does_not_change_pointer_document_coordinates() {
     assert_ne!(observed[0], observed[2], "a real device-pixel resize must still change the mapping");
 }
 
+/// A document's opening view is fitted to the canvas of the first frame that shows it, and the
+/// window's layout can still move the canvas's edges over the next frames. Two starts of the app
+/// then showed one file at zooms a hair apart, on canvases alike once the window had settled. So
+/// until the view is moved or the user presses, types or scrolls, the opening fit follows the
+/// canvas.
+#[test]
+fn the_opening_fit_follows_the_canvas_until_the_view_moves_or_the_user_acts() {
+    // A frame that shows the canvas `width` points wide, which limits the fit of the 800 × 600
+    // artboard, with `events`: the view after it.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<egui::Event>) -> View {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1800.0, 900.0))),
+            max_texture_side: Some(8192),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let area = egui::Rect::from_min_size(pos2(54.0, 72.0), vec2(width + SCROLL_BAR, 636.0 + SCROLL_BAR));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            show(app, &mut child);
+        });
+        out.textures_delta.clear();
+        *app.view().unwrap()
+    }
+    fn opened() -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600, "created": 0})).unwrap();
+        (app, egui::Context::default())
+    }
+    let first_shown_at = |width: f32| {
+        let (mut app, ctx) = opened();
+        frame(&mut app, &ctx, width, vec![]).zoom
+    };
+    let (narrow, wide) = (first_shown_at(700.0), first_shown_at(702.0));
+    assert!(narrow < wide, "the canvas's width limits the fit: {narrow} and {wide}");
+    let escape = || egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+
+    // The first frame lays the canvas out 2 points narrower than the next: the document opens at
+    // the zoom of the settled canvas, as it does when the first frame has it already.
+    let (mut app, ctx) = opened();
+    frame(&mut app, &ctx, 700.0, vec![]);
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![]).zoom, wide);
+    // Once the user has pressed a key, the canvas changing keeps the view, as resizing the window
+    // does.
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![escape()]).zoom, wide);
+    assert_eq!(frame(&mut app, &ctx, 700.0, vec![]).zoom, wide);
+
+    // A view moved before the canvas changes stays where it was moved to.
+    let (mut app, ctx) = opened();
+    frame(&mut app, &ctx, 700.0, vec![]);
+    app.view_mut().unwrap().zoom = 0.5;
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![]).zoom, 0.5);
+}
+
 /// A rendered raster becomes the image egui's own conversion makes of it, half-transparent
 /// edges and all; one whose bytes don't match its size becomes an empty image of that size.
 #[test]
