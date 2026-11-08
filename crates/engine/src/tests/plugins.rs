@@ -1030,18 +1030,25 @@ fn a_grant_covers_only_the_module_it_was_given_to() {
     std::fs::write(&stored[0], &other).unwrap();
     vectorcraft_plugins::registry::remove(id);
     vectorcraft_plugins::registry::revoke(id);
+    vectorcraft_plugins::registry::set_storage(id, None);
+    let no_storage = |how: &str| {
+        assert!(vectorcraft_plugins::registry::storage(id).is_none(), "{how} gives another module the id's settings and cache");
+    };
     let mut next = session();
     next.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "another module isn't loaded under the grant");
+    no_storage("the next start");
     let dir = crate::tests_links::Folder::new("plugin-folder-grant-hash");
     std::fs::write(dir.0.join("other.wasm"), &other).unwrap();
     let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
     assert_eq!(r["loaded"], json!([]));
     let why = r["failed"][0]["error"].as_str().unwrap();
     assert!(why.contains("needs approval"), "{why}");
+    no_storage("a folder load");
     let data = vectorcraft_format::base64_encode(&other);
     let e = next.execute("plugin.install", &json!({"dataBase64": data, "replace": true})).unwrap_err().to_string();
     assert!(e.contains("`grant`"), "{e}");
+    no_storage("a refused install");
     // Granted, it reads the settings the first module set.
     run(&mut next, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}));
     run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
