@@ -41,7 +41,8 @@ pub(crate) fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, 
     data(interp, global, name, Value::Object(ctor), HIDDEN)
 }
 
-/// Creates the built-ins and the global object's properties.
+/// Creates the built-ins and the global object's properties. The caller installs them before it
+/// sets the realm's limits, so no limit stops the install.
 pub(crate) fn install(interp: &mut Interp) {
     if let Err(e) = try_install(interp) {
         // Installing touches only objects it has just made, so this does not happen; a realm

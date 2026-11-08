@@ -330,8 +330,10 @@ impl Interp {
             global,
             global_env,
             intrinsics: Intrinsics::placeholder(),
-            fuel: limits.fuel,
-            limits,
+            fuel: u64::MAX,
+            // The built-ins are installed without limits; the realm's limits apply from the
+            // first run.
+            limits: Limits { fuel: u64::MAX, heap_bytes: usize::MAX, frames: usize::MAX, reentry: usize::MAX },
             options,
             interrupt: Arc::new(AtomicBool::new(false)),
             reentry: 0,
@@ -343,6 +345,8 @@ impl Interp {
             held: Rc::default(),
         };
         crate::builtins::install(&mut interp);
+        interp.fuel = limits.fuel;
+        interp.limits = limits;
         interp.gc_threshold = interp.next_threshold();
         interp
     }

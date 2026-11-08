@@ -473,8 +473,8 @@ fn hex_digits(pattern: &[u16], at: usize, n: usize) -> Option<u16> {
 }
 
 /// A legacy octal escape (Annex B) whose first digit is at `at`: its value and the position after
-/// it.
-fn octal(pattern: &[u16], at: usize) -> (u16, usize) {
+/// it. [`crate::regexp::check`] reads class escapes with it too.
+pub(crate) fn octal(pattern: &[u16], at: usize) -> (u16, usize) {
     let digit = |i: usize| pattern.get(i).filter(|&&u| (0x30..=0x37).contains(&u)).map(|&u| u - 0x30);
     let Some(first) = digit(at) else { return (0, at) };
     let max = if first <= 3 { 3 } else { 2 };

@@ -184,10 +184,24 @@ fn regular_expressions_match_as_section_15_10_2_says() {
         ("/]/.test(']') + ' ' + show(/[\\d-z]+/.exec('5-z')) + ' ' + /\\8/.test('8')", "true 5-z true"),
         ("/(?:a|b)*c/.exec('ababc').index + ' ' + /x*/.exec('yyy').index", "0 0"),
         ("/[]/.test('a') + ' ' + /[^]/.test('\\n')", "false true"),
+        // An octal escape starting with 4 to 7 takes two digits, so `\477-z` is `'` and the range `7-z`.
+        ("show(/[\\477-z]+/.exec(\"'8y\")) + ' ' + new RegExp('[\\\\477-z]').test('8') + ' ' + /[\\377]/.test('\\xff')", "'8y true true"),
     ];
     for (src, want) in cases {
         shows(src, want);
     }
+}
+
+#[test]
+fn a_realm_made_under_low_limits_has_every_built_in() {
+    let low = Limits { fuel: 0, heap_bytes: 1, ..Limits::default() };
+    let mut realm = Realm::with_options(Options::default(), low.clone());
+    assert_eq!(realm.limits(), &low);
+    realm.set_limits(Limits::default());
+    assert_eq!(
+        run_in(&mut realm, "typeof String + typeof Number + typeof RegExp + typeof Date + typeof /a/.exec + typeof new Date(0).getTime"),
+        JsValue::String("function".repeat(6))
+    );
 }
 
 #[test]
