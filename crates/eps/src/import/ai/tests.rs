@@ -6215,6 +6215,50 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
 }
 
+/// Editing data with symbols and no layers (a symbol library) gives its symbols: in the symbol
+/// list's order with the unlisted one after them, with their registration points and the images
+/// their art shows, without the one holding an instance of a symbol the data doesn't define, and
+/// with the object linked to a listed graphic style linked to it by its id.
+#[test]
+fn a_symbol_library_without_layers_gives_its_symbols() {
+    let styles = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242).
+    let nested = instance("Dot", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let lost = instance("Ghost", [1.0, 0.0, 0.0, -1.0, -8081.0, 8237.0]);
+    let m = "[ 5 0 0 5 -8096 8244.5 ]";
+    let raster = format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n{m} 2 1 0 Xh\n{m} 0 0 2 1 2 1 8 3 0 0 1 0 4 4 0 0\n\
+         %%BeginData: 6\rXI\nABCDEF%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN\n"
+    );
+    let defs = symbols(
+        &(symbol("Dot", &dot(), 1)
+            + &symbol("Pic", &raster, 5)
+            + &symbol("Pair", &nested, 5)
+            + &symbol("Tile", &styled_square("Blue"), 5)
+            + &symbol("Lost", &lost, 5)),
+    );
+    let list = "%AI24_BeginSymbolList\n(Tile)\n(Pair)\n(Lost)\n(Dot)\n%AI24_EndSymbolList\n";
+    let body = format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{styles}{defs}{list}");
+    let read = super::symbols(stream(&body).as_bytes()).expect("the library's symbols");
+    let names: Vec<&str> = read.symbols.iter().map(|(s, _)| s.name.as_str()).collect();
+    assert_eq!(names, ["Tile", "Pair", "Dot", "Pic"]);
+    let registrations: Vec<u8> = read.symbols.iter().map(|(_, r)| r.0).collect();
+    let center = vectorcraft_doc::SymbolRegistration::CENTER.0;
+    assert_eq!(registrations, [center, center, 0, center]);
+    let Some(((tile, _), (pair, _))) = read.symbols.first().zip(read.symbols.get(1)) else { panic!("two symbols") };
+    assert_eq!(tile.art.extras().graphic_style, Some(1), "{:#?}", tile.art);
+    // Dot sits at (10, 5) in Pair's art.
+    let mut doc = Document::new(1.0, 1.0);
+    doc.symbols = read.symbols.iter().map(|(s, _)| s.clone()).collect();
+    assert_eq!(pair.art.visual_bounds_with(&doc.symbol_boxes()), Some(Rect::new(8.0, 3.0, 12.0, 7.0)));
+    let keys: Vec<String> =
+        doc.symbols.iter().filter_map(|s| if let NodeKind::Image(im) = &s.art.kind { Some(im.key.clone()) } else { None }).collect();
+    assert_eq!(keys.len(), 1);
+    assert_eq!(read.images.keys().cloned().collect::<Vec<_>>(), keys);
+    // Without symbols there are none to give.
+    assert!(super::symbols(stream(&styles).as_bytes()).is_none());
+}
+
 #[test]
 fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
     let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);

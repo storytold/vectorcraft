@@ -142,7 +142,8 @@ mod types;
 pub(crate) use art::join_and;
 use art::preview_png;
 pub use document::{
-    BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
+    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
+    symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
 pub(crate) use ops::read_art_style;
