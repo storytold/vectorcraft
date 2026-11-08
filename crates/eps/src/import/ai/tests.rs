@@ -2481,6 +2481,37 @@ fn ai_variable_library_edge_cases() {
     assert_eq!(notes, ["the file's variable library couldn't be read: the Variables panel doesn't list it"]);
 }
 
+/// The empty library a file can keep, its nodes named and nothing else (no value, no type, empty
+/// attributes), has nothing to list: it comes in without a note. A node that has a value or a type
+/// isn't empty, so the same skeleton with a value, or with a type, still gets the note.
+#[test]
+fn an_empty_variable_library_gives_no_note() {
+    // A node with a name and nothing else: its children, then its attributes, as `%_` lines.
+    fn bare(name: &str, attributes: &[&str], children: &[String]) -> String {
+        let close = |n: &str, key: &str| format!("{}%_; {key},\n", n.strip_suffix("%_;\n").unwrap_or(n));
+        let attributes: String = attributes.iter().map(|a| close(&bare(a, &[], &[]), &format!("({a}) "))).collect();
+        let children: String = children.iter().map(|c| close(c, "")).collect();
+        format!(
+            "%_/XMLNode :\n%_/Dictionary :\n{attributes}%_; (xmlnode-attributes) ,\n%_/Array :\n{children}%_; (xmlnode-children) ,\n%_({name}) /String (xmlnode-nodename) ,\n%_;\n"
+        )
+    }
+    let data_sets = bare("v:sampleDataSets", &["xmlns:v", "xmlns"], &[]);
+    let skeleton = bare("variableSets", &[], &[bare("variableSet", &["varSetName"], std::slice::from_ref(&data_sets))]);
+    let (vars, notes) = read_library(&skeleton);
+    assert_eq!(vars, vectorcraft_doc::Variables::default());
+    assert!(notes.is_empty(), "{notes:?}");
+    let unread = ["the file's variable library couldn't be read: the Variables panel doesn't list it"];
+    // The same skeleton but for one entry of the data sets node: a value, then a type.
+    let with = |entry: &str| {
+        let data_sets = data_sets.replace("(xmlnode-nodename) ,\n", &format!("(xmlnode-nodename) ,\n{entry}"));
+        bare("variableSets", &[], &[bare("variableSet", &["varSetName"], &[data_sets])])
+    };
+    for entry in ["%_(x) /String (xmlnode-nodevalue) ,\n", "%_1 /Int (xmlnode-nodetype) ,\n"] {
+        let (_, notes) = read_library(&with(entry));
+        assert_eq!(notes, unread, "{entry}");
+    }
+}
+
 /// When the layers can't be read, or reading stops before the library, [`variables`] still reads
 /// it, for the file read from its PDF part.
 #[test]

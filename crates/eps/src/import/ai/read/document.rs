@@ -1690,6 +1690,20 @@ impl LibraryWalk {
     }
 }
 
+/// Whether an XML node in `o` or the dictionaries it holds has a value or a type
+/// (`xmlnode-nodevalue`, `xmlnode-nodetype`). `seen` counts the dictionaries looked at; past
+/// [`MAX_LIBRARY_NODES`] of them, or deeper than [`MAX_DEPTH`], the library is taken to hold some.
+fn holds_values(o: &Obj, seen: &mut usize, depth: usize) -> bool {
+    *seen = seen.saturating_add(1);
+    if *seen > MAX_LIBRARY_NODES || depth > MAX_DEPTH {
+        return true;
+    }
+    if o.ty == "XMLNode" && (o.get("xmlnode-nodevalue").is_some() || o.get("xmlnode-nodetype").is_some()) {
+        return true;
+    }
+    o.items().any(|c| holds_values(c, seen, depth + 1))
+}
+
 /// The library of the `variableSets` element `sets` (see [`variable_library`]).
 fn read_variable_sets(sets: &Obj) -> VariableRead {
     let mut walk = LibraryWalk::default();
@@ -1709,5 +1723,34 @@ fn read_variable_sets(sets: &Obj) -> VariableRead {
     if walk.nodes > MAX_LIBRARY_NODES {
         return VariableRead { variables: Variables::default(), bindings: vec![], bindings_skipped: 0, skipped: 1, present: true };
     }
+    if vars == Variables::default() && walk.bindings.is_empty() && !holds_values(sets, &mut 0, 0) {
+        // The empty library a file can keep: nodes with names and nothing else (no value, no
+        // type). There is nothing in it to list, so nothing was left out.
+        walk.skipped = 0;
+    }
     VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    /// An XML node holding `child` (when given) and nothing else: no value, no type.
+    fn node(child: Option<Obj>) -> Obj {
+        let children = Obj { ty: "Array".into(), content: child.map(|c| V::Obj(Rc::new(c))).into_iter().collect(), ..Obj::default() };
+        Obj { ty: "XMLNode".into(), entries: vec![(Some("xmlnode-children".into()), vec![V::Obj(Rc::new(children))])], ..Obj::default() }
+    }
+
+    /// An empty library is taken to hold values past the caps on what is looked at: nested deeper
+    /// than [`MAX_DEPTH`], or once [`MAX_LIBRARY_NODES`] dictionaries have been looked at.
+    #[test]
+    fn an_empty_library_past_the_caps_is_taken_to_hold_values() {
+        let shallow = node(Some(node(None)));
+        assert!(!holds_values(&shallow, &mut 0, 0));
+        let deep = (0..MAX_DEPTH).fold(node(None), |inner, _| node(Some(inner)));
+        assert!(holds_values(&deep, &mut 0, 0));
+        let mut seen = MAX_LIBRARY_NODES;
+        assert!(holds_values(&shallow, &mut seen, 0));
+    }
 }
