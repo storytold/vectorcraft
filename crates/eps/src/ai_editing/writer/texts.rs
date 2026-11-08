@@ -29,7 +29,7 @@ use vectorcraft_geom::{Affine, PathData, Point};
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and stroke weight, capitals, small capitals at the document's size, Tate-chu-yoko, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and stroke weight, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -350,6 +350,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             all_caps: s.all_caps,
             small_caps: s.small_caps.filter(|v| *v == default_small_caps),
             tate_chu_yoko: s.tate_chu_yoko,
+            // Key 35 holds one of the two: a Tate-chu-yoko run is read back without the other.
+            standard_vertical_roman: s.standard_vertical_roman && !s.tate_chu_yoko,
             ..CharStyle::default()
         }
     };
@@ -401,6 +403,18 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 || (t.area.first_baseline == FirstBaseline::Ascent && t.area.first_baseline_min != 0.0)))
         || (matches!(t.kind, TextKind::OnPath { .. })
             && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_read_as_none(t)))
+}
+
+/// Key 35 of a run in style `st`, as the reader's `Texts::style` reads it: 3 for Tate-chu-yoko, 1
+/// (Standard) for Standard Vertical Roman Alignment, else 2 (rotated).
+fn baseline_direction(st: &CharStyle) -> i64 {
+    if st.tate_chu_yoko {
+        3
+    } else if st.standard_vertical_roman {
+        1
+    } else {
+        2
+    }
 }
 
 /// The name the font of style `st` is written under, and whether it's TrueType: an installed
@@ -556,9 +570,7 @@ impl TextDoc {
             0
         };
         d.push((12, V::Int(caps)));
-        if st.tate_chu_yoko {
-            d.push((35, V::Int(3)));
-        }
+        d.push((35, V::Int(baseline_direction(st))));
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
@@ -943,6 +955,8 @@ impl TextDoc {
             (8, real(0.0)),
             (9, real(0.0)),
             (12, V::Int(0)),
+            // Every run writes its own key 35, so this only sets where new type starts: Standard (1).
+            (35, V::Int(1)),
             (53, paint(&Color::gray(1.0))),
             (56, V::Bool(true)),
             (57, V::Bool(false)),

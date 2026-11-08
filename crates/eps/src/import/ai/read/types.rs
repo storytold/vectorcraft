@@ -1,4 +1,6 @@
-use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Named, Node, Obj, Paint, Rect, V};
+use super::{
+    Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Named, Node, NodeId, Obj, PageBox, Paint, Rect, V,
+};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -19,17 +21,18 @@ pub(super) const BLEND_BUDGET: usize = 50_000;
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
 
-/// Largest image read (pixels).
+/// Largest placed file's preview read (pixels).
 pub(super) const MAX_PIXELS: u64 = 1 << 25;
 /// Most placed files whose other placement ([`super::Structure::placed_elsewhere`]) is kept.
 pub(super) const MAX_PLACED_ELSEWHERE: usize = 4096;
 
-/// The note for an image past [`MAX_PIXELS`]: the file then opens from its PDF part, which reads
-/// larger images (#1479), unless that part can't be read either; then the image is left out.
-pub const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
+/// The note for an image past the hard limits ([`super::raster::Limits`]) in a file without page
+/// art to replace it.
+pub(super) const IMAGE_TOO_LARGE: &str = "an image too large to read from the editing data was left out";
 
-/// Most hex digits of an image's samples read from comment lines (CMYK and alpha at the largest size).
-pub(super) const MAX_HEX: usize = (MAX_PIXELS as usize) * 10;
+/// What an image past the hard limits is, as the notes name it: with page art, its box becomes
+/// that art (#1479).
+pub(super) const LARGE_IMAGES: &str = "very large images";
 
 /// Largest side of the document and its artboards (points).
 pub(super) const MAX_SIDE: f64 = 1e6;
@@ -279,8 +282,12 @@ pub(super) struct Raster {
     /// `XI`'s operands when its samples follow as hex in comment lines (`%FF00…`) up to
     /// `%AI5_EndRaster`, the form the version 7 specification documents (§8).
     pub(super) operands: Option<Vec<V>>,
-    /// Those hex digits.
-    pub(super) hex: Vec<u8>,
+    /// The bytes of those hex digits, up to `max`.
+    pub(super) samples: Vec<u8>,
+    /// The bytes of samples the image reads (0 when it isn't read).
+    pub(super) max: usize,
+    /// A digit waiting for its pair.
+    pub(super) half: Option<u8>,
 }
 
 /// A placed file's operands, from `` ` `` and its preview, until `~`.
@@ -309,6 +316,43 @@ pub(super) struct Place {
 
 /// The longest relative folder of a placed file read (bytes).
 pub(super) const MAX_PLACED_FOLDER: usize = 4096;
+
+/// The dictionary entry after a placed PDF or `.ai` file that holds the page shown (1-based).
+pub(super) const PLACED_PAGE: &str = "AI11 PlacedPDFPageIndex";
+/// The dictionary entry after a placed PDF or `.ai` file that holds the box it is cropped to.
+pub(super) const PLACED_CROP: &str = "AI11 PlacedPDFCropTo";
+
+/// The placed file just read, until the dictionary after it: it may say the file is a page of a
+/// PDF or `.ai` file.
+#[derive(Debug)]
+pub(super) struct PlacedTail {
+    /// Its linked image.
+    pub(super) id: NodeId,
+    /// Its image's key in the document's images.
+    pub(super) key: String,
+    /// The size of its box.
+    pub(super) size: (f64, f64),
+    /// Its image's blob was stored for it, not shared with an earlier image.
+    pub(super) fresh: bool,
+    /// The frames open when it was read: its dictionary closes at the same depth.
+    pub(super) depth: usize,
+}
+
+/// A placed file the dictionary after it says is a page of a PDF or `.ai` file. Its linked image
+/// becomes a placed document once the layers have been compared with the page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlacedPage {
+    /// The linked image.
+    pub id: NodeId,
+    /// The page shown (1-based).
+    pub page: u32,
+    /// The art's bounds are shown, not `page_box`.
+    pub bounding: bool,
+    /// The box of the page shown.
+    pub page_box: PageBox,
+    /// The size of the placed file's box.
+    pub size: (f64, f64),
+}
 
 /// What the open result says of placed files: they show the preview the file keeps of them.
 pub(super) const LINKED_PREVIEWS: &str =
