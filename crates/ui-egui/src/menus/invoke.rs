@@ -1,4 +1,4 @@
-use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
@@ -143,6 +143,10 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // (Recolor Artwork), opens on the art as the gesture left it.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
+        return;
+    }
     if SUBJECT_COMMANDS.contains(&id)
         && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
         && p.get("id").is_none()
@@ -270,6 +274,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     if id == "view.saved.new" && p.as_object().is_none_or(|o| o.is_empty()) {
         let name = app.session.active().map(|d| vectorcraft_engine::doc::SavedView::default_name(&d.doc.views)).unwrap_or_default();
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
+        return true;
+    }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
         return true;
     }
     // Edit Views…: the saved views in a list, to rename or delete.

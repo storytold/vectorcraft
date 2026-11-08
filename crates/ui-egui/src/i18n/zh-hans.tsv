@@ -316,6 +316,13 @@
 	Apply Bullets	应用项目符号
 	Numbered List	编号列表
 	Apply Numbers	应用编号
+	Bullets and Numbering…	项目符号和编号…
+	Numbers	编号
+	Level:	级别：
+	Bullet Character:	项目符号字符：
+	Number Style:	编号样式：
+	Left Indent:	左缩进：
+	First Line Indent:	首行缩进：
 	Convert to Text	转换为文本
 	Filled Dot	实心圆点
 	Dash	短划线
@@ -3331,6 +3338,15 @@ digits	Malayalam	马拉雅拉姆数字
 	Tate-chu-yoko	纵中横
 	Tate-chu-yoko Settings…	纵中横设置…
 	Tate-chu-yoko Settings	纵中横设置
+	Composite Fonts…	复合字体…
+	Composite Fonts	复合字体
+	Export Composite Fonts	导出复合字体
+	Import Composite Fonts	导入复合字体
+	Delete Font	删除字体
+	Kanji	汉字
+	Kana	假名
+	Numerals	数字
+	Scale at Center	从中心缩放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Temperature	色温
@@ -4186,6 +4202,7 @@ imageTrace	Outline	轮廓
 @msg	an image VectorCraft can't read was left out	已略去 VectorCraft 无法读取的图像
 @msg	graphs come in as plain art, without their data or settings	图表作为普通图稿导入，不保留其数据和设置
 @msg	an image whose data is cut short was left out	已略去数据不完整的图像
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	为保留图层，{_1} × {_2} 像素的嵌入图像已缩小为 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	文件中未定义渐变“{name}”：已改用纯色代替
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚无法读取的画笔未加入“画笔”面板 ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	带有多个填色或描边、效果或画笔的对象已按其绘制外观导入 ({_1})：其外观尚不可编辑
@@ -4589,6 +4606,7 @@ imageTrace	Outline	轮廓
 @msg	object ids are non-negative integers, not {v}	对象 id 是非负整数，而不是 {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} 必须是由非负整数对象 id 组成的数组
 @msg	invalid object id {value}: expected a non-negative integer	无效的对象 id {value}：应为非负整数
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 处的项为 {value}，不是非负整数对象 id
 @msg	no such object id {value}	没有 id 为 {value} 的对象
 @msg	id {value} is a layer, not an object	id {value} 是图层，不是对象
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是图层，不是对象；请使用 layer.move 移动图层
@@ -5699,6 +5717,9 @@ axis	Y Axis	Y 轴
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
 	Version: {version}	版本：{version}
+	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”与 ID 为 {_1} 的插件是不同的模块，并会获得为其保存的设置和缓存：请在用户同意后使用 `replace: true` 安装
 	File SHA-256: {hash}	文件 SHA-256：{hash}
 	Read the objects it is given	读取交给它的对象
 	Change, add and delete objects in the document	更改、添加和删除文档中的对象
@@ -5706,10 +5727,13 @@ axis	Y Axis	Y 轴
 	Change how the objects its effect is applied to are drawn	更改应用了其效果的对象的绘制方式
 	Write the document as a file in its own format	将文档写为其自有格式的文件
 	Show its progress, see Cancel and write log lines	显示进度、检测取消请求并写入日志行
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `progress` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
+	Keep settings of its own	保存自己的设置
+	Keep a cache of its own, which you can clear	保存自己的缓存，您可以清除它
+	Clear Plug-in Cache	清除增效工具缓存
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `{permission}` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模块以与宿主不同的类型导入 `env.{name}`：宿主的类型为 {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `progress` 时才能使用它
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效工具 API 级别 2），不能使用 WASI、文件或网络
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `{permission}` 时才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 docs/plugins.md 列出的 `env.vc_*` 函数（增效工具 API 级别 2），不能使用 WASI、文件或网络
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
@@ -6266,6 +6290,16 @@ breakText	Glyphs	字形
 @msg	path must be a list of child indices	path 必须是子项索引列表
 @msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
 @msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend
+@msg	{key} cannot be set on a guide	无法为参考线设置 {key}
+@msg	{key} cannot be set on a blend	无法为混合设置 {key}
+@msg	{key} cannot be set on an envelope	无法为封套设置 {key}
+@msg	{key} cannot be set on a gradient mesh	无法为渐变网格设置 {key}
+@msg	{key} cannot be set on a Repeat	无法为重复设置 {key}
+@msg	{key} cannot be set on a placed document	无法为置入的文档设置 {key}
+@msg	{key} cannot be set on an Intertwine group	无法为交织编组设置 {key}
+@msg	stroke cannot be set on a symbol instance	无法为符号实例设置 stroke
+@msg	fill on a symbol instance must be a solid color or none	符号实例的 fill 必须是纯色或 none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	无法为没有“转换为形状”或“轮廓化对象”效果的图像设置 {key}
 @msg	pass newName, registration, exportType, nineSlice and/or type	请提供 newName、registration、exportType、nineSlice 和/或 type
 	Text Flow	文本流向
 	By Rows	按行

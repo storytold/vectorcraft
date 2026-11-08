@@ -4,6 +4,7 @@
 //! Fill or Stroke changes it.
 
 use serde_json::{Value, json};
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::Rect;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
@@ -105,6 +106,314 @@ fn static_symbols_and_bad_targets_are_refused() {
     assert!(set(&mut s, json!({"id": plain.0, "path": [], "fill": "#ff0000"})).is_err(), "not an instance");
     assert!(s.execute("symbol.options", &json!({"name": "Pair", "type": "sometimes"})).is_err());
     assert_eq!(overrides(&s, inst), 0);
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+/// The frontmost object of the active layer.
+fn top(s: &Session) -> NodeId {
+    let d = &s.doc().unwrap().doc;
+    d.node(d.default_layer().unwrap()).unwrap().children().unwrap().last().unwrap().id
+}
+
+/// Every pixel of the page.
+fn page(s: &Session) -> Vec<[u8; 4]> {
+    let r = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 200.0, 100.0), 1.0, true);
+    (0..r.height).flat_map(|y| (0..r.width).map(move |x| (x, y))).map(|(x, y)| r.pixel(x, y)).collect()
+}
+
+/// A dynamic symbol "Art" of the frontmost object, made in place: its instance.
+fn art_of_top(s: &mut Session) -> NodeId {
+    let t = top(s);
+    id(&s.execute("symbol.new", &json!({"name": "Art", "ids": [t.0], "type": "dynamic"})).unwrap())
+}
+
+/// Put a red fill and stroke on the root of instance `inst`'s art directly, past the command.
+fn paint_root_red(s: &mut Session, inst: NodeId) {
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    s.edit("paint", |d, _| {
+        let o = vectorcraft_doc::symbol_overrides::SymbolOverride { path: vec![], fill: Some(red.clone()), stroke: Some(red), ..Default::default() };
+        d.node_mut(inst).ok_or(EngineError::NoNode(inst))?.extras_mut().symbol_overrides.push(o);
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// A 30×30 red image placed with its frame from (50, 20) to (80, 50).
+fn place_image(s: &mut Session) {
+    let png = crate::tests_links::png(30, 30, [255, 0, 0]);
+    let data = vectorcraft_format::base64_encode(&png);
+    s.execute("file.place", &json!({"name": "red.png", "dataBase64": data, "at": [65, 35], "link": false})).unwrap();
+}
+
+fn select_top(s: &mut Session, n: usize) {
+    let d = &s.doc().unwrap().doc;
+    let kids = d.node(d.default_layer().unwrap()).unwrap().children().unwrap();
+    let ids: Vec<u64> = kids[kids.len() - n..].iter().map(|c| c.id.0).collect();
+    s.execute("select.set", &json!({ "ids": ids })).unwrap();
+}
+
+#[test]
+fn objects_that_draw_no_fill_or_stroke_of_their_own_refuse_one() {
+    let folder = crate::tests_links::Folder::new("dynamic-symbol-kinds");
+    let source = folder.file("placed.vectorcraft");
+    let mut doc = vectorcraft_doc::Document::new(40.0, 40.0);
+    let layer = doc.layers[0].id;
+    let look = vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    let rect = vectorcraft_doc::Node::path(doc.alloc_id(), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), look);
+    doc.insert(Some(layer), 0, rect).unwrap();
+    crate::tests_links::write(&source, &vectorcraft_format::save_file(&doc));
+    type Make = Box<dyn Fn(&mut Session)>;
+    let cases: Vec<(&str, &str, Make)> = vec![
+        (
+            "guide",
+            "a guide",
+            Box::new(|s| {
+                square(s, 10.0);
+                select_top(s, 1);
+                s.execute("view.guides.make", &json!({})).unwrap();
+            }),
+        ),
+        (
+            "blend",
+            "a blend",
+            Box::new(|s| {
+                let (a, b) = (square(s, 10.0), square(s, 60.0));
+                s.execute("object.blend.make", &json!({"ids": [a.0, b.0], "steps": 1})).unwrap();
+            }),
+        ),
+        (
+            "envelope",
+            "an envelope",
+            Box::new(|s| {
+                square(s, 10.0);
+                select_top(s, 1);
+                s.execute("object.envelope.makeWithWarp", &json!({"style": "arch", "bend": 50})).unwrap();
+            }),
+        ),
+        ("radial Repeat", "a Repeat", Box::new(|s| repeat(s, "object.repeat.radial"))),
+        ("grid Repeat", "a Repeat", Box::new(|s| repeat(s, "object.repeat.grid"))),
+        ("mirror Repeat", "a Repeat", Box::new(|s| repeat(s, "object.repeat.mirror"))),
+        (
+            "Intertwine",
+            "an Intertwine group",
+            Box::new(|s| {
+                square(s, 10.0);
+                square(s, 30.0);
+                select_top(s, 2);
+                s.execute("object.intertwine.make", &json!({})).unwrap();
+            }),
+        ),
+        (
+            "gradient mesh",
+            "a gradient mesh",
+            Box::new(|s| {
+                let r = square(s, 10.0);
+                s.execute("object.mesh.create", &json!({"ids": [r.0], "rows": 1, "cols": 1})).unwrap();
+            }),
+        ),
+        ("image", "an image", Box::new(place_image)),
+        (
+            "placed document",
+            "a placed document",
+            Box::new(move |s| {
+                let r = s.execute("file.place", &json!({"path": source, "at": [40, 40]})).unwrap();
+                assert_eq!(r["linked"], true, "{r}");
+            }),
+        ),
+    ];
+    // Every case runs, and the failure lists each object that fails.
+    let mut failures = Vec::new();
+    for (label, kind, make) in cases {
+        let mut s = session();
+        make(&mut s);
+        let inst = art_of_top(&mut s);
+        if let Err(why) = refuses_own_paint(&mut s, inst, kind) {
+            failures.push(format!("{label}: {why}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Check that the root of instance `inst`'s art, an object of `kind` that draws no fill or stroke
+/// of its own, refuses both, takes null, opacity and blend, and draws no stored fill or stroke.
+fn refuses_own_paint(s: &mut Session, inst: NodeId, kind: &str) -> std::result::Result<(), String> {
+    let set = |s: &mut Session, p: &Value| s.execute("symbol.instance.setAppearance", p);
+    let undo = undo_len(s);
+    for key in ["fill", "stroke"] {
+        for paint in [json!("#ff0000"), json!({"none": true})] {
+            // With a valid opacity too: nothing of the call is applied.
+            let p = json!({"id": inst.0, "path": [], key: paint, "opacity": 50});
+            match set(s, &p) {
+                Ok(_) => return Err(format!("{p} was taken")),
+                Err(e) if !e.to_string().contains(&format!("{key} cannot be set on {kind}")) => return Err(format!("{p}: {e}")),
+                Err(_) => {}
+            }
+        }
+    }
+    if (overrides(s, inst), undo_len(s)) != (0, undo) {
+        return Err("a refused call changed the instance or added an undo step".into());
+    }
+    // Null (taking a change back), opacity and blend are taken.
+    let clear = json!({"id": inst.0, "path": [], "fill": null, "stroke": null});
+    for p in [clear, json!({"id": inst.0, "path": [], "opacity": 50, "blend": "multiply"})] {
+        set(s, &p).map_err(|e| format!("{p}: {e}"))?;
+    }
+    if overrides(s, inst) != 1 {
+        return Err("opacity and blend were not stored".into());
+    }
+    // The renderer draws no fill or stroke of the object's own: a stored one changes nothing.
+    let before = page(s);
+    paint_root_red(s, inst);
+    if page(s) != before {
+        return Err("a stored fill and stroke changed the canvas".into());
+    }
+    Ok(())
+}
+
+fn repeat(s: &mut Session, cmd: &str) {
+    square(s, 10.0);
+    select_top(s, 1);
+    s.execute(cmd, &json!({})).unwrap();
+}
+
+#[test]
+fn a_symbol_instance_in_the_art_takes_a_fill_that_stains_it_and_no_stroke() {
+    let mut s = session();
+    pair(&mut s, "static");
+    let inst = art_of_top(&mut s);
+    let undo = undo_len(&s);
+    let e = s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "stroke": "#ff0000"})).unwrap_err().to_string();
+    assert!(e.contains("stroke cannot be set on a symbol instance"), "{e}");
+    assert_eq!((overrides(&s, inst), undo_len(&s)), (0, undo));
+    // A stroke stored past the command draws nothing.
+    let before = page(&s);
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    s.edit("paint", |d, _| {
+        let o = vectorcraft_doc::symbol_overrides::SymbolOverride { path: vec![], stroke: Some(red), ..Default::default() };
+        d.node_mut(inst).ok_or(EngineError::NoNode(inst))?.extras_mut().symbol_overrides.push(o);
+        Ok(())
+    })
+    .unwrap();
+    assert!(page(&s) == before, "a stroke on a symbol instance draws nothing");
+    // The fill stains the nested instance's art.
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "fill": "#ff0000"})).unwrap();
+    assert_eq!(pixel(&s, 30, 30), RED, "the fill stains the art");
+}
+
+#[test]
+fn a_symbol_instance_in_the_art_refuses_a_gradient_fill() {
+    let mut s = session();
+    pair(&mut s, "static");
+    let inst = art_of_top(&mut s);
+    let undo = undo_len(&s);
+    let gradient = json!({"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#00ff00"}]});
+    let p = json!({"id": inst.0, "path": [], "fill": {"gradient": gradient}, "opacity": 50});
+    let e = s.execute("symbol.instance.setAppearance", &p).unwrap_err().to_string();
+    assert!(e.contains("fill on a symbol instance must be a solid color or none"), "{e}");
+    assert_eq!((overrides(&s, inst), undo_len(&s)), (0, undo), "nothing changes and no undo step");
+    // A gradient fill stored past the command draws nothing.
+    let before = page(&s);
+    let paint = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    s.edit("paint", |d, _| {
+        let o = vectorcraft_doc::symbol_overrides::SymbolOverride { path: vec![], fill: Some(paint), ..Default::default() };
+        d.node_mut(inst).ok_or(EngineError::NoNode(inst))?.extras_mut().symbol_overrides.push(o);
+        Ok(())
+    })
+    .unwrap();
+    assert!(page(&s) == before, "a gradient fill on a symbol instance draws nothing");
+    // A solid fill and none are taken.
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "fill": {"none": true}})).unwrap();
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "fill": "#ff0000"})).unwrap();
+    assert_eq!(pixel(&s, 30, 30), RED);
+}
+
+#[test]
+fn a_symbol_instance_in_the_art_refuses_a_pattern_fill() {
+    let mut s = session();
+    let tile = id(&s.execute("shape.rectangle", &json!({"x": 150, "y": 60, "width": 10, "height": 10})).unwrap());
+    s.execute("object.pattern.make", &json!({"ids": [tile.0], "name": "Dots", "edit": false})).unwrap();
+    pair(&mut s, "static");
+    let inst = art_of_top(&mut s);
+    let undo = undo_len(&s);
+    let p = json!({"id": inst.0, "path": [], "fill": {"swatch": "Dots"}, "opacity": 50});
+    let e = s.execute("symbol.instance.setAppearance", &p).unwrap_err().to_string();
+    assert!(e.contains("fill on a symbol instance must be a solid color or none"), "{e}");
+    assert_eq!((overrides(&s, inst), undo_len(&s)), (0, undo), "nothing changes and no undo step");
+    // The pattern draws on a path.
+    let probe = square(&mut s, 110.0);
+    let before = page(&s);
+    s.execute("paint.setFill", &json!({"ids": [probe.0], "swatch": "Dots"})).unwrap();
+    assert!(page(&s) != before, "the pattern draws on a path");
+    // A pattern fill stored on the nested instance past the command draws nothing.
+    let before = page(&s);
+    let paint = s.doc().unwrap().doc.swatch("Dots").unwrap().paint.clone();
+    assert!(matches!(paint, Paint::Pattern { .. }), "{paint:?}");
+    s.edit("paint", |d, _| {
+        let o = vectorcraft_doc::symbol_overrides::SymbolOverride { path: vec![], fill: Some(paint), ..Default::default() };
+        d.node_mut(inst).ok_or(EngineError::NoNode(inst))?.extras_mut().symbol_overrides.push(o);
+        Ok(())
+    })
+    .unwrap();
+    assert!(page(&s) == before, "a pattern fill on a symbol instance draws nothing");
+}
+
+#[test]
+fn null_takes_back_an_old_change_an_object_does_not_draw() {
+    let mut s = session();
+    let (a, b) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    s.execute("object.blend.make", &json!({"ids": [a.0, b.0], "steps": 1})).unwrap();
+    let inst = art_of_top(&mut s);
+    // A change stored before the command refused one, as an older document may hold.
+    paint_root_red(&mut s, inst);
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "fill": null})).unwrap();
+    assert!(node(&s, inst).extras().symbol_overrides[0].fill.is_none());
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "stroke": null})).unwrap();
+    assert_eq!(overrides(&s, inst), 0);
+}
+
+#[test]
+fn paths_type_groups_and_shaped_image_paint_take_a_fill_and_stroke() {
+    let set = |s: &mut Session, inst: NodeId, path: Value| {
+        s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": path, "fill": "#ff0000", "stroke": "#ff0000"})).unwrap()
+    };
+    // A group's own fill paints over its members.
+    let mut s = session();
+    let inst = pair(&mut s, "dynamic");
+    assert_eq!(set(&mut s, inst, json!([]))["overrides"], 1);
+    assert_eq!(pixel(&s, 30, 30), RED, "the group's own fill");
+    // A compound path, type and a clipping path.
+    let mut s = session();
+    let (a, b) = (square(&mut s, 10.0), square(&mut s, 60.0));
+    s.execute("object.compoundPath.make", &json!({"ids": [a.0, b.0]})).unwrap();
+    let inst = art_of_top(&mut s);
+    set(&mut s, inst, json!([]));
+    assert_eq!(pixel(&s, 30, 30), RED, "the compound path");
+    let mut s = session();
+    s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap();
+    let inst = art_of_top(&mut s);
+    set(&mut s, inst, json!([]));
+    let mut s = session();
+    let (a, b) = (square(&mut s, 10.0), square(&mut s, 20.0));
+    s.execute("object.clippingMask.make", &json!({"ids": [a.0, b.0]})).unwrap();
+    let inst = art_of_top(&mut s);
+    assert!(matches!(&node(&s, inst).kind, NodeKind::SymbolInstance { .. }));
+    set(&mut s, inst, json!([0]));
+    set(&mut s, inst, json!([]));
+    // An image whose fill has Convert to Shape: the fill paints 9 pt past its frame.
+    let mut s = session();
+    place_image(&mut s);
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "item": 0})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "convertToShape.rectangle", "item": 0})).unwrap();
+    assert_eq!(pixel(&s, 44, 35), [0, 255, 0, 255]);
+    let inst = art_of_top(&mut s);
+    let e = s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "stroke": "#ff0000"})).unwrap_err().to_string();
+    assert!(e.contains("stroke cannot be set on an image without a Convert to Shape or Outline Object effect on it"), "{e}");
+    s.execute("symbol.instance.setAppearance", &json!({"id": inst.0, "path": [], "fill": "#ff0000"})).unwrap();
+    assert_eq!(pixel(&s, 44, 35), RED, "the shaped fill takes the instance's color");
 }
 
 #[test]

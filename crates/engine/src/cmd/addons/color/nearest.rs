@@ -189,7 +189,7 @@ pub(super) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let given = json!({
         "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "fill": fill, "stroke": stroke, "includeImages": false, "includePatterns": false,
     });
-    let r = recolor_links(s, &given, "Apply Nearest Swatch", &|c| to(c).and_then(Paint::color).unwrap_or(c), &links)?;
+    let r = recolor_links(s, &given, APPLY, "Apply Nearest Swatch", &|c| to(c).and_then(Paint::color).unwrap_or(c), &links)?;
     squash(s, undo, "Apply Nearest Swatch");
     Ok(json!({ "changed": r["changed"], "swatches": names, "added": added }))
 }

@@ -329,6 +329,13 @@ font-technology	Variable	可變
 	Apply Bullets	套用項目符號
 	Numbered List	編號清單
 	Apply Numbers	套用編號
+	Bullets and Numbering…	項目符號與編號…
+	Numbers	編號
+	Level:	層級：
+	Bullet Character:	項目符號字元：
+	Number Style:	編號樣式：
+	Left Indent:	左縮排：
+	First Line Indent:	首行縮排：
 	Convert to Text	轉換為文字
 	Filled Dot	實心圓點
 	Dash	短破折號
@@ -2037,6 +2044,7 @@ file-filter	Templates	範本
 @msg	an image VectorCraft can't read was left out	已略過 VectorCraft 無法讀取的影像
 @msg	graphs come in as plain art, without their data or settings	圖表以一般圖稿匯入，不保留其資料與設定
 @msg	an image whose data is cut short was left out	已略過資料不完整的影像
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	為保留圖層，{_1} × {_2} 像素的內嵌影像已縮小為 {_3} × {_4} 像素
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	檔案中未定義漸層「{name}」：已改用單色替代
 @msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	VectorCraft 尚無法讀取的筆刷未加入「筆刷」面板 ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	具有多個填色或筆畫、效果或筆刷的物件已依其繪製外觀匯入 ({_1})：其外觀目前尚無法編輯
@@ -4370,6 +4378,15 @@ digits	Malayalam	馬來亞拉姆數字
 	Tate-chu-yoko	縱中橫
 	Tate-chu-yoko Settings…	縱中橫設定…
 	Tate-chu-yoko Settings	縱中橫設定
+	Composite Fonts…	複合字體…
+	Composite Fonts	複合字體
+	Export Composite Fonts	匯出複合字體
+	Import Composite Fonts	匯入複合字體
+	Delete Font	刪除字體
+	Kanji	漢字
+	Kana	假名
+	Numerals	數字
+	Scale at Center	從中心縮放
 	Up/Down:	上/下：
 	Left/Right:	左/右：
 	Temperature	色溫
@@ -5410,6 +5427,7 @@ lighting	Light	光源
 @msg	{key} must be Unix seconds (an integer) or null	{key} 必須是以秒為單位的 Unix 時間 (整數) 或 null
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 處的項目為 {value}，不是非負整數物件 id
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
 @msg	id {value} is a layer, not an object	id {value} 是圖層，不是物件
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層
@@ -5495,6 +5513,9 @@ axis	Y Axis	Y 軸
 	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
 	ID: {id}	ID：{id}
 	Version: {version}	版本：{version}
+	Install “{name}” in place of the plug-in with the same ID?	要安裝「{name}」來取代具有相同 ID 的增效模組嗎？
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此檔案不是先前以此 ID 安裝的增效模組。它會取得為該 ID 保存的設定和快取。
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」與 ID 為 {_1} 的增效模組是不同的模組，並會取得為其保存的設定和快取：請在使用者同意後以 `replace: true` 安裝
 	File SHA-256: {hash}	檔案 SHA-256：{hash}
 	Read the objects it is given	讀取交給它的物件
 	Change, add and delete objects in the document	變更、新增和刪除文件中的物件
@@ -5502,10 +5523,13 @@ axis	Y Axis	Y 軸
 	Change how the objects its effect is applied to are drawn	變更套用其效果的物件的繪製方式
 	Write the document as a file in its own format	將文件寫成其自有格式的檔案
 	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `progress` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
+	Keep settings of its own	保存自己的設定
+	Keep a cache of its own, which you can clear	保存自己的快取，您可以清除它
+	Clear Plug-in Cache	清除增效模組快取
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `{permission}` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `progress` 時才能使用它
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效模組 API 層級 2），不能使用 WASI、檔案或網路
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `{permission}` 時才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 docs/plugins.md 列出的 `env.vc_*` 函式（增效模組 API 層級 2），不能使用 WASI、檔案或網路
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
@@ -6063,6 +6087,16 @@ breakText	Glyphs	字符
 @msg	path must be a list of child indices	path 必須是子項索引清單
 @msg	no object at path {shown} in the symbol's art	符號圖稿中路徑 {shown} 處沒有物件
 @msg	give fill, stroke, opacity and/or blend	請提供 fill、stroke、opacity 和/或 blend
+@msg	{key} cannot be set on a guide	無法為參考線設定 {key}
+@msg	{key} cannot be set on a blend	無法為漸變設定 {key}
+@msg	{key} cannot be set on an envelope	無法為封套設定 {key}
+@msg	{key} cannot be set on a gradient mesh	無法為漸層網格設定 {key}
+@msg	{key} cannot be set on a Repeat	無法為重複設定 {key}
+@msg	{key} cannot be set on a placed document	無法為置入的文件設定 {key}
+@msg	{key} cannot be set on an Intertwine group	無法為交織群組設定 {key}
+@msg	stroke cannot be set on a symbol instance	無法為符號範例設定 stroke
+@msg	fill on a symbol instance must be a solid color or none	符號範例的 fill 必須是純色或 none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	無法為沒有「轉換為形狀」或「外框物件」效果的影像設定 {key}
 @msg	pass newName, registration, exportType, nineSlice and/or type	請提供 newName、registration、exportType、nineSlice 和/或 type
 	Text Flow	文字流向
 	By Rows	依列
