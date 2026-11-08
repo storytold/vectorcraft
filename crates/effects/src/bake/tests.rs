@@ -250,26 +250,58 @@ fn baked_warps_move_placed_gradients_from_the_bounds_to_the_warped_bounds() {
         "squeeze",
         "twist",
     ];
+    // The square's warped bounds, from `warp_point` on 401 points along each side: the square's
+    // corners are (-1, -1) and (1, 1) in the warp's box coordinates, and a vertical warp swaps
+    // the axes.
+    let warped_bounds = |style: &str, p: &serde_json::Value| {
+        let Some(style) = crate::WarpStyle::from_id(style) else { panic!("warp.{style}: a style") };
+        let share = |key: &str, default: f64| p.get(key).and_then(serde_json::Value::as_f64).unwrap_or(default) / 100.0;
+        let vertical = p.get("orientation").and_then(serde_json::Value::as_str) == Some("vertical");
+        let (bend, dh, dv) = (share("bend", 50.0), share("horizontal", 0.0), share("vertical", 0.0));
+        let mut r: Option<Rect> = None;
+        for k in 0..=400 {
+            let s = f64::from(k) / 200.0 - 1.0;
+            for (x, y) in [(s, -1.0), (s, 1.0), (-1.0, s), (1.0, s)] {
+                let (x2, y2) = if vertical {
+                    let (a, b) = crate::warp_point(style, bend, dh, dv, 1.0, y, x);
+                    (b, a)
+                } else {
+                    crate::warp_point(style, bend, dh, dv, 1.0, x, y)
+                };
+                let q = Point::new(50.0 + x2 * 50.0, 50.0 + y2 * 50.0);
+                r = Some(r.map_or(Rect::from_points(q, q), |r| r.union_pt(q)));
+            }
+        }
+        r.unwrap_or(square)
+    };
+    let near =
+        |a: Rect, b: Rect, tol: f64| (a.x0 - b.x0).abs() < tol && (a.y0 - b.y0).abs() < tol && (a.x1 - b.x1).abs() < tol && (a.y1 - b.y1).abs() < tol;
     let mut moved = 0;
     for style in styles {
         for params in
             [json!({"bend": 30.0}), json!({"bend": -40.0, "orientation": "vertical"}), json!({"bend": 20.0, "horizontal": 30.0, "vertical": -20.0})]
         {
+            // A warp that bends the square's sides inward keeps its bounds (within 0.5 pt), and the
+            // gradient stays with them.
+            let expected = warped_bounds(style, &params);
+            let moves = !near(expected, square, 0.5);
+            moved += usize::from(moves);
             for linear in [across, down] {
                 let what = format!("warp.{style} {params} {linear:?}");
                 let (b, g) = baked(&placed(linear), fx(&format!("warp.{style}"), params.clone()));
+                assert!(near(b, expected, 0.1), "{what}: bounds {b:?}, want {expected:?}");
+                let geom = g.geom.unwrap();
+                let shifted = geom.start.distance(linear.start).max(geom.end.distance(linear.end));
+                assert_eq!(shifted > 0.1, moves, "{what}: the gradient moves {shifted} with bounds {b:?}");
                 let want = GradientGeom { start: follow(linear.start, b), end: follow(linear.end, b), ..linear };
-                assert_geom_near(g.geom.unwrap(), want, &what);
-                if b != square {
-                    moved += 1;
-                }
+                assert_geom_near(geom, want, &what);
             }
             let what = format!("warp.{style} {params}");
             // A fitted gradient stays fitted, and fits the warped outline.
             assert_eq!(baked(&fitted, fx(&format!("warp.{style}"), params)).1.geom, None, "{what}");
         }
     }
-    assert!(moved >= 80, "most of the warps change the bounds: {moved}");
+    assert_eq!(moved, 39, "the warps that move the bounds, of 45");
     // With no bend and no distortion the gradient stays where it is.
     let (_, g) = baked(&placed(across), fx("warp.arc", json!({"bend": 0.0})));
     assert_geom_near(g.geom.unwrap(), across, "no bend");
