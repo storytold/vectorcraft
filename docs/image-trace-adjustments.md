@@ -51,6 +51,13 @@ traced fills and strokes take the library color without a link to its swatch. Th
 spot and tint swatches. Tints trace at the color shown by the tint swatch. Editing a swatch later
 does not recolor the trace. Colors from other swatch libraries are also unlinked.
 
+**Ignore Color, background only.** Ignore Color leaves out every area of the chosen color. With
+`"ignoreBackground": true` beside `"ignoreWhite": true` in the params of `imageTrace.make` or
+`imageTrace.makeAndExpand`, it leaves out only the areas of that color that reach the image's edge,
+joined through pixels above, below or to either side, and traces the areas of it that other colors
+enclose: black line work inside a panel stays when the black around the panel is left out. Flat Logo
+leaves out every white area whatever `ignoreBackground` is.
+
 **Document Library** traces with the library's colors as they are. Each pixel takes the library
 color nearest to it in lightness and hue, with a difference in hue or chroma counted three times
 as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
