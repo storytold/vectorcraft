@@ -1,4 +1,4 @@
-use super::output::{xml_attr_valid, xml_text};
+use super::output::{xml_attr_escape, xml_attr_valid, xml_text};
 use super::{
     Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
     NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
@@ -166,10 +166,19 @@ impl Writer<'_> {
         }
         let id = self.id_attr(n);
         let a = self.attrs(&css::transparency(n));
-        // Glyphs bent along a path (joined scripts on a curve) can only be outlines: the group
-        // names its text for screen readers and search.
-        let label = if lay.glyphs.iter().any(|g| g.bend.is_some()) {
-            format!(" role=\"img\" aria-label=\"{}\"", xml_attr_valid(&t.plain_text()))
+        // Text outlined because SVG text can't draw it (bent glyphs, vertical type, ruby, effects on
+        // a path and the like) names its text for screen readers and search; Convert to Outlines
+        // leaves only the paths, except for bent glyphs. Inline graphics are written apart from the
+        // glyphs, so their placeholder characters stay out of the name; empty text has none.
+        let text: String = t.plain_text().chars().filter(|&c| c != vectorcraft_doc::text::INLINE_CHAR).collect();
+        let label = if !text.trim().is_empty() && (!self.opts.outline_text || lay.glyphs.iter().any(|g| g.bend.is_some())) {
+            // SVG import names an object by its `aria-label` before its id, so an id that stands for
+            // the name is written as `data-name` too, and the object keeps its name.
+            let name = match self.names.get(&n.id) {
+                Some(named) if !id.is_empty() && !id.contains(" data-name=\"") => format!(" data-name=\"{}\"", xml_attr_escape(named)),
+                _ => String::new(),
+            };
+            format!("{name} role=\"img\" aria-label=\"{}\"", xml_attr_valid(&text))
         } else {
             String::new()
         };

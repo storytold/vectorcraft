@@ -6315,6 +6315,16 @@ shape	Open	Otvoren
 @msg	path must be a list of child indices	path mora biti lista indeksa podređenih objekata
 @msg	no object at path {shown} in the symbol's art	nema objekta na putanji {shown} u grafici simbola
 @msg	give fill, stroke, opacity and/or blend	navedite fill, stroke, opacity i/ili blend
+@msg	{key} cannot be set on a guide	{key} se ne može postaviti na vodilicu
+@msg	{key} cannot be set on a blend	{key} se ne može postaviti na stapanje
+@msg	{key} cannot be set on an envelope	{key} se ne može postaviti na omotnicu
+@msg	{key} cannot be set on a gradient mesh	{key} se ne može postaviti na gradijentnu mrežu
+@msg	{key} cannot be set on a Repeat	{key} se ne može postaviti na ponavljanje
+@msg	{key} cannot be set on a placed document	{key} se ne može postaviti na postavljeni dokument
+@msg	{key} cannot be set on an Intertwine group	{key} se ne može postaviti na Intertwine grupu
+@msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
+@msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
 @msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
 	Text Flow	Tok teksta
 	By Rows	Po redovima

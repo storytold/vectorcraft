@@ -6049,6 +6049,16 @@ breakText	Glyphs	Гліфи
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
+@msg	{key} cannot be set on a guide	{key} не можна задати для напрямної
+@msg	{key} cannot be set on a blend	{key} не можна задати для переходу
+@msg	{key} cannot be set on an envelope	{key} не можна задати для оболонки
+@msg	{key} cannot be set on a gradient mesh	{key} не можна задати для градієнтної сітки
+@msg	{key} cannot be set on a Repeat	{key} не можна задати для повторення
+@msg	{key} cannot be set on a placed document	{key} не можна задати для розміщеного документа
+@msg	{key} cannot be set on an Intertwine group	{key} не можна задати для групи переплетення
+@msg	stroke cannot be set on a symbol instance	stroke не можна задати для екземпляра символу
+@msg	fill on a symbol instance must be a solid color or none	fill екземпляра символу має бути суцільним кольором або none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не можна задати для зображення без ефекту «Перетворити на фігуру» або «Обвести об’єкт»
 @msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
 	Text Flow	Потік тексту
 	By Rows	За рядками

@@ -6030,6 +6030,16 @@ breakText	Glyphs	글리프
 @msg	path must be a list of child indices	path는 자식 인덱스 목록이어야 합니다
 @msg	no object at path {shown} in the symbol's art	심볼 아트의 경로 {shown}에 개체가 없습니다
 @msg	give fill, stroke, opacity and/or blend	fill, stroke, opacity 및/또는 blend를 지정하세요
+@msg	{key} cannot be set on a guide	안내선에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a blend	블렌드에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on an envelope	엔벨로프에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a gradient mesh	그레이디언트 메시에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a Repeat	반복에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on a placed document	가져온 문서에는 {key}을(를) 설정할 수 없습니다
+@msg	{key} cannot be set on an Intertwine group	교차 그룹에는 {key}을(를) 설정할 수 없습니다
+@msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
+@msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
 @msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향

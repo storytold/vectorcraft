@@ -6479,6 +6479,16 @@ breakText	Glyphs	Merkit
 @msg	path must be a list of child indices	path-arvon on oltava luettelo alikohteiden indeksejä
 @msg	no object at path {shown} in the symbol's art	symbolin kuvituksessa ei ole objektia polussa {shown}
 @msg	give fill, stroke, opacity and/or blend	anna fill, stroke, opacity ja/tai blend
+@msg	{key} cannot be set on a guide	{key}-arvoa ei voi asettaa apuviivalle
+@msg	{key} cannot be set on a blend	{key}-arvoa ei voi asettaa sulautukselle
+@msg	{key} cannot be set on an envelope	{key}-arvoa ei voi asettaa kuorelle
+@msg	{key} cannot be set on a gradient mesh	{key}-arvoa ei voi asettaa liukuväriverkolle
+@msg	{key} cannot be set on a Repeat	{key}-arvoa ei voi asettaa toistolle
+@msg	{key} cannot be set on a placed document	{key}-arvoa ei voi asettaa sijoitetulle dokumentille
+@msg	{key} cannot be set on an Intertwine group	{key}-arvoa ei voi asettaa lomitetulle ryhmälle
+@msg	stroke cannot be set on a symbol instance	stroke-arvoa ei voi asettaa symbolin ilmentymälle
+@msg	fill on a symbol instance must be a solid color or none	symbolin ilmentymän fill-arvon on oltava tasainen väri tai none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}-arvoa ei voi asettaa kuvalle, jolla ei ole tehostetta Muunna muodoksi tai Muunna objekti ääriviivoiksi
 @msg	pass newName, registration, exportType, nineSlice and/or type	anna newName, registration, exportType, nineSlice ja/tai type
 	Text Flow	Tekstin kulku
 	By Rows	Riveittäin

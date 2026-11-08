@@ -6433,6 +6433,16 @@ breakText	Glyphs	Glifák
 @msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
 @msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
 @msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét
+@msg	{key} cannot be set on a guide	a {key} nem állítható be segédvonalon
+@msg	{key} cannot be set on a blend	a {key} nem állítható be összemosáson
+@msg	{key} cannot be set on an envelope	a {key} nem állítható be burkolón
+@msg	{key} cannot be set on a gradient mesh	a {key} nem állítható be színátmenetes hálón
+@msg	{key} cannot be set on a Repeat	a {key} nem állítható be ismétlésen
+@msg	{key} cannot be set on a placed document	a {key} nem állítható be elhelyezett dokumentumon
+@msg	{key} cannot be set on an Intertwine group	a {key} nem állítható be összefonási csoporton
+@msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
+@msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
 @msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként

@@ -6449,6 +6449,16 @@ breakText	Glyphs	Glyfy
 @msg	path must be a list of child indices	path musí být seznam indexů potomků
 @msg	no object at path {shown} in the symbol's art	v kresbě symbolu není na cestě {shown} žádný objekt
 @msg	give fill, stroke, opacity and/or blend	zadejte fill, stroke, opacity a/nebo blend
+@msg	{key} cannot be set on a guide	{key} nelze nastavit u vodítka
+@msg	{key} cannot be set on a blend	{key} nelze nastavit u prolnutí
+@msg	{key} cannot be set on an envelope	{key} nelze nastavit u obálky
+@msg	{key} cannot be set on a gradient mesh	{key} nelze nastavit u přechodové sítě
+@msg	{key} cannot be set on a Repeat	{key} nelze nastavit u opakování
+@msg	{key} cannot be set on a placed document	{key} nelze nastavit u umístěného dokumentu
+@msg	{key} cannot be set on an Intertwine group	{key} nelze nastavit u propletené skupiny
+@msg	stroke cannot be set on a symbol instance	stroke nelze nastavit u instance symbolu
+@msg	fill on a symbol instance must be a solid color or none	fill instance symbolu musí být plná barva nebo none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} nelze nastavit u obrazu bez efektu Převést na tvar nebo Převést objekt na obrys
 @msg	pass newName, registration, exportType, nineSlice and/or type	zadejte newName, registration, exportType, nineSlice a/nebo type
 	Text Flow	Tok textu
 	By Rows	Po řádcích

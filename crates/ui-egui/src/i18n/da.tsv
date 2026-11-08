@@ -6280,6 +6280,16 @@ breakText	Glyphs	Glyffer
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend
+@msg	{key} cannot be set on a guide	{key} kan ikke angives for en hjælpelinje
+@msg	{key} cannot be set on a blend	{key} kan ikke angives for en blanding
+@msg	{key} cannot be set on an envelope	{key} kan ikke angives for en kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan ikke angives for et gradientnet
+@msg	{key} cannot be set on a Repeat	{key} kan ikke angives for en gentagelse
+@msg	{key} cannot be set on a placed document	{key} kan ikke angives for et placeret dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan ikke angives for en sammenflettet gruppe
+@msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
+@msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
 @msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
 	Text Flow	Tekstflow
 	By Rows	Efter rækker
