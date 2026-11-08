@@ -5904,6 +5904,8 @@ axis	Y Axis	Axe Y
 @msg	`inputs` lists `{shown}` twice	`inputs` mentionne `{shown}` deux fois
 @msg	`inputs` needs `api` 2 or later	`inputs` nécessite `api` 2 ou plus
 @msg	`inputs` needs the permission `doc.read`	`inputs` nécessite l’autorisation `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	budget mémoire (l’objet {_1} nécessite {size} octets d’entrée, il en reste {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	budget d’objets (plus de {MAX_OBJECTS} objets en lecture seule)
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié

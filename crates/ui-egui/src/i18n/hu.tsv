@@ -5891,6 +5891,8 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik

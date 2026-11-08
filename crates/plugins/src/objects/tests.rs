@@ -556,6 +556,26 @@ fn a_path_past_the_input_capacity_is_the_runtime_limit() {
     assert_eq!(e.to_string(), "plug-in exceeded its memory budget (the selection is too large to hand over)");
 }
 
+/// An output lists at most [`MAX_OBJECTS`] objects and must return every read-only one, so an input
+/// with more read-only objects than that is a limit; exactly that many are given.
+#[test]
+fn more_read_only_objects_than_an_output_lists_is_a_limit() {
+    let (mut d, _, layer, [.., ghost]) = mixed();
+    let mut ids = vec![ghost];
+    for _ in 1..MAX_OBJECTS {
+        let n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Gone".into(), xf: Affine::IDENTITY });
+        ids.push(d.insert(Some(layer), usize::MAX, n).unwrap());
+    }
+    let (_, read_only) = encode_input_with(&d, &ids, &[InputKind::SymbolInstance], usize::MAX).unwrap();
+    assert_eq!(read_only.len(), MAX_OBJECTS);
+    let n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Gone".into(), xf: Affine::IDENTITY });
+    ids.push(d.insert(Some(layer), usize::MAX, n).unwrap());
+    let e = encode_input_with(&d, &ids, &[InputKind::SymbolInstance], usize::MAX).unwrap_err();
+    assert_eq!(e.to_string(), format!("plug-in exceeded its object budget (more than {MAX_OBJECTS} read-only objects)"));
+    // A filter that doesn't list the kind is given none of them.
+    assert!(encode_input_with(&d, &ids, &[], usize::MAX).unwrap().1.is_empty());
+}
+
 /// Objects that clip a clip group are left out, and so are those inside a group that clips one;
 /// those it clips are given. This covers a filter that lists no `inputs` too.
 #[test]

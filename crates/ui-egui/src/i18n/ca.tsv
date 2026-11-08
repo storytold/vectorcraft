@@ -5921,6 +5921,8 @@ digits	Malayalam	Malaiàlam
 @msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
 @msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» demana els permisos {asked}: instal·la’l amb un `grant` que els enumeri quan l’usuari hi estigui d’acord

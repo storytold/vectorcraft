@@ -449,7 +449,8 @@ order, with its id, bounds, transform and name. Type whose runs and paragraphs d
 of these objects don't fit what is left, the run fails before the plug-in starts, naming the object and the bytes it
 needs: `plug-in exceeded its memory budget (object 17 needs 4200 bytes of input, 1000 left)`. A path or compound path
 that doesn't fit fails it with `plug-in exceeded its memory budget (the selection is too large to hand over)` before
-the objects after it are written. An echo of them counts
+the objects after it are written. An output lists at most 100,000 objects, so a run given more than 100,000 of these
+objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
 toward the 64 MiB output cap.
 
 ### Parameters

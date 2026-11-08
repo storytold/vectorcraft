@@ -5589,6 +5589,8 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください

@@ -5504,6 +5504,8 @@ axis	Y Axis	Вісь Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
 @msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет пам’яті (об’єкту {_1} потрібно {size} байтів вхідних даних, залишилося {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	бюджет об’єктів (понад {MAX_OBJECTS} об’єктів лише для читання)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться

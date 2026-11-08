@@ -6480,7 +6480,8 @@ pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted
 toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included: pixels and runs that
 don't fit come the same way, and an object whose other fields don't fit makes `plugin.run` return a memory-budget error
 naming the object and its size, with nothing changed. A path or compound path that doesn't fit makes it return the
-memory-budget error `the selection is too large to hand over`. Its output returns
+memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
+an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
 field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and

@@ -5485,6 +5485,8 @@ axis	Y Axis	Y축
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	개체 예산(읽기 전용 개체 {MAX_OBJECTS}개 초과)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”은(는) {asked} 권한을 요청합니다. 사용자가 동의하면 이를 나열한 `grant`로 설치하세요

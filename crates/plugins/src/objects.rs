@@ -187,8 +187,9 @@ pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
 /// input may be. Every object counts toward `capacity` in order, ids, bounds, transforms and names
 /// included: pixels or text that don't fit what is left are omitted (`pixelsOmitted`,
 /// `truncated`), a read-only object whose other fields alone don't fit is an [`Error::Limit`]
-/// naming it and its size, and a path or compound path that doesn't fit is the limit the runtime
-/// gives an input past its share. Also returns those objects by id, which the filter
+/// naming it and its size, a path or compound path that doesn't fit is the limit the runtime gives
+/// an input past its share, and more than [`MAX_OBJECTS`] read-only objects, more than an output
+/// may list, is an [`Error::Limit`] too. Also returns those objects by id, which the filter
 /// must return as they were ([`decode_output_with`]).
 pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind], capacity: usize) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
     encode_input_within(doc, ids, kinds, Allowance { input: capacity.saturating_sub(EMPTY_INPUT.len()), ..Allowance::FULL })
@@ -221,6 +222,8 @@ fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut 
     for n in ids.iter().filter_map(|id| doc.node(*id)) {
         let path;
         let (o, checked): (&Value, bool) = match input_kind(n).filter(|k| kinds.contains(k)) {
+            // The output must return every read-only object, and lists at most `MAX_OBJECTS`.
+            Some(_) if read_only.len() >= MAX_OBJECTS => return Err(too_many_read_only()),
             Some(_) => match encode_read_only_within(doc, n, &symbols, &mut left)? {
                 Some(o) => (read_only.entry(n.id).insert_entry(o).into_mut(), true),
                 None => continue,
@@ -255,6 +258,11 @@ fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut 
 /// The error for read-only object `n`, which needs `size` bytes of input where `left` are left.
 fn too_large(n: &Node, size: usize, left: usize) -> Error {
     Error::Limit(format!("memory budget (object {} needs {size} bytes of input, {left} left)", n.id.0))
+}
+
+/// The error for an input with more read-only objects than an output may list.
+fn too_many_read_only() -> Error {
+    Error::Limit(format!("object budget (more than {MAX_OBJECTS} read-only objects)"))
 }
 
 /// The kind of read-only object `n` is: type, an image or a symbol instance (`None` for others).

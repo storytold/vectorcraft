@@ -5505,6 +5505,8 @@ axis	Y Axis	Trục Y
 @msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
 @msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ngân sách đối tượng (hơn {MAX_OBJECTS} đối tượng chỉ đọc)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” yêu cầu các quyền {asked}: hãy cài đặt với `grant` liệt kê chúng khi người dùng đồng ý

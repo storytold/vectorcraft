@@ -5542,6 +5542,8 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` 列出了兩次 `{shown}`
 @msg	`inputs` needs `api` 2 or later	`inputs` 需要 `api` 2 或更高
 @msg	`inputs` needs the permission `doc.read`	`inputs` 需要權限 `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	記憶體預算（物件 {_1} 需要 {size} 位元組的輸入，剩餘 {left}）
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	物件預算（超過 {MAX_OBJECTS} 個唯讀物件）
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
 @msg	unknown permission `{shown}`	未知權限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝

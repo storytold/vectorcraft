@@ -5832,6 +5832,8 @@ axis	Y Axis	Y ღერძი
 @msg	`inputs` lists `{shown}` twice	`inputs`-ში `{shown}` ორჯერაა ჩამოთვლილი
 @msg	`inputs` needs `api` 2 or later	`inputs`-ს სჭირდება `api` 2 ან უფრო ახალი
 @msg	`inputs` needs the permission `doc.read`	`inputs`-ს სჭირდება ნებართვა `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	მეხსიერების ბიუჯეტი (ობიექტს {_1} სჭირდება შეყვანის {size} ბაიტი, დარჩენილია {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ობიექტების ბიუჯეტი ({MAX_OBJECTS}-ზე მეტი მხოლოდ წასაკითხი ობიექტი)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია

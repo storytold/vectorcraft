@@ -5823,6 +5823,8 @@ axis	Y Axis	Eixo Y
 @msg	`inputs` lists `{shown}` twice	`inputs` lista `{shown}` duas vezes
 @msg	`inputs` needs `api` 2 or later	`inputs` exige `api` 2 ou posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` exige a permissão `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	orçamento de memória (o objeto {_1} precisa de {size} bytes de entrada, restam {left})
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	orçamento de objetos (mais de {MAX_OBJECTS} objetos somente leitura)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pede as permissões {asked}: instale-o com `grant` listando-as depois que o usuário concordar

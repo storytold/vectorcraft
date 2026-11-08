@@ -5268,6 +5268,8 @@
 @msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
 @msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
 @msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	ऑब्जेक्ट बजट ({MAX_OBJECTS} से अधिक केवल-पठन ऑब्जेक्ट)
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	अनुमति `{shown}` बाद के प्लग-इन API के लिए आरक्षित है; यह होस्ट इसे नहीं देता
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
