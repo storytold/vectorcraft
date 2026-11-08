@@ -3823,6 +3823,15 @@ file-filter	Templates	テンプレート
 	Tate-chu-yoko	縦中横
 	Tate-chu-yoko Settings…	縦中横の設定…
 	Tate-chu-yoko Settings	縦中横の設定
+	Composite Fonts…	合成フォント…
+	Composite Fonts	合成フォント
+	Export Composite Fonts	合成フォントを書き出し
+	Import Composite Fonts	合成フォントを読み込み
+	Delete Font	フォントを削除
+	Kanji	漢字
+	Kana	かな
+	Numerals	数字
+	Scale at Center	中心から拡大・縮小
 	Up/Down:	上下:
 	Left/Right:	左右:
 	Temperature	色温度

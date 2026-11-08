@@ -115,6 +115,10 @@ struct Ctx<'a> {
     db: &'a FontDb,
     text: &'a str,
     runs: Vec<(Range<usize>, &'a CharStyle)>,
+    /// The runs as the text sets them, when `runs` are the pieces a composite font splits them
+    /// into ([`FontDb::composite_split`]); empty otherwise. Ruby readings take their style from
+    /// these, so a reading in a composite font is set in its own parts.
+    set_runs: Vec<(Range<usize>, &'a CharStyle)>,
     /// The inline graphic of each run that is one (parallel to `runs`).
     inlines: Vec<Option<&'a InlineArt>>,
     /// The face of each run (parallel to `runs`), looked up once ([`run_face`]).
@@ -149,6 +153,16 @@ impl Ctx<'_> {
 
     fn style_at(&self, b: usize) -> &CharStyle {
         self.run_at(b).and_then(|i| self.runs.get(i)).map_or(&self.default, |(_, s)| *s)
+    }
+
+    /// The style the text sets byte `b` in: [`Self::style_at`], or for text in a composite font
+    /// the run's style before it was split by class ([`Self::set_runs`]).
+    fn set_style_at(&self, b: usize) -> &CharStyle {
+        let i = self.set_runs.partition_point(|(r, _)| r.end <= b);
+        match self.set_runs.get(i).or_else(|| self.set_runs.last()) {
+            Some((_, s)) => s,
+            None => self.style_at(b),
+        }
     }
 
     /// The face of [`Self::style_at`] `b` ([`FontDb::style_face`]).

@@ -101,6 +101,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
+        (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];
     if vectorcraft_engine::cmd::plugin::EXTS.contains(&ext.as_str()) {
         Some(OpensAs::Plugin)

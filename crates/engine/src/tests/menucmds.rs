@@ -4463,7 +4463,7 @@ fn k_only(c: Color) -> f32 {
 fn document_color_mode_separates_rgb_greys_through_the_profile() {
     let (mut s, ids, _, _) = greys_document();
     s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
-    // As Illustrator converts them: four-colour greys and a rich black.
+    // Through the profile: a mid gray in four inks and a rich black.
     let Color::Cmyk { c, m, y, k } = fill_of(&s, ids[2]) else { panic!("not CMYK") };
     assert!(c > 0.05 && m > 0.05 && y > 0.05 && k > 0.0, "a four-colour mid grey: {c} {m} {y} {k}");
     let Color::Cmyk { c, k, .. } = fill_of(&s, ids[0]) else { panic!("not CMYK") };

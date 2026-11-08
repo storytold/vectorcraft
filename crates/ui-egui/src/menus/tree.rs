@@ -407,6 +407,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Fit Headline", "text.fitHeadline"),
                 Sep,
                 c("Find Font…", "type.findFont"),
+                c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
                 sub(
                     "Change Case",
                     vec![

@@ -65,8 +65,8 @@ pub fn approved(plugin: &Plugin) -> bool {
 
 /// Installs `plugin`, replacing one with the same id.
 pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
-    // The revision changes with the set locked, so a reader that sees the new revision then waits
-    // for the set and finds the plug-in.
+    // The revision moves while the write lock is held, so a cache that reads the new revision and
+    // then the plug-ins finds the new plug-in among them.
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     let p = Arc::new(plugin);

@@ -12,6 +12,7 @@ pub mod clipboard;
 mod colorcmds;
 pub mod colormgmt;
 pub mod colortheme;
+pub mod compositefonts;
 mod compoundshape;
 pub(crate) mod create;
 mod css;
@@ -286,6 +287,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(inline::specs());
         v.extend(textstyles::specs());
         v.extend(fonts::specs());
+        v.extend(compositefonts::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
         v.extend(threads::specs());

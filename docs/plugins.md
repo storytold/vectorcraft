@@ -56,7 +56,9 @@ In the app, installed filters appear under **Object › Plug-ins**, next to **In
 Plug-ins**; live effects under **Effect › Plug-ins** and in the Appearance panel's effect menu. A plug-in with
 parameters gets a dialog generated from its schema (numbers, whole numbers, checkboxes, dropdowns, text, lists
 of numbers and colors, labelled, explained and sorted into sections as its manifest says) with a live preview; without
-parameters it runs at once. Parameters too many for the window's height scroll inside the dialog, which keeps its
+parameters it runs at once. Edit › Keyboard Shortcuts lists each installed filter under Object › Plug-ins, where
+it can be given a shortcut (`plugin:<id>`); the shortcut stays saved while the plug-in is removed and applies again
+when it is reinstalled. Parameters too many for the window's height scroll inside the dialog, which keeps its
 heading and buttons in view. Exporters are formats of **File › Export › Export As**, where Use
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›

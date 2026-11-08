@@ -794,11 +794,14 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
     let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
-    if let Some(path) = st.path.as_deref() {
+    let base = super::links::LinkBase::of(st);
+    if base.doc.is_some() {
         // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
         let roots = crate::file_access::current().or_else(|| opened_by.clone());
-        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, base));
     }
+    // The copy's links keep their relative paths, which name places from the same file.
+    let links_from = base.relative.map(str::to_string);
     doc.drop_edit_modes();
     if doc.pattern_edit.is_some() {
         super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
@@ -815,6 +818,7 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     st.imported_from = imported_from;
     st.import_losses = import_losses;
+    st.links_from = links_from;
     st.opened_by = st.opened_by.take().or(opened_by);
     st.mark_unsaved();
     Ok(json!({ "index": i, "title": st.title() }))

@@ -696,8 +696,8 @@ effect colors that new art takes; Undo restores their original values and Redo r
 colors of 3D effects stay RGB.
 Gray colors stay Gray and print
 on the black plate only. RGB grays are colors like any
-other: to CMYK they separate through the profile into four-colour greys and a rich black, as Illustrator converts
-them. `grays: "black"` puts RGB greys with R = G = B on the black plate instead, K = their grey value (the inks Edit Colors ›
+other: to CMYK they separate through the profile into light grays in cyan, magenta and yellow only, darker
+four-color grays and a rich black. `grays: "black"` puts RGB greys with R = G = B on the black plate instead, K = their grey value (the inks Edit Colors ›
 Convert to Grayscale before the switch would give); other colors convert as usual. The reply's `changed` counts the
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
@@ -3656,6 +3656,13 @@ They list such a command while the user has changed its shortcut (`overridden: t
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
 
+Each installed filter plug-in's Object › Plug-ins item is its own row, with id `plugin:<id>` (the plug-in's id), its
+menu label and no default shortcut, so two filters with the same name have two rows. `shortcuts.set {id:
+"plugin:<id>", shortcut}`, `shortcuts.list` and Import Shortcut Set use that id, `shortcuts.exportText` writes one line
+for the row under its menu path and label, and the key runs what a click on the item runs, `plugin.dialog {id}`. A
+removed plug-in's row goes away and its key runs nothing; its shortcut stays saved and applies again when a plug-in
+with the same id is installed.
+
 `shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
 Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
 and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
@@ -4595,6 +4602,14 @@ its file was found. Only files on this computer, or on the network share the doc
 on, are looked at: a path to another computer, a device or a URL counts as missing. On Windows, a document opened from
 a mapped drive (`Z:\…`) is on the share the drive is mapped to, and links on that share (`\\server\share\…`) are
 looked at. A link on a drive mapped to another share (`Y:\…`) counts as missing, from a document on this computer too.
+The links of an open document keep their relative paths from the file it was opened from (for a `.ai` file another
+app wrote, that file), also after a save to another folder. When a link's file is not at its path, a save and Package
+write the path relative to the new file of the place the file is found, or for a missing file of the place that
+relative path names, and a document made with New Document from State keeps the same places, so a document moved while
+its linked files were missing finds them once they are back in that folder. In the open document, a link
+is looked for at its path, then at its relative path from the folder of the file the document was opened from and from
+the document's own folder, then by name in those two folders. A link found away from its path takes the relative path
+of the place it was found.
 The result lists `missingLinks`
 (their images show the preview), `modifiedLinks` (left as they were; read again only with the preference
 `updateLinks: "automatically"`, then they are in `updatedLinks`), each as `{name, path, ids}`, with `refused` (why the
@@ -5825,6 +5840,53 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Composite Fonts
+
+A composite font sets each class of character in a font of its own
+([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347)).
+`type.compositeFonts.set {fonts: [{name, parts}]}` replaces the active document's composite fonts as one undo step,
+and adds no step when nothing changes. `parts` holds `kanji` (the base font), `kana`, `punctuation`, `symbols`, `roman`
+and `numerals`, each `{font, style?, size?, baseline?, hScale?, vScale?, scaleAtCenter?}`; a part left out copies the
+`kanji` part. Which characters fall in each class is VectorCraft's own rule: Kanji takes ideographs, full-width
+letters and digits and every character no other class takes; Kana takes hiragana and katakana of both widths;
+Punctuation takes East Asian and full-width punctuation, quotes and dashes; Symbols takes arrows, math, shapes and
+other symbols; Roman takes half-width letters, their punctuation and spaces; Numerals takes the digits 0 to 9.
+
+`size` (10 to 400, 100 by default) and `baseline` (-100 to 100, 0 by default; positive raises) are percentages of the
+type's size, VectorCraft's own ranges. `hScale` and `vScale` (10 to 400, 100 by default) scale Kana, Roman and
+Numerals only, and `scaleAtCenter` (Kana only) scales kana from the center of the em box instead of the baseline. A
+value out of range, a scale on another class, an unknown class or key, a name that is empty, longer than 255
+characters, shared by two fonts (in any case) or the name of an installed font, and a part set in a composite font are
+each refused with an error, and nothing changes. A document keeps at most 256.
+
+Type set in a composite font names it as its family (`text.setStyle {font: "My Composite"}`), and the font menus list
+composite fonts first. The layout sets each character in its class's font, a letter and its combining marks together.
+A composite font taken out of the document leaves its type naming it, and the type shows as missing. Composite fonts
+are saved with the document. SVG and legacy `.ai` write type in one of the document's composite fonts as outlines, and
+SVG, PDF, EPS and legacy `.ai` export draw it in the font's parts also when the document was read without an open app.
+`type.compositeFonts.list` returns the document's composite fonts.
+
+`text.replaceFont` and `addon.cleanup.replaceFonts` with a composite font as the new font set the type in it by its own
+name, and the type keeps its style. `text.fonts` lists a composite font by its name; its `status` is the worst among the
+parts its characters are drawn in, and `missingGlyphs` counts the characters that their part's font lacks.
+`text.missingFonts`, File › Package and the warnings about fonts that aren't available name the part fonts that the
+characters are drawn in. `text.glyphAlternates` lists the alternates of a character from its part's font.
+
+`type.compositeFonts.export {path?, names?, fonts?}` writes the document's composite fonts (all, or those `names`
+lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`.
+`type.compositeFonts.import {path | data | dataBase64, apply?}` reads a file of at most 4 MB. With `apply` (the
+default) its fonts join the document's, replacing a font of the same name, as one undo step; with `apply: false` it
+only returns them. Opening a `.vccomposite` file imports it.
+
+Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
+Font picks one, and a table sets each class's font, style, size, baseline and scales. New adds a font based on the one
+picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one picked. OK runs
+`type.compositeFonts.set` with every font as one undo step; a refused font keeps the dialog open.
+
+```json
+{"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
+```
+
 ## Optical Margin Alignment
 
 `type.opticalMarginAlignment {on?: bool}` (Type › Optical Margin Alignment) turns Optical Margin Alignment on or off
@@ -6207,8 +6269,12 @@ Type on a path flows between a start and an end bracket, stored as fractions of 
 Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
 then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
 the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
-default) along the path; `spacing` (points) closes glyphs up round the outside of curves and opens them up round the
-inside. With none of them it queries the first selected type on a path:
+default) along the path, each character by its own font, size and vertical scale: `ascender` runs the top of the
+font's em box along it (its ideographic em box, else an em box centered on the cap height), `descender` runs the
+bottom of the font's bounding box along it, and `center` runs a line at half the height of the top of the font's H
+above the baseline along it (in vertical type, `ascender` and `descender` move the characters half an em with their
+horizontal scale, and `center` leaves them on the path); `spacing` (points) closes glyphs up round the outside of
+curves and opens them up round the inside. With none of them it queries the first selected type on a path:
 `{start, end, flip: false, effect, alignToPath, spacing}`. The Options dialog shows Effect, Flip, Align to Path and
 Spacing and leaves the brackets where they are. As in the reference app, the Selection and Direct Selection tools
 show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type

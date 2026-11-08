@@ -19,7 +19,7 @@
 //! at first when a code is not known), and `__query` and `__attention` (the filter of the rows shown).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex};
 
 use craft_keymap::import::namematch::{Candidate, Matcher, Proposal};
 use craft_keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
@@ -363,10 +363,12 @@ fn single_key(chord: &str) -> bool {
 }
 
 /// What a name can stand for: Keyboard Shortcuts' entries, by their English labels and the labels in
-/// the interface language.
+/// the interface language. A filter plug-in's row is left out: a row of the file reaches it only
+/// when the user picks it as the target.
 pub fn candidates() -> Vec<Candidate> {
     shortcut_editor::entries()
         .iter()
+        .filter(|e| !e.key.starts_with("plugin:"))
         .map(|e| {
             let shown = tl!(&e.label);
             let labels = if shown == e.label { vec![e.label.clone()] } else { vec![e.label.clone(), shown.to_string()] };
@@ -375,10 +377,17 @@ pub fn candidates() -> Vec<Candidate> {
         .collect()
 }
 
-/// Keyboard Shortcuts' entry `key`.
-fn entry(key: &str) -> Option<&'static Entry> {
-    static BY_KEY: OnceLock<HashMap<&'static str, &'static Entry>> = OnceLock::new();
-    BY_KEY.get_or_init(|| shortcut_editor::entries().iter().map(|e| (e.key.as_str(), e)).collect()).get(key).copied()
+/// Keyboard Shortcuts' entry `key`, among the entries for the plug-ins installed now.
+fn entry(key: &str) -> Option<Entry> {
+    type Index = (Arc<[Entry]>, HashMap<String, usize>);
+    static BY_KEY: Mutex<Option<Index>> = Mutex::new(None);
+    let entries = shortcut_editor::entries();
+    let mut by = BY_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if by.as_ref().is_none_or(|(e, _)| !Arc::ptr_eq(e, &entries)) {
+        let index = entries.iter().enumerate().map(|(i, e)| (e.key.clone(), i)).collect();
+        *by = Some((entries, index));
+    }
+    by.as_ref().and_then(|(e, index)| index.get(key).and_then(|&i| e.get(i)).cloned())
 }
 
 /// A tool, command or panel that Keyboard Shortcuts can give a shortcut.
@@ -388,7 +397,7 @@ fn known(key: &str) -> bool {
 
 /// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu.
 fn shown(e: &Entry) -> String {
-    if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) }
+    shortcut_editor::shown_name(e)
 }
 
 /// What a row's target shows.
@@ -396,7 +405,7 @@ fn target_label(target: Option<&str>) -> String {
     match target {
         None => tl!("Choose…").to_string(),
         Some("") => tl!("No equivalent").to_string(),
-        Some(t) => entry(t).map_or_else(|| t.to_string(), shown),
+        Some(t) => entry(t).map_or_else(|| t.to_string(), |e| shown(&e)),
     }
 }
 
@@ -934,6 +943,7 @@ pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<Stri
     let option = |ui: &mut egui::Ui, key: &str, label: &str| {
         ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked().then(|| key.to_string())
     };
+    let all = shortcut_editor::entries();
     widgets::combo_menu(ui, ("shortcut-import-target", i), &current, TARGET_W, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| {
@@ -946,12 +956,12 @@ pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<Stri
                 let mut picked = option(ui, "", tl!("No equivalent"));
                 let list: Vec<&Entry> = if q.is_empty() {
                     for e in r.choices.iter().filter_map(|c| entry(c)) {
-                        picked = option(ui, &e.key, &shown(e)).or(picked);
+                        picked = option(ui, &e.key, &shown(&e)).or(picked);
                     }
                     ui.separator();
-                    shortcut_editor::entries().iter().collect()
+                    all.iter().collect()
                 } else {
-                    shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
+                    all.iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
                 };
                 ui.data_mut(|d| d.insert_temp(header_id, ui.min_rect().height()));
                 (list, picked)

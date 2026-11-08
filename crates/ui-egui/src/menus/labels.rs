@@ -213,11 +213,13 @@ pub(super) fn unlock_item_label(app: &VectorcraftApp, id: &str, p: &Value, lang:
 }
 
 /// The shortcut a menu item shows: its command's (items without params), a panel's for the
-/// Window menu's `window.panel {panel}` items, or an effect's for the Effect menu's items.
+/// Window menu's `window.panel {panel}` items, an effect's for the Effect menu's items, or a filter
+/// plug-in's for Object › Plug-ins' `plugin.dialog {id}` items.
 pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
     match (id, p.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
         ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
+        ("plugin.dialog", _) => p.get("id").and_then(Value::as_str).and_then(crate::shortcut_editor::filter_shortcut),
         // The Artboard tool's canvas menu passes the point its Paste goes to.
         ("edit.paste", _) => shortcut_of(id),
         // That menu's Cut and Copy: with the tool chosen, the keys run `edit.cut` and `edit.copy`, which do the same.

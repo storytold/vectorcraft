@@ -919,7 +919,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                         super::textedit::unprotected_runs(&t.runs, a, b, &kept)
                     }
                 };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);

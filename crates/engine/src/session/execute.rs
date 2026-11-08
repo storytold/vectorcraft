@@ -157,6 +157,9 @@ impl Session {
         }
         if let Some(open) = open {
             self.open_undo_groups_in_new_documents(&open);
+            // Type is drawn in the composite fonts of the documents open now, an undone or opened
+            // document's included.
+            cmd::compositefonts::sync(self);
         }
         let journaled = spec.journal || (self.depth == 0 && std::mem::take(&mut self.journal_query));
         if journaled && self.depth == 0 && self.active().is_none_or(|d| d.interaction.is_none()) {
