@@ -125,6 +125,13 @@ impl App {
             }
             open_files(&mut self.app, files);
         }
+        let (now, zoom) = (ctx.input(|i| i.time), ctx.zoom_factor());
+        if let Some(w) = &self.winit_window
+            && window::monitors_due(self.monitors_listed, now, zoom)
+        {
+            self.app.services.dock_monitors = window::dock_monitors(w, zoom);
+            self.monitors_listed = Some((now, zoom));
+        }
         self.app.tick(ctx);
         if self.pending_maximize {
             if let Some(w) = &self.winit_window {
