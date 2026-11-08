@@ -941,9 +941,16 @@ fn a_mask_whose_art_passes_the_object_limit_is_left_out() {
         let limited = out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT);
         (String::from_utf8_lossy(&out.program).replace("\r\n", "\n"), limited)
     };
-    let (all, limited) = text(4);
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let (all, limited) = text(read);
     assert!(!limited && all.contains("(AI9_Mask)"), "{all}");
-    let (short, limited) = text(2);
+    let has_mask = |max: usize| text(max).0.contains("(AI9_Mask)");
+    let Some(fit) = (0..=read).find(|&max| has_mask(max)) else { panic!("the mask fits with room for {read} objects") };
+    assert!(fit > 2, "the mask needs room beyond the two squares: {fit}");
+    for max in fit..=read {
+        assert!(has_mask(max), "room for {max} of {read}, the mask fits in {fit}");
+    }
+    let (short, limited) = text(fit - 1);
     assert!(limited);
     assert!(!short.contains("(AI9_Mask)") && !short.contains("%_/ArtDictionary :\n%_/Mask"), "{short}");
     assert_eq!(short.matches("\nf\n").count(), 2, "both squares are written: {short}");
@@ -970,6 +977,9 @@ fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
         let text = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
         let defined = text.contains("%AI14_BeginSymbol");
         assert_eq!(defined, text.contains("/SymbolInstance :"), "room for {max} of {read}: {text}");
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "art is left out with room for {max} of {read} objects");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
     }
 }
 
