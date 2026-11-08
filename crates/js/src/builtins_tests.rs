@@ -384,6 +384,36 @@ fn number_parsing_counts_its_copy_toward_the_heap_limit() {
 }
 
 #[test]
+fn strings_built_ins_write_take_fuel_and_stay_counted_across_collections() {
+    // Each join writes 1 Mi code units, so a thousand of them do not fit in 2,000,000 units of
+    // fuel, whether the units are separators or a string's contents.
+    let limits = Limits { heap_bytes: 8 << 20, fuel: 2_000_000, ..Limits::default() };
+    assert_eq!(limit(&mut small(limits.clone()), "var a = new Array((1 << 20) + 1); for (var i = 0; i < 1000; i++) a.join('x'); i"), LimitKind::Fuel);
+    assert_eq!(
+        limit(&mut small(limits), "var a = [new Array((1 << 20) + 1).join('x')]; for (var i = 0; i < 1000; i++) a.join(''); i"),
+        LimitKind::Fuel
+    );
+    // `join` holds a 2 MiB buffer for `s` while the second element's `toString` keeps new objects.
+    // A collection in between still counts the buffer, so the objects and the buffer together do
+    // not fit in a heap with 1 MiB to spare beyond the objects.
+    let setup = "var s = new Array((1 << 20) + 1).join('x'); var keep = []; 0";
+    let fill = "for (var i = 0; i < 30000; i++) keep.push({});";
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(&format!("{setup}; {fill} 0")), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (1 << 20);
+    let mut realm = small(Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    let join = format!("var f = {{toString: function () {{ {fill} return ''; }}}}; [s, f].join('').length");
+    assert_eq!(limit(&mut realm, &join), LimitKind::Heap);
+    // A join that throws gives its buffer back, so a hundred of them still fit in 8 MiB.
+    let mut realm = small(Limits { heap_bytes: 8 << 20, ..Limits::default() });
+    let src = "var s = new Array((1 << 20) + 1).join('x'); var t = {toString: function () { throw 1; }}; \
+               for (var i = 0; i < 100; i++) { try { [s, t].join(''); } catch (e) {} } i";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(100.0)));
+}
+
+#[test]
 fn values_built_ins_hold_survive_collections() {
     // A small heap makes the callbacks' garbage start collections while the results are built.
     let mut realm = small(Limits { heap_bytes: 2 << 20, ..Limits::default() });

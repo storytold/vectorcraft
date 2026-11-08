@@ -192,30 +192,49 @@ fn new_string(interp: &mut Interp, units: Vec<u16>) -> JsResult<Value> {
     Ok(Value::String(Str::from_units(units)))
 }
 
-/// A string the built-ins build piece by piece: each piece is checked against the longest string
-/// the heap limit allows and its bytes are reserved before it is added. Everything the caller
-/// still needs must be reachable from the roots.
+/// Code units a built-in may write into a string for one unit of fuel.
+const UNITS_PER_FUEL: usize = 16;
+
+/// A string the built-ins build piece by piece: each piece takes fuel for its length, is checked
+/// against the longest string the heap limit allows, and has its bytes reserved before it is
+/// added. The buffer's bytes count toward the heap until `finish` or until the native call that
+/// made the builder returns. Everything the caller still needs must be reachable from the roots.
 struct Builder {
     units: Vec<u16>,
     /// Code units already reserved and charged to the heap.
     charged: usize,
+    /// Code units written since fuel was last taken, fewer than `UNITS_PER_FUEL`.
+    unpaid: usize,
 }
 
 impl Builder {
     fn new() -> Self {
-        Builder { units: Vec::new(), charged: 0 }
+        Builder { units: Vec::new(), charged: 0, unpaid: 0 }
     }
 
-    /// Checks that `more` code units fit, reserving heap for them.
+    /// Checks that `more` code units fit, reserving heap for them, and takes fuel for writing them.
     fn make_room(&mut self, interp: &mut Interp, more: usize) -> JsResult<()> {
         let want = self.units.len().saturating_add(more);
         if want > interp.limits.heap_bytes / 4 {
             return Err(Abrupt::Limit(crate::LimitKind::Heap));
         }
+        self.unpaid += more;
+        let fuel = (self.unpaid / UNITS_PER_FUEL) as u64;
+        self.unpaid %= UNITS_PER_FUEL;
+        if fuel > 0 {
+            if interp.fuel < fuel {
+                interp.fuel = 0;
+                return Err(Abrupt::Limit(crate::LimitKind::Fuel));
+            }
+            // The last unit goes through `use_fuel`, which also checks for an interrupt.
+            interp.fuel -= fuel - 1;
+            interp.use_fuel()?;
+        }
         if want > self.charged {
             let grow = (want - self.charged).max(self.charged / 2).max(256).min((interp.limits.heap_bytes / 4).saturating_sub(self.charged));
             interp.reserve_heap(2 * grow)?;
             interp.heap.bytes = interp.heap.bytes.saturating_add(2 * grow);
+            interp.held_bytes = interp.held_bytes.saturating_add(2 * grow);
             self.charged += grow;
         }
         Ok(())
@@ -246,8 +265,10 @@ impl Builder {
         self.push_units(interp, &units)
     }
 
-    /// The string built, whose bytes were charged as it grew.
-    fn finish(self) -> Value {
+    /// The string built, whose bytes were charged as it grew. From here on the heap counts them
+    /// as the string's.
+    fn finish(self, interp: &mut Interp) -> Value {
+        interp.held_bytes = interp.held_bytes.saturating_sub(2 * self.charged);
         Value::String(Str::from_units(self.units))
     }
 }

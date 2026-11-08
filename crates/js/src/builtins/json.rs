@@ -446,7 +446,7 @@ fn stringify_rooted(interp: &mut Interp, args: &[Value]) -> JsResult<Value> {
     while !w.stack.is_empty() {
         step(interp, &settings, &mut w)?;
     }
-    Ok(w.out.finish())
+    Ok(w.out.finish(interp))
 }
 
 /// Reads the replacer and the space argument (section 15.12.3, steps 4 to 8).

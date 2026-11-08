@@ -304,7 +304,7 @@ fn join_elements(interp: &mut Interp, o: ObjId, len: u32, sep: &[u16], item: fn(
         out.push_units(interp, &s.flat())?;
     }
     out.push_repeated(interp, sep, u64::from(len - 1).saturating_sub(seps))?;
-    Ok(out.finish())
+    Ok(out.finish(interp))
 }
 
 /// An element as `join` writes it: nothing for `undefined` and `null`.

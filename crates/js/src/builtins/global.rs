@@ -241,7 +241,7 @@ fn encode(interp: &mut Interp, args: &[Value], unescaped: fn(u16) -> bool) -> Js
         }
         k += 1;
     }
-    Ok(out.finish())
+    Ok(out.finish(interp))
 }
 
 fn hex_byte(s: &[u16], at: usize) -> Option<u8> {
@@ -294,7 +294,7 @@ fn decode(interp: &mut Interp, args: &[Value], reserved: &str) -> JsResult<Value
         out.push_units(interp, ch.encode_utf16(&mut units))?;
         k += 1;
     }
-    Ok(out.finish())
+    Ok(out.finish(interp))
 }
 
 fn encode_uri(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -329,7 +329,7 @@ fn escape(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
             out.push_units(interp, &[u16::from(b'%'), u16::from(b'u'), hex(12), hex(8), hex(4), hex(0)])?;
         }
     }
-    Ok(out.finish())
+    Ok(out.finish(interp))
 }
 
 /// `unescape` (section B.2.2).
@@ -360,5 +360,5 @@ fn unescape(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<
         out.push_units(interp, &[unit])?;
         k += 1;
     }
-    Ok(out.finish())
+    Ok(out.finish(interp))
 }

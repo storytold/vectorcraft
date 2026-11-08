@@ -166,6 +166,10 @@ pub(crate) struct Interp {
     /// The objects `Array.prototype.join` and `toLocaleString` are joining, innermost last: a
     /// cycle back to one of them joins as an empty string.
     pub(crate) join_stack: Vec<ObjId>,
+    /// Bytes of the string buffers native functions are building outside the heap. They are
+    /// charged to `heap.bytes` and added back after each collection, and a native call's
+    /// buffers are released when it returns.
+    pub(crate) held_bytes: usize,
 }
 
 /// The least heap size a collection waits for.
@@ -302,6 +306,7 @@ impl Interp {
             last_thrown: Value::Undefined,
             random: random_seed(),
             join_stack: Vec::new(),
+            held_bytes: 0,
         };
         crate::builtins::install(&mut interp);
         interp.gc_threshold = interp.next_threshold();
@@ -455,6 +460,7 @@ impl Interp {
         roots.objects.extend(self.intrinsics.all());
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
+        self.heap.bytes = self.heap.bytes.saturating_add(self.held_bytes);
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -1733,7 +1739,9 @@ impl Interp {
                     let mark = self.temp_roots.len();
                     self.temp_roots.push(this.clone());
                     self.temp_roots.extend(args.iter().cloned());
+                    let held = self.held_bytes;
                     let r = native(self, this, &args, false);
+                    self.held_bytes = held;
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
@@ -1834,7 +1842,10 @@ impl Interp {
                 self.enter_function(Entry { callee, code, env, this: Value::Object(obj), args }, Some(obj), false)
             }
             Some(Func::Native { f: native, constructor: true, .. }) => {
-                let v = native(self, Value::Undefined, &args, true)?;
+                let held = self.held_bytes;
+                let r = native(self, Value::Undefined, &args, true);
+                self.held_bytes = held;
+                let v = r?;
                 self.stack.truncate(start);
                 self.push(v)
             }
