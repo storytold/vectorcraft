@@ -279,6 +279,32 @@ fn built_ins_end_with_a_limit_instead_of_running_on() {
 }
 
 #[test]
+fn keys_built_ins_make_count_toward_the_heap_limit() {
+    // Each key is a new 1 MiB string, so 64 of them do not fit in an 8 MiB heap.
+    let limits = Limits { heap_bytes: 8 << 20, ..Limits::default() };
+    let big = "var s = 'x'; for (var i = 0; i < 19; i++) s += s; ";
+    let sort = format!("{big} var a = []; for (var i = 0; i < 64; i++) a[i] = {{n: i, toString: function () {{ return s + this.n; }}}}; a.sort();");
+    assert_eq!(limit(&mut small(limits.clone()), &sort), LimitKind::Heap);
+    let list = format!(
+        "{big} var a = [], c = 0; for (var i = 0; i < 64; i++) Object.defineProperty(a, i, {{get: function () {{ return s + c++; }}}}); JSON.stringify({{}}, a);"
+    );
+    assert_eq!(limit(&mut small(limits), &list), LimitKind::Heap);
+    // Keys that share a string's storage are not charged again: with half the string's size to
+    // spare, sorting objects whose keys are that string still fits.
+    let setup = format!(
+        "{big} var keep = [s + 0, s + 1]; keep.sort(); var a = []; for (var i = 0; i < 64; i++) a[i] = s; a.sort(); \
+         var b = []; for (var i = 0; i < 64; i++) b[i] = {{toString: function () {{ return s; }}}}; 0"
+    );
+    let mut measure = small(Limits::default());
+    assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let live = measure.interp().heap.bytes;
+    let mut realm = small(Limits { heap_bytes: live + (512 << 10), ..Limits::default() });
+    assert_eq!(realm.run(&setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("b.sort(); JSON.stringify({}, a); JSON.stringify({}, [s, s, s]); b.length"), Ok(JsValue::Number(64.0)));
+}
+
+#[test]
 fn values_built_ins_hold_survive_collections() {
     // A small heap makes the callbacks' garbage start collections while the results are built.
     let mut realm = small(Limits { heap_bytes: 2 << 20, ..Limits::default() });

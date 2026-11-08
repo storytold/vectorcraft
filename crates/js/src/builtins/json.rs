@@ -487,17 +487,27 @@ fn property_list(interp: &mut Interp, r: ObjId) -> JsResult<Vec<Key>> {
         interp.use_fuel()?;
         let v = interp.get_from(r, &key_of(f64::from(i)), &Value::Object(r))?;
         let item = match &v {
-            Value::String(s) => Some(s.flat()),
-            Value::Number(n) => Some(number_to_str(*n).flat()),
+            Value::String(s) => Some(s.clone()),
+            Value::Number(_) => Some(interp.primitive_to_str(&v)),
             Value::Object(o) if interp.heap.object(*o).is_some_and(|x| matches!(x.class, Class::String(_) | Class::Number)) => {
-                Some(interp.to_str(&v)?.flat())
+                Some(interp.to_str(&v)?)
             }
             _ => None,
         };
-        if let Some(k) = item
-            && seen.insert(k.clone())
-        {
-            interp.reserve_heap(string_bytes(k.len()))?;
+        let Some(s) = item else { continue };
+        // Flattening a concatenation makes a new buffer, so it is charged.
+        let rope = s.buffer_addr().is_none();
+        let bytes = string_bytes(s.len());
+        if rope {
+            interp.reserve_heap(bytes)?;
+        }
+        let k = s.flat();
+        if seen.insert(k.clone()) {
+            if rope {
+                interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+            }
+            // The list lives until the call returns, so its names are rooted.
+            interp.temp_roots.push(Value::String(s));
             list.push(k);
         }
     }

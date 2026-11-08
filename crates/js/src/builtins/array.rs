@@ -641,9 +641,22 @@ fn sort_elements(interp: &mut Interp, o: ObjId, len: u64, compare: &Value) -> Js
         let mut keyed = Vec::with_capacity(values.len());
         for v in values {
             interp.use_fuel()?;
-            let s = interp.to_str(&v)?.flat();
-            interp.reserve_heap(crate::heap::string_bytes(s.len()))?;
-            keyed.push((s, v));
+            let s = interp.to_str(&v)?;
+            // Flattening a concatenation makes a new buffer, so it is charged. A key that is
+            // not an element is rooted so that collections count it.
+            let rope = s.buffer_addr().is_none();
+            let bytes = crate::heap::string_bytes(s.len());
+            if rope {
+                interp.reserve_heap(bytes)?;
+            }
+            let units = s.flat();
+            if rope {
+                interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+            }
+            if !matches!(v, Value::String(_)) {
+                interp.temp_roots.push(Value::String(s));
+            }
+            keyed.push((units, v));
         }
         merge_sort(interp, &mut keyed, |_, a, b| Ok(a.0 > b.0))?;
         values = keyed.into_iter().map(|(_, v)| v).collect();
