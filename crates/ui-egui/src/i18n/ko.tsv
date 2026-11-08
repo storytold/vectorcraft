@@ -4821,6 +4821,9 @@ theme	Appearance	외관
 @msg	the Pixar file's image data is damaged	Pixar 파일의 이미지 데이터가 손상되었습니다
 @msg	the JPEG 2000 file can't be read	JPEG 2000 파일을 읽을 수 없습니다
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 파일에 지원되지 않는 색 공간 또는 JPX 콘텐츠가 있습니다
+@msg	the HEIC or HEIF file can't be read	HEIC 또는 HEIF 파일을 읽을 수 없습니다
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 또는 HEIF 파일에 읽을 수 없는 종류의 이미지가 있습니다
+@msg	HEIC and HEIF images can't be opened in this build	이 빌드에서는 HEIC 및 HEIF 이미지를 열 수 없습니다
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 이미지가 너무 커서 읽을 수 없습니다({_1} × {_2}픽셀)
 @msg	zipped 32-bit PSD image data with prediction can't be read	예측이 적용된 ZIP 압축 32비트 PSD 이미지 데이터는 읽을 수 없습니다
 @msg	{depth}-bit PSD files in this colour mode can't be read	이 색상 모드의 {depth}비트 PSD 파일은 읽을 수 없습니다

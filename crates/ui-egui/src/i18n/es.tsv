@@ -4811,6 +4811,9 @@ axis	Both	Ambos
 @msg	the Pixar file's image data is damaged	los datos de imagen del archivo Pixar están dañados
 @msg	the JPEG 2000 file can't be read	no se puede leer el archivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	el archivo JPEG 2000 tiene un espacio de color o contenido JPX no compatible
+@msg	the HEIC or HEIF file can't be read	no se puede leer el archivo HEIC o HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	el archivo HEIC o HEIF contiene un tipo de imagen que no se puede leer
+@msg	HEIC and HEIF images can't be opened in this build	las imágenes HEIC y HEIF no se pueden abrir en esta compilación
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	la imagen PSD es demasiado grande para leerla ({_1} × {_2} píxeles)
 @msg	zipped 32-bit PSD image data with prediction can't be read	no se pueden leer datos de imagen PSD de 32 bits comprimidos en ZIP con predicción
 @msg	{depth}-bit PSD files in this colour mode can't be read	los archivos PSD de {depth} bits en este modo de color no se pueden leer
