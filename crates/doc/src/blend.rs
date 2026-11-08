@@ -1018,15 +1018,19 @@ impl Spine {
         for i in 0..n {
             let c = sp.segment(i);
             let end = self.anchor_length(i + 1).unwrap_or(self.length());
-            if end <= start {
-                // Skip segments whose flattened end is not greater than start
-                continue;
-            }
             if s <= end || i + 1 == n {
                 let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
                 let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
                 let e = c.eval(t);
                 let tv = c.deriv().eval(t);
+                // Handle zero curve derivative: use limiting tangent from nearby parameter
+                let tv = if tv.x.abs() < 1e-12 && tv.y.abs() < 1e-12 {
+                    // Use tangent at adjacent parameter as fallback
+                    let t2 = t.clamp(0.5, 0.5).max(t.min(1.0 - 1e-3).min(1.0 - 1e-3)).clamp(1e-3, 1.0 - 1e-3);
+                    c.deriv().eval(t2)
+                } else {
+                    tv
+                };
                 return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
             }
             start = end;
@@ -1037,6 +1041,14 @@ impl Spine {
         let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
         let e = c.eval(t);
         let tv = c.deriv().eval(t);
+        // Handle zero curve derivative: use limiting tangent from nearby parameter
+        let tv = if tv.x.abs() < 1e-12 && tv.y.abs() < 1e-12 {
+            // Use tangent at adjacent parameter as fallback
+            let t2 = t.clamp(0.5, 0.5).max(t.min(1.0 - 1e-3).min(1.0 - 1e-3)).clamp(1e-3, 1.0 - 1e-3);
+            c.deriv().eval(t2)
+        } else {
+            tv
+        };
         (Point::new(e.x, e.y), tv.y.atan2(tv.x))
     }
 }
