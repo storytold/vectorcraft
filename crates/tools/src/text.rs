@@ -162,8 +162,9 @@ pub struct TypeTool {
     mode: Mode,
     /// The tool whose double-click on type chose this tool, which Escape and Cmd+Enter return to.
     /// The canvas sets it; choosing the Type tool another way (the toolbar) leaves it unset, and
-    /// Escape then goes to the Selection tool. It is kept until another tool is chosen, through
-    /// clicks that end editing or move it to other text.
+    /// Escape then goes to the Selection tool. Clicks that end editing or move it to other text
+    /// keep it. Choosing another tool clears it, and so does deactivating this tool when another
+    /// document or another window of the document becomes active.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
