@@ -3656,6 +3656,13 @@ They list such a command while the user has changed its shortcut (`overridden: t
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
 
+Each installed filter plug-in's Object › Plug-ins item is its own row, with id `plugin:<id>` (the plug-in's id), its
+menu label and no default shortcut, so two filters with the same name have two rows. `shortcuts.set {id:
+"plugin:<id>", shortcut}`, `shortcuts.list` and Import Shortcut Set use that id, `shortcuts.exportText` writes one line
+for the row under its menu path and label, and the key runs what a click on the item runs, `plugin.dialog {id}`. A
+removed plug-in's row goes away and its key runs nothing; its shortcut stays saved and applies again when a plug-in
+with the same id is installed.
+
 `shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
 Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
 and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
