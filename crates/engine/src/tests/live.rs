@@ -237,13 +237,13 @@ fn blend_smooth_colour_steps_from_colour_distance() {
     let mut s = session();
     let (_, _, g) = blend(&mut s, json!({}));
     let n = steps_of(&s, g).len() - 2;
-    assert_eq!(n, 128, "black→white: one step per two levels");
-    // Consecutive steps differ by at most ~2 levels.
+    assert_eq!(n, 254, "black→white: one step per level");
+    // Consecutive steps differ by about a level.
     let st = steps_of(&s, g);
     for w in st.windows(2) {
         let x = w[0].appearance.fill_paint().color().unwrap().to_rgb()[0];
         let y = w[1].appearance.fill_paint().color().unwrap().to_rgb()[0];
-        assert!((x - y).abs() <= 2.5 / 255.0);
+        assert!((x - y).abs() <= 1.5 / 255.0);
     }
 }
 
@@ -254,7 +254,9 @@ fn blend_smooth_colour_same_colours_uses_distance() {
     let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
     sel(&mut s, &[a, b]);
     let g = id_of(&s.execute("object.blend.make", &json!({"smooth": true})).unwrap());
-    assert_eq!(steps_of(&s, g).len() - 2, 20);
+    // The edges are 40 pt apart, 3.6 times the keys' 11 pt visible width (their 1 pt strokes
+    // included): rounded, less one.
+    assert_eq!(steps_of(&s, g).len() - 2, 3);
 }
 
 #[test]
