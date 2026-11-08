@@ -84,6 +84,11 @@
 	3 Color Job…	Trabajo a 3 colores…
 	30° Angles	Ángulos de 30°
 	3D and Materials	3D y materiales
+	Plane	Plano
+	Extrude	Extrusión
+	Revolve	Revolución
+	Inflate	Inflar
+	Select objects, then pick an object type to give them a 3D effect.	Seleccione objetos y luego elija un tipo de objeto para darles un efecto 3D.
 	3D Ribbon	Cinta 3D
 	45° Angles	Ángulos de 45°
 	60° Angles	Ángulos de 60°
@@ -284,6 +289,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Mostrar líneas en cruz
 	Show Video Safe Areas	Mostrar áreas seguras de video
 	Video Ruler Pixel Aspect Ratio:	Proporción de píxel de las reglas de video:
+	Fade Region Outside Artboard	Atenuar región fuera de la mesa de trabajo
+	Update While Dragging	Actualizar al arrastrar
 	Hide Video Rulers	Ocultar reglas de video
 	Background Contents	Contenido de fondo
 	Background Contents:	Contenido de fondo:
@@ -1378,6 +1385,8 @@ font-technology	Variable	Variables
 	Grays	Grises
 	Grays and Neutrals	Grises y neutros
 	Grayscale	Escala de grises
+	High Color	Muchos colores
+	Low Color	Pocos colores
 	Grayscale images	Imágenes en escala de grises
 	Greek & Cyrillic	Griego y cirílico
 	Green	Verde
@@ -1451,6 +1460,7 @@ font-technology	Variable	Variables
 	Step Backward	Paso atrás
 	Step Forward	Paso adelante
 	Clear History	Borrar historial
+	New Document from State	Nuevo documento desde estado
 	Set History Limit…	Definir límite de historial…
 	History States	Estados de historial
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1828,6 +1838,9 @@ font-technology	Variable	Variables
 	Live Paint Selection Tool	Herramienta Selección de pintura interactiva
 	Live Shape Properties	Propiedades de forma dinámica
 	Load Color Profile…	Cargar perfil de color…
+	Load Character Styles…	Cargar estilos de carácter…
+	Load Paragraph Styles…	Cargar estilos de párrafo…
+	Load All Styles…	Cargar todos los estilos…
 	Remove Color Profile…	Quitar perfil de color…
 	Load Image into Clipboard	Cargar imagen en el portapapeles
 	Load Metafile into Clipboard	Cargar metarchivo en el portapapeles
@@ -2739,6 +2752,7 @@ digits	Malayalam	Malayálam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
+	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente
 	Replace With Font From	Reemplazar con fuente de
 	System	Sistema
@@ -2755,6 +2769,8 @@ digits	Malayalam	Malayálam
 	Reset OpenType Features	Restablecer funciones OpenType
 	Reset Panel	Restablecer panel
 	Reset Preferences	Restablecer preferencias
+	Search Preferences	Buscar en preferencias
+	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
@@ -3248,6 +3264,7 @@ digits	Malayalam	Malayálam
 	Spaces	Espacios
 	Spacing Guides	Guías de espaciado
 	Invoke Distance Guides	Invocar guías de distancia
+	Snap to Last Location	Ajustar a última ubicación
 	Spacing:	Espaciado:
 	Spanish	Español
 	Specified Distance	Distancia especificada
@@ -3931,6 +3948,9 @@ axis	Both	Ambos
 	Put back in the toolbar	Devolver a la barra de herramientas
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
+	Dock to Top	Anclar arriba
+	Dock to Bottom	Anclar abajo
+	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
@@ -4378,6 +4398,7 @@ axis	Both	Ambos
 @msg	nothing to save: the document has no visible art	no hay nada que guardar: el documento no tiene ilustración visible
 @msg	nothing to undo	no hay nada que deshacer
 @msg	no history to clear	no hay historial que borrar
+@msg	no history state {v}	no hay ningún estado del historial {v}
 @msg	nothing to warp	no hay nada que deformar
 @msg	nothing to wrap	no hay nada que envolver
 @msg	object {0} cannot have children	el objeto {0} no puede tener hijos
@@ -4739,6 +4760,7 @@ axis	Both	Ambos
 	Perspective Distort	Distorsión de perspectiva
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` es la referencia a un paso {r}, que solo `run` y `command_batch` resuelven
 @msg	`ids` must be an array of object ids, not {v}	`ids` debe ser una lista de identificadores de objeto, no {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` debe ser una lista de colores, no {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` debe ser una lista de índices de puntos de ancla, no {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: el resultado del paso {i} no tiene ese valor (escriba $$ para un $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: no hay ningún paso {i} antes de este (los pasos se cuentan desde 0; escriba $$ para un $ literal)
@@ -6192,6 +6214,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Hueco 5
 
 @msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objetos de texto deformados que se importaron como arte, no como texto editable: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	los objetos que se dibujaban de forma distinta a la página del propio archivo se importaron como el arte de la página: {_1}
 
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.

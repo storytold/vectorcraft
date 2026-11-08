@@ -96,6 +96,11 @@
 	30° Angles	Ângulos de 30°
 	3D Ribbon	Fita 3D
 	3D and Materials	3D e Materiais
+	Plane	Plano
+	Extrude	Extrusão
+	Revolve	Revolver
+	Inflate	Inflar
+	Select objects, then pick an object type to give them a 3D effect.	Selecione objetos e escolha um tipo de objeto para dar a eles um efeito 3D.
 	45° Angles	Ângulos de 45°
 	60° Angles	Ângulos de 60°
 	90° & 45° & 30° Angles	Ângulos de 90° & 45° & 30°
@@ -270,6 +275,8 @@
 	Show Cross Hairs	Mostrar Linhas Cruzadas
 	Show Video Safe Areas	Mostrar Áreas Seguras de Vídeo
 	Video Ruler Pixel Aspect Ratio:	Proporção de Pixel das Réguas de Vídeo:
+	Fade Region Outside Artboard	Escurecer Região Fora da Prancheta
+	Update While Dragging	Atualizar ao Arrastar
 	Hide Video Rulers	Ocultar Réguas de Vídeo
 	Background Contents	Conteúdo do Plano de Fundo
 	Background Contents:	Conteúdo do Plano de Fundo:
@@ -1205,6 +1212,8 @@
 	Grays	Cinzas
 	Grays and Neutrals	Cinzas e Neutros
 	Grayscale	Escala de Cinza
+	High Color	Muitas Cores
+	Low Color	Poucas Cores
 	Grayscale images	Imagens em escala de cinza
 	Green	Verde
 	Grid	Grade
@@ -1270,6 +1279,7 @@
 	Step Backward	Voltar um Passo
 	Step Forward	Avançar um Passo
 	Clear History	Limpar Histórico
+	New Document from State	Novo Documento do Estado
 	Set History Limit…	Definir Limite do Histórico…
 	History States	Estados do Histórico
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1552,6 +1562,9 @@
 	Live Paint Selection Tool	Ferramenta Seleção de Pintura ao Vivo
 	Live Shape Properties	Propriedades de Forma ao Vivo
 	Load Color Profile…	Carregar Perfil de Cor…
+	Load Character Styles…	Carregar Estilos de Caractere…
+	Load Paragraph Styles…	Carregar Estilos de Parágrafo…
+	Load All Styles…	Carregar Todos os Estilos…
 	Remove Color Profile…	Remover Perfil de Cor…
 	Load Image into Clipboard	Carregar Imagem na Área de Transferência
 	Load Metafile into Clipboard	Carregar Metarquivo na Área de Transferência
@@ -2281,6 +2294,7 @@ digits	Malayalam	Malaiala
 	Replace Font	Substituir Fonte
 	Replace Spine	Substituir Coluna
 	Replace Symbol	Substituir Símbolo
+	Reset Transformation	Redefinir Transformação
 	Replace With Font	Substituir Com Fonte
 	Replace With Font From	Substituir Com Fonte De
 	System	Sistema
@@ -2298,6 +2312,8 @@ digits	Malayalam	Malaiala
 	Reset OpenType Features	Redefinir Recursos OpenType
 	Reset Panel	Redefinir Painel
 	Reset Preferences	Redefinir Preferências
+	Search Preferences	Pesquisar nas Preferências
+	No settings found	Nenhuma configuração encontrada
 	Reset Profiles	Redefinir Perfis
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
@@ -2711,6 +2727,7 @@ digits	Malayalam	Malaiala
 	Spaces	Espaços
 	Spacing Guides	Guias de Espaçamento
 	Invoke Distance Guides	Invocar Guias de Distância
+	Snap to Last Location	Ajustar ao Último Local
 	Spacing:	Espaçamento:
 	Spanish	Espanhol
 	Specify:	Especificar:
@@ -3187,6 +3204,9 @@ imageTrace	Outline	Contorno
 	Put back in the toolbar	Devolver à barra de ferramentas
 	Float Panel	Flutuar Painel
 	Dock Panel	Encaixar Painel
+	Dock to Top	Encaixar na Parte Superior
+	Dock to Bottom	Encaixar na Parte Inferior
+	Dock Control Bar	Encaixar Barra de Controle
 	Float Tool Group	Flutuar Grupo de Ferramentas
 	Services	Serviços
 	Hide VectorCraft	Ocultar o VectorCraft
@@ -3957,6 +3977,7 @@ axis	Both	Ambos
 @msg	nothing to save: the document has no visible art	nada para salvar: o documento não tem arte visível
 @msg	nothing to undo	nada para desfazer
 @msg	no history to clear	nenhum histórico para limpar
+@msg	no history state {v}	nenhum estado do histórico {v}
 @msg	nothing to warp	nada para deformar
 @msg	nothing to wrap	nada para envolver
 @msg	object {0} cannot have children	o objeto {0} não pode ter filhos
@@ -4283,6 +4304,7 @@ axis	Both	Ambos
 	Artboard	Prancheta
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` é a referência de etapa {r}, que somente `run` e `command_batch` resolvem
 @msg	`ids` must be an array of object ids, not {v}	`ids` deve ser uma matriz de ids de objeto, não {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` deve ser uma matriz de cores, não {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` deve ser uma matriz de índices de âncora, não {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: o resultado da etapa {i} não tem esse valor (escreva $$ para um $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: não há etapa {i} antes desta (as etapas contam a partir de 0; escreva $$ para um $ literal)
@@ -6168,6 +6190,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Lacuna 5
 
 @msg	{_1}: they came in as the page's art	{_1}: foram importados como arte da página
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objetos de texto distorcidos importados como arte, não como texto editável: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	os objetos desenhados de forma diferente da própria página do arquivo foram importados como arte da página: {_1}
 
 @msg	You must choose a side pattern.	Você deve escolher um padrão lateral.

@@ -85,6 +85,11 @@
 	3 Color Job…	Travail en 3 couleurs…
 	30° Angles	Angles de 30°
 	3D and Materials	3D et matières
+	Plane	Plan
+	Extrude	Extrusion
+	Revolve	Révolution
+	Inflate	Gonfler
+	Select objects, then pick an object type to give them a 3D effect.	Sélectionnez des objets, puis choisissez un type d’objet pour leur donner un effet 3D.
 	3D Ribbon	Ruban 3D
 	45° Angles	Angles de 45°
 	60° Angles	Angles de 60°
@@ -285,6 +290,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Afficher le réticule
 	Show Video Safe Areas	Afficher les zones de sécurité vidéo
 	Video Ruler Pixel Aspect Ratio:	Format des pixels des règles vidéo :
+	Fade Region Outside Artboard	Assombrir la zone hors du plan de travail
+	Update While Dragging	Mettre à jour pendant le déplacement
 	Hide Video Rulers	Masquer les règles vidéo
 	Background Contents	Contenu de l’arrière-plan
 	Background Contents:	Contenu de l’arrière-plan :
@@ -1372,6 +1379,8 @@ font-technology	Variable	Variables
 	Grays	Gris
 	Grays and Neutrals	Gris et neutres
 	Grayscale	Niveaux de gris
+	High Color	Beaucoup de couleurs
+	Low Color	Peu de couleurs
 	Grayscale images	Images en niveaux de gris
 	Greek & Cyrillic	Grec et cyrillique
 	Green	Vert
@@ -1445,6 +1454,7 @@ font-technology	Variable	Variables
 	Step Backward	Pas en arrière
 	Step Forward	Pas en avant
 	Clear History	Effacer l’historique
+	New Document from State	Nouveau document à partir de l’état
 	Set History Limit…	Définir la limite de l’historique…
 	History States	États de l’historique
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1822,6 +1832,9 @@ font-technology	Variable	Variables
 	Live Paint Selection Tool	Outil Sélection de peinture dynamique
 	Live Shape Properties	Propriétés de la forme dynamique
 	Load Color Profile…	Charger un profil colorimétrique…
+	Load Character Styles…	Charger les styles de caractère…
+	Load Paragraph Styles…	Charger les styles de paragraphe…
+	Load All Styles…	Charger tous les styles…
 	Remove Color Profile…	Supprimer un profil colorimétrique…
 	Load Image into Clipboard	Charger une image dans le presse-papiers
 	Load Metafile into Clipboard	Charger un métafichier dans le presse-papiers
@@ -2731,6 +2744,7 @@ digits	Malayalam	Malayalam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
 	Replace Spine	Remplacer la dorsale
 	Replace Symbol	Remplacer le symbole
+	Reset Transformation	Réinitialiser la transformation
 	Replace With Font	Remplacer par la police
 	Replace With Font From	Remplacer par une police de
 	System	Système
@@ -2747,6 +2761,8 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Réinitialiser les fonctions OpenType
 	Reset Panel	Réinitialiser le panneau
 	Reset Preferences	Réinitialiser les préférences
+	Search Preferences	Rechercher dans les préférences
+	No settings found	Aucun réglage trouvé
 	Reset Profiles	Réinitialiser les profils
 	Reset Rotate View	Réinitialiser la rotation de l’affichage
 	Rotate View to Selection	Faire pivoter l’affichage selon la sélection
@@ -3240,6 +3256,7 @@ digits	Malayalam	Malayalam
 	Spaces	Espaces
 	Spacing Guides	Repères d’espacement
 	Invoke Distance Guides	Appeler les repères de distance
+	Snap to Last Location	Magnétisme du dernier emplacement
 	Spacing:	Espacement :
 	Spanish	Espagnol
 	Specified Distance	Distance définie
@@ -3921,6 +3938,9 @@ axis	Both	Les deux
 	Put back in the toolbar	Remettre dans la barre d’outils
 	Float Panel	Rendre le panneau flottant
 	Dock Panel	Ancrer le panneau
+	Dock to Top	Ancrer en haut
+	Dock to Bottom	Ancrer en bas
+	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
 	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
@@ -4368,6 +4388,7 @@ axis	Both	Les deux
 @msg	nothing to save: the document has no visible art	rien à enregistrer : le document n’a aucune illustration visible
 @msg	nothing to undo	rien à annuler
 @msg	no history to clear	aucun historique à effacer
+@msg	no history state {v}	aucun état d’historique {v}
 @msg	nothing to warp	rien à déformer
 @msg	nothing to wrap	rien à envelopper
 @msg	object {0} cannot have children	l’objet {0} ne peut pas avoir d’enfants
@@ -4747,6 +4768,7 @@ axis	Both	Les deux
 	ICF Bottom/Left	ICF bas/gauche
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
 @msg	`ids` must be an array of object ids, not {v}	`ids` doit être une liste d’identifiants d’objet, pas {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` doit être une liste de couleurs, pas {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` doit être une liste d’indices de points d’ancrage, pas {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}` : le résultat de l’étape {i} n’a pas cette valeur (écrivez $$ pour un $ littéral)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}` : il n’y a pas d’étape {i} avant celle-ci (les étapes sont comptées à partir de 0 ; écrivez $$ pour un $ littéral)
@@ -6245,6 +6267,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objets texte déformés importés comme dessin et non comme texte modifiable : {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.

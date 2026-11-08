@@ -41,6 +41,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
+    pub fade_region_outside_artboard: bool,
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -115,6 +121,7 @@ pub struct Prefs {
     pub measurement_labels: bool,
     pub spacing_guides: bool,
     pub distance_guides: bool,
+    pub snap_to_last_location: bool,
     pub snapping_tolerance: f64,
     pub snap_tangent: bool,
     pub snap_perpendicular: bool,
@@ -349,6 +356,8 @@ impl Default for Prefs {
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            fade_region_outside_artboard: true,
+            artboard_update_while_dragging: true,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
@@ -410,6 +419,7 @@ impl Default for Prefs {
             measurement_labels: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             snap_tangent: true,
             snap_perpendicular: true,
