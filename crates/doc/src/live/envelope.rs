@@ -32,7 +32,14 @@ pub enum EnvelopeKind {
         handles: Vec<[Vec2; 4]>,
     },
     /// The content's bounding box maps onto the outline of this path.
-    TopObject { path: PathData },
+    TopObject {
+        path: PathData,
+        /// The anchors (indices into the outline, the path's largest subpath, in its own order)
+        /// at the top left, top right, bottom right and bottom left corners, as a saved file gives
+        /// them. `None`: the corners are found from the outline.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        corners: Option<[u32; 4]>,
+    },
 }
 
 /// Envelope Options → Preserve Shape Using: how a distorted raster keeps the envelope's shape.
@@ -518,7 +525,7 @@ pub fn envelope_overlay(n: &Node) -> Option<(PathData, Option<GradientMesh>)> {
             Some((grid.lines(), Some(grid)))
         }
         EnvelopeKind::Warp { .. } => Some((EnvelopeMap::of(n)?.surface_mesh(4, 4, Color::BLACK).lines(), None)),
-        EnvelopeKind::TopObject { path } => Some((path.clone(), None)),
+        EnvelopeKind::TopObject { path, .. } => Some((path.clone(), None)),
     }
 }
 
@@ -642,7 +649,7 @@ pub fn envelope_bounds(content: &[Arc<Node>], kind: &EnvelopeKind, frame: Affine
             let first = *points.first()?;
             Some(points.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)))
         }
-        EnvelopeKind::TopObject { path } => path.bounds(),
+        EnvelopeKind::TopObject { path, .. } => path.bounds(),
         EnvelopeKind::Warp { .. } => EnvelopeMap::new(content, kind, frame, options)?.bounds(),
     }
 }

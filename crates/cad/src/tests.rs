@@ -824,6 +824,30 @@ fn units_scale_coordinates_and_set_insunits() {
 }
 
 #[test]
+fn the_cnc_preset_writes_version_2000_in_millimeters_with_type_as_paths_and_strokes_as_lines() {
+    let mut d = text_doc("Cut", 20.0);
+    let layer = d.layers[0].id;
+    let frame = path(&mut d, shapes::rectangle(Rect::new(5.0, 5.0, 195.0, 95.0)), Paint::None, Paint::solid(Color::BLACK), 10.0);
+    d.insert(Some(layer), usize::MAX, frame).unwrap();
+    let o = DxfOptions { region: d.artboards[0].rect, ..DxfPreset::Cnc.options() };
+    let out = export(&d, &o).unwrap();
+    let p = pairs(&out.bytes);
+    assert_eq!(header(&p, "$ACADVER").as_deref(), Some("AC1015"));
+    assert_eq!(header(&p, "$INSUNITS").as_deref(), Some("4"));
+    let k = kinds(&out);
+    assert!(!k.iter().any(|k| matches!(k.as_str(), "TEXT" | "MTEXT" | "IMAGE")), "type is paths: {k:?}");
+    assert!(k.len() > 2, "the glyphs' outlines: {k:?}");
+    // The 10 pt stroke (wider than the widest lineweight) is one center line, not a filled outline.
+    assert_eq!(k.last().map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert_ne!(k.get(k.len() - 2).map(String::as_str), Some("LWPOLYLINE"), "{k:?}");
+    assert!(out.images.is_empty());
+    assert_eq!(DxfPreset::of(&o), DxfPreset::Cnc);
+    assert_eq!(DxfPreset::of(&DxfOptions { colors: ColorDepth::True, ..o.clone() }), DxfPreset::Custom);
+    assert_eq!(DxfPreset::of(&DxfOptions::default()), DxfPreset::Custom);
+    assert_eq!(DxfPreset::from_id(" CNC "), Some(DxfPreset::Cnc));
+}
+
+#[test]
 fn layers_become_dxf_layers() {
     let mut d = shapes_doc();
     let second = d.add_layer(Some("Dims: <top>"));
@@ -1052,15 +1076,15 @@ fn a_bullet_is_text_of_its_own_before_its_paragraph() {
 
 /// A numbered list paragraph's number and period are a TEXT entity of their own where they are
 /// drawn, in the order they are drawn: in a right-to-left paragraph the period comes first, at the
-/// number's left.
+/// number's left, with the marker aligned left or right.
 #[test]
 fn a_number_is_text_of_its_own_before_its_paragraph() {
-    use vectorcraft_doc::text::{NumberStyle, ParaList};
-    let numbered = |text: &str, count: u32| {
+    use vectorcraft_doc::text::{ListAlign, NumberStyle, ParaList};
+    let numbered_aligned = |text: &str, count: u32, align: ListAlign| {
         let mut d = text_doc(text, 20.0);
         let id = d.layers[0].children().unwrap()[0].id;
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
-            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic));
+            t.para.list = Some(ParaList::numbered(NumberStyle::Arabic).aligned(align));
             t.para.left_indent = 30.0;
             t.para.first_line_indent = -30.0;
             t.list_count = count;
@@ -1068,10 +1092,27 @@ fn a_number_is_text_of_its_own_before_its_paragraph() {
         let out = export(&d, &DxfOptions { version: DxfVersion::R2018, preserve: Preserve::Editability, ..opts(&d) }).unwrap();
         entities(&out).iter().map(|e| (get(e, 1).map(str::to_string), all(e, 10)[0])).collect::<Vec<_>>()
     };
+    let numbered = |text: &str, count: u32| numbered_aligned(text, count, ListAlign::Left);
     assert_eq!(numbered("Item", 11), [(Some("12.".to_string()), 10.0), (Some("Item".to_string()), 40.0)]);
     let rtl = numbered("שלום", 11);
     assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
     assert!(rtl[1].1 > rtl[0].1, "the number right of the text: {rtl:?}");
+    // Aligned right, the number keeps its order and moves right, against the text.
+    let right = numbered_aligned("Item", 11, ListAlign::Right);
+    assert_eq!((right[0].0.as_deref(), right[1].clone()), (Some("12."), (Some("Item".to_string()), 40.0)));
+    assert!(right[0].1 > 10.0 && right[0].1 < 40.0, "{right:?}");
+    let rtl = numbered_aligned("שלום", 11, ListAlign::Right);
+    assert_eq!(rtl.iter().map(|(s, _)| s.clone().unwrap_or_default()).collect::<Vec<_>>(), ["שלום", ".12"]);
+    // A mixed paragraph: the period follows the paragraph's direction, not the script of the
+    // words it holds, with either alignment.
+    let marker = |text: &str, align: ListAlign| {
+        let out = numbered_aligned(text, 11, align);
+        out.into_iter().filter_map(|(s, _)| s).find(|s| s.contains("12")).unwrap_or_default()
+    };
+    for align in [ListAlign::Left, ListAlign::Right] {
+        assert_eq!(marker("Item שלום", align), "12.", "{align:?}");
+        assert_eq!(marker("שלום Item", align), ".12", "{align:?}");
+    }
 }
 
 /// Area type that Shrink Text to Fit scales down is written at the height it draws at.

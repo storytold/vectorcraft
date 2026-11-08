@@ -13,7 +13,7 @@
 //!
 //! The lexer moves forward through the source one character at a time and never recurses.
 
-use crate::chars::{hex_value, is_decimal_digit, is_id_part, is_id_start, is_line_terminator, is_octal_digit, is_whitespace};
+use crate::chars::{hex_value, is_decimal_digit, is_id_part, is_id_start, is_line_terminator, is_octal_digit, is_whitespace, radix_value};
 use crate::error::SyntaxError;
 use crate::regexp;
 use crate::token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
@@ -352,26 +352,10 @@ impl<'s> Lexer<'s> {
     /// Reads digits in `radix` (8 or 16) and returns their value, or `None` when there are none.
     fn radix_digits(&mut self, radix: u32) -> Option<f64> {
         let begin = self.pos;
-        let mut exact: u128 = 0;
-        let mut value = 0.0_f64;
-        let mut overflow = false;
-        while let Some(d) = self.peek().and_then(hex_value).filter(|&d| d < radix) {
-            match exact.checked_mul(u128::from(radix)).and_then(|v| v.checked_add(u128::from(d))) {
-                Some(v) if !overflow => exact = v,
-                _ => {
-                    if !overflow {
-                        value = exact as f64;
-                        overflow = true;
-                    }
-                    value = value * f64::from(radix) + f64::from(d);
-                }
-            }
+        while self.peek().and_then(hex_value).is_some_and(|d| d < radix) {
             self.pos += 1;
         }
-        if self.pos == begin {
-            return None;
-        }
-        Some(if overflow { value } else { exact as f64 })
+        radix_value(self.src[begin..self.pos].iter().filter_map(|&u| hex_value(u32::from(u))), radix)
     }
 
     /// After `0` and a digit: an octal literal when every digit is octal, else a decimal literal

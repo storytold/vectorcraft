@@ -1,4 +1,4 @@
-use super::state::{SUBJECT_COMMANDS, has_subject, waits_for_ime};
+use super::state::{SUBJECT_COMMANDS, enabled, has_subject, waits_for_ime};
 use super::{Value, VectorcraftApp, json};
 
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
@@ -138,6 +138,10 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     if waits_for_ime(app, id) {
         return;
     }
+    // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
+    if id == "plugin.dialog" && !enabled(app, id) {
+        return;
+    }
     if SUBJECT_COMMANDS.contains(&id)
         && p.get("ids").is_none_or(|ids| ids.as_array().is_some_and(Vec::is_empty))
         && p.get("id").is_none()
@@ -271,6 +275,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         let _ = app.run("ui.paramDialog", json!({"command": id, "label": "New View", "params": {"name": name}}));
         return true;
     }
+    // Composite Fonts…: the document's composite fonts, to edit before OK sets them.
+    if id == crate::dialogs::composite_fonts::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::composite_fonts::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
     // Edit Views…: the saved views in a list, to rename or delete.
     if id == "view.saved.edit" && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::edit_views::open(app) {
@@ -351,10 +362,12 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
-    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
-    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
-    // shows stays open.
-    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
         if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }

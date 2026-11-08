@@ -19,7 +19,7 @@
 //! at first when a code is not known), and `__query` and `__attention` (the filter of the rows shown).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex};
 
 use craft_keymap::import::namematch::{Candidate, Matcher, Proposal};
 use craft_keymap::import::{MAX_IMPORT_TEXT, MAX_PATH_SEGMENTS};
@@ -363,10 +363,12 @@ fn single_key(chord: &str) -> bool {
 }
 
 /// What a name can stand for: Keyboard Shortcuts' entries, by their English labels and the labels in
-/// the interface language.
+/// the interface language. A filter plug-in's row is left out: a row of the file reaches it only
+/// when the user picks it as the target.
 pub fn candidates() -> Vec<Candidate> {
     shortcut_editor::entries()
         .iter()
+        .filter(|e| !e.key.starts_with("plugin:"))
         .map(|e| {
             let shown = tl!(&e.label);
             let labels = if shown == e.label { vec![e.label.clone()] } else { vec![e.label.clone(), shown.to_string()] };
@@ -375,14 +377,17 @@ pub fn candidates() -> Vec<Candidate> {
         .collect()
 }
 
-/// Keyboard Shortcuts' entry `key`. The commands of installed plug-ins are looked up in
-/// [`shortcut_editor::entries`] as it is now.
+/// Keyboard Shortcuts' entry `key`, among the entries for the plug-ins installed now.
 fn entry(key: &str) -> Option<Entry> {
-    static BY_KEY: OnceLock<HashMap<String, Entry>> = OnceLock::new();
-    if vectorcraft_engine::cmd::plugin::is_command_id(key) {
-        return shortcut_editor::entry(key);
+    type Index = (Arc<[Entry]>, HashMap<String, usize>);
+    static BY_KEY: Mutex<Option<Index>> = Mutex::new(None);
+    let entries = shortcut_editor::entries();
+    let mut by = BY_KEY.lock().unwrap_or_else(|e| e.into_inner());
+    if by.as_ref().is_none_or(|(e, _)| !Arc::ptr_eq(e, &entries)) {
+        let index = entries.iter().enumerate().map(|(i, e)| (e.key.clone(), i)).collect();
+        *by = Some((entries, index));
     }
-    BY_KEY.get_or_init(|| shortcut_editor::entries().iter().map(|e| (e.key.clone(), e.clone())).collect()).get(key).cloned()
+    by.as_ref().and_then(|(e, index)| index.get(key).and_then(|&i| e.get(i)).cloned())
 }
 
 /// A tool, command or panel that Keyboard Shortcuts can give a shortcut.
@@ -392,7 +397,7 @@ fn known(key: &str) -> bool {
 
 /// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu.
 fn shown(e: &Entry) -> String {
-    if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) }
+    shortcut_editor::shown_name(e)
 }
 
 /// What a row's target shows.
@@ -512,7 +517,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         shortcut_editor::open(app);
     }
     if let Some(k) = app.ui.dialog.as_mut() {
-        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(km.overrides()));
+        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(&shortcut_editor::saved_overrides(km.overrides(), &ov)));
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }
@@ -938,6 +943,7 @@ pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<Stri
     let option = |ui: &mut egui::Ui, key: &str, label: &str| {
         ui.add(egui::Button::selectable(r.target.as_deref() == Some(key), label)).clicked().then(|| key.to_string())
     };
+    let all = shortcut_editor::entries();
     widgets::combo_menu(ui, ("shortcut-import-target", i), &current, TARGET_W, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| {
@@ -948,27 +954,22 @@ pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<Stri
                 }
                 let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
                 let mut picked = option(ui, "", tl!("No equivalent"));
-                let all = shortcut_editor::entries();
-                let list: Vec<usize> = if q.is_empty() {
+                let list: Vec<&Entry> = if q.is_empty() {
                     for e in r.choices.iter().filter_map(|c| entry(c)) {
                         picked = option(ui, &e.key, &shown(&e)).or(picked);
                     }
                     ui.separator();
-                    (0..all.len()).collect()
+                    all.iter().collect()
                 } else {
-                    all.iter()
-                        .enumerate()
-                        .filter(|(_, e)| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q))
-                        .map(|(i, _)| i)
-                        .collect()
+                    all.iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
                 };
                 ui.data_mut(|d| d.insert_temp(header_id, ui.min_rect().height()));
-                (all, list, picked)
+                (list, picked)
             },
             ROW_H,
-            |(_, list, _)| list.len(),
-            |ui, range, (all, list, mut picked)| {
-                for e in range.filter_map(|k| list.get(k).and_then(|&i| all.get(i))) {
+            |(list, _)| list.len(),
+            |ui, range, (list, mut picked)| {
+                for e in range.filter_map(|k| list.get(k)) {
                     picked = option(ui, &e.key, &shown(e)).or(picked);
                 }
                 if picked.is_some() {
