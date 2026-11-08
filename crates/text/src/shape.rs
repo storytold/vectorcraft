@@ -1048,8 +1048,11 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     }
     // Harakat styled apart from their letters (paint only): shaped with them, each glyph then
     // takes its own character's run ([`crate::harakat`]).
-    let styled_marks =
-        boundaries().any(|b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1));
+    let mark_boundaries: Vec<usize> = boundaries()
+        .filter(|&b| run_at(b - 1).1 != run_at(b).1 && crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .collect();
+    // Source run starts are sorted. Reuse their classification when checking cluster splits.
+    let styled_marks = !mark_boundaries.is_empty();
     let char_level = std::cell::Cell::new(false);
 
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
@@ -1064,9 +1067,12 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let Shaped { raw, proportional, vpal, chars } = &mut shaped;
         let hb_shaped = face.hb().map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
+            // The baseline and character-level pass use exactly the same resolved features.
+            // Alternate positioning passes still resolve their own features, with `more` last.
+            let with_more = |resolved: Vec<Feature>| resolved.into_iter().chain(more.iter().cloned()).collect::<Vec<_>>();
+            let along_features = with_more(feats.resolve(st));
             // gid, cluster, x and y advance, x and y offset.
             let shape = |feats: &[Feature], direction: Direction| {
-                let feats: Vec<Feature> = feats.iter().chain(more).cloned().collect();
                 let mut buf = UnicodeBuffer::new();
                 for (i, c) in text_seg.char_indices() {
                     let cl = (range.start + i) as u32;
@@ -1100,8 +1106,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 }
                 // A buffer whose characters name no script reads as `UNKNOWN`: its plan has none.
                 let script = Some(buf.script()).filter(|s| *s != harfrust::script::UNKNOWN);
-                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), &feats);
-                let gb = shaper.shape(buf, ShapeOptions::new().features(&feats).plan(Some(&plan)));
+                let plan = face.shape_plan(&shaper, buf.direction(), script, language.as_ref(), feats);
+                let gb = shaper.shape(buf, ShapeOptions::new().features(feats).plan(Some(&plan)));
                 gb.glyph_infos()
                     .iter()
                     .zip(gb.glyph_positions())
@@ -1109,21 +1115,25 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     .collect::<Vec<_>>()
             };
             let along = if level.is_rtl() { Direction::RightToLeft } else { Direction::LeftToRight };
-            *raw = shape(&feats.resolve(st), along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
+            *raw = shape(&along_features, along).into_iter().map(|(g, c, xa, _, xo, yo)| (g, c, xa, xo, yo)).collect();
             let raw = &*raw;
             let same_glyphs = |v: &[(u32, u32, i32, i32, i32, i32)]| v.len() == raw.len() && v.iter().zip(raw).all(|(a, b)| a.0 == b.0);
             // The same shaping at character level names each glyph's own character (kept only when
             // it sets the same glyphs alike, each character in its glyph's cluster).
-            if styled_marks {
+            if let Some(classes) = styled_marks.then(|| crate::harakat::mark_classes(face)).flatten()
+                // Without a mark glyph, no glyph can take a later character's paint. Avoid
+                // reshaping; the original clusters already give the conservative ownership.
+                && raw.iter().any(|g| classes.get(skrifa::GlyphId::new(g.0)) == 3)
+            {
                 char_level.set(true);
-                let by_char = shape(&feats.resolve(st), along);
+                let by_char = shape(&along_features, along);
                 char_level.set(false);
-                *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| crate::harakat::is_gdef_mark(face, gid));
+                *chars = crate::harakat::own_chars(raw, &by_char, range.end, text, |gid| classes.get(skrifa::GlyphId::new(gid)) == 3);
             }
             if feats.proportional(st) {
                 // `palt` is positioning only: the same glyphs set on their full widths tell which
                 // advances it changed (kerning and the rest change both alike).
-                let full = shape(&feats.resolve_fixed_width(st), along);
+                let full = shape(&with_more(feats.resolve_fixed_width(st)), along);
                 if same_glyphs(&full) {
                     *proportional = full.iter().zip(raw).map(|(a, b)| a.2 != b.2).collect();
                 }
@@ -1134,7 +1144,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                 // and without either tell how it moves each and changes its advance down the column
                 // (y up, advances negative). Which advances `vpal` itself changed comes from setting
                 // them with it alone.
-                let ttb = |proportional, kerning| shape(&feats.resolve_vertical(st, proportional, kerning), Direction::TopToBottom);
+                let ttb = |proportional, kerning| shape(&with_more(feats.resolve_vertical(st, proportional, kerning)), Direction::TopToBottom);
                 let (with, without, alone) = (ttb(true, true), ttb(false, false), ttb(true, false));
                 if same_glyphs(&with) && same_glyphs(&without) && same_glyphs(&alone) {
                     *vpal = with
@@ -1237,7 +1247,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     // Except at harakat styled apart only in paint ([`crate::harakat`]).
     let inside_clusters: Vec<usize> = boundaries()
         .filter(|&b| cluster_starts.binary_search(&b).is_err() && run_at(b - 1).1 != run_at(b).1)
-        .filter(|&b| !crate::harakat::paint_only_mark_boundary(text, b, run_at(b - 1).1, run_at(b).1))
+        .filter(|b| mark_boundaries.binary_search(b).is_err())
         .collect();
     if !inside_clusters.is_empty() {
         return shape_apart(inside_clusters, out);

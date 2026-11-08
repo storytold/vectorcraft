@@ -152,6 +152,146 @@ fn paint_only_differences_are_told_apart() {
     assert_eq!(harakat_ranges("اللَّهِ", 0.."اللَّهِ".len()), [6..10, 12..14], "shadda and fatha together");
 }
 
+/// The allocation-free comparison must keep the previous comparison's complete contract,
+/// including attributes that affect layout rather than shaping and non-reflexive file values.
+#[test]
+fn paint_only_keeps_every_nonpaint_attribute_and_partial_equality() {
+    use vectorcraft_doc::{CharAlign, CharPosition, Dash, Digits, FontHeightReference, GlyphChoice, LineCap, LineJoin, ParaDirection, StrokeAlign};
+
+    fn previous(a: &CharStyle, b: &CharStyle) -> bool {
+        let mut b = b.clone();
+        b.fill = a.fill.clone();
+        b.stroke = a.stroke.clone();
+        b.stroke_width = a.stroke_width;
+        b.overprint_fill = a.overprint_fill;
+        b.overprint_stroke = a.overprint_stroke;
+        b.stroke_cap = a.stroke_cap;
+        b.stroke_join = a.stroke_join;
+        b.stroke_miter_limit = a.stroke_miter_limit;
+        b.stroke_dash = a.stroke_dash.clone();
+        b.stroke_align = a.stroke_align;
+        b.style_name = a.style_name.clone();
+        *a == b
+    }
+
+    fn check(a: &CharStyle, b: &CharStyle, want: bool, name: &str) {
+        for (left, right) in [(a, b), (b, a)] {
+            assert_eq!(paint_only(left, right), previous(left, right), "{name}: old contract");
+        }
+        assert_eq!(paint_only(a, b), want, "{name}");
+    }
+
+    let a = CharStyle {
+        fill: Paint::Pattern { pattern: "named pattern".repeat(8), xf: Affine::IDENTITY },
+        stroke: Paint::Solid { color: Color::BLACK, swatch: Some("global swatch".repeat(8)), tint: 0.5 },
+        stroke_dash: Some(Dash { pattern: vec![2.0, 3.0, 4.0, 5.0], offset: 0.5, align_corners: true }),
+        style_name: Some("named character style".repeat(8)),
+        ..style(FAMILY)
+    };
+    macro_rules! field {
+        ($field:ident, $value:expr, $want:expr) => {{
+            let mut b = a.clone();
+            b.$field = $value;
+            check(&a, &b, $want, stringify!($field));
+        }};
+    }
+    field!(font_family, "other family".into(), false);
+    field!(font_style, "Bold".into(), false);
+    field!(font_version, Some("other version".into()), false);
+    field!(font_axes, [("wght".into(), 700.0)].into(), false);
+    field!(size, 13.0, false);
+    field!(leading, Some(60.0), false);
+    field!(tracking, 20.0, false);
+    field!(kerning, Some(0.0), false);
+    field!(optical_kerning, true, false);
+    field!(baseline_shift, 1.0, false);
+    field!(h_scale, 90.0, false);
+    field!(v_scale, 90.0, false);
+    field!(rotation, 3.0, false);
+    field!(underline, true, false);
+    field!(strikethrough, true, false);
+    field!(all_caps, true, false);
+    field!(features, vec!["-liga".into()], false);
+    field!(position, CharPosition::Superscript(Default::default()), false);
+    field!(small_caps, Some(80.0), false);
+    field!(char_align, CharAlign::EmBoxTop, false);
+    field!(char_direction, Some(ParaDirection::RightToLeft), false);
+    field!(kashidas, false, false);
+    field!(proportional_metrics, true, false);
+    field!(tate_chu_yoko, true, false);
+    field!(tcy_up_down, 1.0, false);
+    field!(tcy_left_right, 1.0, false);
+    field!(standard_vertical_roman, true, false);
+    field!(digits, Digits::Hindi, false);
+    field!(font_height_reference, FontHeightReference::CapHeight, false);
+    field!(no_break, true, false);
+    field!(language, Some("ar".into()), false);
+    field!(glyph_alternate, Some(GlyphChoice { ch: 'a', gid: 1, font: "other".into(), version: String::new() }), false);
+    field!(fill, Paint::None, true);
+    field!(stroke, Paint::None, true);
+    field!(stroke_width, 2.0, true);
+    field!(overprint_fill, true, true);
+    field!(overprint_stroke, true, true);
+    field!(stroke_cap, LineCap::Round, true);
+    field!(stroke_join, LineJoin::Round, true);
+    field!(stroke_miter_limit, 2.0, true);
+    field!(stroke_dash, None, true);
+    field!(stroke_align, StrokeAlign::Outside, true);
+    field!(style_name, None, true);
+    // Only the first style's ignored fields survive the old normalization. A NaN in the
+    // second style's paint is ignored, but reversing the arguments must still return false.
+    field!(fill, Paint::solid(Color::Gray { k: f32::NAN }), true);
+    field!(stroke, Paint::solid(Color::Gray { k: f32::NAN }), true);
+    field!(stroke_width, f64::NAN, true);
+    field!(stroke_miter_limit, f64::NAN, true);
+    field!(stroke_dash, Some(Dash { pattern: vec![f64::NAN], offset: 0.0, align_corners: false }), true);
+    field!(tracking, f64::NAN, false);
+}
+
+/// A face without usable mark classification keeps cluster-start paint, without changing
+/// its glyphs or positioning when a harakat's paint is edited. All variants are in-memory.
+#[test]
+fn synthetic_harakat_keep_geometry_with_and_without_gdef_marks() {
+    use skrifa::raw::TableProvider;
+    use write_fonts::FontBuilder;
+    use write_fonts::tables::gdef::Gdef;
+    use write_fonts::tables::layout::ClassDefFormat1;
+    use write_fonts::types::{GlyphId16, Tag};
+
+    let bytes = crate::test_fonts::lam_alef_font(b"rlig").unwrap();
+    let font = skrifa::FontRef::new(&bytes).unwrap();
+    for variant in ["marks", "no GDEF", "no class definition", "base classes"] {
+        let mut builder = FontBuilder::new();
+        for r in font.table_directory.table_records() {
+            let tag = Tag::new(&r.tag().to_be_bytes());
+            if variant == "marks" || tag != Tag::new(b"GDEF") {
+                builder.add_raw(tag, font.table_data(r.tag()).unwrap().as_bytes());
+            }
+        }
+        if variant == "no class definition" {
+            builder.add_table(&Gdef::new(None, None, None, None)).unwrap();
+        } else if variant == "base classes" {
+            let classes = ClassDefFormat1::new(GlyphId16::new(0), vec![1; usize::from(font.maxp().unwrap().num_glyphs())]);
+            builder.add_table(&Gdef::new(Some(classes.into()), None, None, None)).unwrap();
+        }
+        let db = FontDb::with_font_dirs(vec![]);
+        assert_eq!(db.add_font(builder.build()), 1, "{variant}");
+        let family = crate::test_fonts::lam_alef_family(b"rlig");
+        let plain = text_with_harakat("بَبَبَ", family, None);
+        let coloured = text_with_harakat("بَبَبَ", family, Some(red()));
+        let before = layout(&db, &plain);
+        let after = layout(&db, &coloured);
+        assert!(!before.glyphs.is_empty(), "{variant}");
+        assert_eq!(geometry(&before), geometry(&after), "{variant}");
+        assert_eq!(coloured.plain_text(), plain.plain_text(), "{variant}");
+        if variant == "marks" {
+            assert!(painted(&coloured, &after, &red()) > 0, "{variant}: harakat own their paint");
+        } else {
+            assert!(after.glyphs.iter().all(|g| run_of(&coloured, g).style.fill != red()), "{variant}: cluster-start paint");
+        }
+    }
+}
+
 /// A range is normalised as `edit::style_range` takes one: clamped, each end moved back to the
 /// start of its character, put in order. Never a silent empty result for a usable range.
 #[test]

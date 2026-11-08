@@ -14,9 +14,8 @@
 //! and exporters read the glyph's run as they always did, so they need no change. The text itself
 //! is never changed.
 
-use skrifa::GlyphId;
 use skrifa::raw::TableProvider;
-use skrifa::raw::tables::gdef::GlyphClassDef;
+use skrifa::raw::tables::layout::ClassDef;
 use vectorcraft_doc::CharStyle;
 
 use crate::fontdb::FontFace;
@@ -42,19 +41,89 @@ pub(crate) fn is_harakat(c: char) -> bool {
 /// and change no glyph, advance or position. Stricter than [`crate::shape`]'s `shapes_alike`
 /// (which also ignores baseline shift, tracking, underline, …).
 pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
-    let mut b = b.clone();
-    b.fill = a.fill.clone();
-    b.stroke = a.stroke.clone();
-    b.stroke_width = a.stroke_width;
-    b.overprint_fill = a.overprint_fill;
-    b.overprint_stroke = a.overprint_stroke;
-    b.stroke_cap = a.stroke_cap;
-    b.stroke_join = a.stroke_join;
-    b.stroke_miter_limit = a.stroke_miter_limit;
-    b.stroke_dash = a.stroke_dash.clone();
-    b.stroke_align = a.stroke_align;
-    b.style_name = a.style_name.clone();
-    *a == b
+    // Exhaustive: a new attribute must explicitly keep or relax this boundary rule.
+    let CharStyle {
+        font_family,
+        font_style,
+        font_version,
+        font_axes,
+        size,
+        leading,
+        tracking,
+        kerning,
+        optical_kerning,
+        baseline_shift,
+        h_scale,
+        v_scale,
+        rotation,
+        underline,
+        strikethrough,
+        all_caps,
+        features,
+        position,
+        small_caps,
+        char_align,
+        char_direction,
+        kashidas,
+        proportional_metrics,
+        tate_chu_yoko,
+        tcy_up_down,
+        tcy_left_right,
+        standard_vertical_roman,
+        digits,
+        font_height_reference,
+        no_break,
+        language,
+        glyph_alternate,
+        fill,
+        stroke,
+        stroke_width,
+        stroke_miter_limit,
+        stroke_dash,
+        overprint_fill: _,
+        overprint_stroke: _,
+        stroke_cap: _,
+        stroke_join: _,
+        stroke_align: _,
+        style_name: _,
+    } = a;
+    // Previously b's paint was replaced with a's before comparing the whole styles. Keep
+    // that PartialEq behavior for non-reflexive paint values (NaN), without cloning paint.
+    let original_paint = (&a.fill, &a.stroke, &a.stroke_width, &a.stroke_miter_limit, &a.stroke_dash);
+    let normalized_paint = (fill, stroke, stroke_width, stroke_miter_limit, stroke_dash);
+    original_paint == normalized_paint
+        && font_family == &b.font_family
+        && font_style == &b.font_style
+        && font_version == &b.font_version
+        && font_axes == &b.font_axes
+        && size == &b.size
+        && leading == &b.leading
+        && tracking == &b.tracking
+        && kerning == &b.kerning
+        && optical_kerning == &b.optical_kerning
+        && baseline_shift == &b.baseline_shift
+        && h_scale == &b.h_scale
+        && v_scale == &b.v_scale
+        && rotation == &b.rotation
+        && underline == &b.underline
+        && strikethrough == &b.strikethrough
+        && all_caps == &b.all_caps
+        && features == &b.features
+        && position == &b.position
+        && small_caps == &b.small_caps
+        && char_align == &b.char_align
+        && char_direction == &b.char_direction
+        && kashidas == &b.kashidas
+        && proportional_metrics == &b.proportional_metrics
+        && tate_chu_yoko == &b.tate_chu_yoko
+        && tcy_up_down == &b.tcy_up_down
+        && tcy_left_right == &b.tcy_left_right
+        && standard_vertical_roman == &b.standard_vertical_roman
+        && digits == &b.digits
+        && font_height_reference == &b.font_height_reference
+        && no_break == &b.no_break
+        && language == &b.language
+        && glyph_alternate == &b.glyph_alternate
 }
 
 /// Is the run boundary at byte `at` of `text`, between styles `before` and `after`, one that
@@ -90,17 +159,15 @@ pub(crate) fn harakat_ranges(text: &str, range: std::ops::Range<usize>) -> Vec<s
 
 /// Does `face`'s GDEF GlyphClassDef name glyph `gid` as class 3 (mark)? False when the face has
 /// no GDEF, no class def, or the class is unavailable (typical of AAT/`morx` paths).
+#[cfg(test)]
 pub(crate) fn is_gdef_mark(face: &FontFace, gid: u32) -> bool {
-    let Some(font) = face.skrifa() else {
-        return false;
-    };
-    let Ok(gdef) = font.gdef() else {
-        return false;
-    };
-    let Some(Ok(classes)) = gdef.glyph_class_def() else {
-        return false;
-    };
-    GlyphClassDef::new(classes.get(GlyphId::new(gid))) == GlyphClassDef::Mark
+    mark_classes(face).as_ref().is_some_and(|classes| classes.get(skrifa::GlyphId::new(gid)) == 3)
+}
+
+/// Borrow the face's mark classification once for a shaping pass. No GDEF, missing classes
+/// or malformed tables keep the conservative cluster-start ownership.
+pub(crate) fn mark_classes(face: &FontFace) -> Option<ClassDef<'_>> {
+    face.skrifa()?.gdef().ok()?.glyph_class_def()?.ok()
 }
 
 /// Each glyph's own character, from the shaping `by_char` at character cluster level of the
