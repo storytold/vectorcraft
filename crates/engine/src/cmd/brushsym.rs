@@ -24,6 +24,9 @@ use super::{
 };
 use crate::EngineError;
 
+/// Whether Reset Transformation changes a symbol instance.
+pub use symbols::reset_transformation_changes;
+
 mod brushes;
 mod dynamic;
 mod symbols;
@@ -40,8 +43,8 @@ pub(crate) use symbols::{
     stored_natural_size,
 };
 use symbols::{
-    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_list, symbol_new, symbol_options, symbol_place, symbol_replace,
-    symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
+    symbol_adjust, symbol_break_link, symbol_delete, symbol_duplicate, symbol_instance_reset_transform, symbol_list, symbol_new, symbol_options,
+    symbol_place, symbol_replace, symbol_select_instances, symbol_set_current, symbol_spray, symbol_unused, symbol_update,
 };
 
 const SIZES_KEY: &str = vectorcraft_doc::SYMBOL_SIZES;
@@ -271,6 +274,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?|id?} drop the selected dynamic symbol instances' own appearance changes, so they show the symbol's appearance again → {ids: the instances that had changes}",
             has_selection,
             symbol_instance_reset
+        ),
+        cmd!(
+            "symbol.instance.resetTransform",
+            "Reset Transformation",
+            [],
+            None,
+            "{ids?|id?} give the selected symbol instances (in groups too) their symbol's own scale, without rotation, shear or reflection, keeping the center of each one's bounding box in place, as one undo step; other objects, instances in perspective and instances already at their symbol's scale are left as they are, and no undo step is added when nothing changes; an id naming no object, or no symbol instance among the objects, is an error → {ids: the instances changed}",
+            has_selection,
+            symbol_instance_reset_transform
         ),
         cmd!(
             "symbol.setCurrent",
