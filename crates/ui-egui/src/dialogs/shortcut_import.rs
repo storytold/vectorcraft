@@ -375,9 +375,13 @@ pub fn candidates() -> Vec<Candidate> {
         .collect()
 }
 
-/// Keyboard Shortcuts' entry `key`.
+/// Keyboard Shortcuts' entry `key`. The commands of installed plug-ins are looked up in
+/// [`shortcut_editor::entries`] as it is now.
 fn entry(key: &str) -> Option<&'static Entry> {
     static BY_KEY: OnceLock<HashMap<&'static str, &'static Entry>> = OnceLock::new();
+    if vectorcraft_engine::cmd::plugin::is_command_id(key) {
+        return shortcut_editor::entries().iter().find(|e| e.key == key);
+    }
     BY_KEY.get_or_init(|| shortcut_editor::entries().iter().map(|e| (e.key.as_str(), e)).collect()).get(key).copied()
 }
 

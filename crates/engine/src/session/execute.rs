@@ -91,7 +91,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = (spec.run)(s, params);
+            let r = cmd::run_spec(s, spec, params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)

@@ -20,6 +20,10 @@ pub const MAX_TEXT: usize = 4_096;
 pub const MAX_LIST: usize = 256;
 /// Most file extensions an exporter may declare.
 pub const MAX_EXTENSIONS: usize = 8;
+/// Most menu commands a plug-in may add (`commands`).
+pub const MAX_COMMANDS: usize = 32;
+/// Longest command id, in characters.
+pub const MAX_COMMAND_ID: usize = 32;
 
 /// What a plug-in is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +176,30 @@ pub struct Param {
     pub ui: ParamUi,
 }
 
+/// A menu command a plug-in adds (`commands`): the host lists it under Object › Plug-ins › the
+/// plug-in's name (Effect › Plug-ins for a live effect's), runs it as the command
+/// `plugin.<plug-in id>.<id>`, and calls the plug-in's `vc_run` with `_context.command` set to
+/// `id` and the parameters it declares.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Command {
+    /// `[a-z][a-z0-9_]*`, at most [`MAX_COMMAND_ID`] characters, unique within the manifest.
+    pub id: String,
+    /// The menu label: 1 to 64 printable characters, shown with bidirectional characters escaped
+    /// ([`crate::permissions::display_text`]).
+    pub label: String,
+    /// Parameters in declaration (dialog) order, declared as the manifest's own are.
+    #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
+    pub params: Vec<(String, Param)>,
+}
+
+impl Command {
+    /// The label as menus and errors show it: control and bidirectional characters escaped, at
+    /// most [`crate::permissions::MAX_SHOWN_NAME`] characters.
+    pub fn shown_label(&self) -> String {
+        crate::permissions::display_text(self.label.trim(), crate::permissions::MAX_SHOWN_NAME)
+    }
+}
+
 impl From<ParamSpec> for Param {
     fn from(spec: ParamSpec) -> Self {
         Param { spec, ui: ParamUi::default() }
@@ -260,6 +288,9 @@ pub struct Manifest {
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
+    /// The menu commands it adds, in menu order (a filter or a live effect only).
+    #[serde(default, deserialize_with = "ordered_commands", skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<Command>,
 }
 
 impl Manifest {
@@ -288,7 +319,19 @@ impl Manifest {
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
+            commands: Vec::new(),
         }
+    }
+
+    /// The manifest command `c` runs with: this one with `c`'s label as its name and `c`'s
+    /// parameters as its own, so dialogs show them and [`Manifest::resolve_params`] checks them.
+    pub fn for_command(&self, c: &Command) -> Manifest {
+        Manifest { name: c.label.clone(), params: c.params.clone(), commands: Vec::new(), ..self.clone() }
+    }
+
+    /// The command with id `id`.
+    pub fn command(&self, id: &str) -> Option<&Command> {
+        self.commands.iter().find(|c| c.id == id)
     }
 
     /// Checks what the module declared: its id, name and text lengths, its extensions, a budget its
@@ -320,6 +363,12 @@ impl Manifest {
                 return Err(Error::Manifest("an exporter always gets an export's budget: leave `budget` out".into()));
             }
         }
+        self.validate_params()?;
+        self.validate_commands()
+    }
+
+    /// Checks each parameter and its dialog layout.
+    fn validate_params(&self) -> Result<()> {
         for (i, (k, p)) in self.params.iter().enumerate() {
             if !valid_key(k) {
                 return Err(Error::Manifest(format!("invalid parameter name {k:?}")));
@@ -329,6 +378,47 @@ impl Manifest {
         }
         if self.params.iter().filter(|(_, p)| p.ui.group.is_none()).count() > MAX_UNGROUPED {
             return Err(Error::Manifest(format!("at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`")));
+        }
+        Ok(())
+    }
+
+    /// A filter or a live effect lists at most [`MAX_COMMANDS`] commands, each with a distinct
+    /// id, a printable label and parameters declared as the manifest's own are. A heavy filter
+    /// lists none. The error names the command: its id, or its place in the list.
+    fn validate_commands(&self) -> Result<()> {
+        if self.commands.is_empty() {
+            return Ok(());
+        }
+        if self.kind == Kind::Exporter {
+            return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
+        }
+        if self.budget == Budget::Heavy {
+            return Err(Error::Manifest("a heavy filter runs in the background, so it can't declare `commands`".into()));
+        }
+        if self.commands.len() > MAX_COMMANDS {
+            return Err(Error::Manifest(format!("at most {MAX_COMMANDS} `commands`")));
+        }
+        for (i, c) in self.commands.iter().enumerate() {
+            let name = command_name(i, &c.id);
+            if !valid_command_id(&c.id) {
+                return Err(Error::Manifest(format!(
+                    "command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter"
+                )));
+            }
+            let label = c.label.trim();
+            if label.is_empty() || label.chars().count() > 64 || label.chars().any(char::is_control) {
+                return Err(Error::Manifest(format!("command {name}: `label` must be 1-64 printable characters")));
+            }
+            if self.commands.get(..i).is_some_and(|before| before.iter().any(|b| b.id == c.id)) {
+                return Err(Error::Manifest(format!("command {name} is declared twice")));
+            }
+            self.for_command(c).validate_params().map_err(|e| {
+                let e = match e {
+                    Error::Manifest(why) => why,
+                    other => other.to_string(),
+                };
+                Error::Manifest(format!("command {name}: {e}"))
+            })?;
         }
         Ok(())
     }
@@ -486,6 +576,45 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
         }
     }
     d.deserialize_any(V)
+}
+
+/// Reads the `commands` list one entry at a time, so a malformed entry is an error that names it
+/// (its id, or its place in the list), and a list longer than [`MAX_COMMANDS`] is refused before
+/// its entries are read.
+fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<Command>, D::Error> {
+    use serde::de::Error as _;
+    let entries = match Value::deserialize(d)? {
+        Value::Null => return Ok(Vec::new()),
+        Value::Array(entries) => entries,
+        _ => return Err(D::Error::custom("`commands` must be a list of {id, label, params?}")),
+    };
+    if entries.len() > MAX_COMMANDS {
+        return Err(D::Error::custom(format!("at most {MAX_COMMANDS} `commands`")));
+    }
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let name = command_name(i, v.get("id").and_then(Value::as_str).unwrap_or_default());
+            serde_json::from_value::<Command>(v).map_err(|e| D::Error::custom(format!("command {name}: {e}")))
+        })
+        .collect()
+}
+
+/// How errors name the command at place `i` with id `id`: the id in backticks, escaped and capped
+/// as prompts show text, or `[i]` when it has none.
+fn command_name(i: usize, id: &str) -> String {
+    match id {
+        "" => format!("[{i}]"),
+        id => format!("`{}`", crate::permissions::display_text(id, crate::permissions::MAX_SHOWN_FIELD)),
+    }
+}
+
+/// `[a-z][a-z0-9_]*`, 1 to [`MAX_COMMAND_ID`] characters.
+fn valid_command_id(id: &str) -> bool {
+    id.len() <= MAX_COMMAND_ID
+        && id.bytes().next().is_some_and(|b| b.is_ascii_lowercase())
+        && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
 }
 
 fn params_as_object<S: serde::Serializer>(p: &[(String, Param)], s: S) -> std::result::Result<S::Ok, S::Error> {
@@ -661,6 +790,68 @@ mod tests {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
         }
+    }
+
+    /// A filter or a live effect lists menu commands with their own parameters; a `menu` key is
+    /// ignored. A malformed entry, a bad or repeated id, a label that isn't printable and too many
+    /// commands are refused, and the error names the command.
+    #[test]
+    fn commands_are_checked_and_errors_name_them() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.tidy","name":"Tidy","kind":"filter","commands":[
+                {"id":"tidy_all","label":"Tidy All","menu":"File"},
+                {"id":"grow","label":"Grow","params":{"by":{"type":"number","min":0,"max":10,"default":2},"mode":{"type":"bool"}}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(m.commands.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["tidy_all", "grow"]);
+        let grow = m.command("grow").unwrap();
+        assert_eq!(grow.params.iter().map(|p| p.0.as_str()).collect::<Vec<_>>(), ["by", "mode"]);
+        let run = m.for_command(grow);
+        assert_eq!((run.name.as_str(), run.id.as_str()), ("Grow", "org.example.tidy"));
+        assert_eq!(Value::Object(run.resolve_params(&json!({"by": 50})).unwrap()), json!({"by": 10.0, "mode": false}));
+        let written = serde_json::to_value(&m).unwrap();
+        assert_eq!(written["commands"][1]["params"]["by"]["max"], json!(10.0));
+        assert!(written["commands"][0].get("menu").is_none(), "a menu key is not kept");
+        assert!(serde_json::to_value(Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap()).unwrap().get("commands").is_none());
+        let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","commands":[{"id":"c","label":"C"}]}"#).unwrap();
+        assert_eq!(effect.commands.len(), 1);
+        let label = |l: &str| Command { id: "c".into(), label: l.into(), params: Vec::new() }.shown_label();
+        assert_eq!(label("Flip\u{202E}txt.exe"), "Flip\\u{202E}txt.exe");
+
+        let many: Vec<String> = (0..=MAX_COMMANDS).map(|i| format!(r#"{{"id":"c{i}","label":"C"}}"#)).collect();
+        let too_many = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":[{}]}}"#, many.join(","));
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"ok","label":"A"},{"label":"B"}]}"#, "command [1]: missing field `id`"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"nolabel"}]}"#, "command `nolabel`: missing field `label`"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"Upper","label":"A"}]}"#, "command `Upper`: use an id"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"9lives","label":"A"}]}"#, "command `9lives`: use an id"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"a.b","label":"A"}]}"#, "command `a.b`: use an id"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"","label":"A"}]}"#, "command [0]: use an id"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":" "}]}"#, "command `x`: `label`"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"a\nb"}]}"#, "command `x`: `label`"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A"},{"id":"x","label":"B"}]}"#, "command `x` is declared twice"),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A","params":{"r":{"type":"number","min":5,"max":1,"default":1}}}]}"#,
+                "command `x`: parameter `r`: bad range",
+            ),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A","params":{"id":{"type":"bool"}}}]}"#,
+                "command `x`: invalid parameter",
+            ),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":[1]}"#, "command [0]"),
+            (r#"{"id":"a","name":"x","kind":"filter","commands":{"id":"x"}}"#, "must be a list"),
+            (r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"commands":[{"id":"x","label":"A"}]}"#, "only a filter or a live effect"),
+            (r#"{"id":"a","name":"x","kind":"filter","budget":"heavy","commands":[{"id":"x","label":"A"}]}"#, "heavy filter"),
+            (too_many.as_str(), "at most 32 `commands`"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+        let long_id = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":[{{"id":"{}","label":"A"}}]}}"#, "c".repeat(MAX_COMMAND_ID + 1));
+        assert!(Manifest::parse(long_id.as_bytes()).is_err());
+        let hidden =
+            Manifest::parse("{\"id\":\"a\",\"name\":\"x\",\"kind\":\"filter\",\"commands\":[{\"id\":\"x\u{202E}\",\"label\":\"A\"}]}".as_bytes());
+        assert!(hidden.unwrap_err().to_string().contains("command `x\\u{202E}`"), "an id in an error is escaped");
     }
 
     #[test]

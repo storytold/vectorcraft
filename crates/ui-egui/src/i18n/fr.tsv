@@ -5804,6 +5804,14 @@ axis	Y Axis	Axe Y
 @msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtre lourd s’exécute en arrière-plan, il ne peut donc pas déclarer `commands`
+@msg	at most {MAX_COMMANDS} `commands`	au plus {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	la commande {name} est déclarée deux fois
+@msg	command {name}: `label` must be 1-64 printable characters	commande {name} : `label` doit compter 1-64 caractères imprimables
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	commande {name} : utilisez un id de 1-{MAX_COMMAND_ID} caractères parmi a-z 0-9 _ commençant par une lettre
+@msg	command {name}: {e}	commande {name} : {e}
+@msg	only a filter or a live effect declares `commands`	seul un filtre ou un effet dynamique déclare `commands`
+@msg	“{name}” › {label}: {e}	« {name} » › {label} : {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…

@@ -23,7 +23,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed. With `hash`, a module whose SHA-256 differs is refused. |
@@ -49,6 +49,29 @@ same kind once the file is picked, and its Export button writes the file. **File
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
 background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).
+
+### Commands
+
+A filter or a live effect may declare commands of its own in its manifest (`commands`, [below](#manifest)). Each
+becomes the command `plugin.<id>.<command>` while the plug-in is installed, and is gone once the plug-in is removed or
+replaced by a module without it.
+
+- **Menus.** A plug-in with commands is a submenu of **Object › Plug-ins** (a live effect: **Effect › Plug-ins**)
+  named after the plug-in. The submenu holds the plug-in's own item, then its commands. A command with parameters has
+  an ellipsis and opens a dialog for them, with a live preview, as a filter's own item does. A manifest cannot put a
+  command in another menu: a `menu` key in a command is ignored.
+- **Keyboard Shortcuts.** Edit › Keyboard Shortcuts lists each command under its submenu, and the user can give it a
+  shortcut. A manifest cannot give a command a shortcut.
+- **Actions and agents.** A command run is recorded in an action like any other command and plays back with its
+  parameters. `run`, MCP and `command.batch` call it as `plugin.<id>.<command>` with `{"ids"?: [...], "params"?: {…}}`
+  (its parameters may also be top-level keys). `command.list` lists it, and `plugin.list` lists a plug-in's commands
+  as `commands: [{id, command, label, params, paramsSchema}]`.
+- **Runs.** The parameters are checked against the command's declarations before the plug-in runs. The plug-in runs
+  through `vc_run` on the selection (or `ids`) as a filter run does, with `_context.mode` `"command"` and
+  `_context.command` set to the command's id ([Parameters](#parameters)), under the plug-in's
+  [permissions](#permissions): a live effect's command has no `doc.write`, so an output that changes the document is
+  refused. One run is one undo step named after the command. A run that traps or fails leaves the document as it was,
+  and the error starts with the plug-in's name and the command's label (`“Cmd Test” › Grow: …`).
 
 **Preference folder.** Edit › Preferences › Plug-ins & Scratch Disks › *Additional Plug-ins Folder*: when set, every
 `*.wasm` in that folder (not recursive) is installed at startup and whenever the preference changes (desktop builds;
@@ -207,6 +230,11 @@ pointers are offsets into the module's memory.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
   `document.export` then writes the exporter's format only when asked for by its format id.
+- `commands` (filters and live effects; not heavy filters): up to 32 commands of the plug-in's own
+  ([Commands](#commands)), each `{"id": "grow", "label": "Grow", "params"?: {…}}`. An `id` is 1–32 characters from
+  `a-z 0-9 _` that starts with a letter, and appears once. A `label` is 1–64 printable characters; menus show it with
+  control and bidirectional characters escaped. `params` are declared as the plug-in's own `params` are. A malformed
+  entry is refused when the module is installed, and the error names the command by its id (or its place, `[0]`).
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults
@@ -299,7 +327,8 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
  "_context": {"mode": "filter", "bounds": [10, 0, 75, 60], "artboard": [0, 0, 612, 792], "documentData": {"pens": 4}}}
 ```
 
-`mode` is `"filter"`, `"effect"` or `"export"`; `bounds` the selection's geometric bounds (a live effect: the reference
+`mode` is `"filter"`, `"effect"`, `"export"` or `"command"` (a [command](#commands) run, whose `command` is the
+command's id); `bounds` the selection's geometric bounds (a live effect: the reference
 box of the effect, the object's bounds or those of the previous effect's result); `artboard` (filters) the artboard
 under the selection's centre, else the first; `documentData` (filters) what the plug-in last kept with the document
 (`null` until it keeps something; see Output). A live effect's `item` says where it sits: `"object"` (one of the

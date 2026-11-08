@@ -5194,6 +5194,14 @@
 @msg	unknown permission `{shown}`	अज्ञात अनुमति `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” अनुमतियां {asked} मांगता है: उपयोगकर्ता की सहमति मिलने पर इसे उन्हें सूचीबद्ध करने वाले `grant` के साथ इंस्टॉल करें
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” को `{p}` नहीं दी गई, जो उसके आउटपुट को चाहिए: कुछ नहीं बदला
+@msg	a heavy filter runs in the background, so it can't declare `commands`	भारी फ़िल्टर पृष्ठभूमि में चलता है, इसलिए वह `commands` घोषित नहीं कर सकता
+@msg	at most {MAX_COMMANDS} `commands`	अधिकतम {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	कमांड {name} दो बार घोषित है
+@msg	command {name}: `label` must be 1-64 printable characters	कमांड {name}: `label` में 1-64 प्रिंट करने योग्य वर्ण होने चाहिए
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	कमांड {name}: a-z 0-9 _ के 1-{MAX_COMMAND_ID} वर्णों वाली ऐसी id इस्तेमाल करें जो अक्षर से शुरू हो
+@msg	command {name}: {e}	कमांड {name}: {e}
+@msg	only a filter or a live effect declares `commands`	केवल फ़िल्टर या लाइव इफ़ेक्ट ही `commands` घोषित करता है
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	मॉड्यूल का SHA-256 वह नहीं है जो `hash` बताता है: कुछ भी इंस्टॉल नहीं हुआ
 @msg	“{name}” is not a file	"{name}" एक फ़ाइल नहीं है
 @msg	({note}) ({more})	({note}) ({more})

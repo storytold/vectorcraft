@@ -5490,6 +5490,14 @@ axis	Y Axis	Y 軸
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
+@msg	a heavy filter runs in the background, so it can't declare `commands`	重いフィルターはバックグラウンドで実行されるため、`commands` を宣言できません
+@msg	at most {MAX_COMMANDS} `commands`	`commands` は最大 {MAX_COMMANDS} 個です
+@msg	command {name} is declared twice	コマンド {name} が 2 回宣言されています
+@msg	command {name}: `label` must be 1-64 printable characters	コマンド {name}: `label` は印刷可能な 1-64 文字にしてください
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	コマンド {name}: a-z 0-9 _ からなり英字で始まる 1-{MAX_COMMAND_ID} 文字の ID を使用してください
+@msg	command {name}: {e}	コマンド {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` を宣言できるのはフィルターかライブ効果だけです
+@msg	“{name}” › {label}: {e}	「{name}」 › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
 # Actions panel: action sets (#3712).
 	New Set…	新規セット…

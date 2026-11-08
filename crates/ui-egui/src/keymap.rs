@@ -7,7 +7,7 @@
 //! outside it are VectorCraft's too (`Cmd+Shift+]`, `Comma`, `Period`, `~` for the backtick key,
 //! `=` for Plus with modifiers). Inside an [`Overrides`] keys and texts are the crate's.
 
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 use craft_keymap::{Bindable, Binding, Chord, CommandRef, Key, Keymap, Kind, Lookup, Mods, Overrides, Platform, Scope, Scopes};
 use serde_json::{Value, json};
@@ -212,11 +212,25 @@ pub(crate) fn per_platform<T>(cells: &'static [OnceLock<T>; 3], p: Platform, mak
     cell.get_or_init(make)
 }
 
-/// The keymap with the default shortcuts for [`platform`], built once per platform.
+/// The keymap with the default shortcuts for [`platform`], built once per platform, and again for
+/// each set of plug-in commands installed ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
 pub fn template() -> &'static Keymap {
     static TEMPLATES: [OnceLock<Keymap>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    static WITH_PLUGINS: Mutex<Vec<(Platform, u64, &'static Keymap)>> = Mutex::new(Vec::new());
     let p = platform();
-    per_platform(&TEMPLATES, p, || keymap_for(p))
+    let generation = vectorcraft_engine::cmd::plugin::commands_generation();
+    if generation == 0 {
+        return per_platform(&TEMPLATES, p, || keymap_for(p));
+    }
+    let mut made = WITH_PLUGINS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, _, km)) = made.iter().find(|(q, g, _)| *q == p && *g == generation) {
+        return km;
+    }
+    made.retain(|(_, g, _)| *g == generation);
+    // Kept for the rest of the process: one keymap for each set of plug-in commands installed.
+    let km: &'static Keymap = Box::leak(Box::new(keymap_for(p)));
+    made.push((p, generation, km));
+    km
 }
 
 /// The default keymap of `p`. The chords the operating system takes can't be assigned.

@@ -854,3 +854,139 @@ fn a_cancelled_filter_run_changes_nothing() {
     assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
     assert_eq!(s.doc().unwrap().doc, before);
 }
+
+/// The manifest of a filter `id` named "Cmd Test" of `kind` with `commands` (a JSON list).
+fn with_commands(id: &str, kind: &str, commands: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Cmd Test","version":"1","kind":"{kind}","commands":{commands}}}"#)
+}
+
+/// Two commands: Grow, with a parameter, and Tidy, whose `menu` names another menu.
+const GROW_AND_TIDY: &str = r#"[{"id":"grow","label":"Grow","params":{"by":{"type":"number","min":0,"max":10,"default":2}}},
+    {"id":"tidy","label":"Tidy","menu":"File"}]"#;
+
+/// A plug-in that adds a triangle when it runs as its command `grow` (`_context.command`) and
+/// returns its input unchanged otherwise.
+fn grower(id: &str) -> String {
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    tpl::when_given(&with_commands(id, "filter", GROW_AND_TIDY), tpl::Given::Params, r#""command":"grow""#, triangle)
+}
+
+/// The command listing's entry for `id`.
+fn listed(s: &Session, id: &str) -> Option<crate::cmd::CommandInfo> {
+    s.commands().into_iter().find(|c| c.id == id)
+}
+
+fn objects(s: &Session) -> usize {
+    s.doc().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum()
+}
+
+/// A plug-in's commands are commands of their own while it is installed: listed under Object ›
+/// Plug-ins › its name whatever menu the manifest names, run with their checked parameters and
+/// `_context.command` as one undo step named after them, and gone once it is removed or replaced
+/// by a module without them.
+#[test]
+fn plugin_commands_are_registered_run_and_removed() {
+    let mut s = session();
+    let id = "test.engine.cmds";
+    let (grow, tidy) = ("plugin.test.engine.cmds.grow", "plugin.test.engine.cmds.tidy");
+    let info = install_wat(&mut s, &grower(id));
+    assert_eq!(info["commands"][0]["command"], grow);
+    assert_eq!(info["commands"][1]["label"], "Tidy");
+    for (cmd, label) in [(grow, "Grow"), (tidy, "Tidy")] {
+        let c = listed(&s, cmd).unwrap_or_else(|| panic!("{cmd} is listed"));
+        assert_eq!((c.label, c.menu.as_slice()), (label, &["Object", "Plug-ins", "Cmd Test"][..]), "{cmd}");
+        assert!(c.enabled, "{cmd}");
+    }
+    assert!(crate::cmd::find_command(grow).is_some());
+
+    run(&mut s, "select.none", json!({}));
+    let (before, undo) = (objects(&s), s.doc().unwrap().history.undo.len());
+    let r = run(&mut s, grow, json!({"by": 3}));
+    assert_eq!((r["plugin"].as_str(), r["command"].as_str()), (Some(id), Some("grow")));
+    assert_eq!(objects(&s), before + 1, "the command added its triangle");
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.history.undo.last().unwrap().label.as_str()), (undo + 1, "Grow"));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(objects(&s), before);
+    // Its parameters are checked before it runs.
+    let e = s.execute(grow, &json!({"by": "lots"})).unwrap_err();
+    assert!(matches!(&e, EngineError::BadParams { cmd, .. } if cmd == grow), "{e}");
+    assert_eq!(objects(&s), before);
+    // Another command of the same plug-in is told apart by its id.
+    run(&mut s, tidy, json!({}));
+    assert_eq!(objects(&s), before, "tidy returns its input unchanged");
+
+    // Replaced by a module without commands, its commands are gone; installed again, back.
+    install_wat(&mut s, &tpl::module(&tpl::manifest(id, "filter", "{}"), tpl::ECHO, "", 1));
+    assert!(listed(&s, grow).is_none() && crate::cmd::find_command(grow).is_none());
+    install_wat(&mut s, &grower(id));
+    assert!(listed(&s, grow).is_some());
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(listed(&s, grow).is_none() && listed(&s, tidy).is_none());
+    assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
+}
+
+/// A command run is journaled like any other, so an action records it with its parameters and
+/// plays it back.
+#[test]
+fn actions_record_and_play_plugin_commands() {
+    let mut s = session();
+    let id = "test.engine.cmds.actions";
+    let grow = crate::cmd::plugin::command_id(id, "grow");
+    install_wat(&mut s, &grower(id));
+    run(&mut s, "select.none", json!({}));
+    let before = objects(&s);
+    let start = s.journal.len();
+    run(&mut s, &grow, json!({"by": 4}));
+    let steps = s.journal_for_action(start);
+    assert_eq!(steps, [(grow.clone(), json!({"by": 4}))]);
+    run(&mut s, "edit.undo", json!({}));
+    let commands: Vec<Value> = steps.iter().map(|(c, p)| json!({"command": c, "params": p})).collect();
+    // The triangle a run adds is selected, and the next run would be given it: deselect between.
+    let none = json!({"command": "select.none", "params": {}});
+    run(&mut s, "command.batch", json!({"label": "Grow Twice", "commands": [commands[0].clone(), none, commands[0].clone()]}));
+    assert_eq!(objects(&s), before + 2, "both steps ran");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A command that traps leaves the document and its history as they were, and the error names
+/// the plug-in and the command.
+#[test]
+fn a_failing_plugin_command_changes_nothing_and_names_itself() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let id = "test.engine.cmds.trap";
+    install_wat(&mut s, &tpl::module(&with_commands(id, "filter", r#"[{"id":"boom","label":"Boom"}]"#), "unreachable", "", 1));
+    let (before, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "boom"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("“Cmd Test” › Boom: ") && e.contains("trapped"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A live effect's commands are listed under Effect › Plug-ins, run under its permissions (it may
+/// not change the document), and labels show bidirectional characters escaped. A malformed
+/// `commands` entry is refused at install, and the error names it.
+#[test]
+fn effect_commands_labels_and_malformed_entries() {
+    let mut s = session();
+    let id = "test.engine.cmds.effect";
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    install_wat(&mut s, &tpl::returning(&with_commands(id, "effect", "[{\"id\":\"flip\",\"label\":\"Flip\u{202E}txt\"}]"), triangle));
+    let c = listed(&s, &crate::cmd::plugin::command_id(id, "flip")).expect("listed");
+    assert_eq!((c.label, c.menu.as_slice()), ("Flip\\u{202E}txt", &["Effect", "Plug-ins", "Cmd Test"][..]));
+    run(&mut s, "select.none", json!({}));
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute(&crate::cmd::plugin::command_id(id, "flip"), &json!({})).unwrap_err().to_string();
+    assert!(e.contains("wasn't granted `doc.write`"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+
+    let bad = id.replace("effect", "bad");
+    let wasm = wat::parse_str(tpl::module(&with_commands(&bad, "filter", r#"[{"id":"ok","label":"A"},{"id":"Bad","label":"B"}]"#), tpl::ECHO, "", 1));
+    let e = s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm.unwrap())})).unwrap_err().to_string();
+    assert!(e.contains("command `Bad`"), "{e}");
+    assert!(vectorcraft_plugins::registry::get(&bad).is_none());
+}

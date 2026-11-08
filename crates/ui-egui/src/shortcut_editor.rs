@@ -66,10 +66,13 @@ pub(crate) use ui_mirror;
 pub(crate) struct Mirror {
     pub keymap: Keymap,
     text: HashMap<String, Option<&'static str>>,
+    /// The plug-in commands the keymap holds ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
+    plugins: u64,
 }
 
 impl Mirror {
     fn new(overrides: Overrides) -> Mirror {
+        let plugins = vectorcraft_engine::cmd::plugin::commands_generation();
         let keymap = crate::keymap::template().clone().with_overrides(overrides);
         let text = keymap
             .overrides()
@@ -80,20 +83,36 @@ impl Mirror {
                 (key, t)
             })
             .collect();
-        Mirror { keymap, text }
+        Mirror { keymap, text, plugins }
     }
 }
 
 ui_mirror!(fn store() -> Option<Arc<Mirror>>);
 
-/// The mirror: the keymap in effect.
+/// The mirror: the keymap in effect. It is made again when the plug-in commands change.
 pub(crate) fn current() -> Arc<Mirror> {
-    static DEFAULTS: [OnceLock<Arc<Mirror>>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-    store()
-        .read()
-        .ok()
-        .and_then(|m| m.clone())
-        .unwrap_or_else(|| crate::keymap::per_platform(&DEFAULTS, crate::keymap::platform(), || Arc::new(Mirror::new(Overrides::new()))).clone())
+    static DEFAULTS: Mutex<Vec<Arc<Mirror>>> = Mutex::new(Vec::new());
+    let plugins = vectorcraft_engine::cmd::plugin::commands_generation();
+    if let Some(m) = store().read().ok().and_then(|m| m.clone()) {
+        if m.plugins == plugins {
+            return m;
+        }
+        let fresh = Arc::new(Mirror::new(m.keymap.overrides().clone()));
+        if let Ok(mut m) = store().write() {
+            *m = Some(fresh.clone());
+        }
+        GENERATION.fetch_add(1, Ordering::Relaxed);
+        return fresh;
+    }
+    let p = crate::keymap::platform();
+    let mut defaults = DEFAULTS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(m) = defaults.iter().find(|m| m.plugins == plugins && m.keymap.platform() == p) {
+        return m.clone();
+    }
+    defaults.retain(|m| m.plugins == plugins);
+    let m = Arc::new(Mirror::new(Overrides::new()));
+    defaults.push(m.clone());
+    m
 }
 
 /// Leak-once interning for override strings (bounded by the chords a user ever assigns).
@@ -113,7 +132,11 @@ pub fn sync(ui: &UiState) {
     let same = store()
         .read()
         .map(|m| match &*m {
-            Some(m) => *m.keymap.overrides() == ui.shortcut_overrides && m.keymap.platform() == crate::keymap::platform(),
+            Some(m) => {
+                *m.keymap.overrides() == ui.shortcut_overrides
+                    && m.keymap.platform() == crate::keymap::platform()
+                    && m.plugins == vectorcraft_engine::cmd::plugin::commands_generation()
+            }
             None => ui.shortcut_overrides.is_empty(),
         })
         .unwrap_or(false);
@@ -210,6 +233,7 @@ pub fn command_for_key(key: &str) -> Option<&'static str> {
     let c = crate::keymap::lookup(&current().keymap, &vc_chord(key)?)?;
     vectorcraft_engine::command_specs()
         .iter()
+        .chain(vectorcraft_engine::cmd::plugin::command_specs())
         .map(|c| c.id)
         .chain(menus::UI_COMMANDS.iter().map(|c| c.0))
         .find(|id| *id == c.id && c.params.is_null())
@@ -334,8 +358,37 @@ pub struct Entry {
     pub is_tool: bool,
 }
 
-/// Every tool, command and panel the editor can give a shortcut; [`listed`] says which it lists.
+/// Every tool, command and panel the editor can give a shortcut, followed by the commands of the
+/// installed plug-ins; [`listed`] says which it lists. The list is made again when the plug-in
+/// commands change ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
 pub fn entries() -> &'static [Entry] {
+    static WITH_PLUGINS: Mutex<Option<(u64, &'static [Entry])>> = Mutex::new(None);
+    let base = built_in_entries();
+    let generation = vectorcraft_engine::cmd::plugin::commands_generation();
+    if generation == 0 {
+        return base;
+    }
+    let mut with = WITH_PLUGINS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((g, e)) = *with
+        && g == generation
+    {
+        return e;
+    }
+    let mut v = base.to_vec();
+    v.extend(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
+        key: c.id.into(),
+        label: c.label.into(),
+        group: c.menu.join(" › "),
+        is_tool: false,
+    }));
+    // Kept for the rest of the process: one list for each set of plug-in commands installed.
+    let e: &'static [Entry] = Box::leak(v.into_boxed_slice());
+    *with = Some((generation, e));
+    e
+}
+
+/// [`entries`] without the plug-in commands.
+fn built_in_entries() -> &'static [Entry] {
     static E: OnceLock<Vec<Entry>> = OnceLock::new();
     E.get_or_init(|| {
         let mut v: Vec<Entry> = vectorcraft_tools::catalog::all_tools()
@@ -379,6 +432,7 @@ pub fn entries() -> &'static [Entry] {
         }
         v
     })
+    .as_slice()
 }
 
 /// One Effect menu item a shortcut can be given (#3296): the effect's id, the command its item runs
@@ -863,24 +917,30 @@ struct DialogView {
     keymap: Keymap,
     texts: Vec<Option<String>>,
     conflicts: usize,
+    /// The plug-in commands [`entries`] held ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
+    plugins: u64,
 }
 
 impl DialogView {
     fn new(overrides: Overrides) -> DialogView {
+        let plugins = vectorcraft_engine::cmd::plugin::commands_generation();
         let keymap = keymap_with(&overrides);
         let backtick = backtick_text();
         let texts = entries().iter().map(|e| dialog_shortcuts_with(&keymap, &e.key, backtick.as_deref())).collect();
         let conflicts = conflicts_in(&keymap).len();
-        DialogView { source: stored::to_value(keymap.overrides()), backtick, keymap, texts, conflicts }
+        DialogView { source: stored::to_value(keymap.overrides()), backtick, keymap, texts, conflicts, plugins }
     }
 
-    /// The view of `d`'s working set, from the cache unless the set or the backtick key's
-    /// character changed. The dialog's `overrides` field is left in its stored form.
+    /// The view of `d`'s working set, from the cache unless the set, the backtick key's character
+    /// or the plug-in commands changed. The dialog's `overrides` field is left in its stored form.
     fn of(ctx: &egui::Context, d: &mut Dialog) -> Arc<DialogView> {
         let id = egui::Id::unique("dialog-shortcuts-view");
         let source = d.fields.get("overrides").unwrap_or(&Value::Null);
         let backtick = backtick_text();
-        if let Some(v) = ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source && v.backtick == backtick) {
+        let plugins = vectorcraft_engine::cmd::plugin::commands_generation();
+        if let Some(v) =
+            ctx.data(|m| m.get_temp::<Arc<DialogView>>(id)).filter(|v| v.source == *source && v.backtick == backtick && v.plugins == plugins)
+        {
             return v;
         }
         let v = Arc::new(DialogView::new(dialog_overrides(d)));

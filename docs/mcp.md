@@ -5925,11 +5925,18 @@ filter without `doc.write` or `state` that returns output needing them gets an e
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
+A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
+`plugin.<id>.<command>` while the plug-in is installed, listed by `command.list` and in its `plugin.list` entry
+(`commands: [{id, command, label, params, paramsSchema}]`). Run it with `{ids?, params?}` (its parameters may also
+be top-level keys): the parameters are checked before the plug-in runs, a run is one undo step named after the
+command, and a failing run returns an error that starts with the plug-in's name and the command's label and leaves
+the document as it was.
 
 ```json
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.org.example.tidy.grow","params":{"by":3}}}
 ```
 
 ## Colour adjustments

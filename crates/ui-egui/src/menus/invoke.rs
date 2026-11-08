@@ -152,6 +152,10 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         app.ui.dialog = Some(crate::state::Dialog::new(kind, fields));
         return;
     }
+    // A plug-in command with parameters asks for them, from its menu item or its shortcut.
+    if p.as_object().is_none_or(|o| o.is_empty()) && crate::dialogs::plugin::open_command(app, id) {
+        return;
+    }
     if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {
         return;
     }

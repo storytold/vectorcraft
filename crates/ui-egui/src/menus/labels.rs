@@ -139,15 +139,18 @@ pub(super) fn shows_a_name(id: &str, label: &str) -> bool {
     SLOTS.iter().any(|s| id.starts_with(s))
         || saved_selection_slot(id).is_some()
         || matches!(id, "text.setStyle" | "plugin.dialog" | "window.toolbar.custom")
+        || vectorcraft_engine::cmd::plugin::is_command_id(id)
         || (id == "window.workspace" && !crate::workspaces::is_builtin(label))
         || (matches!(id, "effect.apply" | "effect.dialog") && vectorcraft_effects::plugin_effects().iter().any(|e| e.label == label))
 }
 
 /// Does the menu item `id` with `params` list an installed plug-in (an Object › Plug-ins filter or
-/// an Effect › Plug-ins effect), by the plug-in's own name? Told by the item itself, so it holds
-/// while another thread installs or removes plug-ins.
+/// an Effect › Plug-ins effect) or one of its commands, by the plug-in's own text? Told by the item
+/// itself, so it holds while another thread installs or removes plug-ins.
 pub(crate) fn lists_plugin(id: &str, params: &Value) -> bool {
-    id == "plugin.dialog" || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
+    id == "plugin.dialog"
+        || vectorcraft_engine::cmd::plugin::is_command_id(id)
+        || params.get("effect").and_then(Value::as_str).and_then(vectorcraft_plugins::effect::plugin_id).is_some()
 }
 
 /// The label of a menu item as drawn: [`dynamic_label`] in the UI language. Labels assembled
@@ -307,6 +310,11 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Lock Grid",
 ];
 
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
+pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
+    children.iter().any(|c| matches!(c, Item::Cmd(_, id, _) if vectorcraft_engine::cmd::plugin::is_command_id(id)))
+}
+
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the
 /// Preferences dialog can show: what a complete language catalog has to cover. Names that are user
 /// data (fonts, recent files, saved views, libraries, installed plug-ins), the point sizes and the
@@ -335,6 +343,8 @@ pub fn menu_strings() -> std::collections::BTreeSet<String> {
                 Item::Todo(l, _) | Item::Header(l) => {
                     out.insert(l.to_string());
                 }
+                // A plug-in's submenu is named after the plug-in.
+                Item::Sub(_, children) if holds_plugin_commands(children) => walk(children, under, out),
                 Item::Sub(l, children) => {
                     out.insert(l.to_string());
                     // Type › Font lists the installed families: names, not UI text.
