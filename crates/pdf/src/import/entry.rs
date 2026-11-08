@@ -232,6 +232,23 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The notes on the fonts the file draws with that aren't available: type in a font the file
+/// carries keeps its look until it is edited; the rest shows in the fallback font.
+fn warn_missing_fonts(b: &mut Builder, kept: &HashMap<(String, String), String>) {
+    let (carried, missing): (Vec<String>, Vec<String>) =
+        std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| kept.keys().any(|(f, _)| f == family));
+    if !carried.is_empty() {
+        b.warn(&format!(
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
+            carried.join(", ")
+        ));
+    }
+    if !missing.is_empty() {
+        let list = missing.join(", ");
+        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
+    }
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
@@ -456,20 +473,7 @@ fn read_opened(
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
-    // Type in a font the file carries keeps its look until it is edited; the rest shows in the
-    // fallback font.
-    let (carried, missing): (Vec<String>, Vec<String>) =
-        std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| kept.keys().any(|(f, _)| f == family));
-    if !carried.is_empty() {
-        b.warn(&format!(
-            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
-            carried.join(", ")
-        ));
-    }
-    if !missing.is_empty() {
-        let list = missing.join(", ");
-        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
-    }
+    warn_missing_fonts(&mut b, &kept);
     // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
     // than the stack goes.
     let mut depth_notes = vec![];
