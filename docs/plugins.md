@@ -134,7 +134,10 @@ capability model proposed for PhotoCraft plug-ins
   `plugin.inspect` entry's `hash` so that the module installed is the one the user saw.
 - The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
   `Plug-ins` folder. Installing a module with the same id that lists no new permission needs no new approval; one that
-  lists more asks again. `plugin.remove` forgets the grant. When a `Plug-ins` folder is in use, only the grants kept
+  lists more asks again. `plugin.remove` forgets the grant. An entry of `grants.json` that this version can't use (a
+  permission it doesn't know, an invalid id) is skipped and stays in the file until its plug-in is granted again or
+  removed. A `grants.json` that is not a JSON list is never overwritten, and the file is never written larger than
+  1 MiB, the most that is read. When a `Plug-ins` folder is in use, only the grants kept
   in it count for `plugin.install`, `plugin.inspect`, `plugin.reload` and the Additional Plug-ins Folder. At startup,
   a stored plug-in whose permissions are not granted is skipped. The Additional Plug-ins Folder and `plugin.reload`
   install only plug-ins whose permissions were granted, and report the others.

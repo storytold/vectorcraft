@@ -289,21 +289,42 @@ impl Session {
     }
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
-    /// other grants as they are; with none left, remove the file.
+    /// other grants as they are; with none left, remove the file. Entries this version can't use
+    /// are written back as they were, except one for `id`. A grants file that is too large, can't
+    /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
+    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`.
     pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) {
         let Some(dir) = &self.plugin_dir else { return };
-        let mut grants = stored_grants(dir);
-        let changed = match grant {
-            Some(g) => grants.insert(id.to_string(), g.clone()).as_ref() != Some(&g),
-            None => grants.remove(id).is_some(),
+        let mut file = match read_grants(dir) {
+            Ok(file) => file,
+            Err(e) => {
+                log::warn!("not updating the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+                return;
+            }
         };
+        let others = file.other.len();
+        file.other.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id));
+        let changed = match grant {
+            Some(g) => file.grants.insert(id.to_string(), g.clone()).as_ref() != Some(&g),
+            None => file.grants.remove(id).is_some(),
+        } || file.other.len() != others;
         if !changed {
             return;
         }
-        if grants.is_empty() {
+        let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
+        entries.extend(file.other);
+        if entries.is_empty() {
             take(dir, GRANTS_FILE);
-        } else if let Ok(bytes) = serde_json::to_vec_pretty(&grants.into_values().collect::<Vec<_>>()) {
-            put(dir, GRANTS_FILE, &bytes);
+            return;
+        }
+        // The file is read back only up to its cap: written compactly when pretty-printed is larger,
+        // and not at all when that is too.
+        let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
+        match serde_json::to_vec_pretty(&entries).ok().filter(fits).or_else(|| serde_json::to_vec(&entries).ok().filter(fits)) {
+            Some(bytes) => {
+                put(dir, GRANTS_FILE, &bytes);
+            }
+            None => log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE)),
         }
     }
 
@@ -315,20 +336,53 @@ impl Session {
     }
 }
 
-/// The grants kept in the plug-in store `dir`, by plug-in id: none when there is no grants file,
-/// and none, with a log record, when it is too large or doesn't parse. Grants for an invalid id are
-/// left out.
-fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+/// What the grants file of a plug-in store holds.
+#[derive(Default)]
+struct GrantsFile {
+    /// The grants this version can use, by plug-in id.
+    grants: BTreeMap<String, vectorcraft_plugins::permissions::Grant>,
+    /// The entries it can't use (a permission it doesn't know, an invalid id), as they were.
+    other: Vec<serde_json::Value>,
+}
+
+/// The grants file of the plug-in store `dir`: empty when there is none, an error when it is too
+/// large, can't be read or doesn't hold a list. An entry that doesn't parse as a grant, or names an
+/// invalid id, is kept in [`GrantsFile::other`] with a log record.
+fn read_grants(dir: &Path) -> Result<GrantsFile, String> {
     let path = dir.join(GRANTS_FILE);
-    if !path.is_file() {
-        return BTreeMap::new();
+    if !path.exists() {
+        return Ok(GrantsFile::default());
     }
-    let grants = read_capped(&path, MAX_GRANTS_FILE)
-        .and_then(|bytes| serde_json::from_slice::<Vec<vectorcraft_plugins::permissions::Grant>>(&bytes).map_err(|e| e.to_string()));
-    match grants {
-        Ok(grants) => grants.into_iter().filter(|g| vectorcraft_plugins::manifest::valid_id(&g.id)).map(|g| (g.id.clone(), g)).collect(),
+    let entries =
+        read_capped(&path, MAX_GRANTS_FILE).and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| e.to_string()))?;
+    let mut file = GrantsFile::default();
+    let mut first_error = None;
+    for entry in entries {
+        let why = match serde_json::from_value::<vectorcraft_plugins::permissions::Grant>(entry.clone()) {
+            Ok(g) if vectorcraft_plugins::manifest::valid_id(&g.id) => {
+                file.grants.insert(g.id.clone(), g);
+                continue;
+            }
+            Ok(g) => format!("invalid id `{}`", g.id.escape_debug()),
+            Err(e) => e.to_string(),
+        };
+        first_error.get_or_insert(why);
+        file.other.push(entry);
+    }
+    if let Some(why) = first_error {
+        log::warn!("skipping {} stored plug-in grants in {} (the first: {why})", file.other.len(), path.display());
+    }
+    Ok(file)
+}
+
+/// The grants kept in the plug-in store `dir` that this version can use, by plug-in id: none when
+/// there is no grants file, and none, with a log record, when it is too large, can't be read or
+/// doesn't hold a list.
+fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+    match read_grants(dir) {
+        Ok(file) => file.grants,
         Err(e) => {
-            log::warn!("skipping the stored plug-in grants {}: {e}", path.display());
+            log::warn!("skipping the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
             BTreeMap::new()
         }
     }
