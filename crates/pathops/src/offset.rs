@@ -85,6 +85,14 @@ pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_l
 /// The area covered by stroke outlines (each filled with the non-zero rule, open subpaths
 /// closed) as one clean path: overlaps removed and the stroker's pieces refitted.
 pub fn stroke_region(outlines: &[BezPath]) -> PathData {
+    match crate::sweep_axis::turned_outlines(outlines) {
+        Some(turned) => crate::sweep_axis::unturn(stroke_region_upright(&turned)),
+        None => stroke_region_upright(outlines),
+    }
+}
+
+/// [`stroke_region`] with the sweep run on `outlines` as they are.
+pub(crate) fn stroke_region_upright(outlines: &[BezPath]) -> PathData {
     let tidy = Tidy::free(DEFAULT_PRECISION);
     let parts: Vec<BezPath> = outlines.iter().map(close_all).filter(|o| !o.elements().is_empty()).collect();
     if let [one] = &parts[..] {

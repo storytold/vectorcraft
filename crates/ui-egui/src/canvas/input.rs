@@ -290,6 +290,11 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
         Drag::Tool
     };
+    // A drag of the Zoom, Hand or Rotate View tool uses the tool of a held shortcut; held Space's
+    // view tools are not that tool.
+    if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {
+        crate::shortcuts::note_tool_use(app);
+    }
     // Panning, zooming or turning the view takes the pointer from the tool's hover.
     if !tool_holds(d) {
         app.session.tool_hover_ended(view);

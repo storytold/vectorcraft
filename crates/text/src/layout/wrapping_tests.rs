@@ -115,6 +115,7 @@ fn composition_trim_stays_along_the_line_when_a_character_rotates() {
                 text: "A",
                 runs: vec![(0..1, &style)],
                 inlines: vec![None],
+                faces: vec![std::cell::OnceCell::new()],
                 default: style.clone(),
                 opts: &opts,
                 vertical: false,
