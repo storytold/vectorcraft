@@ -231,9 +231,13 @@ impl MoveSnap {
     }
 
     /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
-    /// guides.
+    /// guides. With Smart Guides › Snap to Last Location, a move within Snapping Tolerance of where
+    /// it began goes back there before anything else snaps ([`Targets::snap_back`]).
     pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
@@ -291,7 +295,8 @@ impl MoveSnap {
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
     /// with the other art ([`Targets::snap_rects_along`]) and the grabbed point lands where the line
     /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
-    /// length does not snap.
+    /// length does not snap, and Snap to Last Location goes back to where the move began first, as
+    /// in [`Self::snap`].
     pub(crate) fn snap_along(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let len = d.hypot();
         if !len.is_finite() || len <= 1e-9 {
@@ -309,6 +314,9 @@ impl MoveSnap {
                 .unwrap_or(0.0)
         };
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds

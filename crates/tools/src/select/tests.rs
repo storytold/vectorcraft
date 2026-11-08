@@ -782,6 +782,80 @@ fn an_alt_copy_snaps_to_the_original_left_behind() {
     assert_eq!(dx(&t.pointer(&c, &ev(PointerKind::Drag, 253.0, 150.0))), 103.0);
 }
 
+/// Smart Guides › Snap to Last Location: a move that comes within Snapping Tolerance of where it
+/// began goes back there, labeled "last location", a Shift move too; farther out, with the option
+/// or Smart Guides off, it stays where it is dragged, and an Alt copy snaps as it does with the
+/// option off.
+#[test]
+fn snap_to_last_location_puts_a_move_back_where_it_began() {
+    let (mut d, id) = doc_with_rect();
+    // An artboard whose edges and center are out of reach.
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let on = ToolContext { snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let moved = |c: &ToolContext, to: (f64, f64), m: Mods| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let labels: Vec<String> =
+            t.overlays(c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), labels)
+    };
+    let none = Mods::default();
+    let (back, labels) = moved(&on, (156.0, 155.0), none);
+    assert!(moved_by(back, (0.0, 0.0)), "{back:?}: 7.8 pt away, within 10");
+    assert_eq!(labels, ["last location"]);
+    let shift = Mods { shift: true, ..none };
+    assert!(moved_by(moved(&on, (157.0, 150.0), shift).0, (0.0, 0.0)), "a Shift move goes back too");
+    let (out, labels) = moved(&on, (159.0, 158.0), none);
+    assert!(moved_by(out, (9.0, 8.0)), "{out:?}: 12 pt away, out of reach");
+    assert!(labels.is_empty(), "{labels:?}");
+    let off = ToolContext { snap_to_last_location: false, ..on };
+    assert!(moved_by(moved(&off, (156.0, 155.0), none).0, (6.0, 5.0)), "the option off");
+    let no_guides = ToolContext { smart_guides: false, ..on };
+    assert!(moved_by(moved(&no_guides, (156.0, 155.0), none).0, (6.0, 5.0)), "Smart Guides off");
+    // An Alt copy lines up with the original it leaves behind, as it does with the option off.
+    let alt = Mods { alt: true, ..none };
+    let (copy, labels) = moved(&on, (156.0, 155.0), alt);
+    assert_eq!((copy, labels.contains(&"last location".to_string())), (moved(&off, (156.0, 155.0), alt).0, false), "{labels:?}");
+}
+
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location, as over every other
+/// snap: a short move of a square whose top-left is off the pixel grid puts that corner on whole
+/// pixels, a Shift move on its own axis, and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let moved = |to: (f64, f64), m: Mods| {
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let labels: Vec<String> =
+            t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), labels)
+    };
+    // By (6, 5) the top-left (106.3, 105.4) rounds to (106, 105).
+    let (m, labels) = moved((156.0, 155.0), Mods::default());
+    assert!(moved_by(m, (5.7, 4.6)), "{m:?}");
+    assert!(labels.is_empty(), "{labels:?}");
+    let (m, labels) = moved((157.0, 150.0), Mods { shift: true, ..Mods::default() });
+    assert!(moved_by(m, (6.7, 0.0)), "{m:?}: a Shift move");
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A move shows the filled arrow, hollow while it snaps (here B's left side onto A's right
 /// one); Alt, which leaves a copy behind, the double arrowhead.
 #[test]
