@@ -74,6 +74,19 @@ const MAX_ZSTD_WINDOW: u64 = 64 << 20;
 /// Most Zstandard frames read (the app writes one).
 const MAX_FRAMES: usize = 4096;
 
+#[cfg(test)]
+thread_local! {
+    /// How many bytes [`Codec::decode`] has looked at on this thread to find whether another
+    /// Zstandard frame follows or only zero padding is left.
+    static PADDING_LOOKS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`PADDING_LOOKS`] of this thread.
+#[cfg(test)]
+fn padding_looks() -> u64 {
+    PADDING_LOOKS.get()
+}
+
 const EPS_BEGIN: &[u8] = b"%AI9_PrivateDataBegin";
 const EPS_END: &[u8] = b"%AI9_PrivateDataEnd";
 
@@ -171,7 +184,11 @@ impl Codec {
                 // can itself end in a zero byte, so the padding is what is left after the last frame.
                 let mut src = data;
                 let mut frames = 0usize;
-                while src.iter().any(|b| *b != 0) {
+                while src.iter().any(|b| {
+                    #[cfg(test)]
+                    PADDING_LOOKS.set(PADDING_LOOKS.get().saturating_add(1));
+                    *b != 0
+                }) {
                     frames += 1;
                     if frames > MAX_FRAMES {
                         return Err(damaged("its Zstandard compression"));
