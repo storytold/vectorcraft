@@ -504,7 +504,18 @@ impl Writer<'_> {
     /// after the group's end, `0 0 Xd`, `6 () XW`); the object itself on `%_` lines (a path's or
     /// compound path's points painted with nothing, or with its gradient fill when its style has
     /// one; a group with its members), its name and opacity mask; then `1 (name) XW`.
+    /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
+    /// room for them, nothing is written.
     pub(super) fn styled_object(&mut self, n: &Node, orig: &Node, name: &str) {
+        let own = match &orig.kind {
+            NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
+            NodeKind::Compound { .. } => super::object_count(compound_path(orig).subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
+            NodeKind::Group { .. } => 1,
+            _ => 0,
+        };
+        if !self.take_objects(1 + own) {
+            return;
+        }
         self.state(orig.locked, !orig.visible);
         let xy = Xy::of(orig);
         let was = self.in_look;
@@ -533,6 +544,10 @@ impl Writer<'_> {
         let saved = std::mem::take(&mut self.body);
         self.hidden += 1;
         let fit = drawn_outline(n, orig).map(|p| p.bounding_box());
+        // A path's objects were kept for it above; it counts them itself.
+        if !matches!(orig.kind, NodeKind::Group { .. }) {
+            self.objects -= own;
+        }
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),

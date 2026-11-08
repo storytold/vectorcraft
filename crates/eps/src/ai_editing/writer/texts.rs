@@ -1002,6 +1002,12 @@ fn clone_v(v: &V) -> V {
     }
 }
 
+/// The objects the reader reads of [`stub`] for `t`: the text object, and a path for each subpath
+/// of its frame's path.
+pub(in crate::ai_editing) fn stub_objects(t: &TextObject) -> usize {
+    1 + shape(t).map_or(0, |p| p.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count())
+}
+
 /// The text object stub of story `story`, frame `frame`: `/AI11Text :`, `/FreeUndo`, `/FrameIndex`,
 /// `/StoryIndex`, for area type and type on a path the frame's path (`/Art :`, `X=`, the path in
 /// art space through `to_art`, `X+`, `; /ConfiningPath ,`), `/TextAntialiasing`, `;`.

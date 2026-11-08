@@ -70,7 +70,9 @@ use graphics::{GState, Out};
 use interp::{Fault, Interp};
 use obj::PsError;
 
-pub(crate) use ai::{MAX_GRADIENT_STOPS, MAX_SYMBOLS, read_art_style, symbol_art_member};
+#[cfg(test)]
+pub(crate) use ai::objects_read;
+pub(crate) use ai::{MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_SYMBOLS, read_art_style, symbol_art_member};
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
 pub(crate) use native::{MAX_TEXT, scale_document};

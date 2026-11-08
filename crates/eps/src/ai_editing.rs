@@ -167,7 +167,8 @@
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
 //! layers and opacity masks nested too deep, and, on objects written without an art style, live
 //! effects other than geometry effects left out; graphic styles, links to them and every art style
-//! on a large canvas are left out.
+//! on a large canvas are left out; art past [`crate::import::MAX_EDITING_OBJECTS`] objects in all
+//! (the most the reader reads), counted as the reader counts them, is left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
@@ -240,6 +241,11 @@ pub struct AiEditingOutput {
 
 /// Write `doc` as the editing data of a `.ai` file: every artboard and layer.
 pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditingOutput, String> {
+    export_within(doc, o, crate::import::MAX_EDITING_OBJECTS)
+}
+
+/// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
+fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
@@ -280,6 +286,7 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     // On a large canvas the layers' symbol instances are written as their art.
     w.symbols_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
+    w.max_objects = max_objects;
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;

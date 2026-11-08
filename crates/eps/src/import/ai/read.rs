@@ -140,6 +140,7 @@ pub use document::{
 pub(crate) use document::{slot_frame, slot_of};
 pub(crate) use ops::read_art_style;
 pub use types::IMAGE_TOO_LARGE;
+pub(crate) use types::MAX_NODES;
 use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
@@ -233,6 +234,14 @@ pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
     r.large_canvas = large_canvas.then_some(1.0);
     r.run()?;
     r.finish()
+}
+
+/// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
+#[cfg(test)]
+pub(crate) fn objects_read(data: &[u8]) -> Result<usize, String> {
+    let mut r = Reader::with_names(data);
+    r.run()?;
+    Ok(r.nodes)
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
