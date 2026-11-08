@@ -66,7 +66,7 @@ fn measure(s: &Session, p: &Value, cmd: &str) -> Result<Measure> {
     Ok(Measure { preview, point: s.prefs.align_glyph_bounds_point, area: s.prefs.align_glyph_bounds_area })
 }
 
-/// Param `key` of the Align commands, Shear, Unlock All, Show All and `text.setFormat`'s lists: one
+/// Param `key` of the Align commands, Shear, Unlock All, Show All, a warp's `orientation` and `text.setFormat`'s lists: one
 /// of `values`, or `None` when it is missing or null. Any other value is an error that lists `values`.
 pub(crate) fn choice<'a>(p: &'a Value, cmd: &str, key: &str, values: &[&str]) -> Result<Option<&'a str>> {
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
@@ -112,7 +112,9 @@ fn apply_moves(s: &mut Session, label: &str, p: &Value, ids: &[NodeId], moves: &
         for (id, dv) in moves {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dv), sc);
+                super::pixelgrid::keep_pixel_aligned(n, sc);
             }
+            super::pixelgrid::keep_compound_aligned(d, *id, sc);
         }
         for &(i, pos) in &guides {
             if let Some(g) = d.guides.get_mut(i) {
@@ -330,6 +332,7 @@ fn align_anchors(s: &mut Session, p: &Value, ids: &[NodeId], (h, v): (Option<&st
                     a.translate(target(a.p) - a.p);
                 }
             }
+            snap_anchor_path(d, *id);
         }
         Ok(())
     })?;
@@ -434,9 +437,21 @@ fn distribute_anchors(s: &mut Session, label: &str, horiz: bool, gap: Option<f64
                 a.translate(if horiz { Vec2::new(delta, 0.0) } else { Vec2::new(0.0, delta) });
             }
         }
+        for (id, _) in &targets {
+            snap_anchor_path(d, *id);
+        }
         Ok(())
     })?;
     ok()
+}
+
+/// After anchors of path `id` moved: snap the path, or the compound path that holds it, to the
+/// pixel grid again when it is pixel-aligned.
+fn snap_anchor_path(d: &mut Document, id: NodeId) {
+    let top = crate::cmd::path::compound_or_self(d, id);
+    if let Some(n) = d.node_mut(top) {
+        super::pixelgrid::snap_if_aligned(n);
+    }
 }
 
 pub(super) fn distribute(s: &mut Session, p: &Value) -> Result<Value> {

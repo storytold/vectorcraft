@@ -188,7 +188,7 @@ fn newer_keys_and_legacy_profiles_survive_open_and_save() {
 
 /// A version 1 document saved before VectorCraft 0.21.0 turned its Twist effects counterclockwise
 /// for a positive angle. It opens with the angles negated, so its art turns as it did; saved
-/// again it is a version 2 document, and saved for an older file version it is version 1 again.
+/// again it is a document of the current version, and saved for an older file version it is version 1 again.
 #[test]
 fn a_version_1_documents_twist_turns_as_it_was_saved() {
     use vectorcraft_doc::{Appearance, Document, Effect, Node};
@@ -212,7 +212,7 @@ fn a_version_1_documents_twist_turns_as_it_was_saved() {
     let p = turned.subpaths[0].anchors[0].p;
     assert!(p.y < 49.5, "{p:?}");
     let again = json_of(&saved(&mut s, json!({})));
-    assert_eq!(again["document"]["version"], 2);
+    assert_eq!(again["document"]["version"], vectorcraft_doc::FORMAT_VERSION);
     assert!(again.to_string().contains(r#""angle":-45.0"#), "{again}");
     // Saved for an older file version, it is version 1 with its angle as 0.20.0 saved it.
     let older = json_of(&saved(&mut s, json!({"version": 3})));
@@ -222,7 +222,8 @@ fn a_version_1_documents_twist_turns_as_it_was_saved() {
 
 /// A save records the date the document was made in, so the same commands twice gave different
 /// bytes (#2880). A pinned date makes them identical — `file.new {created}` here, and
-/// `SOURCE_DATE_EPOCH` for an export that takes no date param.
+/// `SOURCE_DATE_EPOCH` for an export that takes no date param. The PDF a native file carries by
+/// default is dated by the document's dates, not by the time of writing.
 #[test]
 fn a_pinned_date_makes_saves_byte_identical() {
     let once = |t: i64| {
@@ -232,6 +233,9 @@ fn a_pinned_date_makes_saves_byte_identical() {
         saved(&mut s, json!({}))
     };
     let at = 1_791_208_980;
+    let pdf = vectorcraft_format::pdf_content(&once(at)).expect("a native save carries a PDF by default");
+    let info = vectorcraft_pdf::file_info(&pdf, None).unwrap();
+    assert_eq!((info.created, info.modified), (Some(at), Some(at)), "the PDF has the document's dates");
     assert_eq!(once(at), once(at), "the same document and date give the same bytes");
     // The date really is in the bytes, so the comparison above is not vacuous.
     assert_ne!(once(at), once(at + 1), "another date shows in the bytes");

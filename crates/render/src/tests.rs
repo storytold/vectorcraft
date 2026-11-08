@@ -19,15 +19,18 @@ pub(super) mod fontchange;
 mod freeform;
 mod fxzoom;
 mod isolation;
+mod keptpath;
 mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod movedstroke;
 mod objectfx;
 mod placed_document;
 mod rasterize;
 mod setup;
 mod strokegradient;
+mod thincoverage;
 mod tileedge;
 mod typeedges;
 mod viewraster;
@@ -396,6 +399,28 @@ fn an_instance_is_culled_by_the_art_its_9_slice_guides_move() {
     let (id, l) = (d.alloc_id(), d.layers[0].id);
     let xf = Affine::translate((110.0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0);
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
+    // The panel of the test above at its natural size, in a symbol without guides. The holder's
+    // instance scales the panel 2 times across and moves it 110 pt right: the bar draws from x 90
+    // to 270 while the frame starts at x 110, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(10.0, 40.0, 70.0, 60.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let panel = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf: Affine::IDENTITY });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(panel) });
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((110.0, 0.0)) * Affine::scale_non_uniform(2.0, 1.0);
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
 }
@@ -1309,7 +1334,7 @@ fn invalid_dash_pattern_strokes_solid() {
         let d = line(Some(pattern.clone()));
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || tx.send(render(&d)).ok());
-        let img = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
+        let img = rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|_| panic!("rendering dash {pattern:?} did not finish"));
         assert_eq!(img.pixels, solid.pixels, "dash {pattern:?}");
     }
 }

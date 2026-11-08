@@ -12,8 +12,12 @@
 //! as its own app, which replaces a stale file. Nothing received is ever run.
 //!
 //! Runs that start many apps side by side (`--control`, `VECTORCRAFT_NO_PREFS`) neither forward
-//! nor listen, and `--new-instance` opens a launch's files in an app of its own. macOS hands files
-//! opened from Finder to the running app itself (`open_documents`), so this is off there.
+//! nor listen, and neither does a `--safe-mode` launch, which opens its files in an app of its own
+//! and leaves later launches to start theirs with plug-ins. `--new-instance` opens a launch's files
+//! in an app of its own. An app that stays in Safe Mode after the choice about a stopped plug-in
+//! stops listening ([`resign`]), and files later launches handed it before then open in a new app
+//! with plug-ins ([`take_for_frame`]). macOS hands files opened from Finder to the running app itself
+//! (`open_documents`), so this is off there.
 
 use std::fs::{self, OpenOptions};
 use std::hash::{BuildHasher as _, RandomState};
@@ -43,6 +47,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Paths handed over by later launches that the UI hasn't opened yet.
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// This app while it is the one later launches hand their files to ([`hold`]).
+static HELD: Mutex<Option<Primary>> = Mutex::new(None);
 /// The UI to wake when files arrive (unset until the window exists; the first frame opens them).
 static UI: OnceLock<egui::Context> = OnceLock::new();
 
@@ -56,21 +62,44 @@ pub enum Start {
 
 /// Hand `files` to the app already running, or become the app later launches hand theirs to.
 /// `automation`: started with `--control`.
-pub fn start(automation: bool, new_instance: bool, files: &[String]) -> Start {
+pub fn start(automation: bool, new_instance: bool, safe_mode: bool, files: &[String]) -> Start {
     if automation || !prefs_enabled() {
         return Start::Running(None);
     }
     let Some(path) = prefs_path().and_then(|p| Some(p.parent()?.join(FILE_NAME))) else { return Start::Running(None) };
+    start_at(&path, new_instance, safe_mode, files)
+}
+
+/// [`start`] with the endpoint file `path`. A launch with `--new-instance` or `--safe-mode` keeps
+/// its files and runs as its own app: a running app would open them with its plug-ins loaded. A
+/// `--safe-mode` launch never becomes the app later launches hand their files to, which would open
+/// them without plug-ins.
+fn start_at(path: &Path, new_instance: bool, safe_mode: bool, files: &[String]) -> Start {
+    if safe_mode {
+        return Start::Running(None);
+    }
     // With nothing to hand over, the same exchange only asks whether an app is running.
     let send: &[String] = if new_instance { &[] } else { files };
-    match forward(&path, send) {
+    match forward(path, send) {
         Ok(()) if send.is_empty() => Start::Running(None),
         Ok(()) => Start::Forwarded,
         Err(e) => {
             log::debug!("no running VectorCraft to hand files to ({e})");
-            Start::Running(listen(&path, queue))
+            Start::Running(listen(path, queue))
         }
     }
+}
+
+/// Keep `primary` ([`start`]'s) until [`resign`].
+pub fn hold(primary: Option<Primary>) {
+    *HELD.lock().unwrap_or_else(PoisonError::into_inner) = primary;
+}
+
+/// Later launches start their own app from now on: the endpoint file goes. The app calls it when
+/// its window is gone, and when it stays in Safe Mode after the choice about a stopped plug-in.
+pub fn resign() {
+    let primary = HELD.lock().unwrap_or_else(PoisonError::into_inner).take();
+    drop(primary);
 }
 
 /// Wake `ctx` when files arrive from later launches.
@@ -82,6 +111,43 @@ pub fn set_ui(ctx: &egui::Context) {
 /// The paths later launches handed over since the last call.
 pub fn take() -> Vec<String> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(PoisonError::into_inner))
+}
+
+/// The paths later launches handed over since the last call, to open in this app. An app that
+/// stays in Safe Mode (`safe_mode`) resigns and hands them to a new app with plug-ins (`launch`,
+/// [`launch_with_plug_ins`] in the app) instead: they arrived while it was the primary, before the
+/// choice about a stopped plug-in ended in Safe Mode, or just before it resigned. When `launch`
+/// fails (logged), they open here.
+pub fn take_for_frame(safe_mode: bool, launch: impl FnOnce(&[String]) -> io::Result<()>) -> Vec<String> {
+    let files = take();
+    if !safe_mode {
+        return files;
+    }
+    // First, so the new app becomes the primary instead of handing the files back.
+    resign();
+    if files.is_empty() {
+        return files;
+    }
+    match launch(&files) {
+        Ok(()) => Vec::new(),
+        Err(e) => {
+            log::warn!("couldn't start VectorCraft with plug-ins for the files another launch opened: {e}");
+            files
+        }
+    }
+}
+
+/// Start this program again, with plug-ins, on `files`.
+pub fn launch_with_plug_ins(files: &[String]) -> io::Result<()> {
+    app_with_plug_ins(&std::env::current_exe()?, files).spawn().map(drop)
+}
+
+/// The command [`launch_with_plug_ins`] runs: `exe -- files…`, so a file whose name starts with '-'
+/// stays a file.
+fn app_with_plug_ins(exe: &Path, files: &[String]) -> std::process::Command {
+    let mut command = std::process::Command::new(exe);
+    command.arg("--").args(files);
+    command
 }
 
 fn queue(files: Vec<String>) {
@@ -263,15 +329,30 @@ mod tests {
 
     use super::*;
 
+    /// Held by the tests that use the process-wide [`HELD`] and [`PENDING`], one at a time.
+    static GLOBALS: Mutex<()> = Mutex::new(());
+
+    fn globals() -> std::sync::MutexGuard<'static, ()> {
+        GLOBALS.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.path()
+        }
+    }
+
     /// A fresh folder for one test, with an existing file in it.
-    fn folder(name: &str) -> (PathBuf, PathBuf, String) {
-        let dir = std::env::temp_dir().join(format!("vc-single-instance-{}-{name}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("a b.svg");
+    fn folder(name: &str) -> (PathBuf, TestDir, String) {
+        let dir = tempfile::Builder::new().prefix(&format!("vc-single-instance-{name}-")).tempdir().unwrap();
+        let file = dir.path().join("a b.svg");
         fs::write(&file, "<svg/>").unwrap();
         let file = file.to_string_lossy().into_owned();
-        (dir.join(FILE_NAME), dir, file)
+        (dir.path().join(FILE_NAME), TestDir(dir), file)
     }
 
     fn primary(path: &Path) -> (Primary, mpsc::Receiver<Vec<String>>) {
@@ -303,12 +384,77 @@ mod tests {
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
         drop(primary);
         assert!(!path.exists(), "the endpoint file goes with the app");
-        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_new_instance_or_safe_mode_launch_keeps_its_files() {
+        let (path, _dir, file) = folder("own");
+        let (primary, rx) = primary(&path);
+        for (new_instance, safe_mode) in [(true, false), (false, true)] {
+            let start = start_at(&path, new_instance, safe_mode, std::slice::from_ref(&file));
+            assert!(matches!(start, Start::Running(None)), "runs as its own app (new instance {new_instance}, Safe Mode {safe_mode})");
+        }
+        assert!(matches!(start_at(&path, false, false, std::slice::from_ref(&file)), Start::Forwarded));
+        assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), std::slice::from_ref(&file));
+        assert!(rx.try_recv().is_err(), "only the plain launch handed its file over");
+        drop(primary);
+    }
+
+    #[test]
+    fn a_safe_mode_launch_leaves_later_launches_their_own_app() {
+        let _globals = globals();
+        let (path, _dir, file) = folder("safe-mode-alone");
+        // With no app running, a Safe Mode launch runs without listening.
+        assert!(matches!(start_at(&path, false, true, std::slice::from_ref(&file)), Start::Running(None)));
+        assert!(!path.exists(), "a Safe Mode launch records no endpoint");
+        // A plain launch after it starts its own app and takes later launches' files.
+        let Start::Running(Some(primary)) = start_at(&path, false, false, std::slice::from_ref(&file)) else {
+            panic!("the plain launch runs and listens")
+        };
+        assert!(path.exists());
+        // An app that stays in Safe Mode after the choice gives that up.
+        hold(Some(primary));
+        resign();
+        assert!(!path.exists(), "the endpoint file goes with resign");
+    }
+
+    #[test]
+    fn files_handed_to_an_app_staying_in_safe_mode_go_to_a_new_app_with_plug_ins() {
+        let _globals = globals();
+        // Nothing left over from a test that failed.
+        resign();
+        drop(take());
+        let (path, _dir, file) = folder("safe-mode-later");
+        let Start::Running(Some(primary)) = start_at(&path, false, false, &[]) else { panic!("the first launch listens") };
+        hold(Some(primary));
+        // A later launch handed its file over while the choice about a stopped plug-in was up.
+        queue(vec![file.clone()]);
+        let mut launched = Vec::new();
+        let here = take_for_frame(true, |files| {
+            launched = files.to_vec();
+            Ok(())
+        });
+        assert!(here.is_empty(), "nothing opens in the Safe Mode app");
+        assert_eq!(launched, std::slice::from_ref(&file), "a new app with plug-ins opens it");
+        assert!(!path.exists(), "the app resigned before starting the new one");
+        // When the new app can't start, the file opens here rather than being lost.
+        queue(vec![file.clone()]);
+        assert_eq!(take_for_frame(true, |_| Err(io::Error::other("no program"))), std::slice::from_ref(&file));
+        // An app with plug-ins opens what it is handed.
+        queue(vec![file.clone()]);
+        assert_eq!(take_for_frame(false, |_| panic!("no new app")), [file]);
+    }
+
+    #[test]
+    fn the_new_app_takes_every_name_as_a_file() {
+        let command = app_with_plug_ins(Path::new("vectorcraft"), &["-a.svg".to_owned(), "b.svg".to_owned()]);
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, ["--", "-a.svg", "b.svg"]);
     }
 
     #[test]
     fn a_wrong_token_garbage_and_oversized_messages_are_refused() {
-        let (path, dir, file) = folder("refused");
+        let (path, _dir, file) = folder("refused");
         let (_primary, rx) = primary(&path);
         let token = read_endpoint(&path).unwrap().token;
         let wrong = format!("{}\n", json!({ "token": "0".repeat(token.len()), "files": [file] }));
@@ -323,12 +469,11 @@ mod tests {
         // The listener still serves a launch with the right token.
         forward(&path, std::slice::from_ref(&file)).unwrap();
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_stale_endpoint_file_is_ignored_and_replaced() {
-        let (path, dir, file) = folder("stale");
+        let (path, _dir, file) = folder("stale");
         // The recorded app is gone: whatever holds the port closes without a greeting. (A freed
         // port can be taken by another test's listener meanwhile, which would then accept this
         // connection in place of its own client's.)
@@ -357,18 +502,16 @@ mod tests {
         let (_primary, rx) = primary(&path);
         forward(&path, std::slice::from_ref(&file)).unwrap();
         assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
     fn a_replaced_endpoint_file_stays_when_the_earlier_app_ends() {
-        let (path, dir, _) = folder("replaced");
+        let (path, _dir, _) = folder("replaced");
         let (first, _rx1) = primary(&path);
         let (_second, _rx2) = primary(&path);
         let second_token = read_endpoint(&path).unwrap().token;
         drop(first);
         assert_eq!(read_endpoint(&path).map(|e| e.token), Some(second_token));
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -383,9 +526,8 @@ mod tests {
     #[test]
     fn the_endpoint_file_is_the_users_alone() {
         use std::os::unix::fs::PermissionsExt as _;
-        let (path, dir, _) = folder("mode");
+        let (path, _dir, _) = folder("mode");
         let _primary = primary(&path);
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
-        let _ = fs::remove_dir_all(dir);
     }
 }

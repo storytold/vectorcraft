@@ -209,3 +209,14 @@ sync_github_name = true
 real_name = "Alexander Buraga"
 display_name = "Alexander Buraga"
 sync_github_name = false
+
+[people.adikshan11]
+real_name = "Adithya Shankaran"
+sync_github_name = true
+
+[people.slafebre]
+real_name = "Sven Lafebre"
+
+[people.kylekanouse]
+real_name = "Kyle Kanouse"
+sync_github_name = true

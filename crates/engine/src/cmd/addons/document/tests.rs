@@ -333,6 +333,35 @@ fn batch_trace_folder_traces_and_saves_each_image() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Batch Trace Folder rejects optional values with the wrong type before opening images.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_rejects_wrong_typed_options() {
+    const C: &str = "addon.document.batchTraceFolder";
+    let dir = folder("batch-trace-bad-options");
+    let src = dir.join("in");
+    let out = dir.join("out");
+    std::fs::create_dir_all(&src).unwrap();
+    let mut s = Session::new();
+    for (key, value) in [
+        ("format", json!(42)),
+        ("format", Value::Null),
+        ("preset", json!(false)),
+        ("preset", Value::Null),
+        ("expand", json!("true")),
+        ("expand", Value::Null),
+        ("includeSubdirs", json!(1)),
+        ("includeSubdirs", Value::Null),
+    ] {
+        let mut params = json!({"folder": src, "destinationFolder": out});
+        params[key] = value;
+        let error = s.execute(C, &params).unwrap_err();
+        assert!(error.to_string().contains(&format!("`{key}`")), "{key}: {error}");
+        assert!(!out.exists(), "invalid options must not create a destination folder");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A folder too big to list in full is refused rather than traced in part.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]

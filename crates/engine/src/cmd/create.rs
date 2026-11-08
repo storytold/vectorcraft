@@ -721,7 +721,7 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
     if rotation != 0.0 {
         t.xf *= vectorcraft_geom::rotate_deg(rotation);
     }
-    t.vertical = p.get("vertical").and_then(Value::as_bool).unwrap_or(false);
+    t.vertical = switch_or(p, "vertical", false, "text.create")?;
     t.para = new_type_para();
     new_type_alignment(s, p, "text.create", &mut t)?;
     if let Some(a) = p.get("area") {
@@ -833,7 +833,10 @@ pub(crate) fn new_type_style(s: &Session, p: &Value) -> CharStyle {
         None if !s.paint.fill.is_none() && s.paint.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::WHITE) => s.paint.fill.clone(),
         None => vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
     };
-    // In the document's language (Document Setup), none for the default.
-    style.language = s.doc().ok().and_then(|d| vectorcraft_doc::setup::char_language(&d.doc.setup.language).ok().flatten()).map(str::to_string);
+    // In the language Document Setup chose, else Preferences › Hyphenation › Default Language; none
+    // for the default. Type already in a document keeps its own.
+    let chosen = |name: &str| vectorcraft_doc::setup::char_language(name).ok().flatten();
+    let document = s.doc().ok().and_then(|d| chosen(&d.doc.setup.language));
+    style.language = document.or_else(|| chosen(&s.prefs.hyphenation_language)).map(str::to_string);
     style
 }

@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
     ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
+    (
+        "shortcuts.exportText",
+        "Export Keyboard Shortcuts as Text…",
+        "",
+        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+    ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
         "ui.shortcutImportDialog",
@@ -441,6 +447,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    (
+        "window.control.dock",
+        "Dock Control Bar",
+        "",
+        "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -449,6 +461,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{double?: bool, toolbar?: name} show the toolbar's tools (with `toolbar`, that toolbar made with New Toolbar's) in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.toolsBesideCanvas",
+        "Keep Tools Beside the Canvas",
+        "",
+        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
+    ),
     (
         "window.floatTools",
         "Float Tool Group",
@@ -524,6 +542,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("window.toolbar.list", "List Toolbars", "", "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots}]"),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
+        "window.pathfinder.compoundShapes",
+        "Shape Mode Buttons Make Compound Shapes",
+        "",
+        "{} toggles the Compound Shapes add-on's setting: on, the Pathfinder panel's Shape Mode buttons make a compound shape and Alt-click gives the permanent Pathfinder result; off (the default), the other way round. Members of a compound shape selected always take the mode",
+    ),
+    (
         "window.taskBar.pin",
         "Pin Bar Position",
         "",
@@ -578,7 +602,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.dock",
         "Dock Panel",
         "",
-        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on. Returns {layout, closed, floating}",
     ),
     (
         "window.collapseDock",
@@ -694,6 +718,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
+    (
+        "help.safeMode",
+        "Safe Mode…",
+        "",
+        "{} open the Safe Mode dialog (dialog `safeMode`): whether VectorCraft is in Safe Mode, and the disabled plug-ins, each with Enable on Re-launch (engine: plugin.setEnabled). Closing it leaves Safe Mode as it is; Safe Mode is chosen at launch (--safe-mode, or the choice after a launch that stopped while a plug-in was loading, dialog `pluginStopped`)",
+    ),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",
@@ -777,7 +807,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.options",
         "Tool Options…",
         "",
-        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x, y and preview (on initially), previews one there and accepts it as one Undo step; Cancel rolls back the preview), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (pt), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), livePaintBucket → Live Paint Bucket Options (dialog `livePaintBucketOptions`, fields paintFills (on) and paintStrokes (off), highlight (on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the face highlight's width, 1–20 px; 4; an edge's highlight is half as wide); OK runs tool.setOption {tool: \"livePaintBucket\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values}; a highlightColor with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), objectsOnPath → Objects on Path Tool Options (dialog `objectsOnPathOptions`, fields pivot (0–8, row by row from the top left; 4, the center) and rotate (°, −360–360; 0); Reset puts 4 and 0 back; Save runs tool.setOption {tool: \"objectsOnPath\", values}: the objects attached next use them, groups attached before keep theirs)",
+        "{tool: id} what double-clicking a tool button opens: hand → fits the artboard in the window (view.fitArtboard), zoom → 100% (view.actualSize), rotate|scale|reflect|shear → that Object › Transform dialog (dialog `rotate`, `scale`, `reflect` or `shear`; error `nothing selected` without a selection), selection|directSelection|groupSelection → the Move dialog (dialog `move`; the same error), gradient|magicWand → the Gradient or Magic Wand panel (window.panel), artboard → Artboard Options of the active artboard (dialog `artboardOptions`, fields index, name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.setProps, and with other artboards selected with the Artboard tool a new width or height goes to each of them too, in its `artboards` list, each resized about the reference point the form used for that size, or about its top-left corner when the size was set in the fields directly), flare → Flare Tool Options (dialog `flareOptions`, fields diameter and pathLength (pt), opacity, brightness, growth, fuzziness, longest, rayFuzziness, largest (%), rays, rings, direction (°), raysOn, ringsOn; OK runs tool.setOption {tool: \"flare\", values}: the next flare dragged out uses them, and a Flare click's dialog, which also has x, y and preview (on initially), previews one there and accepts it as one Undo step; Cancel rolls back the preview), lineSegment|arc|rectangularGrid|polarGrid → that tool's Tool Options, its click dialog without x and y (dialog kind = the tool id, `__toolOptions: true`; lineSegment: length (pt), angle (°), fillLine; arc: lengthX, lengthY (pt), reference (0–8), arcType: open|closed, baseAlong: x|y, slope (−100…100), fillArc; rectangularGrid: width, height (pt, the Default Size), reference (0–8), rows, columns, rowSkew, columnSkew (%), frame, fill; polarGrid: the same with concentric, radial, concentricSkew, radialSkew and compound for rows, columns, the skews and frame; OK runs tool.setOption {tool, values} and draws nothing: the next drag uses them (Fill Line, the arc's type, base, slope and fill, the grids' dividers, skews and switches) and a click's dialog opens at them), columnGraph|stackedColumnGraph|barGraph|stackedBarGraph|lineGraph|areaGraph|scatterGraph|pieGraph|radarGraph → Graph Type for the selected graph (dialog `command` running graph.setType; an error without one), typeOnPath|verticalTypeOnPath → Type on a Path Options for the selected type on a path (dialog `command` running type.pathOptions; error `nothing selected` without a selection, and the command's error when no type on a path is selected),symbolSprayer|symbolShifter|symbolScruncher|symbolSizer|symbolSpinner|symbolStainer|symbolScreener|symbolStyler → Symbolism Tools Options (dialog `symbolismOptions`, fields tool, diameter (pt), intensity and density (1–10), shared by the eight tools; OK runs tool.setOption {tool, values}), blend → Blend Options, perspectiveGrid → Perspective Grid Options, eyedropper → Eyedropper Options (dialog `eyedropperOptions`, fields sampleSize, pickUp, apply; OK runs eyedropper.setOptions), printTiling → resets the print tiling (print.tiling.set {reset: true}), warp|twirl|pucker|bloat|scallop|crystallize|wrinkle → that tool's Tool Options (dialog `liquifyOptions`, fields tool, width, height, angle, intensity %, usePressure, detail, simplify, simplifyOn, rate, complexity, horizontal %, vertical %, affectAnchors, affectIn, affectOut, showBrush; OK runs tool.setOption {tool, values}), pencil|paintbrush|smooth|blobBrush|eraser → that tool's Tool Options (dialog `freehandOptions`, fields tool and the options the tool keeps: fidelity (px for pencil and paintbrush, the same at any zoom; pt for smooth and blobBrush), fill, keepSelected (on for pencil and paintbrush, off for blobBrush), mergeOnlySelection (off), closeWithin and editWithin (px, 0 is off), livePreview (pencil, on: off draws a thin line while the stroke is drawn, and the path's fill and stroke on release), size (pt), angle (°, −180–180; 0) and roundness (%, 1–100; 100) of the eraser's tip; OK runs tool.setOption {tool, values}), livePaintSelection → Live Paint Selection Tool Options (dialog `livePaintSelectionOptions`, fields selectFills and selectStrokes (both on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the highlight's width, 1–20 px; 4); OK runs tool.setOption {tool: \"livePaintSelection\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), livePaintBucket → Live Paint Bucket Options (dialog `livePaintBucketOptions`, fields paintFills (on) and paintStrokes (off), highlight (on), color (the highlight color, #rrggbb or a layer color's name; #ff2a2a), width (the face highlight's width, 1–20 px; 4; an edge's highlight is half as wide); OK runs tool.setOption {tool: \"livePaintBucket\", values}; a color with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), shapeBuilder → Shape Builder Tool Options (dialog `shapeBuilderOptions`, fields gapDetection (off), gapLength (pt, 0–72; 3), openFilledAsClosed (on), clickStrokeSplitsPath (off), pickColorFrom: artwork|swatches (artwork), cursorSwatchPreview (off), selection: freeform|straightLine (freeform), highlightFill (on), highlightStroke (on), highlightColor (#rrggbb or a layer color's name; #ff4f4f); OK runs tool.setOption {tool: \"shapeBuilder\", values}; a highlightColor with an alpha part (#rrggbbaa or #rgba) is an error and OK changes nothing), objectsOnPath → Objects on Path Tool Options (dialog `objectsOnPathOptions`, fields pivot (0–8, row by row from the top left; 4, the center) and rotate (°, −360–360; 0); Reset puts 4 and 0 back; Save runs tool.setOption {tool: \"objectsOnPath\", values}: the objects attached next use them, groups attached before keep theirs)",
     ),
     (
         "ui.colorGuideOptions",
@@ -850,6 +880,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
     ),
     (
+        "ui.rename",
+        "Rename",
+        "",
+        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, or a row the panel's search, filter or Show Layers Only hides, is an error and nothing opens → {id, name}",
+    ),
+    (
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
@@ -860,6 +896,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "New Artboard Options…",
         "",
         "{} open Artboard Options for a new artboard, filled in as artboard.new {} would make it (Artboard N, the last artboard's size, 20 pt to its right): dialog `artboardOptions` with new: true, fields name, x, y, width, height, showCenterMark, showCrossHairs; OK runs artboard.new with the fields and makes the new artboard the active one; Cancel adds nothing",
+    ),
+    (
+        "artboard.selectAll",
+        "Select All Artboards",
+        "",
+        "{} the Artboard tool, chosen first when another tool is in use, selects every artboard, and the active artboard stays active; the art's selection stays as it is, and no undo step is recorded → {selected: [index…]} (the active artboard first)",
     ),
     (
         "ui.layersPanelOptions",
@@ -932,6 +974,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Save Graphic Style Library…",
         "",
         "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
+    ),
+    (
+        "ui.loadCharStyles",
+        "Load Character Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character styles to the active one (engine: charStyle.load), the Character Styles panel menu's Load Character Styles…",
+    ),
+    (
+        "ui.loadParaStyles",
+        "Load Paragraph Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's paragraph styles to the active one (engine: paraStyle.load), the Paragraph Styles panel menu's Load Paragraph Styles…",
+    ),
+    (
+        "ui.loadAllStyles",
+        "Load All Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character and paragraph styles to the active one (engine: textStyle.loadAll), Load All Styles… in either panel's menu",
     ),
     (
         "window.userGraphicStyleLibrary1",
@@ -1023,6 +1083,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open JavaScript Files for the active document (dialog `javascriptFiles`, fields `file`: a path or URL and `selected`: a linked file; the SVG Interactivity panel's Link JavaScript Files button): its list shows svgInteractivity.info's files, Add runs svgInteractivity.addFile with file and Remove runs svgInteractivity.removeFile with selected",
     ),
     (
+        "ui.svgFilterDialog",
+        "Apply SVG Filter…",
+        "",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+    ),
+    (
+        "ui.importSvgFilter",
+        "Import SVG Filter…",
+        "",
+        "{} pick an SVG file and add its filters to the active document's SVG filters (svgFilter.import) → svgFilter.import's result",
+    ),
+    (
         "ui.spotColors",
         "Spot Colors…",
         "",
@@ -1032,7 +1104,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.menuDialog",
         "Menu Dialog",
         "",
-        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
+        "{command: object.move|object.rotate|object.scale|object.reflect|object.shear|object.transformEach|path.average|path.averageJoin|object.path.offsetPath|object.path.simplify|object.path.smooth|object.path.splitIntoGrid|object.vectorHalftone|artboard.rearrange|artboard.rename|object.envelope.makeWithWarp|object.envelope.resetWithWarp|object.envelope.makeWithMesh|object.envelope.resetWithMesh|object.envelope.options|addon.arrange.grid|addon.arrange.replace|addon.arrange.size} open the dialog that command's menu item opens (dialog kind: move, rotate, scale, reflect, shear, transformEach, …, vectorHalftone, rearrangeArtboards, renameArtboards, envelopeWarp, envelopeMesh, envelopeOptions, arrangeGrid, arrangeReplace, arrangeSize; Scale and Transform Each have `corners` and `strokes`, from the preferences, which OK updates; Transform Each opens on the values it was last confirmed with (not `copy`), and its Copy button confirms with `copy: true`; the envelope dialogs start from the selected envelope, Make opens as Reset (`reset: true`) while one is selected)",
     ),
     (
         "ui.widthPointEdit",
@@ -1176,10 +1248,22 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} close the export progress dialog; the exports go on, shown in the status bar → {hidden: n}",
     ),
     (
+        "file.cancelOpen",
+        "Cancel Opening",
+        "",
+        "{} stop opening every file being read in the background (its progress window's Cancel): the files don't open → {cancelled: n}",
+    ),
+    (
+        "file.openInBackground",
+        "Continue in Background",
+        "",
+        "{} close the progress window of the files being opened; they go on being read, shown in the status bar → {hidden: n}",
+    ),
+    (
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
-        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
+        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last, a dxfPreset's options under them; the dxfPreset field shows cnc while every field it sets matches, else custom); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
     ),
     (
         "links.editOriginal",
@@ -1198,6 +1282,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Placement Options…",
         "",
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
+    ),
+    (
+        "ui.relinkDialog",
+        "Relink…",
+        "",
+        "{ids?: [image or placed document ids]} open Relink for `ids` (default: the selected ones; dialog `relink`: ids, links ([{name, ids}], one row per linked file), scope (Replace: each|selected (default)|all|missingInFolder, see links.relink), path (picked when empty), paths (with each: the files chosen so far, one per row of links)); OK runs links.relink with them, one undo step, except with each: OK takes path, or picks a file, for the next row of links, and the last row's OK relinks them all. An error when nothing is given or selected",
     ),
     (
         "ui.findLinksInFolder",
@@ -1239,7 +1329,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::PLAY_ACTION,
         "Play Action",
         "",
-        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
+        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. An action with a stop, at any speed, plays up to the stop and waits until ui.action.continue or ui.action.stop; at Accelerated the steps between stops are one undoable batch each → {results, pending, atStop?: true when it already waits}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
     ),
     (
         crate::panels::actions::PLAYBACK_OPTIONS,
@@ -1257,7 +1347,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",
-        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses: the steps played stay and the rest do not run. With nothing recording or playing it changes nothing → {stopped}",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. With nothing recording or playing it changes nothing → {stopped}",
+    ),
+    (
+        crate::panels::actions::INSERT_STOP,
+        "Insert Stop",
+        "",
+        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+    ),
+    (
+        crate::panels::actions::CONTINUE_PLAYBACK,
+        "Continue Action",
+        "",
+        "{} play on from the stop the Actions panel's playing action waits at, on the document active now, and close the stop's message box (dialog `actionStopMessage`): the next step runs at once, or at Accelerated the steps up to the next stop as one undo step. The panel's Play Current Selection runs this while an action waits. With no action waiting at a stop it is an error → {results, pending, atStop?}",
+    ),
+    (
+        crate::panels::actions::DELETE_STEP,
+        "Delete Action Step",
+        "",
+        "{set: index, action: index, step: index} delete one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step). The steps after it keep whether they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one open on a later step of the action follows it up. A missing or invalid index is an error and changes nothing. Undo does not bring the step back. The panel's Delete Selection runs this for the selected step → {set, action, step}",
     ),
     (
         "ui.batchDialog",
@@ -1275,7 +1383,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::LOAD_SET,
         "Load Actions…",
         "",
-        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused; the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}",
+        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused; the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file; the other steps, every step with no label and every step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
     ),
     (
         crate::panels::actions::DELETE_SETS,
@@ -1367,7 +1475,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A filter that asks for a heavy budget asks the user first: OK installs it → plugin.install's result | {pending: \"confirm\"} while it asks",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool, hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, and so does a filter that asks for a heavy budget: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
     ),
     (
         "plugin.cancelRuns",

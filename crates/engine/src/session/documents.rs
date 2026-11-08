@@ -25,6 +25,8 @@ impl Session {
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
             vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
         });
+        // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
+        vectorcraft_text::register_envelope_ink();
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
@@ -40,10 +42,13 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
+            replaying: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -78,6 +83,7 @@ impl Session {
             batch_stash: None,
             batch_steps: None,
             batch_paint_docs: Vec::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -106,6 +112,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
@@ -292,6 +299,27 @@ impl Session {
         true
     }
 
+    /// Move the document in tab `from` to tab `to` (a document tab dragged along the strip,
+    /// `document.move`); the documents between them shift by one. The current document stays the
+    /// current one, wherever it moves to, and its tool keeps its state: no document is switched to.
+    /// False, changing nothing, when either index is past the last document.
+    pub fn move_document(&mut self, from: usize, to: usize) -> bool {
+        let n = self.docs.len();
+        if from >= n || to >= n {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(uid) = active {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+        }
+        true
+    }
+
     /// Commands with enablement (for menus, palette, MCP `list_commands`).
     pub fn commands(&self) -> Vec<CommandInfo> {
         command_specs().iter().map(|c| c.info(self)).collect()
@@ -313,7 +341,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

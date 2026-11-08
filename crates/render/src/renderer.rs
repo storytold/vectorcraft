@@ -18,6 +18,9 @@ use super::{
     group, ink, kurbo, live, lru, peniko, proof, vello_cpu,
 };
 
+#[cfg(test)]
+pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
+
 mod images;
 mod nodes;
 mod paint;
@@ -30,15 +33,20 @@ pub(crate) use text::{edge_coverage, edge_grid, type_reach};
 
 impl Renderer {
     pub fn new() -> Self {
+        // Envelopes map type from its glyphs here too, without an engine session.
+        vectorcraft_text::register_envelope_ink();
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
+            text_ids: PtrMap::default(),
             text_fonts: 0,
             clips: FrameCache::new(lru::CLIP_BUDGET, 256),
             threads: default_threads(),
             geom: PtrMap::default(),
+            kept: PtrMap::default(),
             symbols: vec![],
             plugin_revision: 0,
             strokes: PtrMap::default(),
+            moved_strokes: PtrMap::default(),
             char_strokes: FrameCache::new(lru::CHAR_STROKE_BUDGET, 0),
             cur: None,
             made_again: false,
@@ -74,6 +82,7 @@ impl Renderer {
             twice_drawn: 0,
             clip_paints: FrameCache::new(lru::CLIP_BUDGET, 256),
             stroke_slices: PtrMap::default(),
+            moved_slices: PtrMap::default(),
             adjusts: HashMap::new(),
             dim_images: None,
             inline_depth: 0,
@@ -87,6 +96,7 @@ impl Renderer {
 
     /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, width, height, view, opts, false, 1)
     }
 
@@ -187,11 +197,18 @@ impl Renderer {
         // them, a drag left up to that many old copies of the object alive, each with all its
         // members (and, for a compound path, its assembled path).
         self.geom.retain(|_, e| g - e.stamp <= 3);
+        // A kept path stays while its object is in `geom`, which keeps the objects still drawn.
+        let geom = &self.geom;
+        self.kept.retain(|_, e| g - e.stamp <= 3 || geom.get(&(Arc::as_ptr(&e.node) as usize)).is_some_and(|k| Arc::ptr_eq(&k.node, &e.node)));
         if self.strokes.len() > 1024 {
             self.strokes.retain(|_, e| g - e.stamp <= 3);
+            let strokes = &self.strokes;
+            self.moved_strokes.retain(|_, k| strokes.contains_key(k));
         }
         if self.stroke_slices.len() > 256 {
             self.stroke_slices.retain(|_, e| g - e.stamp <= 3);
+            let slices = &self.stroke_slices;
+            self.moved_slices.retain(|_, k| slices.contains_key(k));
         }
         if self.shadows.len() > 256 {
             self.shadows.retain(|_, e| g - e.stamp <= 3);
@@ -203,6 +220,7 @@ impl Renderer {
         self.pixel_fx.retain(|_, e| e.stamp == g);
         self.type_edges.sweep(g);
         self.texts.sweep(g);
+        self.text_ids.retain(|_, key| self.texts.contains_key(key));
         self.char_strokes.sweep(g);
         self.clips.sweep(g);
         self.clip_paints.sweep(g);
@@ -308,6 +326,7 @@ impl Renderer {
     pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, w, h, view, opts, true, 1).pixels
     }
 

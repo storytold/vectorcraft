@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
@@ -160,7 +160,8 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    /// The tool that was active before type editing began, which Escape and Cmd+Enter return to.
+    /// Clicks that move editing to other text keep it.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -174,9 +175,10 @@ pub struct TypeTool {
     /// Caret and selection anchor (byte offsets into the plain text).
     caret: usize,
     anchor: usize,
-    /// After Select All in a frame of threaded text: the story's frames in thread order, the edited
-    /// one included. While the selection is the edited frame's whole text, the text of the other
-    /// frames is selected too. Empty otherwise.
+    /// After Select All in a frame of threaded text: the story's frames in thread order then, the
+    /// edited one included. While the selection is the edited frame's whole text and this holds the
+    /// edited frame, the text of the other frames of its current thread is selected too. Empty
+    /// otherwise.
     story: Vec<NodeId>,
     /// Horizontal position kept by Up/Down (text space).
     goal_x: Option<f64>,
@@ -230,8 +232,8 @@ impl TypeTool {
             return None;
         }
         let id = self.editing?;
-        let (attribute, by) = plain::step_key(key, mods.shift, a == b, vertical)?;
         let story = !self.story_others(cx).is_empty();
+        let (attribute, by) = plain::step_key(key, mods.shift, a == b && !story, vertical)?;
         let mut out = self.commit();
         let by = if mods.cmd { by * 5.0 } else { by };
         // With the whole story selected, `type.step` steps the text of every frame of it.
@@ -326,11 +328,26 @@ impl TypeTool {
             return None;
         }
         // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
-        // opening or closing quote, by the character before it.
+        // opening or closing quote, by the character before it. A `”` typed alone (the macOS Serbian
+        // Cyrillic layout's only double quote) becomes the opening quote where one opens, and stays
+        // `”` where one closes.
         let setup = &cx.doc.setup;
-        if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
-            let mut prev = self.char_before(cx, self.caret.min(self.anchor));
-            return Some(setup.quotes.apply(&s, &mut prev));
+        if setup.typographers_quotes {
+            let mut chars = s.chars();
+            if let (Some(c), None) = (chars.next(), chars.next()) {
+                if matches!(c, '"' | '\'') {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    return Some(setup.quotes.apply(&s, &mut prev));
+                }
+                if cx.typed_from_keyboard
+                    && let Some(q) = Quotes::typed_as_straight(c)
+                {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    if setup.quotes.opens_after(prev) {
+                        return Some(setup.quotes.apply(&q.to_string(), &mut prev));
+                    }
+                }
+            }
         }
         Some(s)
     }
@@ -395,6 +412,25 @@ impl TypeTool {
         out
     }
 
+    /// Stop editing and go back to the tool that was active before type editing began (or to the
+    /// Selection tool), and leave the type selected.
+    fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
+        let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
+        let mut out = self.finish(cx);
+        out.push(Action::SwitchTool(target));
+        out
+    }
+
+    /// Enter types a line break, and Shift+Enter types a forced line break. Cmd+Enter (Ctrl+Enter on
+    /// Windows and Linux) ends editing as Escape does and keeps the typed text. `Mods` does not tell
+    /// Ctrl apart from Cmd+Ctrl, so Cmd+Ctrl+Enter on macOS ends editing too.
+    fn enter(&mut self, cx: &ToolContext, mods: Mods) -> Vec<Action> {
+        if mods.cmd && !mods.shift && !mods.alt {
+            return self.end_editing(cx);
+        }
+        self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None)
+    }
+
     /// Replace the selection with `insert` (styled `runs` when given) inside the typing session.
     fn replace(&mut self, cx: &ToolContext, insert: &str, styled: Option<Vec<TextRun>>) -> Vec<Action> {
         let Some(id) = self.editing else { return vec![] };
@@ -441,8 +477,8 @@ impl TypeTool {
     }
 
     /// The other frames whose whole text is selected along with the edited frame's after Select
-    /// All in threaded text ([`Self::story`]): none once the selection is not all of the edited
-    /// frame's text.
+    /// All in threaded text ([`Self::story`]), read from the document's current thread: none once
+    /// the selection is not all of the edited frame's text.
     fn story_others(&self, cx: &ToolContext) -> Vec<NodeId> {
         let Some(id) = self.editing.filter(|id| self.story.contains(id)) else { return vec![] };
         let Some(t) = Self::text(cx, id) else { return vec![] };
@@ -450,7 +486,22 @@ impl TypeTool {
         if a != 0 || b < edit::runs_len(&t.runs) {
             return vec![];
         }
-        self.story.iter().copied().filter(|f| *f != id && Self::text(cx, *f).is_some()).collect()
+        cx.doc.story_of(id).into_iter().filter(|f| *f != id).collect()
+    }
+
+    /// Whether the whole story is selected ([`Self::story_others`]) and its other frames hold text.
+    /// The story stays selected when the edited frame holds no text, as after a frame threaded in
+    /// before it took the text.
+    fn story_selected(&self, cx: &ToolContext) -> bool {
+        self.story_others(cx).into_iter().any(|f| Self::text(cx, f).is_some_and(|o| edit::runs_len(&o.runs) > 0))
+    }
+
+    /// Put back the caret and anchor `selected` that a key clamped to the edited frame's text, when
+    /// the key leaves the whole story selected.
+    fn keep_story_offsets(&mut self, story: bool, selected: (usize, usize)) {
+        if story {
+            (self.caret, self.anchor) = selected;
+        }
     }
 
     /// Move the caret (Shift keeps the anchor). Moving ends the typing session.
@@ -486,7 +537,11 @@ impl TypeTool {
     /// from the start of the caret's paragraph up to it start a list ([`TextObject::typed_list_at`]),
     /// the typing session ends as one undo step with those characters, and `text.startList`
     /// removes them and makes the paragraph a list as the next one, so one Undo puts them back.
+    /// With Type › Start Lists From Typed Markers off, the characters stay as typed.
     fn start_typed_list(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !cx.typed_lists {
+            return vec![];
+        }
         let (Some(id), Some(ty)) = (self.editing, &self.typing) else { return vec![] };
         let Some(mut t) = Self::text(cx, id).cloned() else { return vec![] };
         // The document does not have the space yet (its preview is applied after this input).

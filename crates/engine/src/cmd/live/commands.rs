@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Spine Point",
             [],
             None,
-            "{id? (default: the selected blend), anchor: index, x, y, handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on the point moves with it. The first edit turns the straight spine into a path",
+            "{id? (default: the selected blend), anchor: index, x, y, with?: [index…], handle?: in|out, independent?: bool} move a point of the blend's spine (its handles along), and the points `with` names by as much, or with `handle` place that handle's end at (x, y) (a smooth point keeps the other handle in line unless `independent`). A key object sitting on a moved point moves with it. The first edit turns the straight spine into a path",
             has_doc,
             spine_move_anchor
         ),
@@ -136,7 +136,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Warp…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+Shift+W"),
-            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected) → {id}",
+            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
             has_selection,
             env_make_warp
         ),
@@ -145,7 +145,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Mesh…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+M"),
-            "{ids?, rows?: 1..50 (4), cols?: 1..50 (4), columns?: as cols} envelope the selected objects with a mesh of rows × cols patches → {id}",
+            "{ids?, rows?: 1..50 (4), cols?: 1..50 (4), columns?: as cols} envelope the selected objects with a mesh of rows × cols patches over their bounds (type measured by its glyph outlines) → {id}",
             has_selection,
             env_make_mesh
         ),
@@ -154,7 +154,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Top Object",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+C"),
-            "{ids?} the topmost selected path becomes the envelope of the others → {id}",
+            "{ids?} the topmost selected path becomes the envelope of the others: its outline splits into four sides at its corners, and each piece of a side takes a share of the content in proportion to its control polygon's length (type maps from its glyph outline bounds) → {id}",
             has_multi,
             env_make_top
         ),
@@ -172,7 +172,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset with Mesh…",
             ["Object", "Envelope Distort"],
             None,
-            "{rows?: 1..50, cols?: 1..50 (unset: a mesh envelope's own, else 4), maintainShape?: bool (true: the mesh follows the current envelope shape; false: a flat grid over the content), columns?: as cols} make the selected envelopes mesh envelopes, keeping their content",
+            "{rows?: 1..50, cols?: 1..50 (unset: a mesh envelope's own, else 4), maintainShape?: bool (true: the mesh follows the current envelope shape; false: a flat grid over the content, type measured by its glyph outlines), columns?: as cols} make the selected envelopes mesh envelopes, keeping their content",
             has_envelope,
             env_reset_mesh
         ),
@@ -181,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -199,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),
@@ -217,7 +217,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Contents",
             ["Object", "Envelope Distort"],
             None,
-            "{editing?: bool} toggle Edit Contents / Edit Envelope → {editing}",
+            "{editing?: bool} toggle Edit Contents / Edit Envelope; leaving Edit Contents measures an envelope's boundsMargin again when the content's strokes reach differently than when Edit Contents began → {editing}",
             has_envelope,
             env_edit_contents
         ),

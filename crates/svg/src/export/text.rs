@@ -235,6 +235,12 @@ impl Writer<'_> {
                 self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // A reader turns each `<textPath>` glyph with the path, as Rainbow does: Skew, 3D
+            // Ribbon, Stair Step and Gravity keep their look as outlines.
+            if t.path_effect != vectorcraft_doc::PathEffect::Rainbow {
+                self.warn("type on a path with an effect other than Rainbow is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // It cannot hang glyphs outside the start bracket either.
             if hangs_on_path(t, &lay) {
                 self.warn("type on a path with glyphs hanging outside its brackets is outlined to keep its look");
@@ -519,14 +525,24 @@ impl Writer<'_> {
         let space = (lay.bounds, self.xf * t.xf);
         let base = self.char_props(&t.first_style(), space);
         let mut props = base.clone();
-        match t.para_at(0).justify {
-            Justify::Center | Justify::JustifyCenter => props.push(("text-anchor", "middle".into())),
-            Justify::Right | Justify::JustifyRight => props.push(("text-anchor", "end".into())),
-            _ => {}
-        }
+        let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
+        // The anchor sits where the layout aligns the line within its span.
+        let at = match t.para_at(0).justify {
+            Justify::Center | Justify::JustifyCenter => {
+                props.push(("text-anchor", "middle".into()));
+                (from + to) / 2.0
+            }
+            Justify::Right | Justify::JustifyRight => {
+                props.push(("text-anchor", "end".into()));
+                to
+            }
+            _ => from,
+        };
+        // A closed path's span runs past its start point; `startOffset` can't, so wrap it.
+        let at = if at > 1.0 { at - 1.0 } else { at };
         props.extend(css::transparency(n));
         let a = self.attrs(&props);
-        let offset = fmt_num(start * 100.0, 3);
+        let offset = fmt_num(at * 100.0, 3);
         let mut s = format!("<text{id} xml:space=\"preserve\"{a}><textPath xlink:href=\"#{pid}\" startOffset=\"{offset}%\">");
         for run in &t.runs {
             let mut diff = run_diff(&base, self.char_props(&run.style, space));
@@ -784,15 +800,26 @@ fn end_segment(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`reader_advances`] laid out type again on this thread.
+    static READER_LAYOUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The advance a reader of live SVG text gives each character cluster of `t` and how far from
 /// its pen it draws the cluster's first glyph, keyed by the cluster's byte offset: `t` laid out
 /// as point type (which isn't justified) without Mojikumi, scaled as `t`'s layout `lay` is by
 /// Shrink Text to Fit. Without `kerning`, the font's pair kerning is left out (as manual
-/// kerning leaves it out).
+/// kerning leaves it out). When that leaves `t` as it is, its glyphs are read from `lay`, which
+/// is `t`'s layout, instead of laying it out again.
 fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: bool) -> HashMap<usize, (f64, f64)> {
+    // Mojikumi that spaces none of the characters sets them as Mojikumi None does.
+    let mojikumi = lay.mojikumi_applies(&t.plain_text());
     let mut set = TextObject { kind: TextKind::Point, ..t.clone() };
     for p in std::iter::once(&mut set.para).chain(set.paras.iter_mut()) {
-        p.mojikumi = vectorcraft_doc::Mojikumi::None;
+        if mojikumi {
+            p.mojikumi = vectorcraft_doc::Mojikumi::None;
+        }
         // A reader spaces words and letters as the font does.
         p.justification = vectorcraft_doc::JustificationOptions::default();
     }
@@ -801,8 +828,17 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
             r.style.kerning.get_or_insert(0.0);
         }
     }
+    let relaid;
+    let glyphs = if set == *t {
+        &lay.glyphs
+    } else {
+        #[cfg(test)]
+        READER_LAYOUTS.with(|n| n.set(n.get() + 1));
+        relaid = vectorcraft_text::layout(FontDb::global(), &set);
+        &relaid.glyphs
+    };
     let mut out: HashMap<usize, (f64, f64)> = HashMap::new();
-    for g in vectorcraft_text::layout(FontDb::global(), &set).glyphs.iter().filter(|g| g.len > 0) {
+    for g in glyphs.iter().filter(|g| g.len > 0) {
         let (advance, _) = out.entry(g.byte).or_insert((0.0, (g.xf.translation().x - g.origin.x) * lay.fit_scale));
         *advance += g.advance * lay.fit_scale;
     }
@@ -819,3 +855,6 @@ fn line_start(line: &[Segment], anchor: Option<f64>) -> Option<(f64, f64)> {
     };
     Some((x, first.y))
 }
+
+#[cfg(test)]
+mod tests;

@@ -198,6 +198,30 @@ fn read_file_refuses_what_is_not_a_regular_file() {
     assert!(read_file("/dev/zero").is_err());
 }
 
+/// Read the first `max` bytes of a file (all of it when it is shorter), and nothing past them. Only
+/// a regular file is read.
+fn read_file_head(path: &str, max: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    if !std::fs::metadata(path).map_err(|e| e.to_string())?.is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    let mut out = vec![];
+    std::fs::File::open(path).and_then(|f| f.take(max as u64).read_to_end(&mut out)).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+#[cfg(test)]
+#[test]
+fn read_file_head_reads_no_more_than_it_is_asked_for() {
+    use std::io::Write as _;
+    let mut f = tempfile::Builder::new().prefix("vectorcraft-read-head-").tempfile().unwrap();
+    f.write_all(b"0123456789").unwrap();
+    let p = f.path().to_string_lossy();
+    assert_eq!(read_file_head(&p, 4).unwrap(), b"0123");
+    assert_eq!(read_file_head(&p, 20).unwrap(), b"0123456789", "a shorter file is read whole");
+    assert!(read_file_head(&std::env::temp_dir().to_string_lossy(), 4).is_err(), "a folder is not read");
+}
+
 /// Write a file the safe way: a failed write keeps the old file ([`fileio::write_atomic`]).
 fn write_file(path: &str, bytes: &[u8]) -> Result<(), String> {
     fileio::write_atomic(std::path::Path::new(path), bytes).map_err(|e| e.to_string())
@@ -274,13 +298,16 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
         // up its Format menu before the sheet begins (#866); rfd shows the others.
         PickRequest::Save(pick) => match mac_save_format::begin(window, &pick) {
             // The dialog thread blocks here until the sheet answers.
-            Some(picked) => Box::pin(async move { picked.recv().unwrap_or_default() }),
-            None => {
+            Ok(mac_save_format::Begin::Shown(picked)) => Box::pin(async move { picked.recv().unwrap_or_default() }),
+            Ok(mac_save_format::Begin::DeferToRfd) => {
                 // Nothing is added to the sheet once rfd has begun it: an accessory view set then
                 // made recent macOS versions dismiss the sheet at once (#1800).
                 let picked = dialog.save_file();
                 Box::pin(async move { picked.await.iter().map(path).collect() })
             }
+            // AppKit returned nil for the panel. rfd uses the same `+savePanel` and would panic
+            // on that nil; treat the pick as cancelled instead (#5980).
+            Err(()) => Box::pin(async move { Vec::new() }),
         },
         PickRequest::Folder => {
             let picked = dialog.pick_folder();
@@ -325,6 +352,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         #[cfg(windows)]
         stylus: Some(windows_stylus::start()),
         read: Some(Box::new(read_file)),
+        // Load Actions… refuses a file over its size limit without reading all of it.
+        read_head: Some(Box::new(read_file_head)),
         write: Some(Box::new(write_file)),
         exists: Some(Box::new(|p: &str| std::path::Path::new(p).exists())),
         // Background Save and Export write from a worker thread.
@@ -569,22 +598,20 @@ mod open_with_tests {
     use super::{check_app, find_photocraft, photocraft_candidates, registered_path, windows_candidates};
 
     /// A fresh, empty folder under the system's temporary folder.
-    fn scratch(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("vc-open-with-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn scratch(name: &str) -> tempfile::TempDir {
+        tempfile::Builder::new().prefix(&format!("vc-open-with-{name}-")).tempdir().unwrap()
     }
 
     /// #5236: only an application counts as PhotoCraft, never a document, a folder or a missing
     /// path.
     #[test]
     fn only_applications_are_started() {
-        let d = scratch("check");
+        let temp = scratch("check");
+        let d = temp.path();
         let doc = d.join("notes.txt");
         std::fs::write(&doc, "hi").unwrap();
         assert!(check_app(&doc).is_err(), "a document");
-        assert!(check_app(&d).is_err(), "a folder");
+        assert!(check_app(d).is_err(), "a folder");
         assert!(check_app(&d.join("Missing.app")).is_err(), "a missing path");
         if cfg!(target_os = "macos") {
             let app = d.join("Editor.app");
@@ -600,19 +627,19 @@ mod open_with_tests {
             std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
             assert!(check_app(&tool).is_ok(), "an executable file");
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// PhotoCraft is looked for only where it installs.
     #[test]
     fn photocraft_is_found_where_it_installs() {
-        let d = scratch("find");
+        let temp = scratch("find");
+        let d = temp.path();
         if cfg!(target_os = "macos") {
-            let candidates = photocraft_candidates(Some(&d), None);
+            let candidates = photocraft_candidates(Some(d), None);
             assert_eq!(candidates.first().map(|p| p.to_string_lossy().into_owned()).as_deref(), Some("/Applications/PhotoCraft.app"));
             assert!(candidates.contains(&d.join("Applications/PhotoCraft.app")), "{candidates:?}");
             std::fs::create_dir_all(d.join("Applications/PhotoCraft.app")).unwrap();
-            assert!(find_photocraft(Some(&d), None).unwrap().ends_with("PhotoCraft.app"));
+            assert!(find_photocraft(Some(d), None).unwrap().ends_with("PhotoCraft.app"));
         } else {
             let bin = d.join("bin");
             std::fs::create_dir_all(&bin).unwrap();
@@ -636,7 +663,6 @@ mod open_with_tests {
                 assert_eq!(find_photocraft(None, Some(&path_var)), Some(exe));
             }
         }
-        let _ = std::fs::remove_dir_all(&d);
     }
 
     /// #5327 review: on Windows PhotoCraft is looked for where its installer puts it: the path it

@@ -15,10 +15,13 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
-/// that hold the selected objects (`scope: "group"`).
-pub(super) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
+/// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
+/// chosen with Shift add to the selection (`add: true`).
+pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
+        crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
     }
 }
@@ -68,12 +71,16 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             ("splitIntoGrid", crate::dialogs::path_ops::split_fields(size.0, size.1))
         }
         "object.vectorHalftone" => (crate::dialogs::halftone::KIND, crate::dialogs::halftone::fields()),
+        crate::addons::pathtools::set_corners::COMMAND => {
+            (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
+        }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
+        "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
         _ => return None,
     })
 }
@@ -163,6 +170,12 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // Image Trace traces off the UI thread, with its progress (#3098).
     if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
         if let Err(e) = crate::trace_runs::start(app, id, p, false) {
+            app.status(e);
+        }
+        return;
+    }
+    if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
+        if let Err(e) = r {
             app.status(e);
         }
         return;
@@ -334,10 +347,12 @@ fn open_object_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
         }
         return true;
     }
-    // Export Assets, Remove, Rename and Asset Export Settings with no params, as the command
-    // palette runs them (#4864): the Asset Export panel, where each one is done. A panel that already
-    // shows stays open.
-    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set") && p.as_object().is_none_or(|o| o.is_empty()) {
+    // Export Assets, Remove, Rename, Asset Export Settings, Export 3D Assets and 3D Export Format
+    // with no params, as the command palette runs them (#4864): the Asset Export panel, where each
+    // one is done. A panel that already shows stays open.
+    if matches!(id, "assets.export" | "assets.remove" | "assets.rename" | "assets.settings.set" | "assets.export3D" | "assets.set3DFormat")
+        && p.as_object().is_none_or(|o| o.is_empty())
+    {
         if let Err(e) = crate::panel_docking::reveal_panel(app, crate::panels::asset_export::ID) {
             app.status(e);
         }

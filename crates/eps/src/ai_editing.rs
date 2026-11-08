@@ -18,11 +18,37 @@
 //!   `%AI5_ArtFlags`, `%AI5_TargetResolution`, `%AI5_NumLayers`, `%AI5_OpenViewLayers` (a digit for
 //!   each layer, 7 shown and 6 hidden), `%AI7_GridSettings` (§2.1.1), and the version comment
 //!   `%%AI8_CreatorVersion` ([`CREATOR_VERSION`]).
-//! - Setup: `0 Bn` (no gradient definitions, §3), the color swatches (`%AI5_BeginPalette`,
-//!   `0 0 Pb`, the Registration swatch, each swatch's color operator and `(name) Pc`, a color group as `0 (name) count Pg`
-//!   before its swatches, `PB`), then the artboards as the `ArtboardArray` of the `/Document`
-//!   dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on `%_`
-//!   lines.
+//! - Setup: the gradients the art uses as `n Bn` and a definition of each (§3.5: `%AI5_BeginGradient:
+//!   (name)`, `(name) type stops Bd`, `[`, each stop on a `%_` line as `color style opacity 6 midpoint
+//!   rampPoint Bs`, `BD`, `%AI5_EndGradient`), those only the swatches use in a non-printing block
+//!   (§14: `%AI5_Begin_NonPrinting`, `Np`, `%AI5_End_NonPrinting--`); the patterns the same way
+//!   (§3.4: `%AI3_BeginPattern: (name)`, `(name) llx lly urx ury`, the tile's art on `%_` lines, `E`,
+//!   `%AI3_EndPattern`); the swatches (`%AI5_BeginPalette`, `0 0 Pb`, the Registration swatch, each
+//!   swatch's color operator, gradient instance or pattern operator and `(name) Pc`, a color group as
+//!   `0 (name) count Pg` before its swatches, `PB`), then the artboards as the `ArtboardArray` of the
+//!   `/Document` dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on
+//!   `%_` lines.
+//! - Variables (`writer::variables`): after the canvas size, the variable library as XML nodes
+//!   (`/XMLNode`: `xmlnode-nodename`, `xmlnode-nodevalue`, `xmlnode-nodetype`, `xmlnode-children`,
+//!   `xmlnode-attributes`) of an XML document `#document`: a `metadata` element holding
+//!   `variableSets`, one `variableSet` (`locked`: `none`, or `variableAndTypes` when the variables
+//!   are locked), its `variables` (a `variable` element with `varName` and `trait`: `textcontent`,
+//!   `visibility`, `fileref` or `graphdata`, none for a variable of unknown kind; a variable bound to
+//!   objects declared once for each, its `docRef` the object's XML id, `/XMLUIDREF`) and its
+//!   `v:sampleDataSets` (`i:activeDataSet`, the data set shown) of `v:sampleDataSet` elements
+//!   (`dataSetName`), each holding an element named after each variable it gives a value: a `p`
+//!   element for each line of a text value, a `/Bool` text whether the objects show, a linked file's
+//!   `file://` URL or path. An object bound to a variable without a name gets an XML id and an empty
+//!   `AIArtName`. Bindings to layers, to type written as outlines, to graphs and to linked images
+//!   written as other objects, and graph values, values that don't fit their variable, linked files
+//!   that aren't absolute paths, paths from the root that the reader reads as other paths (`/`
+//!   alone, `/C:…`), drive and network paths with white space at either end, values of variables
+//!   whose names have a colon, and a data set shown that isn't written, are left out, as is what
+//!   the reader leaves out
+//!   (variables and data sets whose names are empty, repeated, longer than 255 characters or start
+//!   or end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to XML ids longer than
+//!   255 characters, names and values past 8,388,608 bytes in all), and values past 200,000 text
+//!   lines and values in all.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
 //!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
 //!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
@@ -30,10 +56,22 @@
 //! - Colors: `g` gray, `k` CMYK, `c m y k r g b Xa` RGB (Lab is written as RGB); a spot color
 //!   `c m y k (name) tint x` (CMYK) or `c m y k r g b|L a b (name) tint 1|2 Xx` (RGB or Lab); a
 //!   global process color `… (name) tint model Xk`; Registration `1 1 1 1 ([Registration]) tint
-//!   Xs`. Upper case paints the stroke.
+//!   Xs`; a pattern `(name) 0 0 1 1 0 0 0 0 0 [matrix] p` (`P`), the matrix taking the pattern's
+//!   space (its tile's lower left corner the origin) to art space. Upper case paints the stroke.
+//! - Gradients (§3.5.3): around the painting operator of a path (of a compound path's last path),
+//!   `Bb` (`1 Bb` for the stroke), a radial gradient's focal point `x y angle fraction Bh`, then
+//!   `flag (name) x y angle length a b c d tx ty 1 Bg`, which places the gradient on the path: a
+//!   linear one with the identity matrix, `x` the start and `length` the length as fractions of the
+//!   path's extent along `angle`; a radial one with the matrix taking the unit circle onto its
+//!   extent ellipse, `x` and `y` its center as fractions of the path's bounds there and `length` its
+//!   radius as a multiple of the one the bounds give (`writer::paints::placement`). The imaging data
+//!   follows (a linear gradient's `a b c d tx ty Xm`, its caps `Bc` and a `Bm` for each pair of
+//!   stops; a radial one's `Bm`), then the operator and `0 BB` (`2 BB` or `1 BB` when the path is
+//!   stroked too; a fill's instance ends `2 BB` before a stroke's). In a pattern's tile the matrices
+//!   are in the canvas's space (y down, from art space's origin there).
 //! - State before each object: locked `A`, hidden `Xw` (`1` or `0`). An object's name follows it as
-//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are `(N) *`, the
-//!   path, `(N) *` (`(n) *` when closed).
+//!   an `/ArtDictionary` whose `AI10_ArtUID` is the name as an XML id. Guides are the path
+//!   followed by `(N) *` (`(n) *` when closed), without the `(N) *` that §6 also puts before it.
 //! - Transparency: `mode opacity isolate knockout shape Xy` (the blending mode's number, Knockout
 //!   Group 0 off, 1 on, 2 neutral), written when it changes: in a path's paint after its colors,
 //!   before a guide, and after a group's end (`U` or `Q`) followed by `0 0 Xd` and `6 () XW`; a
@@ -45,20 +83,91 @@
 //! - Opacity masks: an `AI9_Mask` entry in the object's `/ArtDictionary`, a `/Mask` dictionary
 //!   holding the mask's art between `X=` and `X+` on `%_` lines, `(Art) ,`, and `Clipping`,
 //!   `Inverted`, `Disabled` and `Linked` as `/Bool` entries.
+//! - Embedded images (§8): `%AI5_File:`, `%AI5_BeginRaster`, `() 1 XG`, the color space
+//!   (`/DeviceGray`, `/DeviceRGB` or `/DeviceCMYK`) with `XN`, `[matrix] w h 0 Xh`, `[matrix] 0 0
+//!   w h w h 8 type alpha flags 1 0 4 4 0 0` (type 1 gray, 3 RGB, 4 CMYK; alpha 1 with an alpha
+//!   channel; flags 0 gray, 1 RGB, 2 CMYK, 16 more with an alpha channel), `%%BeginData:` counting
+//!   `XI`, its line end and the color samples, `XI`, the samples in binary (8 bits, rows from the
+//!   top, CMYK images with their ink amounts) followed by the alpha channel, `%%EndData`, `XH`,
+//!   `%AI5_EndRaster`, `N`. The matrix (to ten decimals) is an art-space matrix applied to the
+//!   pixels with their rows running downwards. In a part on `%_` lines, `XI` and the samples are
+//!   not, and `%_%%EndData` ends them.
+//! - Linked images (version 7 specification §16, with the newer sections): `%AI5_BeginPlace`,
+//!   `%%FileType: 1`, `[matrix] llx lly urx ury 4 4 0` and `(path)` with `` ` ``, `%%IncludeFile:`,
+//!   the folder relative to the document's between `%AI28_BeginPlacedRelativePath` and its end,
+//!   a preview of at most 256 pixels a side between `%AI26_BeginPlacedObjectPreview` and its end
+//!   (`w h rowBytes 32 17 `, then rows of premultiplied ARGB), each in versioned content, `~`,
+//!   `%AI5_EndPlace`. The box is the file's pixels at art space's origin on the canvas; the matrix
+//!   takes it into art space. In opacity masks, pattern tiles and symbols, linked images are
+//!   embedded.
+//! - Type: a text object `/AI11Text :` naming its story and frame (`/StoryIndex`, `/FrameIndex`),
+//!   for area type and type on a path with its frame's path (`/Art :` … `; /ConfiningPath ,`), and
+//!   the text document after the document data (`%AI11_BeginTextDocument`, see
+//!   `writer::texts`), in the form the reader's `ate.rs` reads: the characters, the fonts, sizes,
+//!   leading, tracking, baseline shift, scales, solid fills and strokes and capitals of each run,
+//!   the alignment, indents, spacing, hyphenation and direction of each paragraph, and the frame:
+//!   point type's point and matrix, area type's frame, rows, columns, gutters and first baseline,
+//!   type on a path's path and span, vertical type, and the frames a threaded story flows through.
+//! - Symbols, as the reader reads them ([`crate::import`]'s `.ai` reader, `read.rs`): every symbol
+//!   of the document defined in the setup after the patterns, in a non-printing block
+//!   (`%AI14_BeginSymbol`, `(name)`, `0 A`, `0 Xw`, `0 Ae`, the art in the symbol's space with y
+//!   down, the registration point as `AI13PatternRegistrationType` 1 to 9 from the top left, row by
+//!   row (VectorCraft's numbering, in the order the scripting reference lists the points), in the
+//!   art's dictionary, `%AI10_EndSymbol`), each after those its art uses; the symbol
+//!   list after the palette (`%AI24_BeginSymbolList`, the names in the Symbols panel's order,
+//!   `%AI24_EndSymbolList`); each instance as `/SymbolInstance :`, `(name) /SymbolRef ,`, the
+//!   matrix taking the art to art space as `a b c d tx ty /RTransformMatrix`, `;`, then its name
+//!   and opacity mask and a state block as a group's with its opacity and blending mode (an
+//!   instance with isolation, knockout or knockout shape of its own is written as its art). The
+//!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
+//!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
+//!   group with live effects is written as its drawn look (`u`, its vector art as its geometry
+//!   effects leave it, without shadows, glows or feathers, `U`, its transparency, `0 0 Xd`,
+//!   `6 () XW`), then the object itself on `%_` lines (its points painted
+//!   with nothing, or with its gradient fill; a group with its members) with its name and opacity
+//!   mask, then `1 (style) XW`. The styles are written in a non-printing block after the symbols
+//!   (`%AI9_BeginArtStyles`, each `/KnownStyle :` with its name and a filter tree: a chain of the
+//!   stack of fills and strokes with the contents among them, the effects and the blend filter). A
+//!   fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that fills by
+//!   the even-odd rule is written as its drawn look. A style is written only when the reader reads it
+//!   back as the object's appearance.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
-//! loss a warning: type as its outlines and its inline graphics' art, gradients as their average color, pattern fills as their
-//! tiles cut to the shape, clipping groups and clipping layers whose clipping object isn't a path,
+//! loss a warning: type the text document can't hold (in opacity masks, pattern tiles, symbols and
+//! art cut to a clipping object, mirrored, turned or unevenly scaled area type and type on a path, inline graphics, ruby,
+//! gradient or pattern paint, an appearance of its own) as its outlines and its inline graphics'
+//! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
+//! along or across a stroke and gradients without stops, with more than 256 stops or without extent
+//! as their average color
+//! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
+//! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
+//! the tile or is painted with patterns, and pattern fills in symbols, as their tiles cut
+//! to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
-//! stroke not), images as their outlines filled with
-//! their average color, symbols and live objects as their art (symbol art past
-//! [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects in all left out), strokes a plain line can't draw
-//! as their filled outlines, several fills or strokes as a group of a path for each, gradient and
-//! pattern swatches, the opacity and blending modes of single fills and strokes, opacity masks on
-//! layers and opacity masks nested too deep, and live effects other than geometry effects left out.
+//! stroke not; an image in a clipping group of the region it is cut to), images that can't be
+//! decoded or have more than 33,554,432 pixels as their outlines filled mid gray, images of 16 bits
+//! a channel at 8 bits, linked images in opacity masks, pattern tiles and symbols as embedded images,
+//! symbol instances with a fill, appearance changes, isolation, knockout or knockout shape of their
+//! own, instances of symbols with 9-slice guides or pattern paint, instances in pattern tiles or in art cut to a
+//! clipping object, instances scaled almost flat, instances that turn, mirror or scale symbols holding
+//! type, live objects, instances written as their art, shapes with rounded live corners or strokes
+//! written as outlines or brush art,
+//! instances that scale their symbol more than 100 times, instances on the layers of a large canvas
+//! and instances of
+//! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
+//! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
+//! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
+//! strokes a plain line can't draw
+//! as their filled outlines, several fills or strokes as a group of a path for each, freeform
+//! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
+//! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
+//! layers and opacity masks nested too deep, and, on objects written without an art style, live
+//! effects other than geometry effects left out; graphic styles, links to them and every art style
+//! on a large canvas are left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
@@ -135,11 +244,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
+    let scale = canvas_scale(doc);
+    // The objects that may keep their effects in an art style, as they are before baking (not on
+    // a large canvas, whose scale the styles' strokes and effects would need).
+    let styled = writer::styled_objects(doc);
+    let graphic_styles = writer::has_graphic_styles(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
-    let scale = canvas_scale(doc);
     let reduced = (scale != 1.0).then(|| {
         let mut d = doc.clone();
         crate::import::scale_document(&mut d, 1.0 / scale, true);
@@ -155,15 +268,36 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
         }
         d
     });
+    // Symbols are defined at their own size, whatever the canvas.
+    let symbol_doc = doc;
     let doc = reduced.as_ref().unwrap_or(doc);
     let board = doc.artboards.first().map_or(board, |a| a.rect);
     // The document is y down; art space is ruler space: y up, its origin the first artboard's
     // top-left corner.
     let to_art = Affine::new([1.0, 0.0, 0.0, -1.0, -board.x0, board.y0]);
-    let mut w = Writer::new(doc, to_art);
+    let origin = ruler_origin(doc, to_art);
+    let mut w = Writer::new(doc, to_art, origin);
+    // On a large canvas the layers' symbol instances are written as their art.
+    w.symbols_live = scale == 1.0;
+    w.symbol_doc = symbol_doc;
+    w.reserve_swatch_gradients();
+    if scale == 1.0 {
+        w.styled = styled;
+    } else if !styled.is_empty() {
+        w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
+    }
+    if graphic_styles {
+        w.warnings.push(writer::GRAPHIC_STYLES.to_string());
+    }
     for layer in &doc.layers {
         w.layer(layer);
     }
+    // The symbols no instance uses too; their art adds definitions.
+    w.symbols();
+    // The palette first: its gradient and pattern swatches add definitions.
+    let mut palette = String::new();
+    w.palette(&mut palette);
+    let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
         .layers
@@ -174,23 +308,52 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
         .filter(|b| b.is_finite())
         .reduce(|a, b| a.union(b))
         .unwrap_or(first);
-    let origin = ruler_origin(doc, to_art);
     let header = header(doc, o, &w, art, first, origin, scale);
     let mut s = header.clone();
-    // No gradient definitions: gradients are written as their average color.
-    s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n0 Bn\n");
-    w.palette(&mut s);
-    artboards(&mut s, doc, to_art, origin);
+    s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
+    w.definitions(&mut s);
+    w.symbol_definitions(&mut s);
+    w.art_styles(&mut s);
+    s.push_str(&palette);
+    w.symbol_list(&mut s);
+    artboards(&mut s, doc, to_art, origin, &library);
+    if !w.texts.is_empty() {
+        s.push_str(&w.texts.section(doc));
+    }
     s.push_str("%%EndSetup\n");
     s.push_str(&w.body);
     s.push_str("%%PageTrailer\ngsave annotatepage grestore showpage\n%%Trailer\n%%EOF\n");
     // Lines end in CR LF, as in the files users sent; line breaks inside strings are escaped.
-    Ok(AiEditingOutput { program: crlf(&s), header: crlf(&header), warnings: w.warnings })
+    let program = splice(&crlf(&s), &w.payloads);
+    Ok(AiEditingOutput { program, header: crlf(&header), warnings: w.warnings })
 }
 
 /// `s` with each line ending in CR LF.
 fn crlf(s: &str) -> Vec<u8> {
     s.replace('\n', "\r\n").into_bytes()
+}
+
+/// `text` with each payload's mark (`\u{1}`, its index in `payloads`, `\u{1}`) replaced by its
+/// bytes. Strings are written with that byte escaped, so a mark is never part of one.
+fn splice(text: &[u8], payloads: &[Vec<u8>]) -> Vec<u8> {
+    let mark = writer::PAYLOAD as u8;
+    if payloads.is_empty() {
+        return text.to_vec();
+    }
+    let mut out = Vec::with_capacity(text.len() + payloads.iter().map(Vec::len).sum::<usize>());
+    let mut parts = text.split(|b| *b == mark);
+    if let Some(first) = parts.next() {
+        out.extend_from_slice(first);
+    }
+    // The parts alternate: an index, then the text up to the next mark.
+    while let (Some(index), Some(rest)) = (parts.next(), parts.next()) {
+        let payload = std::str::from_utf8(index).ok().and_then(|i| i.parse::<usize>().ok()).and_then(|i| payloads.get(i));
+        if let Some(p) = payload {
+            out.extend_from_slice(p);
+        }
+        out.extend_from_slice(rest);
+    }
+    out
 }
 
 /// `doc` with its geometry effects and group paint baked ([`vectorcraft_effects::bake_document`]),
@@ -305,7 +468,7 @@ fn header(doc: &Document, o: &AiEditingOptions, w: &Writer, art: Rect, first: Re
     s.push('\n');
     s.push_str("%%DocumentProcessColors: Cyan Magenta Yellow Black\n");
     s.push_str("%AI5_FileFormat 14.0\n%AI3_ColorUsage: Color\n");
-    // Linked images aren't embedded (the data holds no images).
+    // Linked files aren't included (their previews are).
     s.push_str("%AI7_ImageSettings: 0\n");
     let spots = w.spot_swatches();
     for (i, (name, _)) in spots.iter().enumerate() {
@@ -363,10 +526,12 @@ fn ruler_units(u: Unit) -> u8 {
 /// bottom-right corners in art space (`PositionPoint1`, `PositionPoint2`), its top-left corner on
 /// the canvas (`RulerOrigin`, `origin` being art space's origin there), its pixel aspect ratio
 /// (`PAR`), `DisplayMark` 0 (as in the files users sent), whether it is the selected one (the
-/// first) and its name; then the canvas's size. Every record holds all of these entries. The
-/// artboards and the canvas size are written in the `/Recorded` part of the `/Document`
-/// dictionary, followed by an empty `/NotRecorded` part.
-fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64)) {
+/// active one) and its name; then the index of the active artboard (`CropAreaActive`: the one
+/// [`Document::opened_artboard`] names, else the first) and the canvas's size. Every record holds
+/// all of these entries. The artboards, the active artboard and the canvas size are written in the
+/// `/Recorded` part of the `/Document` dictionary, followed by an empty `/NotRecorded` part.
+fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64), library: &str) {
+    let active = doc.opened_artboard.and_then(|id| doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
     s.push_str("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n");
     for (i, ab) in doc.artboards.iter().enumerate() {
         let r = to_art.transform_rect_bbox(ab.rect);
@@ -381,11 +546,14 @@ fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64))
         ps::push_num(s, if par.is_finite() && par > 0.0 { par } else { 1.0 });
         // Display marks: 1 the center mark, 2 cross hairs, 4 video safe areas.
         let mark = u8::from(ab.show_center_mark) | u8::from(ab.show_cross_hairs) << 1 | u8::from(ab.show_video_safe_areas) << 2;
-        let _ = writeln!(s, " /Real (PAR) ,\n%_{mark} /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == 0));
+        let _ = writeln!(s, " /Real (PAR) ,\n%_{mark} /Int (DisplayMark) ,\n%_{} /Bool (IsArtboardSelected) ,", u8::from(i == active));
         let _ = writeln!(s, "%_{} /UnicodeString (Name) ,\n%_; ,", ps::bytes(ab.name.as_bytes()));
     }
     s.push_str("%_; (ArtboardArray) ,\n");
+    let _ = writeln!(s, "%_{active} /Int (CropAreaActive) ,");
     let _ = writeln!(s, "%_{CANVAS_SIZE} /Int (AIDocumentCanvasSize) ,");
+    // The variable library, after the canvas size.
+    s.push_str(library);
     s.push_str("%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n");
 }
 

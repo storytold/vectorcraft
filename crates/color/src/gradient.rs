@@ -151,16 +151,23 @@ pub struct GradientStop {
     /// Tint of the linked swatch (0..1; 1 without a link), as on a solid paint.
     #[serde(default = "crate::full_tint", skip_serializing_if = "crate::is_full_tint")]
     pub tint: f32,
+    /// Process inks (C, M, Y, K, 0..1) printed together with the linked spot swatch's tint: a
+    /// DeviceN colour of a file that mixes a spot ink with process plates. `color` is how the mix
+    /// looks; separations print the spot ink at `tint` and these plates. `None`: the ink alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plates: Option<[f32; 4]>,
 }
 
 impl GradientStop {
     /// An opaque, unlinked stop of `color` at `offset` with a centred midpoint.
     pub fn new(offset: f32, color: Color) -> Self {
-        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0 }
+        Self { offset, color, opacity: 1.0, midpoint: 0.5, swatch: None, tint: 1.0, plates: None }
     }
-    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked.
+    /// Give the stop `color`, linked to `link` (a global swatch and tint) or unlinked, without
+    /// process plates.
     pub fn set_color(&mut self, color: Color, link: Option<(String, f32)>) {
         self.color = color;
+        self.plates = None;
         (self.swatch, self.tint) = match link {
             Some((n, t)) => (Some(n), t),
             None => (None, 1.0),

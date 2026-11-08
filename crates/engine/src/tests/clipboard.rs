@@ -278,6 +278,54 @@ fn gradient_swatches_come_along_with_their_stop_links() {
     assert_eq!(sw.gradient, g.gradient, "the added gradient swatch links its stop to the added Sky too");
 }
 
+/// A gradient swatch made from another one (by name, from a fill linked to it, or from a gradient
+/// that names it, placed or not) holds the gradient alone, so copying art that uses it brings only
+/// that swatch. A placed gradient keeps its aspect, and the swatch still fits each object it is
+/// applied to.
+#[test]
+fn a_gradient_swatch_made_from_another_holds_no_link_to_it() {
+    let mut s = session();
+    let glow = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#3080ff"}, {"offset": 1, "color": "#ffffff"}]});
+    s.execute("swatch.new", &json!({"name": "Glow", "gradient": glow})).unwrap();
+    let r = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Glow"})).unwrap();
+    let Paint::Gradient(applied) = fill(&s, r) else { panic!("a gradient fill") };
+    assert_eq!(applied.swatch.as_deref(), Some("Glow"));
+    let mut by_gradient = vectorcraft_tools::params::gradient_params(&applied);
+    by_gradient["swatch"] = json!("Glow");
+    let mut placed = by_gradient.clone();
+    placed["start"] = json!([25, 25]);
+    placed["end"] = json!([50, 25]);
+    placed["aspect"] = json!(50);
+    let made = [
+        ("By Name", json!({"name": "By Name", "swatch": "Glow"})),
+        ("From Fill", json!({"name": "From Fill"})),
+        ("From Gradient", json!({"name": "From Gradient", "gradient": by_gradient})),
+        ("Placed", json!({"name": "Placed", "gradient": placed})),
+    ];
+    let mut links = vec![];
+    for (name, p) in &made {
+        s.execute("swatch.new", p).unwrap();
+        let Paint::Gradient(sw) = doc(&s).swatch(name).unwrap().paint.clone() else { panic!("{name}: a gradient swatch") };
+        assert_eq!(sw.gradient, applied.gradient, "{name}: Glow's gradient");
+        links.push(sw.swatch.clone());
+    }
+    assert_eq!(links, [None, None, None, None], "no swatch links to Glow");
+    let Paint::Gradient(sw) = doc(&s).swatch("Placed").unwrap().paint.clone() else { panic!("a gradient swatch") };
+    assert!(sw.geom.is_some_and(|g| (g.aspect - 0.5).abs() < 1e-9), "the placed gradient keeps its aspect: {:?}", sw.geom);
+    for (name, _) in &made {
+        let t = rect(&mut s, 100.0, 0.0, 100.0, 60.0);
+        s.execute("paint.setFill", &json!({"ids": [t.0], "swatch": name})).unwrap();
+        if *name == "Placed" {
+            let Paint::Gradient(g) = fill(&s, t) else { panic!("a gradient fill") };
+            let geom = g.geom.unwrap();
+            assert!(geom.start.distance(Point::new(150.0, 30.0)) < 1e-9 && (geom.aspect - 0.5).abs() < 1e-9, "{geom:?}");
+        }
+        copy(&mut s, &[t]);
+        assert_eq!(s.clipboard.swatches.iter().map(|w| w.name.as_str()).collect::<Vec<_>>(), [*name], "Glow stays behind");
+    }
+}
+
 #[test]
 fn lab_spot_colours_show_as_the_target_documents_spot_option_says() {
     let mut s = session();
@@ -849,4 +897,95 @@ fn artwork_drop_uses_the_current_layer_even_when_paste_remembers_hidden_or_locke
         assert_eq!(doc(&s).layers.len(), 2);
         assert!(doc(&s).paste_remembers_layers, "the preference still applies to ordinary Paste");
     }
+}
+
+/// Two touching rectangles made into 9-slice symbol `Audit`, its instance scaled 150% × 75% and
+/// copied (#5902).
+fn copied_nine_slice_instance(s: &mut Session) -> Document {
+    let red = rect(s, 30.0, 30.0, 80.0, 60.0);
+    s.execute("paint.setFill", &json!({"ids": [red.0], "color": "#ff0000"})).unwrap();
+    let blue = rect(s, 110.0, 90.0, 40.0, 30.0);
+    s.execute("paint.setFill", &json!({"ids": [blue.0], "color": "#0000ff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Audit", "nineSlice": true, "registration": 0, "exportType": "graphic"})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 75})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    doc(s).clone()
+}
+
+/// The symbol options pasted symbol `to` should have: those of `from` in `src`.
+fn assert_same_symbol_options(src: &Document, from: &str, d: &Document, to: &str) {
+    assert!(src.symbol_nine_slice(from).is_some());
+    assert_eq!(d.symbol_nine_slice(to), src.symbol_nine_slice(from));
+    assert_eq!(d.symbol_registration(to), src.symbol_registration(from));
+    assert_eq!(d.symbol_export_type(to), src.symbol_export_type(from));
+    assert_eq!(d.symbol_natural_xf(to), src.symbol_natural_xf(from));
+}
+
+#[test]
+fn a_nine_slice_symbol_pasted_into_another_document_keeps_its_options_and_look() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
+    // Pasting again uses the symbol the first paste added.
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
+#[test]
+fn a_renamed_nine_slice_symbol_keeps_its_options_under_the_new_name() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    let other = ellipse(&mut s);
+    sel(&mut s, &[other]);
+    s.execute("symbol.new", &json!({"name": "Audit"})).unwrap();
+    let own = doc(&s).clone();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    // The document's own symbol keeps its options.
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None);
+    assert_eq!(doc(&s).symbol_natural_xf("Audit"), own.symbol_natural_xf("Audit"));
+}
+
+#[test]
+fn a_same_named_symbol_with_other_options_is_not_reused() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    // The document's `Audit` has the same art but 9-slice scaling off now.
+    s.execute("symbol.options", &json!({"name": "Audit", "nineSlice": false})).unwrap();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None, "the document's own symbol keeps its options");
+}
+
+#[test]
+fn a_symbol_without_a_recorded_natural_size_is_pasted_without_one() {
+    let mut s = session();
+    let r = rect(&mut s, 30.0, 30.0, 80.0, 60.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Plain"})).unwrap();
+    s.edit("Forget size", |d, _| {
+        if let Some(m) = d.unknown.get_mut(vectorcraft_doc::SYMBOL_SIZES).and_then(Value::as_object_mut) {
+            m.remove("Plain");
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None);
+    s.execute("edit.copy", &json!({})).unwrap();
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(doc(&s).symbols.iter().any(|x| x.name == "Plain"));
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None, "no size is made up for it");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
 }

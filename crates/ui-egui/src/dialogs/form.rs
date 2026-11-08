@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
+use vectorcraft_doc::color::Color;
 use vectorcraft_plugins::{Manifest, Param, ParamSpec};
 
 use crate::state::Dialog;
@@ -60,6 +61,24 @@ pub(crate) fn length_within(
     let value = d.fields.contains_key(key).then(|| d.f64(key, 0.0));
     let bounds = range.unwrap_or(crate::widgets::ANY);
     let Some(v) = crate::widgets::num_field_within(ui, ("dlg-len", key), value, unit, width, bounds) else { return false };
+    d.fields.insert(key.into(), json!(v));
+    true
+}
+
+/// [`length_within`] for a value the selected objects may not share: with no value the field reads
+/// `empty` ("Mixed"), and typing a distance sets it.
+pub(crate) fn length_mixed(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    key: &str,
+    unit: Unit,
+    width: f32,
+    range: Option<std::ops::RangeInclusive<f64>>,
+    empty: &str,
+) -> bool {
+    let value = d.fields.contains_key(key).then(|| d.f64(key, 0.0));
+    let bounds = range.unwrap_or(crate::widgets::ANY);
+    let Some(v) = crate::widgets::num_field_within_empty(ui, ("dlg-len", key), value, empty, unit, width, bounds) else { return false };
     d.fields.insert(key.into(), json!(v));
     true
 }
@@ -150,6 +169,26 @@ fn choices(kind: &str, key: &str) -> Vec<(&'static str, &'static str)> {
     }
 }
 
+/// The id of the colour swatch beside the field `key` (a test clicks it; [`colour_swatch`] draws it).
+pub(super) fn colour_swatch_id(key: &str) -> egui::Id {
+    egui::Id::unique(("fx-colour-swatch", key))
+}
+
+/// The colour swatch beside the colour field `key`, showing `colour`: a double-click asks for the
+/// Color Picker over this dialog, whose OK fills the field ([`super::color_picker::over_effect`]).
+/// Returns whether the picker was asked for.
+pub(super) fn colour_swatch(ui: &mut egui::Ui, key: &str, colour: Color) -> bool {
+    let t = Tokens::get(ui.ctx());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(20.0, 18.0), egui::Sense::hover());
+    let resp = ui.interact(rect, colour_swatch_id(key), egui::Sense::click());
+    let [r, g, b, _] = colour.to_rgba8(1.0);
+    ui.painter().rect_filled(rect, 2.0, egui::Color32::from_rgb(r, g, b));
+    ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    resp.double_clicked()
+}
 /// A text field `width` wide bound to `d.fields[key]`. Returns true when it changed.
 pub(super) fn text(ui: &mut egui::Ui, d: &mut Dialog, key: &str, width: f32) -> bool {
     text_edit(ui, d, key, width).changed()
@@ -371,10 +410,16 @@ pub(crate) fn params(d: &Dialog) -> Value {
 /// The (label, value) choices of a parameter that picks one of some values.
 pub(super) type Choices = &'static [(&'static str, &'static str)];
 
+/// Effects whose dialogs give their number fields spinner arrows (#5367, #5368): Drop Shadow's
+/// and the glows' Opacity, offsets and Blur, which are stepped more than typed.
+pub(super) fn has_spinners(effect: &str) -> bool {
+    matches!(effect, "stylize.dropShadow" | "stylize.outerGlow" | "stylize.innerGlow")
+}
+
 /// Generic editor for command/effect parameters: numbers, booleans, strings and colours; the
 /// parameters `is_length` names are distances shown and typed in `unit`, those `choices` gives
 /// choices for are dropdowns. Fields come in `rank` order (by name among equals). Returns true when
-/// a value changed.
+/// a value changed. The fields of [`has_spinners`]' effects carry spinner arrows.
 pub(super) fn param_fields(
     ui: &mut egui::Ui,
     d: &mut Dialog,
@@ -385,6 +430,8 @@ pub(super) fn param_fields(
 ) -> bool {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
+    let mut pick: Option<(String, Color)> = None;
+    let spinners = has_spinners(&d.str("__effect"));
     egui::Grid::new("fxgrid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         let mut keys: Vec<(String, Value)> =
             d.fields.iter().filter(|(k, _)| !k.starts_with("__") && k.as_str() != "preview").map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -406,7 +453,26 @@ pub(super) fn param_fields(
                 if is_length(&k) {
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
-                    changed |= length_within(ui, d, &k, unit, 140.0, range);
+                    if spinners {
+                        let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
+                        let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
+                        if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
+                            d.fields.insert(k.clone(), json!(x));
+                            changed = true;
+                        }
+                    } else {
+                        changed |= length_within(ui, d, &k, unit, 140.0, range);
+                    }
+                    return;
+                }
+                // A size in pixels of the raster effects resolution (Color Halftone's Max Radius)
+                // stays in pixels whatever the document's units, within its documented range.
+                if let Some(range) = vectorcraft_effects::raster_px_range(&d.str("__effect"), &k) {
+                    let x = v.as_f64().unwrap_or(*range.start());
+                    if let Some(x) = crate::widgets::range_field_named(ui, ("fx-px", &k), None, x, range, &unit_suffix("px"), 2, 140.0) {
+                        d.fields.insert(k.clone(), typed_number(x));
+                        changed = true;
+                    }
                     return;
                 }
                 if let Some(options) = choices(&k) {
@@ -422,6 +488,13 @@ pub(super) fn param_fields(
                     return;
                 }
                 match v {
+                    Value::Number(n) if spinners => {
+                        let range = if k == "opacity" { 0.0..=100.0 } else { crate::widgets::ANY };
+                        if let Some(x) = crate::widgets::spin_range(ui, ("fx-num", k.as_str()), n.as_f64(), range, "", 3, 140.0, 1.0) {
+                            d.fields.insert(k.clone(), typed_number(x));
+                            changed = true;
+                        }
+                    }
                     Value::Number(n) => {
                         if let Some(x) = crate::widgets::plain_field(ui, ("fx-num", &k), n.as_f64().unwrap_or(0.0), "", 3, 140.0) {
                             d.fields.insert(k.clone(), typed_number(x));
@@ -452,18 +525,42 @@ pub(super) fn param_fields(
                         }
                     }
                     Value::String(mut s) => {
-                        if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(140.0)).changed() {
-                            d.fields.insert(k.clone(), json!(s));
-                            changed = true;
+                        // A hex colour (#rrggbb or #rgb) shows its swatch beside the field; the swatch's
+                        // double-click opens the Color Picker over this dialog.
+                        let mut colour = None;
+                        let mut ask = false;
+                        ui.horizontal(|ui| {
+                            if ui.add(egui::TextEdit::singleline(&mut s).align(egui::Align2::LEFT_CENTER).desired_width(140.0)).changed() {
+                                d.fields.insert(k.clone(), json!(s));
+                                changed = true;
+                            }
+                            colour = crate::panels::color::parse_hex(&s);
+                            if let Some(c) = colour {
+                                ask = colour_swatch(ui, &k, c);
+                            }
+                        });
+                        if ask && let Some(c) = colour {
+                            pick = Some((k.clone(), c));
                         }
                     }
                     // A color object shows as its hex; typing in the field stores the typed text.
                     other => match color_object(&other) {
                         Some(c) => {
                             let mut s = c.to_hex();
-                            if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
-                                d.fields.insert(k.clone(), json!(s));
-                                changed = true;
+                            let mut colour = None;
+                            let mut ask = false;
+                            ui.horizontal(|ui| {
+                                if ui.add(egui::TextEdit::singleline(&mut s).desired_width(140.0)).changed() {
+                                    d.fields.insert(k.clone(), json!(s));
+                                    changed = true;
+                                }
+                                colour = crate::panels::color::parse_hex(&s);
+                                if let Some(c) = colour {
+                                    ask = colour_swatch(ui, &k, c);
+                                }
+                            });
+                            if ask && let Some(c) = colour {
+                                pick = Some((k.clone(), c));
                             }
                         }
                         None => {
@@ -475,6 +572,9 @@ pub(super) fn param_fields(
             ui.end_row();
         }
     });
+    if let Some((key, colour)) = pick {
+        *d = super::color_picker::over_effect(d, &key, colour);
+    }
     changed
 }
 
@@ -883,15 +983,30 @@ pub(super) fn preview_result(
     cmd: &str,
     params: Value,
 ) -> Option<Value> {
-    const LAST: &str = PREVIEWED;
     ui.add_space(8.0);
-    let mut on = d.bool("preview");
+    preview_check(ui, d);
+    preview_or_rollback(app, d, label, cmd, params)
+}
+
+/// The Preview checkbox (field `preview`), for a dialog that draws it in its button row
+/// (`DialogSpec::footer_left`) instead of through [`preview`].
+pub(crate) fn preview_check(ui: &mut egui::Ui, d: &mut Dialog) {
+    let on = d.bool("preview");
     if crate::widgets::check(ui, tl!("Preview"), on, true) {
-        on = !on;
-        d.fields.insert("preview".into(), json!(on));
+        d.fields.insert("preview".into(), json!(!on));
     }
-    if !on {
-        if d.fields.remove(LAST).is_some() {
+}
+
+/// [`preview`] without its checkbox, which the dialog draws itself ([`preview_check`]): the preview
+/// runs while the field is on and rolls back when it is off.
+pub(crate) fn preview_without_check(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) {
+    let _ = preview_or_rollback(app, d, label, cmd, params);
+}
+
+/// [`preview_now`] while Preview is on; off, it rolls the preview back.
+fn preview_or_rollback(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) -> Option<Value> {
+    if !d.bool("preview") {
+        if d.fields.remove(PREVIEWED).is_some() {
             let _ = app.session.cancel_interaction();
         }
         return None;

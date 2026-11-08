@@ -242,8 +242,8 @@ fn internal_panels_are_edp_lvds_and_dsi_connectors() {
 /// PCI ids. Each GPU is listed once, the one with the panel as primary.
 #[test]
 fn linux_display_gpus_come_from_the_connected_connectors() -> std::io::Result<()> {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-drm-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let temp = tempfile::Builder::new().prefix("vectorcraft-drm-").tempdir()?;
+    let dir = temp.path();
     let card = |name: &str, (vendor, device): (u32, u32)| -> std::io::Result<()> {
         std::fs::create_dir_all(dir.join(name).join("device"))?;
         std::fs::write(dir.join(name).join("device/vendor"), format!("{vendor:#06x}\n"))?;
@@ -262,11 +262,11 @@ fn linux_display_gpus_come_from_the_connected_connectors() -> std::io::Result<()
     connector("card1-DP-2", "connected")?;
     connector("card2-Virtual-1", "connected")?;
     std::fs::write(dir.join("renderD128"), "")?;
-    let mut gpus = linux_display_gpus(&dir);
+    let mut gpus = linux_display_gpus(dir);
     gpus.sort_by_key(|g| g.pci);
     assert_eq!(gpus, [primary(AMD_IGPU), monitor(NVIDIA_3090)]);
     assert!(linux_display_gpus(&dir.join("no such dir")).is_empty());
-    std::fs::remove_dir_all(&dir)
+    Ok(())
 }
 
 #[test]
@@ -616,11 +616,26 @@ fn a_normal_exit_or_another_failure_does_not_restart() {
 /// A log folder of its own for each test, and the guard that keeps other tests from starting a
 /// program while it runs: the test releases the start file's lock and takes it again, and a child
 /// starting meanwhile would keep it held (`crate::no_spawns`).
-fn start_dir(tag: &str) -> (std::path::PathBuf, std::sync::RwLockReadGuard<'static, ()>) {
+struct TestDir(tempfile::TempDir);
+
+impl std::ops::Deref for TestDir {
+    type Target = std::path::Path;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.path()
+    }
+}
+
+impl AsRef<std::path::Path> for TestDir {
+    fn as_ref(&self) -> &std::path::Path {
+        self.0.path()
+    }
+}
+
+fn start_dir(tag: &str) -> (TestDir, std::sync::RwLockReadGuard<'static, ()>) {
     let spawns = crate::no_spawns();
-    let d = std::env::temp_dir().join(format!("vectorcraft-gpu-start-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    (d, spawns)
+    let dir = tempfile::Builder::new().prefix(&format!("vectorcraft-gpu-start-{tag}-")).tempdir().unwrap();
+    (TestDir(dir), spawns)
 }
 
 /// What a start in `dir` leaves out; it then ends without crashing.
@@ -670,7 +685,6 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
     assert_eq!(left_out.adapters, ["Dx12:8086:3184"], "kept");
     assert_eq!(left_out.crash, None, "the note is shown once");
     third.ended();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A start whose first frame reached the screen, or that ended without crashing (a normal exit,
@@ -693,7 +707,6 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
     assert!(finish(Ok(Ok(())), &first).is_ok());
     drop(first);
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The process ended while the adapters were being listed (wgpu's DX12 backend creates a
@@ -721,7 +734,6 @@ fn a_crash_while_listing_lists_opengl_alone() {
     second.none_left();
     second.ended();
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` choose for a start whatever crashed before; when that
@@ -742,7 +754,6 @@ fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
     explicit.picked(&c[0].key, &c[0].name, true);
     explicit.presented();
     assert_eq!(next_start(&dir, false), LeftOut::default(), "a new driver shows the window");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A damaged record, a file that can't be opened and one another starting copy of the app holds
@@ -777,10 +788,9 @@ fn a_damaged_or_unreadable_start_file_is_ignored() {
     assert_eq!(next_start(&dir, false).adapters, ["Dx12:8086:3184"]);
 
     // A folder in the file's place.
-    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::remove_file(dir.join(START_FILE)).unwrap();
     std::fs::create_dir_all(dir.join(START_FILE)).unwrap();
     assert_eq!(next_start(&dir, false), LeftOut::default());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -809,4 +819,11 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     }
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
     assert_eq!(record.crashed.last().map(|c| c.key.as_str()), Some("Dx12:10de:0013"));
+}
+
+/// `u32::from_str_radix` accepts a leading `+`; a device id with one is not a PCI id.
+#[test]
+fn pci_ids_reject_a_sign_in_the_hex_digits() {
+    assert_eq!(pci_ids("PCI\\VEN_+10DE&DEV_2204"), None);
+    assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_+2204"), None);
 }

@@ -14,7 +14,7 @@ use vectorcraft_geom::{Rect, shapes};
 
 use super::{
     CommandSpec, EngineError, NodeId, Result, Session, bad, bool_or, cmd, f64_or, f64_req, has_doc, has_selection, id_param, ids_param, index,
-    targets,
+    switch_or, targets,
 };
 
 /// The most slices one Divide Slices makes.
@@ -593,7 +593,7 @@ fn options(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn clip_to_artboard(s: &mut Session, p: &Value) -> Result<Value> {
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!s.doc()?.doc.slices_clip_to_artboard);
+    let on = switch_or(p, "on", !s.doc()?.doc.slices_clip_to_artboard, "object.slice.clipToArtboard")?;
     if on != s.doc()?.doc.slices_clip_to_artboard {
         s.edit("Clip to Artboard", |d, _| {
             d.slices_clip_to_artboard = on;
@@ -604,7 +604,7 @@ fn clip_to_artboard(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn hide(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("hidden").and_then(Value::as_bool).unwrap_or(!s.menu.slices_hidden);
+    let v = switch_or(p, "hidden", !s.menu.slices_hidden, "view.slices.hide")?;
     s.menu.slices_hidden = v;
     if v {
         deselect_in_every_document(s);
@@ -613,7 +613,7 @@ fn hide(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn lock(s: &mut Session, p: &Value) -> Result<Value> {
-    let v = p.get("locked").and_then(Value::as_bool).unwrap_or(!s.menu.slices_locked);
+    let v = switch_or(p, "locked", !s.menu.slices_locked, "view.slices.lock")?;
     s.menu.slices_locked = v;
     if v {
         deselect_in_every_document(s);
@@ -708,7 +708,9 @@ fn move_slices(s: &mut Session, p: &Value) -> Result<Value> {
                 None => {
                     if let Some(n) = d.node_mut(*id) {
                         n.transform(vectorcraft_geom::Affine::translate(v), vectorcraft_doc::Scaling::default());
+                        super::object::keep_pixel_aligned(n, vectorcraft_doc::Scaling::default());
                     }
+                    super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
                 }
             }
         }

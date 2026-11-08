@@ -25,7 +25,8 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
-    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    /// Escape while editing is the tool's: it goes back to the tool that was active before type
+    /// editing began, or to the Selection tool when there was none (#1686).
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
@@ -163,7 +164,7 @@ impl Tool for TypeTool {
         // commit this check still sees the pre-edit at the caret, while `text_input` replaces it
         // from its start; with a custom pair whose opening quote is straight, that can look
         // verbatim here and then be rewritten. Never claim verbatim for one.
-        if cx.doc.setup.typographers_quotes && matches!(s, "\"" | "'") {
+        if cx.doc.setup.typographers_quotes && (matches!(s, "\"" | "'") || (cx.typed_from_keyboard && is_one_typed_curly_quote(s))) {
             return false;
         }
         let Some(normalized) = self.input_text(cx, s) else { return false };
@@ -197,11 +198,14 @@ impl Tool for TypeTool {
         };
         let text = t.plain_text();
         let len = text.len();
+        let story = self.story_selected(cx);
+        let selected = (self.caret, self.anchor);
         self.caret = self.caret.min(len);
         self.anchor = self.anchor.min(len);
         let (a, b) = self.sel();
         // Alt+arrows step the type by the Preferences › Type increments (Cmd/Ctrl too: five steps).
         if let Some(out) = self.step_attribute(cx, key, mods, a, b, t.vertical) {
+            self.keep_story_offsets(story, selected);
             return out;
         }
         let word = mods.cmd || mods.alt;
@@ -225,15 +229,10 @@ impl Tool for TypeTool {
             // Escape ends editing and goes back to the tool used before double-clicking into type
             // (or to the Selection tool by default), the type selected: the keyboard is free for
             // tool shortcuts again (#1686).
-            ToolKey::Escape => {
-                let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
-                let mut out = self.finish(cx);
-                out.push(Action::SwitchTool(target));
-                out
-            }
-            ToolKey::Enter => self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None),
+            ToolKey::Escape => self.end_editing(cx),
+            ToolKey::Enter => self.enter(cx, mods),
             ToolKey::Tab => self.replace(cx, "\t", None),
-            ToolKey::Backspace | ToolKey::Delete if a != b => self.replace(cx, "", None),
+            ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {
                 self.anchor = if word { edit::prev_word(&text, self.caret) } else { edit::prev_char(&text, self.caret) };
                 self.replace(cx, "", None)
@@ -313,7 +312,10 @@ impl Tool for TypeTool {
                 let to = if mods.cmd { len } else { vectorcraft_text::line_end_of(&lay, self.caret) };
                 self.move_to(to, mods.shift)
             }
-            _ => vec![],
+            _ => {
+                self.keep_story_offsets(story, selected);
+                vec![]
+            }
         }
     }
     fn ime_preedit(&mut self, cx: &ToolContext, text: &str, active_chars: Option<Range<usize>>) -> Vec<Action> {
@@ -546,6 +548,12 @@ impl Tool for TypeTool {
                 {
                     self.start_editing(NodeId(id), b);
                     self.anchor = a;
+                    // The frames of a threaded story whose whole text Select All selected.
+                    let story: Vec<NodeId> =
+                        v.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+                    if story.len() >= 2 && story.contains(&NodeId(id)) {
+                        self.story = story;
+                    }
                 }
             }
             "prevTool" | "previousTool" => {
@@ -672,7 +680,10 @@ impl Tool for TypeTool {
             for q in vectorcraft_text::selection_quads(&lay, a, b) {
                 o.push(Overlay::Highlight { quad: q.map(|p| t.xf * p), color: [60, 120, 255, 90] });
             }
-            // The whole story is selected: the other frames' text is highlighted too.
+        }
+        // The whole story is selected: the other frames' text is highlighted too, also when the
+        // edited frame holds no text.
+        if self.preedit.is_none() {
             for f in self.story_others(cx) {
                 let Some(other) = Self::text(cx, f) else { continue };
                 let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), other);
@@ -704,4 +715,11 @@ impl Tool for TypeTool {
             (None, true) => Cursor::TypeVertical,
         }
     }
+}
+
+/// Is `s` one curly quote that Typographer's Quotes may set like a straight one
+/// ([`vectorcraft_doc::Quotes::typed_as_straight`]: a lone `”`)?
+fn is_one_typed_curly_quote(s: &str) -> bool {
+    let mut chars = s.chars();
+    matches!((chars.next(), chars.next()), (Some(c), None) if vectorcraft_doc::Quotes::typed_as_straight(c).is_some())
 }

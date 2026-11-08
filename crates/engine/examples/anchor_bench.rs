@@ -1,6 +1,7 @@
 //! `cargo run --release -p vectorcraft-engine --example anchor_bench` prints the wall time of the
-//! engine steps of editing anchors with Direct Selection, on three synthetic documents: one closed path of
-//! 50,000 anchors, 2,000 closed paths of 50 anchors each, and one open path of 200,000 anchors.
+//! engine steps of editing anchors with Direct Selection, on four synthetic documents: one closed path of
+//! 50,000 anchors, 2,000 closed paths of 50 anchors each, one open path of 200,000 anchors, and the closed
+//! path of 50,000 anchors filled and with a dashed stroke.
 //! `ITERS` sets the runs per step (default 7); each row is the median in ms.
 // Example (dev tool): unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -10,7 +11,7 @@ use std::time::Instant;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Document, Node, NodeId};
+use vectorcraft_doc::{Appearance, AppearanceItem, Dash, Document, Node, NodeId};
 use vectorcraft_engine::tools::{Mods, PointerEvent, PointerKind};
 use vectorcraft_engine::{Session, ViewInfo};
 use vectorcraft_geom::{Affine, Anchor, PathData, Point, SubPath, Vec2};
@@ -68,6 +69,20 @@ fn one_outline() -> Shape {
         segment,
         marquee: (Point::new(r + 50.0, -5.0), Point::new(r * a.cos() - 1.0, r * a.sin() + 1.0)),
     }
+}
+
+/// [`one_outline`] filled, with a 1 pt stroke of 6 pt dashes and 4 pt gaps.
+fn dashed_outline() -> Shape {
+    let mut shape = one_outline();
+    let mut look = Appearance::basic(Paint::solid(Color::rgb(0.8, 0.2, 0.2)), Paint::solid(Color::BLACK), 1.0);
+    for item in &mut look.items {
+        if let AppearanceItem::Stroke(st) = item {
+            st.dash = Some(Dash { pattern: vec![6.0, 4.0], offset: 0.0, align_corners: false });
+        }
+    }
+    shape.doc.node_mut(shape.ids[0]).unwrap().appearance = look.into();
+    shape.name = "one closed path, 50,000 anchors, filled, dashed stroke";
+    shape
 }
 
 fn many_paths() -> Shape {
@@ -317,4 +332,5 @@ fn main() {
     bench(one_outline());
     bench(many_paths());
     bench(long_open_path());
+    bench(dashed_outline());
 }

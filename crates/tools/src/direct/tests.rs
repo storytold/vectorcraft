@@ -182,6 +182,45 @@ fn dragging_a_spine_point_moves_it() {
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the clicked point shows");
 }
 
+/// #5285: Shift-click picks several points of a blend's spine, as of a path; dragging one of them
+/// moves them all (`with`), and Shift-click on a picked point takes it away again.
+#[test]
+fn shift_click_picks_several_spine_points_which_drag_together() {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 2, "both picked points show");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A plain press on a picked point keeps both.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 300.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 1 && v["with"] == json!([2])), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 300.0));
+    // Shift-click takes one away; a plain click on another point picks it alone.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 310.0).with_mods(shift));
+    assert_eq!(filled(&t), 1);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 110.0, 330.0));
+    assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]
@@ -503,6 +542,73 @@ fn pressing_an_anchor_of_a_fully_selected_path_keeps_the_selection() {
     assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"}))]);
 }
 
+/// Smart Guides › Snap to Last Location: a path selected whole that Direct Selection moves held by
+/// one of its anchors goes back to where it began within Snapping Tolerance, labeled "last
+/// location", a move Shift keeps to its line too; farther out, or with the option off, it moves as
+/// dragged.
+#[test]
+fn snap_to_last_location_puts_a_path_moved_by_its_anchor_back() {
+    let (mut d, id) = doc_with_rect();
+    // An artboard whose edges and center are out of reach.
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let on = ToolContext { snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    // A press on the top-left anchor, then a drag to `to` with `m` held.
+    let moved = |c: &ToolContext, to: (f64, f64), m: Mods| {
+        let mut t = DirectSelectionTool::new(false);
+        assert!(t.pointer(c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+        let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+        assert_eq!(command, "object.transform");
+        let labels: Vec<String> =
+            t.overlays(c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN)), labels)
+    };
+    let none = Mods::default();
+    let (back, labels) = moved(&on, (106.0, 105.0), none);
+    assert!(back.hypot() < 1e-9, "{back:?}: 7.8 pt away, within 10");
+    assert_eq!(labels, ["last location"]);
+    let shift = Mods { shift: true, ..none };
+    let (back, _) = moved(&on, (107.0, 100.0), shift);
+    assert!(back.hypot() < 1e-9, "{back:?}: a Shift move goes back too");
+    let (out, labels) = moved(&on, (109.0, 108.0), none);
+    assert!((out - Vec2::new(9.0, 8.0)).hypot() < 1e-9, "{out:?}: 12 pt away, out of reach");
+    assert!(labels.is_empty(), "{labels:?}");
+    let off = ToolContext { snap_to_last_location: false, ..on };
+    let (stays, _) = moved(&off, (106.0, 105.0), none);
+    assert!((stays - Vec2::new(6.0, 5.0)).hypot() < 1e-9, "{stays:?}: the option off");
+}
+
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location for a path selected whole
+/// that Direct Selection moves held by an anchor: a short move puts the held anchor, off the
+/// pixel grid before, on whole pixels and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location_for_a_path_moved_by_its_anchor() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.3, 100.4)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 106.3, 105.4));
+    let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+    assert_eq!(command, "object.transform");
+    let m = Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN));
+    // The held anchor (106.3, 105.4) rounds to (106, 105).
+    assert!((m - Vec2::new(5.7, 4.6)).hypot() < 1e-9, "{m:?}");
+    let labels: Vec<String> =
+        t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A click (no drag) on an anchor that is selected with others, whether the whole path is or
 /// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
 /// selection so a drag moves it all, the release without a drag narrows it. Shift still
@@ -755,11 +861,17 @@ fn group_selection_picks_a_path_of_a_compound_path() {
     d.insert(Some(l), 0, c).unwrap();
     let p = paint();
     let none = Selection::default();
-    let click = |s: &Selection, x, y| DirectSelectionTool::new(true).pointer(&cx(&d, s, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    let click = |s: &Selection, x, y| {
+        let mut t = DirectSelectionTool::new(true);
+        let context = cx(&d, s, &p);
+        let mut actions = t.pointer(&context, &PointerEvent::new(PointerKind::Down, x, y));
+        actions.extend(t.pointer(&context, &PointerEvent::new(PointerKind::Up, x, y)));
+        actions
+    };
     let set = |id: NodeId| vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
     assert_eq!(click(&none, 25.0, 100.0), set(outer), "the fill between the outline and the hole");
     assert_eq!(click(&none, 50.0, 100.0), set(hole), "the hole's outline");
-    assert!(click(&none, 100.0, 100.0).is_empty(), "inside the hole nothing is hit");
+    assert_eq!(click(&none, 100.0, 100.0), vec![Action::Exec("select.none".into(), json!({}))], "a click inside the hole clears selection");
     let mut s = Selection::default();
     s.set([outer]);
     assert_eq!(click(&s, 25.0, 100.0), vec![Action::Exec("select.add".into(), json!({"ids": [compound.0]}))]);
@@ -811,6 +923,30 @@ fn nested_group_doc() -> (vectorcraft_doc::Document, NodeId, NodeId, NodeId, Nod
     let outer_g = vectorcraft_doc::Node::group(outer, vec![std::sync::Arc::new(inner_g), path(outside, 300.0)]);
     d.insert(Some(l), 0, outer_g).unwrap();
     (d, inside, outside, inner, outer)
+}
+
+/// A selected component drags independently; only a completed click adds its group.
+#[test]
+fn group_selection_distinguishes_selected_leaf_drags_from_clicks() {
+    let (d, inside, _, inner, _) = nested_group_doc();
+    let paint = paint();
+    let mut selected = Selection::default();
+    selected.set([inside]);
+    let context = cx(&d, &selected, &paint);
+    let mut t = DirectSelectionTool::new(true);
+    let down = PointerEvent::new(PointerKind::Down, 150.0, 150.0);
+    assert!(t.pointer(&context, &down).is_empty());
+    let actions = t.pointer(&context, &PointerEvent::new(PointerKind::Drag, 180.0, 165.0));
+    assert!(matches!(actions.as_slice(), [Action::Begin(_), Action::Preview(command, _)] if command=="object.transform"));
+    assert_eq!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 180.0, 165.0)), vec![Action::Commit]);
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(
+        t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)),
+        vec![Action::Exec("select.add".into(), json!({"ids":[inner.0]}))]
+    );
+    assert!(t.pointer(&context, &down).is_empty());
+    assert_eq!(t.key(&context, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
 /// Isolation mode: a marquee and an anchor click take the path inside the isolated group and
@@ -1793,6 +1929,29 @@ fn a_move_of_objects_lands_an_edge_on_the_grid() {
     }
 }
 
+/// #3835: with Snap to Grid on, a straight segment dragged by a point along it lands its anchors
+/// on the grid, not that point. B's top edge, (300, 300)–(400, 300), pressed at (350, 300) and
+/// dragged by (22, 23), moves its anchors to 322–422 across and 323 down: the right end is nearest
+/// the gridline 423 and the edge nearest 324, so the move is (23, 24). Snapping the pressed point
+/// instead would move it by (19, 24), onto the intersection (369, 324), leaving both anchors off
+/// the grid. An anchor pressed on still lands on an intersection itself.
+#[test]
+fn a_dragged_segment_lands_its_anchors_on_the_grid() {
+    let (d, _, b) = two_squares();
+    let p = paint();
+    let mut s = anchors_of(b, &[(0, 0), (0, 1)]);
+    s.segments.insert(b, [(0, 0)].into_iter().collect());
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, &c, (350.0, 300.0), (372.0, 323.0), Mods::default()).0, json!({"dx": 23.0, "dy": 24.0}));
+    let (v, _) = drag(&mut t, &c, (350.0, 300.0), (363.0, 301.0), Mods { shift: true, ..Mods::default() });
+    let (x, y) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+    assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "{v}");
+    let one = anchors_of(b, &[(0, 0)]);
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &one, &p) };
+    assert_eq!(drag(&mut t, &c, (300.0, 300.0), (322.0, 323.0), Mods::default()).0, json!({"dx": 24.0, "dy": 24.0}));
+}
+
 /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its
 /// line when it snaps, as the Selection tool does: level by 13.04 with Snap to Grid on, B's
 /// right side (413.04) lands on the gridline 414, and its top stays at 300, between 297 and
@@ -1987,4 +2146,166 @@ fn selected_path_handle_over_background_rect_is_draggable() {
     let mut t = DirectSelectionTool::new(false);
     let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
     assert_eq!(acts, vec![Action::Begin("Reshape".into())]);
+}
+
+/// On an instance of a dynamic symbol, a Direct Selection click picks the object of the symbol's
+/// art under the pointer, which is then outlined; Alt and Shift, a static symbol and Group
+/// Selection pick the instance whole, as before.
+#[test]
+fn a_click_on_a_dynamic_instance_picks_the_object_under_the_pointer() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, Symbol};
+    let square = |id, x: f64| {
+        Arc::new(Node::path(NodeId(id), vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default_art()))
+    };
+    let art = Node::group(NodeId(0), vec![square(0, 0.0), square(0, 20.0)]);
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: true, name: "Pair".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = vectorcraft_geom::Affine::translate((300.0, 300.0)) * vectorcraft_geom::Affine::scale(2.0);
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Pair".into(), xf })).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let down = |d: &vectorcraft_doc::Document, sel: &Selection, group: bool, x: f64, y: f64, m: Mods| {
+        DirectSelectionTool::new(group).pointer(&cx(d, sel, &p), &PointerEvent::new(PointerKind::Down, x, y).with_mods(m))
+    };
+    let part = |path: Value| vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": id.0, "path": path}))];
+    // The second square is drawn at 340..360.
+    assert_eq!(down(&d, &none, false, 350.0, 310.0, Mods::default()), part(json!([1])));
+    assert_eq!(down(&d, &none, false, 310.0, 310.0, Mods::default()), part(json!([0])));
+    let whole = vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))];
+    assert_eq!(down(&d, &none, false, 350.0, 310.0, Mods { alt: true, ..Mods::default() }), whole, "Alt picks the instance");
+    let shift = down(&d, &none, false, 350.0, 310.0, Mods { shift: true, ..Mods::default() });
+    assert_eq!(shift, vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))]);
+    assert_eq!(down(&d, &none, true, 350.0, 310.0, Mods::default()), whole, "Group Selection picks the instance");
+    // The part selected: a click on it again keeps it, and it is outlined.
+    let mut sel = Selection::default();
+    sel.set_symbol_part(id, vec![1]);
+    assert_eq!(down(&d, &sel, false, 350.0, 310.0, Mods::default()), vec![]);
+    let outline = DirectSelectionTool::new(false).overlays(&cx(&d, &sel, &p));
+    let drawn =
+        outline.iter().find_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::kurbo::Shape::bounding_box(path)) } else { None });
+    assert_eq!(drawn, Some(Rect::new(340.0, 300.0, 360.0, 320.0)));
+    // With the part selected, an Alt-click on the instance, or a press on its center point, picks
+    // the instance whole again.
+    assert_eq!(down(&d, &sel, false, 350.0, 310.0, Mods { alt: true, ..Mods::default() }), whole, "Alt with the part selected");
+    d.node_mut(id).unwrap().edit_attrs(|a| a.show_center = Some(true));
+    assert_eq!(down(&d, &sel, false, 330.0, 310.0, Mods::default()), whole, "the center point with the part selected");
+    // A static symbol: the instance is picked whole.
+    d.symbols[0].dynamic = false;
+    assert_eq!(down(&d, &none, false, 350.0, 310.0, Mods::default()), whole);
+}
+
+/// In a dynamic symbol's art, a Direct Selection press passes over a locked object: it picks the
+/// unlocked object beneath it, and where only a locked object is under the pointer it picks the
+/// instance whole.
+#[test]
+fn a_press_on_a_dynamic_instance_passes_over_locked_objects() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, Symbol};
+    let square = |x: f64, locked: bool| {
+        let mut n = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default_art());
+        n.locked = locked;
+        Arc::new(n)
+    };
+    // The unlocked square at 0..10 has a locked square over it; the square at 20..30 is locked.
+    let art = Node::group(NodeId(0), vec![square(0.0, false), square(0.0, true), square(20.0, true)]);
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: true, name: "Locked".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = vectorcraft_geom::Affine::translate((300.0, 300.0));
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Locked".into(), xf })).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let down = |x: f64, y: f64| DirectSelectionTool::new(false).pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    assert_eq!(down(305.0, 305.0), vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": id.0, "path": [0]}))]);
+    assert_eq!(down(325.0, 305.0), vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    // A locked clipping path still clips, but a press on its outline picks the art it clips.
+    let mut clip = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art());
+    clip.locked = true;
+    let art = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(Rect::new(-10.0, -10.0, 30.0, 30.0)), Appearance::default_art());
+    let masked = Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(art)], clip: true });
+    let mut d = d.clone();
+    d.symbols[0].art = Arc::new(masked);
+    let down = |x: f64, y: f64| DirectSelectionTool::new(false).pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    assert_eq!(down(319.0, 310.0), vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": id.0, "path": [1]}))]);
+}
+
+/// In a dynamic symbol's art, a Direct Selection press passes over a guide path while guides are
+/// hidden or locked and picks the square beneath it; with guides shown and unlocked it picks the
+/// guide path. The same goes for a press on the edge of a guide used as a clipping path.
+#[test]
+fn a_press_on_a_dynamic_instance_passes_over_guides_while_they_cannot_be_picked() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, Symbol};
+    let square = |r: Rect, is_guide: bool| {
+        let mut n = Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        let NodeKind::Path { guide, .. } = &mut n.kind else { panic!("Node::path makes a path") };
+        *guide = is_guide;
+        Arc::new(n)
+    };
+    let small = Rect::new(0.0, 0.0, 10.0, 10.0);
+    let art = Node::group(NodeId(0), vec![square(small, false), square(small, true)]);
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: true, name: "Guided".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = vectorcraft_geom::Affine::translate((300.0, 300.0));
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Guided".into(), xf })).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let part = |path: Value| vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": id.0, "path": path}))];
+    let down = |d: &vectorcraft_doc::Document, guides: bool, x: f64, y: f64| {
+        let c = ToolContext { guides, ..cx(d, &none, &p) };
+        DirectSelectionTool::new(false).pointer(&c, &PointerEvent::new(PointerKind::Down, x, y))
+    };
+    assert_eq!(down(&d, false, 305.0, 305.0), part(json!([0])), "guides off: the square beneath");
+    assert_eq!(down(&d, true, 305.0, 305.0), part(json!([1])), "guides on: the guide");
+    // A guide gives a clip group no clip region, so nothing in the group is hit away from its edge,
+    // as outside symbols. With guides off a press on its edge picks the instance whole.
+    let clip = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let masked =
+        Node::new(NodeId(0), NodeKind::Group { children: vec![square(clip, true), square(Rect::new(-10.0, -10.0, 30.0, 30.0), false)], clip: true });
+    d.symbols[0].art = Arc::new(masked);
+    assert_eq!(
+        down(&d, false, 319.0, 310.0),
+        vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))],
+        "guides off: the clipping path's edge"
+    );
+    assert_eq!(down(&d, true, 319.0, 310.0), part(json!([0])), "guides on: the clipping path's edge");
+}
+
+/// In a dynamic symbol's art, a Direct Selection press on the outline of a clip group's clipping
+/// path picks the clipping path, also where the art it clips covers the path's edge; inside the
+/// mask away from the edge the art is picked.
+#[test]
+fn a_press_on_a_clipping_path_in_a_dynamic_instance_picks_it() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, Symbol};
+    let rect = |r: Rect| Arc::new(Node::path(NodeId(0), vectorcraft_geom::shapes::rectangle(r), Appearance::default_art()));
+    let art = Node::new(
+        NodeId(0),
+        NodeKind::Group { children: vec![rect(Rect::new(0.0, 0.0, 20.0, 20.0)), rect(Rect::new(-10.0, -10.0, 30.0, 30.0))], clip: true },
+    );
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: true, name: "Masked".into(), art: Arc::new(art) });
+    let (l, id) = (d.layers[0].id, d.alloc_id());
+    let xf = vectorcraft_geom::Affine::translate((300.0, 300.0));
+    d.insert(Some(l), usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: "Masked".into(), xf })).unwrap();
+    let (none, p) = (Selection::default(), paint());
+    let down = |x: f64, y: f64| DirectSelectionTool::new(false).pointer(&cx(&d, &none, &p), &PointerEvent::new(PointerKind::Down, x, y));
+    let part = |path: Value| vec![Action::Exec("symbol.instance.selectPart".into(), json!({"id": id.0, "path": path}))];
+    // The clipping path's right edge is at x = 320; the art covers it.
+    assert_eq!(down(321.0, 310.0), part(json!([0])), "just outside the mask, on its edge");
+    assert_eq!(down(319.0, 310.0), part(json!([0])), "just inside the mask, on its edge");
+    assert_eq!(down(310.0, 310.0), part(json!([1])), "inside the mask, the art");
+    // Clipped art from 10 to 30 picked: its outline is cut to the clipping path's bounds (0 to 20),
+    // where it is picked.
+    let art = Node::new(
+        NodeId(0),
+        NodeKind::Group { children: vec![rect(Rect::new(0.0, 0.0, 20.0, 20.0)), rect(Rect::new(10.0, 10.0, 30.0, 30.0))], clip: true },
+    );
+    d.symbols[0].art = Arc::new(art);
+    let mut sel = Selection::default();
+    sel.set_symbol_part(id, vec![1]);
+    let outline = DirectSelectionTool::new(false).overlays(&cx(&d, &sel, &p));
+    let drawn =
+        outline.iter().find_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::kurbo::Shape::bounding_box(path)) } else { None });
+    assert_eq!(drawn, Some(Rect::new(310.0, 310.0, 320.0, 320.0)));
 }

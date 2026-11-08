@@ -83,6 +83,18 @@ impl FontDb {
         let _ = on;
     }
 
+    /// Is the lazy system-font fallback on ([`Self::set_system_fallback`])?
+    pub(crate) fn system_fallback_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+
     /// Process-wide database: the bundled fonts, then the installed system fonts, cataloged the
     /// first time a lookup by family name needs them (or ahead of time by
     /// [`FontDb::scan_in_background`]).
@@ -216,6 +228,30 @@ impl FontDb {
         v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
         v.dedup_by(|a, b| a.2 == b.2);
         v.into_iter().map(|t| t.2).collect()
+    }
+
+    /// The style a style-less request gets for `family`: its face nearest Regular upright, by the
+    /// catalog's or the loaded faces' metadata. Unlike [`FontDb::face`] it reads no font files, so
+    /// the closest styles of many families cost little.
+    pub fn closest_style(&self, family: &str) -> Option<String> {
+        let (family, _) = self.canonical(family, "");
+        let family = family.as_str();
+        let mut best: Option<(f32, String)> = None;
+        let consider = |best: &mut Option<(f32, String)>, weight: f32, italic: bool, style: &str| {
+            let d = super::build::weight_distance(weight, italic, 400.0, false);
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                *best = Some((d, style.to_string()));
+            }
+        };
+        for f in self.read_faces().iter().filter(|f| f.family.eq_ignore_ascii_case(family)) {
+            consider(&mut best, f.weight, f.italic, &f.style);
+        }
+        if let Some(c) = self.read_catalog().get(&family.to_ascii_lowercase()) {
+            for cf in &c.faces {
+                consider(&mut best, cf.weight, cf.italic, &cf.style);
+            }
+        }
+        best.map(|(_, style)| style)
     }
 
     /// Add a user font (TTF/OTF/TTC bytes). Returns the number of faces added (0 if unparseable or

@@ -49,6 +49,10 @@ impl SymbolOverride {
                     r.style.fill = p.clone();
                 }
                 if let Some(p) = &self.stroke {
+                    // A painted stroke on characters without a weight gets 1 pt, as a path's does.
+                    if !p.is_none() && r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
+                    }
                     r.style.stroke = p.clone();
                 }
             }
@@ -57,6 +61,14 @@ impl SymbolOverride {
                 n.appearance.set_fill(p.clone());
             }
             if let Some(p) = &self.stroke {
+                // A stroke without paint has no weight; painting it gives it 1 pt.
+                if !p.is_none()
+                    && let Some(s) = n.appearance.stroke_mut()
+                    && s.paint.is_none()
+                    && s.width == 0.0
+                {
+                    s.width = 1.0;
+                }
                 n.appearance.set_stroke(p.clone());
             }
         }
@@ -67,6 +79,13 @@ impl SymbolOverride {
             n.blend = b;
         }
     }
+}
+
+/// Can Direct Selection select `n`, an object of a dynamic symbol's art, and change its fill and
+/// stroke for one instance? Paths, compound paths and type can; groups, images and every other
+/// object cannot.
+pub fn takes_part_paint(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_))
 }
 
 /// An override's path read from a file: at most [`MAX_PATH_DEPTH`] indices, so a compressed file
@@ -178,6 +197,27 @@ mod tests {
         let mut kept = o;
         retain_parts(&mut kept, &a);
         assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn a_stroke_on_type_without_a_weight_gets_one_point() {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let style = crate::CharStyle { stroke: Paint::None, stroke_width: 0.0, ..crate::CharStyle::default() };
+        let text = Node::new(NodeId(2), NodeKind::Text(Box::new(crate::TextObject::point(vectorcraft_geom::Point::ZERO, "Hi", style))));
+        let mut a = Node::group(NodeId(1), vec![Arc::new(text)]);
+        apply(&mut a, &[SymbolOverride { path: vec![0], stroke: Some(red.clone()), ..Default::default() }]);
+        let Some(NodeKind::Text(t)) = part(&a, &[0]).map(|n| &n.kind) else { panic!("type") };
+        assert!(t.runs.iter().all(|r| r.style.stroke == red && r.style.stroke_width == 1.0), "the stroke draws at 1 pt");
+
+        // A path whose stroke has neither paint nor weight gets 1 pt too.
+        let mut ap = Appearance::default_art();
+        if let Some(s) = ap.stroke_mut() {
+            (s.paint, s.width) = (Paint::None, 0.0);
+        }
+        let path = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), ap);
+        let mut a = Node::group(NodeId(1), vec![Arc::new(path)]);
+        apply(&mut a, &[SymbolOverride { path: vec![0], stroke: Some(red.clone()), ..Default::default() }]);
+        assert_eq!(part(&a, &[0]).unwrap().appearance.stroke_width(), 1.0);
     }
 
     #[test]

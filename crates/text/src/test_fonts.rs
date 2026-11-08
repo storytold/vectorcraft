@@ -1,6 +1,8 @@
 //! Fonts built in code for tests, so no font file is committed: a small variable font (#296).
 //! Compiled for this crate's tests and, with the `test-fonts` feature, for other crates' tests.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use skrifa::instance::{LocationRef, Size};
 use skrifa::raw::TableProvider;
 use skrifa::raw::tables::glyf::Glyph;
@@ -9,6 +11,39 @@ use write_fonts::FontBuilder;
 use write_fonts::tables::fvar::{AxisInstanceArrays, Fvar, InstanceRecord, VariationAxisRecord};
 use write_fonts::tables::gvar::{GlyphDelta, GlyphDeltas, GlyphVariations, Gvar, Tent};
 use write_fonts::types::{F2Dot14, Fixed, NameId, Tag};
+
+/// Whether faces use and keep shaping plans ([`keep_shape_plans`]).
+static KEEP_SHAPE_PLANS: AtomicBool = AtomicBool::new(true);
+
+/// Sets whether font faces use and keep shaping plans, for the whole process. When `keep` is false,
+/// every shaped segment makes a plan of its own, so a test can compare what kept plans produce with
+/// what its own plan produces. Plans a face already holds stay and are used again when it is true.
+pub fn keep_shape_plans(keep: bool) {
+    KEEP_SHAPE_PLANS.store(keep, Ordering::SeqCst);
+}
+
+pub(crate) fn keeps_shape_plans() -> bool {
+    KEEP_SHAPE_PLANS.load(Ordering::SeqCst)
+}
+
+std::thread_local! {
+    /// How many layouts this thread has started ([`layouts_on_this_thread`]).
+    static LAYOUTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn count_layout() {
+    LAYOUTS.with(|n| n.set(n.get() + 1));
+}
+
+/// How many layouts this thread has started.
+pub fn layouts_on_this_thread() -> u64 {
+    LAYOUTS.with(std::cell::Cell::get)
+}
+
+/// Drop every layout kept for a first frame, so that a test can draw what laying out again draws.
+pub fn drop_kept_layouts() {
+    crate::kept::drop_kept_layouts();
+}
 
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";
@@ -423,6 +458,112 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`conjunct_font`].
+pub const CONJUNCT_FAMILY: &str = "Conjuncttest Sans";
+
+/// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses K, the halant uses a period and
+/// the vowel sign I (drawn before its syllable) uses i. The `GSUB` table's `dev2` script has an
+/// `aalt` single substitution of K by k and a `salt` one of K by i, which list k and the vowel
+/// sign's glyph as alternates of Ka, and a `half` ligature of K and the period into k (Ka's half
+/// form). Family [`CONJUNCT_FAMILY`]. `None` when it can't be built.
+pub fn conjunct_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = CONJUNCT_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Conjuncttest Sans Regular"), (6, "ConjuncttestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let ka = gid('K')?;
+    let aalt = SingleSubstFormat2::new(CoverageFormat1::new(vec![ka]).into(), vec![gid('k')?]);
+    let half =
+        LigatureSubstFormat1::new(CoverageFormat1::new(vec![ka]).into(), vec![LigatureSet::new(vec![Ligature::new(gid('k')?, vec![gid('.')?])])]);
+    let salt = SingleSubstFormat2::new(CoverageFormat1::new(vec![ka]).into(), vec![gid('i')?]);
+    // Features sorted by tag, as OpenType requires: `aalt`, `half`, then `salt`.
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(b"aalt"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"half"), Feature::new(None, vec![1])),
+        FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![2])),
+    ]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![aalt.into()])),
+        SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![half])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`matra_font`].
+pub const MATRA_FAMILY: &str = "Matratest Sans";
+
+/// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses a, the vowel sign I (drawn
+/// before its consonant) uses i and the nukta uses the period. The `GSUB` table's `dev2` script has
+/// a `nukt` ligature of Ka and the nukta into N, and a `salt` single substitution of Ka by b.
+/// Family [`MATRA_FAMILY`]. `None` when it can't be built.
+pub fn matra_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+    use write_fonts::tables::gsub::{
+        Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [('क', 'a'), ('\u{093F}', 'i'), ('\u{093C}', '.')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let family = MATRA_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Matratest Sans Regular"), (5, "Version 1.000"), (6, "MatratestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let ka = gid('a')?;
+    let ligature = LigatureSet::new(vec![Ligature::new(gid('N')?, vec![gid('.')?])]);
+    let nukt = LigatureSubstFormat1::new(CoverageFormat1::new(vec![ka]).into(), vec![ligature]);
+    let salt = SingleSubstFormat2::new(CoverageFormat1::new(vec![ka]).into(), vec![gid('b')?]);
+    // Features sorted by tag, as OpenType requires: `nukt`, then `salt`.
+    let features = FeatureList::new(vec![
+        FeatureRecord::new(Tag::new(b"nukt"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1])),
+    ]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![nukt])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
+    ]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`lam_alef_font`] whose lam-alef ligature is in `feature`.
 pub fn lam_alef_family(feature: &[u8; 4]) -> &'static str {
     match feature {
@@ -714,6 +855,44 @@ pub fn vertical_ligature_caret_font(caret: i16) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// [`vertical_ligature_caret_font`] with its one caret at y = `caret` font units, f + i joined by
+/// `ccmp` (which shaping applies top to bottom too, unlike `liga`), and its `GPOS` replaced by a
+/// `vpal` single adjustment that changes the ligature glyph's advance down the column by
+/// `y_advance` font units. `None` when it can't be built.
+pub fn proportional_vertical_ligature_caret_font(caret: i16, y_advance: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList, SinglePos, ValueRecord};
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = vertical_ligature_caret_font(caret)?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let gid = |c| Some(GlyphId16::new(source_sans_gid(c)?));
+    let ligature = gid(LIGATURE_CARET_GLYPH)?;
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = || ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    let subst = LigatureSubstFormat1::new(
+        CoverageFormat1::new(vec![gid('f')?]).into(),
+        vec![LigatureSet::new(vec![Ligature::new(ligature, vec![gid('i')?])])],
+    );
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let gsub = Gsub::new(scripts(), features, lookups);
+    let pos = SinglePos::format_1(CoverageFormat1::new(vec![ligature]).into(), ValueRecord::new().with_y_advance(y_advance));
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"vpal"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Single(Lookup::new(Default::default(), vec![pos]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&gsub).ok()?;
+    builder.add_table(&Gpos::new(scripts(), features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`variable_ligature_caret_font`].
 pub const VARIABLE_LIGATURE_CARET_FAMILY: &str = "Varicaret Sans";
 
@@ -830,16 +1009,30 @@ pub const RIGHT_TO_LEFT_OPTICAL_FAMILY: &str = "Right-to-left Profile Sans";
 
 /// Two Hebrew characters mapped to the bundled Source Sans 3 A and V outlines.
 pub fn right_to_left_optical_font() -> Option<Vec<u8>> {
+    remapped_source_sans(RIGHT_TO_LEFT_OPTICAL_FAMILY, "RtlProfileSans-Regular", &[('א', 'A'), ('ב', 'V')])
+}
+
+/// The family of [`ideograph_optical_font`].
+pub const IDEOGRAPH_OPTICAL_FAMILY: &str = "Ideograph Profile Sans";
+
+/// Two ideographs, two kana and a fullwidth letter mapped to the bundled Source Sans 3 A, V, T, o
+/// and W outlines: shapes Optical would space, on characters that keep the font's spacing.
+pub fn ideograph_optical_font() -> Option<Vec<u8>> {
+    remapped_source_sans(IDEOGRAPH_OPTICAL_FAMILY, "IdeographProfileSans-Regular", &[('日', 'A'), ('本', 'V'), ('カ', 'T'), ('な', 'o'), ('Ｗ', 'W')])
+}
+
+/// A face named `family` that maps only the characters of `mapping` to the bundled Source Sans 3
+/// outlines of their letters, with no `GPOS` or `kern` table.
+fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]) -> Option<Vec<u8>> {
     use write_fonts::tables::cmap::Cmap;
 
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let charmap = font.charmap();
-    let mapping = [('א', 'A'), ('ב', 'V')];
-    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let mappings = mapping.iter().map(|&(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
     let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
-    let family = RIGHT_TO_LEFT_OPTICAL_FAMILY;
-    let name = name_table(&[(1, family), (2, "Regular"), (4, "Right-to-left Profile Sans Regular"), (6, "RtlProfileSans-Regular")])?;
+    let full = format!("{family} Regular");
+    let name = name_table(&[(1, family), (2, "Regular"), (4, full.as_str()), (6, postscript)])?;
     let mut builder = FontBuilder::new();
     builder.add_table(&cmap).ok()?;
     builder.add_raw(Tag::new(b"name"), name);
@@ -850,6 +1043,34 @@ pub fn right_to_left_optical_font() -> Option<Vec<u8>> {
         }
     }
     Some(builder.build())
+}
+
+/// The family of [`tall_ideograph_font`].
+pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
+
+/// A face that maps the ideograph 编 to the bundled Source Sans 3 `H` outline, which stands on the
+/// baseline, with a taller ascent (1,058 units per 1,000) and descent (262) than Source Sans 3 in
+/// its `hhea` and `OS/2` tables and no line gap: the vertical proportions of a CJK system face.
+pub fn tall_ideograph_font() -> Option<Vec<u8>> {
+    const ASCENT: i16 = 1058;
+    const DESCENT: i16 = 262;
+    let mut data = remapped_source_sans(TALL_IDEOGRAPH_FAMILY, "TallIdeographSans-Regular", &[('编', 'H')])?;
+    let tables: Vec<(Tag, usize)> = {
+        let font = skrifa::FontRef::new(&data).ok()?;
+        font.table_directory.table_records().iter().map(|r| (Tag::new(&r.tag().to_be_bytes()), r.offset() as usize)).collect()
+    };
+    let (ascent, descent, gap) = (ASCENT.to_be_bytes(), (-DESCENT).to_be_bytes(), [0, 0]);
+    for (tag, at) in tables {
+        if tag == Tag::new(b"hhea") {
+            // ascender, descender and lineGap at bytes 4 to 10.
+            data.get_mut(at + 4..at + 10)?.copy_from_slice(&[ascent, descent, gap].concat());
+        } else if tag == Tag::new(b"OS/2") {
+            // sTypoAscender, sTypoDescender, sTypoLineGap, usWinAscent and usWinDescent at bytes 68 to 78.
+            let win = [ASCENT.unsigned_abs().to_be_bytes(), DESCENT.unsigned_abs().to_be_bytes()];
+            data.get_mut(at + 68..at + 78)?.copy_from_slice(&[ascent, descent, gap, win[0], win[1]].concat());
+        }
+    }
+    Some(data)
 }
 
 /// The family of [`soft_hyphen_outline_font`].
