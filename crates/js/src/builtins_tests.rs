@@ -530,6 +530,25 @@ fn json_stringify_writes_values_with_replacers_and_indentation() {
 }
 
 #[test]
+fn json_stringify_unwraps_number_string_and_boolean_objects() {
+    assert_eq!(string("JSON.stringify(Object(3))"), "3");
+    assert_eq!(string("JSON.stringify(Object('abc'))"), "\"abc\"");
+    assert_eq!(string("JSON.stringify(Object(true))"), "true");
+    assert_eq!(string("JSON.stringify({n: Object(-0), m: Object(NaN), s: Object('')})"), "{\"n\":0,\"m\":null,\"s\":\"\"}");
+    assert_eq!(string("JSON.stringify([Object.getPrototypeOf(Object(3)), Object.getPrototypeOf(Object('abc'))])"), "[0,\"\"]");
+    // The space argument (step 5).
+    assert_eq!(string("JSON.stringify([1], null, Object(2))"), "[\n  1\n]");
+    assert_eq!(string("JSON.stringify([1], null, Object('--'))"), "[\n--1\n]");
+    // Replacer list entries (step 4.b.ii).
+    assert_eq!(string("JSON.stringify({a: 1, 3: 2, b: 3}, [Object('a'), Object(3)])"), "{\"a\":1,\"3\":2}");
+    // Methods on Object.prototype do not reach the objects; methods on their own prototypes do.
+    assert_eq!(string("Object.prototype.toString = function () { return 'z'; }; JSON.stringify(Object('abc'))"), "\"abc\"");
+    assert_eq!(string("Object.prototype.valueOf = function () { return 9; }; JSON.stringify(Object(3))"), "3");
+    assert_eq!(string("Object.getPrototypeOf(Object(1)).valueOf = function () { return 4; }; JSON.stringify(Object(3))"), "4");
+    assert_eq!(string("Object.getPrototypeOf(Object('')).toString = function () { return 'q'; }; JSON.stringify(Object('abc'))"), "\"q\"");
+}
+
+#[test]
 fn deep_json_nesting_needs_no_native_stack() {
     let handle = std::thread::Builder::new()
         .stack_size(256 << 10)

@@ -2240,7 +2240,7 @@ impl Interp {
             Value::Object(o) => return Ok(*o),
             Value::Undefined | Value::Null => return Err(self.type_error("cannot convert undefined or null to an object")),
             Value::Bool(b) => (Class::Boolean(*b), self.intrinsics.boolean_proto),
-            Value::Number(_) => (Class::Number, self.intrinsics.number_proto),
+            Value::Number(n) => (Class::Number(*n), self.intrinsics.number_proto),
             Value::String(s) => (Class::String(s.clone()), self.intrinsics.string_proto),
         };
         Ok(self.heap.alloc_object(Object::new(class, Some(proto))))

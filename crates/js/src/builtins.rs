@@ -78,7 +78,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     }
     interp.intrinsics.array_proto = alloc(interp, Class::Array { length: 0, length_writable: true }, Some(object_proto));
     interp.intrinsics.string_proto = alloc(interp, Class::String(Str::from("")), Some(object_proto));
-    interp.intrinsics.number_proto = alloc(interp, Class::Number, Some(object_proto));
+    interp.intrinsics.number_proto = alloc(interp, Class::Number(0.0), Some(object_proto));
     interp.intrinsics.boolean_proto = alloc(interp, Class::Boolean(false), Some(object_proto));
     interp.intrinsics.regexp_proto = alloc(interp, Class::Ordinary, Some(object_proto));
     let thrower = native(interp, "", throw_type_error, 0, NativeKind::Plain, false)?;

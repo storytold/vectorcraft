@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use super::{Builder, ELEMENT_BYTES, arg, data, key_of, length_of, method, new_array, new_string, to_integer};
 use crate::heap::{Class, Key, OBJECT_BYTES, OPEN, ObjId, Object, Prop, key, string_bytes};
-use crate::interp::{Desc, ErrorType, Interp, JsResult};
+use crate::interp::{Desc, ErrorType, Hint, Interp, JsResult};
 use crate::value::{Str, Value, number_to_str};
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
@@ -459,14 +459,7 @@ fn settings(interp: &mut Interp, replacer: &Value, space: &Value) -> JsResult<Se
             s.properties = Some(property_list(interp, *r)?);
         }
     }
-    let space = match space {
-        Value::Object(o) => match interp.heap.object(*o).map(|x| &x.class) {
-            Some(Class::Number) => Value::Number(interp.to_number(space)?),
-            Some(Class::String(_)) => Value::String(interp.to_str(space)?),
-            _ => space.clone(),
-        },
-        _ => space.clone(),
-    };
+    let space = unwrap_primitive(interp, space, false)?.unwrap_or_else(|| space.clone());
     match space {
         Value::Number(_) => {
             let n = to_integer(interp, &space)?.clamp(0.0, 10.0) as usize;
@@ -489,9 +482,10 @@ fn property_list(interp: &mut Interp, r: ObjId) -> JsResult<Vec<Key>> {
         let item = match &v {
             Value::String(s) => Some(s.clone()),
             Value::Number(_) => Some(interp.primitive_to_str(&v)),
-            Value::Object(o) if interp.heap.object(*o).is_some_and(|x| matches!(x.class, Class::String(_) | Class::Number)) => {
-                Some(interp.to_str(&v)?)
-            }
+            Value::Object(_) => match unwrap_primitive(interp, &v, true)? {
+                Some(Value::String(s)) => Some(s),
+                _ => None,
+            },
             _ => None,
         };
         let Some(s) = item else { continue };
@@ -546,12 +540,11 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
         keep(interp, &v);
     }
     if let Value::Object(o) = &v {
-        v = match interp.heap.object(*o).map(|x| &x.class) {
-            Some(Class::Number) => Value::Number(interp.to_number(&v)?),
-            Some(Class::String(_)) => Value::String(interp.to_str(&v)?),
-            Some(Class::Boolean(b)) => Value::Bool(*b),
-            _ => v,
-        };
+        if let Some(Class::Boolean(b)) = interp.heap.object(*o).map(|x| &x.class) {
+            v = Value::Bool(*b);
+        } else if let Some(p) = unwrap_primitive(interp, &v, false)? {
+            v = p;
+        }
     }
     Ok(match v {
         Value::Undefined => Item::Skip,
@@ -559,6 +552,43 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
         Value::Object(o) => Item::Container(o),
         other => Item::Primitive(other),
     })
+}
+
+/// ToNumber of a Number object, or ToString of a String object (of either when `as_string` is
+/// set), as section 15.12.3 applies them in Str step 4, step 4.b.ii and step 5. Returns `None`
+/// for any other value. When the method that [[DefaultValue]] (section 8.12.8) calls first is not
+/// found on the object or on its prototype chain before the object's standard prototype, the
+/// result is the object's [[PrimitiveValue]] (sections 8.6.2 and 9.9), the value that
+/// `Number.prototype.valueOf` (15.7.4.4), `Number.prototype.toString` (15.7.4.2) and
+/// `String.prototype.toString` (15.5.4.2) return. Otherwise ToPrimitive calls the method found.
+fn unwrap_primitive(interp: &mut Interp, v: &Value, as_string: bool) -> JsResult<Option<Value>> {
+    let Value::Object(o) = v else { return Ok(None) };
+    let (primitive, proto, string) = match interp.heap.object(*o).map(|x| &x.class) {
+        Some(Class::Number(n)) => (Value::Number(*n), interp.intrinsics.number_proto, as_string),
+        Some(Class::String(s)) => (Value::String(s.clone()), interp.intrinsics.string_proto, true),
+        _ => return Ok(None),
+    };
+    let (hint, name) = if string { (Hint::String, "toString") } else { (Hint::Number, "valueOf") };
+    let p = if reaches_prototype(interp, *o, proto, name)? { primitive } else { interp.to_primitive(v, hint)? };
+    Ok(Some(if string { Value::String(interp.primitive_to_str(&p)) } else { Value::Number(interp.to_number(&p)?) }))
+}
+
+/// Whether looking up `name` from `o` reaches the object `proto` on the prototype chain before
+/// any object on the way, `proto` included, has its own property `name`.
+fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) -> JsResult<bool> {
+    let k = key(name);
+    let mut cur = Some(o);
+    while let Some(id) = cur {
+        interp.use_fuel()?;
+        if interp.get_own_property(id, &k)?.is_some() {
+            return Ok(false);
+        }
+        if id == proto {
+            return Ok(true);
+        }
+        cur = interp.heap.object(id).and_then(|x| x.proto);
+    }
+    Ok(false)
 }
 
 /// Quote (section 15.12.3): the string in double quotes with the characters JSON escapes.

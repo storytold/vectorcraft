@@ -209,8 +209,8 @@ pub(crate) enum Class {
     Arguments(Box<ArgMap>),
     /// A `Boolean` object made by ToObject, with its primitive value.
     Boolean(bool),
-    /// A `Number` object made by ToObject.
-    Number,
+    /// A `Number` object made by ToObject, with its primitive value.
+    Number(f64),
     String(Str),
     RegExp,
     ForIn(Box<ForIn>),
@@ -232,7 +232,7 @@ impl Class {
             Class::Error => "Error",
             Class::Arguments(_) => "Arguments",
             Class::Boolean(_) => "Boolean",
-            Class::Number => "Number",
+            Class::Number(_) => "Number",
             Class::String(_) => "String",
             Class::RegExp => "RegExp",
         }
