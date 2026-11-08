@@ -1,6 +1,6 @@
 //! Importer plug-ins (`"kind": "importer"`, docs/plugins.md › Importers) through the engine: the
 //! formats they add to `document.formats` and `document.open`, which files they are given, the
-//! document their objects become, and what happens when they fail, decline or are cancelled.
+//! document their objects become, and what happens when they fail, decline or are canceled.
 //!
 //! A test binary of its own: installed plug-ins are process-wide, and the unit tests that check the
 //! exact list of formats would see these ones.
@@ -298,13 +298,13 @@ fn failures_open_nothing() {
     token.cancel();
     let r = vectorcraft_doc::cancel::scope(&token, None, || open(&mut s, "x.tsf", b"?", json!({"importer": "plugin.test.fail.spins"})));
     assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
-    assert_eq!(state(&mut s), before, "cancelled");
+    assert_eq!(state(&mut s), before, "canceled");
 }
 
 /// Cancel stops an importer between two slices of its budget, and nothing opens: here one that
-/// never returns, run with a token cancelled beforehand.
+/// never returns, run with a token canceled beforehand.
 #[test]
-fn a_cancelled_open_stops_the_importer() {
+fn a_canceled_open_stops_the_importer() {
     let mut s = Session::new();
     install(&mut s, &tpl::module(&tpl::importer("test.spins", r#"["tss"]"#, "{}"), SPINS, "", 1));
     let token = vectorcraft_doc::cancel::CancelToken::new();
