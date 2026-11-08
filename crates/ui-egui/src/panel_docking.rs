@@ -1136,9 +1136,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     }
     let modal = modal_open(app, &ctx);
     // Palette windows are OS windows of their own, held above the app's window while it is active,
-    // so a dialog or a menu drawn in the main window would be covered by them.
+    // so a dialog, a menu or a tool flyout drawn in the main window would be covered by them.
     #[cfg(not(target_arch = "wasm32"))]
-    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx));
+    palette_window_levels(&ctx, &layout, modal, egui::Popup::is_any_open(&ctx) || crate::menus::menu_open(&ctx) || crate::toolbar::flyout_open(&ctx));
     let mut blocked = Vec::new();
     if modal || egui::Popup::is_any_open(&ctx) {
         blocked.push(ctx.content_rect());

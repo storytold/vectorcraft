@@ -651,6 +651,139 @@ fn a_menu_of_the_menu_bar_lowers_the_palette_windows() {
         "and is hidden until the menu closes"
     );
 }
+
+/// The visibility and level commands the palette window `viewport` was sent, cleared after reading.
+fn take_palette_commands(h: &Harness, viewport: ViewportId) -> (Vec<bool>, Vec<egui::WindowLevel>) {
+    let commands = std::mem::take(&mut h.host.borrow_mut().commands);
+    let shown = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::Visible(visible) if *id == viewport => Some(*visible),
+            _ => None,
+        })
+        .collect();
+    let levels = commands
+        .iter()
+        .filter_map(|(id, command)| match command {
+            ViewportCommand::WindowLevel(level) if *id == viewport => Some(*level),
+            _ => None,
+        })
+        .collect();
+    (shown, levels)
+}
+
+/// Opens the flyout of the group `tools` on the Tools panel.
+fn open_tool_flyout(h: &mut Harness, tools: &[&str]) {
+    h.app.ui.flyout = Some(0);
+    let tools: Vec<String> = tools.iter().map(|tool| tool.to_string()).collect();
+    h.ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::unique("flyout-tools"), tools);
+        d.insert_temp(crate::toolbar::flyout_toolbar_id(), None::<String>);
+    });
+}
+
+/// A tool group's flyout is drawn in the main window, so a palette window over it hides until it
+/// closes (#5813), and takes its palette level again with the keyboard left where it was.
+#[test]
+fn a_tool_flyout_hides_the_palette_windows_until_it_closes() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    let (shown, levels) = take_palette_commands(&h, viewport);
+    assert_eq!(shown, [false], "hidden while the flyout is open");
+    assert_eq!(levels, [egui::WindowLevel::Normal], "and out of the top level");
+    assert_eq!(h.app.ui.flyout, Some(0), "the flyout stays open");
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the commands go once");
+    h.app.ui.flyout = None;
+    h.frames(2);
+    let focus_commands = h.host.borrow().commands.iter().filter(|(_, command)| matches!(command, ViewportCommand::Focus)).count();
+    assert_eq!(focus_commands, 0, "nothing takes the keyboard");
+    let (shown, levels) = take_palette_commands(&h, viewport);
+    assert_eq!(shown, [true], "shown again when the flyout closes");
+    assert_eq!(levels, [egui::WindowLevel::AlwaysOnTop], "at its palette level");
+}
+
+/// The All Tools drawer is drawn in the main window too, so it hides a palette window the same way.
+#[test]
+fn the_all_tools_drawer_hides_the_palette_windows_until_it_closes() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden while the drawer is open");
+    h.app.run("window.editToolbar", json!({"open": false})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again when the drawer closes");
+}
+
+/// A flyout or a drawer left set while its toolbar is hidden does not draw, so the palette windows
+/// stay on screen.
+#[test]
+fn a_flyout_or_drawer_of_a_hidden_toolbar_leaves_the_palette_windows_shown() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    h.app.run("window.toolbar", json!({})).unwrap();
+    h.frames(1);
+    assert!(!h.app.ui.toolbar && h.app.ui.tools_drawer, "the drawer is left set with the Tools panel hidden");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again: the drawer does not draw");
+    h.app.ui.tools_drawer = false;
+    h.app.run("window.toolbar", json!({})).unwrap();
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the flyout");
+    // Tab hides the toolbar and the panels, and Shift+Tab shows the panels alone.
+    h.app.run("window.dock", json!({})).unwrap();
+    h.app.run("window.panels", json!({})).unwrap();
+    h.frames(1);
+    assert!(!h.app.ui.toolbar && h.app.ui.flyout.is_some(), "the flyout is left set with the Tools panel hidden");
+    assert_eq!(take_palette_commands(&h, viewport).0.last(), Some(&true), "shown again: the flyout does not draw");
+}
+
+/// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
+/// no later frame need come while the app is idle.
+#[test]
+fn a_click_elsewhere_shows_the_palette_windows_in_the_frame_it_closes_a_flyout() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    // On the dock: a press on the canvas closes a flyout later in its frame, and the release's frame
+    // shows the palette windows.
+    let at = pos2(1500.0, 700.0);
+    let button = |pressed| Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let click = |h: &mut Harness| {
+        h.frame(vec![Event::PointerMoved(at), button(true)]);
+        h.frame(vec![button(false)]);
+    };
+    open_tool_flyout(&mut h, &["pen", "curvature"]);
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the flyout");
+    click(&mut h);
+    assert_eq!(h.app.ui.flyout, None, "the click closes the flyout");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown in that frame");
+    h.app.run("window.editToolbar", json!({"open": true})).unwrap();
+    h.frames(2);
+    assert_eq!(take_palette_commands(&h, viewport).0, [false], "hidden under the drawer");
+    click(&mut h);
+    assert!(!h.app.ui.tools_drawer, "the click closes the drawer");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown in that frame");
+}
+
 /// A modal dialog is drawn in the main window, so the palettes' OS windows leave their topmost
 /// level while it is open and take it back after, or the dialog would be covered by them.
 #[test]
