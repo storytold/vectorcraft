@@ -42,6 +42,10 @@ pub(crate) use driver::layout_faces_per_call;
 pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
 
+#[cfg(test)]
+pub(crate) use driver::envelope_ink_inputs;
+pub use driver::{envelope_ink, register_envelope_ink};
+
 const EPS: f64 = 1e-6;
 
 /// Is glyph `g` a later glyph of the cluster of glyph `prev` before it (a combining mark the shaper

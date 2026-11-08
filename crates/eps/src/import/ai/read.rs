@@ -648,6 +648,9 @@ impl<'a> Reader<'a> {
     }
 
     fn new(data: &'a [u8]) -> Self {
+        // An envelope's saved margins and its check against its drawn art measure type by its
+        // glyphs, as the app maps it.
+        vectorcraft_text::register_envelope_ink();
         let mut doc = Document::new(1.0, 1.0);
         doc.layers.clear();
         Self {

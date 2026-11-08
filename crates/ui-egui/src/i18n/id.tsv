@@ -1232,6 +1232,7 @@ lighting	Light	Cahaya
 	Rotate Tool	Alat putar
 	Rotate View Tool	Alat putar tampilan
 	Trackpad Gesture to Rotate View	Putar tampilan dengan gestur trackpad
+	Hold a Tool Shortcut to Use the Tool Temporarily	Tahan pintasan alat untuk menggunakan alat itu sementara
 	Rotate View	Putar tampilan
 	Rounded Rectangle Tool	Alat persegi panjang bulat
 	Scale Tool	Alat skala
@@ -1898,6 +1899,14 @@ digits	Malayalam	Malayalam
 	Location	Lokasi
 	No images	Tidak ada gambar
 	Relink to Folder…	Tautkan ulang ke folder…
+	Each Link Separately	Setiap tautan terpisah
+	Selected Instances	Instans yang dipilih
+	All Instances	Semua instans
+	Missing Links from This Folder	Tautan hilang dari folder ini
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} bukan each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each dan paths digunakan bersama: paths mencantumkan entri berisi ids dan path, sebagai ganti ids, path, dan folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	entri paths {i} memerlukan path dan ids (id objek yang tidak dimiliki entri lain)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder menerima path: tautan hilang lainnya dicari di folder file tersebut
 	Show Missing	Tampilkan yang hilang
 	Sort by Status	Urutkan berdasarkan status
 	Clear Overrides	Hapus penimpaan
@@ -5712,6 +5721,17 @@ axis	Y Axis	Sumbu Y
 	The plug-in is computing…	Plug-in sedang menghitung…
 	Inspect Plug-in	Periksa plug-in
 	Cancel Plug-in Run	Batalkan jalannya plug-in
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instal “{name}”, yang meminta izin berikut?
+	ID: {id}	ID: {id}
+	Version: {version}	Versi: {version}
+	File SHA-256: {hash}	SHA-256 file: {hash}
+	Read the objects it is given	Membaca objek yang diberikan kepadanya
+	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
+	Keep data of its own with the document	Menyimpan datanya sendiri bersama dokumen
+	Change how the objects its effect is applied to are drawn	Mengubah cara objek yang diberi efeknya digambar
+	Write the document as a file in its own format	Menulis dokumen sebagai file dalam formatnya sendiri
+	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
 	New Set	Set baru

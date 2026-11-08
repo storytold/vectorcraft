@@ -380,8 +380,14 @@ explicit `ids`, which stand in for the selection, so they work with nothing sele
 `ids?|id?` (or `id?, ids?: … (instead of id)`), `id` is `ids` of one object: `{"id": 7}` does what `{"ids": [7]}`
 does, with or without a selection, and an `id` or `ids` that is malformed (not a non-negative integer) or names no
 object is refused under the command's name, never replaced by the selection (`effect.apply {"id": "warp.arc"}`
-without `effect` names the effect). A command that leaves out an object selected inside a selected group also
-leaves it out when `ids` list it together with a group that holds it.
+without `effect` names the effect). Other commands that act on `id` or else the selection, the highlighted layer row
+or a new object (`css.export`, `object.isolate`, `layer.locate`, `layer.releaseToLayers`, `graphicStyle.new`,
+`graphicStyle.redefine`, `charStyle.new`, `charStyle.apply`, `charStyle.redefine` and their `paraStyle.*`
+counterparts, `image.info`, `links.info`, `links.goTo`, `links.unembed`, `shaper.release`, `shaper.expand`,
+`transparency.editOpacityMask`, `transparency.viewOpacityMask`, `symbol.edit`, the `object.blend.spine.*` commands
+and `path.curvature`) refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) with an error and
+change nothing; an omitted or null `id` keeps the default. A command that leaves out an object selected inside a
+selected group also leaves it out when `ids` list it together with a group that holds it.
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
@@ -3631,7 +3637,11 @@ control channel's `ui.drag` scrubs), `showHomeScreen` (on by default: the Home s
 off, an empty window, and the Home button or `app.home` still shows the screen), `autoCollapseIconPanels` (off by
 default: on, a click away from a panel popped out of the icon column puts it away), `displayPrintSize` (off by
 default: View › Actual Size / `view.actualSize` is one document point per screen point; on, one document inch fills
-96 screen points, an inch at the system's reference density whatever the display scaling). `highlightAlternateGlyphs` (off by default: on, the canvas paints a pink cell behind glyphs OpenType features
+96 screen points, an inch at the system's reference density whatever the display scaling). The tool shortcut
+preference `holdToolKeys` also needs the desktop app. It is on by default: a single-key tool shortcut held for 0.25 s
+or more, or held while its tool is used, chooses the tool until the key is let go and then returns to the tool active
+before, after any drag in progress; a quicker press chooses the tool for good. With it off, every press and every key
+repeat chooses the tool. `highlightAlternateGlyphs` (off by default: on, the canvas paints a pink cell behind glyphs OpenType features
 substituted — ligatures, contextual forms — on screen; Document Setup's Highlight Substituted Glyphs stays
 separate). `highlightSubstitutedFonts` (on by default: the canvas paints pink behind text drawn in a substitute for a
 missing font, in every document). `blackOnScreen`
@@ -4369,6 +4379,14 @@ The result lists `missingLinks`
 path isn't followed) when it isn't. The desktop app also checks the active document's links when its window
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
+`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other object in the layers linked to the same file as
+one of them; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
+`path`'s folder, and lists the names not there in `notFound` (with `copy`, only missing images are looked for); `each` takes `paths: [{ids, path}]` in place of `ids`,
+`path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
+`path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
+errors, and nothing is relinked. Each call is one undo step. The Links panel's Relink… opens the `relink` dialog
+(`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
 documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
@@ -5511,8 +5529,8 @@ Force) of the selected type (or `ids`): an East Asian comma or full stop ending 
 ､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
 measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
 they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
-`text.create`) takes `standard`; documents from before it and imported text keep `none`, and `none` isn't saved. One
-undo step.
+`text.create`) takes `standard`; documents from before it and imported text keep `none`, except legacy `.ai` type
+with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}
@@ -6076,7 +6094,18 @@ that no built-in format has. A failing plug-in returns an error and leaves the d
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
-`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean. `prefs.set` returns an error and
+A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
+installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
+the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
+an error naming the permissions needed. The grant is kept with the module's hash; a module
+with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
+filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
+A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
+log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
+under its id. A module that imports anything else, or imports these without `api` 2 and `progress`, is refused by
+`plugin.install` and `plugin.inspect` with an error naming the import.
+`plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean, a `grant` that is not a list of
+permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
 
@@ -6372,6 +6401,13 @@ envelopes, the path for a top-object envelope); the content keeps the envelope's
 opacity mask.
 Type inside an envelope distorts as its glyph outlines, run by run in each run's paint, on the canvas and in every
 export (SVG, PDF, EPS, EMF/WMF, DXF).
+An envelope maps type from the bounds of its glyph outlines, underlines and strikethroughs instead of its laid-out
+box (ascent to descent, or an area's frame) when the type is on its own, in groups and layers, or used as a clipping
+path. Inline graphics in the type count by their boxes. Rotated type and type in perspective map from the bounds of
+their outlines as they are drawn. `object.envelope.makeWithMesh`, `object.envelope.makeWithTopObject` and
+`object.envelope.resetWithMesh` with `maintainShape: false` use those bounds. Type that draws nothing keeps its
+laid-out box, and so does type inside any other object, such as a blend, a repeat or a symbol instance. This is
+VectorCraft's own rule, and envelopes of type in saved files redraw by it.
 Everything inside bends with the envelope: images as a raster mesh warp (cut into pieces by Fidelity, each a clipped
 image under its own affine map; SVG shares the pixels between the pieces), symbol instances as their symbol's art,
 and with Distort Appearance strokes (as their filled outlines) and geometry effects; with it, Distort Linear Gradients
