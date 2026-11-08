@@ -469,12 +469,11 @@ fn unshift(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
     with_this(interp, &this, |interp, o| {
         let len = u64::from(length_of(interp, o)?);
         let count = args.len() as u64;
-        if count > 0 {
-            let maps = vec![Map::Shift(-1), Map::Shift(count as i64 - 1)];
-            let mut it = Indices::new(interp, o, 1, len + 1, false, maps)?;
-            while let Some(k) = it.next(interp)? {
-                move_element(interp, o, k - 1, k + count - 1)?;
-            }
+        // With no arguments each element is still read and written back in place (steps 6 and 7).
+        let maps = vec![Map::Shift(-1), Map::Shift(count as i64 - 1)];
+        let mut it = Indices::new(interp, o, 1, len + 1, false, maps)?;
+        while let Some(k) = it.next(interp)? {
+            move_element(interp, o, k - 1, k + count - 1)?;
         }
         for (j, v) in args.iter().enumerate() {
             interp.use_fuel()?;

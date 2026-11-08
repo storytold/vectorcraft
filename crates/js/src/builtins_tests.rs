@@ -167,6 +167,12 @@ fn methods_that_change_the_array() {
     assert_eq!(string("var a = [1, 2, 3]; a.pop() + ':' + a.join() + ':' + [].pop()"), "3:1,2:undefined");
     assert_eq!(string("var a = [1, 2, 3]; a.shift() + ':' + a.join()"), "1:2,3");
     assert_eq!(string("var a = [3]; a.unshift(1, 2) + ':' + a.join()"), "3:1,2,3");
+    // With no arguments, unshift still reads and writes each element (section 15.4.4.13).
+    assert_eq!(
+        run("var n = 0, a = []; Object.defineProperty(a, 0, {get: function () { n++; return 1; }, set: function () { n += 10; }}); a.unshift(); n"),
+        JsValue::Number(11.0)
+    );
+    throws("var a = [1, 2]; Object.defineProperty(a, 0, {writable: false}); a.unshift()", "TypeError");
     assert_eq!(string("[1, , 3].reverse().join()"), "3,,1");
     truth("var a = [1, , 3, , ]; a.reverse(); !(0 in a) && a[1] === 3 && !(2 in a) && a[3] === 1 && a.length === 4");
     assert_eq!(string("var a = [1, 2, 3, 4, 5]; var r = a.splice(1, 2, 'x'); r.join() + ':' + a.join()"), "2,3:1,x,4,5");
