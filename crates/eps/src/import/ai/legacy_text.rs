@@ -78,6 +78,17 @@ struct ParaRun {
     tabs_version: u64,
 }
 
+/// An overflow paragraph break (`(\r) TX`) read before any more type, with the state in force
+/// where it was read.
+#[derive(Debug)]
+struct PendingBreak {
+    /// `TV` at the break.
+    vertical: bool,
+    /// The attributes and [`TypeState::tabs_version`] of the empty paragraph the break ends, when
+    /// it ends one that no character started.
+    para: Option<(ParaStyle, u64)>,
+}
+
 /// A text object being read.
 #[derive(Debug, Default)]
 pub(super) struct LegacyText {
@@ -101,7 +112,7 @@ pub(super) struct LegacyText {
     /// The current paragraph's attributes are in `paras`.
     para_taken: bool,
     /// An overflow paragraph break (`(\r) TX`) not yet followed by type: the story's end.
-    pending_break: bool,
+    pending_break: Option<PendingBreak>,
     /// Characters were set in a mask rendering mode (`Tr` 4 to 7): the text object is a clipping
     /// path (§5.7).
     clips: bool,
@@ -632,7 +643,10 @@ impl Reader<'_> {
         }
         // Overflow text ending the story with a paragraph break (`(\r) TX`) adds no paragraph.
         if w == "TX" && decoded == "\n" {
-            t.pending_break = true;
+            if t.pending_break.is_none() {
+                let para = (!t.para_taken).then(|| (st.para.clone(), st.tabs_version));
+                t.pending_break = Some(PendingBreak { vertical: st.vertical, para });
+            }
             return;
         }
         // As many characters as the file's allowance has left.
@@ -642,10 +656,13 @@ impl Reader<'_> {
         }
         let decoded: String = decoded.chars().take(room).collect();
         st.chars += decoded.chars().count();
+        // A break read before these characters keeps the direction and paragraph attributes it was
+        // read with, and is the story's first character when nothing came before it.
+        let brk = t.pending_break.take();
         if t.runs.is_empty() {
-            t.vertical = st.vertical;
+            t.vertical = brk.as_ref().map_or(st.vertical, |b| b.vertical);
         }
-        t.direction_changed |= st.vertical != t.vertical;
+        t.direction_changed |= st.vertical != t.vertical || brk.as_ref().is_some_and(|b| b.vertical != t.vertical);
         let gs = &self.gs;
         let mut style = st.style.clone();
         style.tate_chu_yoko |= st.kumi_recorded && !t.vertical;
@@ -664,7 +681,10 @@ impl Reader<'_> {
         (style.stroke_cap, style.stroke_join, style.stroke_miter_limit, style.stroke_dash) = (gs.cap, gs.join, gs.miter, gs.dash.clone());
         (style.overprint_fill, style.overprint_stroke) = (gs.overprint_fill, gs.overprint_stroke);
         let mut text = String::new();
-        if std::mem::take(&mut t.pending_break) {
+        if let Some(brk) = brk {
+            if let Some((mut para, tabs_version)) = brk.para {
+                t.begin_para(&mut para, tabs_version);
+            }
             text.push('\n');
             t.para_taken = false;
         }
