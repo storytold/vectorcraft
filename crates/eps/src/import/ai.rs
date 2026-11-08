@@ -46,9 +46,12 @@ pub use read::{
     BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, Symbols, active_artboard, artboards, bindings_note, brushes, graphic_styles,
     palette, read, read_beside, symbols, variables,
 };
-pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, read_over_page, slot_frame, slot_of, symbol_art_member};
+pub(crate) use read::{
+    MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with, symbol_art_member,
+};
 
 pub(crate) use read::is_look_slot;
+pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]
 mod tests;

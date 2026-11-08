@@ -146,7 +146,7 @@ pub use document::{
     symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
-pub(crate) use ops::read_art_style;
+pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub use types::PlacedPage;

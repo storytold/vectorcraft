@@ -203,6 +203,8 @@ impl Writer<'_> {
         if sym.dynamic || doc.symbol_export_type(name) != SymbolExportType::default() || doc.symbol_nine_slice(name).is_some() {
             self.warn(SYMBOL_OPTIONS);
         }
+        // The art's effects are its own, not those of a drawn look that first places it.
+        let in_look = std::mem::take(&mut self.in_look);
         self.defining_symbols.push(name.to_string());
         let mut used = vec![];
         vectorcraft_doc::swatches::walk_with_masks(&sym.art, &mut |m| {
@@ -216,6 +218,7 @@ impl Writer<'_> {
         if self.symbol_defs.len() + self.defining_symbols.len() > MAX_SYMBOLS {
             self.defining_symbols.pop();
             self.warn(SYMBOL_COUNT);
+            self.in_look = in_look;
             return false;
         }
         // The art is written in the symbol's space, from the state `0 A` and `0 Xw` set, from the
@@ -291,6 +294,7 @@ impl Writer<'_> {
             (self.wrote_fixed, self.inner_scale),
         ) = saved;
         self.doc = page_doc;
+        self.in_look = in_look;
         let art = std::mem::replace(&mut self.body, art);
         self.defining_symbols.pop();
         let text = format!("%AI14_BeginSymbol\n{}\n0 A\n0 Xw\n0 Ae\n{art}%AI10_EndSymbol\n", ps::bytes(name.as_bytes()));

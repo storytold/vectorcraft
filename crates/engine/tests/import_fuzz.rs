@@ -4058,13 +4058,13 @@ proptest! {
 const STYLES_FUZZ_CHARS: usize = 64_000;
 
 /// The editing data VectorCraft writes for a document with a drop shadow on a path, a gradient fill
-/// and a width profile on others, a stroked even-odd path with an opacity mask and Pathfinder › Add
-/// on a group.
+/// and a width profile on others, a stroked even-odd path with an opacity mask, Pathfinder › Add on
+/// a group and a graphic style of its own with effects on one of its fills.
 fn styles_text() -> &'static str {
     static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEXT.get_or_init(|| {
         use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
-        use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
+        use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
         use vectorcraft_geom::{FillRule, Rect, shapes};
         let mut doc = Document::new(200.0, 100.0);
         let layer = doc.layers[0].id;
@@ -4107,6 +4107,10 @@ fn styles_text() -> &'static str {
         let mut merged = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(a), std::sync::Arc::new(b)]);
         merged.appearance = Appearance { effects: vec![fx("pathfinder.add")], ..Appearance::default() }.into();
         doc.insert(Some(layer), usize::MAX, merged).unwrap();
+        doc.graphic_styles.push(GraphicStyle::new("Shaded", ap));
+        let chained = FillLayer { opacity: 0.5, effects: vec![fx("distort.twist")], ..FillLayer::new(Paint::solid(Color::WHITE)) };
+        let chained = Appearance { items: vec![AppearanceItem::Fill(chained)], ..Appearance::default() };
+        doc.graphic_styles.push(GraphicStyle::new("Chained", chained));
         let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
         String::from_utf8(out.program).unwrap()
     })
@@ -4118,14 +4122,25 @@ fn styles_text() -> &'static str {
 fn the_written_styles_fuzz_data_opens_live() {
     let text = styles_text();
     assert!(text.chars().count() < STYLES_FUZZ_CHARS, "{}", text.chars().count());
-    for mark in ["%AI9_BeginArtStyles", "%AI5_BeginLayer", "\n6 () XW", "\n1 (Anon", "(BSLeftWidthsArray)", "0 /Bool (UseEvenOdd)", "Bb"] {
-        assert!(text.contains(mark), "{mark}");
+    for mark in [
+        "%AI9_BeginArtStyles",
+        "%AI9_BeginArtStyleList",
+        "%AI5_BeginLayer",
+        "\n6 () XW",
+        "\n1 (Anon",
+        "(BSLeftWidthsArray)",
+        "0 /Bool (UseEvenOdd)",
+        "(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter",
+        "Bb",
+    ] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
     }
     let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
     let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
     assert!(layered, "{warnings:?}");
     let art = d.layers[0].children().unwrap();
     assert_eq!(art.iter().map(|n| n.appearance.effects.len()).collect::<Vec<_>>(), [1, 1, 1, 1, 1]);
+    assert!(d.graphic_style("Shaded").is_some() && d.graphic_style("Chained").is_some());
 }
 
 /// [`symbols_text`] without its layer: a symbol library.

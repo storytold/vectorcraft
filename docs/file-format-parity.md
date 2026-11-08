@@ -97,8 +97,13 @@ private editing data. VectorCraft:
   group's effects change its members' outlines, a member's strokes are plain lines, and its fills are not pattern
   fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects with
   live effects are written as their vector art with their geometry effects applied, and their other effects, such as
-  Drop Shadow, the glows and Feather, are left out with a warning. Graphic styles and links to them are left out with a warning. No art style is written on a large
-  canvas.
+  Drop Shadow, the glows and Feather, are left out with a warning. A path, compound path or group linked to a graphic style names it when it has the style's
+  appearance and the style is written; other links to graphic styles, those on a styled group's members included, are
+  left out with a warning. The Graphic Styles panel's styles are written in its order, with their fills, strokes, transparency and effects (Warp,
+  Transform, Free Distort, Pucker & Bloat, Twist, Zig Zag and Gaussian Blur too). Styles with gradient or pattern fills,
+  with fills, strokes or effects the reader doesn't read back, with a name another style has, with names over 1,024
+  bytes and past 4,096 styles are left out with a warning. A panel with no style written opens with a new document's
+  styles, with a warning. No art style is written on a large canvas.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
