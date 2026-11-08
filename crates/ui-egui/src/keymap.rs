@@ -413,6 +413,21 @@ mod tests {
         assert_eq!(vc_format(&Chord::new(Mods::CMD, Key::Comma)), "Cmd+Comma");
     }
 
+    /// View › Zoom to Selection is Cmd/Ctrl+Shift+0 by default (#5601), beside Fit Artboard in
+    /// Window (Cmd+0) and Fit All in Window (Cmd+Alt+0), which keep theirs, and can be reassigned.
+    #[test]
+    fn zoom_to_selection_is_cmd_shift_0_beside_the_fit_commands() {
+        let km = template();
+        for (chord, id) in [("Cmd+0", "view.fitArtboard"), ("Cmd+Alt+0", "view.fitAll"), ("Cmd+Shift+0", crate::addons::arrange::ZOOM)] {
+            assert_eq!(lookup(km, &vc_chord(chord).unwrap()), Some(CommandRef::new(id)), "{chord}");
+        }
+        let mut overrides = Overrides::new();
+        set_override(&mut overrides, crate::addons::arrange::ZOOM, "Cmd+Alt+Shift+0");
+        let km = keymap_with(&overrides);
+        assert_eq!(lookup(&km, &vc_chord("Cmd+Alt+Shift+0").unwrap()), Some(CommandRef::new(crate::addons::arrange::ZOOM)));
+        assert_eq!(lookup(&km, &vc_chord("Cmd+Shift+0").unwrap()), None, "the default moved");
+    }
+
     #[test]
     fn the_default_shortcuts_do_not_conflict() {
         assert_eq!(template().conflicts(), vec![]);

@@ -537,6 +537,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Zoom Out", "view.zoomOut"),
                 c("Fit Artboard in Window", "view.fitArtboard"),
                 c("Fit All in Window", "view.fitAll"),
+                c("Zoom to Selection", crate::addons::arrange::ZOOM),
                 c("Actual Size", "view.actualSize"),
                 Sep,
                 sub("Rotate View", crate::state::ROTATE_VIEW_ANGLES.iter().map(|(l, a)| cp(l, "view.rotate", json!({ "angle": a }))).collect()),

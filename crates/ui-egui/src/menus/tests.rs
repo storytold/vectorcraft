@@ -649,6 +649,24 @@ fn zoom_to_selection_centres_the_selection() {
     assert_eq!(center(&app), vectorcraft_geom::Point::new(30.0, 30.0), "on: the selection's centre");
 }
 
+/// View › Zoom to Selection sits after Fit All in Window with its shortcut, Cmd/Ctrl+Shift+0
+/// (#5601), and is enabled only with a selection.
+#[test]
+fn view_menu_zoom_to_selection_follows_the_fit_commands() {
+    let view = menu_tree().into_iter().find(|(n, _)| *n == "View").unwrap().1;
+    let ids: Vec<&str> = view.iter().filter_map(|it| if let Item::Cmd(_, id, _) = it { Some(*id) } else { None }).collect();
+    let at = ids.iter().position(|id| *id == "view.fitAll").unwrap();
+    assert_eq!(ids.get(at + 1), Some(&crate::addons::arrange::ZOOM));
+    assert!(view.iter().any(|it| matches!(it, Item::Cmd("Zoom to Selection", _, _))));
+    assert_eq!(shortcut_of(crate::addons::arrange::ZOOM), Some("Cmd+Shift+0"));
+    assert_eq!((shortcut_of("view.fitArtboard"), shortcut_of("view.fitAll")), (Some("Cmd+0"), Some("Cmd+Alt+0")));
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    assert!(!enabled(&app, crate::addons::arrange::ZOOM), "nothing selected");
+    app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 20})).unwrap();
+    assert!(enabled(&app, crate::addons::arrange::ZOOM));
+}
+
 /// Preferences › Type › Number of Recent Fonts (#394): Type › Recent Fonts lists that many.
 #[test]
 fn number_of_recent_fonts_sets_how_many_are_listed() {

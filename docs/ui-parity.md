@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (View › Zoom to Selection, Cmd/Ctrl+Shift+0; Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -332,6 +332,10 @@ empty), without opening the dialog.
 Cmd/Ctrl+Alt+Shift+U (`document.switchUnits`, Switch Units in the shortcut editor) switches the document to the
 next unit in the order a right-click on a ruler lists them, from Feet back to Points.
 
+Cmd/Ctrl+Shift+0 (View › Zoom to Selection, `addon.arrange.zoomSelection`, a VectorCraft addition) fits the
+active view to the selection, beside Fit Artboard in Window (Cmd/Ctrl+0) and Fit All in Window (Cmd/Ctrl+Alt+0);
+the menu item is dimmed with nothing selected, and the shortcut can be reassigned (#5601).
+
 ## Panels, Control bar, Properties, context menus
 
 | Interaction | Status | Evidence |
@@ -478,6 +482,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | View › Zoom to Selection after Fit All in Window, with the default shortcut Cmd/Ctrl+Shift+0 (#5601; a VectorCraft addition); scores and estimates unchanged |
 | 2026-11-06 | minor | Keyboard shortcuts: Cmd/Ctrl+Alt+. and Cmd/Ctrl+Alt+, (Stroke Weight Up and Down) step each selected stroke's weight, or the next object drawn's (#5797); scores and estimates unchanged |
 | 2026-11-06 | minor | Properties: Quick Actions has Repeat Options for one selected radial, grid or mirror repeat, opening Object › Repeat › Options with its values (#5181); scores and estimates unchanged |
 | 2026-11-06 | minor | Control bar: with type selected, a Paragraph: link (the Paragraph panel in a popover) and the Align left, Align center and Align right buttons follow the Character controls; the bar leaves them out from its right end when short of room, after X/Y/W/H and the Align buttons (#5372); scores and estimates unchanged |
