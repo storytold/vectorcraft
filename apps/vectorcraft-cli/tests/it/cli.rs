@@ -19,6 +19,31 @@ fn empty_dir(dir: std::path::PathBuf) -> std::path::PathBuf {
     dir
 }
 
+/// `run` refuses `plugin.install`'s `grant` unless the process was started with
+/// `--allow-plugin-grants`, which `mcp` won't take with `--connect`.
+#[test]
+fn plugin_grants_need_the_start_up_flag() {
+    let module = vectorcraft_format::base64_encode(include_bytes!("../../../../crates/plugins/tests/fixtures/desaturate.wasm"));
+    let steps = tmp("grants.json");
+    std::fs::write(&steps, json!([{"command": "plugin.install", "params": {"dataBase64": module, "grant": ["doc.read"]}}]).to_string()).unwrap();
+    let config = empty_dir(std::env::temp_dir().join(format!("vectorcraft-cli-test-grants-{}", std::process::id())));
+    let run = |extra: &[&str]| {
+        Command::new(BIN).env("VECTORCRAFT_CONFIG_DIR", &config).args(["run", "--commands", steps.to_str().unwrap()]).args(extra).output().unwrap()
+    };
+    let out = run(&[]);
+    assert!(!out.status.success());
+    let shown = String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
+    assert!(shown.contains("--allow-plugin-grants"), "{shown}");
+    let out = run(&["--allow-plugin-grants"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+
+    let out = Command::new(BIN).args(["mcp", "--allow-plugin-grants", "--connect", "127.0.0.1:1"]).output().unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--allow-plugin-grants applies to the headless server"));
+    let usage = Command::new(BIN).arg("help").output().unwrap();
+    assert!(String::from_utf8_lossy(&usage.stdout).contains("--allow-plugin-grants lets plugin.install's grant and allowHeavy take effect"));
+}
+
 #[test]
 fn commands_prints_catalogue() {
     let out = Command::new(BIN).arg("commands").output().unwrap();

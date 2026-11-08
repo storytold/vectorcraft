@@ -5418,7 +5418,7 @@ axis	Y Axis	Y축
 @msg	Running “{name}”…	“{name}” 실행 중…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	라이브 효과는 문서를 그리는 동안 실행되므로 `heavy`일 수 없습니다
 @msg	an exporter always gets an export's budget: leave `budget` out	내보내기 플러그인은 항상 내보내기 예산을 받습니다. `budget`은 생략하세요
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 사용자가 동의하면 `allowHeavy: true`로 설치하세요
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”은(는) 큰 계산 예산을 요청합니다(실행당 최대 {minutes}분, 평소의 {times}배 명령어). 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `allowHeavy: true`를 전달하세요
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
@@ -5443,7 +5443,9 @@ axis	Y Axis	Y축
 @msg	permission `{shown}` is listed twice	`{shown}` 권한이 두 번 나열되어 있습니다
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` 권한은 이후 플러그인 API용으로 예약되어 있습니다. 이 호스트는 이 권한을 부여하지 않습니다
 @msg	unknown permission `{shown}`	알 수 없는 권한 `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}”은(는) {asked} 권한을 요청합니다. 사용자가 동의하면 이를 나열한 `grant`로 설치하세요
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}”은(는) {asked} 권한을 요청합니다. 데스크톱 앱에서 사람이 승인하거나 --allow-plugin-grants로 시작한 세션에서 `grant`를 전달하세요
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant`와 `allowHeavy`는 --allow-plugin-grants로 시작한 세션에서만 적용됩니다. 데스크톱 앱에서 플러그인을 승인하세요
+@msg	Only the person at the keyboard can approve installing a plug-in	플러그인 설치는 키보드 앞에 있는 사람만 승인할 수 있습니다
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}”에 출력에 필요한 `{p}` 권한이 부여되지 않았습니다. 아무것도 변경되지 않았습니다
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	모듈의 SHA-256이 `hash`에 지정된 값과 다릅니다. 아무것도 설치되지 않았습니다
 # Actions panel: action sets (#3712).

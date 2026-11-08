@@ -294,6 +294,44 @@ fn an_unidentifiable_stale_injected_batch_fails_closed() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A plug-in's permissions are approved only by a person. A control request (or MCP, which comes
+/// through it) can't pass `grant`, can't answer the approval dialog or rewrite what it installs,
+/// and a frame of synthetic input can't press its OK; the person at the keyboard can.
+#[test]
+fn automation_cannot_approve_a_plugin_install() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = "test.ui.approval.automation";
+    let manifest = format!(r#"{{"id":"{id}","name":"Approval","version":"1","kind":"filter","permissions":["doc.read"]}}"#);
+    let bytes = wat::parse_str(vectorcraft_plugins::wat::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    let data = vectorcraft_format::base64_encode(&bytes);
+    let refused = |r: &Value, says: &str| assert!(r["error"].as_str().is_some_and(|e| e.contains(says)), "{r}");
+
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "plugin.install", "params": {"dataBase64": data, "grant": ["doc.read"]}}));
+    refused(&r, "--allow-plugin-grants");
+    assert!(app.ui.dialog.is_none());
+
+    let r = request(&mut app, &tx, "ui.menu.invoke", json!({"command": "ui.installPlugin", "params": {"dataBase64": data}}));
+    assert_eq!(r["result"]["pending"], crate::dialogs::plugin::INSTALL_KIND, "{r}");
+    let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
+    refused(&r, "Only the person at the keyboard");
+    assert!(app.ui.dialog.is_some(), "the refused answer leaves it open");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+
+    // What the dialog installs isn't in its fields.
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__params", "value": {"dataBase64": "AAAA"}}));
+    assert!(r.get("error").is_none(), "{r}");
+    app.synthetic_frame = true;
+    assert!(crate::dialogs::confirm(&mut app).unwrap_err().contains("Only the person at the keyboard"));
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    app.synthetic_frame = false;
+
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// Edit Original and the Attributes panel's Browser button hand a file or URL to another app: a
 /// control request (or MCP, which comes through it) can't run them, roots or not.
 #[test]

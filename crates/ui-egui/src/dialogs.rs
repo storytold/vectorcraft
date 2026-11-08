@@ -390,6 +390,7 @@ registry! {
     PrintPresets: [print_presets::KIND] => print_presets::SPEC,
     Plugin: [plugin::KIND] => plugin::SPEC,
     PluginExport: [plugin::EXPORT_KIND] => plugin::EXPORT_SPEC,
+    PluginInstall: [plugin::INSTALL_KIND] => plugin::INSTALL_SPEC,
     ScriptCheck: [script_check::KIND] => script_check::SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
@@ -545,6 +546,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
     if let Some(d) = app.ui.dialog.take() {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
+        }
+        if d.kind == plugin::INSTALL_KIND {
+            app.pending_plugin_install = None;
         }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec

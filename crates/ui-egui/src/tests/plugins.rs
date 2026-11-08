@@ -142,25 +142,26 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     let bytes = asking(id, name, r#"["doc.read","doc.write"]"#);
     let data = vectorcraft_format::base64_encode(&bytes);
     let r = app.run("ui.installPlugin", json!({"dataBase64": data, "name": "tidy.wasm"})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.str("message"), "Install “Tidy\\u{202E}fdp.exe\\u{2066}”, which asks for these permissions?");
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let pending = app.pending_plugin_install.as_ref().unwrap();
+    assert_eq!(pending.message, "Install “Tidy\\u{202E}fdp.exe\\u{2066}”, which asks for these permissions?");
     let hash = vectorcraft_plugins::permissions::sha256_hex(&bytes);
-    assert_eq!(d.fields.get("__params").map(|p| p["hash"].clone()), Some(json!(hash)), "OK installs the module shown");
-    let detail = d.str("detail");
+    assert_eq!(pending.params["hash"], json!(hash), "OK installs the module shown");
+    let detail = pending.detail.clone();
     assert_eq!(
         detail,
         format!(
             "ID: {id}\nVersion: 3.0\\u{{202E}}\\u{{0009}}\\u{{0007}}\nFile SHA-256: {hash}\n\n• Read the objects it is given\n• Change, add and delete objects in the document"
         )
     );
-    assert!(!detail.chars().chain(d.str("message").chars()).any(|c| matches!(c, '\u{202E}' | '\u{2066}' | '\t' | '\u{0007}')));
+    assert!(!detail.chars().chain(pending.message.chars()).any(|c| matches!(c, '\u{202E}' | '\u{2066}' | '\t' | '\u{0007}')));
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "not before the user agrees");
     dialogs::cancel(&mut app);
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "Cancel installs nothing");
+    assert!(app.pending_plugin_install.is_none(), "Cancel drops what it asked about");
     // File › Open asks too, and OK installs it with what it lists granted.
     io::open_bytes(&mut app, "tidy.wasm", &bytes, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND));
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND));
     dialogs::confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
     assert!(vectorcraft_plugins::registry::get(id).is_some());
@@ -171,11 +172,11 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     // Other bytes with the same permissions ask, from both ways in; Cancel keeps the one installed.
     let again = asking(id, "Tidy 2", r#"["doc.write","doc.read"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&again)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND, "other bytes ask again");
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND, "other bytes ask again");
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some(name.into()), "Cancel keeps the one installed");
     io::open_bytes(&mut app, "tidy2.wasm", &again, None).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::confirm::KIND), "File › Open asks too");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(dialogs::plugin::INSTALL_KIND), "File › Open asks too");
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()));
     let new_hash = vectorcraft_plugins::permissions::sha256_hex(&again);
@@ -183,8 +184,8 @@ fn installing_a_plugin_that_lists_permissions_asks_first() {
     // One that asks for another permission asks again.
     let more = asking(id, "Tidy 3", r#"["doc.read","doc.write","state"]"#);
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&more)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    assert!(app.ui.dialog.as_ref().unwrap().str("detail").ends_with("• Keep data of its own with the document"));
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    assert!(app.pending_plugin_install.as_ref().unwrap().detail.ends_with("• Keep data of its own with the document"));
     dialogs::cancel(&mut app);
     assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()), Some("Tidy 2".into()), "Cancel keeps the one installed");
     // OK keeps the `replace` it was asked with: `false` leaves the installed one in place.
@@ -202,8 +203,8 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     let manifest = format!(r#"{{"id":"{id}","name":"Count","kind":"filter","api":2,"permissions":["doc.read","progress"]}}"#);
     let bytes = wat::parse_str(tpl::reporting(&manifest, "(call $vc_progress (i64.const 1) (i64.const 2))", r#"{"objects":[]}"#)).unwrap();
     let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
-    assert_eq!(r["pending"], dialogs::confirm::KIND);
-    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    assert_eq!(r["pending"], dialogs::plugin::INSTALL_KIND);
+    let detail = app.pending_plugin_install.as_ref().unwrap().detail.clone();
     assert!(detail.ends_with("• Read the objects it is given\n• Show its progress, see Cancel and write log lines"), "{detail}");
     dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));

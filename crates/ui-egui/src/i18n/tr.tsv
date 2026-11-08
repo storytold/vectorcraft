@@ -5798,7 +5798,7 @@ axis	Y Axis	Y ekseni
 @msg	Running “{name}”…	“{name}” çalıştırılıyor…
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	canlı efekt belge çizilirken çalışır, bu yüzden `heavy` olamaz
 @msg	an exporter always gets an export's budget: leave `budget` out	dışa aktarma eklentisi her zaman bir dışa aktarmanın bütçesini alır: `budget` anahtarını çıkarın
-@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): kullanıcı onayladıktan sonra `allowHeavy: true` ile yükleyin
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” büyük bir hesaplama bütçesi istiyor (her çalıştırma en fazla {minutes} dakika ve olağan komutların {times} katı): masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `allowHeavy: true` geçirin
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
 	ID: {id}	Kimlik: {id}
@@ -5823,7 +5823,9 @@ axis	Y Axis	Y ekseni
 @msg	permission `{shown}` is listed twice	`{shown}` izni iki kez listelenmiş
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`
-@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” {asked} izinlerini istiyor: kullanıcı onayladıktan sonra bunları listeleyen bir `grant` ile yükleyin
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	“{name}” {asked} izinlerini istiyor: masaüstü uygulamasında bir kişinin onaylaması gerekir veya --allow-plugin-grants ile başlatılan bir oturumda `grant` geçirin
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` ve `allowHeavy` yalnızca --allow-plugin-grants ile başlatılan bir oturumda etkili olur: eklentiyi masaüstü uygulamasında onaylayın
+@msg	Only the person at the keyboard can approve installing a plug-in	Bir eklentinin yüklenmesini yalnızca klavye başındaki kişi onaylayabilir
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” öğesine çıktısının ihtiyaç duyduğu `{p}` izni verilmedi: hiçbir şey değiştirilmedi
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modül `hash` içinde verilen SHA-256 değerine sahip değil: hiçbir şey yüklenmedi
 # Actions panel: action sets (#3712).

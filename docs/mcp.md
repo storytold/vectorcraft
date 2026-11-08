@@ -6168,15 +6168,19 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. A failing plug-in returns an error and leaves the document as it was (an export writes
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
-`plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`
+`plugin.inspect {path | dataBase64}` entry) needs a person's approval, and `plugin.install` refuses `allowHeavy: true`
+from a request. `plugin.run`
 runs it where it is called, so the call may take minutes; `notifications/cancelled` stops it.
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
-installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
-the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash and covers only that module: the
-same bytes install again without `grant`, and a module with other bytes has `needsApproval: true` and needs a new
-`grant` even when it lists the same permissions. `plugin.install` does not check that a person approved `grant`: it
-trusts the client that sends it. `plugin.remove` forgets the grant. A
+needs a person's approval too, and `plugin.install` refuses `grant: [permission]` from a request. With a desktop
+app connected, `ui.installPlugin` opens the approval dialog and returns `{pending: "pluginInstall"}`; `answer_dialog`,
+`ui.dialog.confirm` and injected input can't confirm it. A `vectorcraft-cli mcp` started with `--allow-plugin-grants`
+accepts `grant` and `allowHeavy` from any request, in that session only (headless; it can't be combined with
+`--connect`). Without `--allow-plugin-grants` and without a desktop approval, `plugin.install` returns
+an error naming the permissions needed. The approval is kept with the module's hash and covers only that module: the
+same bytes install again without one, also from a headless session that reads the same `grants.json`, and a module
+with other bytes has `needsApproval: true` and needs a new one even when it lists the same permissions. `plugin.remove`
+forgets the approval. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log

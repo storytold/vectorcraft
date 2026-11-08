@@ -1,3 +1,4 @@
+use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
 use super::save::suggested;
@@ -181,63 +182,72 @@ fn permission_words(name: &str) -> String {
 }
 
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
-/// with `name`) → `plugin.install`'s result. A plug-in that lists permissions the user hasn't
-/// granted it yet (`grant`) asks them first, showing its name, id, version, file hash and what each
-/// permission lets it do, and so does a filter that asks for a heavy budget the user hasn't allowed
-/// yet (`allowHeavy`); OK installs it if the module still has the hash the prompt showed, Cancel
-/// installs nothing → `{pending}` while it asks. Every
-/// text from the manifest is shown with its hidden characters escaped and its length capped
+/// with `name`) → `plugin.install`'s result. A plug-in that lists permissions no person has granted
+/// it yet asks first, showing its name, id, version, file hash and what each permission lets it
+/// do, and so does a filter that asks for a heavy budget; OK installs it if the module still has
+/// the hash the prompt showed, Cancel installs nothing → `{pending}` while it asks. The `grant`
+/// and `allowHeavy` of a request are ignored: only the dialog's OK approves. Every text from the
+/// manifest is shown with its hidden characters escaped and its length capped
 /// ([`permissions::display_text`]).
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
-    let heavy_allowed = module.get("allowHeavy").and_then(Value::as_bool) == Some(true);
-    let granted = module.get("grant").is_some_and(|g| !g.is_null());
-    if !heavy_allowed || !granted {
-        let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
-        let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
-        // What OK installs: the same module, with what the user has agreed to so far, pinned to
-        // the bytes the prompt shows (`hash`).
-        let mut answered =
-            Value::Object(["path", "dataBase64", "name", "replace", "grant", "allowHeavy", "hash"].into_iter().filter_map(given).collect());
-        let info = app.run("plugin.inspect", source)?;
-        if answered.get("hash").is_none() {
-            answered["hash"] = info["hash"].clone();
-        }
-        let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
-        let name = shown("name", permissions::MAX_SHOWN_NAME);
-        if !granted && info["needsApproval"] == true {
-            let message = crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)]);
-            let mut lines = vec![crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))])];
-            let version = shown("version", permissions::MAX_SHOWN_FIELD);
-            if !version.is_empty() {
-                lines.push(crate::i18n::fmt(tl!("Version: {version}"), &[("version", &version)]));
-            }
-            lines.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
-            lines.push(String::new());
-            let asked = info["permissions"].as_array().cloned().unwrap_or_default();
-            lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p))));
-            let mut again = answered;
-            again["grant"] = Value::Array(asked);
-            dialogs::confirm::ask(app, &message, &lines.join("\n"), "ui.installPlugin", again);
-            return Ok(json!({ "pending": dialogs::confirm::KIND }));
-        }
-        if !heavy_allowed && info["budget"] == "heavy" {
-            let (minutes, times) = vectorcraft_plugins::heavy_terms();
-            let message = crate::i18n::fmt(tl!("Install “{name}”, which asks for a heavy budget?"), &[("name", &name)]);
-            let detail = crate::i18n::fmt(
-                tl!(
-                    "Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it."
-                ),
-                &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
-            );
-            let mut allowed = answered;
-            allowed["allowHeavy"] = json!(true);
-            dialogs::confirm::ask(app, &message, &detail, "ui.installPlugin", allowed);
-            return Ok(json!({ "pending": dialogs::confirm::KIND }));
-        }
+    let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
+    let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
+    let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
+    let info = app.run("plugin.inspect", source)?;
+    let (needs_grant, heavy) = (info["needsApproval"] == true, info["budget"] == "heavy");
+    if !needs_grant && !heavy {
+        let r = app.run("plugin.install", install)?;
+        report_installed(app, &r);
+        return Ok(r);
     }
-    let r = app.run("plugin.install", module)?;
+    // Pinned to the bytes the prompt shows.
+    if install.get("hash").is_none() {
+        install["hash"] = info["hash"].clone();
+    }
+    let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
+    let name = shown("name", permissions::MAX_SHOWN_NAME);
+    let asked = info["permissions"].as_array().cloned().unwrap_or_default();
+    let mut paragraphs = vec![];
+    if needs_grant {
+        let mut lines = vec![crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))])];
+        let version = shown("version", permissions::MAX_SHOWN_FIELD);
+        if !version.is_empty() {
+            lines.push(crate::i18n::fmt(tl!("Version: {version}"), &[("version", &version)]));
+        }
+        lines.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
+        lines.push(String::new());
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p))));
+        paragraphs.push(lines.join("\n"));
+        install["grant"] = Value::Array(asked.clone());
+    }
+    if heavy {
+        let (minutes, times) = vectorcraft_plugins::heavy_terms();
+        paragraphs.push(crate::i18n::fmt(
+            tl!(
+                "Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it."
+            ),
+            &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
+        ));
+        install["allowHeavy"] = json!(true);
+    }
+    let message = if needs_grant {
+        crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)])
+    } else {
+        crate::i18n::fmt(tl!("Install “{name}”, which asks for a heavy budget?"), &[("name", &name)])
+    };
+    let approval = InstallApproval {
+        id: info["id"].as_str().unwrap_or_default().to_string(),
+        hash: info["hash"].as_str().unwrap_or_default().to_string(),
+        permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        heavy,
+    };
+    let pending = dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval };
+    Ok(dialogs::plugin::ask_install(app, pending))
+}
+
+/// Says in the status bar that `plugin.install`'s result `r` was installed.
+pub(crate) fn report_installed(app: &mut VectorcraftApp, r: &Value) {
     app.status(format!("Installed plug-in {}", permissions::display_text(r["name"].as_str().unwrap_or_default(), permissions::MAX_SHOWN_NAME)));
-    Ok(r)
 }
 
 /// Where File → Open… starts: the folder of the most recently opened file, else the active

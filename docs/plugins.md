@@ -26,8 +26,8 @@ This page is the contract for plug-in authors and the reference for the host (`c
 | `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source, api, permissions, hash}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed, unless the user already granted a module with the same SHA-256. With `hash`, a module whose SHA-256 differs is refused. |
-| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when `plugin.install` needs `grant`). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a person already granted a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. |
+| `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder; a bad module is reported and skipped, and so are a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). |
 
@@ -89,8 +89,9 @@ budget). Each of its runs gets 1 G instructions (20 times a light run's) plus th
 much there is only once the run has ended.
 
 - **Installing asks first.** Install Plug-in… and File › Open show what the filter asks for, and install it once the
-  user clicks OK; `plugin.install` refuses it without `allowHeavy: true`, which an agent passes once the user agreed
-  (`plugin.inspect` tells it beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed again
+  user clicks OK (see [Permissions](#permissions) for who can). `plugin.install` refuses it without `allowHeavy: true`,
+  and refuses `allowHeavy` from a request except in a session started with `vectorcraft-cli --allow-plugin-grants`
+  (`plugin.inspect` shows the budget beforehand). A filter kept in the `Plug-ins` folder was agreed to and is installed again
   at startup. The Additional Plug-ins Folder skips heavy filters with a note in its report, since loading a folder
   asks nobody.
 - **It runs in the background.** Its dialog has no Preview. OK (or the menu item, without parameters) runs it on a
@@ -129,10 +130,14 @@ capability model proposed for PhotoCraft plug-ins
   the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
   SHA-256 shown; Cancel installs nothing. The
   names shown have control and bidirectional characters escaped (`\u{202E}`) and are cut to 64 characters.
-  `plugin.install` refuses the module, naming the permissions it needs, unless `grant` lists them all, which an agent
-  passes once the user agreed (`plugin.inspect`'s `needsApproval` tells it beforehand), with `hash` set to the
-  `plugin.inspect` entry's `hash` so that the module installed is the one the user saw. `plugin.install` does not
-  check that a person approved `grant`: it trusts the client that sends it.
+  Only a person can press its OK: `ui.dialog.confirm`, MCP's `answer_dialog` and injected input (`ui.key`, `ui.click`)
+  are refused and the dialog stays open, and Enter does not confirm it. `ui.dialog.set` can't change what it installs.
+- `plugin.install` refuses the module, naming the permissions it needs, unless a person already granted this module
+  (`plugin.inspect`'s `needsApproval` tells it beforehand). A request's `grant` is refused too: `plugin.install` takes
+  it only with the approval the dialog gives. A `vectorcraft-cli mcp` or `run` started with `--allow-plugin-grants`
+  takes `grant` and `allowHeavy` from any request; only the person starting the process can set that flag, and it
+  doesn't apply to a running app. Without it, MCP in headless mode and the CLI install a module that lists
+  permissions only when a person approved its hash in the desktop app, which they read from the shared `grants.json`.
 - The grant is recorded with the plug-in's id, the module's hash and the permissions, in `grants.json` in the
   `Plug-ins` folder, and covers only that module. Installing the same bytes again needs no new approval. A module with
   other bytes asks again, even when it lists the same permissions. Until it is approved, the installed module and its

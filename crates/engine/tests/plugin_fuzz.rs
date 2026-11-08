@@ -308,6 +308,7 @@ proptest! {
             prop_assert!(shown.chars().count() <= vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
         }
         let mut s = rich_session();
+        s.allow_plugin_grants_from_requests();
         let module = wat::parse_str(tpl::returning(&text, r#"{"objects":[]}"#)).unwrap();
         let data = vectorcraft_format::base64_encode(&module);
         let r = catch_quiet(|| {

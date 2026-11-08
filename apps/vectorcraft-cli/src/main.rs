@@ -72,7 +72,7 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
-  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
+  vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]... [--allow-plugin-grants]
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
       --automation-read-root / --automation-write-root confine the files the agent's commands read
@@ -80,8 +80,12 @@ USAGE:
       DIR, links followed; each may be given more than once, a path inside any of its folders being
       allowed, and a kind left out grants none of its access. They imply --headless: a running app
       enforces its own (vectorcraft --control PORT --automation-read-root DIR …).
+      --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this session,
+      so whoever sends the commands can give a plug-in the permissions it lists, and a heavy budget,
+      with nobody approving them. Without it they are refused, and a plug-in installs only when a
+      person already approved its hash in the desktop app. It implies --headless.
 
-  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N]
+  vectorcraft-cli run [--in FILE] [--cmd ID [--params JSON] | --commands FILE|-]... [--export FILE]... [--scale N] [--ppi N] [--allow-plugin-grants]
       Headless batch: open FILE (any readable format) or start a new document, run commands in
       order, export each FILE in the format its extension picks (see Writable formats; a .ait FILE
       is a template, written as file.saveAsTemplate writes it). Raster exports use the document's
@@ -91,6 +95,8 @@ USAGE:
       --cmd and --export steps: a JSON array of {\"command\": ID, \"params\": {...}} (or \"id\" for
       \"command\"), or one such object per line (JSON Lines), at most 64 MiB and 100000 steps.
       Errors name the step, counting from 0 as \"$N\" references do.
+      --allow-plugin-grants lets plugin.install's grant and allowHeavy take effect in this run, as
+      for mcp.
 
   vectorcraft-cli commands
       Print the command catalogue as JSON.
@@ -213,12 +219,21 @@ fn with_stores(mut h: Headless) -> Headless {
     h
 }
 
+/// Makes `h`'s `plugin.install` accept `grant` and `allowHeavy` when `allow` (`--allow-plugin-grants`).
+fn accepting_grants(mut h: Headless, allow: bool) -> Headless {
+    if allow {
+        h.session.allow_plugin_grants_from_requests();
+    }
+    h
+}
+
 fn mcp(args: &[String]) -> Result<(), String> {
     if help_requested(args, &["--connect", "--automation-read-root", "--automation-write-root"]) {
         return help();
     }
     let mut connect: Option<String> = None;
     let mut headless = false;
+    let mut allow_grants = false;
     let (mut read_roots, mut write_roots): (Vec<String>, Vec<String>) = (vec![], vec![]);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -230,6 +245,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
         match flag {
             "--connect" => connect = Some(it.next().cloned().ok_or("--connect needs an address")?),
             "--headless" => headless = true,
+            "--allow-plugin-grants" => allow_grants = true,
             "--automation-read-root" | "--automation-write-root" => {
                 let dir = inline.or_else(|| it.next().cloned()).ok_or_else(|| format!("{flag} needs a folder"))?;
                 if flag == "--automation-read-root" { read_roots.push(dir) } else { write_roots.push(dir) }
@@ -239,6 +255,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
     }
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
+    }
+    if allow_grants && connect.is_some() {
+        return Err("--allow-plugin-grants applies to the headless server; in a running app a person approves each plug-in".into());
     }
     let read: Vec<&Path> = read_roots.iter().map(Path::new).collect();
     let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
@@ -251,9 +270,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
         // Every thread of this process, not only the server's: nothing reaches past the roots.
         file_access::confine_process(roots.clone());
         eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
-        Box::new(Headless::with_document().with_automation_roots(Some(roots)))
-    } else if headless {
-        Box::new(with_stores(Headless::with_document()))
+        Box::new(accepting_grants(Headless::with_document().with_automation_roots(Some(roots)), allow_grants))
+    } else if headless || allow_grants {
+        Box::new(accepting_grants(with_stores(Headless::with_document()), allow_grants))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.
         Box::new(Remote::connect(&addr).map_err(|e| format!("cannot connect to {addr}: {e}"))?)
@@ -512,6 +531,7 @@ fn run(args: &[String]) -> Result<(), String> {
     let mut stdin_read = false;
     let mut scale = None::<f64>;
     let mut ppi = None::<f64>;
+    let mut allow_grants = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |what: &str| it.next().cloned().ok_or_else(|| format!("{a} needs {what}"));
@@ -546,6 +566,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 steps.push(Step::Export(val("a file")?));
                 params_for = None;
             }
+            "--allow-plugin-grants" => allow_grants = true,
             "--scale" | "-s" => {
                 let raw = val("a number")?;
                 scale = Some(raw.parse::<f64>().map_err(|_| format!("--scale {raw}: not a number"))?);
@@ -563,7 +584,7 @@ fn run(args: &[String]) -> Result<(), String> {
         }
     }
 
-    let mut h = with_stores(Headless::new());
+    let mut h = accepting_grants(with_stores(Headless::new()), allow_grants);
     let mut out = std::io::stdout().lock();
     // A reader that stopped early (a closed pipe) isn't an error, and the batch goes on: its later
     // steps (an export…) still run, unprinted.

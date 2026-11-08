@@ -214,7 +214,8 @@ after it), `__plugin` (the plug-in id) and `preview`. It previews `plugin.run` o
 the `effect` dialog (`effect.dialog {effect: "plugin.<id>"}`). An exporter plug-in with parameters opens the
 `pluginExport` dialog once Export As has picked the file: one field per parameter, `__plugin`, and `__export` (the
 export's own parameters); `ui.dialog.confirm` writes the file. `ui.installPlugin {path?}` installs a `.wasm` (without
-a path it asks for one); see [plugins.md](plugins.md).
+a path it asks for one); one that needs approval opens the `pluginInstall` dialog, which only a person can confirm
+(`ui.dialog.confirm` and injected input are refused); see [plugins.md](plugins.md).
 
 Overprint Black: the Edit → Edit Colors → Overprint Black… menu item opens a `command` parameter dialog for
 `edit.colors.overprintBlack` (fields `remove`, `percentage`, `fill`, `stroke`, `includeCmyBlacks`,
