@@ -1348,10 +1348,15 @@ fn app_click(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2, f: 
     }
 }
 
-/// `key` pressed and released in an app-like frame of `f`, then one more frame.
-fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+/// `key` pressed and released in one app-like frame of `f`, with no idle frame after it.
+fn app_key_now(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
     let ev = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
     app_frame(ctx, app, vec![ev(true), ev(false)], f);
+}
+
+/// `key` pressed and released in an app-like frame of `f`, then one more frame.
+fn app_key(ctx: &egui::Context, app: &mut VectorcraftApp, key: egui::Key, f: fn(&mut VectorcraftApp, &mut egui::Ui)) {
+    app_key_now(ctx, app, key, f);
     app_frame(ctx, app, vec![], f);
 }
 
@@ -1493,11 +1498,39 @@ fn delete_after_the_last_highlighted_layer_row_is_deleted_clears_the_selection()
     let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
     let row = text_rect(&texts, "Layer 2").center();
     app_click(&ctx, &mut app, row, boxed_layers);
-    app_key(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
     assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Layer 2 is deleted");
     assert!(app.session.active().unwrap().selection.contains(rect), "the rectangle stays selected");
-    app_key(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
     assert!(app.session.active().unwrap().doc.node(rect).is_none(), "Delete clears the selected object once the panel has no rows");
+}
+
+/// Clicking a row right after the last highlighted row was deleted restores the row keys: Delete
+/// then deletes that row, not the selected art.
+#[test]
+fn clicking_a_row_after_the_last_one_was_deleted_keeps_delete_with_the_layers_panel() {
+    let ctx = drop_ctx();
+    let mut app = app_with_rect();
+    run(&mut app, "layer.new", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    let rect = first_selected(&app).unwrap().id;
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer2 = text_rect(&texts, "Layer 2").center();
+    app_click(&ctx, &mut app, layer2, boxed_layers);
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 2, "Layer 2 is deleted");
+    // Click Layer 3 and press Delete in the very next frame: the click's highlight action runs at
+    // the end of its frame, so the panel must read the rows the click will leave.
+    let texts = frame_events(&ctx, &mut app, vec![], boxed_layers);
+    let layer3 = text_rect(&texts, "Layer 3").center();
+    let button =
+        |pressed| egui::Event::PointerButton { pos: layer3, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    for e in [egui::Event::PointerMoved(layer3), button(true), button(false)] {
+        app_frame(&ctx, &mut app, vec![e], boxed_layers);
+    }
+    app_key_now(&ctx, &mut app, egui::Key::Delete, boxed_layers);
+    assert_eq!(app.session.active().unwrap().doc.layers.len(), 1, "Delete removes the clicked row");
+    assert!(app.session.active().unwrap().doc.node(rect).is_some(), "the rectangle on Layer 1 stays");
 }
 
 /// A tool that claims Delete and Backspace (the Artboard tool's active artboard) leaves them to a
