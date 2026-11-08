@@ -160,58 +160,6 @@ fn arb_paint() -> impl Strategy<Value = Value> {
     ]
 }
 
-/// An output object: an input object's id (by index into the inputs) or a random one, and any of
-/// the object keys.
-fn arb_object() -> impl Strategy<Value = (Option<usize>, Value)> {
-    let stroke = (arb_paint(), prop::option::of(arb_num())).prop_map(|(p, w)| json!({"paint": p, "width": w}));
-    (
-        prop::option::of(0usize..8),
-        prop::option::of(prop_oneof![Just(json!("path")), Just(json!("compound")), arb_junk()]),
-        prop::option::of(arb_path()),
-        prop::option::of(prop_oneof![Just(json!("evenodd")), Just(json!("nonzero")), arb_junk()]),
-        prop::option::of(prop::collection::vec(arb_paint(), 0..3)),
-        prop::option::of(prop::collection::vec(stroke, 0..3)),
-        prop::option::of(arb_num()),
-        prop::option::of(prop_oneof![Just(json!("name")), arb_junk()]),
-    )
-        .prop_map(|(id, t, path, rule, fills, strokes, opacity, name)| {
-            let mut o = Map::new();
-            for (k, v) in [
-                ("type", t),
-                ("path", path),
-                ("fillRule", rule),
-                ("fills", fills.map(Value::from)),
-                ("strokes", strokes.map(Value::from)),
-                ("opacity", opacity),
-                ("name", name),
-            ] {
-                if let Some(v) = v {
-                    o.insert(k.into(), v);
-                }
-            }
-            (id, Value::Object(o))
-        })
-}
-
-/// The output document: objects (ids resolved against `inputs`; out-of-range indices become
-/// unknown ids), or junk.
-fn output(objects: &[(Option<usize>, Value)], inputs: &[u64], junk: Option<Value>) -> String {
-    if let Some(j) = junk {
-        return j.to_string();
-    }
-    let list: Vec<Value> = objects
-        .iter()
-        .map(|(id, o)| {
-            let mut o = o.clone();
-            if let Some(i) = id {
-                o["id"] = json!(inputs.get(*i).copied().unwrap_or(9_999_999 + *i as u64));
-            }
-            o
-        })
-        .collect();
-    json!({ "objects": list }).to_string()
-}
-
 /// Bytes in the passive data segment that bulk memory cases initialize memory from.
 const SEGMENT_LEN: u32 = 4096;
 
@@ -476,6 +424,58 @@ fn bulk_memory_cases_reach_their_instruction() {
         let r = run_bulk(outside, Fuel::Default);
         assert!(matches!(r, Err(Error::Trap(_))), "{op:?} out of bounds gave {r:?}");
     }
+}
+
+/// An output object: an input object's id (by index into the inputs) or a random one, and any of
+/// the object keys.
+fn arb_object() -> impl Strategy<Value = (Option<usize>, Value)> {
+    let stroke = (arb_paint(), prop::option::of(arb_num())).prop_map(|(p, w)| json!({"paint": p, "width": w}));
+    (
+        prop::option::of(0usize..8),
+        prop::option::of(prop_oneof![Just(json!("path")), Just(json!("compound")), arb_junk()]),
+        prop::option::of(arb_path()),
+        prop::option::of(prop_oneof![Just(json!("evenodd")), Just(json!("nonzero")), arb_junk()]),
+        prop::option::of(prop::collection::vec(arb_paint(), 0..3)),
+        prop::option::of(prop::collection::vec(stroke, 0..3)),
+        prop::option::of(arb_num()),
+        prop::option::of(prop_oneof![Just(json!("name")), arb_junk()]),
+    )
+        .prop_map(|(id, t, path, rule, fills, strokes, opacity, name)| {
+            let mut o = Map::new();
+            for (k, v) in [
+                ("type", t),
+                ("path", path),
+                ("fillRule", rule),
+                ("fills", fills.map(Value::from)),
+                ("strokes", strokes.map(Value::from)),
+                ("opacity", opacity),
+                ("name", name),
+            ] {
+                if let Some(v) = v {
+                    o.insert(k.into(), v);
+                }
+            }
+            (id, Value::Object(o))
+        })
+}
+
+/// The output document: objects (ids resolved against `inputs`; out-of-range indices become
+/// unknown ids), or junk.
+fn output(objects: &[(Option<usize>, Value)], inputs: &[u64], junk: Option<Value>) -> String {
+    if let Some(j) = junk {
+        return j.to_string();
+    }
+    let list: Vec<Value> = objects
+        .iter()
+        .map(|(id, o)| {
+            let mut o = o.clone();
+            if let Some(i) = id {
+                o["id"] = json!(inputs.get(*i).copied().unwrap_or(9_999_999 + *i as u64));
+            }
+            o
+        })
+        .collect();
+    json!({ "objects": list }).to_string()
 }
 
 proptest! {
