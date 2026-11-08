@@ -30,8 +30,9 @@ fn config() -> ProptestConfig {
     c
 }
 
+/// Installs `wasm`, in place of any module installed with its id before (`replace: true`).
 fn install(s: &mut Session, wasm: &[u8]) -> Result<Value, String> {
-    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(wasm)})).map_err(|e| e.to_string())
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "replace": true})).map_err(|e| e.to_string())
 }
 
 /// The document renders and exports without panicking.
