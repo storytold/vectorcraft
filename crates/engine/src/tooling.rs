@@ -117,6 +117,8 @@ impl Session {
         // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
+        // `switch_tool` returns early for the tool already active.
+        self.select_whole_instance(id);
         if again {
             let acts = self.with_tool_cx(view, |t, cx| t.chosen_again(cx));
             self.apply_actions(acts)?;
@@ -147,8 +149,22 @@ impl Session {
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
+            self.select_whole_instance(id);
         }
         Ok(())
+    }
+
+    /// The selection tools other than Direct Selection pick whole objects: with one of them chosen,
+    /// an object selected in a symbol instance's art gives way to the instance. The revision
+    /// changes with it, so panels that cache by revision show the instance.
+    fn select_whole_instance(&mut self, id: &str) {
+        if id != "directSelection"
+            && vectorcraft_tools::catalog::is_selection_tool(id)
+            && let Some(st) = self.active_mut()
+            && st.selection.symbol_part.take().is_some()
+        {
+            st.revision += 1;
+        }
     }
 
     /// The selection tool Cmd lends tool `id` for a drag: the one chosen last; until one is,
@@ -200,6 +216,8 @@ impl Session {
             // Fails only without a document, and then there is no typing to keep.
             let _ = crate::cmd::settle_interaction(self);
         }
+        // The Selection and Group Selection tools act on the instance whole.
+        self.select_whole_instance(id);
         let lent = self.make_tool(id);
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
@@ -319,6 +337,11 @@ impl Session {
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
             selection_tolerance: self.prefs.selection_tolerance,
+            marquee_mode: match self.prefs.marquee_selection.as_str() {
+                "enclosed" => vectorcraft_tools::MarqueeMode::Enclosed,
+                "directional" => vectorcraft_tools::MarqueeMode::Directional,
+                _ => vectorcraft_tools::MarqueeMode::Touching,
+            },
             anchor_size: self.prefs.anchor_size,
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
@@ -332,6 +355,7 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            typed_lists: self.prefs.typed_lists,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
             anchor_path_labels: self.prefs.anchor_path_labels,
@@ -577,6 +601,11 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
+        // A key that cancels a gesture may put back options the gesture changed (Escape on an
+        // arc, spiral or grid drag): keep them.
+        if acts.contains(&Action::Cancel) {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 

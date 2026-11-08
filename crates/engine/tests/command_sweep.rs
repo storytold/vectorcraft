@@ -432,6 +432,37 @@ fn structured_junk() {
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": 300, "invert": true, "clip": false, "fromArt": true}})),
         ("effect.apply", json!({"effect": "addon.color.halftone", "params": {"frequency": -1e308, "mode": "cmyk", "color": "#123456", "target": 3}})),
         ("effect.apply", json!({"effect": "addon.color.duotone", "params": {"tones": "x", "skipSpot": "yes"}})),
+        // Effect › SVG Filters: hostile filters are refused or drawn within their bounds.
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feTurbulence numOctaves=\"1e308\"/></filter>"}})),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feGaussianBlur stdDeviation=\"1e308\"/></filter>", "scale": 1e308}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\" filterUnits=\"userSpaceOnUse\" x=\"-1e308\" width=\"1e308\"><feFlood/></filter>"}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<filter id=\"a\"><feImage xlink:href=\"/etc/passwd\"/></filter>", "scale": -1}}),
+        ),
+        (
+            "effect.apply",
+            json!({"effect": "svg.filter", "params": {"xml": "<!DOCTYPE x [<!ENTITY a \"aaaa\">]><filter id=\"&a;\"><feOffset/></filter>"}}),
+        ),
+        ("effect.apply", json!({"effect": "svg.filter", "params": {"xml": ["x"], "name": 3}})),
+        ("svgFilter.define", json!({"xml": "<filter id=\"a\"><feConvolveMatrix order=\"4294967295\" kernelMatrix=\"1\"/></filter>"})),
+        ("svgFilter.define", json!({"xml": format!("<filter id=\"a\">{}</filter>", "<feOffset/>".repeat(100_000)), "replace": "a"})),
+        (
+            "svgFilter.import",
+            json!({"svg": format!(
+                "<!DOCTYPE svg [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"{}\"><!ENTITY c \"{}\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><filter id=\"&c;\"><feOffset/></filter></svg>",
+                "&a;".repeat(10),
+                "&b;".repeat(10)
+            )}),
+        ),
+        ("svgFilter.apply", json!({"name": "\u{0}", "ids": [u64::MAX]})),
+        ("svgFilter.delete", json!({"name": ["a"]})),
         (
             "effect.apply",
             json!({"effect": "addon.color.duotone", "params": {"tones": [1, null, {"color": [1e308, -1e308, "x"], "curve": [[1e308, -1e308], ["a"]]}]}}),

@@ -133,8 +133,9 @@ type RunArgs = (i32, i32, i32, i32);
 impl Plugin {
     /// Validates and loads a module: checks the ABI version, the exports and reads the manifest, and
     /// checks that each host import it asks for is one the host offers ([`crate::host::IMPORTS`])
-    /// and its manifest allows.
+    /// and its manifest allows. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
+        crate::safe_mode::check()?;
         if bytes.len() > limits.max_module_bytes {
             return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
         }
@@ -279,7 +280,8 @@ impl Plugin {
         self.run_limited(input, params, &self.limits)
     }
 
-    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one).
+    /// [`Plugin::run`] with other time and instruction budgets (live effects get a shorter one). In
+    /// Safe Mode nothing runs ([`Error::SafeMode`]), even a plug-in installed before it was on.
     pub fn run_limited(&self, input: &[u8], params: &[u8], limits: &Limits) -> Result<Vec<u8>> {
         self.run_reporting(input, params, limits).0
     }
@@ -290,6 +292,9 @@ impl Plugin {
     /// doesn't) and `vc_cancelled` sees the scope's Cancel.
     pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
         let mut report = Report::default();
+        if let Err(e) = crate::safe_mode::check() {
+            return (Err(e), report);
+        }
         // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
         // still not take the document down (native builds; wasm aborts on panic anyway).
         let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report)));

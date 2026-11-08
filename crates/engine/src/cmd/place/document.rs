@@ -157,11 +157,11 @@ std::thread_local! {
 }
 
 /// A document's links being resolved ([`READING`]): the entry goes when this does.
-struct Reading;
+pub(super) struct Reading;
 
 impl Reading {
     /// `None` when the document of `bytes` is already being read, or [`MAX_NESTED_READS`] are.
-    fn enter(bytes: &[u8]) -> Option<Self> {
+    pub(super) fn enter(bytes: &[u8]) -> Option<Self> {
         let hash = hash_bytes(bytes);
         READING.with_borrow_mut(|r| (r.len() < MAX_NESTED_READS && !r.contains(&hash)).then(|| r.push(hash))).map(|()| Reading)
     }

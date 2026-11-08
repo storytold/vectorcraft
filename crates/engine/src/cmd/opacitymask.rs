@@ -34,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Transparency"],
             None,
             "{id?|ids?} put the mask art back above each masked object (default: the selection, or the object whose mask is being edited, which leaves mask editing)",
-            has_doc,
+            can_change_mask,
             release
         ),
         cmd!(
@@ -43,25 +43,22 @@ pub fn specs() -> Vec<CommandSpec> {
             ["Window", "Transparency"],
             None,
             "{id?|ids?} keep the mask but stop applying it",
-            has_doc,
+            can_change_mask,
             |s, p| set_flags(s, p, "Disable Opacity Mask", &json!({ "disabled": true }))
         ),
-        cmd!("transparency.enableOpacityMask", "Enable Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", has_doc, |s, p| set_flags(
-            s,
-            p,
-            "Enable Opacity Mask",
-            &json!({ "disabled": false })
-        )),
+        cmd!("transparency.enableOpacityMask", "Enable Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", can_change_mask, |s, p| {
+            set_flags(s, p, "Enable Opacity Mask", &json!({ "disabled": false }))
+        }),
         cmd!(
             "transparency.unlinkOpacityMask",
             "Unlink Opacity Mask",
             ["Window", "Transparency"],
             None,
             "{id?|ids?} the object moves without its mask",
-            has_doc,
+            can_change_mask,
             |s, p| set_flags(s, p, "Unlink Opacity Mask", &json!({ "linked": false }))
         ),
-        cmd!("transparency.linkOpacityMask", "Link Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", has_doc, |s, p| set_flags(
+        cmd!("transparency.linkOpacityMask", "Link Opacity Mask", ["Window", "Transparency"], None, "{id?|ids?}", can_change_mask, |s, p| set_flags(
             s,
             p,
             "Link Opacity Mask",
@@ -73,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{id?|ids?, clip?, invert?, disabled?, linked?} change the opacity masks of `ids`, the selection, or the object whose mask is being edited",
-            has_doc,
+            can_change_mask,
             |s, p| set_flags(s, p, "Opacity Mask Options", p)
         ),
         cmd!(
@@ -152,14 +149,33 @@ pub(crate) fn percent(o: f64) -> f32 {
     (o / 100.0).clamp(0.0, 1.0) as f32
 }
 
-/// The [`transparency_targets`] that have an opacity mask.
+/// Refuses a command that would change [`transparency_targets`] when they are the selection, without
+/// `id` or `ids` and outside mask editing, while an object of a dynamic symbol instance's art is
+/// selected: the instance's transparency and mask change only when the instance is selected.
+pub(crate) fn refuse_symbol_part_unnamed(s: &Session, p: &Value) -> Result<()> {
+    if p.get("ids").is_none() && p.get("id").is_none() && s.doc()?.doc.mask_edit.is_none() {
+        super::edit::refuse_symbol_part(s)?;
+    }
+    Ok(())
+}
+
+/// The [`transparency_targets`] that have an opacity mask, refused as
+/// [`refuse_symbol_part_unnamed`] says.
 fn masked_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
+    refuse_symbol_part_unnamed(s, p)?;
     let ids: Vec<NodeId> = transparency_targets(s, p)?.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.extras().mask.is_some())).collect();
     if ids.is_empty() {
         return Err(EngineError::Other("no target object has an opacity mask: select one or give `id`".into()));
     }
     Ok(ids)
+}
+
+/// The commands that change an existing opacity mask: a document is open, and outside mask editing
+/// no object of a dynamic symbol instance's art is selected ([`masked_targets`]).
+fn can_change_mask(s: &Session) -> std::result::Result<(), String> {
+    has_doc(s)?;
+    if s.active().is_some_and(|st| st.doc.mask_edit.is_some()) { Ok(()) } else { super::edit::no_symbol_part(s) }
 }
 
 /// Make Opacity Mask: a document is open, and one selected object, which [`make`] gives an empty

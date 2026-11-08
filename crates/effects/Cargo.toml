@@ -17,6 +17,11 @@ vectorcraft-text = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 image = { workspace = true }
 kurbo = { workspace = true }
+# Effect › SVG Filters draws its filters with resvg (MIT OR Apache-2.0), at the usvg version the
+# workspace reads SVG with; raster-images decodes the object's pixels it hands the filter as a PNG.
+resvg = { version = "0.48", default-features = false, features = ["raster-images"] }
+# The number lists of filter attributes, read as usvg reads them (MIT OR Apache-2.0; already used by usvg).
+svgtypes = "0.16"
 serde_json = { workspace = true }
 
 [dev-dependencies]
