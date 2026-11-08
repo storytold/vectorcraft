@@ -4773,6 +4773,7 @@ axis	Both	Оба
 @msg	an image VectorCraft can't read was left out	изображение, которое VectorCraft не может прочитать, пропущено
 @msg	graphs come in as plain art, without their data or settings	диаграммы импортируются как обычная графика, без их данных и настроек
 @msg	an image whose data is cut short was left out	изображение с обрезанными данными пропущено
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	встроенное изображение {_1} × {_2} пикселей уменьшено до {_3} × {_4} пикселей, чтобы сохранить слои
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, меняющий направление письма внутри текстового объекта, открывается в направлении своего первого символа

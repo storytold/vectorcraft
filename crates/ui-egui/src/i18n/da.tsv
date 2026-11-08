@@ -4668,6 +4668,7 @@ imageTrace	Outline	Kontur
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst, der skifter skriveretning inde i et tekstobjekt, åbnes i retningen for sit første tegn

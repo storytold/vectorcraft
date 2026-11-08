@@ -4462,6 +4462,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an image VectorCraft can't read was left out	VectorCraft で読み込めない画像は除外されました
 @msg	graphs come in as plain art, without their data or settings	グラフは通常のアートとして読み込まれ、データと設定は保持されません
 @msg	an image whose data is cut short was left out	データが途中で切れている画像は除外されました
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます

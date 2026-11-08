@@ -4778,6 +4778,7 @@ axis	Both	Entrambi
 @msg	an image VectorCraft can't read was left out	un'immagine che VectorCraft non può leggere è stata omessa
 @msg	graphs come in as plain art, without their data or settings	i grafici vengono importati come grafica semplice, senza i loro dati e le loro impostazioni
 @msg	an image whose data is cut short was left out	un'immagine con dati incompleti è stata omessa
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	un'immagine incorporata di {_1} × {_2} pixel è stata ridotta a {_3} × {_4} pixel per mantenere i livelli
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	le immagini collegate mostrano l'anteprima a bassa risoluzione salvata nel file finché i loro file non vengono trovati: ricollegale nel pannello Collegamenti
 @msg	linked type areas past VectorCraft's limits were left out	le aree di testo concatenate oltre i limiti di VectorCraft sono state omesse
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	il testo che cambia direzione di scrittura all’interno di un oggetto di testo si apre nella direzione del suo primo carattere
