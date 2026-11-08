@@ -187,7 +187,9 @@ private editing data. VectorCraft:
   block in vertical type opens unmarked, and two blocks with nothing between them open as one block. Its upright
   Roman characters (`Tv`) open with Standard Vertical Roman Alignment. VectorCraft's own layout rule also sets a
   run of two or three half-width digits across the column in vertical type, inside or outside a block and with
-  either `Tv` value.
+  either `Tv` value. Its binding punctuation (`Tg`) opens as Burasagari's Force setting when on and as no
+  Burasagari when off, which is VectorCraft's own mapping; the repeat character, line breaking (`TG`) and
+  Japanese layout rules (`Xu`, `Tu`) are not read.
   Legacy `.ai` type set in rendering modes 4 to 7 (`Tr`, text used as a mask) is a clipping path of its
   clipping group, as a `W` path is, and the mode lasts into later text objects. Type in linked areas, in
   wraparound text or in a compound path doesn't clip, with a warning. A `Tr` operand that is not a whole number
