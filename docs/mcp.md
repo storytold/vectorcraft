@@ -840,6 +840,9 @@ empty `boxes`, and `thumbnail: 1` shows what that page prints. A page whose `Use
 opens at its size in points, the file's numbers times the `UserUnit` (one above 75,000 counts as 75,000), and
 `document.pdfInfo` gives its size and boxes in points too. A `.ai` whose editing data has its artboards in the units of
 such a page opens from that data at the page's size.
+`document.open`, `file.place` and `document.pdfInfo` reject a `cropTo`, `crop`, `password`, `colorMode` or `textAs`
+that is not a string, and `document.pdfInfo` rejects a `thumbnailSize` that is not a number. The error names the param,
+and nothing opens or is placed. Leaving a param out or giving null keeps its default.
 Imported colours keep their model:
 DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
 and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too). CMYK images
