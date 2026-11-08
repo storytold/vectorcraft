@@ -766,3 +766,78 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Export 3D Object in the panel menu collects the selected 3D object; its tile is marked 3D, the
+/// Format row sets its mesh format, and Export writes it as a mesh file beside the pictures.
+#[test]
+fn a_3d_asset_takes_its_format_from_the_row_and_exports_as_a_mesh() {
+    let (mut app, log, [a, b]) = app(true);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "params": {"depth": 20}})).unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    app.run("assets.add", json!({"ids": [b], "name": "Flat"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // Without a 3D asset there is no 3D Format row.
+    frame(&ctx, &mut app, vec![], false);
+    assert!(!has(&frame(&ctx, &mut app, vec![], false), "3D Format:"));
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Export 3D Object")));
+    let list = assets(&mut app);
+    assert_eq!((list[1]["name"].clone(), list[1]["format3D"].clone()), (json!("Box"), json!("usda")));
+    let texts = frame(&ctx, &mut app, vec![], false);
+    let texts = if has(&texts, "3D Format:") { texts } else { frame(&ctx, &mut app, vec![], false) };
+    assert!(has(&texts, "3D") && has(&texts, "3D Format:"), "{:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>());
+    frame(&ctx, &mut app, click(at(&texts, "USDA")), false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "OBJ")), false);
+    assert_eq!(assets(&mut app)[1]["format3D"], "obj");
+    // The menu left the new 3D asset selected: Export writes its OBJ and MTL alone, as one zip.
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export 1 Selected")), false);
+    {
+        let log = log.borrow();
+        let [(name, zip)] = log.as_slice() else { panic!("{:?} {}", log.iter().map(|f| &f.0).collect::<Vec<_>>(), app.ui.status) };
+        assert!(name.ends_with(".zip"), "{name}");
+        let has_name = |n: &str| zip.windows(n.len()).any(|w| w == n.as_bytes());
+        assert!(has_name("Box.obj") && has_name("Box.mtl"));
+    }
+    // Every asset: the 3D asset's files first, since they are written at once, then the picture
+    // asset as before.
+    log.borrow_mut().clear();
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Select All Assets")));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    let log = log.borrow();
+    assert_eq!(log.iter().map(|f| f.0.ends_with(".zip")).collect::<Vec<_>>(), [true, false], "{:?}", log.iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert!(log[1].0.starts_with("Flat"), "{}", log[1].0);
+}
+
+/// When the 3D assets fail to export, Export leaves the picture assets unexported and the status
+/// bar keeps the 3D error.
+#[test]
+fn a_failed_3d_export_stops_the_picture_export() {
+    let (mut app, log, [a, b]) = app(true);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "params": {"depth": 20}})).unwrap();
+    app.run("layer.setProps", json!({"id": a, "name": "Box"})).unwrap();
+    app.run("assets.add3D", json!({"ids": [a]})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.run("effect.remove", json!({"index": 0})).unwrap();
+    app.run("assets.add", json!({"ids": [b], "name": "Flat"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    frame(&ctx, &mut app, vec![], false);
+    menu_frame(&ctx, &mut app, vec![]);
+    let items = menu_frame(&ctx, &mut app, vec![]);
+    menu_frame(&ctx, &mut app, click(at(&items, "   Select All Assets")));
+    frame(&ctx, &mut app, vec![], false);
+    let texts = frame(&ctx, &mut app, vec![], false);
+    frame(&ctx, &mut app, click(at(&texts, "Export")), false);
+    assert!(log.borrow().is_empty(), "{:?}", log.borrow().iter().map(|f| &f.0).collect::<Vec<_>>());
+    assert!(app.ui.status.contains("Box"), "{}", app.ui.status);
+}

@@ -50,6 +50,23 @@ location /vectorcraft/ {
 
 Local test: `python3 -m http.server 8765` inside the folder, then open http://localhost:8765/.
 
+## Browser requirements
+
+The wasm is built with WebAssembly SIMD (`-C target-feature=+simd128`, `.cargo/config.toml`,
+#2786), so it needs a browser that has it:
+
+| Browser | First version |
+|---|---|
+| Chrome, Edge | 91 |
+| Firefox | 89 |
+| Safari (macOS and iOS/iPadOS) | 16.4 |
+
+Source: caniuse `wasm-simd` and the WebAssembly feature table (webassembly.org/features). An older
+browser can't compile the module. There is no fallback build and no message: the page stays on
+"Loading VectorCraft..." and the console shows a WebAssembly compile error. The app also needs
+WebGPU or WebGL2 (see "Renderer selection" below). If you must serve older browsers, put a
+version check in front of the app on your own page.
+
 ## Fonts folder
 
 Builds made with craft-fonts (`CRAFT_FONTS_DIR`, all releases) have a `fonts/` folder beside the

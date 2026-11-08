@@ -703,7 +703,7 @@ fn find_preset(s: &Session, name: &str) -> Option<ScreenExportPreset> {
 }
 
 /// `p` over the settings of its `exportPreset`, when it names one (its own keys win).
-fn with_preset(s: &Session, p: &Value) -> Result<Value> {
+pub(super) fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     let Some(name) = str_param(p, "exportPreset") else { return Ok(p.clone()) };
     let preset = find_preset(s, name).ok_or_else(|| bad(C, format!("no export preset `{name}` (see document.exportPresets.list)")))?;
     let mut merged = preset.settings;
@@ -1243,6 +1243,9 @@ fn items(
         let mut pieces = vec![];
         for id in ids {
             let a = doc.asset(*id).ok_or_else(|| bad(C, format!("no asset {id} (see assets.list)")))?;
+            if a.format_3d.is_some() {
+                return Err(bad(C, format!("asset {id} is a 3D asset: assets.export3D writes it")));
+            }
             let (d, r) = alone(&a.nodes, &a.name).ok_or_else(|| bad(C, format!("asset `{}` has no art to export", a.name)))?;
             pieces.push((a.name.clone(), d, Some(0), r));
         }

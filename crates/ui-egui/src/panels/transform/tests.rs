@@ -503,3 +503,47 @@ fn rotate_and_shear_fields_are_named() {
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Rotate");
     let _ = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Shear");
 }
+
+/// The Align to Pixel Grid checkbox turns the selected paths' pixel-aligned property on, shows a
+/// dash when they differ (a click then turns it on for both), turns it off when it is on for all,
+/// and is unavailable with type selected.
+#[test]
+fn align_to_pixel_grid_shows_and_sets_the_property() {
+    use crate::panels::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 60.3, "y": 20.6, "width": 30.4, "height": 9.7})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let aligned = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().extras().pixel_aligned;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let toggle = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let texts = frame_events(ctx, app, vec![], show);
+        click(ctx, app, text_rect(&texts, "Align to Pixel Grid").center(), show);
+    };
+    assert_eq!(pixel_aligned_state(&app).map(|s| (s.0, s.1)), Some((Some(false), true)));
+    toggle(&ctx, &mut app);
+    assert!(aligned(&app, a) && aligned(&app, b));
+    let x0 = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(a)).unwrap().geometric_bounds().unwrap().x0;
+    // The default 1 pt stroke is odd and centered: the edges go to half points.
+    assert_eq!(x0, 10.5);
+    app.run("object.setPixelAligned", json!({"ids": [b], "on": false})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.0), Some(None));
+    toggle(&ctx, &mut app);
+    assert!(aligned(&app, a) && aligned(&app, b));
+    toggle(&ctx, &mut app);
+    assert!(!aligned(&app, a) && !aligned(&app, b));
+    let t = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, t]})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
+    toggle(&ctx, &mut app);
+    assert!(!aligned(&app, a));
+    // A path inside a compound path snaps with the compound path, so it cannot be aligned alone.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let c = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(true));
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(c)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [member]})).unwrap();
+    assert_eq!(pixel_aligned_state(&app).map(|s| s.1), Some(false));
+}

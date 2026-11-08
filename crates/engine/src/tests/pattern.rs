@@ -979,6 +979,32 @@ fn picking_another_pattern_swatch_keeps_the_pattern_transform() {
     assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
 }
 
+/// A pattern swatch made from the current fill holds the pattern untransformed: a fill picked up
+/// from art whose tiles were moved does not carry that placement to the art the swatch is applied
+/// to, which keeps its own (#1970).
+#[test]
+fn a_pattern_swatch_made_from_a_transformed_fill_holds_the_pattern_untransformed() {
+    let mut s = session();
+    make_dots(&mut s);
+    let src = rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [src.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [src.0], "matrix": [2, 0, 0, 2, 15, 10]})).unwrap();
+    sel(&mut s, &[]);
+    s.execute("appearance.copyFrom", &json!({"source": src.0})).unwrap();
+    let Paint::Pattern { xf, .. } = &s.paint.fill else { panic!("the picked-up pattern fill") };
+    assert_eq!(xf.as_coeffs(), [2.0, 0.0, 0.0, 2.0, 15.0, 10.0], "the current fill has the tiles' placement");
+    s.execute("swatch.new", &json!({"name": "Picked"})).unwrap();
+    let Paint::Pattern { pattern, xf } = doc(&s).swatch("Picked").unwrap().paint.clone() else { panic!("a pattern swatch") };
+    assert_eq!((pattern.as_str(), xf.as_coeffs()), ("Dots", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    let dst = rect(&mut s, 300.0, 100.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "color": "#00ff00"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Dots"})).unwrap();
+    s.execute("pattern.transform", &json!({"ids": [dst.0], "matrix": [3, 0, 0, 3, 0, 0]})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [dst.0], "swatch": "Picked"})).unwrap();
+    let Paint::Pattern { xf, .. } = node(&s, dst).appearance.fill_paint() else { panic!("a pattern fill") };
+    assert_eq!(xf.as_coeffs(), [3.0, 0.0, 0.0, 3.0, 0.0, 0.0], "the art keeps its own placement");
+}
+
 #[test]
 fn inner_glow_on_a_pattern_fill_stays_inside_the_object_on_the_threaded_renderer() {
     // #2426: the glow's pixmap was drawn with the pattern's paint transform, so it landed

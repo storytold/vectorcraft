@@ -215,6 +215,28 @@ fn control_save_refuses_an_option_no_format_takes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// An action set another app saved (`.aia`) is read only from inside the read root, whichever way a
+/// control request names it: `actionSet.read` and Load Actions….
+#[test]
+fn action_sets_are_read_only_inside_the_read_root() {
+    let (mut app, tx, base) = confined("aia");
+    let set = "/version 3\n/name [ 4 4d696e65 ]\n/action-1 { /name [ 1 41 ] }\n";
+    std::fs::write(base.join("in/a.aia"), set).unwrap();
+    std::fs::write(base.join("outside/b.aia"), set).unwrap();
+    let execute = |command: &str, path: PathBuf| json!({"command": command, "params": {"path": s(path)}});
+    let r = request(&mut app, &tx, "engine.execute", execute("actionSet.read", base.join("in/a.aia")));
+    assert_eq!(r["result"]["set"], "Mine", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", execute(crate::panels::actions::LOAD_SET, base.join("in/a.aia")));
+    assert_eq!(r["result"]["name"], "Mine", "{r}");
+    let sets = app.ui.action_sets.len();
+    for command in ["actionSet.read", crate::panels::actions::LOAD_SET] {
+        let r = request(&mut app, &tx, "engine.execute", execute(command, base.join("outside/b.aia")));
+        assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the read root")), "{command}: {r}");
+    }
+    assert_eq!(app.ui.action_sets.len(), sets, "no set added");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `ui.render` (MCP's `render_preview` and `screenshot` in the app) draws the artboard pixel for
 /// pixel as `app.export` writes a PNG on white: two rectangles that meet at x 40.3 and a diagonal
 /// edge.

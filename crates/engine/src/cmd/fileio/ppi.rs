@@ -1,6 +1,7 @@
 //! Image resolution metadata (pixels per inch): PNG `pHYs`, JPEG JFIF density or EXIF, TIFF and
 //! WebP EXIF resolution tags, BMP pixels per metre, a Photoshop document's ResolutionInfo, a PCX
-//! header's HDpi and VDpi, or JP2 capture and display resolution boxes. Place
+//! header's HDpi and VDpi, JP2 capture and display resolution boxes, or a HEIF image's EXIF
+//! resolution tags. Place
 //! sizes an image by it (72 ppi when the file has none); images converted to PNG on import keep it
 //! as a `pHYs` chunk.
 
@@ -26,6 +27,8 @@ pub fn resolution(bytes: &[u8]) -> Option<(f64, f64)> {
         super::pcxread::resolution(bytes)
     } else if super::jp2read::is_jpeg2000(bytes) {
         jp2(bytes)
+    } else if super::heifread::is_heif(bytes) {
+        super::heifread::with_exif(bytes, tiff)
     } else {
         None
     };

@@ -109,12 +109,13 @@ pub(crate) fn saved_rows(saved: &Map<String, Value>) -> (Vec<Value>, Option<&str
 /// Open the dialog on its Assets tab with `checked` assets checked (every asset when `None`).
 pub(crate) fn open_assets(app: &mut VectorcraftApp, checked: Option<&[u64]>) {
     open(app);
+    let shown: Vec<u64> = app.session.active().map(|st| picture_assets(st).iter().map(|a| a.id).collect()).unwrap_or_default();
     if let Some(d) = app.ui.dialog.as_mut() {
         d.fields.insert("tab".into(), json!("assets"));
         if let Some(c) = checked {
             d.fields.insert("assets".into(), json!(c));
-            // The list scrolls to the first of them once: new assets land at its end.
-            if let Some(first) = c.first() {
+            // The list scrolls to the first of them it shows, once: new assets land at its end.
+            if let Some(first) = c.iter().find(|id| shown.contains(id)) {
                 d.fields.insert("__scrollTo".into(), json!(first));
             }
         }
@@ -129,7 +130,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let (n, saved, assets) = app
         .session
         .active()
-        .map(|st| (st.doc.artboards.len(), st.doc.export_settings.clone(), st.doc.assets.iter().map(|a| a.id).collect::<Vec<_>>()))
+        .map(|st| (st.doc.artboards.len(), st.doc.export_settings.clone(), picture_assets(st).iter().map(|a| a.id).collect::<Vec<_>>()))
         .unwrap_or_default();
     let get = |k: &str| saved.get(k).filter(|v| !v.is_null());
     let flag = |k: &str, default: bool| get(k).and_then(Value::as_bool).unwrap_or(default);
@@ -594,16 +595,23 @@ fn tiles(
     toggled
 }
 
-/// The checked assets that are still in the document, in panel order.
-fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
-    let on: Vec<u64> = d.fields.get("assets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
-    app.session.active().map(|st| st.doc.assets.iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
+/// The document's assets exported as pictures, in panel order: 3D assets export as mesh files from
+/// the Asset Export panel (`assets.export3D`).
+fn picture_assets(st: &vectorcraft_engine::DocState) -> Vec<&vectorcraft_doc::ExportAsset> {
+    st.doc.assets.iter().filter(|a| a.format_3d.is_none()).collect()
 }
 
-/// The Assets tab: each asset's thumbnail with its checkbox and name, in a grid or a list.
+/// The checked picture assets that are still in the document, in panel order.
+fn checked_assets(app: &VectorcraftApp, d: &Dialog) -> Vec<u64> {
+    let on: Vec<u64> = d.fields.get("assets").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).collect()).unwrap_or_default();
+    app.session.active().map(|st| picture_assets(st).iter().map(|a| a.id).filter(|id| on.contains(id)).collect()).unwrap_or_default()
+}
+
+/// The Assets tab: each picture asset's thumbnail with its checkbox and name, in a grid or a list.
 fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let Some(st) = app.session.active() else { return };
-    if st.doc.assets.is_empty() {
+    let shown = picture_assets(st);
+    if shown.is_empty() {
         ui.add_space(24.0);
         widgets::dim_label(ui, tl!("No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel."));
         return;
@@ -611,10 +619,10 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let mut on = checked_assets(app, d);
     let before = on.clone();
     // Asked for until its row is in view: the dialog's first frame only measures it.
-    let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| st.doc.assets.iter().any(|a| a.id == *id));
+    let scroll_to = d.fields.get("__scrollTo").and_then(Value::as_u64).filter(|id| shown.iter().any(|a| a.id == *id));
     let mut in_view = scroll_to.is_none();
-    let clicked = tiles(ui, "efs-assets", st.doc.assets.len(), list, |ui, i, r| {
-        let Some(a) = st.doc.assets.get(i) else { return (String::new(), String::new(), false) };
+    let clicked = tiles(ui, "efs-assets", shown.len(), list, |ui, i, r| {
+        let Some(a) = shown.get(i) else { return (String::new(), String::new(), false) };
         crate::panels::asset_export::paint_thumb(ui, st, a, r);
         if scroll_to == Some(a.id) {
             if ui.clip_rect().contains_rect(r) {
@@ -626,7 +634,7 @@ fn assets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
         (a.name.clone(), a.name.clone(), on.contains(&a.id))
     });
     for i in clicked {
-        if let Some(a) = st.doc.assets.get(i) {
+        if let Some(a) = shown.get(i) {
             if on.contains(&a.id) {
                 on.retain(|id| *id != a.id);
             } else {

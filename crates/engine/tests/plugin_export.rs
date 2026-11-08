@@ -69,9 +69,8 @@ fn an_exporter_adds_a_write_only_format_while_it_is_installed() {
     assert!(e.to_string().contains("unknown format"), "{e}");
 }
 
-/// The exporter is given the document as a native file's JSON: what `document.save` writes before
-/// the data of large images, which stays behind (compact, where a save of a small document is
-/// indented).
+/// The exporter receives the native document JSON without optional save renditions or preference
+/// metadata. Large image bytes stay in the saved file's tail; plug-in input stays compact.
 #[test]
 fn the_exporter_is_given_the_native_file_s_json() {
     let mut s = session();
@@ -94,8 +93,14 @@ fn the_exporter_is_given_the_native_file_s_json() {
     let saved = exported(&s.execute("document.save", &json!({})).unwrap());
     assert!(saved.len() > given.len() + png.len(), "the image data follows the JSON in the saved file");
     let doc: Value = serde_json::from_slice(&given).unwrap();
-    let saved_json: Value = serde_json::from_slice(vectorcraft_format::json_part(&saved)).unwrap();
-    assert_eq!(doc, saved_json, "the saved file's JSON");
+    let mut saved_json: Value = serde_json::from_slice(vectorcraft_format::json_part(&saved)).unwrap();
+    assert!(saved_json.get("pdf").is_some(), "a default application save carries a PDF");
+    assert_eq!(saved_json["pdfCompatible"], true);
+    assert!(doc.get("pdf").is_none() && doc.get("pdfCompatible").is_none(), "the plug-in input omits optional save members");
+    let saved_members = saved_json.as_object_mut().unwrap();
+    saved_members.remove("pdf");
+    saved_members.remove("pdfCompatible");
+    assert_eq!(doc, saved_json, "the native document JSON without optional save members");
     assert!(!given.contains(&b'\n'), "without indentation");
     assert_eq!((&doc["format"], &doc["version"]), (&json!("vectorcraft"), &json!(vectorcraft_format::VERSION)));
     let images = doc["images"].as_object().unwrap();
