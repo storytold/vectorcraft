@@ -19,6 +19,18 @@ fn pieces(c: vectorcraft_geom::CubicBez, tolerance: f64) -> u32 {
     if n.is_finite() { (n as u32).clamp(1, 32) } else { 32 }
 }
 
+/// `path` with its overlaps resolved under `rule`: simple contours that do not cross,
+/// holes running against their outlines. Type often draws one glyph as overlapping contours (a
+/// "k"'s arm across its stem), and [`rings`] tells a contour's side from one point of it, so a
+/// contour that crosses another must be cut where they meet first. A path the boolean refuses is
+/// used as it is.
+pub(super) fn resolved(path: &PathData, rule: FillRule) -> (PathData, FillRule) {
+    match vectorcraft_pathops::try_normalize(path, rule) {
+        Ok(p) if !p.subpaths.is_empty() => (p, FillRule::NonZero),
+        _ => (path.clone(), rule),
+    }
+}
+
 /// The rings of a shape: closed polygons with the filled side on their left, (-dy, dx): outer
 /// outlines run one way and holes the other, so nonzero winding fills them as the art is. Curves
 /// are followed within a tolerance of 1/2000 of `size` (at least 0.05 pt), so small curves take

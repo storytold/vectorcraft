@@ -754,3 +754,31 @@ fn many_small_rings_far_apart_are_too_complex() {
     let e = rings(&p, FillRule::NonZero, r.width().max(r.height()), usize::MAX).unwrap_err();
     assert!(e.contains("too complex"), "{e}");
 }
+
+/// Type often draws a glyph as contours that cross (a "k"'s arm across its stem, its leg across
+/// the arm). Each contour's side was told from its first point, so one starting inside another
+/// was dropped or cut as a hole, and the parts left were walled where they overlapped. The
+/// outline is the union the art fills, under either rule.
+#[test]
+fn crossing_contours_make_one_outline() {
+    let rect = |r: Rect| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true)
+    };
+    // The stem, an arm starting inside it, and a leg starting inside the arm.
+    let k = PathData::new(vec![
+        rect(Rect::new(0.0, 0.0, 20.0, 100.0)),
+        rect(Rect::new(10.0, 40.0, 60.0, 60.0)),
+        rect(Rect::new(50.0, 50.0, 70.0, 100.0)),
+    ]);
+    let b = k.bounds().unwrap();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        let filled = vectorcraft_pathops::area(&k, rule);
+        assert!(close(area(&plane(&k, rule, b, front()).unwrap()), filled, 1e-6), "{rule:?}: Rotate");
+        let f = extrude(&k, rule, b, Extrude::default(), front()).unwrap();
+        assert_eq!(f.len(), 1, "{rule:?}: straight on, only the front cap shows");
+        assert!(close(area(&f), filled, 1e-6), "{rule:?}: Extrude's cap");
+        assert!(inflate(&k, rule, b, Inflate::default(), front()).is_ok_and(|f| close(extent(&f).width(), 70.0, 1e-6)), "{rule:?}: Inflate");
+    }
+    // The filled area is the union's: the stem, the arm past it and the leg past the arm.
+    assert!(close(vectorcraft_pathops::area(&k, FillRule::NonZero), 20.0 * 100.0 + 40.0 * 20.0 + 20.0 * 50.0 - 10.0 * 10.0, 1e-6));
+}

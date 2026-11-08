@@ -1,6 +1,6 @@
 use super::build::{Builder, Built, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
-use super::rings::{MAX_SOLID_POINTS, rings, signed_area};
+use super::rings::{MAX_SOLID_POINTS, resolved, rings, signed_area};
 use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
@@ -18,7 +18,8 @@ struct Puff {
 
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    let (path, rule) = resolved(path, rule);
+    let rings = rings(&path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     if rings.is_empty() {
         return Ok(None);
     }
