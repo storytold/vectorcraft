@@ -1173,6 +1173,7 @@ font-technology	Variable	Variables
 	Stroke When Editable	Trazo si es editable
 	Fill Color	Color de relleno
 	Fill New Type Objects With Placeholder Text	Rellenar nuevos objetos de texto con texto de muestra
+	Start Lists From Typed Markers	Iniciar listas a partir de marcadores escritos
 	Fill Rule	Regla de relleno
 	Fill with Placeholder Text	Rellenar con texto de muestra
 	Insert Inline Symbol	Insertar símbolo en el texto
@@ -1184,6 +1185,7 @@ font-technology	Variable	Variables
 	Find Font…	Buscar fuente…
 	Find Next	Buscar siguiente
 	Find Objects	Buscar objetos
+	Compare with Image	Comparar con imagen
 	First Page	Primera página
 	First-line Left Indent	Sangría izquierda en primera línea
 	Fisheye…	Ojo de pez…
@@ -3792,6 +3794,7 @@ digits	Malayalam	Malayálam
 	Zoom to Selection	Zoom a la selección
 	Zoom Tool	Herramienta Zoom
 	Zoom with Mouse Wheel	Zoom con la rueda del mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Desplazar horizontalmente con Cmd/Ctrl + rueda del mouse
 	Scrub Numeric Fields by Dragging	Ajustar campos numéricos arrastrando
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} archivo en {folder} {note}. ¿Mostrar la carpeta del paquete?|{n} archivos en {folder} {note}. ¿Mostrar la carpeta del paquete?
 @plural	{n} linked file not found|{n} linked files not found	No se encontró {n} archivo vinculado|No se encontraron {n} archivos vinculados
@@ -5452,6 +5455,11 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	la imagen mide {iw} × {ih} píxeles y la mesa de trabajo a ese ancho mide {rw} × {rh} píxeles: sus proporciones difieren
+@msg	`threshold` must be a number from 0 to 1	`threshold` debe ser un número de 0 a 1
+@msg	background {v}: a color such as "#808080"	fondo {v}: un color como "#808080"
+@msg	comparing with an image file isn't available in the browser	la comparación con un archivo de imagen no está disponible en el navegador
 @msg	an image of {w} × {h} pixels is shown at reduced size	una imagen de {w} × {h} píxeles se muestra a tamaño reducido
 @msg	the image can't be read as a texture	la imagen no se puede leer como textura
 	Fill and Stroke Controls	Controles de relleno y trazo
@@ -5646,6 +5654,9 @@ mark-style	Japanese	Japonesas
 @msg	too many library panels were opened in this session	se abrieron demasiados paneles de biblioteca en esta sesión
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	La imagen tiene {_1} × {_2} píxeles, más de {LARGE_TRACE_SIDE} en un lado: se calcará, pero más despacio. Un ajuste preestablecido de menor fidelidad o una copia más pequeña de la imagen se calcan más rápido.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	La imagen se calcó a {_1} × {_2} píxeles, reducida desde {_3} × {_4} ({_5} megapíxeles como máximo).
+@msg	byColor must be true or false	byColor debe ser true o false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor no puede dividir los grupos de Agrupación automática: calque sin Agrupación automática
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor no puede reagrupar un calco con un efecto Pathfinder activo: expanda sin byColor
 	Snapping	Ajuste
 	Snap to Tangent	Ajustar a tangente
 	Snap to Perpendicular	Ajustar a perpendicular
@@ -6207,6 +6218,8 @@ breakText	Glyphs	Glifos
 	File + Data Set Name	Archivo + nombre del conjunto de datos
 	Data Set Name	Nombre del conjunto de datos
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` debe ser `fileNumber`, `fileDataSetName` o `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Cada conjunto de datos se guarda sobre el mismo archivo, que solo conserva el último conjunto de datos.
+@msg	save the document with Save As before Save and Close	guarde el documento con «Guardar como» antes de «Guardar y cerrar»
 @msg	no free data set file name in destination folder	No hay un nombre de archivo libre para el conjunto de datos en la carpeta de destino
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

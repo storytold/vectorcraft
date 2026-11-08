@@ -3058,6 +3058,7 @@ theme	Appearance	Tampilan
 	Document JSON	JSON dokumen
 	Duplicate	Duplikatkan
 	Find Objects	Cari objek
+	Compare with Image	Bandingkan dengan gambar
 	Inspect Document	Periksa dokumen
 	Inspect Object	Periksa objek
 	Begin Undo Group	Mulai grup urungkan
@@ -3361,6 +3362,7 @@ theme	Appearance	Tampilan
 	Feet	Kaki
 	Files	File
 	Fill New Type Objects With Placeholder Text	Isi objek teks baru dengan teks placeholder
+	Start Lists From Typed Markers	Mulai daftar dari penanda yang diketik
 	Folder	Folder
 	Font Preview Size	Ukuran pratinjau font
 	Get Preferences	Dapatkan preferensi
@@ -3471,6 +3473,7 @@ theme	Appearance	Tampilan
 	Yards	Yard
 	Zoom to Selection	Zum ke seleksi
 	Zoom with Mouse Wheel	Zum dengan roda mouse
+	Scroll Sideways with Cmd/Ctrl + Wheel	Gulir horizontal dengan Cmd/Ctrl + roda mouse
 	Scrub Numeric Fields by Dragging	Atur nilai kolom numerik dengan menyeret
 	Linux Display Server	Server tampilan Linux
 	Print Preview	Pratinjau cetak
@@ -6113,6 +6116,8 @@ breakText	Glyphs	Glif
 	File + Data Set Name	File + nama set data
 	Data Set Name	Nama set data
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` harus `fileNumber`, `fileDataSetName`, atau `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Setiap set data disimpan menimpa file yang sama, sehingga hanya set data terakhir yang tersisa.
+@msg	save the document with Save As before Save and Close	simpan dokumen dengan Simpan sebagai sebelum Simpan dan tutup
 @msg	no free data set file name in destination folder	Tidak ada nama file set data yang tersedia di folder tujuan
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

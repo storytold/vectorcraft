@@ -223,6 +223,9 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// Type → Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list ([`crate::text::TypeTool`]).
+    pub typed_lists: bool,
     /// Smart Guides → Color: the smart guides' lines and labels (RGB).
     pub smart_guide_color: [u8; 3],
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up

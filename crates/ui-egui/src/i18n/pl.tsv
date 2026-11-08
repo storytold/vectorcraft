@@ -3195,6 +3195,7 @@ theme	Appearance	Wygląd
 	Document JSON	JSON dokumentu
 	Duplicate	Powiel
 	Find Objects	Znajdź obiekty
+	Compare with Image	Porównaj z obrazem
 	Inspect Document	Zbadaj dokument
 	Inspect Object	Zbadaj obiekt
 	Begin Undo Group	Rozpocznij grupę cofania
@@ -3496,6 +3497,7 @@ theme	Appearance	Wygląd
 	Feet	Stopy
 	Files	Pliki
 	Fill New Type Objects With Placeholder Text	Wypełniaj nowe obiekty tekstowe tekstem zastępczym
+	Start Lists From Typed Markers	Rozpoczynaj listy od wpisanych znaczników
 	Folder	Folder
 	Font Preview Size	Rozmiar podglądu czcionki
 	Get Preferences	Pobierz preferencje
@@ -3606,6 +3608,7 @@ theme	Appearance	Wygląd
 	Yards	Jardy
 	Zoom to Selection	Powiększaj do zaznaczenia
 	Zoom with Mouse Wheel	Powiększaj kółkiem myszy
+	Scroll Sideways with Cmd/Ctrl + Wheel	Przewijaj w poziomie kółkiem z Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Zmieniaj pola liczbowe przeciąganiem
 	Linux Display Server	Serwer wyświetlania Linux
 	Print Preview	Podgląd wydruku
@@ -5350,6 +5353,11 @@ mark-style	Japanese	Japońskie
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 	Load EPS into Clipboard	Wczytaj EPS do schowka
 @msg	an image of {w} × {h} pixels is too large to draw	obraz o wymiarach {w} × {h} pikseli jest zbyt duży, aby go narysować
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: to nie jest obraz PNG, JPEG, WebP, TIFF ani BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	obraz ma {iw} × {ih} pikseli, a obszar kompozycji przy tej szerokości ma {rw} × {rh} pikseli: ich proporcje się różnią
+@msg	`threshold` must be a number from 0 to 1	`threshold` musi być liczbą od 0 do 1
+@msg	background {v}: a color such as "#808080"	tło {v}: kolor, np. "#808080"
+@msg	comparing with an image file isn't available in the browser	porównywanie z plikiem obrazu nie jest dostępne w przeglądarce
 @msg	an image of {w} × {h} pixels is shown at reduced size	obraz o wymiarach {w} × {h} pikseli jest wyświetlany w zmniejszonym rozmiarze
 	Basic	Podstawowy
 	Fill and Stroke Controls	Elementy sterujące wypełnieniem i obrysem
@@ -5558,6 +5566,9 @@ mark-style	Japanese	Japońskie
 @msg	too many library panels were opened in this session	w tej sesji otwarto zbyt wiele paneli bibliotek
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Obraz ma {_1} × {_2} pikseli, ponad {LARGE_TRACE_SIDE} na jednym boku: zostanie obrysowany, ale wolniej. Ustawienie wstępne o niższej wierności lub mniejsza kopia obrazu obrysuje się szybciej.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Obraz obrysowano w rozdzielczości {_1} × {_2} pikseli, po zmniejszeniu z {_3} × {_4} (najwyżej {_5} megapikseli).
+@msg	byColor must be true or false	byColor musi mieć wartość true lub false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor nie może podzielić grup Automatycznego grupowania: obrysuj bez Automatycznego grupowania
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor nie może ponownie zgrupować obrysu z aktywnym efektem Pathfinder: rozwiń bez byColor
 	Snapping	Przyciąganie
 	Snap to Tangent	Przyciągaj do stycznych
 	Snap to Perpendicular	Przyciągaj do prostopadłych
@@ -6119,6 +6130,8 @@ breakText	Glyphs	Glify
 	File + Data Set Name	Plik + nazwa zestawu danych
 	Data Set Name	Nazwa zestawu danych
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` musi mieć wartość `fileNumber`, `fileDataSetName` lub `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Każdy zestaw danych jest zapisywany w tym samym pliku, który zachowuje tylko ostatni zestaw danych.
+@msg	save the document with Save As before Save and Close	zapisz dokument poleceniem „Zapisz jako” przed „Zapisz i zamknij”
 @msg	no free data set file name in destination folder	Brak wolnej nazwy pliku zestawu danych w folderze docelowym
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

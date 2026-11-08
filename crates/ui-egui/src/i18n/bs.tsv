@@ -3577,6 +3577,7 @@ theme	Appearance	Izgled
 	Feet	Stope
 	Files	Datoteke
 	Fill New Type Objects With Placeholder Text	Ispuni nove tekstualne objekte tekstom čuvara mjesta
+	Start Lists From Typed Markers	Započni liste iz otkucanih oznaka
 	Folder	Folder
 	Font Preview Size	Veličina pregleda fonta
 	Get Preferences	Preuzmi postavke
@@ -3699,6 +3700,7 @@ theme	Appearance	Izgled
 	Yards	Jardi
 	Zoom to Selection	Zumiraj na odabir
 	Zoom with Mouse Wheel	Zumiraj točkićem miša
+	Scroll Sideways with Cmd/Ctrl + Wheel	Pomjeraj vodoravno uz Cmd/Ctrl + točkić miša
 	Scrub Numeric Fields by Dragging	Mijenjaj numerička polja prevlačenjem
 	Linux Display Server	Linux server prikaza
 	Print Preview	Pregled štampanja
@@ -6111,6 +6113,8 @@ shape	Open	Otvoren
 	File + Data Set Name	Datoteka + naziv skupa podataka
 	Data Set Name	Naziv skupa podataka
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` mora biti `fileNumber`, `fileDataSetName` ili `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Svaki skup podataka se sačuva preko iste datoteke, u kojoj ostaje samo posljednji skup podataka.
+@msg	save the document with Save As before Save and Close	sačuvajte dokument pomoću „Sačuvaj kao“ prije „Sačuvaj i zatvori“
 @msg	no free data set file name in destination folder	Nema slobodnog naziva datoteke skupa podataka u odredišnoj mapi
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).

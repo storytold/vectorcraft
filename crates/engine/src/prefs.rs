@@ -54,6 +54,8 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
@@ -95,6 +97,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -367,6 +372,7 @@ impl Default for Prefs {
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: true,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
@@ -399,6 +405,7 @@ impl Default for Prefs {
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),

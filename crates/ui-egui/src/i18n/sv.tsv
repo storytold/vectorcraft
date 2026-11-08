@@ -1138,6 +1138,7 @@ font-technology	Variable	Variabla
 	Live curve fitting	Kurvanpassning medan du ritar
 	Fill Color	Fyllnadsfärg
 	Fill New Type Objects With Placeholder Text	Fyll nya textobjekt med platshållartext
+	Start Lists From Typed Markers	Starta listor från inskrivna punkttecken
 	Fill Rule	Fyllningsregel
 	Fill with Placeholder Text	Fyll med platshållartext
 	Fill:	Fyllning:
@@ -1148,6 +1149,7 @@ font-technology	Variable	Variabla
 	Find Font…	Sök typsnitt…
 	Find Next	Sök nästa
 	Find Objects	Sök objekt
+	Compare with Image	Jämför med bild
 	First Page	Första sidan
 	First-line Left Indent	Vänsterindrag för första raden
 	Fisheye…	Fisköga…
@@ -3714,6 +3716,7 @@ digits	Malayalam	Malayalam
 	Zoom to Selection	Zooma till markering
 	Zoom Tool	Zoomverktyg
 	Zoom with Mouse Wheel	Zooma med mushjulet
+	Scroll Sideways with Cmd/Ctrl + Wheel	Rulla horisontellt med Cmd/Ctrl + mushjulet
 	Scrub Numeric Fields by Dragging	Ändra numeriska fält genom att dra
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} fil i {folder} {note}. Visa paketmappen?|{n} filer i {folder} {note}. Visa paketmappen?
 @plural	{n} linked file not found|{n} linked files not found	{n} länkad fil hittades inte|{n} länkade filer hittades inte
@@ -5412,6 +5415,11 @@ mark-style	Japanese	Japanska
 theme	Appearance	Utseende
 	Load EPS into Clipboard	Läs in EPS till urklipp
 @msg	an image of {w} × {h} pixels is too large to draw	en bild på {w} × {h} pixlar är för stor för att ritas
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: inte en PNG-, JPEG-, WebP-, TIFF- eller BMP-bild
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	bilden är {iw} × {ih} pixlar och ritytan i den bredden är {rw} × {rh} pixlar: proportionerna skiljer sig åt
+@msg	`threshold` must be a number from 0 to 1	`threshold` måste vara ett tal från 0 till 1
+@msg	background {v}: a color such as "#808080"	background {v}: en färg som "#808080"
+@msg	comparing with an image file isn't available in the browser	jämförelse med en bildfil är inte tillgänglig i webbläsaren
 @msg	an image of {w} × {h} pixels is shown at reduced size	en bild på {w} × {h} pixlar visas i förminskad storlek
 	Fill and Stroke Controls	Kontroller för fyllning och kontur
 	Coloring Controls	Kontroller för färgläggning
@@ -5727,6 +5735,9 @@ swatch	Yellow Green	Gulgrön
 @msg	“{name}” is not a file	”{name}” är inte en fil
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Bilden är {_1} × {_2} pixlar, mer än {LARGE_TRACE_SIDE} på en sida: den vektoriseras, men långsammare. En förinställning med lägre återgivning eller en mindre kopia av bilden går snabbare.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Bilden vektoriserades vid {_1} × {_2} pixlar, nedskalad från {_3} × {_4} (högst {_5} megapixlar).
+@msg	byColor must be true or false	byColor måste vara true eller false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kan inte dela upp grupper från Automatisk gruppering: vektorisera utan Automatisk gruppering
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kan inte gruppera om en kalkering med en aktiv Pathfinder-effekt: expandera utan byColor
 	Snapping	Fäst
 	Snap to Tangent	Fäst mot tangent
 	Snap to Perpendicular	Fäst mot vinkelrät
@@ -6317,6 +6328,8 @@ breakText	Glyphs	Glyfer
 	File + Data Set Name	Fil + datauppsättningens namn
 	Data Set Name	Datauppsättningens namn
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` måste vara `fileNumber`, `fileDataSetName` eller `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Varje datauppsättning sparas över samma fil, som bara behåller den sista datauppsättningen.
+@msg	save the document with Save As before Save and Close	spara dokumentet med Spara som före Spara och stäng
 @msg	no free data set file name in destination folder	Inget ledigt filnamn för datauppsättningen i målmappen
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
