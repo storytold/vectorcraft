@@ -6,9 +6,9 @@
 //! by `|`; a `?` marks an optional one, and a `:`, `=` or `(` starts what the entry says about it. An entry that starts
 //! with `…` stands for keys listed elsewhere: those of each command it names after `as` or `of`
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
-//! described key by key, so only the top level is checked, except in an export's options: those
-//! are checked against the options of the formats the command can write, in `marks`, `bleed` and
-//! the other objects too ([`check_export_options`]).
+//! described key by key, so only the top level is checked, except in the options of an export, a
+//! save or Export for Screens: those are checked against the options of the formats the command
+//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]).
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
@@ -508,25 +508,136 @@ fn check_option_tree(id: &str, within: &str, given: &serde_json::Map<String, Val
     Ok(())
 }
 
-/// The options of an export command `id`. `document.export`, `document.exportSelection` and
-/// `document.serialize` take a key that some format reads (one object can carry several formats'
-/// options; `document.formats` lists them). `document.exportPdf`, `document.pdfSettings` and
-/// `pdf.preset.save` take a key that PDF reads, `document.exportEps` one that EPS reads and
-/// `document.exportDxf` one that DXF reads. Where a command takes `marks`, `bleed`, `flattener` or
-/// another object option of PDF or EPS, only the object's own keys pass. An SVG export's `svg`
-/// object is checked when it is read. Saved presets are not checked: one with a key that is no
-/// longer read keeps loading.
+/// `given`, the options object at `within` (`""` for the params themselves, `options.`,
+/// `formats[0].`), has only `keys`, and only their own keys in the PDF and EPS object options
+/// (`trees`). `why_not` says why a key that is not near any of `keys` is refused, and where the
+/// keys are listed.
+fn check_option_keys(id: &str, within: &str, given: &serde_json::Map<String, Value>, keys: &[&str], why_not: &str, trees: &Value) -> Result<()> {
+    for (key, value) in given {
+        if !keys.contains(&key.as_str()) {
+            return Err(bad(
+                id,
+                match nearest(key, keys) {
+                    Some(near) => format!("unknown parameter `{within}{key}`; did you mean `{within}{near}`?"),
+                    None => format!("unknown parameter `{within}{key}`; {why_not}"),
+                },
+            ));
+        }
+        if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
+            check_option_tree(id, &format!("{within}{key}."), value, schema)?;
+        }
+    }
+    Ok(())
+}
+
+/// Why an export option that no format reads is refused.
+const NO_FORMAT: &str = "no format takes it (see document.formats)";
+
+/// Why a save option that no save format reads is refused.
+const NO_SAVE_FORMAT: &str = "no save format takes it (see file.formatOptions)";
+
+/// The format ids Export for Screens writes: the writable formats but those it doesn't write.
+fn screen_formats() -> Vec<&'static str> {
+    use super::fileio::{FORMATS, SCREEN_UNWRITTEN_FORMATS};
+    FORMATS.iter().filter(|f| f.write && !SCREEN_UNWRITTEN_FORMATS.contains(&f.id)).map(|f| f.id).collect()
+}
+
+/// The object options an export or save checks key by key: PDF's `marks`, `bleed` and the others,
+/// the flattener's, and SVG's `svg` with the artboard keys it may carry.
+fn option_trees() -> Value {
+    let mut trees = pdf_option_tree();
+    if let Some(tree) = trees.as_object_mut() {
+        tree.insert("flattener".into(), serde_json::to_value(super::flatten::FlattenOptions::default()).unwrap_or_default());
+        let mut svg = serde_json::to_value(vectorcraft_svg::ExportOptions::default()).unwrap_or_default();
+        if let Some(svg) = svg.as_object_mut() {
+            svg.extend(super::fileio::ARTBOARD_PARAMS.iter().chain(&["useArtboards"]).map(|k| (k.to_string(), Value::Null)));
+        }
+        tree.insert("svg".into(), svg);
+    }
+    trees
+}
+
+/// The format rows (`formats`) and the per-format `settings` of Export for Screens params `p`, at
+/// `within` (`settings.` in `document.exportPresets.save`). A row, and the settings of a format,
+/// take its own keys (`format`, `scale`…), `includeArtboardFill`, `richBlack` and a key some
+/// format reads, as `document.export` does; `settings` takes the formats Export for Screens writes.
+fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>, trees: &Value) -> Result<()> {
+    use super::fileio::{FORMATS, SCREEN_ROW_KEYS};
+    let mut keys: Vec<&str> = SCREEN_ROW_KEYS.to_vec();
+    // The encoders read both from a row's options (`with_artboard_fills`, the render options).
+    keys.extend(["includeArtboardFill", "richBlack"]);
+    keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+    if let Some(Value::Array(rows)) = p.get("formats") {
+        for (i, row) in rows.iter().enumerate() {
+            if let Value::Object(row) = row {
+                check_option_keys(id, &format!("{within}formats[{i}]."), row, &keys, NO_FORMAT, trees)?;
+            }
+        }
+    }
+    if let Some(Value::Object(settings)) = p.get("settings") {
+        let formats = screen_formats();
+        for (format, options) in settings {
+            if !formats.contains(&format.as_str()) {
+                let why = match nearest(format, &formats) {
+                    Some(near) => format!("did you mean `{within}settings.{near}`?"),
+                    None => format!("`{within}settings` takes: {}", formats.join(", ")),
+                };
+                return Err(bad(id, format!("unknown parameter `{within}settings.{format}`; {why}")));
+            }
+            if let Value::Object(options) = options {
+                check_option_keys(id, &format!("{within}settings.{format}."), options, &keys, NO_FORMAT, trees)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The options of an export or save command `id`. `document.export`, `document.exportSelection`
+/// and `document.serialize` take a key that some format reads (one object can carry several
+/// formats' options; `document.formats` lists them). `document.exportPdf`, `document.pdfSettings`
+/// and `pdf.preset.save` take a key that PDF reads, `document.exportEps` one that EPS reads and
+/// `document.exportDxf` one that DXF reads. `document.save`, `file.saveAs`, `file.saveCopy` and
+/// `file.saveAsTemplate` take, beside the path and in `options`, a key that some save format
+/// reads. `document.exportForScreens` takes the keys it reads, and checks its format rows and
+/// settings ([`check_screen_rows`]), as `document.exportPresets.save` does in its `settings`.
+/// Where a command takes `marks`, `bleed`, `flattener`, `svg` or another object option of PDF,
+/// EPS or SVG, only the object's own keys pass ([`option_trees`]). Saved presets are not checked:
+/// one with a key that is no longer read keeps loading.
 fn check_export_options(id: &str, params: &Value) -> Result<()> {
-    use super::fileio::{FORMATS, dxf, eps, pdf};
+    use super::fileio::{FORMATS, SAVE_FORMATS, TEMPLATE_FORMATS, dxf, eps, pdf};
     let Value::Object(given) = params else { return Ok(()) };
+    const NO_SCREENS: &str = "Export for Screens doesn't take it";
+    match (id, given.get("settings")) {
+        ("document.exportForScreens", _) => {
+            check_option_keys(id, "", given, &super::fileio::SCREEN_PARAM_KEYS, NO_SCREENS, &Value::Null)?;
+            return check_screen_rows(id, "", given, &option_trees());
+        }
+        ("document.exportPresets.save", Some(Value::Object(settings))) => {
+            check_option_keys(id, "settings.", settings, &super::fileio::SCREEN_PARAM_KEYS, NO_SCREENS, &Value::Null)?;
+            return check_screen_rows(id, "settings.", settings, &option_trees());
+        }
+        _ => {}
+    }
     let mut keys: Vec<&str> = vec!["path", "format", "acknowledgeLoss"];
+    // A save's `options` and the keys they take.
+    let mut inner: Option<(&serde_json::Map<String, Value>, Vec<&str>)> = None;
     let why_not = match id {
+        "document.save" | "file.saveAs" | "file.saveCopy" | "file.saveAsTemplate" => {
+            let saved = FORMATS.iter().filter(|f| SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id));
+            let options: Vec<&str> = saved.flat_map(|f| f.options).map(|o| o.name).collect();
+            if let Some(Value::Object(o)) = given.get("options") {
+                inner = Some((o, options.clone()));
+            }
+            keys.extend(["options", "modified"]);
+            keys.extend(options);
+            NO_SAVE_FORMAT
+        }
         "document.export" | "document.exportSelection" | "document.serialize" => {
             // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
             // exporter plug-in's own.
             keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
-            "no format takes it"
+            NO_FORMAT
         }
         "document.exportPdf" | "document.pdfSettings" | "pdf.preset.save" => {
             keys.push("includeArtboardFill");
@@ -536,38 +647,24 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
                 "pdf.preset.save" => keys.extend(["name", "newName", "description"]),
                 _ => {}
             }
-            "PDF doesn't take it"
+            "PDF doesn't take it (see document.formats)"
         }
         "document.exportEps" => {
             keys.push("includeArtboardFill");
             keys.extend(eps::OPTIONS.iter().map(|o| o.name));
-            "EPS doesn't take it"
+            "EPS doesn't take it (see document.formats)"
         }
         "document.exportDxf" => {
             keys.extend(dxf::OPTIONS.iter().map(|o| o.name));
-            "DXF doesn't take it"
+            "DXF doesn't take it (see document.formats)"
         }
         _ => return Ok(()),
     };
-    let mut trees = pdf_option_tree();
-    if let Some(tree) = trees.as_object_mut() {
-        tree.insert("flattener".into(), serde_json::to_value(super::flatten::FlattenOptions::default()).unwrap_or_default());
+    let trees = option_trees();
+    if let Some((o, options)) = inner {
+        check_option_keys(id, "options.", o, &options, NO_SAVE_FORMAT, &trees)?;
     }
-    for (key, value) in given {
-        if !keys.contains(&key.as_str()) {
-            return Err(bad(
-                id,
-                match nearest(key, &keys) {
-                    Some(near) => format!("unknown parameter `{key}`; did you mean `{near}`?"),
-                    None => format!("unknown parameter `{key}`; {why_not} (see document.formats)"),
-                },
-            ));
-        }
-        if let (Some(Value::Object(schema)), Value::Object(value)) = (trees.get(key), value) {
-            check_option_tree(id, &format!("{key}."), value, schema)?;
-        }
-    }
-    Ok(())
+    check_option_keys(id, "", given, &keys, why_not, &trees)
 }
 
 /// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,

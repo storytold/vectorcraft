@@ -112,7 +112,8 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
 /// only when saving).
 fn options(d: &Dialog) -> Value {
     let mode = Mode::of(d);
-    let mut o: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut o: Map<String, Value> =
+        d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str()) && !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     if mode == Mode::Export {
         o.remove("preserveEditing");
         if d.bool("useArtboards") {

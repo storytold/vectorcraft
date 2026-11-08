@@ -29,7 +29,13 @@ pub(crate) fn opt_bool(p: &Value, key: &str) -> Result<Option<bool>, String> {
 /// `params` has only keys the params description of engine command `id` names, or the parameter
 /// error naming the one it doesn't (#1442). The UI's own commands aren't checked yet: their
 /// descriptions haven't been audited against what they read.
+/// `file.save` and `file.exportForScreens` take the params of the engine command they run.
 pub fn check_params(session: &vectorcraft_engine::Session, id: &str, params: &Value) -> Result<(), String> {
+    let id = match id {
+        "file.save" => "document.save",
+        "file.exportForScreens" => "document.exportForScreens",
+        id => id,
+    };
     if UI_COMMANDS.iter().any(|c| c.0 == id) {
         return Ok(());
     }

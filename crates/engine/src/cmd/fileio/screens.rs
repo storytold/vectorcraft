@@ -187,7 +187,10 @@ pub(crate) fn safe_file_name(s: &str) -> String {
 }
 
 /// Keys of a format row that aren't encoder options.
-const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
+pub(crate) const ROW_KEYS: [&str; 7] = ["format", "scale", "ppi", "width", "height", "suffix", "folder"];
+
+/// The writable formats a format row can't name.
+pub(crate) const UNWRITTEN_FORMATS: [&str; 5] = ["template", "txt", "dxf", "emf", "wmf"];
 
 /// One format row: what to write, at which size, with which suffix, into which sub-folder.
 struct Row {
@@ -208,7 +211,7 @@ impl Row {
             return Err(bad(C, "each format is an object {format, scale?, suffix?}"));
         }
         let format = writable(C, Some(str_param(row, "format").unwrap_or("png")), None)?;
-        if matches!(format.id, "template" | "txt" | "dxf" | "emf" | "wmf") {
+        if UNWRITTEN_FORMATS.contains(&format.id) {
             return Err(bad(C, "Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft"));
         }
         // Vector formats have no pixel size: it doesn't apply and adds no @2x suffix (not even one
@@ -279,8 +282,39 @@ impl Row {
 /// or where to.
 pub const SHARED_KEYS: [&str; 6] = ["formats", "preset", "settings", "prefix", "subfolders", "antiAlias"];
 
+/// The keys `document.exportForScreens` reads: those of [`ScreenParams`], the formats and their
+/// settings, `antiAlias`, `exportPreset` and `openLocation`, which the app reads.
+pub(crate) const PARAM_KEYS: [&str; 25] = [
+    "artboard",
+    "artboards",
+    "range",
+    "folder",
+    "zip",
+    "fullDocument",
+    "includeBleed",
+    "includeArtboardFill",
+    "subfolders",
+    "preset",
+    "prefix",
+    "assets",
+    "layers",
+    "selection",
+    "name",
+    "counterStart",
+    "counterPer",
+    "date",
+    "folders",
+    "pdfs",
+    "formats",
+    "settings",
+    "antiAlias",
+    "exportPreset",
+    "openLocation",
+];
+
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(default, rename_all = "camelCase")]
 struct ScreenParams {
     #[serde(flatten)]
@@ -1351,7 +1385,17 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Output, ScreenSize, safe_file_name};
+    use super::{Output, PARAM_KEYS, ScreenParams, ScreenSize, safe_file_name};
+
+    /// Every key `document.exportForScreens` reads into its params is one the key check takes.
+    #[test]
+    fn param_keys_hold_every_screen_param() {
+        let Ok(serde_json::Value::Object(read)) = serde_json::to_value(ScreenParams::default()) else { panic!("ScreenParams is an object") };
+        for key in read.keys() {
+            assert!(PARAM_KEYS.contains(&key.as_str()), "{key}");
+        }
+        assert!(read.len() > 10);
+    }
 
     /// Files given one name are numbered in turn, each numbering going on from the last one (so
     /// thousands of them don't each try every number used before), and a file asking again for

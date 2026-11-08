@@ -177,6 +177,162 @@ fn export_options_pass_every_listed_key() {
     }
 }
 
+const SAVES: [&str; 4] = ["document.save", "file.saveAs", "file.saveCopy", "file.saveAsTemplate"];
+
+/// A save refuses a key no save format reads, beside the path, in `options` and in the PDF and
+/// SVG objects of either, under each save command.
+#[test]
+fn save_options_refuse_a_key_no_save_format_reads() {
+    let why = "no save format takes it (see file.formatOptions)";
+    for id in SAVES {
+        assert_eq!(refusal(id, json!({"path": "a.pdf", "noSuchOption": true})), format!("unknown parameter `noSuchOption`; {why}"));
+        assert_eq!(
+            refusal(id, json!({"path": "a.pdf", "options": {"noSuchOption": true}})),
+            format!("unknown parameter `options.noSuchOption`; {why}")
+        );
+        assert_eq!(refusal(id, json!({"compres": true})), "unknown parameter `compres`; did you mean `compress`?");
+        assert_eq!(refusal(id, json!({"options": {"compres": true}})), "unknown parameter `options.compres`; did you mean `options.compress`?");
+        // An export's own key is not a save's.
+        assert_eq!(refusal(id, json!({"path": "a.png", "quality": 80})), format!("unknown parameter `quality`; {why}"));
+        for (given, message) in [
+            (json!({"path": "a.pdf", "marks": {"useDocumentBleed": true}}), "unknown parameter `marks.useDocumentBleed`; `marks` takes:"),
+            (json!({"path": "a.pdf", "options": {"marks": {"x": 1}}}), "unknown parameter `options.marks.x`; `options.marks` takes:"),
+            (json!({"path": "a.ai", "bleed": {"useDocumen": true}}), "unknown parameter `bleed.useDocumen`; did you mean `bleed.useDocument`?"),
+            // The `svg` object is checked when the save writes no SVG too.
+            (json!({"path": "a.pdf", "svg": {"noSuchOption": true}}), "unknown parameter `svg.noSuchOption`; `svg` takes:"),
+            (
+                json!({"path": "a.pdf", "options": {"svg": {"minfy": true}}}),
+                "unknown parameter `options.svg.minfy`; did you mean `options.svg.minify`?",
+            ),
+        ] {
+            let got = refusal(id, given.clone());
+            assert!(got.starts_with(message), "{id} {given}: {got}");
+        }
+        // A key that another format a save writes reads still passes: the save leaves it out.
+        for given in [
+            json!({"path": "a.svg", "compress": true}),
+            json!({"path": "a.pdf", "options": {"preview": true, "styling": "style"}}),
+            json!({"path": "a.vectorcraft", "standard": "pdfX4", "marks": {"trim": true}}),
+            json!({"path": "a.ai", "acknowledgeLoss": true, "modified": null, "svg": {"minify": true}}),
+            json!({"path": "a.svg", "svg": {"styling": "css", "artboard": 0, "useArtboards": true}}),
+        ] {
+            check_params(id, &given).unwrap_or_else(|e| panic!("{id} {given}: {e}"));
+        }
+    }
+}
+
+/// A save passes each option of each format it writes, beside the path and in `options`, and
+/// each key its description names.
+#[test]
+fn save_options_pass_every_listed_key() {
+    use crate::cmd::fileio::{FORMATS, SAVE_FORMATS, TEMPLATE_FORMATS};
+    for f in FORMATS.iter().filter(|f| SAVE_FORMATS.contains(&f.id) || TEMPLATE_FORMATS.contains(&f.id)) {
+        for o in f.options {
+            for params in [json!({"format": f.id, o.name: null}), json!({"format": f.id, "options": {o.name: null}})] {
+                for id in SAVES {
+                    check_params(id, &params).unwrap_or_else(|e| panic!("{id} {params}: {e}"));
+                }
+            }
+        }
+    }
+    for id in SAVES {
+        let keys = doc_keys(find_command(id).unwrap().params).unwrap().keys;
+        let refused: Vec<&str> = keys.into_iter().filter(|key| check_params(id, &json!({*key: null})).is_err()).collect();
+        assert_eq!(refused, Vec::<&str>::new(), "{id} names and refuses these");
+    }
+}
+
+/// Export for Screens refuses a key it doesn't take, and in its rows and settings a key no format
+/// reads, by the row's path; `document.exportPresets.save` checks the rows of its settings.
+#[test]
+fn export_for_screens_refuses_a_key_no_format_reads() {
+    let id = "document.exportForScreens";
+    assert_eq!(refusal(id, json!({"folder": "out", "noSuchOption": true})), "unknown parameter `noSuchOption`; Export for Screens doesn't take it");
+    assert_eq!(refusal(id, json!({"subfolder": true})), "unknown parameter `subfolder`; did you mean `subfolders`?");
+    let no_format = "no format takes it (see document.formats)";
+    for (given, message) in [
+        (json!({"formats": [{"format": "png", "noSuchOption": 1}]}), format!("unknown parameter `formats[0].noSuchOption`; {no_format}")),
+        (
+            json!({"formats": [{"format": "png"}, {"format": "pdf", "marks": {"useDocumentBleed": true}}]}),
+            "unknown parameter `formats[1].marks.useDocumentBleed`; `formats[1].marks` takes:".into(),
+        ),
+        (
+            json!({"formats": [{"format": "pdf", "security": {"openPasswrd": "x"}}]}),
+            "unknown parameter `formats[0].security.openPasswrd`; did you mean `formats[0].security.openPassword`?".into(),
+        ),
+        (
+            json!({"formats": [{"format": "eps", "flattener": {"balanse": 50}}]}),
+            "unknown parameter `formats[0].flattener.balanse`; did you mean `formats[0].flattener.balance`?".into(),
+        ),
+        (json!({"formats": [{"format": "jpg", "sufix": "@2x"}]}), "unknown parameter `formats[0].sufix`; did you mean `formats[0].suffix`?".into()),
+        (json!({"settings": {"pnj": {}}}), "unknown parameter `settings.pnj`; did you mean `settings.png`?".into()),
+        (json!({"settings": {"dxf": {}}}), "unknown parameter `settings.dxf`; `settings` takes: ".into()),
+        (
+            json!({"settings": {"png": {"bckground": "white"}}}),
+            "unknown parameter `settings.png.bckground`; did you mean `settings.png.background`?".into(),
+        ),
+        (json!({"settings": {"pdf": {"bleed": {"top": 9, "inner": 1}}}}), "unknown parameter `settings.pdf.bleed.inner`;".into()),
+    ] {
+        let got = refusal(id, given.clone());
+        assert!(got.starts_with(&message), "{given}: {got}");
+    }
+    let save = "document.exportPresets.save";
+    assert_eq!(
+        refusal(save, json!({"name": "a", "settings": {"formats": [{"format": "png", "noSuchOption": 1}]}})),
+        format!("unknown parameter `settings.formats[0].noSuchOption`; {no_format}")
+    );
+    assert!(
+        refusal(save, json!({"name": "a", "settings": {"settings": {"pdf": {"marks": {"x": 1}}}}}))
+            .starts_with("unknown parameter `settings.settings.pdf.marks.x`;")
+    );
+    assert_eq!(
+        refusal(save, json!({"name": "a", "settings": {"formtas": [{"format": "png"}]}})),
+        "unknown parameter `settings.formtas`; did you mean `settings.formats`?"
+    );
+    assert_eq!(
+        refusal(save, json!({"name": "a", "settings": {"noSuchOption": true}})),
+        "unknown parameter `settings.noSuchOption`; Export for Screens doesn't take it"
+    );
+    // Keys the preset leaves out are still Export for Screens params.
+    check_params(save, &json!({"name": "a", "settings": {"zip": true, "formats": [{"format": "jpg", "quality": 80}]}})).unwrap();
+    // The encoders read Include Artboard Fill and Appearance of Black from a row or a format's
+    // settings.
+    for given in [
+        json!({"formats": [{"format": "png", "includeArtboardFill": false, "richBlack": true}]}),
+        json!({"settings": {"png": {"includeArtboardFill": false, "richBlack": true}}}),
+    ] {
+        check_params(id, &given).unwrap_or_else(|e| panic!("{given}: {e}"));
+    }
+}
+
+/// Export for Screens passes each key its description names, each option of a format in a row or
+/// in settings, and the built-in presets; `settings` takes the formats a row can write.
+#[test]
+fn export_for_screens_passes_every_listed_key() {
+    use crate::cmd::fileio::{FORMATS, check_screen_settings, screen_export_builtin_presets};
+    let id = "document.exportForScreens";
+    let keys = doc_keys(find_command(id).unwrap().params).unwrap().keys;
+    assert!(keys.len() > 20, "{keys:?}");
+    let refused: Vec<&str> = keys.into_iter().filter(|key| check_params(id, &json!({*key: null})).is_err()).collect();
+    assert_eq!(refused, Vec::<&str>::new(), "{id} names and refuses these");
+    check_params(id, &json!({"artboard": 0, "openLocation": true})).unwrap();
+    let s = Session::new();
+    for f in FORMATS.iter().filter(|f| f.write) {
+        for o in f.options {
+            let row = json!({"formats": [{"format": "png", "scale": 2, "suffix": "", "folder": "x", o.name: null}]});
+            check_params(id, &row).unwrap_or_else(|e| panic!("{row}: {e}"));
+        }
+        let written = check_screen_settings(&s, &json!({"formats": [{"format": f.id}]})).is_ok();
+        let settings = json!({"settings": {f.id: {}}});
+        assert_eq!(check_params(id, &settings).is_ok(), written, "{settings}");
+    }
+    for preset in screen_export_builtin_presets() {
+        let settings = serde_json::Value::Object(preset.settings);
+        check_params(id, &settings).unwrap_or_else(|e| panic!("{}: {e}", preset.name));
+        check_params("document.exportPresets.save", &json!({"name": "a", "settings": settings})).unwrap();
+    }
+}
+
 /// `stroke.set` names every key it reads (its own, `item`, and `ids`/`id`/`target`), so a
 /// misnamed one is refused instead of answering `objects: 1` with nothing changed.
 #[test]
