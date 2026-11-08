@@ -80,6 +80,17 @@ pub(super) fn make_slots(
             {
                 taller += 1;
             }
+            // Where point type draws, to weigh it against the page's type: its layout's box, with
+            // what its strokes paint around it (as its visual bounds have). Its own bounds before
+            // a layout are a guess that starts at the anchor, which centred or right-aligned type
+            // doesn't (and that misses tracking and the font's widths).
+            if let NodeKind::Text(text) = &node.kind
+                && matches!(text.kind, TextKind::Point)
+            {
+                let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text).bounds;
+                let o = node.appearance.outset().max(text.char_stroke_outset());
+                region = Some(text.xf.transform_rect_bbox(laid).inflate(o, o)).filter(|r| r.is_finite() && !r.is_zero_area()).or(region);
+            }
             Some((Box::new(node), region))
         })
         .collect();
@@ -282,7 +293,10 @@ fn made_content(infos: &[SlotInfo], made: Vec<Option<Made>>) -> Vec<Content> {
         .zip(made)
         .map(|(info, m)| match m {
             Some((node, region)) => {
-                let drawn = node.visual_bounds().filter(|b| !b.is_zero_area()).or(region);
+                // Point type draws where its layout puts it (see [`make_slots`]).
+                let point = matches!(&node.kind, NodeKind::Text(t) if matches!(t.kind, TextKind::Point));
+                let drawn =
+                    if point { region.or_else(|| node.visual_bounds()) } else { node.visual_bounds().filter(|b| !b.is_zero_area()).or(region) };
                 Content::Made(node, drawn.filter(|_| info.shown), false)
             }
             None => Content::Empty,
