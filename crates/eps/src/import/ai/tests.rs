@@ -5870,6 +5870,17 @@ fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
     let crossed = format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{}f\nU\n{bowtie}1 (Bent) XW\n", rect_path(20.0, 20.0, 60.0, 50.0));
     let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", flat, BLUE_FILL), layer(&crossed)));
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A look worked out by hand rather than by the effect: Zig Zag of 3 pt with one ridge per
+    // segment and corner points, on a line from (20, 20) to (60, 20), puts the line's ends 3 pt up
+    // the page and its middle 3 pt down. The same look mirrored keeps the drawn look.
+    let one = "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n1 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let line = "20 20 m\n60 20 L\n".replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{line}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 23 m\n40 17 L\n60 23 L\n"))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Path { .. }), "{:#?}", art(&r.doc));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 17 m\n40 23 L\n60 17 L\n"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// The gradient `G`, white to black, defined for a document.

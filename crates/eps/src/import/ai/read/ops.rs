@@ -1107,7 +1107,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 /// ([`draws_look_outline`]): the look's coordinates are written to a few decimals.
 const OUTLINE_TOLERANCE: f64 = 0.25;
 
-/// Most points compared, one outline's flattened points times the other's segments.
+/// Most point-to-segment distances worked out for one object, over all its look's outlines.
 const MAX_OUTLINE_PAIRS: usize = 4_000_000;
 
 /// Does path or compound path `object` with `appearance`'s effects draw every outline of its drawn look
@@ -1167,21 +1167,26 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     /// Does every point of segments `a` lie within the tolerance of segments `b`? Each segment is
     /// checked at both ends (the last point of an open outline starts no segment) and at points
     /// at most the tolerance apart between them (two outlines can share their vertices and join
-    /// them differently). `false` past [`MAX_OUTLINE_PAIRS`] points compared.
-    fn near(a: &[kurbo::Line], b: &[kurbo::Line]) -> bool {
+    /// them differently). Each point's distance to each segment of `b` (a projection onto it) is
+    /// taken from `budget`: `false` once that runs out.
+    fn near(a: &[kurbo::Line], b: &[kurbo::Line], budget: &mut usize) -> bool {
         use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
         let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE);
-        let mut budget = MAX_OUTLINE_PAIRS;
         for s in a {
             let steps = (s.arclen(1e-6) / OUTLINE_TOLERANCE).ceil();
             let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
             let Some(left) = budget.checked_sub(steps.saturating_add(1).saturating_mul(b.len())) else { return false };
-            budget = left;
+            *budget = left;
             if !(0..=steps).all(|k| close(s.eval(k as f64 / steps as f64))) {
                 return false;
             }
         }
         true
+    }
+    /// The box round segments `lines` (`None` without any).
+    fn bounds(lines: &[kurbo::Line]) -> Option<kurbo::Rect> {
+        let first = lines.first()?.p0;
+        Some(lines.iter().fold(kurbo::Rect::from_points(first, first), |r, l| r.union_pt(l.p0).union_pt(l.p1)))
     }
     let (mut ours, mut theirs) = (vec![], vec![]);
     if !matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !leaves(object, &mut ours, 0) || !leaves(look, &mut theirs, 0) {
@@ -1194,8 +1199,18 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     }
     let max = MAX_OUTLINE_PAIRS.isqrt();
     let Some(ours) = segments(&ours, max) else { return false };
+    let Some(ours_box) = bounds(&ours) else { return false };
+    // Two outlines each within the tolerance of the other have boxes as close: the boxes are
+    // compared first, then the points, from one budget for the object.
+    let boxed = |t: &[kurbo::Line]| {
+        let Some(r) = bounds(t) else { return false };
+        [r.x0 - ours_box.x0, r.y0 - ours_box.y0, r.x1 - ours_box.x1, r.y1 - ours_box.y1].iter().all(|d| d.abs() <= OUTLINE_TOLERANCE)
+    };
+    let mut budget = MAX_OUTLINE_PAIRS;
     // Each of the look's outlines (a fill and a stroke draw the same one) is the object's.
-    theirs.iter().all(|t| segments(std::slice::from_ref(t), max).is_some_and(|t| near(&t, &ours) && near(&ours, &t)))
+    theirs
+        .iter()
+        .all(|t| segments(std::slice::from_ref(t), max).is_some_and(|t| boxed(&t) && near(&t, &ours, &mut budget) && near(&ours, &t, &mut budget)))
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
@@ -1362,6 +1377,30 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// The outline check works from one budget for the object: a look of the outline drawn twice
+    /// (a fill and a stroke) matches, one drawn thousands of times gives up and keeps the drawn
+    /// look instead of comparing every copy.
+    #[test]
+    fn the_outline_check_has_one_budget_for_the_object() {
+        let zig = vectorcraft_doc::Effect {
+            id: "distort.zigZag".into(),
+            params: serde_json::json!({"size": 3.0, "relative": false, "ridges": 4, "points": "corner"}),
+            visible: true,
+        };
+        let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 60.0));
+        let appearance = Appearance { effects: vec![zig.clone()], ..Appearance::basic(Paint::None, Paint::None, 0.0) };
+        let object = Node::path(NodeId(1), path.clone(), appearance.clone());
+        let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &path, Rect::new(0.0, 0.0, 100.0, 60.0));
+        let look = |copies: u64| {
+            let drawn = (0..copies).map(|i| Arc::new(Node::path(NodeId(10 + i), outline.clone(), Appearance::default()))).collect();
+            Node::group(NodeId(2), drawn)
+        };
+        assert!(draws_look_outline(&object, &appearance, &look(2)));
+        let started = std::time::Instant::now();
+        assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
