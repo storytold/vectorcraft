@@ -29,6 +29,7 @@ pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
         || note.ends_with("they came in as the page's art")
+        || note.starts_with(ai::WARPED_TYPE_DRAWN)
         || note == PAGE_TYPE_LEFT_OUT
         || note == PAGE_TYPE_UNCHECKED
         || [ART_LEFT_OUT, LAYERS_UNREAD, DREW_DIFFERENTLY, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY]

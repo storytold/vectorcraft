@@ -343,7 +343,10 @@ pub(crate) fn show_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // As wide as the field and as tall as the buttons, as in `dialogs::show`: a right-to-left
+        // layout would take all the height left in the window and center the buttons in it.
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }
@@ -445,7 +448,8 @@ pub(crate) fn show_manage(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }

@@ -428,6 +428,11 @@
 	Document Raster Effects Settings…	Instellingen voor documentrastereffecten…
 	Vector Effects	Vectoreffecten
 	3D and Materials	3D en materialen
+	Plane	Vlak
+	Extrude	Extruderen
+	Revolve	Draaien
+	Inflate	Opblazen
+	Select objects, then pick an object type to give them a 3D effect.	Selecteer objecten en kies dan een objecttype om ze een 3D-effect te geven.
 	Extrude & Bevel…	Extruderen en afschuinen…
 	3D (Classic)	3D (klassiek)
 	Extrude & Bevel (Classic)…	Extruderen en afschuinen (klassiek)…
@@ -778,6 +783,9 @@
 	Put back in the toolbar	Terug in de werkbalk zetten
 	Float Panel	Paneel laten zweven
 	Dock Panel	Paneel dokken
+	Dock to Top	Bovenaan dokken
+	Dock to Bottom	Onderaan dokken
+	Dock Control Bar	Bedieningsbalk dokken
 	Float Tool Group	Gereedschapsgroep laten zweven
 	Services	Diensten
 	Hide VectorCraft	VectorCraft verbergen
@@ -903,6 +911,8 @@ lighting	Light	Licht
 	Expand Layers Panel Rows	Rijen in het Lagen-paneel uitvouwen
 	Export CSS…	CSS exporteren…
 	Export Keyboard Shortcuts…	Sneltoetsen exporteren…
+	Export Keyboard Shortcuts as Text…	Sneltoetsen als tekst exporteren…
+	Export Text…	Tekst exporteren…
 	File Info Dialog	Dialoogvenster bestandsinfo
 	Go to Artboard	Ga naar tekengebied
 	Graphic Style Options…	Opties voor grafische stijl…
@@ -1247,6 +1257,7 @@ lighting	Light	Licht
 	Rotate Tool	Draaien-gereedschap
 	Rotate View Tool	Weergave draaien-gereedschap
 	Trackpad Gesture to Rotate View	Weergave draaien met trackpadgebaar
+	Hold a Tool Shortcut to Use the Tool Temporarily	Sneltoets van een gereedschap ingedrukt houden om het tijdelijk te gebruiken
 	Rotate View	Weergave draaien
 	Rounded Rectangle Tool	Afgeronde rechthoek-gereedschap
 	Scale Tool	Schalen-gereedschap
@@ -1569,6 +1580,7 @@ digits	Malayalam	Malayalam
 	Step Backward	Stap terug
 	Step Forward	Stap vooruit
 	Clear History	Historie wissen
+	New Document from State	Nieuw document uit status
 	Set History Limit…	Historielimiet instellen…
 	Open a document to see its history.	Open een document om de historie te zien.
 	Abutting	Aaneengesloten
@@ -1912,6 +1924,14 @@ digits	Malayalam	Malayalam
 	Location	Locatie
 	No images	Geen afbeeldingen
 	Relink to Folder…	Opnieuw koppelen aan map…
+	Each Link Separately	Elke koppeling afzonderlijk
+	Selected Instances	Geselecteerde instanties
+	All Instances	Alle instanties
+	Missing Links from This Folder	Ontbrekende koppelingen uit deze map
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} is niet each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each en paths horen bij elkaar: paths bevat items met ids en path, in plaats van ids, path en folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	item {i} van paths heeft path en ids nodig (object-id's die geen ander item heeft)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder neemt path: in de map van dat bestand wordt naar de andere ontbrekende koppelingen gezocht
 	Show Missing	Ontbrekende weergeven
 	Sort by Status	Sorteren op status
 	Clear Overrides	Onderdrukkingen wissen
@@ -2399,6 +2419,8 @@ digits	Malayalam	Malayalam
 	Show Cross Hairs	Dradenkruis tonen
 	Show Video Safe Areas	Veilige videogebieden tonen
 	Video Ruler Pixel Aspect Ratio:	Pixelverhouding van videolinialen:
+	Fade Region Outside Artboard	Gebied buiten tekenbord dimmen
+	Update While Dragging	Bijwerken tijdens slepen
 	Hide Video Rulers	Videolinialen verbergen
 	Client-side (.html)	Client-side (.html)
 	Color Reduction:	Kleurreductie:
@@ -2968,6 +2990,7 @@ theme	Appearance	Vormgeving
 	Redefine Symbol	Symbool opnieuw definiëren
 	Remove Brush Stroke	Penseelstreek verwijderen
 	Replace Symbol	Symbool vervangen
+	Reset Transformation	Transformatie opnieuw instellen
 	Select All Instances	Alle exemplaren selecteren
 	Symbol Sprayer	Symboolspuit
 	Symbolism Tool	Symbolisatiegereedschap
@@ -2995,6 +3018,9 @@ theme	Appearance	Vormgeving
 	Convert Document Color Mode	Kleurmodus van document omzetten
 	Gamut Warning	Gamutwaarschuwing
 	Load Color Profile…	Kleurprofiel laden…
+	Load Character Styles…	Tekenstijlen laden…
+	Load Paragraph Styles…	Alineastijlen laden…
+	Load All Styles…	Alle stijlen laden…
 	Plates	Platen
 	Spot Color	Steunkleur
 	Add to Swatches	Aan stalen toevoegen
@@ -3424,6 +3450,8 @@ theme	Appearance	Vormgeving
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
+	Search Preferences	Voorkeuren doorzoeken
+	No settings found	Geen instellingen gevonden
 	Scale Corners	Hoeken schalen
 	Scale Cursor Proportional to UI	Cursor proportioneel schalen met UI
 	Scale Strokes & Effects	Streken & effecten schalen
@@ -3444,6 +3472,7 @@ theme	Appearance	Vormgeving
 	Snapping Tolerance	Snapping-tolerantie
 	Spacing Guides	Hulplijnen voor tussenruimte
 	Invoke Distance Guides	Afstandshulplijnen oproepen
+	Snap to Last Location	Uitlijnen op laatste locatie
 	Spanish	Spaans
 	Subdivisions	Onderverdelingen
 	Templates Folder	Sjablonenmap
@@ -3611,6 +3640,8 @@ axis	Both	Beide
 	Center	Midden
 	Transform in Perspective	In perspectief transformeren
 	Grayscale	Grijswaarden
+	High Color	Veel kleuren
+	Low Color	Weinig kleuren
 	Embed	Insluiten
 	Star	Ster
 	Power Saving (integrated)	Energiebesparend (geïntegreerd)
@@ -4360,6 +4391,7 @@ imageTrace	Outline	Contour
 @msg	nothing to save: the document has no visible art	niets om op te slaan: het document heeft geen zichtbare illustratie
 @msg	nothing to undo	niets om ongedaan te maken
 @msg	no history to clear	geen historie om te wissen
+@msg	no history state {v}	geen historiestatus {v}
 @msg	nothing to warp	niets om te buigen
 @msg	nothing to wrap	niets om te laten omlopen
 @msg	object {0} cannot have children	object {0} kan geen onderliggende objecten hebben
@@ -4585,6 +4617,7 @@ imageTrace	Outline	Contour
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} afbeelding kon niet worden gedecodeerd en wordt als doorgekruist vak weergegeven|{n} afbeeldingen konden niet worden gedecodeerd en worden als doorgekruiste vakken weergegeven
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	het document stelt een afloop in die dit PDF/X-bestand weglaat: schakel 'Afloopinstellingen van document gebruiken' in
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
@@ -4667,6 +4700,7 @@ imageTrace	Outline	Contour
 @msg	No linked files to look for	Geen gekoppelde bestanden om naar te zoeken
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` is de stapverwijzing {r}, die alleen `run` en `command_batch` oplossen
 @msg	`ids` must be an array of object ids, not {v}	`ids` moet een array van object-id's zijn, niet {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` moet een array van kleuren zijn, niet {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` moet een array van ankerindices zijn, niet {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: het resultaat van stap {i} heeft geen dergelijke waarde (schrijf $$ voor een letterlijke $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: er is geen stap {i} vóór deze stap (stappen tellen vanaf 0; schrijf $$ voor een letterlijke $)
@@ -5744,6 +5778,17 @@ axis	Y Axis	Y-as
 	The plug-in is computing…	De plug-in is aan het rekenen…
 	Inspect Plug-in	Plug-in inspecteren
 	Cancel Plug-in Run	Plug-in-run annuleren
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	„{name}” installeren, dat om deze machtigingen vraagt?
+	ID: {id}	ID: {id}
+	Version: {version}	Versie: {version}
+	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
+	Read the objects it is given	De objecten lezen die het krijgt
+	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
+	Keep data of its own with the document	Eigen gegevens bij het document bewaren
+	Change how the objects its effect is applied to are drawn	Wijzigen hoe de objecten waarop het effect is toegepast worden getekend
+	Write the document as a file in its own format	Het document als bestand in een eigen indeling schrijven
+	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
 	New Set	Nieuwe set
@@ -5752,6 +5797,19 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Playback Options…	Afspeelopties…
+	Insert Stop…	Stop invoegen…
+	Insert Stop	Stop invoegen
+	Record Stop	Stop opnemen
+	Allow Continue	Doorgaan toestaan
+	Continue	Doorgaan
+	Continue Action	Actie voortzetten
+	Delete Action Step	Actiestap verwijderen
+	Press Play Current Selection in the Actions panel to go on.	Druk in het paneel Acties op Huidige selectie afspelen om door te gaan.
+	Stop: {message}	Stop: {message}
+@msg	no action is waiting at a stop	geen actie wacht bij een stop
+@msg	message must be text	message moet tekst zijn
+@msg	allowContinue must be true or false	allowContinue moet true of false zijn
+@msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Playback Options	Afspeelopties
 	Accelerated	Versneld
 	Step by Step	Stap voor stap
@@ -6155,6 +6213,7 @@ breakText	Glyphs	Glyphs
 	Gap 5	Tussenruimte 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ze zijn geïmporteerd als pagina-afbeelding
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	tekstobjecten met Warp die zijn geïmporteerd als afbeelding, niet als bewerkbare tekst: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	objecten die anders werden getekend dan de eigen pagina van het bestand, zijn geïmporteerd als pagina-afbeelding: {_1}
 
 @msg	You must choose a side pattern.	Kies een zijpatroon.

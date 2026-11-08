@@ -249,11 +249,11 @@ proptest! {
     }
 }
 
-/// 50,000 class rules give 50,000 elements, each with one of the classes, their fill within
-/// 20 s.
+/// 5,000 class rules give 5,000 elements, each with one of the classes, their fill, testing
+/// about one rule per element.
 #[test]
-fn styling_50000_elements_with_50000_rules_finishes_within_20_s() {
-    const N: usize = 50_000;
+fn styling_5000_elements_with_5000_rules_tests_about_one_rule_each() {
+    const N: usize = 5_000;
     let rules: String = (0..N).map(|i| format!(".c{i} {{ fill: #{i:06x} }}\n")).collect();
     let rects: String = (0..N).map(|i| format!(r#"<rect class="c{i}"/>"#)).collect();
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{rules}</style>{rects}</svg>"#);
@@ -262,9 +262,12 @@ fn styling_50000_elements_with_50000_rules_finishes_within_20_s() {
         let doc = roxmltree::Document::parse(&svg).unwrap();
         let st = Styles::new(&doc);
         let fills: Vec<Option<String>> = doc.descendants().filter(|n| n.tag_name().name() == "rect").map(|n| st.own(n, "fill")).collect();
-        tx.send(fills).ok();
+        tx.send((fills, selector_tests())).ok();
     });
-    let fills = rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|_| panic!("styling {N} elements did not finish within 20 s"));
+    let (fills, tests) =
+        rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|_| panic!("styling {N} elements did not finish within 300 s"));
+    // Testing every rule against every element would test N × N selectors.
+    assert!(tests <= 2 * N as u64, "styling {N} elements tested {tests} selectors");
     assert_eq!(fills.len(), N);
     for (i, fill) in fills.iter().enumerate() {
         assert_eq!(fill.as_deref(), Some(format!("#{i:06x}").as_str()));

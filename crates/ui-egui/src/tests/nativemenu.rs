@@ -155,7 +155,8 @@ fn language_and_appearance_are_in_the_app_menu() {
 
 /// Everything the in-window bar lists is in the Mac menu bar, once: what moved to the app menu
 /// (About, Settings, Quit, Language, UI Brightness) leaves its other places, and Join Our Discord
-/// stays under Help.
+/// stays under Help. The Mac bar is laid out from the in-window bar's own read of the menus: Type ›
+/// Font and the plug-in rows come from process-wide state that a test running alongside can change.
 #[test]
 fn every_in_window_item_is_in_the_mac_menu_bar_once() {
     let app = app(true);
@@ -171,7 +172,7 @@ fn every_in_window_item_is_in_the_mac_menu_bar_once() {
         n
     };
     let in_window = native_menu::from_tree(&app, &menus::menu_tree());
-    let mac = bar(&app);
+    let mac = native_menu::mac_layout(&app, &in_window, Lang::EN).bar;
     let (a, b) = (count(&in_window), count(&mac));
     // The in-window application menu's commands, its submenus' included.
     let moved: Vec<&str> = MenuBar { menus: vec![in_window.menus[0].clone()] }.items().iter().filter_map(|it| it.command).collect();
@@ -225,19 +226,26 @@ fn a_command_keeps_a_system_key_it_is_bound_to() {
 }
 
 /// A native menu can't turn a plain item into a check item in place: opening a document or
-/// selecting must not change the menus' structure, or every change rebuilds them.
+/// selecting must not change the menus' structure, or every change rebuilds them. The four reads run
+/// undisturbed: a font or plug-in that a test running alongside adds between two of them changes the
+/// key.
 #[test]
 fn documents_and_selections_change_state_not_structure() {
-    let empty = native_menu::structure_key(&bar(&app(false)));
-    let mut a = app(true);
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "a document with a selected rectangle");
-    a.run("select.none", json!({})).unwrap();
-    a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
-    assert!(!a.session.active().unwrap().selection.objects.is_empty());
-    assert_eq!(native_menu::structure_key(&bar(&a)), empty, "type selected");
-    // A recent file is a new item: the menus are rebuilt.
-    crate::io::note_recent(&mut a, "/art/a.svg");
-    assert_ne!(native_menu::structure_key(&bar(&a)), empty);
+    let (_m, (empty, drawn, typed, recent)) = undisturbed(|_| {
+        let key = |app: &VectorcraftApp| native_menu::structure_key(&bar(app));
+        let empty = key(&app(false));
+        let mut a = app(true);
+        let drawn = key(&a);
+        a.run("select.none", json!({})).unwrap();
+        a.run("text.create", json!({"x": 50, "y": 50, "text": "Hi"})).unwrap();
+        assert!(!a.session.active().unwrap().selection.objects.is_empty());
+        let typed = key(&a);
+        crate::io::note_recent(&mut a, "/art/a.svg");
+        (empty, drawn, typed, key(&a))
+    });
+    assert_eq!(drawn, empty, "a document with a selected rectangle");
+    assert_eq!(typed, empty, "type selected");
+    assert_ne!(recent, empty, "a recent file is a new item: the menus are rebuilt");
 }
 
 #[test]

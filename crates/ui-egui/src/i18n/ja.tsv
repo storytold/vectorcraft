@@ -487,6 +487,11 @@ digits	Malayalam	マラヤーラム数字
 	Document Raster Effects Settings…	ドキュメントのラスタライズ効果設定…
 	Vector Effects	ベクター効果
 	3D and Materials	3D とマテリアル
+	Plane	平面
+	Extrude	押し出し
+	Revolve	回転体
+	Inflate	膨張
+	Select objects, then pick an object type to give them a 3D effect.	オブジェクトを選択してから、オブジェクトの種類を選んで 3D 効果を適用してください。
 	Extrude & Bevel…	押し出しとベベル…
 	3D (Classic)	3D（クラシック）
 	Extrude & Bevel (Classic)…	押し出しとベベル（クラシック）…
@@ -1040,6 +1045,8 @@ digits	Malayalam	マラヤーラム数字
 	Show Cross Hairs	十字線を表示
 	Show Video Safe Areas	ビデオセーフエリアを表示
 	Video Ruler Pixel Aspect Ratio:	ビデオ定規のピクセル縦横比:
+	Fade Region Outside Artboard	アートボードの外側を暗く表示
+	Update While Dragging	ドラッグ中に更新
 	Hide Video Rulers	ビデオ定規を隠す
 	Background Contents	背景のカラー
 	Background Contents:	背景のカラー:
@@ -1592,6 +1599,8 @@ digits	Malayalam	マラヤーラム数字
 	Export Document	ドキュメントを書き出し
 	Export EPS	EPS を書き出し
 	Export Keyboard Shortcuts…	キーボードショートカットを書き出し…
+	Export Keyboard Shortcuts as Text…	キーボードショートカットをテキストで書き出し…
+	Export Text…	テキストを書き出し…
 	Export Option	書き出しオプション
 	Export PDF	PDF を書き出し
 	Export PDF Presets	PDF プリセットを書き出し
@@ -1738,6 +1747,8 @@ digits	Malayalam	マラヤーラム数字
 	Graphics: {adapter}	グラフィックス: {adapter}
 	Grays	グレー
 	Grayscale	グレースケール
+	High Color	多色
+	Low Color	少色
 	Flat Logo	フラットロゴ
 	Grayscale images	グレースケールイメージ
 	Green	グリーン
@@ -1783,6 +1794,7 @@ digits	Malayalam	マラヤーラム数字
 	Step Backward	一段階戻る
 	Step Forward	一段階進む
 	Clear History	ヒストリーを消去
+	New Document from State	状態から新規ドキュメント
 	Set History Limit…	ヒストリーの上限を設定…
 	History States	ヒストリー数
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2092,6 +2104,9 @@ digits	Malayalam	マラヤーラム数字
 	Live Paint Selection Tool	ライブペイント選択ツール
 	Live Shape Properties	ライブシェイプのプロパティ
 	Load Color Profile…	カラープロファイルを読み込む…
+	Load Character Styles…	文字スタイルを読み込み…
+	Load Paragraph Styles…	段落スタイルを読み込み…
+	Load All Styles…	すべてのスタイルを読み込み…
 	Remove Color Profile…	カラープロファイルを削除…
 	Load Image into Clipboard	画像をクリップボードに読み込む
 	Load Metafile into Clipboard	メタファイルをクリップボードに読み込む
@@ -2726,6 +2741,14 @@ mark-style	Japanese	日本式
 	Release to Layers (Sequence)	レイヤーに分配 (シーケンス)
 	Relink	再リンク
 	Relink to Folder…	フォルダーに再リンク…
+	Each Link Separately	リンクごとに個別
+	Selected Instances	選択したインスタンス
+	All Instances	すべてのインスタンス
+	Missing Links from This Folder	このフォルダーから見つからないリンク
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} は each|selected|all|missingInFolder のいずれでもありません
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each と paths は一緒に指定します: paths には ids、path、folder の代わりに、ids と path を持つエントリを並べます
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths のエントリ {i} には path と ids (ほかのエントリにないオブジェクト ID) が必要です
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder は path を取ります: そのファイルのフォルダーで、ほかの見つからないリンクを探します
 	Relink…	再リンク…
 	Find Linked Files	リンクファイルを検索
 	Find Linked Files in Folder…	フォルダー内のリンクファイルを検索…
@@ -2761,6 +2784,7 @@ mark-style	Japanese	日本式
 	Replace:	置換:
 	Replace Font	フォントを置換
 	Replace Symbol	シンボルを置き換え
+	Reset Transformation	変形をリセット
 	Replace With Font	置換するフォント
 	Replace With Font From	置換するフォントの一覧
 	System	システム
@@ -2775,6 +2799,8 @@ mark-style	Japanese	日本式
 	Reset OpenType Features	OpenType 機能をリセット
 	Reset Panel	パネルをリセット
 	Reset Preferences	環境設定をリセット
+	Search Preferences	環境設定を検索
+	No settings found	設定が見つかりません
 	Reset Profiles	プロファイルをリセット
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Reset to Default	初期設定に戻す
@@ -2809,6 +2835,7 @@ mark-style	Japanese	日本式
 	Rotate Tool	回転ツール
 	Rotate View Tool	回転ビューツール
 	Trackpad Gesture to Rotate View	トラックパッドのジェスチャーでビューを回転
+	Hold a Tool Shortcut to Use the Tool Temporarily	ツールのショートカットを押している間だけツールを使用
 	Rotation	回転
 	Round Cap	丸型線端
 	Round Join	ラウンド結合
@@ -3075,6 +3102,7 @@ mark-style	Japanese	日本式
 	Spaces	スペース
 	Spacing Guides	間隔ガイド
 	Invoke Distance Guides	距離ガイドを呼び出す
+	Snap to Last Location	最後の位置にスナップ
 	Spacing:	間隔:
 	Spanish	スペイン語
 	Specify:	指定:
@@ -3924,6 +3952,9 @@ axis	Both	両方
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
+	Dock to Top	上部にドッキング
+	Dock to Bottom	下部にドッキング
+	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング
@@ -4177,6 +4208,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	nothing to redo	やり直す操作がありません
 @msg	nothing to undo	取り消す操作がありません
 @msg	no history to clear	消去するヒストリーがありません
+@msg	no history state {v}	ヒストリーの状態 {v} はありません
 @msg	Expand Appearance: the selection has a basic appearance	アピアランスを分割: 選択範囲は基本アピアランスです
 @msg	select (or target) objects whose appearance isn't basic	基本アピアランスではないオブジェクトを選択するか、ターゲットに指定してください
 @msg	{C}: no effect at index {from}	{C}: インデックス {from} に効果がありません
@@ -4748,6 +4780,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} 個の画像をデコードできませんでした: バツ印の付いた枠で表示しています
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} 個のリンク画像がディスク上で変更されました: 「リンクを更新」で新しいバージョンを表示できます
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	ディスク上で変更された {n} 個のリンクファイルを更新しました
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ドキュメントに設定された裁ち落としがこの PDF/X ファイルには含まれません: 「ドキュメントの裁ち落とし設定を使用」をオンにしてください
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} を書き出しましたが、注意事項が {n} 件あります: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個のフォントファイルが {folder} に入りました
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個のフォントファイルが {folder} に入りましたが、{failed} 個は追加できませんでした: {reason}
@@ -4830,6 +4863,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	No linked files to look for	検索するリンクファイルがありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
+@msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` はアンカーポイントのインデックスの配列にしてください ({v} は使えません)
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ステップ {i} の結果にその値はありません ($ そのものを書くには $$ と入力してください)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: この前にステップ {i} はありません (ステップは 0 から数えます。$ そのものを書くには $$ と入力してください)
@@ -5480,6 +5514,33 @@ axis	Y Axis	Y 軸
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。ユーザーが同意したら `allowHeavy: true` を指定してインストールしてください
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
+	ID: {id}	ID: {id}
+	Version: {version}	バージョン: {version}
+	File SHA-256: {hash}	ファイルの SHA-256: {hash}
+	Read the objects it is given	渡されたオブジェクトの読み取り
+	Change, add and delete objects in the document	ドキュメント内のオブジェクトの変更、追加、削除
+	Keep data of its own with the document	独自のデータをドキュメントと一緒に保存
+	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
+	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
+	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `progress` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `progress` がある場合だけです
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは `env.vc_progress`、`env.vc_cancelled`、`env.vc_log` (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
+@msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
+@msg	at most {MAX_PERMISSIONS} `permissions`	`permissions` は最大 {MAX_PERMISSIONS} 個です
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	権限 `{shown}` は種類 `{_1}` のプラグインには適用されません
+@msg	permission `{shown}` is listed twice	権限 `{shown}` が 2 回指定されています
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
+@msg	unknown permission `{shown}`	不明な権限 `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」は権限 {asked} を求めています。ユーザーが同意したら、それらを列挙した `grant` を指定してインストールしてください
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」には出力に必要な `{p}` が付与されていません。何も変更されませんでした
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	モジュールの SHA-256 が `hash` の値と一致しません。何もインストールされませんでした
 # Actions panel: action sets (#3712).
 	New Set…	新規セット…
 	New Set	新規セット
@@ -5488,6 +5549,19 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Playback Options…	再生オプション…
+	Insert Stop…	停止を挿入…
+	Insert Stop	停止を挿入
+	Record Stop	停止を記録
+	Allow Continue	続行を許可
+	Continue	続行
+	Continue Action	アクションを続行
+	Delete Action Step	アクションステップを削除
+	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
+	Stop: {message}	停止: {message}
+@msg	no action is waiting at a stop	停止で待機中のアクションはありません
+@msg	message must be text	message にはテキストを指定してください
+@msg	allowContinue must be true or false	allowContinue には true または false を指定してください
+@msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Playback Options	再生オプション
 	Accelerated	高速
 	Step by Step	ステップ実行
@@ -5930,6 +6004,7 @@ breakText	Glyphs	字形
 	Gap 5	間隔 5
 
 @msg	{_1}: they came in as the page's art	{_1}: ページのアートとして読み込みました
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	編集可能なテキストではなくアートとして読み込んだワープのテキストオブジェクト: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	ファイル自身のページと描画が異なるオブジェクトをページのアートとして読み込みました: {_1}
 
 @msg	You must choose a side pattern.	側面パターンを選択してください。

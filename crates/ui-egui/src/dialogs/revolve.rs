@@ -61,7 +61,10 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
+/// The tabs and controls of the 3D effect in `d.fields["__effect"]`, editing `d.fields`; the
+/// dialog's body and the 3D and Materials panel draw them. With `__panel` set (the panel), the
+/// controls that only the dialog's artboard gizmos use are left out.
+pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.spacing_mut().item_spacing.y = 4.0;
     let id = d.str("__effect");
     if id != REVOLVE {
@@ -96,14 +99,13 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     number(ui, d, "offset", tl!("Offset"), (0.0, 100000.0), "", 1, Some(unit));
     ui.horizontal(|ui| {
-        let mut cap = d.bool("cap");
+        let cap = flag(d, "cap", true);
         let tip = tl!("Close the circular ends of open profiles. Partial sweeps keep their cut sides open.");
-        if widgets::check_tip(ui, c3("Cap"), cap, true, tip) {
-            cap = !cap;
-            d.fields.insert("cap".into(), json!(cap));
+        if widgets::check3_tip(ui, c3("Cap"), cap, true, tip) {
+            d.fields.insert("cap".into(), json!(cap != Some(true)));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "cap", !cap, "true") {
+        if reset_dot(ui, "cap", cap != Some(true), "true") {
             d.fields.insert("cap".into(), json!(true));
         }
     });
@@ -116,20 +118,22 @@ fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(6.0);
     egui::CollapsingHeader::new(tl!("Advanced")).id_salt("revolve-advanced").show(ui, |ui| {
         number(ui, d, "segments", tl!("Segments"), (8.0, 128.0), "", 0, None);
-        super::form::check(ui, d, "__showAxis", tl!("Show axis"));
+        if !d.bool("__panel") {
+            super::form::check(ui, d, "__showAxis", tl!("Show axis"));
+        }
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            let visible = d.fields.get("expandVisibleOnly").and_then(Value::as_bool).unwrap_or(true);
+            let visible = flag(d, "expandVisibleOnly", true);
             let tip = tl!("Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.");
             let toggled = ui.allocate_ui_with_layout(
                 vec2((ui.available_width() - 30.0).max(100.0), 24.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    widgets::check_tip(ui, tl!("Keep visible surfaces only when expanding"), visible, true, tip)
+                    widgets::check3_tip(ui, tl!("Keep visible surfaces only when expanding"), visible, true, tip)
                 },
             ).inner;
             if toggled {
-                d.fields.insert("expandVisibleOnly".into(), json!(!visible));
+                d.fields.insert("expandVisibleOnly".into(), json!(visible != Some(true)));
             }
-            if reset_dot(ui, "expandVisibleOnly", !visible, "true") {
+            if reset_dot(ui, "expandVisibleOnly", visible != Some(true), "true") {
                 d.fields.insert("expandVisibleOnly".into(), json!(true));
             }
         });
@@ -256,7 +260,9 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
 pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, options: &[(Value, &str)]) {
     let id = d.str("__effect");
     let default = vectorcraft_effects::default_params(&id).and_then(|p| p.get(key).cloned()).unwrap_or(Value::Null);
-    let value = d.fields.get(key).cloned().unwrap_or_else(|| default.clone());
+    // A mixed setting (null) shows its default, with its reset dot filled.
+    let mixed = d.fields.get(key).is_some_and(Value::is_null);
+    let value = d.fields.get(key).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| default.clone());
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         label(ui, name);
@@ -269,38 +275,48 @@ pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, o
             d.fields.insert(key.into(), v.clone());
         }
         let default_label = options.iter().find(|(v, _)| *v == default).map_or("", |(_, l)| *l);
-        if reset_dot(ui, key, value != default, default_label) {
+        if reset_dot(ui, key, mixed || value != default, default_label) {
             d.fields.insert(key.into(), default.clone());
         }
     });
 }
 
-/// A checkbox for `key`, with its reset dot.
+/// The checkbox setting `key`: `None` when it is null (the 3D and Materials panel's selected
+/// effects hold it with different values), else its value, or `default` when it has none.
+fn flag(d: &Dialog, key: &str, default: bool) -> Option<bool> {
+    match d.fields.get(key) {
+        Some(Value::Null) => None,
+        value => Some(value.and_then(Value::as_bool).unwrap_or(default)),
+    }
+}
+
+/// A checkbox for `key`, with its reset dot. A mixed setting shows a dash, and a click turns it on.
 pub(super) fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, default: bool) {
     ui.horizontal(|ui| {
-        let on = d.bool(key);
-        if widgets::check(ui, name, on, ui.is_enabled()) {
-            d.fields.insert(key.into(), json!(!on));
+        let on = flag(d, key, default);
+        if widgets::check3(ui, name, on, ui.is_enabled()) {
+            d.fields.insert(key.into(), json!(on != Some(true)));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, key, on != default, if default { "true" } else { "false" }) {
+        if reset_dot(ui, key, on != Some(default), if default { "true" } else { "false" }) {
             d.fields.insert(key.into(), json!(default));
         }
     });
 }
 
 fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
+    let shade = flag(d, "shade", true);
     ui.horizontal(|ui| {
-        let shade = d.bool("shade");
-        if widgets::check(ui, tl!("Shading"), shade, true) {
-            d.fields.insert("shade".into(), json!(!shade));
+        if widgets::check3(ui, tl!("Shading"), shade, true) {
+            d.fields.insert("shade".into(), json!(shade != Some(true)));
         }
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "shade", !shade, "true") {
+        if reset_dot(ui, "shade", shade != Some(true), "true") {
             d.fields.insert("shade".into(), json!(true));
         }
     });
-    ui.add_enabled_ui(d.bool("shade"), |ui| {
+    // A mixed Shading leaves the light settings on, for the effects that shade.
+    ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
         lighting_presets(ui, d);
         light_list(ui, d);
         let mut selected = selected_light(d);
@@ -421,8 +437,10 @@ pub(super) fn light_list(ui: &mut egui::Ui, d: &mut Dialog) {
             super::revolve_gizmo::clear(ui.ctx());
         }
     });
+    // Add Light is off while a setting of the single light is mixed (null).
+    let mixed = explicit_lights(d).is_none() && LIGHT_KEYS.iter().any(|(_, key)| d.fields.get(*key).is_some_and(Value::is_null));
     ui.horizontal(|ui| {
-        if ui.add_enabled(list.len() < vectorcraft_three_d::MAX_LIGHTS, egui::Button::new(tl!("Add Light"))).clicked() {
+        if ui.add_enabled(list.len() < vectorcraft_three_d::MAX_LIGHTS && !mixed, egui::Button::new(tl!("Add Light"))).clicked() {
             let mut added = selected_light(d);
             let defaults = vectorcraft_effects::default_params(&d.str("__effect")).unwrap_or(json!({}));
             for (_, key) in LIGHT_KEYS {
@@ -466,7 +484,8 @@ fn light_color(ui: &mut egui::Ui, d: &mut Dialog) {
         }
         ui.label(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]));
         ui.add_space((ui.available_width() - 24.0).max(0.0));
-        if reset_dot(ui, "lightColor", rgb != [255; 3], "#FFFFFF") {
+        let mixed = d.fields.get("lightColor").is_some_and(Value::is_null);
+        if reset_dot(ui, "lightColor", mixed || rgb != [255; 3], "#FFFFFF") {
             d.fields.insert("lightColor".into(), json!("#ffffff"));
         }
     });
@@ -558,7 +577,9 @@ pub(super) fn number(ui: &mut egui::Ui, d: &mut Dialog, key: &str, name: &str, r
         if let Some(n) = slider.0.map(|n| rail_min + f64::from(n) * (rail_max - rail_min)).or(slider.2) {
             next = Some(n);
         }
-        if reset_dot(ui, key, (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
+        // A setting the 3D and Materials panel's selected effects hold with different values is null.
+        let mixed = d.fields.get(key).is_some_and(Value::is_null);
+        if reset_dot(ui, key, mixed || (to(value) - default).abs() > 1e-6, &format!("{}{}", from(default), suffix)) {
             next = Some(from(default));
         }
     });

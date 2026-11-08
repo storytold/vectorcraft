@@ -416,6 +416,11 @@
 	Document Raster Effects Settings…	Ustawienia efektów rastrowych dokumentu…
 	Vector Effects	Efekty wektorowe
 	3D and Materials	3D i materiały
+	Plane	Płaszczyzna
+	Extrude	Wyciągnięcie
+	Revolve	Obrót
+	Inflate	Nadmuchanie
+	Select objects, then pick an object type to give them a 3D effect.	Zaznacz obiekty, a następnie wybierz typ obiektu, aby nadać im efekt 3D.
 	Extrude & Bevel…	Wyciągnięcie i fazowanie…
 	3D (Classic)	3D (klasyczne)
 	Extrude & Bevel (Classic)…	Wyciągnięcie i fazowanie (klasyczne)…
@@ -776,6 +781,9 @@
 	Put back in the toolbar	Odłóż z powrotem na pasek narzędzi
 	Float Panel	Odepnij panel
 	Dock Panel	Zadokuj panel
+	Dock to Top	Zadokuj u góry
+	Dock to Bottom	Zadokuj u dołu
+	Dock Control Bar	Zadokuj pasek sterowania
 	Float Tool Group	Odepnij grupę narzędzi
 	Services	Usługi
 	Hide VectorCraft	Ukryj VectorCraft
@@ -905,6 +913,8 @@ lighting	Light	Światło
 	Expand Layers Panel Rows	Rozwiń wiersze panelu Warstwy
 	Export CSS…	Eksportuj CSS…
 	Export Keyboard Shortcuts…	Eksportuj skróty klawiaturowe…
+	Export Keyboard Shortcuts as Text…	Eksportuj skróty klawiaturowe jako tekst…
+	Export Text…	Eksportuj tekst…
 	File Info Dialog	Okno informacji o pliku
 	Go to Artboard	Przejdź do obszaru kompozycji
 	First Artboard	Pierwszy obszar kompozycji
@@ -1242,6 +1252,7 @@ lighting	Light	Światło
 	Rotate Tool	Narzędzie Obrót
 	Rotate View Tool	Narzędzie Obrót widoku
 	Trackpad Gesture to Rotate View	Obracaj widok gestem na gładziku
+	Hold a Tool Shortcut to Use the Tool Temporarily	Używaj narzędzia tymczasowo, przytrzymując jego skrót
 	Rounded Rectangle Tool	Narzędzie Zaokrąglony prostokąt
 	Scale Tool	Narzędzie Skalowanie
 	Scallop Tool	Narzędzie Ząbkowanie
@@ -1558,6 +1569,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Krok wstecz
 	Step Forward	Krok naprzód
 	Clear History	Wyczyść historię
+	New Document from State	Nowy dokument ze stanu
 	Set History Limit…	Ustaw limit historii…
 	Open a document to see its history.	Otwórz dokument, aby zobaczyć jego historię.
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2012,6 +2024,14 @@ digits	Malayalam	Malajalam
 	Location	Położenie
 	No images	Brak obrazów
 	Relink to Folder…	Połącz ponownie z folderem…
+	Each Link Separately	Każde łącze osobno
+	Selected Instances	Zaznaczone wystąpienia
+	All Instances	Wszystkie wystąpienia
+	Missing Links from This Folder	Brakujące łącza z tego folderu
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} nie jest jednym z each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths występują razem: paths wymienia wpisy z ids i path zamiast ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	wpis {i} w paths wymaga path i ids (identyfikatorów obiektów, których nie ma żaden inny wpis)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder przyjmuje path: w folderze tego pliku szukane są pozostałe brakujące łącza
 	Show Missing	Pokaż brakujące
 	Sort by Status	Sortuj według stanu
 	Clear Overrides	Wyczyść zastąpienia
@@ -2511,6 +2531,8 @@ digits	Malayalam	Malajalam
 	Show Cross Hairs	Pokaż krzyż nitkowy
 	Show Video Safe Areas	Pokaż bezpieczne obszary wideo
 	Video Ruler Pixel Aspect Ratio:	Proporcje piksela linijek wideo:
+	Fade Region Outside Artboard	Przyciemnij obszar poza obszarem kompozycji
+	Update While Dragging	Aktualizuj podczas przeciągania
 	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
@@ -3089,6 +3111,7 @@ theme	Appearance	Wygląd
 	Redefine Symbol	Zdefiniuj ponownie symbol
 	Remove Brush Stroke	Usuń pociągnięcie pędzla
 	Replace Symbol	Zastąp symbol
+	Reset Transformation	Resetuj przekształcenie
 	Select All Instances	Zaznacz wszystkie wystąpienia
 	Symbol Sprayer	Rozpylanie symboli
 	Symbolism Tool	Narzędzie symboli
@@ -3116,6 +3139,9 @@ theme	Appearance	Wygląd
 	Convert Document Color Mode	Konwertuj tryb koloru dokumentu
 	Gamut Warning	Ostrzeżenie gamutu
 	Load Color Profile…	Wczytaj profil kolorów…
+	Load Character Styles…	Wczytaj style znakowe…
+	Load Paragraph Styles…	Wczytaj style akapitowe…
+	Load All Styles…	Wczytaj wszystkie style…
 	Remove Color Profile…	Usuń profil kolorów…
 	Plates	Płyty
 	Spot Color	Kolor dodatkowy
@@ -3545,6 +3571,8 @@ theme	Appearance	Wygląd
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
+	Search Preferences	Szukaj w preferencjach
+	No settings found	Nie znaleziono ustawień
 	Scale Corners	Skaluj narożniki
 	Scale Cursor Proportional to UI	Skaluj kursor proporcjonalnie do interfejsu
 	Scale Strokes & Effects	Skaluj obrysy i efekty
@@ -3565,6 +3593,7 @@ theme	Appearance	Wygląd
 	Snapping Tolerance	Tolerancja przyciągania
 	Spacing Guides	Linie odstępów
 	Invoke Distance Guides	Wywołuj linie odległości
+	Snap to Last Location	Przyciągaj do ostatniego położenia
 	Spanish	Hiszpański
 	Subdivisions	Podpodziały
 	Templates Folder	Folder szablonów
@@ -3712,6 +3741,8 @@ axis	Both	Obie
 	Center	Środek
 	Transform in Perspective	Przekształć w perspektywie
 	Grayscale	Skala szarości
+	High Color	Wiele kolorów
+	Low Color	Mało kolorów
 	Embed	Osadź
 	Star	Gwiazda
 	Power Saving (integrated)	Oszczędzanie energii (zintegrowany)
@@ -4518,6 +4549,7 @@ imageTrace	Outline	Kontur
 @msg	nothing to save: the document has no visible art	nie ma czego zapisać: dokument nie ma widocznej kompozycji
 @msg	nothing to undo	nie ma czego cofnąć
 @msg	no history to clear	brak historii do wyczyszczenia
+@msg	no history state {v}	brak stanu historii {v}
 @msg	nothing to warp	nie ma czego wypaczyć
 @msg	nothing to wrap	nie ma czego oblewać
 @msg	object {0} cannot have children	obiekt {0} nie może mieć elementów podrzędnych
@@ -4767,6 +4799,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	nie udało się zdekodować {n} obrazu: jest wyświetlany jako przekreślona ramka|nie udało się zdekodować {n} obrazów: są wyświetlane jako przekreślone ramki|nie udało się zdekodować {n} obrazów: są wyświetlane jako przekreślone ramki
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} połączony obraz zmienił się na dysku: Aktualizuj łącza pokaże nową wersję|{n} połączone obrazy zmieniły się na dysku: Aktualizuj łącza pokaże nowe wersje|{n} połączonych obrazów zmieniło się na dysku: Aktualizuj łącza pokaże nowe wersje
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Zaktualizowano {n} połączony plik zmieniony na dysku|Zaktualizowano {n} połączone pliki zmienione na dysku|Zaktualizowano {n} połączonych plików zmienionych na dysku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument ustawia spad, który ten plik PDF/X pomija: włącz „Użyj ustawień spadu dokumentu”
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Wyeksportowano {what} z {n} uwagą: {first}|Wyeksportowano {what} z {n} uwagami: {first}|Wyeksportowano {what} z {n} uwagami: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} plik czcionki jest teraz w {folder}|{n} pliki czcionek są teraz w {folder}|{n} plików czcionek jest teraz w {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} plik czcionki jest teraz w {folder}; nie udało się dodać {failed}: {reason}|{n} pliki czcionek są teraz w {folder}; nie udało się dodać {failed}: {reason}|{n} plików czcionek jest teraz w {folder}; nie udało się dodać {failed}: {reason}
@@ -4853,6 +4886,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` musi być tablicą indeksów punktów, nie {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: wynik kroku {i} nie ma takiej wartości (wpisz $$, aby uzyskać znak $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: przed tym krokiem nie ma kroku {i} (kroki liczone od 0; wpisz $$, aby uzyskać znak $)
@@ -5652,6 +5686,33 @@ axis	Y Axis	Oś Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	efekt na żywo działa podczas rysowania dokumentu, więc nie może być `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	wtyczka eksportu zawsze dostaje budżet eksportu: pomiń `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” prosi o duży budżet obliczeń (każde uruchomienie do {minutes} minut i {times} razy więcej instrukcji niż zwykle): zainstaluj wtyczkę z `allowHeavy: true`, gdy użytkownik się zgodzi
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Zainstalować „{name}”, wtyczkę, która prosi o te uprawnienia?
+	ID: {id}	ID: {id}
+	Version: {version}	Wersja: {version}
+	File SHA-256: {hash}	SHA-256 pliku: {hash}
+	Read the objects it is given	Odczytywać obiekty, które otrzymuje
+	Change, add and delete objects in the document	Zmieniać, dodawać i usuwać obiekty w dokumencie
+	Keep data of its own with the document	Przechowywać własne dane w dokumencie
+	Change how the objects its effect is applied to are drawn	Zmieniać sposób rysowania obiektów, do których zastosowano jej efekt
+	Write the document as a file in its own format	Zapisywać dokument jako plik we własnym formacie
+	Show its progress, see Cancel and write log lines	Pokazywać swój postęp, wykrywać anulowanie i zapisywać wiersze dziennika
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	uprawnienie `progress` wymaga poziomu API wtyczek {PROGRESS_API}: podaj `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduł importuje `env.{name}` z innym typem niż typ hosta: typ hosta to {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	moduł importuje `env.{name}`, którego wtyczka może używać tylko na poziomie API wtyczek {PROGRESS_API} (`api` {PROGRESS_API}) i z uprawnieniem `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	moduł importuje `{from}.{name}`, którego host nie udostępnia: wtyczka może importować tylko `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (poziom API wtyczek 2), bez WASI, plików i sieci
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ma wartość {_1}; ten host obsługuje poziomy API wtyczek od 1 do {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` musi być listą nazw uprawnień
+@msg	`grant` names an unknown permission `{shown}`	`grant` wymienia nieznane uprawnienie `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	wtyczka rodzaju `{_1}` potrzebuje uprawnienia `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	najwyżej {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	uprawnienie `{shown}` nie dotyczy wtyczki rodzaju `{_1}`
+@msg	permission `{shown}` is listed twice	uprawnienie `{shown}` występuje dwa razy
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
+@msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” prosi o uprawnienia {asked}: zainstaluj ją z `grant`, który je wymienia, gdy użytkownik się zgodzi
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nie otrzymała `{p}`, którego potrzebuje jej wynik: nic nie zmieniono
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	moduł nie ma skrótu SHA-256 podanego w `hash`: nic nie zainstalowano
 # Actions panel: action sets (#3712).
 	New Set…	Nowy zestaw…
 	New Set	Nowy zestaw
@@ -5660,6 +5721,19 @@ axis	Y Axis	Oś Y
 	Action Options…	Opcje operacji…
 	Action Options	Opcje operacji
 	Playback Options…	Opcje odtwarzania…
+	Insert Stop…	Wstaw zatrzymanie…
+	Insert Stop	Wstaw zatrzymanie
+	Record Stop	Nagraj zatrzymanie
+	Allow Continue	Zezwalaj na kontynuację
+	Continue	Kontynuuj
+	Continue Action	Kontynuuj operację
+	Delete Action Step	Usuń krok operacji
+	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
+	Stop: {message}	Zatrzymanie: {message}
+@msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
+@msg	message must be text	message musi być tekstem
+@msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
+@msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
 	Playback Options	Opcje odtwarzania
 	Accelerated	Przyspieszone
 	Step by Step	Krok po kroku
@@ -6100,6 +6174,7 @@ breakText	Glyphs	Glify
 	Gap 5	Odstęp 5
 
 @msg	{_1}: they came in as the page's art	{_1}: zaimportowano je jako grafikę strony
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	wypaczone obiekty tekstowe zaimportowane jako grafika, a nie jako edytowalny tekst: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	obiekty rysowane inaczej niż własna strona pliku zaimportowano jako grafikę strony: {_1}
 
 @msg	You must choose a side pattern.	Musisz wybrać wzór boczny.

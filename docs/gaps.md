@@ -184,7 +184,7 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
 
 ## G9 Illustrator `.ai` and EPS files from real users
 
-- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out; EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
+- **Done (2026-10-30):** from an audit of a user's `.ai`/EPS files: All Caps and Small Caps; placed files at their box's corner; pages cropped to the art; gradient mesh corners with handle weights of 0 and the transparency written after a mesh, a masked mesh and a blend; a layer's state block with the stroke style; type on a path spaced as the file lays it out (the distance from the path under Align to Path comes from VectorCraft's font metrics, and the fit under Gravity does not reproduce the file's layout); EPS10 legacy-format type; a PDF of some artboards compared on the artboard its page shows. Comparison limits remain unchanged. This narrows G9; scores and estimates unchanged.
 
 - **Save-back update (2026-10-26):** ordinary EPS Save retains page margins and the whole editable document; source-loss confirmation remains. Import fidelity gaps and estimates below are unchanged.
 
@@ -203,7 +203,8 @@ from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall 
   of 14), open speed on large files (#758), live effects, Scatter, Art, Pattern and Bristle brushes on paths, a
   path's own Calligraphic brush settings, and symbols as live objects (#637; plain art styles read Drop Shadow, Outer Glow and Feather as live effects; pattern fills and global colours are read since #1025, placed (linked) files since #1264). A PDF-compatible `.ai` carries an editing copy of the art in the form
   VectorCraft's reader reads (layers, groups, paths, colors, gradients, patterns, images, transparency, opacity masks,
-  clipping and type as text), with live effects left out and symbols and live objects written as their art
+  clipping, type as text and symbols), with live effects kept only on paths, compound paths and groups that
+  qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports, other objects' effects other than geometry effects left out, and live objects written as their art
   ([file-format-parity.md](file-format-parity.md)). Save As
   `.ai` › Version: Legacy (version 7) writes the PostScript form from the published version 7 specification,
   keeping layers (names, order, visibility, lock), groups, compound paths, clipping groups, gradients and
