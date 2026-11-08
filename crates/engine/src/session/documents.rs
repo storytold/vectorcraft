@@ -42,6 +42,8 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -110,6 +112,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
