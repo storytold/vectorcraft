@@ -19,6 +19,7 @@ pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub use id_index::tree_walks;
 pub mod inks;
 mod inline;
 pub mod intertwine;

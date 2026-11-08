@@ -1,4 +1,5 @@
-use super::labels::{Role, label_style};
+use super::axis::radar_axis;
+use super::labels::{Role, filled_lines_on, label_style};
 use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
@@ -121,11 +122,82 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
             let node = doc.node(*id)?;
             let paint = node.appearance.paint_at(None, fill)?.clone();
             let width = (!fill).then(|| node.appearance.stroke_width());
-            Some((r.graph, r.index, paint, width))
+            Some((r.graph, r.index, fill, paint, width))
         })
         .collect();
+    store_series_paints(doc, captures)
+}
+
+/// The paint of the topmost visible fill (`true`) or stroke (`false`) of `node`, and a stroke's weight (0 without paint).
+/// With no such row: no paint.
+pub(crate) fn shown_paint(node: &Node, fill: bool) -> (Paint, f64) {
+    match node.appearance.items.iter().rev().find(|it| it.is_fill() == fill && it.visible()) {
+        Some(vectorcraft_doc::AppearanceItem::Stroke(st)) if !st.paint.is_none() => (st.paint.clone(), st.width),
+        Some(it) => (it.paint().clone(), 0.0),
+        None => (Paint::None, 0.0),
+    }
+}
+
+/// Copy the paint of the topmost visible fill (`true`) or stroke (`false`), and a stroke's weight, of generated series
+/// art just edited (`edited`: each object with the kind of row, later entries replacing earlier ones) into that series'
+/// fill or stroke; art left without such a row keeps no paint. A series that draws Filled Lines bands stores no stroke: its
+/// bands keep their own outline. Called inside the same document edit, so both undo together. Returns whether a series'
+/// captured fill or stroke changed.
+pub(crate) fn capture_series_top_paints(doc: &mut Document, edited: &[(NodeId, bool)]) -> bool {
+    if edited.is_empty() {
+        return false;
+    }
+    let members = series_members(doc);
+    if members.is_empty() {
+        return false;
+    }
+    // Each series is checked once: the check reads the graph's whole grid.
+    let mut bands: HashMap<(NodeId, usize), bool> = HashMap::new();
+    let mut captures = Vec::new();
+    for (id, fill) in edited {
+        // Only the paths the graph draws again, not the copy of a graph design.
+        let Some(r) = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group)) else { continue };
+        let Some(node) = doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. })) else { continue };
+        let drawn = || doc.node(r.graph).and_then(|n| n.extras().graph.as_deref()).is_some_and(|g| series_draws_bands(g, r.index));
+        if !*fill && *bands.entry((r.graph, r.index)).or_insert_with(drawn) {
+            continue;
+        }
+        let (paint, width) = shown_paint(node, *fill);
+        captures.push((r.graph, r.index, *fill, paint, (!*fill).then_some(width)));
+    }
+    store_series_paints(doc, captures)
+}
+
+/// Does series `i` draw any Filled Lines band? A line needs two neighboring values, a scatter series two neighboring points
+/// in different places (its index counts pairs of columns), and a radar series two categories with a value plotted away
+/// from the center.
+fn series_draws_bands(g: &GraphSpec, i: usize) -> bool {
+    let series = g.rows.iter().map(Vec::len).max().unwrap_or(0).clamp(1, vectorcraft_doc::MAX_GRAPH_SERIES);
+    if !g.connect_points || !filled_lines_on(g, series) {
+        return false;
+    }
+    let cells = g.cells();
+    let cell = |row: &[Option<f64>], s: usize| row.get(s).copied().flatten();
+    match g.series_kind(i) {
+        GraphKind::Line => cells.windows(2).any(|w| w.iter().all(|row| cell(row, i).is_some())),
+        GraphKind::Radar => {
+            let (lo, hi, _) = radar_axis(g);
+            cells.len() > 1 && cells.iter().any(|row| (cell(row, i).unwrap_or(0.0) - lo) / (hi - lo) > 0.0)
+        }
+        GraphKind::Scatter => {
+            let s = i.saturating_mul(2);
+            let point = |row: &[Option<f64>]| Some((cell(row, s)?, cell(row, s.saturating_add(1))?));
+            cells.windows(2).any(|w| matches!(w, [a, b] if point(a).is_some() && point(b).is_some() && point(a) != point(b)))
+        }
+        _ => false,
+    }
+}
+
+/// Store each capture (graph, series index, fill or stroke, paint, stroke weight) in its series. Returns whether a
+/// series' captured fill or stroke changed.
+fn store_series_paints(doc: &mut Document, captures: Vec<(NodeId, usize, bool, Paint, Option<f64>)>) -> bool {
     let mut changed = false;
-    for (graph, index, paint, width) in captures {
+    for (graph, index, fill, paint, width) in captures {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let was = spec.series_paints.clone();
         // `index` is below the graph's series count (`series_members`).
@@ -144,7 +216,7 @@ pub(crate) fn capture_series_paints(doc: &mut Document, ids: &[NodeId], fill: bo
     changed
 }
 
-/// Copy the opacity of the topmost fill (`true`) or stroke (`false`) of generated series art just edited (`edited`:
+/// Copy the opacity of the topmost visible fill (`true`) or stroke (`false`) of generated series art just edited (`edited`:
 /// each object with the kind of row) into that series' fill or stroke opacity; art left without a row of that kind
 /// keeps none. Called inside the same document edit, so both undo together. Returns whether a series' kept opacity
 /// changed.
@@ -162,7 +234,8 @@ pub(crate) fn capture_series_opacity(doc: &mut Document, edited: &[(NodeId, bool
             // Only the paths the graph draws again, not the copy of a graph design.
             let r = members.get(id).filter(|r| doc.parent_of(*id) == Some(r.group))?;
             let node = doc.node(*id).filter(|n| matches!(n.kind, NodeKind::Path { .. }))?;
-            let opacity = node.appearance.items.iter().rev().find(|it| it.is_fill() == *fill).map_or(1.0, vectorcraft_doc::AppearanceItem::opacity);
+            let row = node.appearance.items.iter().rev().find(|it| it.is_fill() == *fill && it.visible());
+            let opacity = row.map_or(1.0, vectorcraft_doc::AppearanceItem::opacity);
             Some((r.graph, r.index, *fill, (opacity < 1.0).then_some(opacity)))
         })
         .collect();

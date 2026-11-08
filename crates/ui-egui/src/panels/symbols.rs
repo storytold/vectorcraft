@@ -160,6 +160,13 @@ pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
     instance_selected(app, |c| !c.extras().symbol_overrides.is_empty())
 }
 
+/// Does the selection hold a symbol instance whose scale, rotation or shear differs from its
+/// symbol's, which Reset Transformation restores?
+fn transformed_instances_selected(app: &VectorcraftApp) -> bool {
+    let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
+    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c))
+}
+
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
 fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
     let st = app.session.active()?;
@@ -178,7 +185,9 @@ fn selected_instance_symbols(app: &VectorcraftApp) -> Option<Vec<String>> {
 /// The Control bar's Replace menu while symbol instances alone are selected: the document's
 /// symbols, showing the one the instances share (blank when they differ); picking another
 /// replaces them all, as "Select a new symbol from the Replace dropdown in the Control panel"
-/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>).
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/edit-symbols.html>),
+/// and the Reset button, which gives them their symbol's scale, rotation and shear again
+/// (<https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/transform-symbols.html>).
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(symbols) = selected_instance_symbols(app) else { return };
     let Some(st) = app.session.active() else { return };
@@ -196,6 +205,14 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(name) = widgets::dropdown_names(ui, "cb-symbol-replace", &shared, &options, 140.0).and_then(|i| names.get(i))
         && *name != shared
         && let Err(e) = app.run("symbol.replace", json!({ "name": name }))
+    {
+        app.status(e);
+    }
+    // Reset: Reset Transformation, enabled while an instance's scale, rotation or shear differs
+    // from its symbol's.
+    let reset = transformed_instances_selected(app);
+    if ui.add_enabled_ui(reset, |ui| widgets::flat_button_fit(ui, tl!("Reset"), 48.0).on_hover_text(tl!("Reset Transformation"))).inner.clicked()
+        && let Err(e) = app.run("symbol.instance.resetTransform", json!({}))
     {
         app.status(e);
     }
@@ -328,7 +345,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Delete Symbol"), sel.is_some() || !marked.is_empty(), false) {
         delete(app, &marked, sel.as_deref(), false);
     }
-    let items: [(&str, bool, &str, Value); 7] = [
+    let items: [(&str, bool, &str, Value); 8] = [
         (tl!("Symbol Options…"), sel.is_some(), "ui.symbolOptions", json!({"edit": true, "name": sel})),
         // The selected instance, else the symbol selected in the panel.
         (tl!("Edit Symbol"), inst || sel.is_some(), "symbol.edit", if inst { json!({}) } else { name.clone() }),
@@ -336,6 +353,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         (tl!("Replace Symbol"), inst && sel.is_some(), "symbol.replace", name.clone()),
         (tl!("Break Link to Symbol"), inst, "symbol.breakLink", json!({})),
         (tl!("Reset Symbol Instance"), changed_instances_selected(app), "symbol.instance.reset", json!({})),
+        (tl!("Reset Transformation"), transformed_instances_selected(app), "symbol.instance.resetTransform", json!({})),
         (tl!("Select All Instances"), sel.is_some(), "symbol.selectInstances", name),
     ];
     for (label, enabled, cmd, params) in items {
@@ -1299,5 +1317,65 @@ mod tests {
         click(&mut app, &ctx, star);
         let doc = &app.session.active().unwrap().doc;
         assert!(matches!(&doc.node(leaf).unwrap().kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"), "the instance is replaced");
+    }
+
+    /// The panel menu's Reset Transformation and the Control bar's Reset are enabled only while a
+    /// selected instance's scale, rotation or shear differs from its symbol's, and give the
+    /// instance its symbol's again.
+    #[test]
+    fn reset_transformation_is_enabled_for_a_transformed_instance_and_resets_it() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
+        let xf = |app: &VectorcraftApp| match app.session.active().unwrap().doc.node(leaf).map(|n| &n.kind) {
+            Some(NodeKind::SymbolInstance { xf, .. }) => *xf,
+            _ => panic!("the Leaf instance"),
+        };
+        let master = xf(&app);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        ctx.enable_accesskit();
+        let item_disabled = |app: &mut VectorcraftApp| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(236.0, 400.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            nodes
+                .iter()
+                .find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Reset Transformation"))
+                .map(|(_, n)| n.is_disabled())
+                .expect("the menu item")
+        };
+        // At its symbol's scale the menu item is disabled and a click changes nothing.
+        assert!(item_disabled(&mut app), "the item is disabled at the symbol's scale");
+        let before = app.session.active().unwrap().doc.clone();
+        click_menu(&ctx, &mut app, "Reset Transformation");
+        assert!(Arc::ptr_eq(&before, &app.session.active().unwrap().doc), "the item is disabled");
+        app.run("object.rotate", json!({"angle": 30})).unwrap();
+        assert!(!item_disabled(&mut app), "a turned instance enables it");
+        click_menu(&ctx, &mut app, "Reset Transformation");
+        let close =
+            |a: vectorcraft_geom::Affine, b: vectorcraft_geom::Affine| a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| (x - y).abs() < 1e-9);
+        assert!(close(xf(&app), master), "the menu item resets the instance: {:?} vs {master:?}", xf(&app));
+        // The Control bar's Reset.
+        let bar = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 400.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                ui.horizontal(|ui| control_bar(app, ui));
+            });
+            out.textures_delta.clear();
+            out
+        };
+        let reset_disabled = |out: &egui::FullOutput| {
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Reset")).map(|(_, n)| n.is_disabled()).expect("a Reset button")
+        };
+        assert!(reset_disabled(&bar(&mut app, vec![])), "Reset is disabled at the symbol's scale");
+        app.run("object.scale", json!({"sx": 150, "sy": 50})).unwrap();
+        let out = bar(&mut app, vec![]);
+        assert!(!reset_disabled(&out));
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "Reset").expect("a Reset button").1;
+        bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
+        assert!(close(xf(&app), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&app));
     }
 }

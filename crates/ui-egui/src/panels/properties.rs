@@ -435,7 +435,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));

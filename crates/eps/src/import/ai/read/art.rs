@@ -216,13 +216,11 @@ impl<'a> Reader<'a> {
         // A gradient instance's paint replaces the missing pattern.
         let unread = (fill && self.pending_unread_fill && fill_paint.is_none()) || (stroke && self.pending_unread_stroke && stroke_paint.is_none());
         let mut items = Vec::new();
-        if fill && !clip {
-            items.push(AppearanceItem::Fill(FillLayer {
-                overprint: gs.overprint_fill,
-                ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
-            }));
+        // A clipping path keeps its fill and its stroke: its fill paints under the art it clips and its stroke over it
+        // (`Node::clip_paint`), as the file's PDF part draws them.
+        if fill {
+            items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
-        // A clipping path keeps its stroke, which paints over the art it clips.
         if stroke {
             let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
             st.cap = gs.cap;
@@ -254,23 +252,6 @@ impl<'a> Reader<'a> {
         if clip && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
-        // A clipping path's fill is painted too, under the art it clips, as the file's PDF part draws it.
-        let painted = clip && fill && !matches!(gs.fill, Paint::None);
-        let copy = painted.then(|| {
-            let mut copy = node.clone();
-            copy.id = self.doc.alloc_id();
-            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
-                *clipping = false;
-            }
-            let paint = fill_paint.clone().unwrap_or_else(|| gs.fill.clone());
-            copy.appearance = Appearance {
-                items: vec![AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(paint) })],
-                ..Appearance::default()
-            }
-            .into();
-            copy
-        });
-        // The note and Show Center are the path's, not its painted copy's.
         node.edit_attrs(|a| {
             a.note = gs.note.clone().unwrap_or_default();
             a.show_center = gs.show_center;
@@ -296,10 +277,6 @@ impl<'a> Reader<'a> {
                     self.unsupported.insert("pattern fills".into());
                 }
             }
-        }
-        if let Some(copy) = copy {
-            self.clip_fills.insert(copy.id);
-            self.add(copy, hidden)?;
         }
         Ok(())
     }
@@ -342,19 +319,13 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state. A clipping path
-    /// takes the stroke itself, not the painted copy of its fill.
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
     pub(super) fn stroke_last(&mut self) {
         let gs = self.gs.clone();
         if !self.after_object {
             return;
         }
-        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
-        let Some(mut at) = kids.len().checked_sub(1) else { return };
-        if kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) && at > 0 {
-            at -= 1;
-        }
-        let Some(n) = kids.get_mut(at) else { return };
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
