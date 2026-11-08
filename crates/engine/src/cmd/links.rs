@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, copy?: false (with path, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object in the layers linked to the same file as one of them) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy)}",
             has_doc,
             relink
         ),
@@ -1125,6 +1125,62 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
     Ok(json!({ "updated": updated, "missing": missing }))
 }
 
+/// Which links `links.relink` points at the new file (the Replace choice of Relink).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    /// Each link its own file (`paths`).
+    Each,
+    /// The objects given or selected.
+    Selected,
+    /// Every object in the layers linked to the same file as one given or selected.
+    All,
+    /// The objects given or selected, then every other missing link whose file name is in the new
+    /// file's folder.
+    MissingInFolder,
+}
+
+impl Scope {
+    fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "each" => Some(Scope::Each),
+            "selected" => Some(Scope::Selected),
+            "all" => Some(Scope::All),
+            "missingInFolder" => Some(Scope::MissingInFolder),
+            _ => None,
+        }
+    }
+}
+
+/// The error for `scope` and `paths` given one without the other, or `paths` beside ids, path or
+/// folder.
+fn each_mismatch(cmd: &str) -> EngineError {
+    bad(cmd, "scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder")
+}
+
+/// `links.relink {scope: "each", paths}`: each entry's ids with its absolute file, entries naming
+/// one file merged. A malformed entry, an id in two entries or an empty list is an error.
+fn each_paths(p: &Value, cmd: &str) -> Result<Vec<(Vec<NodeId>, String)>> {
+    let entries = p.get("paths").and_then(Value::as_array).filter(|a| !a.is_empty()).ok_or_else(|| each_mismatch(cmd))?;
+    let mut seen = BTreeSet::new();
+    let mut out: Vec<(Vec<NodeId>, String)> = vec![];
+    for (i, e) in entries.iter().enumerate() {
+        let malformed = || bad(cmd, format!("paths entry {i} needs path and ids (object ids no other entry has)"));
+        let path = e.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()).ok_or_else(malformed)?;
+        let ids = e.get("ids").and_then(Value::as_array).filter(|a| !a.is_empty()).ok_or_else(malformed)?;
+        let mut these = vec![];
+        for v in ids {
+            let id = v.as_u64().map(NodeId).filter(|id| seen.insert(*id)).ok_or_else(malformed)?;
+            these.push(id);
+        }
+        let path = absolute_path(path);
+        match out.iter_mut().find(|(_, p)| *p == path) {
+            Some((ids, _)) => ids.extend(these),
+            None => out.push((these, path)),
+        }
+    }
+    Ok(out)
+}
+
 fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.relink";
     // How the new file takes the image's place this time (default: its Placement Options).
@@ -1132,13 +1188,26 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
         Some(v) => Some(Preserve::from_id(v).ok_or_else(|| bad(C, format!("preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill")))?),
     };
+    let scope = match p.get("scope").filter(|v| !v.is_null()) {
+        None => Scope::Selected,
+        Some(v) => v.as_str().and_then(Scope::from_id).ok_or_else(|| bad(C, format!("scope {v} is not each|selected|all|missingInFolder")))?,
+    };
     let st = s.doc()?;
     let folder_param = str_param(p, "folder");
+    match scope {
+        Scope::Each if p.get("path").is_some() || folder_param.is_some() || p.get("ids").is_some() => return Err(each_mismatch(C)),
+        Scope::Selected | Scope::All | Scope::MissingInFolder if p.get("paths").is_some() => return Err(each_mismatch(C)),
+        Scope::MissingInFolder if folder_param.is_some() => {
+            return Err(bad(C, "scope missingInFolder takes path: the folder of that file is searched for the other missing links"));
+        }
+        _ => {}
+    }
+    let each = if scope == Scope::Each { Some(each_paths(p, C)?) } else { None };
     // With copy: the saved document's folder, which the file is copied into.
-    let copy_to = match (bool_or(p, "copy", false), str_param(p, "path")) {
+    let copy_to = match (bool_or(p, "copy", false), str_param(p, "path").is_some() || each.is_some()) {
         (false, _) => None,
-        (true, None) => return Err(bad(C, "copy needs path: the file to copy into the document's folder")),
-        (true, Some(_)) => {
+        (true, false) => return Err(bad(C, "copy needs path: the file to copy into the document's folder")),
+        (true, true) => {
             let doc = st.path.as_deref().map(absolute_path).ok_or_else(|| bad(C, "save the document first: copy puts the file in its folder"))?;
             Some(Path::new(&doc).parent().map(Path::to_path_buf).ok_or_else(|| bad(C, format!("{doc} has no folder")))?)
         }
@@ -1151,9 +1220,10 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
-    let ids: Vec<NodeId> = match ids_param(p, "ids") {
-        Some(ids) => ids,
-        None => {
+    let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids")) {
+        (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
+        (None, Some(ids)) => ids,
+        (None, None) => {
             let selected: Vec<NodeId> = st.selection.objects.iter().copied().filter(|id| image(id).is_some()).collect();
             match folder_param {
                 Some(_) if selected.is_empty() => {
@@ -1169,15 +1239,37 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the images to relink, or pass ids"));
     }
+    // All Instances: the other objects in the layers linked to the same files.
+    if scope == Scope::All {
+        let paths: BTreeSet<&str> = ids.iter().filter_map(|id| image(id).flatten()).map(|l| l.path.as_str()).collect();
+        let given: BTreeSet<NodeId> = ids.iter().copied().collect();
+        let mut more = vec![];
+        st.doc.walk(|n| {
+            if let Some((l, _, _)) = linked(n)
+                && paths.contains(l.path.as_str())
+                && !given.contains(&n.id)
+            {
+                more.push(n.id);
+            }
+        });
+        ids.extend(more);
+    }
     if copy_to.is_some() && ids.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::PlacedDocument(_)))) {
         return Err(bad(C, "copy takes images only: relink placed documents where their files are"));
     }
     // (ids, the file) per file to read.
     let mut files: Vec<(Vec<NodeId>, String)> = vec![];
     let mut not_found = vec![];
-    match (str_param(p, "path"), folder_param) {
-        (Some(path), _) => files.push((ids, absolute_path(path))),
-        (None, Some(dir)) => {
+    match (each, str_param(p, "path"), folder_param) {
+        (Some(each), _, _) => files = each,
+        (None, Some(path), _) if scope == Scope::MissingInFolder => {
+            let path = absolute_path(path);
+            let given: BTreeSet<NodeId> = ids.iter().copied().collect();
+            files.push((ids, path));
+            missing_in_folder(st, &given, copy_to.is_some(), &mut files, &mut not_found);
+        }
+        (None, Some(path), _) => files.push((ids, absolute_path(path))),
+        (None, None, Some(dir)) => {
             for id in ids {
                 let Some(link) = image(&id).flatten() else { continue };
                 let path = absolute_path(&Path::new(dir).join(link.name()).to_string_lossy());
@@ -1188,10 +1280,10 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
-        (None, None) => return Err(bad(C, "give path (a file) or folder")),
+        (None, None, None) => return Err(bad(C, "give path (a file) or folder")),
     }
-    let mut reads = vec![];
-    let (mut copied, mut kept) = (vec![], vec![]);
+    // Every file is read and checked before any is copied.
+    let mut checked = vec![];
     for (ids, path) in files {
         let bytes = read_file(&path)?;
         // Images show the file; placed documents each show their artboard or page of it.
@@ -1215,20 +1307,28 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         for ((page, bounding, page_box), ids) in documents {
             sources.push((page, ids, super::place::document::source(&path, &bytes, Some(&path), page, bounding, page_box, C)?));
         }
-        let to = match &copy_to {
-            Some(dir) => {
-                let (to, new) = copy_into_folder(&path, &bytes, dir)?;
+        // The bytes are kept only to be copied, the file as it was checked.
+        let link = link_info(&path, &bytes);
+        let bytes = copy_to.is_some().then_some(bytes);
+        checked.push((path, link, bytes, images, img, sources));
+    }
+    let mut reads = vec![];
+    let (mut copied, mut kept): (Vec<Value>, Vec<Value>) = (vec![], vec![]);
+    for (path, link, bytes, images, img, sources) in checked {
+        let link = match (&copy_to, bytes) {
+            (Some(dir), Some(bytes)) => {
+                let (to, new) = copy_or_remove(&path, &bytes, dir, &copied)?;
+                let link = link_info(&to, &bytes);
                 let pair = json!({ "from": path, "to": to });
                 if new {
                     copied.push(pair)
                 } else {
                     kept.push(pair)
                 }
-                to
+                link
             }
-            None => path,
+            _ => link,
         };
-        let link = link_info(&to, &bytes);
         if let Some(img) = img {
             reads.push((images, Read::Image((link.clone(), img))));
         }
@@ -1248,6 +1348,41 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         out["kept"] = json!(kept);
     }
     Ok(out)
+}
+
+/// `links.relink {scope: "missingInFolder"}`: the other missing links of `st` (not `given`; only
+/// images when `images_only`, as copy takes), each added to `files` with the file of its name in
+/// the folder of the first file there; names not there go to `not_found`.
+fn missing_in_folder(
+    st: &crate::DocState,
+    given: &BTreeSet<NodeId>,
+    images_only: bool,
+    files: &mut Vec<(Vec<NodeId>, String)>,
+    not_found: &mut Vec<String>,
+) {
+    let Some(dir) = files.first().and_then(|(_, p)| Path::new(p).parent()).map(Path::to_path_buf) else { return };
+    for g in groups(&st.doc, None).into_iter().filter(|g| !(images_only && g.document.is_some())) {
+        let rest: Vec<NodeId> = g.ids.iter().copied().filter(|id| !given.contains(id)).collect();
+        if rest.is_empty() || probe(&g, st.path.as_deref()).0 != Status::Missing {
+            continue;
+        }
+        let found = absolute_path(&dir.join(g.link.name()).to_string_lossy());
+        match files.iter_mut().find(|(_, p)| *p == found) {
+            Some((ids, _)) => ids.extend(rest),
+            None if file_stamp(&found).is_some() => files.push((rest, found)),
+            None => not_found.push(g.link.name().to_string()),
+        }
+    }
+}
+
+/// [`copy_into_folder`]; when it fails, the copies `copied` (`{from, to}`) the same call made
+/// before are removed, since nothing is relinked.
+fn copy_or_remove(from: &str, bytes: &[u8], dir: &Path, copied: &[Value]) -> Result<(String, bool)> {
+    copy_into_folder(from, bytes, dir).inspect_err(|_| {
+        for to in copied.iter().filter_map(|pair| pair.get("to").and_then(Value::as_str)) {
+            let _ = std::fs::remove_file(to);
+        }
+    })
 }
 
 /// `links.relink {copy}`: put the file at `from` (`bytes`, as just read) into the folder `dir`,

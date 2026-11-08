@@ -1806,6 +1806,14 @@ digits	Malayalam	მალაიალამური
 	Location	მდებარეობა
 	No images	გამოსახულებები არ არის
 	Relink to Folder…	საქაღალდეში ხელახლა დაკავშირება…
+	Each Link Separately	თითოეული ბმული ცალ-ცალკე
+	Selected Instances	არჩეული ეგზემპლარები
+	All Instances	ყველა ეგზემპლარი
+	Missing Links from This Folder	დაკარგული ბმულები ამ საქაღალდიდან
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} არ არის each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each და paths ერთად გამოიყენება: paths ჩამოთვლის ჩანაწერებს ids-ით და path-ით, ids-ის, path-ისა და folder-ის ნაცვლად
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-ის ჩანაწერს {i} სჭირდება path და ids (ობიექტის ID-ები, რომლებიც სხვა ჩანაწერს არ აქვს)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder იღებს path-ს: სხვა დაკარგული ბმულები ამ ფაილის საქაღალდეში იძებნება
 	Show Missing	დაკარგულების ჩვენება
 	Sort by Status	სტატუსის მიხედვით სორტირება
 	Clear Overrides	ცვლილებების გასუფთავება

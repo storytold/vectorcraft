@@ -2665,6 +2665,14 @@ digits	Malayalam	Malayalam
 	Relink	Neu verknüpfen
 	Relink Linked Files to the Document	Verknüpfte Dateien neu mit dem Dokument verknüpfen
 	Relink to Folder…	Mit Ordner neu verknüpfen…
+	Each Link Separately	Jede Verknüpfung einzeln
+	Selected Instances	Ausgewählte Instanzen
+	All Instances	Alle Instanzen
+	Missing Links from This Folder	Fehlende Verknüpfungen aus diesem Ordner
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} ist nicht each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each und paths gehören zusammen: paths listet Einträge mit ids und path anstelle von ids, path und folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-Eintrag {i} braucht path und ids (Objekt-IDs, die kein anderer Eintrag hat)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder nimmt path: Im Ordner dieser Datei wird nach den anderen fehlenden Verknüpfungen gesucht
 	Relink…	Neu verknüpfen…
 	Find Linked Files	Verknüpfte Dateien suchen
 	Find Linked Files in Folder…	Verknüpfte Dateien in Ordner suchen…

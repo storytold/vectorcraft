@@ -1899,6 +1899,14 @@ digits	Malayalam	Malayalam
 	Location	Lokasi
 	No images	Tidak ada gambar
 	Relink to Folder…	Tautkan ulang ke folder…
+	Each Link Separately	Setiap tautan terpisah
+	Selected Instances	Instans yang dipilih
+	All Instances	Semua instans
+	Missing Links from This Folder	Tautan hilang dari folder ini
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} bukan each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each dan paths digunakan bersama: paths mencantumkan entri berisi ids dan path, sebagai ganti ids, path, dan folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	entri paths {i} memerlukan path dan ids (id objek yang tidak dimiliki entri lain)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder menerima path: tautan hilang lainnya dicari di folder file tersebut
 	Show Missing	Tampilkan yang hilang
 	Sort by Status	Urutkan berdasarkan status
 	Clear Overrides	Hapus penimpaan

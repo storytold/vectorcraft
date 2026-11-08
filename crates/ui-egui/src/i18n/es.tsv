@@ -2708,6 +2708,14 @@ digits	Malayalam	Malayálam
 	Relink	Volver a vincular
 	Relink Linked Files to the Document	Volver a vincular los archivos vinculados al documento
 	Relink to Folder…	Volver a vincular a carpeta…
+	Each Link Separately	Cada vínculo por separado
+	Selected Instances	Instancias seleccionadas
+	All Instances	Todas las instancias
+	Missing Links from This Folder	Vínculos que faltan de esta carpeta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} no es each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each y paths van juntos: paths enumera entradas con ids y path, en lugar de ids, path y folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	la entrada {i} de paths necesita path e ids (id. de objeto que ninguna otra entrada tenga)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder toma path: en la carpeta de ese archivo se buscan los demás vínculos que faltan
 	Relink…	Volver a vincular…
 	Find Linked Files	Buscar archivos vinculados
 	Find Linked Files in Folder…	Buscar archivos vinculados en una carpeta…

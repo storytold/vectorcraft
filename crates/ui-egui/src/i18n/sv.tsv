@@ -2644,6 +2644,14 @@ digits	Malayalam	Malayalam
 	Relink	Länka om
 	Relink Linked Files to the Document	Länka om länkade filer till dokumentet
 	Relink to Folder…	Länka om till mapp…
+	Each Link Separately	Varje länk separat
+	Selected Instances	Markerade instanser
+	All Instances	Alla instanser
+	Missing Links from This Folder	Saknade länkar från den här mappen
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} är inte each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each och paths hör ihop: paths listar poster med ids och path i stället för ids, path och folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths behöver path och ids (objekt-id:n som ingen annan post har)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tar path: de andra saknade länkarna söks i den filens mapp
 	Relink…	Länka om…
 	Find Linked Files	Sök länkade filer
 	Find Linked Files in Folder…	Sök länkade filer i mapp…

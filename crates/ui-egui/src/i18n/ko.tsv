@@ -2719,6 +2719,14 @@ mark-style	Japanese	일본식
 	Release to Layers (Sequence)	레이어로 풀기(순차)
 	Relink	다시 연결
 	Relink to Folder…	폴더로 다시 연결…
+	Each Link Separately	각 연결 따로
+	Selected Instances	선택한 인스턴스
+	All Instances	모든 인스턴스
+	Missing Links from This Folder	이 폴더에서 누락된 연결
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v}은(는) each|selected|all|missingInFolder 중 하나가 아닙니다
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each와 paths는 함께 사용합니다: paths에는 ids, path, folder 대신 ids와 path가 있는 항목을 나열합니다
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths 항목 {i}에는 path와 ids(다른 항목에 없는 개체 ID)가 필요합니다
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder는 path를 받습니다: 그 파일의 폴더에서 다른 누락된 연결을 찾습니다
 	Relink…	다시 연결…
 	Find Linked Files	연결된 파일 찾기
 	Find Linked Files in Folder…	폴더에서 연결된 파일 찾기…
