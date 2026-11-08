@@ -69,6 +69,9 @@ pub struct NodeExtras {
     /// As an envelope with margins in Edit Contents, the margins its strokes gave when Edit Contents
     /// began ([`crate::live::EnvelopeOptions::bounds_margin`]).
     pub envelope_edit_margin: Option<[f32; 4]>,
+    /// Transform panel › Align to Pixel Grid: the path's or compound path's horizontal and vertical
+    /// segments stay on the pixel grid when it is transformed.
+    pub pixel_aligned: bool,
 }
 
 /// No extras: what [`Node::extras`] gives for a node without any.
@@ -95,6 +98,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     shape_mode: crate::ShapeMode::Add,
     symbol_overrides: Vec::new(),
     envelope_edit_margin: None,
+    pixel_aligned: false,
 };
 
 /// A node's [`NodeExtras`], if it has any ([`Node::extras`]). Extras that are all unset equal

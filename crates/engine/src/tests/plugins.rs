@@ -17,8 +17,9 @@ fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
 }
 
+/// Installs `wasm`, in place of any module installed with its id (`replace: true`).
 fn install(s: &mut Session, wasm: &[u8]) -> Value {
-    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(wasm)}))
+    run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "replace": true}))
 }
 
 fn install_wat(s: &mut Session, src: &str) -> Value {
@@ -72,6 +73,52 @@ fn object_filter_recolours_the_selection_as_one_undo_step() {
     run(&mut s, "plugin.run", json!({"id": DESATURATE_ID, "amount": 0}));
     assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
     assert!(matches!(s.execute("plugin.run", &json!({"id": DESATURATE_ID, "amount": "all"})), Err(EngineError::BadParams { .. })));
+}
+
+/// `plugin.run` refuses an `ids` list with an entry that is not an object id, with an error naming
+/// the key, the entry and its value, and changes nothing. With `ids` left out or null the filter
+/// runs on the selection, as it does on the list of the selection.
+#[test]
+fn object_filter_ids_entries_must_be_ids_and_ids_left_out_take_the_selection() {
+    // A session with the plug-in, a red and a blue rectangle, and the red one selected. The
+    // document has no creation date, so documents made in different seconds compare equal.
+    let fresh = || {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 200, "created": null}));
+        install(&mut s, DESATURATE);
+        let a = rect(&mut s, 10.0, "#ff0000");
+        let b = rect(&mut s, 40.0, "#0000ff");
+        run(&mut s, "select.set", json!({"ids": [a.0]}));
+        (s, a, b)
+    };
+    let (_, a, b) = fresh();
+    for (bad, entry) in [(json!(["abc"]), r#"entry 0 is "abc""#), (json!([a.0, true]), "entry 1 is true"), (json!([{}]), "entry 0 is {}")] {
+        let (mut s, ..) = fresh();
+        let st = s.doc().unwrap();
+        let before = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
+        let r = s.execute("plugin.run", &json!({"id": DESATURATE_ID, "amount": 100, "ids": bad}));
+        let want = format!("`ids` {entry}, not a non-negative integer object id");
+        assert!(matches!(&r, Err(EngineError::BadParams { cmd, msg }) if cmd == "plugin.run" && *msg == want), "{bad}: {r:?}");
+        let st = s.doc().unwrap();
+        assert!((st.doc.clone(), st.selection.clone(), st.history.undo.len()) == before, "{bad}: something changed");
+    }
+    let gray = |s: &Session, id: NodeId| {
+        let [r, g, b] = node(s, id).appearance.fill_paint().color().unwrap().to_rgb_uncalibrated();
+        (r - g).abs() < 1e-6 && (g - b).abs() < 1e-6
+    };
+    let mut docs = vec![];
+    for ids in [None, Some(Value::Null), Some(json!([a.0]))] {
+        let (mut s, ..) = fresh();
+        let mut p = json!({"id": DESATURATE_ID, "amount": 100});
+        if let Some(ids) = &ids {
+            p["ids"] = ids.clone();
+        }
+        let r = run(&mut s, "plugin.run", p);
+        assert_eq!(r["ids"], json!([a.0]), "{ids:?}");
+        assert!(gray(&s, a) && !gray(&s, b), "{ids:?}: only the selected rectangle turns gray");
+        docs.push(s.doc().unwrap().doc.clone());
+    }
+    assert!(docs.windows(2).all(|w| w[0] == w[1]), "left out, null and the selection's list give the same document");
 }
 
 #[test]
@@ -532,8 +579,8 @@ fn asking(id: &str, permissions: &str, output: &Value) -> Vec<u8> {
 
 /// A plug-in whose manifest lists permissions installs only once they are all granted (`grant`),
 /// which `plugin.inspect` tells beforehand (`needsApproval`) with the permissions and the module's
-/// hash. The grant is recorded with that hash: replacing the plug-in with one that lists the same
-/// permissions needs no new grant, and one that lists another needs one. Removing it forgets the
+/// hash. The grant is recorded with that hash: replacing the plug-in (`replace: true`) with one
+/// that lists the same permissions needs no new grant, and one that lists another needs one. Removing it forgets the
 /// grant. A plug-in without `permissions` installs as before, with the ones its kind implies.
 #[test]
 fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
@@ -574,15 +621,15 @@ fn a_plugin_that_lists_permissions_installs_once_they_are_granted() {
     // grant now records the new module's hash.
     let other = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "error": null}));
     assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}))["needsApproval"], false);
-    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other)}));
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&other), "replace": true}));
     assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().hash, vectorcraft_plugins::permissions::sha256_hex(&other));
     // One that asks for more is refused until it is granted all of them.
     let more = data(r#"["doc.read","doc.write"]"#);
     assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": more}))["needsApproval"], true);
-    let e = s.execute("plugin.install", &json!({"dataBase64": more})).unwrap_err().to_string();
+    let e = s.execute("plugin.install", &json!({"dataBase64": more, "replace": true})).unwrap_err().to_string();
     assert!(e.contains("doc.read, doc.write") && e.contains("`grant`"), "{e}");
     assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().manifest().permissions().len(), 1, "the one installed stays");
-    run(&mut s, "plugin.install", json!({"dataBase64": more, "grant": ["doc.write", "doc.read", "state"]}));
+    run(&mut s, "plugin.install", json!({"dataBase64": more, "grant": ["doc.write", "doc.read", "state"], "replace": true}));
     assert_eq!(vectorcraft_plugins::registry::granted(id).unwrap().permissions.len(), 2, "only what it lists is recorded");
     // Removed, it is asked again.
     run(&mut s, "plugin.remove", json!({"id": id}));
@@ -603,7 +650,7 @@ fn a_filter_does_only_what_its_permissions_allow() {
     let id = rect(&mut s, 10.0, "#ff0000");
     let filter = |s: &mut Session, pid: &str| s.execute("plugin.run", &json!({"id": pid, "ids": [id.0]}));
     let grant = |s: &mut Session, wasm: &[u8], perms: Value| {
-        run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": perms}));
+        run(s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "grant": perms, "replace": true}));
     };
     // Denied `doc.write`: renaming the object is refused, and the document and history stay.
     let reader = "test.engine.permissions.reader";
@@ -673,9 +720,10 @@ fn read_only_kind_field_and_omission_refuse_without_undo() {
     let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
     let reads =
         |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"]}}"#);
+    // Each case installs another module under the same id, in place of the last (`replace: true`).
     let install_wat = |s: &mut Session, src: &str| {
         let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
-        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]}))
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"], "replace": true}))
     };
     let echo = "test.engine.inputs.echo";
     let module = tpl::module(&reads(echo), tpl::ECHO, "", 1);
@@ -805,6 +853,59 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
     run(&mut granted, "prefs.set", pref);
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "loaded under this store's grant");
     run(&mut granted, "plugin.remove", json!({"id": id}));
+}
+
+/// A grant covers the module it was given to: another module under the id, listing the same
+/// permissions, isn't installed from the store at the next start, a folder load reports it as
+/// needing approval, and `plugin.install` asks for `grant` again, even with `replace: true`. It
+/// doesn't get the settings kept for the id until the user grants it. A kept grant without a hash
+/// covers no module.
+#[test]
+fn a_grant_covers_only_the_module_it_was_given_to() {
+    let folder = crate::tests_links::Folder::new("plugin-store-grant-hash");
+    let id = "test.engine.granthash";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    // The stored module is replaced on disk by one that reads the settings.
+    let other = storing(id, READS);
+    let stored: Vec<_> =
+        std::fs::read_dir(&folder.0).unwrap().map(|e| e.unwrap().path()).filter(|p| p.extension().is_some_and(|x| x == "wasm")).collect();
+    assert_eq!(stored.len(), 1, "{stored:?}");
+    std::fs::write(&stored[0], &other).unwrap();
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_none(), "another module isn't loaded under the grant");
+    let dir = crate::tests_links::Folder::new("plugin-folder-grant-hash");
+    std::fs::write(dir.0.join("other.wasm"), &other).unwrap();
+    let r = run(&mut next, "plugin.reload", json!({"path": dir.0.display().to_string()}));
+    assert_eq!(r["loaded"], json!([]));
+    let why = r["failed"][0]["error"].as_str().unwrap();
+    assert!(why.contains("needs approval"), "{why}");
+    let data = vectorcraft_format::base64_encode(&other);
+    let e = next.execute("plugin.install", &json!({"dataBase64": data, "replace": true})).unwrap_err().to_string();
+    assert!(e.contains("`grant`"), "{e}");
+    // Granted, it reads the settings the first module set.
+    run(&mut next, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+
+    // A kept grant that records no hash, or an empty one, covers no module: the stored module isn't
+    // installed at the next start and `plugin.inspect` asks for approval.
+    for entry in [json!({"id": id, "permissions": ["settings", "cache"]}), json!({"id": id, "hash": "", "permissions": ["settings", "cache"]})] {
+        std::fs::write(folder.0.join("grants.json"), serde_json::to_vec(&json!([entry])).unwrap()).unwrap();
+        vectorcraft_plugins::registry::remove(id);
+        vectorcraft_plugins::registry::revoke(id);
+        let mut again = session();
+        again.attach_plugin_store(folder.0.clone());
+        assert!(vectorcraft_plugins::registry::get(id).is_none(), "a grant without a hash doesn't load the module: {entry}");
+        assert_eq!(run(&mut again, "plugin.inspect", json!({"dataBase64": data}))["needsApproval"], json!(true), "{entry}");
+        next = again;
+    }
+    run(&mut next, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}));
+    run(&mut next, "plugin.remove", json!({"id": id}));
 }
 
 /// A grants file entry this version can't use (a permission it doesn't know, an invalid id) is
@@ -948,7 +1049,7 @@ fn a_filter_run_made_elsewhere_keeps_its_document_data() {
     let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"filter","budget":"heavy"}}"#);
     let install = |s: &mut Session, src: String| {
         let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
-        run(s, "plugin.install", json!({"dataBase64": data, "allowHeavy": true}));
+        run(s, "plugin.install", json!({"dataBase64": data, "allowHeavy": true, "replace": true}));
     };
     // It first keeps the pens it found with the document.
     install(&mut s, tpl::returning(&manifest, &json!({"objects": [], "documentData": {"pens": 2}}).to_string()));
@@ -1013,4 +1114,380 @@ fn a_cancelled_filter_run_changes_nothing() {
     let r = vectorcraft_doc::cancel::scope(&token, None, || s.execute("plugin.run", &json!({"id": id})));
     assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
     assert_eq!(s.doc().unwrap().doc, before);
+}
+
+/// A filter `id` of API level 2 that lists `settings` and `cache`, whose `vc_run` runs `first`
+/// (instructions that trap unless each storage call returns what it should), with the keys "zoom"
+/// at 0x2000 and "tile" at 0x2004 and the value "hello" at 0x2100.
+fn storing(id: &str, first: &str) -> Vec<u8> {
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
+    let data = format!(r#"{} (data (i32.const 0x2000) "zoomtile") (data (i32.const 0x2100) "hello")"#, tpl::STORAGE_IMPORTS);
+    wat::parse_str(tpl::with_imports(&manifest, &data, first, r#"{"objects":[]}"#)).unwrap()
+}
+
+/// Sets "zoom" to "hello" and writes "hel" to the cache entry "tile".
+const WRITES: &str = "(if (call $vc_settings_set (i32.const 0x2000) (i32.const 4) (i32.const 0x2100) (i32.const 5)) (then unreachable))
+    (if (call $vc_cache_write (i32.const 0x2004) (i32.const 4) (i32.const 0x2100) (i32.const 3)) (then unreachable))";
+
+/// Traps unless "zoom" is "hello".
+const READS: &str =
+    "(if (i32.ne (call $vc_settings_get (i32.const 0x2000) (i32.const 4) (i32.const 0x3000) (i32.const 16)) (i32.const 5)) (then unreachable))
+    (if (i32.ne (i32.load (i32.const 0x3000)) (i32.load (i32.const 0x2100))) (then unreachable))";
+
+fn install_storing(s: &mut Session, id: &str, first: &str) -> Value {
+    let data = vectorcraft_format::base64_encode(&storing(id, first));
+    run(s, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"]}))
+}
+
+/// [`install_storing`] in place of another module with the same id (`replace: true`).
+fn replace_storing(s: &mut Session, id: &str, first: &str) -> Value {
+    let data = vectorcraft_format::base64_encode(&storing(id, first));
+    run(s, "plugin.install", json!({"dataBase64": data, "grant": ["settings", "cache"], "replace": true}))
+}
+
+/// A plug-in's settings and cache are kept in the plug-in store under its id: the next session
+/// has them, replacing the plug-in keeps them, another plug-in can't read them, `plugin.clearCache`
+/// empties the cache alone and `plugin.remove` deletes both. The caps and the bytes each call is
+/// charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
+/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test, since
+/// clearing every plug-in's cache would empty theirs.
+#[test]
+fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
+    let folder = crate::tests_links::Folder::new("plugin-storage");
+    let (id, other) = ("test.engine.storing", "test.engine.storing.other");
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    let dir = crate::store::plugin_data_dir(&folder.0, id);
+    assert!(dir.join("settings.json").is_file());
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3));
+
+    // A restart: installed again from the store, and replaced by a module that reads.
+    vectorcraft_plugins::registry::remove(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    let listed = run(&mut next, "plugin.list", json!({}));
+    let entry = listed["plugins"].as_array().unwrap().iter().find(|p| p["id"] == id).cloned().unwrap();
+    assert_eq!(entry["cacheBytes"], json!(3));
+    assert_eq!(replace_storing(&mut next, id, READS)["cacheBytes"], json!(3));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+
+    // Another plug-in has settings of its own: "zoom" isn't set there.
+    install_storing(&mut next, other, READS);
+    assert!(next.execute("plugin.run", &json!({"id": other, "ids": []})).is_err());
+
+    // Clearing the cache leaves the settings.
+    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+    replace_storing(&mut next, other, WRITES);
+    run(&mut next, "plugin.run", json!({"id": other, "ids": []}));
+    let all = run(&mut next, "plugin.clearCache", json!({}));
+    let cleared = all["cleared"].as_array().unwrap();
+    assert!(cleared.contains(&json!(id)) && cleared.contains(&json!(other)) && all["bytesFreed"] == json!(3), "{all}");
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(0));
+    assert!(next.execute("plugin.clearCache", &json!({"id": "test.engine.storing.missing"})).is_err());
+
+    run(&mut next, "plugin.remove", json!({"id": id}));
+    assert!(!dir.exists(), "removed with the plug-in");
+    run(&mut next, "plugin.remove", json!({"id": other}));
+    plugin_storage_is_capped_and_survives_a_damaged_settings_file();
+    plugin_storage_calls_are_charged_the_files_they_read_and_write();
+}
+
+/// A `storage` folder in the plug-in store that is a link leads out of the store: the plug-in
+/// installs without `replace` although a folder for its id is there, its storage calls fail as
+/// unavailable, and removing the plug-in deletes nothing the link leads to.
+#[test]
+fn plugin_storage_behind_a_link_is_left_alone() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-link");
+    let outside = crate::tests_links::Folder::new("plugin-storage-outside");
+    #[cfg(unix)]
+    let made = std::os::unix::fs::symlink(&outside.0, folder.0.join("storage")).is_ok();
+    // Without Developer Mode or elevation Windows makes no symbolic link, but a junction.
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_dir(&outside.0, folder.0.join("storage")).is_ok()
+        || std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(folder.0.join("storage"))
+            .arg(&outside.0)
+            .output()
+            .is_ok_and(|o| o.status.success());
+    #[cfg(not(any(unix, windows)))]
+    let made = false;
+    if !made {
+        eprintln!("skipped: symbolic links can't be made here");
+        return;
+    }
+    let id = "test.engine.storagelink";
+    let kept = crate::store::plugin_data_dir(&folder.0, id).join("settings.json");
+    std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    std::fs::write(&kept, b"{}").unwrap();
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, "");
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let m = &mut vectorcraft_plugins::storage::Meter::unlimited();
+    assert_eq!(st.set_setting("zoom", b"hello", m), Err(vectorcraft_plugins::storage::StorageError::Unavailable));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(kept.is_file(), "left where the link leads");
+}
+
+/// `plugin.remove` with the id of a plug-in that isn't installed deletes the settings and cache the
+/// plug-in store still keeps for it; with neither, it fails as before.
+#[test]
+fn removing_an_id_that_is_not_installed_deletes_its_storage() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-orphan");
+    let id = "test.engine.storageorphan";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    let dir = crate::store::plugin_data_dir(&folder.0, id);
+    std::fs::create_dir_all(dir.join("cache")).unwrap();
+    std::fs::write(dir.join("settings.json"), b"{}").unwrap();
+    std::fs::write(dir.join("cache").join("tile.bin"), b"abc").unwrap();
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    assert_eq!(run(&mut s, "plugin.remove", json!({"id": id})), json!({"removed": id}));
+    assert!(!dir.exists(), "the storage of an id that isn't installed is deleted");
+    assert!(s.execute("plugin.remove", &json!({"id": id})).is_err(), "nothing left to remove");
+}
+
+/// The settings file and the cache are checked: a file that doesn't read is moved aside and the
+/// settings start empty; a write past a cap fails and changes nothing; cache entries whose names
+/// differ only in case are two files; a removed plug-in's storage takes no more writes.
+fn plugin_storage_is_capped_and_survives_a_damaged_settings_file() {
+    use vectorcraft_plugins::storage::{self, Meter, StorageError};
+    let folder = crate::tests_links::Folder::new("plugin-storage-caps");
+    let id = "test.engine.storagecaps";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, "");
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let dir = crate::store::plugin_data_dir(&folder.0, id);
+    std::fs::create_dir_all(&dir).unwrap();
+    let m = &mut Meter::unlimited();
+
+    // A truncated settings file.
+    std::fs::write(dir.join("settings.json"), br#"{"zoom": "aGVsbG"#).unwrap();
+    assert_eq!(st.setting("zoom", m).unwrap(), None);
+    assert!(dir.join("settings.unreadable.json").is_file() && !dir.join("settings.json").exists());
+    st.set_setting("zoom", b"hello", m).unwrap();
+    assert_eq!(st.setting("zoom", m).unwrap(), Some(b"hello".to_vec()));
+    // Damaged again, it replaces the file moved aside before.
+    std::fs::write(dir.join("settings.json"), b"[").unwrap();
+    assert_eq!(st.setting("zoom", m).unwrap(), None);
+    assert_eq!(std::fs::read(dir.join("settings.unreadable.json")).unwrap(), b"[");
+    st.set_setting("zoom", b"hello", m).unwrap();
+    plugin_storage_writes_are_atomic(&*st, &dir, &folder.0);
+
+    // At most 256 keys: a new one is refused, an existing one still changes.
+    let keys: std::collections::BTreeMap<String, String> = (0..storage::MAX_SETTINGS).map(|i| (format!("k{i}"), "eA==".to_string())).collect();
+    std::fs::write(dir.join("settings.json"), serde_json::to_vec(&keys).unwrap()).unwrap();
+    assert_eq!(st.set_setting("one-more", b"x", m), Err(StorageError::Full));
+    st.set_setting("k0", b"y", m).unwrap();
+    assert_eq!(st.setting("k0", m).unwrap(), Some(b"y".to_vec()));
+    plugin_storage_skips_oversize_files(&*st, &dir);
+
+    // At most 1 MiB in all: eleven values of 64 KiB fit, a twelfth doesn't, and nothing changes.
+    let big = vec![7_u8; storage::MAX_SETTING_BYTES];
+    let keys: std::collections::BTreeMap<String, String> = (0..11).map(|i| (format!("k{i}"), vectorcraft_format::base64_encode(&big))).collect();
+    std::fs::write(dir.join("settings.json"), serde_json::to_vec(&keys).unwrap()).unwrap();
+    assert_eq!(st.set_setting("k11", &big, m), Err(StorageError::Full));
+    assert_eq!((st.setting("k11", m).unwrap(), st.setting("k0", m).unwrap()), (None, Some(big.clone())));
+
+    // The cache: entry size, then the total, here nearly reached by a file already there.
+    assert_eq!(st.set_cache_entry("big", &vec![0; storage::MAX_CACHE_ENTRY + 1], m), Err(StorageError::Full));
+    std::fs::create_dir_all(dir.join("cache")).unwrap();
+    std::fs::File::create(dir.join("cache").join("filler.bin")).unwrap().set_len(storage::MAX_CACHE_BYTES - 2).unwrap();
+    // A temporary file a failed write left behind counts toward no cap, and clearing removes it.
+    let leftover = dir.join("cache").join(".tile.bin.1-0.tmp");
+    std::fs::write(&leftover, b"tmp").unwrap();
+    assert_eq!(st.set_cache_entry("tile", b"abc", m), Err(StorageError::Full));
+    assert_eq!(st.cache_entry("tile", m).unwrap(), None);
+    st.set_cache_entry("tile", b"ab", m).unwrap();
+    assert_eq!(st.cache_bytes(), storage::MAX_CACHE_BYTES);
+    assert_eq!(st.clear_cache().unwrap(), storage::MAX_CACHE_BYTES + 3);
+    assert!(!leftover.exists());
+
+    // Names differing in case are two entries.
+    st.set_cache_entry("Tile", b"1", m).unwrap();
+    st.set_cache_entry("tile", b"22", m).unwrap();
+    assert_eq!((st.cache_entry("Tile", m).unwrap(), st.cache_entry("tile", m).unwrap()), (Some(b"1".to_vec()), Some(b"22".to_vec())));
+    assert_eq!(st.cache_bytes(), 3);
+
+    // More items in the cache folder than a write looks at: the write is refused whatever the
+    // items it looked at hold, and clearing still reaches every entry.
+    let cache = dir.join("cache");
+    for i in 0..crate::store::MAX_CACHE_SCAN {
+        std::fs::create_dir(cache.join(format!("d{i:05}"))).unwrap();
+    }
+    std::fs::File::create(cache.join("z.bin")).unwrap().set_len(storage::MAX_CACHE_BYTES).unwrap();
+    assert_eq!(st.set_cache_entry("more", b"1", m), Err(StorageError::Full));
+    assert_eq!(st.clear_cache().unwrap(), storage::MAX_CACHE_BYTES + 3);
+    assert!(!cache.join("z.bin").exists());
+
+    // An id that differs only in case has storage of its own, which removing this one leaves.
+    let upper_id = "test.engine.StorageCaps";
+    s.attach_plugin_storage(upper_id);
+    let upper = vectorcraft_plugins::registry::storage(upper_id).unwrap();
+    assert_eq!(upper.setting("k0", m).unwrap(), None);
+    upper.set_setting("k0", b"upper", m).unwrap();
+    assert_eq!(st.setting("k0", m).unwrap(), Some(big));
+    // So do ids whose `_` and `.` could be read as each other's escapes.
+    let folders: std::collections::BTreeSet<_> =
+        ["a.b", "a_0b", "a_b", "A.b", "a__b", "a._b", "a_.b"].iter().map(|id| crate::store::plugin_data_dir(&folder.0, id)).collect();
+    assert_eq!(folders.len(), 7, "{folders:?}");
+
+    // Removing the plug-in closes the storage a run still holds, even one from before the plug-in
+    // was replaced, so nothing is written back.
+    s.attach_plugin_storage(id);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert_eq!(st.set_setting("zoom", b"again", m), Err(StorageError::Unavailable));
+    assert_eq!(st.set_cache_entry("tile", b"again", m), Err(StorageError::Unavailable));
+    assert!(!dir.exists());
+    assert_eq!(upper.setting("k0", m).unwrap(), Some(b"upper".to_vec()));
+    s.remove_plugin_storage(upper_id).unwrap();
+}
+
+/// Files larger than the storage reads are not read: a settings file larger than 1 MiB, although
+/// each of its values would fit, is moved aside and the settings start empty; a cache entry file
+/// larger than an entry may be fails as unavailable. `st` is the storage in `dir`.
+fn plugin_storage_skips_oversize_files(st: &dyn vectorcraft_plugins::storage::Storage, dir: &std::path::Path) {
+    use vectorcraft_plugins::storage::{self, Meter, StorageError};
+    let m = &mut Meter::unlimited();
+    let value = vectorcraft_format::base64_encode(&vec![7_u8; storage::MAX_SETTING_BYTES]);
+    let keys: std::collections::BTreeMap<String, String> = (0..13).map(|i| (format!("k{i}"), value.clone())).collect();
+    let oversize = serde_json::to_vec(&keys).unwrap();
+    assert!(oversize.len() > storage::MAX_SETTINGS_BYTES);
+    std::fs::write(dir.join("settings.json"), &oversize).unwrap();
+    assert_eq!(st.setting("k0", m).unwrap(), None);
+    assert!(dir.join("settings.unreadable.json").is_file() && !dir.join("settings.json").exists());
+    std::fs::create_dir_all(dir.join("cache")).unwrap();
+    let huge = dir.join("cache").join("huge.bin");
+    std::fs::File::create(&huge).unwrap().set_len(storage::MAX_CACHE_ENTRY as u64 + 1).unwrap();
+    assert_eq!(st.cache_entry("huge", m), Err(StorageError::Unavailable));
+    std::fs::remove_file(&huge).unwrap();
+}
+
+/// Writes are atomic: a new file takes the old one's name, so another name for the old file (a hard
+/// link) keeps its content. `st` is the storage in `dir` and holds the setting "zoom"; `outside` is
+/// a folder outside it.
+fn plugin_storage_writes_are_atomic(st: &dyn vectorcraft_plugins::storage::Storage, dir: &std::path::Path, outside: &std::path::Path) {
+    let m = &mut vectorcraft_plugins::storage::Meter::unlimited();
+    let settings_copy = outside.join("settings-copy.json");
+    let before = std::fs::read(dir.join("settings.json")).unwrap();
+    std::fs::hard_link(dir.join("settings.json"), &settings_copy).unwrap();
+    st.set_setting("zoom", b"world", m).unwrap();
+    assert_eq!(std::fs::read(&settings_copy).unwrap(), before);
+    assert_eq!(st.setting("zoom", m).unwrap(), Some(b"world".to_vec()));
+    st.set_cache_entry("tile", b"abc", m).unwrap();
+    let entry_copy = outside.join("tile-copy.bin");
+    let entry = std::fs::read_dir(dir.join("cache")).unwrap().map(|e| e.unwrap().path()).find(|p| p.is_file()).unwrap();
+    std::fs::hard_link(&entry, &entry_copy).unwrap();
+    st.set_cache_entry("tile", b"xyz", m).unwrap();
+    assert_eq!(std::fs::read(&entry_copy).unwrap(), b"abc");
+    assert_eq!(st.cache_entry("tile", m).unwrap(), Some(b"xyz".to_vec()));
+    assert!(st.remove_cache_entry("tile").unwrap());
+    std::fs::remove_file(&settings_copy).unwrap();
+    std::fs::remove_file(&entry_copy).unwrap();
+}
+
+/// Each storage call is charged the bytes it reads and writes, before it does: a settings call the
+/// whole settings file it reads and the whole file it writes, a cache call the entry it reads or
+/// writes. A call that would pass what its meter has left fails and changes nothing.
+fn plugin_storage_calls_are_charged_the_files_they_read_and_write() {
+    use vectorcraft_plugins::storage::{Meter, StorageError};
+    let folder = crate::tests_links::Folder::new("plugin-storage-meter");
+    let id = "test.engine.storagemeter";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, "");
+    let st = vectorcraft_plugins::registry::storage(id).unwrap();
+    let file = crate::store::plugin_data_dir(&folder.0, id).join("settings.json");
+    let size = || std::fs::metadata(&file).unwrap().len();
+    st.set_setting("big", &[7; 60_000], &mut Meter::unlimited()).unwrap();
+    st.set_setting("small", b"x", &mut Meter::unlimited()).unwrap();
+
+    // Reading a one-byte setting reads the whole file.
+    let before = size();
+    let mut m = Meter::unlimited();
+    assert_eq!(st.setting("small", &mut m).unwrap(), Some(b"x".to_vec()));
+    assert_eq!(m.used(), before);
+    // Setting it reads the file and writes it again, and so does deleting one.
+    let mut m = Meter::unlimited();
+    st.set_setting("small", b"yz", &mut m).unwrap();
+    assert_eq!(m.used(), before + size());
+    let (before, mut m) = (size(), Meter::unlimited());
+    assert!(st.delete_setting("small", &mut m).unwrap());
+    assert_eq!(m.used(), before + size());
+    st.set_setting("small", b"y", &mut Meter::unlimited()).unwrap();
+
+    // Less left than the file: nothing is read. Enough to read it but not to write it again:
+    // nothing changes.
+    let mut m = Meter::new(size() - 1);
+    assert_eq!(st.setting("small", &mut m), Err(StorageError::Budget));
+    assert_eq!(m.used(), 0);
+    assert_eq!(st.set_setting("small", b"z", &mut Meter::new(size())), Err(StorageError::Budget));
+    assert_eq!(st.setting("small", &mut Meter::unlimited()).unwrap(), Some(b"y".to_vec()));
+
+    // A cache write is charged the entry it writes, a read the entry it reads.
+    let mut m = Meter::unlimited();
+    st.set_cache_entry("tile", &[1; 1000], &mut m).unwrap();
+    assert_eq!(m.used(), 1000);
+    let mut m = Meter::unlimited();
+    assert_eq!(st.cache_entry("tile", &mut m).unwrap().map(|v| v.len()), Some(1000));
+    assert_eq!(m.used(), 1000);
+    assert_eq!(st.cache_entry("tile", &mut Meter::new(999)), Err(StorageError::Budget));
+    assert_eq!(st.set_cache_entry("tile", &[2; 10], &mut Meter::new(9)), Err(StorageError::Budget));
+    assert_eq!(st.cache_entry("tile", &mut Meter::unlimited()).unwrap().map(|v| v.len()), Some(1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A module with other bytes than the plug-in installed with its id, or, with none installed, one
+/// whose id has settings and a cache in the plug-in store, installs only with `replace: true`, and
+/// then keeps them; the same module installs again without it, and `replace` must be true or false.
+#[test]
+fn another_module_under_an_id_with_settings_needs_replace() {
+    let folder = crate::tests_links::Folder::new("plugin-storage-replace");
+    let id = "test.engine.storingreplace";
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    install_storing(&mut s, id, WRITES);
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    let hash = run(&mut s, "plugin.info", json!({"id": id}))["hash"].clone();
+    // The same module again.
+    install_storing(&mut s, id, WRITES);
+
+    let reads = vectorcraft_format::base64_encode(&storing(id, READS));
+    let install = |s: &mut Session, extra: Value| {
+        let mut p = json!({"dataBase64": reads, "grant": ["settings", "cache"]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        s.execute("plugin.install", &p)
+    };
+    let Err(e) = install(&mut s, json!({})) else { panic!("another module took the plug-in's place") };
+    assert!(e.to_string().contains(&format!("“Test {id}” is another module than the plug-in with id \"{id}\"")), "{e}");
+    assert!(e.to_string().contains("`replace: true`"), "{e}");
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": reads}))["needsReplace"], json!(true));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["hash"], hash);
+    for bad in [json!({"replace": "yes"}), json!({"replace": 1})] {
+        let Err(e) = install(&mut s, bad) else { panic!("a bad `replace` was taken") };
+        assert!(e.to_string().contains("`replace` must be true or false"), "{e}");
+    }
+    assert!(install(&mut s, json!({"replace": false})).is_err());
+    install(&mut s, json!({"replace": true})).unwrap();
+    // It reads what the one it replaced set.
+    run(&mut s, "plugin.run", json!({"id": id, "ids": []}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": id}))["cacheBytes"], json!(3));
+
+    // Not installed, but with settings in the store: another module needs `replace` too.
+    vectorcraft_plugins::registry::remove(id);
+    let writes = vectorcraft_format::base64_encode(&storing(id, WRITES));
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": writes}))["needsReplace"], json!(true));
+    assert!(s.execute("plugin.install", &json!({"dataBase64": writes, "grant": ["settings", "cache"]})).is_err());
+    run(&mut s, "plugin.install", json!({"dataBase64": writes, "grant": ["settings", "cache"], "replace": true}));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    // Once removed, with its settings and cache, it installs as a first install does.
+    assert_eq!(run(&mut s, "plugin.inspect", json!({"dataBase64": reads}))["needsReplace"], json!(false));
+    install(&mut s, json!({})).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
 }

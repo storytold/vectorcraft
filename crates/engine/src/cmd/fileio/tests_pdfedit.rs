@@ -932,25 +932,31 @@ fn gradients_and_patterns_come_back_from_the_editing_copy() {
     }
     let r = s.execute("document.export", &json!({"format": "ai", "aiVersion": 7})).unwrap();
     let legacy = load::load_with("art.ai", &b64(&r), &LoadOptions::default()).unwrap();
-    // Each gradient the art paints with, by its kind and its stops' places and colors to 5% (version
-    // 7 writes a gradient stroke as its filled outline, so the objects differ, and a spot color's
-    // tint through its CMYK equivalent, 2% off here).
+    // Each gradient the art paints with, by its kind and its stops' places, and its stops' colors
+    // within 5% (version 7 writes a gradient stroke as its filled outline, so the objects differ),
+    // except a spot color's tint, which version 7 writes through its CMYK equivalent: 70% of that
+    // equivalent displays about 7% off the tint of the spot color.
     let gradients = |doc: &vectorcraft_doc::Document| {
-        let mut all = std::collections::BTreeSet::new();
+        let mut all = std::collections::BTreeMap::new();
         doc.walk(|node| {
             for it in node.appearance.items.iter() {
                 if let vectorcraft_color::Paint::Gradient(g) = it.paint() {
-                    let stops: Vec<String> = g
-                        .gradient
-                        .stops
-                        .iter()
-                        .map(|s| format!("{:.3} {:?}", s.offset, s.color.to_rgb().map(|v| (v * 20.0).round() * 5.0)))
-                        .collect();
-                    all.insert(format!("{:?} {stops:?}", g.gradient.kind));
+                    let places: Vec<String> = g.gradient.stops.iter().map(|s| format!("{:.3}", s.offset)).collect();
+                    let colors: Vec<([f32; 3], bool)> =
+                        g.gradient.stops.iter().map(|s| (s.color.to_rgb(), s.swatch.is_some() && s.tint < 1.0)).collect();
+                    all.insert(format!("{:?} {places:?}", g.gradient.kind), colors);
                 }
             }
         });
         all
     };
-    assert_eq!(gradients(&legacy.doc), gradients(&before));
+    let (got, want) = (gradients(&legacy.doc), gradients(&before));
+    assert_eq!(got.keys().collect::<Vec<_>>(), want.keys().collect::<Vec<_>>());
+    for (key, stops) in &want {
+        for (i, (rgb, spot)) in stops.iter().enumerate() {
+            let back = got[key][i].0;
+            let most = if *spot { 0.1 } else { 0.05 };
+            assert!((0..3).all(|c| (back[c] - rgb[c]).abs() < most), "{key} stop {i}: {back:?} for {rgb:?}");
+        }
+    }
 }

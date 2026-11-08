@@ -16,15 +16,21 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -139,8 +145,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step.
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
     s.edit("Text Orientation", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -911,7 +919,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                         super::textedit::unprotected_runs(&t.runs, a, b, &kept)
                     }
                 };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
@@ -1271,7 +1279,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
     let para = t.para_at(0);
-    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
+    let avail = cell.width() - 2.0 * t.area.inset - para.laid_out_left_indent() - para.right_indent;
     Some((line.x1 - line.x0, avail, line.end))
 }
 
