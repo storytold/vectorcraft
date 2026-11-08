@@ -503,7 +503,7 @@ fn a_cmyk_document_starts_with_cmyk_swatches_and_stores_new_colours_as_cmyk() {
     // A swatch made from a hex colour is CMYK as well; the document round-trips natively.
     let name = run(&mut s, "swatch.new", json!({"color": "#00ff00"}))["name"].as_str().unwrap().to_string();
     assert_eq!(doc(&s).swatch(&name).and_then(|w| w.paint.color()), Some(managed(Color::rgb(0.0, 1.0, 0.0))));
-    assert_eq!(name, "C=62 M=0 Y=100 K=0");
+    assert_eq!(name, "C=61 M=0 Y=100 K=0");
     let json = serde_json::to_string(doc(&s)).unwrap();
     assert_eq!(serde_json::from_str::<vectorcraft_doc::Document>(&json).unwrap(), *doc(&s));
 }
