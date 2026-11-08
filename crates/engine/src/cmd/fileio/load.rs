@@ -29,6 +29,8 @@ pub struct Loaded {
     /// A PDF, or a `.ai` or `.ait` that holds a PDF, read through the editor's own copy of its art
     /// that it carries (its layers), not from its PDF part alone.
     pub editing_data: bool,
+    /// Whether the native source declared a PDF; other formats carry no native save preference.
+    pub native_pdf_compatible: Option<bool>,
 }
 
 impl Loaded {
@@ -102,6 +104,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return format("jpeg2000");
+    }
+    if super::heifread::is_heif(bytes) {
+        return format("heif");
     }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
@@ -338,6 +343,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     let mut converted = false;
     let mut preview_only = false;
     let mut editing_data = false;
+    let mut native_pdf_compatible = None;
     let (mut doc, mut warnings, restored) = match format.id {
         // EPS, .ps and PostScript .ai: the document our EPS files carry, else the PostScript read.
         _ if matches!(format.id, "eps" | "ps") || vectorcraft_pdf::is_postscript(bytes) => {
@@ -350,6 +356,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         }
         "vectorcraft" | "template" => {
             let (d, info, warnings) = native_file(bytes)?;
+            native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)
         }
@@ -475,11 +482,15 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     }
     // Threaded type read from a file flows through its frames (the threaded type of a restored
     // document keeps its text as saved), and every frame of a thread takes its first frame's
-    // Optical Margin Alignment setting.
+    // Optical Margin Alignment setting and writing direction. When that changes the direction of a
+    // frame of a restored document, the story flows through that frame's thread again. Threaded
+    // frames keep their size: Auto Size is off for them.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
+        crate::cmd::threads::keep_frame_sizes(&mut doc);
         crate::cmd::threads::share_optical_margin(&mut doc);
+        crate::cmd::threads::share_orientation(&mut doc);
         // A frame whose first paragraph continues from the frame before draws it without the
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
@@ -493,7 +504,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
         doc.title = title;
     }
     warnings.extend(doc.images.values().filter_map(|b| size_note(&b.bytes)));
-    Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data })
+    Ok(Loaded { doc, format, warnings, restored, converted, preview_only, editing_data, native_pdf_compatible })
 }
 
 /// Import SVG text, reading the files its images link to (relative links from `folder`, the SVG's
@@ -553,13 +564,14 @@ impl ReadFile {
 
 /// The first half of [`open_bytes_with`], which needs no session (an app may do it on another
 /// thread): read and decode the file, read its linked files and lay out its type → what
-/// [`open_read`] opens. The linked files are looked for from `path`, where the file was read from,
+/// [`open_read`] opens. Type in the file's composite fonts is measured again once the document
+/// opens and its composite fonts are registered. The linked files are looked for from `path`, where the file was read from,
 /// and modified ones are read again when `update_links` (Preferences › File Handling › Update
 /// Links set to Automatically; see [`crate::cmd::links::resolve`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
     let mut loaded = load_with(name, bytes, &opts)?;
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path.as_deref(), update_links, low_res_proxy_eps);
+    let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
 }
@@ -579,14 +591,15 @@ pub fn open_template(s: &mut Session, name: &str, bytes: &[u8], path: Option<&st
             "only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first",
         ));
     }
-    let links = crate::cmd::links::resolve(&mut loaded.doc, path, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
+    let base = crate::cmd::links::LinkBase::file(path);
+    let links = crate::cmd::links::resolve(&mut loaded.doc, base, s.prefs.update_links == "automatically", s.prefs.low_res_proxy_eps);
     open_loaded(s, loaded, links, path.map(str::to_string), &LoadOptions::default(), true)
 }
 
 /// Make a loaded file the new active document; `links` is what became of its linked files, and
 /// `opts` are the options it was read with.
 fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<String>, opts: &LoadOptions, as_template: bool) -> Result<Value> {
-    let Loaded { mut doc, format, warnings, restored, converted, .. } = loaded.with_grid_prefs(&s.prefs);
+    let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } = loaded.with_grid_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read.
     let losses: Vec<String> = warnings
@@ -618,11 +631,15 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     // writes .ai that way).
     let partial = format.id == "pdf" && opts.is_partial();
     let lossy_ai = format.id == "ai" && !restored;
+    let read_from = path.clone();
     let path = path.filter(|_| !template && !partial && !lossy_ai && SAVE_FORMATS.contains(&format.id));
     let saves_back = path.is_some();
     let converted = saves_back && converted && s.prefs.append_converted;
     let index = s.add_document(doc, path);
     let st = s.doc_mut()?;
+    if let Some(pdf) = native_pdf_compatible {
+        st.save_options.insert("pdfCompatible".into(), json!(pdf));
+    }
     if saves_back {
         st.format = format.id;
         // An SVG that reopened as the full document saves as one again: Save keeps Preserve
@@ -634,6 +651,7 @@ fn open_loaded(s: &mut Session, loaded: Loaded, links: Resolved, path: Option<St
     st.converted = converted;
     st.imported_from = source_path;
     st.import_losses = losses;
+    st.links_from = read_from;
     let opened = &s.documents()[index];
     let (title, file_info_title) = (opened.title(), opened.doc.title.clone());
     Ok(super::merge(
@@ -722,6 +740,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// [`super::pcxread::decode`], which refuses an image past [`MAX_RASTER_ALLOC`] before decoding.
 /// A Pixar picture file is recognized by its magic number ([`super::pxrread::is_pxr`]) and read by
 /// [`super::pxrread::decode`], which does the same.
+/// A HEIC or HEIF file is recognized by its `ftyp` brands ([`super::heifread::is_heif`]) and read
+/// by [`super::heifread::decode`], which does the same.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
@@ -739,6 +759,11 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+    }
+    if super::heifread::is_heif(bytes) {
+        // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
+        let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
     }
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);

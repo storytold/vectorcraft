@@ -36,9 +36,9 @@ pub use bitmap::GlyphImage;
 pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by};
 pub use fontdb::{
-    FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, PlatformFontFiles, StylisticSet, WantedFont,
-    WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined,
-    style_weight, system_font_dirs, user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, IcfMargins, LentCompositeFonts,
+    PlatformFontFiles, StylisticSet, WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files,
+    set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, register_envelope_ink};
@@ -170,7 +170,7 @@ pub struct PositionedGlyph {
     /// taken off, plus the manual kerning of right-to-left text, which moves the glyph right so that
     /// the space it adds lies on the glyph's left. 0 for a glyph standing upright or set across the
     /// column in vertical type, and for an inline graphic. An upright glyph in vertical type on a
-    /// path turns about its pen, and its cell starts one cell length before the cell's top: 0.12 em
+    /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
     /// before the pen without the font's vertical metrics.
     pub width_start: f64,
 }
@@ -331,7 +331,8 @@ pub struct ListMarker {
     /// takes the text to the next tab stop.
     pub glyphs: std::ops::Range<usize>,
     /// The tab's glyph, which draws nothing: the last of [`Self::glyphs`], or the first in a
-    /// right-to-left paragraph.
+    /// right-to-left paragraph. A marker aligned right
+    /// ([`vectorcraft_doc::text::ListAlign::Right`]) has it the other way round.
     pub tab: usize,
     /// The marker's characters ("•").
     pub text: String,
