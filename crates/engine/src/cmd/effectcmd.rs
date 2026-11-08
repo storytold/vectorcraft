@@ -651,7 +651,7 @@ fn raster_image(d: &mut Document, n: &Node) -> Option<(Node, bool)> {
         return None;
     }
     let below = fx.iter().all(effects::RasterFx::is_below);
-    Some((rasterfx::raster_image(d, n, below, true)?, below))
+    Some((rasterfx::raster_image(d, n, below, true, rasterfx::effects_scale(d))?, below))
 }
 
 /// Expand the pieces of `m`, art evaluated from the object of the same id (its pieces share that
