@@ -158,10 +158,7 @@ fn syntax(interp: &mut Interp, why: &str, at: usize) -> crate::interp::Abrupt {
 
 /// `JSON.parse` (section 15.12.2).
 fn parse(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let text = interp.to_str(&arg(args, 0))?.flat();
-    for _ in 0..text.len() {
-        interp.use_fuel()?;
-    }
+    let text = super::global::units_of(interp, args)?;
     let mark = interp.temp_roots.len();
     let r = parse_text(interp, &text).and_then(|v| {
         let reviver = arg(args, 1);
@@ -273,7 +270,7 @@ fn parse_text(interp: &mut Interp, text: &[u16]) -> JsResult<Value> {
                 Open::Array { obj, next } => {
                     let (obj, i) = (*obj, *next);
                     *next = next.saturating_add(1);
-                    interp.reserve_heap(ELEMENT_BYTES)?;
+                    interp.rooted(std::slice::from_ref(&v), |i| i.reserve_heap(ELEMENT_BYTES))?;
                     interp.define(obj, key_of(f64::from(i)), Prop::Data { value: v, flags: OPEN })?;
                     p.skip_space();
                     if p.eat(b',') {
@@ -288,7 +285,7 @@ fn parse_text(interp: &mut Interp, text: &[u16]) -> JsResult<Value> {
                 Open::Object { obj, name } => {
                     let obj = *obj;
                     let Some(k) = name.take() else { return Err(syntax(interp, "a member has no name", p.pos)) };
-                    interp.reserve_heap(ELEMENT_BYTES)?;
+                    interp.rooted(std::slice::from_ref(&v), |i| i.reserve_heap(ELEMENT_BYTES))?;
                     interp.define(obj, k, Prop::Data { value: v, flags: OPEN })?;
                     p.skip_space();
                     if p.eat(b',') {

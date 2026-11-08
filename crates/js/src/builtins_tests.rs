@@ -660,6 +660,40 @@ fn json_stringify_unwraps_number_string_and_boolean_objects() {
 }
 
 #[test]
+fn json_parse_counts_a_string_while_it_reserves_the_property_for_it() {
+    // The limits around the parsed value's size include one where the reservation for the string's
+    // property is what starts a collection. The text is a concatenation, so the parse also flattens
+    // it. Whenever the parse fits, the heap total counts everything that is live.
+    let setup = |text: &str| format!("var s = new Array(4097).join('x'); var text = {text}; 0");
+    for text in ["'[\"' + s + '\"]'", "'{\"k\":\"' + s + '\"}'"] {
+        let setup = setup(text);
+        let parse = "var a = JSON.parse(text); 0";
+        let mut measure = small(Limits::default());
+        assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
+        measure.interp().collect_garbage();
+        assert_eq!(measure.run(parse), Ok(JsValue::Number(0.0)));
+        let full = measure.interp().heap.bytes;
+        let (mut fits, mut over) = (0, 0);
+        for heap_bytes in (full - 8192..=full + 256).step_by(4) {
+            let mut realm = small(Limits { heap_bytes, ..Limits::default() });
+            assert_eq!(realm.run(&setup), Ok(JsValue::Number(0.0)));
+            realm.interp().collect_garbage();
+            match realm.run(parse) {
+                Ok(_) => {
+                    let counted = realm.interp().heap.bytes;
+                    let live = realm.collect_garbage();
+                    assert!(counted >= live, "{text}: {counted} bytes counted with {live} live under a limit of {heap_bytes}");
+                    fits += 1;
+                }
+                Err(RunError { kind: RunErrorKind::Limit(LimitKind::Heap), .. }) => over += 1,
+                Err(e) => panic!("{text}: {e:?}"),
+            }
+        }
+        assert!(fits > 0 && over > 0, "{text}: {fits} limits fit and {over} did not");
+    }
+}
+
+#[test]
 fn deep_json_nesting_needs_no_native_stack() {
     let handle = std::thread::Builder::new()
         .stack_size(256 << 10)

@@ -35,7 +35,7 @@ fn trim_start(s: &[u16]) -> &[u16] {
 
 /// ToString of the first argument, as code units, with each one taking a unit of fuel. A
 /// concatenation is flattened into a new buffer, which is charged to the heap.
-fn units_of(interp: &mut Interp, args: &[Value]) -> JsResult<std::rc::Rc<[u16]>> {
+pub(super) fn units_of(interp: &mut Interp, args: &[Value]) -> JsResult<std::rc::Rc<[u16]>> {
     let s = interp.to_str(&arg(args, 0))?;
     for _ in 0..s.len() {
         interp.use_fuel()?;
