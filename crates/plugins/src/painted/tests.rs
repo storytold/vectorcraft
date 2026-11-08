@@ -123,6 +123,67 @@ fn faults_refuse_the_whole_result_by_field() {
     assert_eq!(declined, Error::Failed("nothing to do".into()));
 }
 
+/// A key a paint does not have, at any level of it, refuses the result and is named; it is not
+/// dropped.
+#[test]
+fn unknown_keys_inside_a_paint_are_refused_by_field() {
+    let gray = json!({"model": "gray", "k": 0});
+    let stop = |extra: Value| {
+        let mut s = json!({"offset": 0, "color": gray});
+        s.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [s]}})
+    };
+    let point = json!({"x": 0, "y": 0});
+    for (fill, at) in [
+        (json!({"type": "solid", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}, "opacity": 0.5}), "objects[0].fills[0].opacity"),
+        (json!({"type": "solid", "color": {"model": "gray", "k": 0, "alpha": 0.5}}), "objects[0].fills[0].color.alpha"),
+        (json!({"type": "none", "color": gray}), "objects[0].fills[0].color"),
+        (json!({"type": "pattern", "pattern": "Dots", "scale": 2}), "objects[0].fills[0].scale"),
+        (stop(json!({"blend": "multiply"})), "objects[0].fills[0].gradient.stops[0].blend"),
+        (stop(json!({"color": {"model": "lab", "l": 50, "a": 0, "b": 0, "c": 1}})), "objects[0].fills[0].gradient.stops[0].color.c"),
+        (
+            json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [{"offset": 0, "color": gray}], "opacity": 0.5}}),
+            "objects[0].fills[0].gradient.opacity",
+        ),
+        (
+            json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [{"offset": 0, "color": gray}]}, "opacity": 0.5}),
+            "objects[0].fills[0].opacity",
+        ),
+        (
+            json!({"type": "gradient", "gradient": {"kind": "Radial", "stops": [{"offset": 0, "color": gray}]},
+                   "geom": {"start": point, "end": {"x": 1, "y": 0, "z": 0}}}),
+            "objects[0].fills[0].geom.end.z",
+        ),
+        (
+            json!({"type": "gradient", "gradient": {"kind": "Freeform", "stops": [{"offset": 0, "color": gray}]},
+                   "freeform": {"points": [{"at": point, "color": gray, "glow": 1}]}}),
+            "objects[0].fills[0].freeform.points[0].glow",
+        ),
+    ] {
+        let e = decode(&out(json!([{"path": square(), "fills": [fill]}])), Scope::Object, FillRule::NonZero).unwrap_err().to_string();
+        assert!(e.contains(&format!("{at}:")), "{at}: {e}");
+    }
+    let e = decode(
+        &out(json!([{"path": square(), "strokes": [{"paint": {"type": "solid", "color": gray, "opacity": 0.5}}]}])),
+        Scope::Object,
+        FillRule::NonZero,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(e.contains("objects[0].strokes[0].paint.opacity:"), "{e}");
+    // Every key a paint does have is still taken.
+    let full = json!({"type": "gradient", "angle": 30, "swatch": "Ramp",
+        "gradient": {"kind": "Freeform", "dither": true, "method": "Perceptual",
+                     "stops": [{"offset": 0, "color": gray, "opacity": 1, "midpoint": 0.5, "swatch": "Ink", "tint": 0.5, "plates": [0, 0, 0, 0]}]},
+        "geom": {"start": point, "end": {"x": 1, "y": 0}, "aspect": 1, "focal": point},
+        "freeform": {"points": [{"at": point, "color": gray, "opacity": 1, "spread": 0.5}], "lines": [[0]], "mode": "lines"}});
+    let solid = json!({"type": "solid", "color": {"model": "cmyk", "c": 0, "m": 0, "y": 0, "k": 1}, "swatch": "Ink", "tint": 0.5});
+    let pattern = json!({"type": "pattern", "pattern": "Dots", "xf": [1, 0, 0, 1, 0, 0]});
+    assert!(
+        decode(&out(json!([{"path": square(), "fills": [full, solid, pattern, {"type": "none"}, null]}])), Scope::Object, FillRule::NonZero).is_ok()
+    );
+}
+
 /// The swatches and patterns a piece's paints name must be in the document.
 #[test]
 fn named_swatches_and_patterns_must_exist() {

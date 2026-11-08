@@ -413,7 +413,8 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 
 - `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
   ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
-  result.
+  result, as does a key that a paint, its color, a gradient stop, a gradient's placement or a freeform point does not
+  have, such as `opacity` on a solid paint.
 - `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
   painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
   a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke

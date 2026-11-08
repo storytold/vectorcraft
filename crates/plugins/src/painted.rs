@@ -47,8 +47,8 @@ pub enum Scope {
 
 /// Parses and checks a painted result: `{"objects": [...]}`, or `{"error": "message"}` when the
 /// plug-in declined. `rule` is the fill rule a piece without `fillRule` takes. Any other top-level
-/// key, an unknown key in a piece or stroke, a list or count past its limit, a number out of range
-/// or a paint of the wrong form refuses the whole result, naming the field.
+/// key, an unknown key in a piece, stroke or paint, a list or count past its limit, a number out of
+/// range or a paint of the wrong form refuses the whole result, naming the field.
 pub fn decode(bytes: &[u8], scope: Scope, rule: FillRule) -> Result<Vec<Piece>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| out_err("output", format!("not JSON: {e}")))?;
     if let Some(e) = crate::objects::declined(&v) {
@@ -162,12 +162,86 @@ fn color(c: &Color, at: &str) -> Result<()> {
     }
 }
 
+/// Refuses a key of object `v` that is not in `keys`, naming it after `at`. A value that is not an
+/// object passes, and deserializing it reports the fault.
+fn only_keys(v: &Value, at: &str, keys: &[&str]) -> Result<()> {
+    match v.as_object().and_then(|o| o.keys().find(|k| !keys.contains(&k.as_str()))) {
+        Some(k) => Err(out_err(&format!("{at}.{k}"), format!("unknown key `{k}`; the keys here are {}", keys.join(", ")))),
+        None => Ok(()),
+    }
+}
+
+/// [`only_keys`] for a color, whose keys follow its `model`. An unknown model passes, and
+/// deserializing it reports the fault.
+fn color_keys(v: &Value, at: &str) -> Result<()> {
+    let keys: &[&str] = match v.get("model").and_then(Value::as_str) {
+        Some("rgb") => &["model", "r", "g", "b"],
+        Some("cmyk") => &["model", "c", "m", "y", "k"],
+        Some("gray") => &["model", "k"],
+        Some("lab") => &["model", "l", "a", "b"],
+        _ => return Ok(()),
+    };
+    only_keys(v, at, keys)
+}
+
+/// [`only_keys`] for a point `{x, y}`.
+fn point_keys(v: Option<&Value>, at: &str) -> Result<()> {
+    v.map_or(Ok(()), |v| only_keys(v, at, &["x", "y"]))
+}
+
+/// Calls `f` on each entry of the array at `v`, named `at[i]`.
+fn each(v: Option<&Value>, at: &str, f: impl Fn(&Value, &str) -> Result<()>) -> Result<()> {
+    v.and_then(Value::as_array).into_iter().flatten().enumerate().try_for_each(|(i, e)| f(e, &format!("{at}[{i}]")))
+}
+
+/// Refuses an unknown key at any level of paint `v`: the paint itself, its colors, a gradient's
+/// stops, placement and freeform points. Deserializing a paint drops unknown keys, so a key such
+/// as `opacity` on a solid paint would otherwise be accepted and do nothing.
+fn paint_keys(v: &Value, at: &str) -> Result<()> {
+    match v.get("type").and_then(Value::as_str) {
+        Some("none") => only_keys(v, at, &["type"]),
+        Some("solid") => {
+            only_keys(v, at, &["type", "color", "swatch", "tint"])?;
+            v.get("color").map_or(Ok(()), |c| color_keys(c, &format!("{at}.color")))
+        }
+        Some("pattern") => only_keys(v, at, &["type", "pattern", "xf"]),
+        Some("gradient") => {
+            only_keys(v, at, &["type", "gradient", "geom", "angle", "swatch", "freeform"])?;
+            if let Some(g) = v.get("gradient") {
+                let at = format!("{at}.gradient");
+                only_keys(g, &at, &["kind", "stops", "dither", "method"])?;
+                each(g.get("stops"), &format!("{at}.stops"), |s, at| {
+                    only_keys(s, at, &["offset", "color", "opacity", "midpoint", "swatch", "tint", "plates"])?;
+                    s.get("color").map_or(Ok(()), |c| color_keys(c, &format!("{at}.color")))
+                })?;
+            }
+            if let Some(geom) = v.get("geom") {
+                let at = format!("{at}.geom");
+                only_keys(geom, &at, &["start", "end", "aspect", "focal"])?;
+                ["start", "end", "focal"].into_iter().try_for_each(|k| point_keys(geom.get(k), &format!("{at}.{k}")))?;
+            }
+            if let Some(ff) = v.get("freeform") {
+                let at = format!("{at}.freeform");
+                only_keys(ff, &at, &["points", "lines", "mode"])?;
+                each(ff.get("points"), &format!("{at}.points"), |p, at| {
+                    only_keys(p, at, &["at", "color", "opacity", "spread"])?;
+                    point_keys(p.get("at"), &format!("{at}.at"))?;
+                    p.get("color").map_or(Ok(()), |c| color_keys(c, &format!("{at}.color")))
+                })?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// A paint as the filter form has it (`null`: none), checked rather than clamped: colors, tints,
 /// stops, opacities, midpoints and placements in range.
 fn paint(v: &Value, at: &str) -> Result<Paint> {
     if v.is_null() {
         return Ok(Paint::None);
     }
+    paint_keys(v, at)?;
     let p: Paint = serde_json::from_value(v.clone()).map_err(|e| out_err(at, e))?;
     let unit = |x: f32, at: &str, what: &str| in_range(x, 0.0, 1.0, at, what);
     match &p {
