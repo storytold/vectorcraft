@@ -1961,6 +1961,94 @@ fn the_later_pages_of_a_pdf_of_some_artboards_are_not_compared() {
     assert_eq!(d.artboards.len(), 4, "{w:?}");
 }
 
+/// The editing data of four 100-point artboards side by side, 50 apart (art space, y up), with a
+/// 4-point square on each at (`squares[i]`, 10 + 20 × i), and a text object with no story in the
+/// file.
+fn four_boards_with_type(squares: [u32; 4]) -> String {
+    let board = |x0: u32| {
+        format!(
+            "%_/Dictionary :\n%_{x0} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n",
+            x0 + 100
+        )
+    };
+    let boards = (0..4u32).map(|i| board(i * 150)).collect::<String>();
+    let boards = format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n");
+    let art: Vec<String> = (0..4u32).map(|i| square(i * 150 + squares[i as usize], 10 + 20 * i)).collect();
+    native(&(boards + &layer("Art", true, &(art.join("\n") + "\n" + &text_object(0)))))
+}
+
+/// The PDF part of a file with [`four_boards_with_type`] saved with two of its artboards: a page
+/// for each in a row, page `i` with a square `squares[i].0` from its left and `squares[i].1` up
+/// from its bottom, and "Hi" 30 from the second page's left and 20 down.
+fn two_pages_with_type(squares: [(f64, u32); 2]) -> Document {
+    let at = |(x, y): (f64, u32), page: f64| pdf_part(page + x, 100.0 - f64::from(y) - 4.0);
+    let mut pdf = at(squares[0], 0.0);
+    let mut second = pdf.artboards[0].clone();
+    (second.id, second.rect) = (2, vectorcraft_geom::Rect::new(120.0, 0.0, 220.0, 100.0));
+    pdf.artboards.push(second);
+    let other = at(squares[1], 120.0);
+    let square = pdf.reid(&other.layers[0].children().unwrap()[0]);
+    let layer_id = pdf.layers[0].id;
+    pdf.insert(Some(layer_id), 1, square).unwrap();
+    let style = vectorcraft_doc::CharStyle { size: 14.0, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "Hi", style);
+    let id = pdf.alloc_id();
+    pdf.insert(Some(layer_id), 2, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    pdf
+}
+
+/// A PDF saved with artboards that don't follow one another has a page for each: the type on a
+/// later page goes to the artboard that page shows, not to the one after the previous page's.
+#[test]
+fn type_on_a_later_page_of_a_pdf_of_some_artboards_goes_to_its_artboard() {
+    // The squares 10, 20, 30 and 40 from each artboard's left.
+    let art = four_boards_with_type([10, 20, 30, 40]);
+    // Pages for the second and fourth artboards. The fourth artboard starts at x 450, so the type
+    // 30 from its left is at x 480.
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages_with_type([(20.0, 30), (40.0, 70)]), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards.len(), 4, "{w:?}");
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 480.0).abs() < 1e-6 && (f - 20.0).abs() < 1e-6, "on the fourth artboard: {:?}", texts[0].xf);
+}
+
+/// A PDF saved with the first and third of four artboards: the type on its second page goes to
+/// the third artboard.
+#[test]
+fn type_on_the_second_page_of_a_pdf_of_the_first_and_third_artboards_goes_to_the_third() {
+    let art = four_boards_with_type([10, 20, 30, 40]);
+    // The third artboard starts at x 300, so the type 30 from its left is at x 330.
+    let (d, w, read) = crate::layered_ai(&private(&art), two_pages_with_type([(10.0, 10), (30.0, 50)]), vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    assert_eq!(d.artboards.len(), 4, "{w:?}");
+    let texts = text_of(&d.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi"], "{w:?}");
+    let [.., e, f] = texts[0].xf.as_coeffs();
+    assert!((e - 330.0).abs() < 1e-6 && (f - 20.0).abs() < 1e-6, "on the third artboard: {:?}", texts[0].xf);
+}
+
+/// An EPS whose page is its art's box: an object the layers can't draw takes the page's art from
+/// that box, when the editing data's first artboard has the page's size elsewhere.
+#[test]
+fn an_unread_object_of_an_eps_of_its_art_box_takes_the_page_art_on_that_box() {
+    let point = |x: u32, y: u32, n: u8| format!("%_{x} {y} /RealPointRelToROrigin\n%_ (PositionPoint{n}) ,\n");
+    let board = |x0: u32| format!("%_/Dictionary :\n{}{}%_; ,\n", point(x0, 100, 1), point(x0 + 100, 0, 2));
+    let array = format!("%_/Array :\n{}{}%_; (ArtboardArray) ,\n", board(200), board(0));
+    let boards = format!("%_/Document :\n%_/Dictionary :\n{array}%_; /NotRecorded ,\n%_;\n");
+    let symbol = format!("%AI14_BeginSymbol\n(Dot) 0 Ae\n{}\n%AI10_EndSymbol\n", square(0, 0));
+    let instance = "/SymbolInstance :\n(Dot) /SymbolRef ,\n[1 0 0 1 50 10] /Matrix ,\n;";
+    let layers = layer("Live", true, &square(10, 10)) + &layer("Mixed", true, &format!("{instance}\n{}", square(70, 10)));
+    let art = native(&format!("{boards}{symbol}{layers}"));
+    let cyan = page_square(50, 10).replace("0 0 1 0 setcmykcolor", "1 0 0 0 setcmykcolor");
+    let page = format!("{}\n{cyan}\n{}", page_square(10, 10), page_square(70, 10));
+    let r = import(&eps(&page, &art)).unwrap();
+    assert_eq!(names(&r.document), ["Live", "Mixed"], "{:?}", r.warnings);
+    assert_eq!(kinds(&r.document.layers[1]), ["group[1]", "path"], "{:?}", r.warnings);
+    replacement_is_cyan(&r.document, 1, 0);
+}
+
 /// Layers that draw each page's art on its artboard come in.
 #[test]
 fn layers_that_match_every_page_come_in() {
