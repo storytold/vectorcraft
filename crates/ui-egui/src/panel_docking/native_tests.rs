@@ -750,7 +750,25 @@ fn a_flyout_or_drawer_of_a_hidden_toolbar_leaves_the_palette_windows_shown() {
     h.app.run("window.panels", json!({})).unwrap();
     h.frames(1);
     assert!(!h.app.ui.toolbar && h.app.ui.flyout.is_some(), "the flyout is left set with the Tools panel hidden");
-    assert_eq!(take_palette_commands(&h, viewport).0.last(), Some(&true), "shown again: the flyout does not draw");
+    assert_eq!(take_palette_commands(&h, viewport).0, [true], "shown again: the flyout does not draw");
+}
+
+/// A strip torn off a flyout and a toolbar made with New Toolbar stay on screen like panels, so the
+/// palette windows stay shown beside them.
+#[test]
+fn a_torn_off_strip_or_a_new_toolbar_leaves_the_palette_windows_shown() {
+    let mut h = Harness::new();
+    let viewport = h.float("navigator");
+    h.host.borrow_mut().focus = ViewportId::ROOT;
+    h.frames(2);
+    take_palette_commands(&h, viewport);
+    h.app.run("window.floatTools", json!({"tool": "pen"})).unwrap();
+    h.app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    h.frames(2);
+    assert!(!h.app.ui.floating_flyouts.is_empty(), "the strip floats");
+    assert!(h.app.ui.custom_toolbars.iter().any(|b| b.shown), "the new toolbar shows");
+    assert_eq!(h.app.ui.flyout, None, "no flyout is open");
+    assert_eq!(take_palette_commands(&h, viewport), (vec![], vec![]), "the palette windows are left as they were");
 }
 
 /// The frame in which a click elsewhere closes a flyout or the drawer shows the palette windows, as
