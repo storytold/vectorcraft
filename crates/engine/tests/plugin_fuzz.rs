@@ -242,6 +242,32 @@ proptest! {
         renders(&s, &out)?;
     }
 
+    /// A live effect that declares `paintOutput` returning hostile pieces, on objects or on a fill:
+    /// drawing, export and Expand Appearance never crash.
+    #[test]
+    fn hostile_painted_effect_output_never_crashes(
+        objects in prop::collection::vec(arb_object(), 0..5),
+        junk in prop::option::weighted(0.1, arb_junk()),
+        on_fill in any::<bool>(),
+    ) {
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let out = output(&objects, &[], junk);
+        let manifest = r#"{"id":"fuzz.painted","name":"Fuzz","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{}}"#;
+        install(&mut s, &wat::parse_str(tpl::returning(manifest, &out)).unwrap()).unwrap();
+        let item = if on_fill { json!(0) } else { Value::Null };
+        let r = catch_quiet(|| s.execute("effect.apply", &json!({"effect": "plugin.fuzz.painted", "item": item})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+        let r = catch_quiet(|| s.execute("effect.expandAppearance", &json!({})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("expanding panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+    }
+
     #[test]
     fn mutated_and_garbage_modules_never_crash(
         flips in prop::collection::vec((any::<prop::sample::Index>(), any::<u8>()), 0..8),

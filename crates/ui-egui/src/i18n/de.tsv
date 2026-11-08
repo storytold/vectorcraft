@@ -5384,6 +5384,7 @@ axis	Y Axis	Y-Achse
 	Change how the objects its effect is applied to are drawn	Ändern, wie die Objekte gezeichnet werden, auf die sein Effekt angewendet ist
 	Write the document as a file in its own format	Das Dokument als Datei in einem eigenen Format schreiben
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ist {_1}; dieser Host unterstützt die Plug-in-API-Stufen 1 bis {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gilt nur für einen Live-Effekt (`kind` "effect") mit `api` 2
 @msg	`grant` must be a list of permission names	`grant` muss eine Liste von Berechtigungsnamen sein
 @msg	`grant` names an unknown permission `{shown}`	`grant` nennt eine unbekannte Berechtigung `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ein Plug-in der Art `{_1}` braucht die Berechtigung `{_2}`

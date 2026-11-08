@@ -5398,6 +5398,7 @@ axis	Y Axis	Вісь Y
 	Change how the objects its effect is applied to are drawn	Змінювати те, як малюються об’єкти, до яких застосовано його ефект
 	Write the document as a file in its own format	Записувати документ у файл власного формату
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`

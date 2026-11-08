@@ -5413,6 +5413,7 @@ axis	Y Axis	Ось Y
 	Change how the objects its effect is applied to are drawn	Изменять то, как рисуются объекты, к которым применён его эффект
 	Write the document as a file in its own format	Записывать документ в файл собственного формата
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` допустим только для динамического эффекта (`kind` "effect") с `api` 2
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
 @msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`

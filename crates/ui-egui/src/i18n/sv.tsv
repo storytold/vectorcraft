@@ -5825,6 +5825,7 @@ axis	Y Axis	Y-axel
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
 	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gäller bara en liveeffekt (`kind` "effect") med `api` 2
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ett plugin av typen `{_1}` behöver behörigheten `{_2}`

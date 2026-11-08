@@ -11,7 +11,8 @@ There are three kinds of plug-in:
   and return the objects to keep, change or add. A run is one undo step. Use them for recolouring, path
   clean-up, halftones, generative patterns and the like.
 - **Live effects** rewrite one object's geometry each time it is drawn, from its appearance stack, like the
-  built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows.
+  built-in Distort & Transform effects. The art stays editable: move or reshape it and the effect follows. A live
+  effect may also paint what it returns ([painted live effects](#painted-live-effects)).
 - **Exporters** write the whole document in a file format of their own, for pen plotters, cutting machines,
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
@@ -23,7 +24,7 @@ This page is the contract for plug-in authors and the reference for the host (`c
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, api, paintOutput?, size, source, permissions, hash}], "folder": report}` (`budget: "heavy"` for a [heavy filter](#heavy-filters); `api` is the manifest's plug-in API level, and `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`). One undo step; the result is selected, except the objects it locked or made guides. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace": bool = true`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`, once the user agreed. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, once the user agreed. With `hash`, a module whose SHA-256 differs is refused. |
@@ -140,8 +141,9 @@ capability model proposed for PhotoCraft plug-ins
 - The host enforces the grant on a filter run: without `doc.read` the filter is given no objects; without `state` its
   `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that changes the
   document is refused. A refused output leaves the document as it was.
-- `api` is the plug-in API level the manifest is written for: `1` (the default) is the only level this host
-  implements, and a higher one is refused.
+- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds a live effect's
+  `paintOutput`. A higher one is refused. A level 2 effect that declares `paintOutput` needs no other permission than
+  `doc.read` and `effect.render`.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
@@ -158,8 +160,10 @@ takes as many instructions the first time as the next. Charged to the run, as wa
 could fail it: when the 20 M-instruction slice the run was in ran out while a function compiled, wasmi ended the run
 with an error rather than a pause the host resumes, and the run stopped with most of its budget left.
 
-Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters and input
-geometry: a plug-in runs again only when one of them changes.
+Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters, input
+geometry, fill rule, reference box and the paints the effect is given: a plug-in runs again only when one of them
+changes. Failures are cached too. The swatches and patterns a painted result names are checked against the document
+each time it is drawn.
 
 ## ABI v1
 
@@ -204,6 +208,11 @@ pointers are offsets into the module's memory.
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
+- `paintOutput` (live effects at `api` 2 only): `true` makes the effect return [painted pieces](#painted-live-effects)
+  instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
+  `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
+  geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
+  there.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
   `document.export` then writes the exporter's format only when asked for by its format id.
@@ -247,7 +256,8 @@ guides too) and clipping paths are left out, and so are other kinds of object (t
 touches. With nothing selected the list is empty (a generator then adds its own objects). A live effect gets one
 object: its geometry (`type`, `path`, `fillRule`, `bounds`) and its `fills` and `strokes`, as a filter gets them (hosts
 from before these give geometry only). The paints are read only: an effect may draw as wide as a stroke or use a
-fill's colour to decide its shape, but it changes only the geometry.
+fill's colour to decide its shape, but it changes only the geometry, unless it declares `paintOutput` ([painted live
+effects](#painted-live-effects)).
 
 An **exporter** gets something else: the document as a native `.vectorcraft` file's JSON, as `document.save` writes it
 but without indentation (the format is documented in [`crates/format/src/lib.rs`](../crates/format/src/lib.rs)). That is every layer, object,
@@ -351,7 +361,45 @@ document, so it can read what every plug-in keeps there, not only its own. A liv
 is worked out from the object alone.
 
 For a **live effect**, the geometry of every returned object's `path` (their subpaths, in order) replaces the
-object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry.
+object's; the rest is ignored (the object keeps its own appearance). An empty list removes the geometry. A live effect
+that declares `paintOutput` returns painted pieces instead ([below](#painted-live-effects)).
+
+#### Painted live effects
+
+A live effect whose manifest has `"api": 2` and `"paintOutput": true` returns `{"objects": [...]}` too, but each entry
+is a piece drawn by itself, in the order returned, with paints of its own:
+
+```json
+{"objects": [
+  {"path": {…}, "fills": [{"type": "solid", "color": {"model": "rgb", "r": 0, "g": 0.6, "b": 0.3}}]},
+  {"path": {…}, "fillRule": "evenodd", "strokes": [{"paint": null}, {"paint": {…}, "width": 4, "join": "round"}]},
+  {"path": {…}}
+]}
+```
+
+- `path` is required; `fillRule` defaults to the object's. `type` and `bounds` may be handed back as given and are
+  ignored. Any other key (`opacity`, `effects`, `guide`, `locked`, `name`, a top-level `documentData`…) refuses the
+  result.
+- `fills` and `strokes` take the forms a filter returns ([Input](#input)). A piece without `fills` (or `strokes`) is
+  painted with the ones the effect was given; an empty list paints none. Given ones replace the object's in order, as
+  a filter's output sets them: an existing fill or stroke keeps its own effects, opacity and blending, and a new stroke
+  starts at 1 pt, miter join, butt cap, miter limit 10.
+- An effect on a fill (`_context.item` `{"fill": i}`) returns only `fills`, which replace that fill on each piece; an
+  effect on a stroke returns only `strokes`. The object's other fills and strokes stay where they are.
+- The effects after it in the stack apply to the pieces together, the reference box being the bounds of all of them.
+  Bounds, hit tests and raster effects use the pieces as they are drawn. Each piece counts against the budget of the
+  object's geometry effects as well as its anchors, so all the painted effects in a stack make at most 100,000 pieces
+  together; a run whose pieces would pass the budget draws its input as it was.
+- The result is checked whole before any of it is drawn: the limits of a filter's output (100,000 objects, 4,000,000
+  anchors, 256 fills and 256 strokes per piece, 256 stops per gradient), finite numbers in range with nothing clamped
+  (color components, tints, offsets, opacities, midpoints 0.13 to 0.87, stops in order of `offset`, stroke
+  widths 0 to 1,000 pt, miter limits 1 to 500), and every swatch a solid paint, gradient or stop links to and every pattern named in
+  the document. One fault refuses the whole result: that step of the stack draws its input as it was, the effect
+  record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for example
+  `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
+- The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
+  export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
+  ordinary path or compound path with its fills and strokes, as one undo step.
 
 An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown
@@ -388,6 +436,6 @@ per change of their input, parameters or paints (results are cached), not per fr
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, host
   callbacks (a plug-in reporting progress or asking whether it was cancelled), importers (plug-in formats that open
   files).
-- Live effects that change paint (they reshape geometry; an object filter recolours), and filters on type, images or
-  symbols.
+- Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
+  it returns), and filters on type, images or symbols.
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

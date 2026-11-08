@@ -5753,6 +5753,7 @@ axis	Y Axis	Άξονας Y
 	Change how the objects its effect is applied to are drawn	Αλλαγή του τρόπου σχεδίασης των αντικειμένων στα οποία εφαρμόζεται το εφέ του
 	Write the document as a file in its own format	Εγγραφή του εγγράφου ως αρχείου σε δική του μορφή
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	το `paintOutput` ισχύει μόνο για ζωντανό εφέ (`kind` "effect") με `api` 2
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	ένα πρόσθετο τύπου `{_1}` χρειάζεται το δικαίωμα `{_2}`

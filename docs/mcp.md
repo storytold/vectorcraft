@@ -5968,8 +5968,11 @@ them again at startup (`plugin.remove` deletes them there):
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
-`effect.list` lists it. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
-`document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
+`effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
+and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them
+as ordinary paths with those paints; a result it refuses is drawn as if the effect weren't there, and `plugin.info`'s
+`lastError` names the plug-in and the refused field. An exporter adds a write-only file format `plugin.<id>` (listed
+by `document.formats`): `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. A failing plug-in returns an error and leaves the document as it was (an export writes
 no file). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`

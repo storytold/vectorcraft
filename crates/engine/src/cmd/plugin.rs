@@ -58,6 +58,10 @@ pub fn describe(p: &Plugin) -> Value {
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
     }
+    v["api"] = json!(m.api);
+    if m.paint_output {
+        v["paintOutput"] = json!(true);
+    }
     v
 }
 
@@ -493,7 +497,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies), hash (the module's SHA-256)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), api (the plug-in API level its manifest is written for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies), hash (the module's SHA-256)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
             always,
             list
         ),
@@ -502,7 +506,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Plug-in Info",
             [],
             None,
-            "{id} → plugin.list's entry plus {manifest, defaults, lastError (a live effect's last failure, null)}",
+            "{id} → plugin.list's entry plus {manifest, defaults, lastError (a live effect's last failure, null; for a live effect with paintOutput, its name and the refused field, such as objects[1].strokes[0].width)}",
             always,
             info
         ),

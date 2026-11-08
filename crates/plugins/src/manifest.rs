@@ -260,6 +260,18 @@ pub struct Manifest {
     /// How much a run may compute: only a filter may be [`Budget::Heavy`].
     #[serde(default, skip_serializing_if = "Budget::is_light")]
     pub budget: Budget,
+    /// A live effect at `api` 2 that returns painted pieces ([`crate::painted`]): `true` when the
+    /// manifest has `"paintOutput": true`, the only value the key may hold.
+    #[serde(default, rename = "paintOutput", deserialize_with = "true_only", skip_serializing_if = "std::ops::Not::not")]
+    pub paint_output: bool,
+}
+
+/// Reads a key that may only be `true` when present (`paintOutput`).
+fn true_only<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<bool, D::Error> {
+    match Value::deserialize(d)? {
+        Value::Bool(true) => Ok(true),
+        _ => Err(serde::de::Error::custom("`paintOutput` may only be true")),
+    }
 }
 
 impl Manifest {
@@ -288,6 +300,7 @@ impl Manifest {
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
+            paint_output: false,
         }
     }
 
@@ -309,6 +322,9 @@ impl Manifest {
         }
         if let Some(names) = &self.permissions {
             permissions::validate(self.kind, names)?;
+        }
+        if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
+            return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -654,12 +670,45 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["ui.panel"]}"#, "reserved"),
             (r#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read"]}"#, "effect.render"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":"doc.read"}"#, "manifest"),
-            (r#"{"id":"a","name":"x","kind":"filter","api":2}"#, "`api` is 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
+    /// A live effect at `api` 2 may declare `"paintOutput": true`, and only that value; any other
+    /// kind or level, and `false`, `null` or another type, is refused naming the key. Without the
+    /// key, at any level, the effect returns geometry only.
+    #[test]
+    fn only_a_level_2_live_effect_declares_paint_output() {
+        let painted = Manifest::parse(br#"{"id":"org.example.tone","name":"Tone","kind":"effect","api":2,"paintOutput":true}"#).unwrap();
+        assert!(painted.paint_output);
+        assert_eq!(serde_json::to_value(&painted).unwrap()["paintOutput"], json!(true));
+        let listed =
+            Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"permissions":["doc.read","effect.render"]}"#)
+                .unwrap();
+        assert!(listed.paint_output);
+        for plain in [r#"{"id":"a","name":"x","kind":"effect","api":2}"#, r#"{"id":"a","name":"x","kind":"effect"}"#] {
+            let m = Manifest::parse(plain.as_bytes()).unwrap();
+            assert!(!m.paint_output, "{plain}");
+            assert!(serde_json::to_value(&m).unwrap().get("paintOutput").is_none(), "{plain}");
+        }
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":false}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":null}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":1}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":"true"}"#,
+            r#"{"id":"a","name":"x","kind":"effect","paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":1,"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"filter","api":2,"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","api":2,"extensions":["plt"],"paintOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"permissions":["doc.read"]}"#,
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("paintOutput") || e.contains("effect.render"), "{bad}: {e}");
         }
     }
 

@@ -711,7 +711,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        crate::reshape::reshape_leaves(&mut m, &fx);
+        crate::reshape::reshape_leaves_in(&mut m, &fx, doc);
     }
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id) && !crate::is_geometry(&e.id));
     if paint {

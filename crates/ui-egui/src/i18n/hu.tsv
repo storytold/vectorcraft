@@ -5785,6 +5785,7 @@ axis	Y Axis	Y tengely
 	Change how the objects its effect is applied to are drawn	Módosíthatja, hogyan rajzolódnak ki az objektumok, amelyekre az effektusa alkalmazva van
 	Write the document as a file in its own format	Saját formátumú fájlba írhatja a dokumentumot
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	a `paintOutput` csak élő effektushoz (`kind` "effect") használható, `api` 2 mellett
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre

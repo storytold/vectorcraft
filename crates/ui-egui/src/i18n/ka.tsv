@@ -5725,6 +5725,7 @@ axis	Y Axis	Y ღერძი
 	Change how the objects its effect is applied to are drawn	იმის შეცვლა, თუ როგორ იხატება ობიექტები, რომლებზეც მისი ეფექტია გამოყენებული
 	Write the document as a file in its own format	დოკუმენტის ჩაწერა ფაილად საკუთარ ფორმატში
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` მხოლოდ ცოცხალი ეფექტისთვისაა (`kind` "effect") `api` 2-ზე
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`

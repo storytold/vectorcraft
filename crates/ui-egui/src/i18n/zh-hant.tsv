@@ -5436,6 +5436,7 @@ axis	Y Axis	Y 軸
 	Change how the objects its effect is applied to are drawn	變更套用其效果的物件的繪製方式
 	Write the document as a file in its own format	將文件寫成其自有格式的檔案
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`

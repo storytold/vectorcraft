@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
-/// this.
-pub const API_LEVEL: u32 = 1;
+/// this. Level 2 adds a live effect's `paintOutput` ([`crate::painted`]).
+pub const API_LEVEL: u32 = 2;
 
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;

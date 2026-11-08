@@ -5199,6 +5199,7 @@
 	Change how the objects its effect is applied to are drawn	जिन ऑब्जेक्ट्स पर उसका इफ़ेक्ट लगा है, उनके बनाए जाने का तरीका बदलना
 	Write the document as a file in its own format	डॉक्यूमेंट को अपने फ़ॉर्मेट की फ़ाइल के रूप में लिखना
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` केवल `api` 2 पर लाइव इफ़ेक्ट (`kind` "effect") के लिए है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` प्रकार के प्लग-इन को `{_2}` अनुमति चाहिए

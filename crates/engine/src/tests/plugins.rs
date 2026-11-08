@@ -269,6 +269,166 @@ fn expanding_a_fill_gives_its_plug_in_effect_the_fill_it_sits_on() {
     assert_eq!(clip.path_data().unwrap().bounds(), triangle().bounds(), "the triangle the canvas fills");
 }
 
+/// The manifest of a test live effect `id` that declares `paintOutput` (at `api` 2), or that
+/// doesn't (`paints` off).
+fn painting(id: &str, paints: bool) -> String {
+    let declared = if paints { r#","api":2,"paintOutput":true"# } else { "" };
+    format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"effect"{declared},"params":{{}}}}"#)
+}
+
+/// A 20 × 20 square at `x`, 40.
+fn square_at(x: f64) -> PathData {
+    PathData::single(SubPath::polyline(&[Point::new(x, 40.0), Point::new(x + 20.0, 40.0), Point::new(x + 20.0, 60.0), Point::new(x, 60.0)], true))
+}
+
+fn solid(hex: &str) -> Value {
+    serde_json::to_value(Paint::solid(Color::from_hex(hex).unwrap())).unwrap()
+}
+
+/// The 200 × 200 top left of the document, drawn on white.
+fn drawn(s: &Session) -> vectorcraft_render::Rendered {
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts)
+}
+
+const WHITE: [u8; 4] = [255, 255, 255, 255];
+const RED: [u8; 4] = [255, 0, 0, 255];
+const GREEN: [u8; 4] = [0, 255, 0, 255];
+const BLUE: [u8; 4] = [0, 0, 255, 255];
+
+/// A live effect that declares `paintOutput` draws each piece it returns by itself, with the paints
+/// it gives (a piece without `fills` keeps the object's), in place of the object; the same output
+/// from an effect that doesn't declare it is one path painted by the object's fill. Drawing and
+/// export leave the document alone, and Expand Appearance writes the pieces as ordinary paths in
+/// one undo step.
+#[test]
+fn a_painted_live_effect_draws_its_pieces_with_their_own_paints() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}, {"path": square_at(80.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.paints", true), &out));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.geometry", false), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.geometry"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (RED, RED, WHITE), "without paintOutput the paint is ignored");
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.paints"}));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (GREEN, RED, WHITE), "each piece with its own paint");
+    // An upstream paint edit reaches the piece that keeps the object's fill; Undo brings it back.
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "color": "#0000ff"}));
+    assert_eq!((drawn(&s).pixel(50, 50), drawn(&s).pixel(90, 50)), (GREEN, BLUE));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(drawn(&s).pixel(90, 50), RED);
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(drawn(&s).pixel(90, 50), BLUE);
+    run(&mut s, "edit.undo", json!({}));
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains("#00ff00") && svg.contains("#ff0000"), "{svg}");
+    assert_eq!(s.doc().unwrap().doc, before, "drawing and export don't change the document");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Expanded: two ordinary paths, green and red, and no live effect, as one undo step.
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let mut paths = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let Some(p) = n.path_data() {
+            assert!(n.appearance.effects.is_empty(), "no live effect left");
+            paths.push((p.bounds(), n.appearance.fill().map(|f| f.paint.clone())));
+        }
+    });
+    let fill = |hex: &str| Some(Paint::solid(Color::from_hex(hex).unwrap()));
+    assert_eq!(paths, [(square_at(40.0).bounds(), fill("#00ff00")), (square_at(80.0).bounds(), fill("#ff0000"))]);
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.paints");
+}
+
+/// On a fill, a painted effect returns only fills: they replace that fill on each piece. A result
+/// that breaks a rule (strokes from an effect on a fill, a swatch the document doesn't have) is
+/// refused whole: the object is drawn as if the effect weren't there, and `plugin.info` names the
+/// plug-in and the field.
+#[test]
+fn a_painted_effect_on_a_fill_and_refused_results() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let fills = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}]}).to_string();
+    let strokes = json!({"objects": [{"path": square_at(40.0), "strokes": [{"paint": solid("#00ff00"), "width": 2}]}]}).to_string();
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Not a swatch");
+    let unknown = json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.fillpaint", true), &fills));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.strokepaint", true), &strokes));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.swatchpaint", true), &unknown));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.fillpaint", "item": fill}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the fill's piece, green");
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.fillpaint"}))["lastError"], Value::Null);
+    // A second painted effect on the same fill paints what it returns too.
+    let blue = json!({"objects": [{"path": square_at(80.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.bluepaint", true), &blue));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.bluepaint", "item": fill}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(90, 50), img.pixel(50, 50), img.pixel(15, 15)), (BLUE, WHITE, WHITE), "the second effect's piece, blue");
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 1, "item": fill}));
+    run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0, "item": fill}));
+    for (effect, item, field) in
+        [("test.engine.strokepaint", json!(fill), "objects[0].strokes"), ("test.engine.swatchpaint", Value::Null, "objects[0].fills[0].swatch")]
+    {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": format!("plugin.{effect}"), "item": item}));
+        let img = drawn(&s);
+        assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (WHITE, RED), "{effect}: drawn as it is");
+        let e = run(&mut s, "plugin.info", json!({"id": effect}))["lastError"].as_str().unwrap_or_default().to_string();
+        assert!(e.starts_with(&format!("Test {effect}: ")) && e.contains(field), "{effect}: {e}");
+        let n = node(&s, id);
+        let kept = if item.is_null() { n.appearance.effects.clone() } else { n.appearance.items[fill].effects().to_vec() };
+        assert_eq!(kept.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), [format!("plugin.{effect}")], "the effect record stays");
+        run(&mut s, "effect.remove", json!({"ids": [id.0], "index": 0, "item": item}));
+    }
+}
+
+/// A painted effect on a group may link its pieces to the document's swatches.
+#[test]
+fn a_painted_group_effect_links_to_the_document_s_swatches() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00", "global": true}));
+    run(&mut s, "select.all", json!({}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.grouppaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "plugin.test.engine.grouppaint"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the group's piece, green");
+}
+
+/// Every painted piece counts against the effects' budget, however small its path: two painted
+/// effects in a stack that each return 350 tiny triangles make no more than 100,000 objects, not
+/// 350 × 350 of them.
+#[test]
+fn painted_pieces_keep_to_the_effects_budget() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let tiny = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.1, 0.0), Point::new(0.0, 0.1)], true));
+    let out = json!({"objects": vec![json!({"path": tiny}); 350]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.many", true), &out));
+    for _ in 0..2 {
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.many"}));
+    }
+    let st = s.doc().unwrap();
+    let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+    let mut paths = 0;
+    art.walk(&mut |n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+    assert!((350..=100_000).contains(&paths), "{paths} paths");
+}
+
 /// `CRAFT_PLUGIN_PAINTS_WASM=<folder>` saves a test live effect to try in the app
 /// (`stroke-width-test-effect.wasm`): it draws a triangle over the area 100,80–300,230 while its
 /// object's stroke is 5 pt wide, and hands the geometry back otherwise.

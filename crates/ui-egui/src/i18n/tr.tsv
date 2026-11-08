@@ -5759,6 +5759,7 @@ axis	Y Axis	Y ekseni
 	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
 	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` yalnızca `api` 2 düzeyindeki canlı efekt (`kind` "effect") içindir
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` türündeki bir eklentinin `{_2}` iznine ihtiyacı vardır

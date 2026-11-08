@@ -5399,6 +5399,7 @@ axis	Y Axis	Trục Y
 	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
 	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` chỉ dành cho hiệu ứng trực tiếp (`kind` "effect") ở `api` 2
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	plug-in loại `{_1}` cần quyền `{_2}`

@@ -5483,6 +5483,7 @@ axis	Y Axis	Y 軸
 	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
 	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
