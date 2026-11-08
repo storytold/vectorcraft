@@ -342,6 +342,13 @@ font-technology	Variable	Μεταβλητές
 	Apply Bullets	Εφαρμογή κουκκίδων
 	Numbered List	Αριθμημένη λίστα
 	Apply Numbers	Εφαρμογή αρίθμησης
+	Bullets and Numbering…	Κουκκίδες και αρίθμηση…
+	Numbers	Αριθμοί
+	Level:	Επίπεδο:
+	Bullet Character:	Χαρακτήρας κουκκίδας:
+	Number Style:	Στυλ αρίθμησης:
+	Left Indent:	Αριστερή εσοχή:
+	First Line Indent:	Εσοχή πρώτης γραμμής:
 	Convert to Text	Μετατροπή σε κείμενο
 	Filled Dot	Γεμάτη κουκκίδα
 	Dash	Παύλα
@@ -3341,6 +3348,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset Transformation	Επαναφορά μετασχηματισμού
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
 	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
+	Find In	Αναζήτηση σε
 	System	Σύστημα
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
@@ -3808,6 +3816,15 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ρυθμίσεις Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ρυθμίσεις Tate-chu-yoko
+	Composite Fonts…	Σύνθετες γραμματοσειρές…
+	Composite Fonts	Σύνθετες γραμματοσειρές
+	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
+	Import Composite Fonts	Εισαγωγή σύνθετων γραμματοσειρών
+	Delete Font	Διαγραφή γραμματοσειράς
+	Kanji	Κάντζι
+	Kana	Κάνα
+	Numerals	Αριθμοί
+	Scale at Center	Κλιμάκωση από το κέντρο
 	Up/Down:	Πάνω/Κάτω:
 	Left/Right:	Αριστερά/Δεξιά:
 	Temperature/Tint…	Θερμοκρασία/Απόχρωση…
@@ -4684,6 +4701,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an image VectorCraft can't read was left out	παραλείφθηκε εικόνα που δεν μπορεί να διαβάσει το VectorCraft
 @msg	graphs come in as plain art, without their data or settings	τα γραφήματα εισάγονται ως απλή γραφική, χωρίς τα δεδομένα και τις ρυθμίσεις τους
 @msg	an image whose data is cut short was left out	παραλείφθηκε εικόνα με περικομμένα δεδομένα
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	μια ενσωματωμένη εικόνα {_1} × {_2} pixel μειώθηκε σε {_3} × {_4} pixel για να διατηρηθούν τα επίπεδα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
@@ -4757,6 +4775,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	object ids are non-negative integers, not {v}	τα αναγνωριστικά αντικειμένων πρέπει να είναι μη αρνητικοί ακέραιοι, όχι {v}
 @msg	{key} must be an array of non-negative integer object ids	{key}: πρέπει να είναι πίνακας αναγνωριστικών αντικειμένων που είναι μη αρνητικοί ακέραιοι
 @msg	invalid object id {value}: expected a non-negative integer	μη έγκυρο αναγνωριστικό αντικειμένου {value}: αναμένεται μη αρνητικός ακέραιος
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	το στοιχείο {index} του `{key}` είναι {value}, όχι αναγνωριστικό αντικειμένου (μη αρνητικός ακέραιος)
 @msg	no such object id {value}	δεν υπάρχει αντικείμενο με αναγνωριστικό {value}
 @msg	id {value} is a layer, not an object	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο
 @msg	id {value} is a layer, not an object; move layers with layer.move	το αναγνωριστικό {value} είναι επίπεδο, όχι αντικείμενο· μετακινήστε τα επίπεδα με το layer.move
@@ -5811,6 +5830,9 @@ axis	Y Axis	Άξονας Y
 	Install “{name}”, which asks for these permissions?	Να εγκατασταθεί το «{name}», που ζητά αυτά τα δικαιώματα;
 	ID: {id}	Αναγνωριστικό: {id}
 	Version: {version}	Έκδοση: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Να εγκατασταθεί το «{name}» στη θέση του πρόσθετου με το ίδιο αναγνωριστικό;
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Αυτό το αρχείο δεν είναι το πρόσθετο που ήταν εγκατεστημένο πριν με αυτό το αναγνωριστικό. Παίρνει τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό το αναγνωριστικό.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	το «{name}» είναι άλλη λειτουργική μονάδα από το πρόσθετο με αναγνωριστικό {_1} και θα έπαιρνε τις ρυθμίσεις και την κρυφή μνήμη που διατηρούνται για αυτό: εγκαταστήστε το με `replace: true` μόλις συμφωνήσει ο χρήστης
 	File SHA-256: {hash}	SHA-256 αρχείου: {hash}
 	Read the objects it is given	Ανάγνωση των αντικειμένων που του δίνονται
 	Change, add and delete objects in the document	Αλλαγή, προσθήκη και διαγραφή αντικειμένων στο έγγραφο
@@ -5818,10 +5840,13 @@ axis	Y Axis	Άξονας Y
 	Change how the objects its effect is applied to are drawn	Αλλαγή του τρόπου σχεδίασης των αντικειμένων στα οποία εφαρμόζεται το εφέ του
 	Write the document as a file in its own format	Εγγραφή του εγγράφου ως αρχείου σε δική του μορφή
 	Show its progress, see Cancel and write log lines	Εμφάνιση της προόδου, αναγνώριση της ακύρωσης και εγγραφή γραμμών καταγραφής
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `progress` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
+	Keep settings of its own	Διατήρηση δικών του ρυθμίσεων
+	Keep a cache of its own, which you can clear	Διατήρηση δικής του κρυφής μνήμης, την οποία μπορείτε να εκκαθαρίσετε
+	Clear Plug-in Cache	Εκκαθάριση κρυφής μνήμης προσθέτου
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	το δικαίωμα `{permission}` χρειάζεται το επίπεδο API προσθέτων {PROGRESS_API}: δώστε `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	η λειτουργική μονάδα εισάγει το `env.{name}` με άλλον τύπο από αυτόν του κεντρικού υπολογιστή: ο τύπος του είναι {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	η λειτουργική μονάδα εισάγει το `env.{name}`, το οποίο ένα πρόσθετο μπορεί να χρησιμοποιεί μόνο στο επίπεδο API προσθέτων {PROGRESS_API} (`api` {PROGRESS_API}) και με το δικαίωμα `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	η λειτουργική μονάδα εισάγει το `{from}.{name}`, το οποίο δεν προσφέρει ο κεντρικός υπολογιστής: ένα πρόσθετο μπορεί να εισάγει μόνο τα `env.vc_progress`, `env.vc_cancelled` και `env.vc_log` (επίπεδο API προσθέτων 2) και κανένα WASI, αρχεία ή δίκτυο
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	η λειτουργική μονάδα εισάγει το `env.{name}`, το οποίο ένα πρόσθετο μπορεί να χρησιμοποιεί μόνο στο επίπεδο API προσθέτων {PROGRESS_API} (`api` {PROGRESS_API}) και με το δικαίωμα `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	η λειτουργική μονάδα εισάγει το `{from}.{name}`, το οποίο δεν προσφέρει ο κεντρικός υπολογιστής: ένα πρόσθετο μπορεί να εισάγει μόνο τις συναρτήσεις `env.vc_*` που απαριθμεί το docs/plugins.md (επίπεδο API προσθέτων 2) και κανένα WASI, αρχεία ή δίκτυο
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	το `api` είναι {_1}· αυτός ο κεντρικός υπολογιστής υποστηρίζει τα επίπεδα API προσθέτων 1 έως {API_LEVEL}
 @msg	`grant` must be a list of permission names	το `grant` πρέπει να είναι λίστα ονομάτων δικαιωμάτων
 @msg	`grant` names an unknown permission `{shown}`	το `grant` αναφέρει άγνωστο δικαίωμα `{shown}`
@@ -6376,6 +6401,16 @@ breakText	Glyphs	Γλύφοι
 @msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
 @msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
 @msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
+@msg	{key} cannot be set on a guide	το {key} δεν μπορεί να οριστεί σε οδηγό
+@msg	{key} cannot be set on a blend	το {key} δεν μπορεί να οριστεί σε ανάμειξη
+@msg	{key} cannot be set on an envelope	το {key} δεν μπορεί να οριστεί σε περίβλημα
+@msg	{key} cannot be set on a gradient mesh	το {key} δεν μπορεί να οριστεί σε πλέγμα ντεγκραντέ
+@msg	{key} cannot be set on a Repeat	το {key} δεν μπορεί να οριστεί σε επανάληψη
+@msg	{key} cannot be set on a placed document	το {key} δεν μπορεί να οριστεί σε τοποθετημένο έγγραφο
+@msg	{key} cannot be set on an Intertwine group	το {key} δεν μπορεί να οριστεί σε ομάδα διαπλοκής
+@msg	stroke cannot be set on a symbol instance	το stroke δεν μπορεί να οριστεί σε στιγμιότυπο συμβόλου
+@msg	fill on a symbol instance must be a solid color or none	το fill ενός στιγμιότυπου συμβόλου πρέπει να είναι συμπαγές χρώμα ή none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	το {key} δεν μπορεί να οριστεί σε εικόνα χωρίς το εφέ «Μετατροπή σε σχήμα» ή «Μετατροπή αντικειμένου σε περιγράμματα»
 @msg	pass newName, registration, exportType, nineSlice and/or type	δώστε newName, registration, exportType, nineSlice ή/και type
 	Text Flow	Ροή κειμένου
 	By Rows	Κατά γραμμές

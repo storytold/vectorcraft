@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 view_moved: None,
                 hover_cursor: None,
                 presented: None,
+                opening_fit: None,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
             },

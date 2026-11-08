@@ -417,6 +417,7 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
         Ok(())
     }));
     let ov = crate::keymap::overrides_from(&[("view.grid", "Ctrl+Alt+G")]);
+    let revision = crate::menus::plugin_revision();
     app.run("edit.keyboardShortcuts", json!({})).unwrap();
     let d = app.ui.dialog.as_mut().expect("Keyboard Shortcuts");
     d.fields.insert("overrides".into(), crate::keymap::stored::to_value(&ov));
@@ -431,7 +432,11 @@ fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
     let texts = texts.borrow();
     let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
     assert_eq!(path, "/keys/list.txt");
-    assert_eq!(*text, crate::shortcut_editor::export_text("Custom", &ov));
+    // Another test installing or removing a plug-in meanwhile changes the Effect menu's rows.
+    if crate::menus::plugin_revision() == revision {
+        assert_eq!(*text, crate::shortcut_editor::export_text("Custom", &ov));
+    }
+    assert!(text.starts_with("Keyboard Shortcuts\nSet: Custom\n"), "{text}");
     assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+Alt+G"))), "{text}");
     assert!(app.ui.shortcut_overrides.is_empty(), "the working set is kept only on OK");
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");

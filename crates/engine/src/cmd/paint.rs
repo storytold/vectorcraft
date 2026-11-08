@@ -950,7 +950,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, label, f)?, None)
+            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
         }
     };
     let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };

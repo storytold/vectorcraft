@@ -2381,6 +2381,53 @@ proptest! {
         );
         survive("TIFF-predicted EPS images", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
     }
+
+    /// Damaged or hostile TrueType data in a Type 42 font that a composite font shows (its table
+    /// directory and its glyphs), any glyph index: drawn, measured and outlined, or left out.
+    #[test]
+    fn eps_type42_glyphs_never_panic(
+        head in prop::collection::vec((0usize..2048, any::<u8>()), 0..12),
+        body in prop::collection::vec((0usize..TYPE42_FONT.len(), any::<u8>()), 0..12),
+        gid in 0u32..70_000,
+    ) {
+        let mut font = TYPE42_FONT.to_vec();
+        for (at, b) in head.into_iter().chain(body) {
+            if let Some(x) = font.get_mut(at) {
+                *x = b;
+            }
+        }
+        let text = type42_composite_eps(&font, gid);
+        survive("damaged Type 42 glyphs", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+}
+
+/// The TrueType font [`type42_composite_eps`] carries.
+const TYPE42_FONT: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+
+/// An EPS showing glyph `gid` of TrueType font `font` through a Type 42 font and a composite font
+/// over it, and measuring and outlining it.
+fn type42_composite_eps(font: &[u8], gid: u32) -> String {
+    let sfnts: String = font.chunks(32_000).map(|c| format!("<{}>\n", c.iter().map(|b| format!("{b:02x}")).collect::<String>())).collect();
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+         10 dict begin /FontName /T42 def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+         /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for Encoding 1 /c01 put\n\
+         /CharStrings 2 dict def CharStrings begin /.notdef 0 def /c01 {gid} def end /sfnts [\n{sfnts}] def FontName currentdict end definefont pop\n\
+         16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def /Encoding [0] def\n\
+         /FDepVector [/T42 findfont] def FontName currentdict end definefont pop\n\
+         /Comp findfont 40 scalefont setfont 10 20 moveto (\\000\\001\\000\\001) show (\\000\\001) stringwidth pop pop\n\
+         10 60 moveto (\\000\\001) true charpath fill\nshowpage\n%%EOF\n"
+    )
+}
+
+/// [`type42_composite_eps`] as it is: the glyph draws as filled outlines, not as type.
+#[test]
+fn the_type42_fixture_draws_its_glyphs() {
+    let r = vectorcraft_eps::import(type42_composite_eps(TYPE42_FONT, 9).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let mut kinds = vec![];
+    r.document.walk(|n| kinds.push(n.kind_label()));
+    assert!(!kinds.contains(&"Text") && kinds.iter().filter(|k| **k == "Path").count() >= 3, "{kinds:?}");
 }
 
 /// An EPS with two 8 × 3 CCITT fax images that the PostScript interpreter reads, coded by hand from
@@ -4772,6 +4819,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI5_BeginRaster\n",
             "\n%AI5_EndRaster\n",
             "\n%%BeginData: 12\rXI\n",
+            // Image operands past 2^25 pixels, of odd 1-bit rows, and past the hard limits: as
+            // many pixels as a u32 side allows, more samples than the bytes allowed, sizes that
+            // overflow when multiplied out, and a matrix that maps the box to nothing.
+            "[1 0 0 1 0 0] 0 0 6000 6000 6000 6000 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 17 13 17 13 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 65536 32769 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 23171 23171 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 4294967295 4294967295 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 1e308 1e308 8 3 1 0 0 0 4 4 0 0 ",
+            "[0 0 0 0 0 0] 0 0 9 9 46341 46341 1 1 0 0 1 0 4 4 0 0 ",
             "\n%%EndData\n",
             "\n%AI5_BeginGradient: (G)\n",
             "\n%AI14_BeginSymbol\n",

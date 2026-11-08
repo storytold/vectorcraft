@@ -1,7 +1,7 @@
 use super::writer::Writer;
 use super::{
-    Affine, AreaOptions, BezPath, CharPosition, CharStyle, Gradient, GradientKind, Paint, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind,
-    TextObject, Write, latin, ps, stroke,
+    Affine, AreaOptions, BezPath, CharPosition, CharStyle, CompositeFont, Document, Gradient, GradientKind, Paint, ParaStyle, PathAlign, PathEffect,
+    StrokeLayer, TextKind, TextObject, Write, latin, ps, stroke,
 };
 
 /// A gradient definition: `%AI5_BeginGradient: (name)`, `(name) type stops Bd`, `[`, the stops
@@ -78,10 +78,11 @@ pub(super) fn latin_string(name: &str) -> String {
     ps::bytes(&bytes)
 }
 
-/// Can type `t` be written as text: 8-bit text can hold it ([`holds_as_text`]) and no character
-/// is rotated ([`rotated`])?
-pub(super) fn writable(t: &TextObject) -> bool {
-    holds_as_text(t) && !rotated(t)
+/// Can type `t` of document `doc` be written as text: 8-bit text can hold it ([`holds_as_text`]),
+/// no character is rotated ([`rotated`]) and no run is set in one of the document's composite
+/// fonts, which a reader can't find by its name?
+pub(super) fn writable(doc: &Document, t: &TextObject) -> bool {
+    holds_as_text(t) && !rotated(t) && !t.runs.iter().any(|r| CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some())
 }
 
 /// Has type `t` visible characters with Character Rotation? A legacy `.ai` text object's character

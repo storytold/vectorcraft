@@ -130,7 +130,9 @@ pub(crate) use access::{drive_share_path, share_path, touched};
 pub(crate) use access::{may_read, may_write};
 pub use commands::specs;
 pub use export_names::artboard_file_names;
-pub(crate) use export_names::{default_name, merge, unique_file_names, with_black_output, write_or_return};
+pub(crate) use export_names::{
+    artboard_file_names_keeping_dots, default_name, merge, unique_file_names_keeping_dots, with_black_output, write_or_return,
+};
 use export_names::{distinct_names_by, write_encoded};
 use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{

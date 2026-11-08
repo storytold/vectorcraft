@@ -191,7 +191,14 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
         if let Some(art) = g.placed_colour(Affine::IDENTITY) {
             colours.push((g.run, Arc::new(art)));
         }
-        let Some(&(missing, face)) = faces.get(g.run) else { continue };
+        let Some(&(mut missing, mut face)) = faces.get(g.run) else { continue };
+        // Type in a composite font: each character's face is its class's part's.
+        if let Some(r) = t.runs.get(g.run)
+            && let Some(c) = plain.get(g.byte..).and_then(|s| s.chars().next())
+            && let Some((m, f)) = db.composite_face(&r.style.font_family, c)
+        {
+            (missing, face) = (m, Some(f));
+        }
         let Some(line) = layout.lines.get(g.line) else { continue };
         let mut cell = Rect::new(g.origin.x, g.origin.y - line.ascent, g.origin.x + g.advance, g.origin.y + line.descent).to_path(0.1);
         cell.apply_affine(Affine::rotate_about(g.angle, g.origin));

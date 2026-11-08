@@ -783,7 +783,7 @@ fn pattern_names_are_shown_up_to_their_newline() {
     // Nor the name of a custom color the program of an EPS gives, or None's.
     let ps = b"%!PS-Adobe-3.0\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%EndComments\n";
     let data = stream(&format!("{}{}{}", def("Outer Ink\\n1", 8), def("[None]\\n1", 8), layer(&filled("Outer Ink\\n1"))));
-    let doc = super::read_beside(data.as_bytes(), true, ps).unwrap().doc;
+    let doc = super::read_beside(data.as_bytes(), true, ps, false).unwrap().doc;
     assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Outer Ink 2", "[None] 2"]);
     assert!(matches!(doc.swatch("Outer Ink").unwrap().paint, Paint::Solid { .. }));
     assert!(matches!(fill(&art(&doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Outer Ink 2"));
@@ -2613,6 +2613,29 @@ fn a_drawn_look_that_is_an_image_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// Samples in hex comment lines after `XI` (the version 7 specification's form) are read up to the
+/// bytes the image needs; an image past the hard limits isn't read, whatever lines follow it.
+#[test]
+fn hex_comment_line_samples_are_read_up_to_the_image() {
+    let raster = |(w, h): (u32, u32), lines: &str| {
+        let s = format!(
+            "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n\
+             [ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n[ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI\n{lines}%AI5_EndRaster\nN\nLB\n%AI5_EndLayer--\n"
+        );
+        let mut out = stream("").into_bytes();
+        let at = out.windows(14).position(|w| w == b"%%PageTrailer\n").unwrap();
+        out.splice(at..at, s.into_bytes());
+        out
+    };
+    // 2 × 1: red, green, then digits past the image's six bytes.
+    let r = read(&raster((2, 1), "%FF00\n%0000FF\n%00FFFFFF\n")).unwrap();
+    let img = pixels(&r.doc).0;
+    assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 255, 0, 255]));
+    let r = read(&raster((70_000, 70_000), "%FF0000\n%00FF00\n")).unwrap();
+    assert!(art(&r.doc).is_empty());
+    assert!(r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
+}
+
 /// The name and opacity mask after an image follow the operators that end its raster: `XH`, the
 /// versioned `Xr` and the `N` after `%AI5_EndRaster`.
 #[test]
@@ -2911,7 +2934,7 @@ fn a_version_7_linked_image_without_its_file_name_is_left_out_with_a_warning() {
     let r = read(stream7(&layer7("L", &raster7("(a.tif) 0 XG\n", m, (100_000, 100_000), "XF", ""))).as_bytes()).unwrap();
     let a = art(&r.doc);
     assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if (im.width, im.height) == (100_000, 100_000))), "{a:?}");
-    assert!(!r.warnings.iter().any(|w| w == read::IMAGE_TOO_LARGE), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
     let twice = raster7("(a.tif) 0 XG\n(b.tif) 0 XG\n", m, (2, 2), "XF", "");
     let r = read(stream7(&layer7("L", &twice)).as_bytes()).unwrap();
     let a = art(&r.doc);
@@ -5778,6 +5801,111 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `name`: a blue fill under a red 2 pt stroke written as a Stroke Offset filter
+/// whose `StrokeOffsetInside` entry is `inside` (`None`: left out).
+fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
+    let switch = inside.map(|v| format!("{v} /Bool (StrokeOffsetInside) ,\n")).unwrap_or_default();
+    offset_stroke_style_with(name, &switch, OFFSET_STROKE)
+}
+
+/// The Stroke Offset stroke of [`offset_stroke_style`]: red, 2 pt, butt caps, miter joins, solid.
+const OFFSET_STROKE: &str = "0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+
+/// An art style named `name`: a blue fill under a Stroke Offset filter whose dictionary holds
+/// `entries` and the stroke style `stroke` (what follows `/StrokeStyle :`).
+fn offset_stroke_style_with(name: &str, entries: &str, stroke: &str) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{entries}(Side) /String (DisplayString) ,\n\
+         /StrokeStyle : {stroke}\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+    )
+}
+
+#[test]
+fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
+    // GUARDS: a style's stroke aligned inside or outside (Stroke panel › Align Stroke) left the object as its drawn look.
+    use vectorcraft_doc::StrokeAlign;
+    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None), (Some(2), None)] {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", offset_stroke_style("Edge", inside), layer(&styled_square("Edge"))));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        let stroke = a[0].appearance.stroke().map(|s| (s.align, s.width, s.paint.color()));
+        match align {
+            Some(align) => {
+                assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+                assert_eq!(stroke, Some((align, 2.0, Some(Color::rgb(1.0, 0.0, 0.0)))));
+                assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+                assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+            }
+            // Without a 0/1 switch, which side it paints isn't known: the drawn look stays.
+            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{inside:?}: {:?}", r.warnings),
+        }
+    }
+}
+
+/// A Stroke Offset stroke keeps the caps, joins, miter limit, dashes and width profile of its
+/// style, as a Stroke Style Filter's does.
+#[test]
+fn a_stroke_offset_filter_keeps_its_strokes_style() {
+    use vectorcraft_doc::StrokeAlign;
+    let profile = "/Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+                   /Array :\n1 /Real ,\n0.1 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let entries = format!("0 /Bool (StrokeOffsetInside) ,\n{profile}");
+    let stroke = "0 R\n0 1 1 0 1 0 0 XA\n1 J 2 j 3 w 4 M [5 10 ]0 d\n0 XR\n1 0 Xd";
+    let style = offset_stroke_style_with("Edge", &entries, stroke);
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let s = a[0].appearance.stroke().expect("a stroke");
+    assert_eq!((s.align, s.width, s.cap, s.join, s.miter_limit), (StrokeAlign::Outside, 3.0, LineCap::Round, LineJoin::Bevel, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| d.pattern.clone()), Some(vec![5.0, 10.0]));
+    assert_eq!(s.profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 1.0, 1.0), (1.0, 0.1, 0.1)]));
+}
+
+/// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
+/// written as another kind, dashes aligned to corners and path ends, a gradient.
+#[test]
+fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
+    let outside = "0 /Bool (StrokeOffsetInside) ,\n";
+    let gradient = "0 R\nBb\n0 0 0 0 Bh\n2 (Red ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+    let cases = [
+        ("a switch written as a number", offset_stroke_style_with("Edge", "1 /Int (StrokeOffsetInside) ,\n", OFFSET_STROKE)),
+        (
+            "dashes aligned to corners",
+            offset_stroke_style_with(
+                "Edge",
+                &format!("{outside}/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n"),
+                &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"),
+            ),
+        ),
+        ("a gradient", offset_stroke_style_with("Edge", outside, gradient)),
+    ];
+    for (why, style) in cases {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// A listed `[Default]` style whose stroke is aligned outside comes in as the default graphic
+/// style with that stroke.
+#[test]
+fn a_default_style_with_a_stroke_aligned_outside_comes_in() {
+    use vectorcraft_doc::StrokeAlign;
+    let r =
+        read_ok(&format!("{}{}", styles_and_list(&[offset_stroke_style("[Default]", Some(0))], &["[Default]"]), layer(&styled_square("[Default]"))));
+    assert_eq!(style_names(&r.doc), [("[Default]".to_string(), 1)]);
+    let stroke = r.doc.graphic_styles[0].appearance.stroke().map(|s| (s.align, s.width));
+    assert_eq!(stroke, Some((StrokeAlign::Outside, 2.0)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert_eq!(a[0].extras().graphic_style, Some(1));
+}
+
 #[test]
 fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
@@ -5962,6 +6090,30 @@ fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
     assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!(a[0].opacity, 0.6);
     assert_eq!(a[0].extras().graphic_style, None, "the style has full opacity");
+}
+
+#[test]
+fn ai_import_registration_style_does_not_carry_over_previous_color_6205() {
+    // Regression test for #6205:
+    // A background shape sets a spot colour ("Shemen").
+    // A following object has an art style with [Registration] at 0% tint.
+    // The object must resolve the Registration style ([Registration] 0% / #ffffff)
+    // rather than falling back to the prior spot color.
+    let defs = [fill_style("RegWhite", "1 1 1 1 ([Registration]) 1 Xs\n")];
+    let background = format!("0 0.67 0.73 0.26 (Shemen) 0 0 Xx\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let styled_obj = styled_square("RegWhite");
+    let content = format!("{background}{styled_obj}");
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["RegWhite"]), layer(&content)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    // First object is background in Shemen spot
+    let Paint::Solid { swatch: s0, .. } = fill(&a[0]) else { panic!("{:#?}", a[0]) };
+    assert_eq!(s0.as_deref(), Some("Shemen"));
+    // Second object is styled in RegWhite: [Registration] at 0% tint (#ffffff)
+    let Paint::Solid { swatch, tint, color } = fill(&a[1]) else { panic!("{:#?}", a[1]) };
+    assert_eq!(swatch.as_deref(), Some(vectorcraft_color::swatch::REGISTRATION));
+    assert_eq!(tint, 0.0);
+    assert_eq!(color, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0));
 }
 
 #[test]
@@ -7517,6 +7669,53 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
     for broken in [mask.replace("%_X+\n", ""), mask.replace("%_U\n", ""), mask.replace("%_f", "%_unknownMaskOperator")] {
         assert!(read(stream(&layer(&format!("{owner}{broken}"))).as_bytes()).is_err());
     }
+}
+
+/// Mask art that sets no paint of its own paints with the paint before its dictionary: the writer
+/// leaves out paint that doesn't change. In a user's file, white letters were masked by a rectangle
+/// with no colour, which came in black and hid them.
+/// The unread pattern flags it also takes aren't covered here: an owner painted with a pattern the
+/// file doesn't have is unread itself, which hides whether its mask art is.
+#[test]
+fn opacity_mask_art_without_its_own_paint_takes_the_paint_before_its_dictionary() {
+    let paint = "0 0 0 0 k\n1 O\n0 1 0 0 K\n1 R\n2 w\n1 J\n1 j\n4 M\n[3 1] 0 d\n1 XR\n";
+    let owner = format!("{paint}{}B\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let hidden_rect = rect_path(10.0, 20.0, 30.0, 60.0).lines().map(|l| format!("%_{l}\n")).collect::<String>();
+    let mask = |own_paint: &str| {
+        format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{own_paint}{hidden_rect}%_B\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    };
+    let fill_layer = |n: &Node| n.appearance.fill().cloned();
+    let stroke_layer = |n: &Node| n.appearance.stroke().cloned();
+    let rule = |n: &Node| match &n.kind {
+        NodeKind::Path { rule, .. } => Some(*rule),
+        _ => None,
+    };
+
+    let r = read_ok(&layer(&format!("{owner}{}", mask(""))));
+    let a = art(&r.doc);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    // The owner has the paint set, none of it the default, so equal layers mean it was taken.
+    let (f, s) = (fill_layer(&a[0]).unwrap(), stroke_layer(&a[0]).unwrap());
+    assert!(f.overprint && s.overprint);
+    assert_eq!((s.width, s.cap, s.join, s.miter_limit), (2.0, LineCap::Round, LineJoin::Round, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| (d.pattern.clone(), d.offset)), Some((vec![3.0, 1.0], 0.0)));
+    assert_eq!(rule(&a[0]), Some(vectorcraft_geom::FillRule::EvenOdd));
+    assert_eq!(fill_layer(&m.art), Some(f));
+    assert_eq!(stroke_layer(&m.art), Some(s));
+    assert_eq!(rule(&m.art), rule(&a[0]));
+
+    // Paint the mask's art sets for itself stays in the mask: an object after the dictionary that
+    // sets none paints with the owner's.
+    let own = "%_1 g\n%_0 O\n%_0 G\n%_0 R\n%_5 w\n%_0 J\n%_0 j\n%_10 M\n%_[] 0 d\n%_0 XR\n";
+    let following = format!("{}B\n", rect_path(70.0, 20.0, 80.0, 30.0));
+    let r = read_ok(&layer(&format!("{owner}{}{following}", mask(own))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    assert_ne!(stroke_layer(&m.art), stroke_layer(&a[0]), "the mask's art has its own paint");
+    assert_eq!(fill_layer(&a[1]), fill_layer(&a[0]));
+    assert_eq!(stroke_layer(&a[1]), stroke_layer(&a[0]));
+    assert_eq!(rule(&a[1]), rule(&a[0]));
 }
 
 /// An opacity mask's art of one shown object is that object; other art is read into a group.

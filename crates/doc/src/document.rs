@@ -34,6 +34,7 @@ impl Document {
             graphic_styles,
             char_styles,
             para_styles,
+            composite_fonts,
             text_threads,
             symbols,
             graph_designs,
@@ -90,6 +91,7 @@ impl Document {
             && *graphic_styles == other.graphic_styles
             && *char_styles == other.char_styles
             && *para_styles == other.para_styles
+            && *composite_fonts == other.composite_fonts
             && *text_threads == other.text_threads
             && symbols.len() == other.symbols.len()
             && symbols.iter().zip(&other.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
@@ -213,6 +215,7 @@ impl Document {
             graphic_styles: default_graphic_styles().into(),
             char_styles: Default::default(),
             para_styles: Default::default(),
+            composite_fonts: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],

@@ -504,6 +504,13 @@ font-technology	Variable	Változó
 	Apply Bullets	Felsorolásjelek alkalmazása
 	Numbered List	Számozott lista
 	Apply Numbers	Számozás alkalmazása
+	Bullets and Numbering…	Felsorolásjelek és számozás…
+	Numbers	Számok
+	Level:	Szint:
+	Bullet Character:	Felsorolásjel:
+	Number Style:	Számozás stílusa:
+	Left Indent:	Bal behúzás:
+	First Line Indent:	Első sor behúzása:
 	Convert to Text	Átalakítás szöveggé
 	Filled Dot	Kitöltött pont
 	Dash	Gondolatjel
@@ -3306,6 +3313,7 @@ mark-style	Japanese	Japán
 	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus
 	Replace With Font From	Helyettesítő betűtípus forrása
+	Find In	Keresés helye
 	System	Rendszer
 	Replace “{name}”, the file this document was opened from?	Felülírod ezt a fájlt, amelyből a dokumentumot megnyitottad: „{name}”?
 	Replaces the saved preset of that name.	Felülírja az azonos nevű mentett előbeállítást.
@@ -4115,6 +4123,15 @@ mark-style	Japanese	Japán
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko beállításai…
 	Tate-chu-yoko Settings	Tate-chu-yoko beállításai
+	Composite Fonts…	Összetett betűtípusok…
+	Composite Fonts	Összetett betűtípusok
+	Export Composite Fonts	Összetett betűtípusok exportálása
+	Import Composite Fonts	Összetett betűtípusok importálása
+	Delete Font	Betűtípus törlése
+	Kanji	Kandzsi
+	Kana	Kana
+	Numerals	Számjegyek
+	Scale at Center	Méretezés középről
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Technical Drawing	Műszaki rajz
@@ -4747,6 +4764,7 @@ imageTrace	Outline	Körvonal
 @msg	an image VectorCraft can't read was left out	kimaradt egy kép, amelyet a VectorCraft nem tud olvasni
 @msg	graphs come in as plain art, without their data or settings	a diagramok egyszerű grafikaként kerülnek be, adataik és beállításaik nélkül
 @msg	an image whose data is cut short was left out	kimaradt egy csonka adatú kép
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	egy {_1} × {_2} képpontos beágyazott kép {_3} × {_4} képpontosra lett kicsinyítve, hogy a rétegek megmaradjanak
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	a szövegobjektumon belül írásirányt váltó szöveg az első karakterének irányában nyílik meg
@@ -5117,6 +5135,7 @@ imageTrace	Outline	Körvonal
 @msg	object ids are non-negative integers, not {v}	az objektumazonosító nemnegatív egész szám, ez nem az: {v}
 @msg	{key} must be an array of non-negative integer object ids	{key}: objektumazonosítók tömbje kell, mindegyik nemnegatív egész szám
 @msg	invalid object id {value}: expected a non-negative integer	érvénytelen objektumazonosító: {value} (nemnegatív egész szám kell)
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` {index} indexű eleme {value}, nem objektumazonosító (nemnegatív egész szám kell)
 @msg	no such object id {value}	nincs ilyen objektumazonosító: {value}
 @msg	id {value} is a layer, not an object	a(z) {value} azonosító egy réteg, nem objektum
 @msg	id {value} is a layer, not an object; move layers with layer.move	a(z) {value} azonosító egy réteg, nem objektum; a rétegeket a layer.move paranccsal helyezheti át
@@ -5843,6 +5862,9 @@ axis	Y Axis	Y tengely
 	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
 	ID: {id}	Azonosító: {id}
 	Version: {version}	Verzió: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Telepíted a(z) „{name}” bővítményt az azonos azonosítójú bővítmény helyére?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ez a fájl nem az a bővítmény, amely korábban ezzel az azonosítóval volt telepítve. Megkapja az ehhez az azonosítóhoz tárolt beállításokat és gyorsítótárat.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	a(z) „{name}” más modul, mint a(z) {_1} azonosítójú bővítmény, és megkapná az ahhoz tárolt beállításokat és gyorsítótárat: telepítsd a `replace: true` megadásával, miután a felhasználó beleegyezett
 	File SHA-256: {hash}	A fájl SHA-256 értéke: {hash}
 	Read the objects it is given	Olvashatja a kapott objektumokat
 	Change, add and delete objects in the document	Módosíthat, hozzáadhat és törölhet objektumokat a dokumentumban
@@ -5850,10 +5872,13 @@ axis	Y Axis	Y tengely
 	Change how the objects its effect is applied to are drawn	Módosíthatja, hogyan rajzolódnak ki az objektumok, amelyekre az effektusa alkalmazva van
 	Write the document as a file in its own format	Saját formátumú fájlba írhatja a dokumentumot
 	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a `progress` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
+	Keep settings of its own	Saját beállításokat tárolhat
+	Keep a cache of its own, which you can clear	Saját gyorsítótárat tárolhat, amelyet Ön kiüríthet
+	Clear Plug-in Cache	Bővítmény gyorsítótárának kiürítése
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a(z) `{permission}` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	a modul az `env.{name}` elemet a gazdaprogramétól eltérő típussal importálja: a gazdaprogram típusa {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a `progress` engedéllyel használhat
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak az `env.vc_progress`, `env.vc_cancelled` és `env.vc_log` elemet importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a(z) `{permission}` engedéllyel használhat
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak a docs/plugins.md által felsorolt `env.vc_*` függvényeket importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
@@ -6408,6 +6433,16 @@ breakText	Glyphs	Glifák
 @msg	path must be a list of child indices	a path gyermekindexek listája kell legyen
 @msg	no object at path {shown} in the symbol's art	a szimbólum grafikájában nincs objektum a(z) {shown} útvonalon
 @msg	give fill, stroke, opacity and/or blend	adja meg a fill, stroke, opacity és/vagy blend értékét
+@msg	{key} cannot be set on a guide	a {key} nem állítható be segédvonalon
+@msg	{key} cannot be set on a blend	a {key} nem állítható be összemosáson
+@msg	{key} cannot be set on an envelope	a {key} nem állítható be burkolón
+@msg	{key} cannot be set on a gradient mesh	a {key} nem állítható be színátmenetes hálón
+@msg	{key} cannot be set on a Repeat	a {key} nem állítható be ismétlésen
+@msg	{key} cannot be set on a placed document	a {key} nem állítható be elhelyezett dokumentumon
+@msg	{key} cannot be set on an Intertwine group	a {key} nem állítható be összefonási csoporton
+@msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
+@msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
 @msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
