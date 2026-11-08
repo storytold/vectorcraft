@@ -510,7 +510,7 @@ fn cmd_alt_k_and_cmd_alt_shift_f_highlight_the_character_fields() {
     assert!(app.ui.dialog.is_none(), "not Preferences");
     // Keyboard Shortcuts lists all three under Type; Highlight Tracking has no default key.
     for id in ["type.highlightFontName", "type.highlightKerning", "type.highlightTracking"] {
-        assert_eq!(crate::shortcut_editor::entry(id).map(|e| e.group.as_str()), Some("Type"), "{id}");
+        assert_eq!(crate::shortcut_editor::entry(id).map(|e| e.group).as_deref(), Some("Type"), "{id}");
     }
     assert_eq!(crate::menus::shortcut_of("type.highlightTracking"), None);
 }
@@ -2347,7 +2347,7 @@ fn all_registered_shortcuts_parse() {
 /// dialog for the selection.
 #[test]
 fn an_effect_menu_item_takes_a_shortcut_of_its_own() {
-    let entry = crate::shortcut_editor::entries().iter().find(|e| e.key == "effect:distort.transform").expect("Transform is listed");
+    let entry = crate::shortcut_editor::entry("effect:distort.transform").expect("Transform is listed");
     assert_eq!(entry.group, "Effect › Distort & Transform");
     assert_eq!(crate::keymap::command_of("effect:distort.transform").id, "effect.dialog");
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

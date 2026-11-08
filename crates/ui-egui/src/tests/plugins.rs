@@ -220,7 +220,7 @@ fn plugin_commands_are_menu_items_and_shortcut_entries() {
     assert!(!entries.iter().any(|e| e.command.as_deref() == Some(size) && e.path.first().map(String::as_str) != Some("Object")), "not in File");
     assert!(!menus::menu_strings().contains("Cmd Test"), "the plug-in's name is not text to translate");
 
-    let listed = crate::shortcut_editor::entries().iter().find(|e| e.key == grow).expect("in Keyboard Shortcuts");
+    let listed = crate::shortcut_editor::entry(grow).expect("in Keyboard Shortcuts");
     assert_eq!((listed.label.as_str(), listed.group.as_str()), ("Grow", "Object › Plug-ins › Cmd Test"));
     assert_eq!(crate::shortcut_editor::default_of(grow), None, "a manifest gives no shortcut");
     assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_some(), "a shortcut can be given to it");
@@ -238,6 +238,7 @@ fn plugin_commands_are_menu_items_and_shortcut_entries() {
     app.run("plugin.remove", json!({"id": id})).unwrap();
     assert!(menus::menu_entries(&app).iter().all(|e| e.command.as_deref() != Some(grow)));
     assert!(crate::shortcut_editor::entries().iter().all(|e| e.key != grow));
+    assert!(crate::keymap::template().bindable(&crate::keymap::command_of(grow)).is_none());
 }
 
 /// A shortcut the user gives a plug-in command runs it.

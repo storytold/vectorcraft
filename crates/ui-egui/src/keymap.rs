@@ -7,7 +7,7 @@
 //! outside it are VectorCraft's too (`Cmd+Shift+]`, `Comma`, `Period`, `~` for the backtick key,
 //! `=` for Plus with modifiers). Inside an [`Overrides`] keys and texts are the crate's.
 
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use craft_keymap::{Bindable, Binding, Chord, CommandRef, Key, Keymap, Kind, Lookup, Mods, Overrides, Platform, Scope, Scopes};
 use serde_json::{Value, json};
@@ -142,7 +142,8 @@ fn catalogue() -> Vec<Bindable> {
             0
         }
     };
-    let mut entries: Vec<&Entry> = shortcut_editor::entries().iter().collect();
+    let all = shortcut_editor::entries();
+    let mut entries: Vec<&Entry> = all.iter().collect();
     entries.sort_by_key(|e| rank(e));
     entries
         .into_iter()
@@ -212,25 +213,43 @@ pub(crate) fn per_platform<T>(cells: &'static [OnceLock<T>; 3], p: Platform, mak
     cell.get_or_init(make)
 }
 
-/// The keymap with the default shortcuts for [`platform`], built once per platform, and again for
-/// each set of plug-in commands installed ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
-pub fn template() -> &'static Keymap {
-    static TEMPLATES: [OnceLock<Keymap>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
-    static WITH_PLUGINS: Mutex<Vec<(Platform, u64, &'static Keymap)>> = Mutex::new(Vec::new());
+/// Values made for one set of installed plug-in commands
+/// ([`vectorcraft_engine::cmd::plugin::commands_generation`]), one for each key. Only the values of
+/// the generation asked for last are kept; an older one is freed once its last holder drops it.
+pub(crate) struct Latest<K, T: ?Sized> {
+    made: Mutex<Vec<(K, u64, Arc<T>)>>,
+}
+
+impl<K: PartialEq, T: ?Sized> Latest<K, T> {
+    pub(crate) const fn new() -> Self {
+        Latest { made: Mutex::new(Vec::new()) }
+    }
+
+    /// The value for `key` at `generation`, made with `make` when there is none yet.
+    pub(crate) fn get(&self, key: K, generation: u64, make: impl FnOnce() -> Arc<T>) -> Arc<T> {
+        let mut made = self.made.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, _, v)) = made.iter().find(|(k, g, _)| *k == key && *g == generation) {
+            return v.clone();
+        }
+        made.retain(|(_, g, _)| *g == generation);
+        let v = make();
+        made.push((key, generation, v.clone()));
+        v
+    }
+}
+
+/// The keymap with the default shortcuts for [`platform`], built once per platform, and again when
+/// the installed plug-in commands change ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
+/// Only the keymaps of the current plug-in commands are kept ([`Latest`]).
+pub fn template() -> Arc<Keymap> {
+    static TEMPLATES: [OnceLock<Arc<Keymap>>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    static WITH_PLUGINS: Latest<Platform, Keymap> = Latest::new();
     let p = platform();
     let generation = vectorcraft_engine::cmd::plugin::commands_generation();
     if generation == 0 {
-        return per_platform(&TEMPLATES, p, || keymap_for(p));
+        return per_platform(&TEMPLATES, p, || Arc::new(keymap_for(p))).clone();
     }
-    let mut made = WITH_PLUGINS.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((_, _, km)) = made.iter().find(|(q, g, _)| *q == p && *g == generation) {
-        return km;
-    }
-    made.retain(|(_, g, _)| *g == generation);
-    // Kept for the rest of the process: one keymap for each set of plug-in commands installed.
-    let km: &'static Keymap = Box::leak(Box::new(keymap_for(p)));
-    made.push((p, generation, km));
-    km
+    WITH_PLUGINS.get(p, generation, || Arc::new(keymap_for(p)))
 }
 
 /// The default keymap of `p`. The chords the operating system takes can't be assigned.
@@ -240,7 +259,7 @@ fn keymap_for(p: Platform) -> Keymap {
 
 /// The keymap with `overrides` applied.
 pub fn keymap_with(overrides: &Overrides) -> Keymap {
-    template().clone().with_overrides(overrides.clone())
+    Keymap::clone(&template()).with_overrides(overrides.clone())
 }
 
 /// The command a chord runs, the first for tools sharing it.
@@ -409,7 +428,8 @@ mod tests {
 
     #[test]
     fn curvature_keeps_shift_tilde_and_plus_is_one_key() {
-        let km = template();
+        let template = template();
+        let km = &*template;
         let curvature = vc_chord("Shift+~").unwrap();
         assert_eq!(curvature, Chord::parse("Shift+`").unwrap());
         assert_eq!(lookup(km, &curvature), Some(CommandRef::new("tool:curvature")));
@@ -431,9 +451,17 @@ mod tests {
     fn the_default_shortcuts_do_not_conflict() {
         assert_eq!(template().conflicts(), vec![]);
         assert_eq!(template().problems(), vec![]);
-        assert_eq!(template().catalog().len(), shortcut_editor::entries().len(), "every entry is bindable");
+        // Both lists for one set of plug-in commands: a test running alongside may install one.
+        let (km, entries) = loop {
+            let before = vectorcraft_engine::cmd::plugin::commands_generation();
+            let both = (template(), shortcut_editor::entries());
+            if vectorcraft_engine::cmd::plugin::commands_generation() == before {
+                break both;
+            }
+        };
+        assert_eq!(km.catalog().len(), entries.len(), "every entry is bindable");
         // A default the bridge can't read would show in the menus but never run.
-        let unbound: Vec<(&str, &str)> = shortcut_editor::entries()
+        let unbound: Vec<(&str, &str)> = entries
             .iter()
             .filter_map(|e| shortcut_editor::default_of(&e.key).map(|d| (e.key.as_str(), d)))
             .filter(|(key, d)| {
@@ -445,6 +473,22 @@ mod tests {
         assert_eq!(unbound, vec![], "every default text becomes the entry's binding");
     }
 
+    /// A value made for an older set of plug-in commands is freed once a newer one is asked for;
+    /// within one set each key keeps its own value, made once.
+    #[test]
+    fn only_the_latest_plugin_commands_are_kept() {
+        let cache: Latest<u8, str> = Latest::new();
+        let first = cache.get(0, 1, || Arc::from("a"));
+        assert!(Arc::ptr_eq(&first, &cache.get(0, 1, || Arc::from("b"))), "made once");
+        let other = Arc::downgrade(&cache.get(1, 1, || Arc::from("c")));
+        assert!(other.upgrade().is_some(), "each key has its own");
+        let old = Arc::downgrade(&first);
+        drop(first);
+        assert_eq!(&*cache.get(0, 2, || Arc::from("d")), "d");
+        assert!(old.upgrade().is_none(), "the older value is freed");
+        assert!(other.upgrade().is_none(), "the older value of the other key is freed");
+    }
+
     #[test]
     fn paint_defaults_have_two_bindings_and_reset_restores_both() {
         for (key, plain, shifted) in [("paint.lastColor", ",", "Shift+,"), ("paint.lastGradient", ".", "Shift+.")] {
@@ -452,10 +496,10 @@ mod tests {
             let defaults = template().default_bindings(&command);
             assert_eq!(defaults, vec![vc_binding(plain).unwrap(), vc_binding(shifted).unwrap()], "{key}");
             assert_eq!(
-                shortcut_editor::entry(key).map(|e| e.label.as_str()),
-                Some(if key == "paint.lastColor" { "Apply Last Color" } else { "Apply Last Gradient" })
+                shortcut_editor::entry(key).map(|e| e.label),
+                Some(if key == "paint.lastColor" { "Apply Last Color" } else { "Apply Last Gradient" }.to_string())
             );
-            assert_eq!(effective_with(template(), key).as_deref(), Some(plain));
+            assert_eq!(effective_with(&template(), key).as_deref(), Some(plain));
             let mut overrides = Overrides::new();
             set_override(&mut overrides, key, "Shift+;");
             assert_eq!(keymap_with(&overrides).bindings(&command), vec![vc_binding("Shift+;").unwrap()]);
@@ -494,7 +538,8 @@ mod tests {
         assert_eq!(entry_key(&c), "panel:layers");
         assert_eq!(entry_of_stored(&stored_key("panel:layers")), "panel:layers");
         assert_eq!(stored_key("tool:pen"), "tool:pen");
-        let paths = &template().bindable(&c).unwrap().paths;
+        let template = template();
+        let paths = &template.bindable(&c).unwrap().paths;
         assert_eq!(paths, &vec![vec!["Window".to_string(), "Layers".to_string()]], "import matches panels by name");
     }
 
@@ -506,8 +551,7 @@ mod tests {
         for id in TOGGLES {
             let label = crate::menus::dynamic_label(&app, id, "");
             assert!(label.starts_with("Show ") || label.starts_with("Hide "), "{id}: {label}");
-            let listed = template().bindable(&CommandRef::new(*id));
-            assert!(listed.is_none_or(|b| b.is_toggle), "{id}");
+            assert!(template().bindable(&CommandRef::new(*id)).is_none_or(|b| b.is_toggle), "{id}");
         }
     }
 }

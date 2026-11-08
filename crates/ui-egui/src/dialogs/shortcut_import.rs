@@ -377,12 +377,12 @@ pub fn candidates() -> Vec<Candidate> {
 
 /// Keyboard Shortcuts' entry `key`. The commands of installed plug-ins are looked up in
 /// [`shortcut_editor::entries`] as it is now.
-fn entry(key: &str) -> Option<&'static Entry> {
-    static BY_KEY: OnceLock<HashMap<&'static str, &'static Entry>> = OnceLock::new();
+fn entry(key: &str) -> Option<Entry> {
+    static BY_KEY: OnceLock<HashMap<String, Entry>> = OnceLock::new();
     if vectorcraft_engine::cmd::plugin::is_command_id(key) {
-        return shortcut_editor::entries().iter().find(|e| e.key == key);
+        return shortcut_editor::entry(key);
     }
-    BY_KEY.get_or_init(|| shortcut_editor::entries().iter().map(|e| (e.key.as_str(), e)).collect()).get(key).copied()
+    BY_KEY.get_or_init(|| shortcut_editor::entries().iter().map(|e| (e.key.clone(), e.clone())).collect()).get(key).cloned()
 }
 
 /// A tool, command or panel that Keyboard Shortcuts can give a shortcut.
@@ -400,7 +400,7 @@ fn target_label(target: Option<&str>) -> String {
     match target {
         None => tl!("Choose…").to_string(),
         Some("") => tl!("No equivalent").to_string(),
-        Some(t) => entry(t).map_or_else(|| t.to_string(), shown),
+        Some(t) => entry(t).map_or_else(|| t.to_string(), |e| shown(&e)),
     }
 }
 
@@ -948,22 +948,27 @@ pub(super) fn target_picker(ui: &mut egui::Ui, i: usize, r: &Row) -> Option<Stri
                 }
                 let q = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
                 let mut picked = option(ui, "", tl!("No equivalent"));
-                let list: Vec<&Entry> = if q.is_empty() {
+                let all = shortcut_editor::entries();
+                let list: Vec<usize> = if q.is_empty() {
                     for e in r.choices.iter().filter_map(|c| entry(c)) {
-                        picked = option(ui, &e.key, &shown(e)).or(picked);
+                        picked = option(ui, &e.key, &shown(&e)).or(picked);
                     }
                     ui.separator();
-                    shortcut_editor::entries().iter().collect()
+                    (0..all.len()).collect()
                 } else {
-                    shortcut_editor::entries().iter().filter(|e| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q)).collect()
+                    all.iter()
+                        .enumerate()
+                        .filter(|(_, e)| shown(e).to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q))
+                        .map(|(i, _)| i)
+                        .collect()
                 };
                 ui.data_mut(|d| d.insert_temp(header_id, ui.min_rect().height()));
-                (list, picked)
+                (all, list, picked)
             },
             ROW_H,
-            |(list, _)| list.len(),
-            |ui, range, (list, mut picked)| {
-                for e in range.filter_map(|k| list.get(k)) {
+            |(_, list, _)| list.len(),
+            |ui, range, (all, list, mut picked)| {
+                for e in range.filter_map(|k| list.get(k).and_then(|&i| all.get(i))) {
                     picked = option(ui, &e.key, &shown(e)).or(picked);
                 }
                 if picked.is_some() {

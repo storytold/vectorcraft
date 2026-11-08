@@ -73,7 +73,7 @@ pub(crate) struct Mirror {
 impl Mirror {
     fn new(overrides: Overrides) -> Mirror {
         let plugins = vectorcraft_engine::cmd::plugin::commands_generation();
-        let keymap = crate::keymap::template().clone().with_overrides(overrides);
+        let keymap = Keymap::clone(&crate::keymap::template()).with_overrides(overrides);
         let text = keymap
             .overrides()
             .iter()
@@ -360,36 +360,30 @@ pub struct Entry {
 
 /// Every tool, command and panel the editor can give a shortcut, followed by the commands of the
 /// installed plug-ins; [`listed`] says which it lists. The list is made again when the plug-in
-/// commands change ([`vectorcraft_engine::cmd::plugin::commands_generation`]).
-pub fn entries() -> &'static [Entry] {
-    static WITH_PLUGINS: Mutex<Option<(u64, &'static [Entry])>> = Mutex::new(None);
+/// commands change ([`vectorcraft_engine::cmd::plugin::commands_generation`]). Only the list of the
+/// current plug-in commands is kept ([`crate::keymap::Latest`]).
+pub fn entries() -> Arc<[Entry]> {
+    static WITH_PLUGINS: crate::keymap::Latest<(), [Entry]> = crate::keymap::Latest::new();
     let base = built_in_entries();
     let generation = vectorcraft_engine::cmd::plugin::commands_generation();
     if generation == 0 {
-        return base;
+        return base.clone();
     }
-    let mut with = WITH_PLUGINS.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((g, e)) = *with
-        && g == generation
-    {
-        return e;
-    }
-    let mut v = base.to_vec();
-    v.extend(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
-        key: c.id.into(),
-        label: c.label.into(),
-        group: c.menu.join(" › "),
-        is_tool: false,
-    }));
-    // Kept for the rest of the process: one list for each set of plug-in commands installed.
-    let e: &'static [Entry] = Box::leak(v.into_boxed_slice());
-    *with = Some((generation, e));
-    e
+    WITH_PLUGINS.get((), generation, || {
+        let mut v = base.to_vec();
+        v.extend(vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| Entry {
+            key: c.id.into(),
+            label: c.label.into(),
+            group: c.menu.join(" › "),
+            is_tool: false,
+        }));
+        v.into()
+    })
 }
 
 /// [`entries`] without the plug-in commands.
-fn built_in_entries() -> &'static [Entry] {
-    static E: OnceLock<Vec<Entry>> = OnceLock::new();
+fn built_in_entries() -> &'static Arc<[Entry]> {
+    static E: OnceLock<Arc<[Entry]>> = OnceLock::new();
     E.get_or_init(|| {
         let mut v: Vec<Entry> = vectorcraft_tools::catalog::all_tools()
             .map(|t| Entry { key: format!("tool:{}", t.id), label: t.label.to_string(), group: "Tools".into(), is_tool: true })
@@ -430,9 +424,8 @@ fn built_in_entries() -> &'static [Entry] {
             }
             v.push(Entry { key: id.to_string(), label: label.to_string(), group: id_group(id), is_tool: false });
         }
-        v
+        v.into()
     })
-    .as_slice()
 }
 
 /// One Effect menu item a shortcut can be given (#3296): the effect's id, the command its item runs
@@ -621,8 +614,8 @@ fn names_a_required_field(params: &str) -> bool {
     false
 }
 
-pub fn entry(key: &str) -> Option<&'static Entry> {
-    entries().iter().find(|e| e.key == key)
+pub fn entry(key: &str) -> Option<Entry> {
+    entries().iter().find(|e| e.key == key).cloned()
 }
 
 /// Entries (other than `except`) whose effective shortcut equals `chord`.
@@ -1217,7 +1210,7 @@ fn export_from_dialog(app: &mut VectorcraftApp) {
 fn drop_hidden(d: &mut Dialog, overrides: &Overrides) {
     for field in ["__recording", "__selected", "__conflict"] {
         let key = d.str(field);
-        if !key.is_empty() && entry(&key).is_none_or(|e| !listed(overrides, e)) {
+        if !key.is_empty() && entry(&key).is_none_or(|e| !listed(overrides, &e)) {
             d.fields.insert(field.into(), json!(""));
         }
     }
@@ -1259,7 +1252,7 @@ mod tests {
 
     #[test]
     fn format_parse_round_trip_for_every_default() {
-        for e in entries() {
+        for e in entries().iter() {
             if let Some(s) = default_of(&e.key)
                 && let Some(sc) = crate::shortcuts::parse(s)
             {
@@ -1574,7 +1567,7 @@ mod tests {
     #[test]
     fn duplicate_can_be_given_a_shortcut() {
         // Duplicate has no default chord (#1539): it must still be listed so one can be set.
-        assert_eq!(entry("edit.duplicate").map(|e| e.group.as_str()), Some("Edit"));
+        assert_eq!(entry("edit.duplicate").map(|e| e.group).as_deref(), Some("Edit"));
         let mut ov = Overrides::new();
         assign(&mut ov, "edit.duplicate", Some("Cmd+Alt+Shift+F8"), false).unwrap();
         assert_eq!(effective_in(&ov, "edit.duplicate").as_deref(), Some("Cmd+Alt+Shift+F8"));
@@ -1647,10 +1640,11 @@ mod tests {
         // whose params are all optional, one the menu bar runs without params (Rotate… opens its
         // dialog) and one that opens a dialog for its values (New Variable).
         let none = Overrides::new();
-        let dropped: Vec<&str> = entries().iter().filter(|e| default_of(&e.key).is_some() && !listed(&none, e)).map(|e| e.key.as_str()).collect();
+        let all = entries();
+        let dropped: Vec<&str> = all.iter().filter(|e| default_of(&e.key).is_some() && !listed(&none, e)).map(|e| e.key.as_str()).collect();
         assert!(dropped.is_empty(), "{dropped:?}");
         for id in ["edit.duplicate", "object.pathfinder.unite", "object.rotate", "variable.define", "object.distributeSpacing"] {
-            assert!(entry(id).is_some_and(|e| listed(&none, e)), "{id}");
+            assert!(entry(id).is_some_and(|e| listed(&none, &e)), "{id}");
         }
         for (doc, required) in [
             ("{}", false),
@@ -1679,12 +1673,12 @@ mod tests {
         let others = ["swatch.unused", "graphicStyle.unused", "document.info", "view.proofSetup", "magicWand.set", "edit.findNext"];
         for id in NEEDS_A_PARAM.iter().chain(&others) {
             let e = entry(id).unwrap_or_else(|| panic!("{id} has an entry"));
-            assert!(!listed(&none, e), "{id}");
+            assert!(!listed(&none, &e), "{id}");
             assert_eq!(default_of(id), None, "{id}");
         }
         let mut ov = Overrides::new();
         crate::keymap::set_override(&mut ov, "transparency.set", "Cmd+Alt+Shift+F10");
-        assert!(entry("transparency.set").is_some_and(|e| listed(&ov, e)));
+        assert!(entry("transparency.set").is_some_and(|e| listed(&ov, &e)));
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         for id in ["transparency.set", "transparency.setOpacityMask"] {
             let list = run_command(&mut app, "shortcuts.list", &json!({ "query": id })).unwrap().unwrap();
@@ -1699,7 +1693,7 @@ mod tests {
             "addon.color.printFixes",
             "edit.findReplace",
         ] {
-            assert!(entry(id).is_some_and(|e| listed(&none, e)), "{id}");
+            assert!(entry(id).is_some_and(|e| listed(&none, &e)), "{id}");
         }
         assert_eq!(menu_target("object.path.cleanUp").map(|(id, _)| id).as_deref(), Some("ui.paramDialog"));
         assert_eq!(
