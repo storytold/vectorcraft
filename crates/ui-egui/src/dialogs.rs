@@ -11,6 +11,7 @@ pub mod action_batch;
 pub mod action_new;
 pub mod action_playback;
 pub mod action_set_options;
+pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
@@ -91,8 +92,9 @@ pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
 mod recovery;
+pub mod relink;
 pub mod rename_artboards;
-mod revolve;
+pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
 pub mod saturate;
 pub mod save_brush_library;
@@ -367,11 +369,14 @@ registry! {
     OfficeExport: [office_export::KIND] => office_export::SPEC,
     DxfOptions: [dxf_options::KIND] => dxf_options::SPEC,
     PlacementOptions: [placement_options::KIND] => placement_options::SPEC,
+    Relink: [relink::KIND] => relink::SPEC,
     Package: [package::KIND] => package::SPEC,
     ActionBatch: [action_batch::KIND] => action_batch::SPEC,
     ActionSetOptions: [action_set_options::KIND] => action_set_options::SPEC,
     ActionNew: [action_new::KIND] => action_new::SPEC,
     ActionPlayback: [action_playback::KIND] => action_playback::SPEC,
+    ActionStopRecord: [action_stop::RECORD_KIND] => action_stop::RECORD_SPEC,
+    ActionStopMessage: [action_stop::MESSAGE_KIND] => action_stop::MESSAGE_SPEC,
     SliceOptions: [slices::OPTIONS] => slices::OPTIONS_SPEC,
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,

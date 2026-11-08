@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, MaskEdit, Node, NodeId, NodeKind, Selection};
 
-use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, switch_or};
+use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, object_param, switch_or};
 
 /// Name of the temporary mask-editing layer.
 pub const MASK_EDIT_LAYER: &str = "Opacity Mask Editing";
@@ -117,7 +117,7 @@ fn enter(s: &mut Session, p: &Value) -> Result<Value> {
     if st.doc.mask_edit.is_some() {
         return Err(bad(C, "already editing an opacity mask"));
     }
-    let id = id_param(p, "id").or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let id = object_param(p, "id", C)?.or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     let layer = start(s, id)?;
     Ok(json!({ "layer": layer.0 }))
 }
@@ -136,6 +136,7 @@ fn start(s: &mut Session, id: NodeId) -> Result<NodeId> {
 
 fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.viewOpacityMask";
+    let given = object_param(p, "id", C)?;
     let st = s.doc()?;
     let editing = st.doc.mask_edit.map(|m| m.object);
     if !switch_or(p, "on", st.shown_mask().is_none(), C)? {
@@ -144,7 +145,7 @@ fn view_mask(s: &mut Session, p: &Value) -> Result<Value> {
         st.revision += 1;
         return Ok(json!({ "on": false, "id": id.map(|i| i.0) }));
     }
-    let id = id_param(p, "id").or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
+    let id = given.or(editing).or_else(|| first_masked(st)).ok_or_else(|| bad(C, "select an object with an opacity mask"))?;
     match editing {
         Some(e) if e != id => return Err(bad(C, "already editing another object's opacity mask")),
         Some(_) => {}

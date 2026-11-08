@@ -90,6 +90,55 @@ fn choosing_a_pdfx_standard_sets_its_version_and_turns_off_what_it_forbids() {
     }
 }
 
+/// A PDF/X file without the bleed the document sets exports as asked and warns; the presets and
+/// options that take the document's bleed, and files that aren't PDF/X files, don't warn.
+#[test]
+fn a_pdfx_file_that_leaves_out_the_document_bleed_warns() {
+    let left_out = |w: &Vec<String>| w.iter().any(|w| w == super::pdf::BLEED_LEFT_OUT);
+    let mut s = session();
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    for standard in ["pdfX1a", "pdfX3", "pdfX4"] {
+        let (_, warnings) = pdf(&mut s, json!({"standard": standard}));
+        // First: the status bar shows the first warning, and PDF/X-1a and PDF/X-3 add the flattening note.
+        assert_eq!(warnings.first().map(String::as_str), Some(super::pdf::BLEED_LEFT_OUT), "{standard}: {warnings:?}");
+        // The page has no bleed, as asked.
+        let v = s.execute("document.exportPdf", &json!({"standard": standard})).unwrap();
+        let info = s.execute("document.pdfInfo", &json!({"name": "x.pdf", "dataBase64": v["dataBase64"]})).unwrap();
+        let boxes = &info["pageInfo"][0]["boxes"];
+        assert!(boxes["media"].is_array() && boxes["media"] == boxes["trim"] && boxes["media"] == boxes["bleed"], "{standard}: {info}");
+    }
+    let v = s.execute("document.export", &json!({"format": "pdf", "standard": "pdfX4"})).unwrap();
+    assert!(v["warnings"].as_array().unwrap().iter().any(|w| w == super::pdf::BLEED_LEFT_OUT), "{v}");
+    // A side the settings leave out warns, and sides they all keep don't.
+    let (_, warnings) = pdf(&mut s, json!({"standard": "pdfX4", "bleed": {"top": 6, "bottom": 6, "left": 6}}));
+    assert!(left_out(&warnings), "{warnings:?}");
+    for p in [
+        json!({"preset": "PDF/X-1a:2001"}),
+        json!({"preset": "PDF/X-3:2002"}),
+        json!({"preset": "PDF/X-4:2010"}),
+        json!({"standard": "pdfX4", "bleed": {"useDocument": true}}),
+        json!({"standard": "pdfX4", "bleed": {"top": 1, "bottom": 1, "left": 1, "right": 1}}),
+        json!({}),
+        json!({"standard": "pdfA2b"}),
+    ] {
+        let (_, warnings) = pdf(&mut s, p.clone());
+        assert!(!left_out(&warnings), "{p}: {warnings:?}");
+    }
+    // The dialog's Summary exports in memory, so it lists the warning too.
+    let v = s.execute("document.pdfSettings", &json!({"standard": "pdfX4", "includeDocument": true})).unwrap();
+    assert!(v["warnings"].as_array().unwrap().iter().any(|w| w == super::pdf::BLEED_LEFT_OUT), "{v}");
+    // A bleed on the top alone: only that side counts.
+    s.execute("document.setup", &json!({"bleed": [6, 0, 0, 0]})).unwrap();
+    let (_, warnings) = pdf(&mut s, json!({"standard": "pdfX4", "bleed": {"top": 1}}));
+    assert!(!left_out(&warnings), "{warnings:?}");
+    let (_, warnings) = pdf(&mut s, json!({"standard": "pdfX4", "bleed": {"bottom": 1}}));
+    assert!(left_out(&warnings), "{warnings:?}");
+    // A document without a bleed has nothing to leave out.
+    s.execute("document.setup", &json!({"bleed": 0})).unwrap();
+    let (_, warnings) = pdf(&mut s, json!({"standard": "pdfX4"}));
+    assert!(!left_out(&warnings), "{warnings:?}");
+}
+
 /// The ink amounts (0..1) `doc` shows at `p` in its images (the topmost image there).
 fn image_inks_at(doc: &vectorcraft_doc::Document, p: vectorcraft_geom::Point) -> Option<[f32; 4]> {
     fn visit(n: &vectorcraft_doc::Node, out: &mut Vec<vectorcraft_doc::ImageObject>) {
