@@ -1465,6 +1465,14 @@
 	Export As SVG…	Exporta com a SVG…
 	Export Asset	Exporta el recurs
 	Export Assets	Exporta els recursos
+	Export 3D Object	Exporta l’objecte 3D
+	3D Export Format	Format d’exportació 3D
+	Export 3D Assets	Exporta els recursos 3D
+@msg	{what} can't be exported in 3D: {e}	no es pot exportar {what} en 3D: {e}
+@msg	asset {id} isn't a 3D asset	el recurs {id} no és un recurs 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	el recurs {id} és un recurs 3D: l’escriu assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	encara no hi ha cap recurs 3D: recolliu primer un objecte amb un efecte 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	seleccioneu un objecte amb un efecte 3D (o indiqueu-ne els id)
 	Export As…	Exporta com a…
 	Export CSS	Exporta CSS
 	Export CSS…	Exporta CSS…

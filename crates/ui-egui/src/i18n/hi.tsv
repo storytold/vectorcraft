@@ -1629,6 +1629,14 @@
 	Export As…	इस रूप में एक्सपोर्ट करें…
 	Export Asset	संपत्ति निर्यात करें
 	Export Assets	निर्यात परिसंपत्तियां
+	Export 3D Object	3D ऑब्जेक्ट निर्यात करें
+	3D Export Format	3D निर्यात फ़ॉर्मेट
+	Export 3D Assets	3D परिसंपत्तियां निर्यात करें
+@msg	{what} can't be exported in 3D: {e}	{what} को 3D में निर्यात नहीं किया जा सकता: {e}
+@msg	asset {id} isn't a 3D asset	परिसंपत्ति {id} 3D परिसंपत्ति नहीं है
+@msg	asset {id} is a 3D asset: assets.export3D writes it	परिसंपत्ति {id} एक 3D परिसंपत्ति है: इसे assets.export3D लिखता है
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	अभी तक कोई 3D परिसंपत्ति नहीं: पहले 3D प्रभाव वाला ऑब्जेक्ट इकट्ठा करें (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D प्रभाव वाला ऑब्जेक्ट चुनें (या उसकी आईडी दें)
 	Export CSS	CSS निर्यात करें
 	Export CSS…	CSS निर्यात करें…
 	Export Data Sets…	डेटा सेट निर्यात करें…

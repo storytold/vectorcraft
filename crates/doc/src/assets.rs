@@ -11,12 +11,16 @@ use serde::{Deserialize, Serialize};
 use crate::{Document, NodeId};
 
 /// One asset: what it is called (its files' names) and the objects it exports, cropped to their
-/// visual bounds.
+/// visual bounds, or for a 3D asset its object's solids as a mesh file.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExportAsset {
     pub id: u64,
     pub name: String,
     pub nodes: Vec<NodeId>,
+    /// A 3D asset's mesh format (`usda`, `usdz`, `gltf` or `obj`): its object exports as a 3D
+    /// file. `None` for art exported as pictures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format_3d: Option<String>,
 }
 
 /// What the assets are named when they aren't named after their object: `Asset 1`, `Asset 2`…

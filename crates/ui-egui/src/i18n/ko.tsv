@@ -1579,6 +1579,14 @@ digits	Malayalam	말라얄람어
 	PDF Print	인쇄용 PDF
 	Export As	다른 형식으로 내보내기
 	Export Assets	에셋 내보내기
+	Export 3D Object	3D 개체 내보내기
+	3D Export Format	3D 내보내기 형식
+	Export 3D Assets	3D 에셋 내보내기
+@msg	{what} can't be exported in 3D: {e}	{what}은(는) 3D로 내보낼 수 없습니다: {e}
+@msg	asset {id} isn't a 3D asset	에셋 {id}은(는) 3D 에셋이 아닙니다
+@msg	asset {id} is a 3D asset: assets.export3D writes it	에셋 {id}은(는) 3D 에셋입니다: assets.export3D로 내보냅니다
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	아직 3D 에셋이 없습니다: 먼저 3D 효과가 있는 개체를 수집하세요 (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D 효과가 있는 개체를 선택하세요 (또는 ID를 지정하세요)
 	Export CSS	CSS 내보내기
 	Export CSS…	CSS 내보내기…
 	Export DXF	DXF 내보내기

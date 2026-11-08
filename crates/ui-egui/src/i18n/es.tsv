@@ -1086,6 +1086,14 @@ font-technology	Variable	Variables
 	Export As SVG…	Exportar como SVG…
 	Export Asset	Exportar recurso
 	Export Assets	Exportar recursos
+	Export 3D Object	Exportar objeto 3D
+	3D Export Format	Formato de exportación 3D
+	Export 3D Assets	Exportar recursos 3D
+@msg	{what} can't be exported in 3D: {e}	{what} no se puede exportar en 3D: {e}
+@msg	asset {id} isn't a 3D asset	el recurso {id} no es un recurso 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	el recurso {id} es un recurso 3D: lo escribe assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	todavía no hay recursos 3D: reúna primero un objeto con un efecto 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	seleccione un objeto con un efecto 3D (o indique sus id)
 	Export As…	Exportar como…
 	Export CSS	Exportar CSS
 	Export CSS…	Exportar CSS…

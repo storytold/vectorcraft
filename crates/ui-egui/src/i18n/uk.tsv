@@ -1081,6 +1081,14 @@ font-technology	Variable	Варіативні
 	Export As SVG…	Експортувати як SVG…
 	Export Asset	Експортувати ресурс
 	Export Assets	Експортувати ресурси
+	Export 3D Object	Експортувати 3D-об’єкт
+	3D Export Format	Формат 3D-експорту
+	Export 3D Assets	Експортувати 3D-ресурси
+@msg	{what} can't be exported in 3D: {e}	{what} неможливо експортувати в 3D: {e}
+@msg	asset {id} isn't a 3D asset	ресурс {id} не є 3D-ресурсом
+@msg	asset {id} is a 3D asset: assets.export3D writes it	ресурс {id} є 3D-ресурсом: його записує assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D-ресурсів ще немає: спершу зберіть об’єкт із 3D-ефектом (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	виберіть об’єкт із 3D-ефектом (або вкажіть його ідентифікатори)
 	Export As…	Експортувати як…
 	Export CSS	Експортувати CSS
 	Export CSS…	Експортувати CSS…

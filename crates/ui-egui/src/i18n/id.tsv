@@ -2935,6 +2935,9 @@ theme	Appearance	Tampilan
 	Asset Export Settings	Pengaturan ekspor aset
 	Assets	Aset
 	Export Assets	Ekspor aset
+	Export 3D Object	Ekspor objek 3D
+	3D Export Format	Format ekspor 3D
+	Export 3D Assets	Ekspor aset 3D
 	Remove Asset	Hapus aset
 	Rename Asset	Ganti nama aset
 	Fill Rule	Aturan isian

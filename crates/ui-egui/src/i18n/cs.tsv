@@ -3191,6 +3191,14 @@ theme	Appearance	Motiv
 	Asset Export Settings	Nastavení exportu prvků
 	Assets	Prvky
 	Export Assets	Exportovat prvky
+	Export 3D Object	Exportovat 3D objekt
+	3D Export Format	Formát 3D exportu
+	Export 3D Assets	Exportovat 3D prvky
+@msg	{what} can't be exported in 3D: {e}	{what} nelze exportovat ve 3D: {e}
+@msg	asset {id} isn't a 3D asset	prvek {id} není 3D prvek
+@msg	asset {id} is a 3D asset: assets.export3D writes it	prvek {id} je 3D prvek: zapisuje jej assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	zatím žádné 3D prvky: nejprve shromážděte objekt s 3D efektem (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	vyberte objekt s 3D efektem (nebo zadejte jeho ID)
 	Remove Asset	Odebrat prvek
 	Rename Asset	Přejmenovat prvek
 	Fill Rule	Pravidlo výplně

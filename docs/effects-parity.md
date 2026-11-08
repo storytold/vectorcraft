@@ -183,11 +183,11 @@ VectorCraft choices; an original approximation, never compared with another appl
 | Materials panel, lighting, ray-traced render | Window › 3D and Materials panel with the object types (Plane, Extrude, Revolve, Inflate) and the Object, Rotation and Lighting settings of the applied effect ([three-d.md](three-d.md#3d-and-materials-panel)); one to ten directional lights with per-light Color (opaque RGB, white by default), Intensity, Rotation, Height, Softness and neutral Ambient Light, Revolve and colored Inflate use smooth vector shading; Extrude & Bevel and Rotate retain planar shading; original Standard, Diffuse, Top Left and Right lighting rigs; no materials, shadows or ray tracing |
 | 3D (Classic): Extrude & Bevel, Revolve, Rotate | none |
 | Turntable (30.0 beta) | none |
-| Export 3D objects (OBJ, USDA, glTF) | none |
+| Export 3D objects (OBJ, USDA, glTF) | initial: Asset Export's Export 3D Object collects an object with Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, and Export writes its solids as a USDA (the default), USDZ, glTF or OBJ mesh with a material in each solid's paint color (`assets.add3D`, `assets.set3DFormat`, `assets.export3D`); no textures, map art or shading ([3D export help](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html)) |
 
 The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials and shadows, ray-traced rendering,
-angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45 h.
+angular cut caps, exact visibility, 3D Classic, Turntable) is 25–45 h.
 
 ## Revision history
 

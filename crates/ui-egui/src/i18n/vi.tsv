@@ -1245,6 +1245,14 @@ font-technology	Variable	Biến thiên
 	Export As SVG…	Xuất thành SVG…
 	Export Asset	Xuất asset
 	Export Assets	Xuất asset
+	Export 3D Object	Xuất đối tượng 3D
+	3D Export Format	Định dạng xuất 3D
+	Export 3D Assets	Xuất asset 3D
+@msg	{what} can't be exported in 3D: {e}	không thể xuất {what} dưới dạng 3D: {e}
+@msg	asset {id} isn't a 3D asset	asset {id} không phải là asset 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	asset {id} là asset 3D: assets.export3D sẽ ghi nó
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	chưa có asset 3D nào: hãy thu thập trước một đối tượng có hiệu ứng 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	hãy chọn một đối tượng có hiệu ứng 3D (hoặc cung cấp id của nó)
 	Export As…	Xuất thành…
 	Export CSS	Xuất CSS
 	Export CSS…	Xuất CSS…

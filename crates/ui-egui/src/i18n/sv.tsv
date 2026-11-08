@@ -1065,6 +1065,14 @@ font-technology	Variable	Variabla
 	Export As SVG…	Exportera som SVG…
 	Export Asset	Exportera resurs
 	Export Assets	Exportera resurser
+	Export 3D Object	Exportera 3D-objekt
+	3D Export Format	3D-exportformat
+	Export 3D Assets	Exportera 3D-resurser
+@msg	{what} can't be exported in 3D: {e}	{what} kan inte exporteras i 3D: {e}
+@msg	asset {id} isn't a 3D asset	resurs {id} är ingen 3D-resurs
+@msg	asset {id} is a 3D asset: assets.export3D writes it	resurs {id} är en 3D-resurs: assets.export3D skriver den
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	inga 3D-resurser än: samla först ett objekt med en 3D-effekt (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	markera ett objekt med en 3D-effekt (eller ange dess id:n)
 	Export As…	Exportera som…
 	Export CSS	Exportera CSS
 	Export CSS…	Exportera CSS…

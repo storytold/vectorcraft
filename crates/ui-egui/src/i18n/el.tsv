@@ -1030,6 +1030,14 @@ font-technology	Variable	Μεταβλητές
 	Export As SVG…	Εξαγωγή ως SVG…
 	Export Asset	Εξαγωγή στοιχείου
 	Export Assets	Εξαγωγή στοιχείων
+	Export 3D Object	Εξαγωγή αντικειμένου 3D
+	3D Export Format	Μορφή εξαγωγής 3D
+	Export 3D Assets	Εξαγωγή στοιχείων 3D
+@msg	{what} can't be exported in 3D: {e}	το {what} δεν μπορεί να εξαχθεί σε 3D: {e}
+@msg	asset {id} isn't a 3D asset	το στοιχείο {id} δεν είναι στοιχείο 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	το στοιχείο {id} είναι στοιχείο 3D: το γράφει η assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	δεν υπάρχουν ακόμη στοιχεία 3D: συγκεντρώστε πρώτα ένα αντικείμενο με εφέ 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	επιλέξτε ένα αντικείμενο με εφέ 3D (ή δώστε τα αναγνωριστικά του)
 	Export As…	Εξαγωγή ως…
 	Export CSS	Εξαγωγή CSS
 	Export CSS…	Εξαγωγή CSS…

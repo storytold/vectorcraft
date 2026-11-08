@@ -5153,6 +5153,38 @@ renderer measures for what the art draws, its effects included.
 A layer id in `ids` (12 above) is the same as Collect for Export on that Layers row: every object under the layer
 becomes an asset (or one asset with `multiple: false`).
 
+### 3D assets
+
+Asset Export's menu item Export 3D Object (`assets.add3D {ids?, format?}`) collects each selected object (or `ids`)
+that carries Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, named after the object; an object already
+collected as a 3D asset keeps it, and an object without such an effect is refused. A 3D asset's Format is `usda` (the
+default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D assets it would export, and
+`assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
+asset's `format3D` (null for a picture asset).
+
+`assets.export3D {assets?, folder?, zip?}` writes each 3D asset (default: all of them) as a mesh file named after it:
+`.usda`, `.usdz`, `.gltf` (glTF 2.0, its buffer embedded) or `.obj` with its `.mtl` (whitespace and `#` in an OBJ's
+name become `_`). Every solid of the object (the
+fill's, each stroke's, a group's members') is its own mesh, with a two-sided material in the color it is painted
+(a gradient's stops averaged, a pattern gray). The mesh holds the solid's faces before they are projected onto the
+page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
+about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+With `zip`, the files go into one ZIP named after the document with `-3D` added (`Untitled-1-3D.zip`), or
+`3D Assets.zip` when the document's title gives no file name.
+An object whose face has a hole that crosses the face's outline or another hole is refused, by `assets.add3D` and
+`assets.export3D` alike, rather than exported with the hole filled. So is an object whose meshes would hold more than
+2,000,000 triangles together, VectorCraft's own limit.
+`assets.export` leaves 3D assets out and refuses one named in its `assets`. On the 3D export page
+(<https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html>)
+the 3D asset's Format is picked in Asset Export, with USDA first; the file layouts follow the glTF 2.0 specification
+(<https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html>) and OpenUSD (<https://openusd.org/release/index.html>).
+
+```json
+{"name":"run_command","arguments":{"command":"assets.add3D","params":{"ids":[12],"format":"gltf"}}}
+{"name":"run_command","arguments":{"command":"assets.set3DFormat","params":{"assets":[40],"format":"obj"}}}
+{"name":"run_command","arguments":{"command":"assets.export3D","params":{"folder":"/tmp/meshes"}}}
+```
+
 ## CSS Properties
 
 `css.selection {ids?, units?, position?, dimensions?, unnamed?, rasterize?}` returns the CSS web pages style the

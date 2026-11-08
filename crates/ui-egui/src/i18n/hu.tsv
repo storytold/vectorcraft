@@ -1368,6 +1368,14 @@ font-technology	Variable	Változó
 	Export As SVG…	Exportálás SVG-ként…
 	Export Asset	Elem exportálása
 	Export Assets	Elemek exportálása
+	Export 3D Object	3D objektum exportálása
+	3D Export Format	3D exportálási formátum
+	Export 3D Assets	3D elemek exportálása
+@msg	{what} can't be exported in 3D: {e}	{what} nem exportálható 3D-ben: {e}
+@msg	asset {id} isn't a 3D asset	a(z) {id} elem nem 3D elem
+@msg	asset {id} is a 3D asset: assets.export3D writes it	a(z) {id} elem 3D elem: az assets.export3D írja ki
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	még nincs 3D elem: előbb gyűjtsön össze egy 3D effektussal rendelkező objektumot (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	jelöljön ki egy 3D effektussal rendelkező objektumot (vagy adja meg az azonosítóit)
 	Export As…	Exportálás másként…
 	Export CSS	CSS exportálása
 	Export CSS…	CSS exportálása…

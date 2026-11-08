@@ -3069,6 +3069,14 @@ theme	Appearance	Wygląd
 	Asset Export Settings	Ustawienia eksportu zasobów
 	Assets	Zasoby
 	Export Assets	Eksportuj zasoby
+	Export 3D Object	Eksportuj obiekt 3D
+	3D Export Format	Format eksportu 3D
+	Export 3D Assets	Eksportuj zasoby 3D
+@msg	{what} can't be exported in 3D: {e}	nie można wyeksportować {what} w 3D: {e}
+@msg	asset {id} isn't a 3D asset	zasób {id} nie jest zasobem 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	zasób {id} jest zasobem 3D: zapisuje go assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	brak zasobów 3D: najpierw zbierz obiekt z efektem 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	zaznacz obiekt z efektem 3D (lub podaj jego identyfikatory)
 	Remove Asset	Usuń zasób
 	Rename Asset	Zmień nazwę zasobu
 	Fill Rule	Reguła wypełniania

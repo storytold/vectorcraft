@@ -974,6 +974,14 @@
 	Export As PNG…	Exportar Como PNG…
 	Export As SVG…	Exportar Como SVG…
 	Export Assets	Exportar Ativos
+	Export 3D Object	Exportar Objeto 3D
+	3D Export Format	Formato de Exportação 3D
+	Export 3D Assets	Exportar Ativos 3D
+@msg	{what} can't be exported in 3D: {e}	não é possível exportar {what} em 3D: {e}
+@msg	asset {id} isn't a 3D asset	o ativo {id} não é um ativo 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	o ativo {id} é um ativo 3D: assets.export3D o grava
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	ainda não há ativos 3D: colete primeiro um objeto com um efeito 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	selecione um objeto com um efeito 3D (ou informe seus ids)
 	Export As…	Exportar Como…
 	Export CSS	Exportar CSS
 	Export CSS…	Exportar CSS…
