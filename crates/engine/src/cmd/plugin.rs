@@ -437,13 +437,17 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
             ),
         ));
     }
-    if m.asks_permissions() {
-        let g = Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted };
+    let new_grant = m.asks_permissions().then(|| Grant { id: m.id.clone(), hash: plugin.hash().to_string(), permissions: wanted });
+    if let Some(g) = &new_grant {
         registry::grant(g.clone());
-        s.store_grant(&m.id, Some(g));
     }
     // Installed plug-ins stay installed after a restart (#2541).
     let stored = s.store_plugin(plugin.id(), &bytes);
+    // A stored grant names one module: when this one could not replace the stored file, the file
+    // keeps the grant it has.
+    if stored && let Some(g) = new_grant {
+        s.store_grant(&m.id, Some(g));
+    }
     // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
     // also when it is disabled by its stored file alone (it stopped a launch while loading). When
     // the new version could not replace the stored file, the old one stays disabled.

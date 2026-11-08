@@ -801,6 +801,36 @@ fn a_filter_does_only_what_its_permissions_allow() {
     assert_eq!(s.doc().unwrap().doc.plugin_data(stateless), Some(&json!({"pen": 1})));
 }
 
+/// When an update can't replace the stored module, the store's grant stays the one for the module
+/// it still holds, so that module loads at the next start.
+#[test]
+fn a_module_the_store_could_not_take_leaves_the_stored_grant() {
+    let folder = crate::tests_links::Folder::new("plugin-store-failed-update");
+    let id = "test.engine.permissions.unwritable";
+    let old = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let new = asking(id, r#"["doc.read"]"#, &json!({"objects": [{"name": "x"}]}));
+    let (old_hash, new_hash) = (vectorcraft_plugins::permissions::sha256_hex(&old), vectorcraft_plugins::permissions::sha256_hex(&new));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&old), "grant": ["doc.read"]}));
+    let stored = std::fs::read_dir(&folder.0).unwrap().map(|e| e.unwrap().path()).find(|p| p.extension().is_some_and(|e| e == "wasm")).unwrap();
+    // A folder under the module's file name can't be replaced by a file.
+    std::fs::remove_file(&stored).unwrap();
+    std::fs::create_dir(&stored).unwrap();
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&new), "grant": ["doc.read"]}));
+    let grants = std::fs::read_to_string(folder.0.join("grants.json")).unwrap();
+    assert!(grants.contains(&old_hash) && !grants.contains(&new_hash), "{grants}");
+    // With the old module back in that place, the next session loads it.
+    std::fs::remove_dir(&stored).unwrap();
+    std::fs::write(&stored, &old).unwrap();
+    vectorcraft_plugins::registry::remove(id);
+    vectorcraft_plugins::registry::revoke(id);
+    let mut next = session();
+    next.attach_plugin_store(folder.0.clone());
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.hash().to_string()), Some(old_hash));
+    run(&mut next, "plugin.remove", json!({"id": id}));
+}
+
 /// What the user granted is kept in the plug-in store with the module: the next session installs
 /// the plug-in again without asking. A stored plug-in that lists permissions nobody granted it is
 /// skipped, even when another store granted it, and so is one in the Additional Plug-ins Folder
