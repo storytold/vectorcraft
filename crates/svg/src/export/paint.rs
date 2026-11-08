@@ -497,13 +497,30 @@ impl Writer<'_> {
     /// gradients require rendered-effect preparation by the caller to preserve their appearance.
     /// Photoshop-style
     /// filters have no SVG equivalent: they are left out with a warning (exports from the app turn
-    /// such objects into images first).
+    /// such objects into images first). An SVG filter (Effect › SVG Filters) that is the last
+    /// effect is written as its own `<filter>` element; elsewhere in the stack it is left out
+    /// like them.
     pub(super) fn filtered(&mut self, n: &Node) {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
+        // An SVG filter's user-space coordinates are the document's from the effect's origin: the
+        // object is written in them, in a group that moves it where the rest of the art goes.
+        let xf = self.xf;
+        let origin = live_svg_filter(&n.appearance.effects).map(|f| Affine::translate(f.origin()));
+        let moved = origin.is_some_and(|o| xf * o != Affine::IDENTITY);
+        if let Some(o) = origin.filter(|_| moved) {
+            self.line(&format!("<g transform=\"{}\">", self.matrix(xf * o)));
+            self.depth += 1;
+            self.xf = o.inverse();
+        }
         let opened = self.open_filters(n, &n.appearance.effects);
         self.node_body(&inner);
         self.close_filters(opened);
+        if moved {
+            self.xf = xf;
+            self.depth -= 1;
+            self.line("</g>");
+        }
     }
 
     /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
@@ -525,7 +542,27 @@ impl Writer<'_> {
                 + 2.0;
         let region = bounds.map(|b| self.xf.transform_rect_bbox(b).inflate(reach, reach));
         let mut opened = 0;
-        for f in fx.iter().rev() {
+        // An SVG filter that is the object's last effect is written as it is ([`Self::filtered`]).
+        let live = if std::ptr::eq(effects, n.appearance.effects.as_slice()) { live_svg_filter(effects) } else { None };
+        for (k, f) in fx.iter().enumerate().rev() {
+            if let RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(sf)) = f
+                && live.is_some()
+                && k + 1 == fx.len()
+            {
+                let fid = self.fresh_id("filter");
+                // The filter as it is drawn: a region given against the object's box is measured
+                // against the object alone, which is all it runs on ([`live_svg_filter`]).
+                let mut input = n.clone();
+                input.appearance.effects.clear();
+                let input_bounds = input.visual_bounds_with(&self.doc.symbol_boxes()).unwrap_or_default();
+                if let Some(def) = sf.written_xml(input_bounds).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid)) {
+                    self.def(1, &def);
+                    self.line(&format!("<g filter=\"url(#{fid})\">"));
+                    self.depth += 1;
+                    opened += 1;
+                    continue;
+                }
+            }
             if matches!(f, RasterFx::Pixel(_) | RasterFx::Rasterize(_)) {
                 self.warn("SVG has no pixel effects such as Radial Blur, Smart Blur or Unsharp Mask: they are left out");
                 continue;
@@ -640,6 +677,25 @@ const MAX_GRADIENT_PX: f64 = 4096.0;
 pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     match p {
         Paint::Gradient(g) if g.draws_as_pixels(fill) => Some(g),
+        _ => None,
+    }
+}
+
+/// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
+/// its last visible effect, measured in points.
+fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
+    if !vectorcraft_effects::svg_filter::writes_live(effects) {
+        return None;
+    }
+    let mut fx = vectorcraft_effects::raster_effects(effects);
+    // A region measured against the object's box is kept only when the filter runs on the object itself.
+    let alone = fx.len() == 1;
+    match fx.pop() {
+        Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
+            if f.in_points() && (alone || !f.measured()) && f.writes_as_svg11() =>
+        {
+            Some(f)
+        }
         _ => None,
     }
 }

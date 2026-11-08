@@ -1215,27 +1215,89 @@ fn in_points(mut d: Document, k: f64) -> Document {
     d
 }
 
-/// #1479: an image larger than the editing data's reader takes would be missing from the layers,
-/// while the PDF part has it (it reads larger images): the file comes in as its PDF part, with a
-/// note saying why, rather than without the image.
+/// A 1-bit gray image of `w` × `h` pixels in the format's operators, its samples `rows` (binary,
+/// rows padded to whole bytes, a set bit white), placed by the matrix `m`.
+fn raster_1bit(m: &str, (w, h): (u32, u32), rows: &str) -> String {
+    format!(
+        "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ {m} ] {w} {h} 0 Xh\n\
+         [ {m} ] 0 0 {w} {h} {w} {h} 1 1 0 0 1 0 4 4 0 0\n%%BeginData: {}\rXI\n{rows}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN",
+        rows.len()
+    )
+}
+
+/// #1479: an image past 2^25 pixels keeps the layers, at full size; a 1-bit one is a 1-bit PNG of
+/// its rows.
 #[test]
-fn an_ai_file_with_an_image_too_large_for_its_editing_data_comes_in_as_its_pdf_part() {
-    let raster = |w: u32, h: u32| {
-        format!(
-            "%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceGray XN\n[ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n\
-             [ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 1 0 0 1 0 4 4 0 0\n%%BeginData: 1\rXI\n\u{0}%%EndData\r\nXH\r\n%AI5_EndRaster\r\nN"
-        )
-    };
-    // 6,000 × 6,000 pixels: past the reader's 2^25.
-    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(6000, 6000))));
+fn an_ai_file_with_an_image_past_2_25_pixels_keeps_its_layers() {
+    // 6,000 × 6,000 pixels, each row black and white in turn ('U' is 01010101).
+    let image = raster_1bit("0.0005 0 0 0.0005 50 14", (6000, 6000), &"U".repeat(750 * 6000));
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
     let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
-    assert!(!read, "the PDF part is used: {warnings:?}");
-    assert!(warnings.iter().any(|w| w.contains("an image is too large to read from them")), "{warnings:?}");
-    assert_eq!(d.layers[0].children().map_or(0, |c| c.len()), 1, "the PDF part's art");
-    // An image the reader takes keeps the layers.
-    let art = native(&layer("Texture", true, &format!("{}\n{}", square(10, 10), raster(1, 1))));
-    let (_, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
     assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert_eq!(kinds(&d.layers[0]), ["path"]);
+    let [image] = d.layers[1].children().unwrap().as_slice() else { panic!("{:?}", d.layers[1]) };
+    let NodeKind::Image(im) = &image.kind else { panic!("{image:?}") };
+    assert_eq!((im.width, im.height), (6000, 6000));
+    let png = &d.images[&im.key].bytes;
+    // Bit depth 1, colour type 0 (gray).
+    assert_eq!(png.get(24..26), Some([1, 0].as_slice()));
+    let gray = image::load_from_memory(png).unwrap().to_luma8();
+    assert_eq!((gray.get_pixel(0, 0)[0], gray.get_pixel(1, 0)[0], gray.get_pixel(5999, 5999)[0]), (0, 255, 255));
+    assert!(warnings.iter().all(|w| !w.contains("image")), "{warnings:?}");
+}
+
+/// An image past the target size is averaged down by the smallest whole step that fits, a 1-bit
+/// one into gray coverage, the blocks at its edges over the pixels they have; it covers the box
+/// the full size would.
+#[test]
+fn an_ai_image_past_the_target_size_is_reduced_and_keeps_the_layers() {
+    // 17 × 13 pixels: rows black, and in turn (the first one) white but for columns 0, 8 and 16.
+    let rows: String = (0..13).map(|y| if y % 2 == 0 { "\u{7f}\u{7f}\0" } else { "\0\0\0" }).collect();
+    let image = raster_1bit("1 0 0 1 50 14", (17, 13), &rows);
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
+    let (d, warnings, read) = crate::import::ai::with_image_limits(20, 1 << 31, 512 << 20, || {
+        crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0)
+    });
+    assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert!(warnings.contains(&"an embedded image of 17 × 13 pixels was reduced to 5 × 4 pixels to keep the layers".to_string()), "{warnings:?}");
+    let [image] = d.layers[1].children().unwrap().as_slice() else { panic!("{:?}", d.layers[1]) };
+    let NodeKind::Image(im) = &image.kind else { panic!("{image:?}") };
+    assert_eq!((im.width, im.height), (5, 4));
+    let full = im.xf.transform_rect_bbox(vectorcraft_geom::Rect::new(0.0, 0.0, 5.0, 4.0));
+    assert!(
+        (full.x0 - 50.0).abs() < 1e-9 && (full.x1 - 67.0).abs() < 1e-9 && (full.y0 - 86.0).abs() < 1e-9 && (full.y1 - 99.0).abs() < 1e-9,
+        "{full:?}"
+    );
+    let gray = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8();
+    // Steps of 4: blocks of rows 0–11 are half white rows, the last block row 12 alone; blocks of
+    // columns 0–3 and 8–11 have 3 white columns of 4, and the last block column 16 alone.
+    let rows: Vec<Vec<u8>> = (0..4).map(|y| (0..5).map(|x| gray.get_pixel(x, y)[0]).collect()).collect();
+    assert_eq!(rows, [vec![96, 128, 96, 128, 0], vec![96, 128, 96, 128, 0], vec![96, 128, 96, 128, 0], vec![191, 255, 191, 255, 0]]);
+}
+
+/// An image past the hard limits is a box that the page's art inside it replaces, and the
+/// layers stay; without page art (the editing data alone), it is left out with a note.
+#[test]
+fn an_ai_image_past_the_hard_limits_comes_in_as_the_pages_art() {
+    let image = raster_1bit("1 0 0 1 50 14", (4, 4), &"\0".repeat(4));
+    let art = native(&(layer("Live", true, &square(10, 10)) + &layer("Texture", true, &image)));
+    let (d, notes, read) =
+        crate::import::ai::with_image_limits(20, 15, 512 << 20, || crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, false, 1.0));
+    assert!(read, "{notes:?}");
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert_eq!(kinds(&d.layers[1]), ["group[1]"]);
+    replacement_is_cyan(&d, 1, 0);
+    assert!(notes.iter().any(|n| n.contains("very large images") && n.contains("they came in as the page's art")), "{notes:?}");
+    // Past the bytes the samples may take, too.
+    let (_, notes, read) =
+        crate::import::ai::with_image_limits(20, 1 << 31, 1, || crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, false, 1.0));
+    assert!(read && notes.iter().any(|n| n.contains("very large images")), "{notes:?}");
+    let (d, notes) = crate::import::ai::with_image_limits(20, 15, 512 << 20, || crate::ai_alone(&private(&art))).unwrap();
+    assert_eq!(names(&d), ["Live", "Texture"]);
+    assert!(d.layers[1].children().unwrap().is_empty());
+    assert!(notes.iter().any(|n| n == "an image too large to read from the editing data was left out"), "{notes:?}");
 }
 
 /// A `.ai` whose layers hold a placed PDF and no text object: its PDF part draws the placed file,
@@ -1322,13 +1384,31 @@ fn an_ai_file_that_comes_in_as_its_pdf_part_keeps_the_swatches_of_its_palette() 
     let mut part = pdf_part(10.0, 86.0);
     let gold = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 0.2, 0.9, 0.1));
     part.swatches.push(vectorcraft_color::swatch::Swatch { name: "Gold ink".into(), paint: gold, global: true, spot: true });
-    let (d, warnings, read) = crate::layered_ai(&private(&art), part, vec![], false, true, 1.0);
+    // An image past 2^25 pixels isn't read here, and the page has no art of its own in its box.
+    let (d, warnings, read) =
+        crate::import::ai::with_image_limits(1 << 26, 1 << 25, 512 << 20, || crate::layered_ai(&private(&art), part, vec![], false, true, 1.0));
     assert!(!read, "the PDF part is used: {warnings:?}");
     let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(swatches, ["[None]", "White", "Gold ink"], "{warnings:?}");
     let groups: Vec<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
     assert_eq!(groups, ["Inks"]);
     assert!(d.swatch("Red ink").is_some_and(|s| s.spot));
+}
+
+/// A `.ai` gradient library (a palette of gradient swatches and no layers) gets the palette's
+/// gradient swatches, each holding its gradient without a link to a swatch.
+#[test]
+fn an_ai_file_without_layers_keeps_the_gradients_of_its_palette_unlinked() {
+    let sky = "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\nPB\n%AI5_EndPalette\n";
+    let art = native(&format!("{sky}{palette}"));
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    let swatches: Vec<&str> = d.swatches.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(swatches, ["[None]", "Sky"], "{warnings:?}");
+    let Some(vectorcraft_color::Paint::Gradient(g)) = d.swatch("Sky").map(|s| &s.paint) else { panic!("{:?}", d.swatch("Sky")) };
+    assert_eq!(g.swatch, None, "the swatch's own paint");
+    assert_eq!(g.gradient.stops.len(), 2);
 }
 
 /// A `.ai` pattern library (a palette of pattern swatches and no layers) whose PDF part defines no
@@ -2829,6 +2909,32 @@ fn a_tate_chu_yoko_run_is_marked() {
 }
 
 #[test]
+fn a_standard_baseline_run_keeps_standard_vertical_roman_alignment() {
+    // Three runs over "ab12": "ab" with key 35 at 1 (Standard), "1" at 2 (rotated), "2" without it.
+    // Horizontal type keeps the mark too.
+    for vertical in [true, false] {
+        let doc = text_document(&[("ab12\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+        let doc = if vertical { vertical_text_document(&doc, 0.0) } else { doc };
+        let run = |n: u32, own: &str| {
+            format!(
+                "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own}/53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 {n} >>"
+            )
+        };
+        let one = run(5, "");
+        assert!(doc.contains(&one));
+        let doc = doc.replacen(&one, &format!("{} {} {}", run(2, "/35 1 "), run(1, "/35 2 "), run(2, "")), 1);
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts = text_of(&r.document.layers[1]);
+        assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+        assert_eq!(texts[0].vertical, vertical);
+        let marked: Vec<(String, bool, bool)> =
+            texts[0].runs.iter().map(|r| (r.text.clone(), r.style.standard_vertical_roman, r.style.tate_chu_yoko)).collect();
+        assert_eq!(marked, [("ab".to_string(), true, false), ("1".to_string(), false, false), ("2".to_string(), false, false)], "{vertical}");
+    }
+}
+
+#[test]
 fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
     for bad in ["(2)", "2.5", "1e300", "-2", "1", "true", "[ 2 ]"] {
         let doc = vertical_text_document(&text_document(&[("x1\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]), 0.0)
@@ -2840,6 +2946,8 @@ fn orientation_and_tate_chu_yoko_values_it_cant_use_are_ignored() {
         assert_eq!(texts.len(), 1, "{bad}: {:?}", r.warnings);
         assert!(!texts[0].vertical, "{bad}");
         assert!(texts[0].runs.iter().all(|r| !r.style.tate_chu_yoko), "{bad}");
+        // Key 35 at 1 is Standard Vertical Roman Alignment; the other values leave it off.
+        assert!(texts[0].runs.iter().all(|r| r.style.standard_vertical_roman == (bad == "1")), "{bad}");
     }
 }
 
@@ -4390,6 +4498,56 @@ fn aligned_type_round_a_circle_runs_along_its_path_as_the_file_lays_it_out() {
     }
 }
 
+/// Type aligned to a circle by its ascender, center or descender, in the default face at 12 pt: the
+/// file's baselines lie inside the path by the top of the face's em box (its `BASE` table's
+/// `ideo` -170 plus one em), half the height of its H's top (656 units) or the bottom of its
+/// bounding box (-295), and laid out, the type's baselines lie where the file has them.
+#[test]
+fn aligned_type_lies_as_far_from_its_path_as_the_file_lays_it_out() {
+    let k = 40.0 * 0.552_284_75;
+    let points = [
+        (90.0, 50.0),
+        (90.0, 50.0 - k),
+        (50.0 + k, 10.0),
+        (50.0, 10.0),
+        (50.0 - k, 10.0),
+        (10.0, 50.0 - k),
+        (10.0, 50.0),
+        (10.0, 50.0 + k),
+        (50.0 - k, 90.0),
+        (50.0, 90.0),
+        (50.0 + k, 90.0),
+        (90.0, 50.0 + k),
+        (90.0, 50.0),
+    ];
+    let all: Vec<(f64, f64)> = points.iter().map(|(x, y)| canvas(*x, *y)).collect();
+    let segment = |i: usize| (0..4).map(|j| format!("{} {}", all[i * 3 + j].0, all[i * 3 + j].1)).collect::<Vec<_>>().join(" ");
+    for (key, align, inside) in [
+        (0, vectorcraft_doc::PathAlign::Ascender, 0.83 * 12.0),
+        (2, vectorcraft_doc::PathAlign::Center, 0.328 * 12.0),
+        (1, vectorcraft_doc::PathAlign::Descender, -0.295 * 12.0),
+    ] {
+        let frame = format!(
+            "<< /0 << /0 [ 0 0 ] /1 << /0 [ {} ] >> /2 << /0 2 /6 [ 2.0 5.99 ] /11 << /2 {key} >> >> >> >>",
+            (0..4).map(segment).collect::<Vec<_>>().join(" ")
+        );
+        let radius = 40.0 - inside;
+        let doc = document_of(&[frame], &[round_story_with("abcdefgh", 5.0, radius, radius / 48.0, &format!("/0 << /0 [ 0 {inside:.3} ] >>"))]);
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts = text_of(&r.document.layers[1]);
+        assert_eq!(texts.len(), 1, "{align:?}: {:?}", r.warnings);
+        assert_eq!(texts[0].path_align, align);
+        let layout = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), texts[0]);
+        assert_eq!(layout.glyphs.len(), 8);
+        // The four cubics stray up to 0.011 from the circle.
+        for g in &layout.glyphs {
+            let (x, y) = (g.origin.x + g.angle.cos() * g.advance * 0.5 - 50.0, g.origin.y + g.angle.sin() * g.advance * 0.5 - 50.0);
+            assert!((x.hypot(y) - radius).abs() < 0.02, "{align:?}: {} from the center, want {radius}", x.hypot(y));
+        }
+    }
+}
+
 #[test]
 fn threaded_area_type_flows_through_its_frames() {
     let frames = [
@@ -5327,6 +5485,103 @@ fn a_placed_file_at_its_boxs_corner_matches_the_page() {
     assert!(matches!(image.kind, NodeKind::Image(_)), "{:?}", image.kind);
     let b = image.geometric_bounds().unwrap();
     assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+}
+
+/// A placed file of [`a_placed_file_at_its_boxs_corner_matches_the_page`] whose dictionary names
+/// page 2 and its media box: `%_` lines when `hidden` (art inside another object's dictionary).
+fn placed_page_two(hidden: bool) -> String {
+    let lines = [
+        "%AI5_BeginPlace".to_string(),
+        "%%FileType: 1".into(),
+        "[1 0 0 -1 -7970 8070] 8000 8000 8040 8040 4 4 0".into(),
+        "(/files/pages.pdf)`".into(),
+        "%AI26_BeginPlacedObjectPreview".into(),
+        format!("2 2 8 32 17 {}", "\x7f\0\0\0".repeat(4)),
+        "%AI26_EndPlacedObjectPreview".into(),
+        "~".into(),
+        "%AI5_EndPlace".into(),
+    ];
+    let hide = if hidden { "%_" } else { "" };
+    let place: String = lines.iter().map(|l| format!("{hide}{l}\n")).collect();
+    format!(
+        "{place}%_/ArtDictionary :\n%_/XMLUID : (pages) ; (AI10_ArtUID) ,\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n"
+    )
+}
+
+/// The placed document of `n`, with its bounds.
+fn placed_document(n: &Node) -> (&vectorcraft_doc::PlacedDocument, vectorcraft_geom::Rect) {
+    let NodeKind::PlacedDocument(p) = &n.kind else { panic!("{:?}", n.kind) };
+    (p, n.geometric_bounds().unwrap())
+}
+
+/// A placed PDF page comes in as a placed document of its page and box, where its linked image
+/// would have gone: at its box's corner when that is where the layers draw as the page does.
+#[test]
+fn a_placed_pdf_page_is_a_placed_document_where_its_image_would_be() {
+    let data = native(&layer("Jig", true, &placed_page_two(false))).replace("%AI5_NumLayers", "%AI3_TemplateBox: 100 50 100 50\n%AI5_NumLayers");
+    let mut page = Document::new(100.0, 100.0);
+    let id = page.alloc_id();
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0));
+    let grey = vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::gray(0.5)));
+    let n = Node::path(id, path, vectorcraft_doc::Appearance { items: vec![vectorcraft_doc::AppearanceItem::Fill(grey)], ..Default::default() });
+    let l = page.layers[0].id;
+    page.insert(Some(l), 0, n).unwrap();
+    let (d, w, read) = crate::layered_ai(&private(&data), page, vec![], false, false, 1.0);
+    assert!(read, "{w:?}");
+    let (p, b) = placed_document(&d.layers[0].children().unwrap()[0]);
+    assert_eq!((p.link.path.as_str(), p.link.page, p.page_box, p.bounding), ("/files/pages.pdf", Some(2), vectorcraft_doc::PageBox::Media, false));
+    assert_eq!((p.width, p.height), (40.0, 40.0));
+    assert!([b.x0 - 30.0, b.y0 - 30.0, b.x1 - 70.0, b.y1 - 70.0].iter().all(|v| v.abs() < 0.01), "on the page's square: {b:?}");
+    assert!(d.images[&p.key].is_proxy(), "the preview until the file is read");
+}
+
+/// A placed PDF page in an object's opacity mask is a placed document there too.
+#[test]
+fn a_placed_pdf_page_in_an_opacity_mask_is_a_placed_document() {
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{}%_X+\n%_ (Art) ,\n%_; (AI9_Mask) ,\n%_;\n%_\n", placed_page_two(true));
+    let data = native(&layer("Masked", true, &format!("{}\n{mask}", square(10, 10))));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let square = &d.layers[0].children().unwrap()[0];
+    let mask = square.extras().mask.clone().unwrap_or_else(|| panic!("{notes:?}"));
+    let art = if let NodeKind::Group { children, .. } = &mask.art.kind { children[0].clone() } else { mask.art.clone() };
+    let (p, _) = placed_document(&art);
+    assert_eq!((p.link.page, p.page_box), (Some(2), vectorcraft_doc::PageBox::Media));
+}
+
+/// A placed PDF page whose box is too small for a finite placement stays a linked image.
+#[test]
+fn a_placed_pdf_page_too_small_to_place_stays_a_linked_image() {
+    let place = placed_page_two(false).replace("[1 0 0 -1 -7970 8070] 8000 8000 8040 8040", "[1e308 0 0 -1 0 200] 0 0 1e-309 2");
+    let data = native(&layer("Jig", true, &place));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let mut kinds = vec![];
+    d.walk(|n| match &n.kind {
+        NodeKind::Image(im) => kinds.push(("image", im.xf.as_coeffs().iter().all(|v| v.is_finite()))),
+        NodeKind::PlacedDocument(p) => kinds.push(("placed", p.xf.as_coeffs().iter().all(|v| v.is_finite()))),
+        _ => {}
+    });
+    assert_eq!(kinds, [("image", true)], "{notes:?}");
+}
+
+/// A placed PDF page bound to an image variable stays a linked image, the object an image variable
+/// binds, so the binding is kept.
+#[test]
+fn a_placed_pdf_page_bound_to_an_image_variable_stays_a_linked_image() {
+    use vectorcraft_testkit::ai::{XmlValue, variable_library_data, xml_element, xml_node};
+    let declared = vec![xml_node(
+        1,
+        "variable",
+        XmlValue::Str(""),
+        &[("trait", XmlValue::Str("fileref")), ("varName", XmlValue::Unicode("v_file")), ("docRef", XmlValue::Raw("/XMLUIDREF : (pages) ;"))],
+        &[],
+    )];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let data = native(&(library + &layer("Jig", true, &placed_page_two(false))));
+    let (d, notes) = crate::ai_alone(&private(&data)).unwrap();
+    let n = &d.layers[0].children().unwrap()[0];
+    assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().is_some_and(|l| l.page.is_none())), "{:?} {notes:?}", n.kind);
+    assert_eq!(d.variables.objects_of("v_file"), [n.id], "{notes:?}");
 }
 
 #[test]

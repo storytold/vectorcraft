@@ -287,6 +287,8 @@ pub enum PixelFx {
     DeInterlace { even: bool, interpolate: bool },
     /// Video › NTSC Colors: colours a television signal can't carry made less saturated.
     NtscColors,
+    /// Effect › SVG Filters: an SVG `<filter>` element run on the pixels.
+    Svg(crate::svg_filter::SvgFilterFx),
 }
 
 /// What a raster's colour channels hold, for the filters that treat them apart (Color Halftone
@@ -598,6 +600,7 @@ pub(crate) fn parse(id: &str, p: &Value) -> Option<PixelFx> {
             interpolate: text(p, "create", "duplication").eq_ignore_ascii_case("interpolation"),
         },
         "video.ntscColors" => PixelFx::NtscColors,
+        crate::SVG_FILTER => PixelFx::Svg(crate::svg_filter::SvgFilterFx::parse(p)?),
         _ => return None,
     })
 }
@@ -666,6 +669,7 @@ impl PixelFx {
             PixelFx::Crystallize { cell } | PixelFx::Pointillize { cell } | PixelFx::StainedGlass { cell, .. } => 1.5 * cell,
             // A square whose centre is on the object is drawn whole.
             PixelFx::Patchwork { square, .. } => square.max(1.0),
+            PixelFx::Svg(ref f) => f.outset(bounds),
         }
     }
 
@@ -745,12 +749,17 @@ impl PixelFx {
             // The lines above and below.
             PixelFx::DeInterlace { .. } => Some(video::MAX_LINE),
             PixelFx::NtscColors => Some(0.0),
+            // A filter's object bounding box is the whole object's.
+            PixelFx::Svg(_) => None,
         }
     }
 
     /// Run the effect on `data`, `w` × `h` premultiplied RGBA8 pixels lying in the document as
     /// `space` says. Does nothing when the sizes don't match.
     pub fn apply(&self, data: &mut [u8], w: usize, h: usize, space: &PixelSpace) {
+        if let PixelFx::Svg(f) = self {
+            return f.apply(data, w, h, space);
+        }
         let Some(px) = pixels(data, w, h) else { return };
         let to_px = |len: f64| len / space.px.max(1e-9);
         match *self {
@@ -829,6 +838,7 @@ impl PixelFx {
             }
             PixelFx::DeInterlace { even, interpolate } => video::deinterlace(px, w, h, space, even, interpolate),
             PixelFx::NtscColors => video::ntsc(px),
+            PixelFx::Svg(_) => {}
         }
     }
 }

@@ -1,5 +1,7 @@
 //! Fill and stroke paint (the toolbar proxies and their defaults) and the Transparency panel.
 
+use std::borrow::Cow;
+
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, CharStyle, Document, Node, NodeId, NodeKind};
@@ -19,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white) → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|freeform, method?: classic|perceptual (as paint.editGradient; default classic), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg, start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits), dither?: bool (linear and radial fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear or radial `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, a solid color or `none` changes that object for this instance only, and a gradient or pattern is refused → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -28,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Stroke",
             [],
             None,
-            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke",
+            "{…as paint.setFill, item?: the stroke item to set} same as paint.setFill, for the stroke; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, a solid color or `none` changes that object for this instance only, and a gradient or pattern is refused",
             has_doc,
             |s, p| { set_paint(s, p, false) }
         ),
@@ -86,7 +88,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with nothing selected, invert the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -95,7 +97,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Complement",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item as paint.invert does; with nothing selected, the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item and a selected object of a dynamic symbol instance as paint.invert does; with nothing selected, the default → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.complement", "Complement", &|c: Color| c.complement_keep_model())
         ),
@@ -172,7 +174,7 @@ impl Session {
     /// new art.
     pub fn proxy_paints(&self) -> (Paint, Paint) {
         let show = |stroke: bool| match self.proxy_source(stroke) {
-            Some((n, item)) => proxy_paint(n, stroke, item),
+            Some((n, item)) => proxy_paint(&n, stroke, item),
             None if stroke => self.paint.stroke.clone(),
             None => self.paint.fill.clone(),
         };
@@ -180,17 +182,22 @@ impl Session {
     }
 
     /// The object whose fill (or stroke) the proxy shows, with the Appearance panel's active item
-    /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art.
-    pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(&Node, Option<usize>)> {
+    /// when it stands for it (see [`Session::proxy_paints`]); None: the defaults for new art. With
+    /// an object of a dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that
+    /// object as the instance draws it.
+    pub(crate) fn proxy_source(&self, stroke: bool) -> Option<(Cow<'_, Node>, Option<usize>)> {
         let st = self.active()?;
+        if let Some(part) = st.selected_symbol_part() {
+            return Some((Cow::Owned(part), None));
+        }
         let first = st.doc.node(*st.selection.subjects().first()?)?;
         let item = self.appearance_item();
         if first.appearance.item_of_kind(item, !stroke).is_some() {
-            return Some((first, item));
+            return Some((Cow::Borrowed(first), item));
         }
         let mut nodes = vec![];
         painted(first, true, &mut nodes);
-        nodes.first().map(|n| (*n, None))
+        nodes.first().map(|n| (Cow::Borrowed(*n), None))
     }
 
     pub(crate) fn remember_paint_now(&mut self, p: &Paint) {
@@ -257,6 +264,9 @@ impl DocState {
         if self.selection.is_empty() {
             return (false, false);
         }
+        if self.selection.symbol_part.is_some() {
+            return (false, false);
+        }
         let ids: std::collections::HashSet<NodeId> = self.selection.objects.iter().copied().collect();
         let (mut selected, mut nodes) = (vec![], vec![]);
         self.doc.walk(|n| {
@@ -274,6 +284,18 @@ impl DocState {
             paints.any(|p| !same_in_proxy(&p0, &p))
         };
         (differ(false), differ(true))
+    }
+
+    /// The object of a dynamic symbol instance's art selected with Direct Selection
+    /// ([`vectorcraft_doc::Selection::symbol_part`]), with the instance's own appearance changes
+    /// applied, in the symbol's coordinates. `None` without one.
+    pub(crate) fn selected_symbol_part(&self) -> Option<Node> {
+        let sp = self.selection.symbol_part.as_ref()?;
+        let inst = self.doc.node(sp.instance)?;
+        let NodeKind::SymbolInstance { symbol, .. } = &inst.kind else { return None };
+        let sym = self.doc.symbols.iter().find(|s| s.name == *symbol)?;
+        let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, inst);
+        vectorcraft_doc::symbol_overrides::part(&art, &sp.path).cloned()
     }
 }
 
@@ -465,6 +487,26 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         s.remember_paint(&paint);
         return Ok(json!({"objects": ids.len()}));
     }
+    // An object of a dynamic symbol instance's art selected with Direct Selection: a solid color or
+    // none changes that object for this instance only, and anything else is refused.
+    if let Some((id, path)) = selected_part_target(s, p, cmd)? {
+        if !part_takes(&paint) {
+            return Err(super::brushsym::part_only());
+        }
+        super::brushsym::edit_part(s, id, &path, if fill { "Fill Color" } else { "Stroke Color" }, |o| {
+            if fill {
+                o.fill = Some(paint.clone());
+            } else {
+                o.stroke = Some(paint.clone());
+            }
+        })?;
+        paint_new_art(s, &paint, fill);
+        if focus {
+            s.fill_active = fill;
+        }
+        s.remember_paint(&paint);
+        return Ok(json!({"objects": 1}));
+    }
     // Resolve the requested targets before mutating defaults or the active proxy.
     let item = item_target(s, p, cmd)?.of_kind(s, fill);
     let selected = item.targets(s, p)?;
@@ -535,6 +577,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
                 // A stroke without paint has no weight; painting it again restores the 1 pt default.
                 stroke.width = 0.0;
             }
+            if !fill {
+                super::object::snap_if_aligned(n);
+            }
             Ok(())
         },
         |d, changed| {
@@ -553,20 +598,45 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
         },
     )?;
     // Rejected edits leave the next shape's appearance and active proxy untouched.
-    // New art takes an unplaced gradient so that it fits the new object's own bounds.
-    if fill {
-        s.paint.fill = unplaced(&paint);
-    } else {
-        if !paint.is_none() && s.paint.stroke.is_none() && s.paint.stroke_width == 0.0 {
-            s.paint.stroke_width = 1.0;
-        }
-        s.paint.stroke = unplaced(&paint);
-    }
+    paint_new_art(s, &paint, fill);
     if focus {
         s.fill_active = fill;
     }
     s.remember_paint(&paint);
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+}
+
+/// The instance whose object is selected with Direct Selection, and that object's path
+/// ([`super::brushsym::selected_part`]), when `p` names no `ids`, `id` or `item`: the paint commands
+/// then change that object. A bad `target` or `aligned` is refused as it is for any other selection.
+fn selected_part_target(s: &Session, p: &Value, cmd: &str) -> Result<Option<(NodeId, Vec<u32>)>> {
+    if p.get("ids").is_some() || p.get("id").is_some() || p.get("item").is_some() {
+        return Ok(None);
+    }
+    let part = super::brushsym::selected_part(s)?;
+    if part.is_some() {
+        item_target(s, p, cmd)?;
+    }
+    Ok(part)
+}
+
+/// Can an object of a dynamic symbol instance's art selected with Direct Selection take `paint`? A
+/// solid color or none can; a gradient or pattern cannot.
+pub(crate) fn part_takes(paint: &Paint) -> bool {
+    matches!(paint, Paint::Solid { .. } | Paint::None)
+}
+
+/// Make `paint` the fill or stroke of new art. New art takes an unplaced gradient so that it fits
+/// the new object's own bounds, and a painted stroke on art that had none gets the 1 pt default.
+fn paint_new_art(s: &mut Session, paint: &Paint, fill: bool) {
+    if fill {
+        s.paint.fill = unplaced(paint);
+    } else {
+        if !paint.is_none() && s.paint.stroke.is_none() && s.paint.stroke_width == 0.0 {
+            s.paint.stroke_width = 1.0;
+        }
+        s.paint.stroke = unplaced(paint);
+    }
 }
 
 /// Does `p` ask for `span: "selection"` (#2127)? Only a linear or radial gradient the targets
@@ -827,6 +897,32 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
 /// active item of the proxy's kind is recoloured in each selected object's own stack instead.
 fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
     let stroke = stroke_param(s, p, cmd)?;
+    // An object of a dynamic symbol instance's art selected with Direct Selection: the solid color
+    // it shows is recolored for this instance only. A gradient or pattern is refused, and so is type
+    // whose characters differ in that paint, since one change holds one paint.
+    if let Some((id, path)) = selected_part_target(s, p, cmd)? {
+        let part = s.doc()?.selected_symbol_part();
+        let mut paint = part.as_ref().map_or(Paint::None, |n| proxy_paint(n, stroke, None));
+        let runs_differ = match part.as_ref().map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => t.runs.iter().any(|r| !same_in_proxy(if stroke { &r.style.stroke } else { &r.style.fill }, &paint)),
+            _ => false,
+        };
+        if runs_differ || !part_takes(&paint) {
+            return Err(super::brushsym::part_only());
+        }
+        let changed = super::colorcmds::map_paint(&mut paint, f);
+        if changed {
+            super::brushsym::edit_part(s, id, &path, label, |o| {
+                if stroke {
+                    o.stroke = Some(paint.clone());
+                } else {
+                    o.fill = Some(paint.clone());
+                }
+            })?;
+            s.remember_paint(&paint);
+        }
+        return Ok(json!({ "changed": changed as usize }));
+    }
     let ids = match super::given_objects(s, p, cmd)? {
         Some(ids) => ids,
         None => super::edit::selected_roots(s)?,
@@ -854,7 +950,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, label, f)?, None)
+            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
         }
     };
     let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };
@@ -866,6 +962,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
 
 fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "transparency.set";
+    super::opacitymask::refuse_symbol_part_unnamed(s, p)?;
     let ids = super::opacitymask::transparency_targets(s, p)?;
     if ids.is_empty() {
         return Err(bad(C, "select objects or give ids"));

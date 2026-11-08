@@ -1653,6 +1653,32 @@ fn redefining_a_graphic_style_updates_a_linked_series_mark() {
     series_0_is(&mut s, id, (&green, 1.0, &stroke, weight), &was);
 }
 
+/// Redefine Graphic Style made from a series mark does not edit that mark, so the graph keeps the paint another mark of the
+/// series stored after it: the graph drawn again shows the same marks with or without the redefinition, and undo brings
+/// back the stored paint.
+#[test]
+fn redefining_a_graphic_style_from_a_series_mark_keeps_the_paint_another_mark_stored() {
+    let (mut s, id, _, marks) = column_marks();
+    blue_style(&mut s, "Blue", true);
+    s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [marks[1].0]})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "color": "#00ff00"})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": top_row(&s, marks[0], true), "color": "#ff0000"})).unwrap();
+    let red = s.doc().unwrap().doc.node(marks[0]).unwrap().appearance.fill_paint();
+    let was = spec(&s, id).series_paints;
+    assert_eq!(was[0].fill, Some(red.clone()));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    let without = marks_of(&s, id, 0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Blue", "id": marks[1].0})).unwrap();
+    assert_eq!(spec(&s, id).series_paints, was, "the source mark was not edited");
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert_eq!(marks_of(&s, id, 0), without);
+    assert!(without.iter().all(|m| m.0 == red));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).series_paints, was);
+}
+
 /// Default Fill and Stroke on a series mark stores a white fill and a 1 pt black stroke, both opaque, on the graph.
 #[test]
 fn default_fill_and_stroke_on_a_series_mark_is_kept() {
@@ -1693,7 +1719,7 @@ fn swapping_onto_a_hidden_top_fill_leaves_the_stored_fill() {
     s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": upper, "visible": false})).unwrap();
     s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": top_row(&s, marks[1], true), "color": "#ff0000"})).unwrap();
     let red = spec(&s, id).series_paints[0].fill.clone();
-    assert!(red.is_some());
+    assert_eq!(red, Some(s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.fill_paint()));
     let stroke = top_row(&s, marks[0], false);
     s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#00ff00", "weight": 3})).unwrap();
     s.execute("paint.swap", &json!({"ids": [marks[0].0]})).unwrap();
