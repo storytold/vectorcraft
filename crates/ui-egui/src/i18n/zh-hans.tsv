@@ -2612,6 +2612,14 @@ digits	Malayalam	马拉雅拉姆数字
 	Relink	重新链接
 	Relink Linked Files to the Document	将链接文件重新链接到文档
 	Relink to Folder…	重新链接到文件夹…
+	Each Link Separately	逐个链接
+	Selected Instances	所选实例
+	All Instances	所有实例
+	Missing Links from This Folder	此文件夹中缺失的链接
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} 不是 each|selected|all|missingInFolder 之一
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each 与 paths 需一起使用：paths 列出包含 ids 和 path 的条目，用来代替 ids、path 和 folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths 条目 {i} 需要 path 和 ids（其他条目没有的对象 ID）
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder 需要 path：将在该文件所在的文件夹中查找其他缺失的链接
 	Relink…	重新链接…
 	Find Linked Files	查找链接文件
 	Find Linked Files in Folder…	在文件夹中查找链接文件…

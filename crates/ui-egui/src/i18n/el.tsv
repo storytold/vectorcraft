@@ -3275,6 +3275,14 @@ digits	Malayalam	Μαλαγιάλαμ
 	Relink	Επανασύνδεση
 	Relink Linked Files to the Document	Επανασύνδεση συνδεδεμένων αρχείων με το έγγραφο
 	Relink to Folder…	Επανασύνδεση σε φάκελο…
+	Each Link Separately	Κάθε σύνδεση χωριστά
+	Selected Instances	Επιλεγμένες παρουσίες
+	All Instances	Όλες οι παρουσίες
+	Missing Links from This Folder	Συνδέσεις που λείπουν από αυτόν τον φάκελο
+@msg	scope {v} is not each|selected|all|missingInFolder	το scope {v} δεν είναι each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	τα scope each και paths πάνε μαζί: το paths απαριθμεί καταχωρίσεις με ids και path, αντί για ids, path και folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	η καταχώριση {i} του paths χρειάζεται path και ids (αναγνωριστικά αντικειμένων που δεν έχει άλλη καταχώριση)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	το scope missingInFolder δέχεται path: στον φάκελο αυτού του αρχείου αναζητούνται οι άλλες συνδέσεις που λείπουν
 	Relink…	Επανασύνδεση…
 	Find Linked Files	Εύρεση συνδεδεμένων αρχείων
 	Find Linked Files in Folder…	Εύρεση συνδεδεμένων αρχείων σε φάκελο…

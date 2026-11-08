@@ -2093,6 +2093,14 @@ digits	Malayalam	Malajálamské
 	Location	Umístění
 	No images	Žádné obrázky
 	Relink to Folder…	Znovu propojit ke složce…
+	Each Link Separately	Každé propojení zvlášť
+	Selected Instances	Vybrané instance
+	All Instances	Všechny instance
+	Missing Links from This Folder	Chybějící propojení z této složky
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} není each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each a paths patří k sobě: paths uvádí položky s ids a path místo ids, path a folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	položka {i} v paths potřebuje path a ids (ID objektů, které nemá žádná jiná položka)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder bere path: ve složce tohoto souboru se hledají ostatní chybějící propojení
 	Show Missing	Zobrazit chybějící
 	Sort by Status	Seřadit podle stavu
 	Clear Overrides	Vymazat přepsání

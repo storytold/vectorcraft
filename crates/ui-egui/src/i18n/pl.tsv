@@ -2013,6 +2013,14 @@ digits	Malayalam	Malajalam
 	Location	Położenie
 	No images	Brak obrazów
 	Relink to Folder…	Połącz ponownie z folderem…
+	Each Link Separately	Każde łącze osobno
+	Selected Instances	Zaznaczone wystąpienia
+	All Instances	Wszystkie wystąpienia
+	Missing Links from This Folder	Brakujące łącza z tego folderu
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} nie jest jednym z each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths występują razem: paths wymienia wpisy z ids i path zamiast ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	wpis {i} w paths wymaga path i ids (identyfikatorów obiektów, których nie ma żaden inny wpis)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder przyjmuje path: w folderze tego pliku szukane są pozostałe brakujące łącza
 	Show Missing	Pokaż brakujące
 	Sort by Status	Sortuj według stanu
 	Clear Overrides	Wyczyść zastąpienia

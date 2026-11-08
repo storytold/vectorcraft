@@ -2514,6 +2514,14 @@ digits	Malayalam	Malayalam
 	Relink	Yeniden bağla
 	Relink Linked Files to the Document	Bağlantılı Dosyaları Belgeye Yeniden Bağlama
 	Relink to Folder…	Klasöre Yeniden Bağlan…
+	Each Link Separately	Her Bağlantıyı Ayrı Ayrı
+	Selected Instances	Seçili Örnekler
+	All Instances	Tüm Örnekler
+	Missing Links from This Folder	Bu Klasördeki Eksik Bağlantılar
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v}, each|selected|all|missingInFolder değerlerinden biri değil
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each ve paths birlikte kullanılır: paths, ids, path ve folder yerine ids ve path içeren girdileri listeler
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths girdisi {i} için path ve ids gerekir (başka hiçbir girdide olmayan nesne kimlikleri)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder path alır: diğer eksik bağlantılar o dosyanın klasöründe aranır
 	Relink…	Yeniden bağla…
 	Find Linked Files	Bağlantılı Dosyaları Bul
 	Find Linked Files in Folder…	Klasördeki Bağlantılı Dosyaları Bul…

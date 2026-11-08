@@ -3624,6 +3624,14 @@
 	Relink	दोबारा लिंक करें
 	Relink Linked Files to the Document	लिंक्ड फ़ाइलें डॉक्यूमेंट से दोबारा लिंक करें
 	Relink to Folder…	फ़ोल्डर से दोबारा लिंक करें…
+	Each Link Separately	हर लिंक अलग से
+	Selected Instances	चुने गए इंस्टेंस
+	All Instances	सभी इंस्टेंस
+	Missing Links from This Folder	इस फ़ोल्डर से मिसिंग लिंक
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v}, each|selected|all|missingInFolder में से नहीं है
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each और paths साथ में दिए जाते हैं: paths में ids और path वाली एंट्री होती हैं, ids, path और folder की जगह
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths की एंट्री {i} को path और ids चाहिए (ऐसे ऑब्जेक्ट ids जो किसी दूसरी एंट्री में न हों)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder, path लेता है: उस फ़ाइल के फ़ोल्डर में बाकी मिसिंग लिंक खोजे जाते हैं
 	Relink…	दोबारा लिंक करें…
 	Reload Plug-ins	प्लग-इन फिर से लोड करें
 	Remember Import Matches	याद रखें आयात मैच

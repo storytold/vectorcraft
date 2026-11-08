@@ -2736,6 +2736,14 @@ digits	Malayalam	Малаялам
 	Relink	Восстановить связь
 	Relink Linked Files to the Document	Восстановить связи связанных файлов с документом
 	Relink to Folder…	Восстановить связь с папкой…
+	Each Link Separately	Каждую связь отдельно
+	Selected Instances	Выбранные экземпляры
+	All Instances	Все экземпляры
+	Missing Links from This Folder	Отсутствующие связи из этой папки
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не является одним из each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each и paths задаются вместе: paths перечисляет записи с ids и path вместо ids, path и folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	записи {i} в paths нужны path и ids (идентификаторы объектов, которых нет в других записях)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder принимает path: в папке этого файла ищутся остальные отсутствующие связи
 	Relink…	Восстановить связь…
 	Find Linked Files	Найти связанные файлы
 	Find Linked Files in Folder…	Найти связанные файлы в папке…

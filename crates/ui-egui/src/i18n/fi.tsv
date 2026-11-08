@@ -2054,6 +2054,14 @@ digits	Malayalam	Malajalam
 	Location	Sijainti
 	No images	Ei kuvia
 	Relink to Folder…	Linkitä uudelleen kansioon…
+	Each Link Separately	Jokainen linkki erikseen
+	Selected Instances	Valitut esiintymät
+	All Instances	Kaikki esiintymät
+	Missing Links from This Folder	Puuttuvat linkit tästä kansiosta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} ei ole each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each ja paths kuuluvat yhteen: paths luettelee merkinnät, joissa on ids ja path, ids:n, path:n ja folder:n sijaan
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-merkintä {i} tarvitsee path- ja ids-arvot (objektitunnukset, joita millään muulla merkinnällä ei ole)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder ottaa path-arvon: muita puuttuvia linkkejä haetaan tämän tiedoston kansiosta
 	Show Missing	Näytä puuttuvat
 	Sort by Status	Lajittele tilan mukaan
 	Clear Overrides	Tyhjennä ohitukset

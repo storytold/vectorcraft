@@ -1913,6 +1913,14 @@ digits	Malayalam	Malayalam
 	Location	Locatie
 	No images	Geen afbeeldingen
 	Relink to Folder…	Opnieuw koppelen aan map…
+	Each Link Separately	Elke koppeling afzonderlijk
+	Selected Instances	Geselecteerde instanties
+	All Instances	Alle instanties
+	Missing Links from This Folder	Ontbrekende koppelingen uit deze map
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} is niet each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each en paths horen bij elkaar: paths bevat items met ids en path, in plaats van ids, path en folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	item {i} van paths heeft path en ids nodig (object-id's die geen ander item heeft)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder neemt path: in de map van dat bestand wordt naar de andere ontbrekende koppelingen gezocht
 	Show Missing	Ontbrekende weergeven
 	Sort by Status	Sorteren op status
 	Clear Overrides	Onderdrukkingen wissen

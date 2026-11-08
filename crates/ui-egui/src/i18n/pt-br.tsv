@@ -2259,6 +2259,14 @@ digits	Malayalam	Malaiala
 	Release with Perspective	Liberar com Perspectiva
 	Relink	Revinculcar
 	Relink to Folder…	Revinculcar Pasta…
+	Each Link Separately	Cada Vínculo Separadamente
+	Selected Instances	Instâncias Selecionadas
+	All Instances	Todas as Instâncias
+	Missing Links from This Folder	Vínculos Ausentes Desta Pasta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} não é each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each e paths andam juntos: paths lista entradas com ids e path, no lugar de ids, path e folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	a entrada {i} de paths precisa de path e ids (ids de objeto que nenhuma outra entrada tenha)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder recebe path: os outros vínculos ausentes são procurados na pasta desse arquivo
 	Relink…	Revinculcar…
 	Reload Plug-ins	Recarregar Plug-ins
 	Remove	Remover

@@ -3231,6 +3231,14 @@ mark-style	Japanese	Japán
 	Relink	Újracsatolás
 	Relink Linked Files to the Document	Csatolt fájlok újracsatolása a dokumentumhoz
 	Relink to Folder…	Újracsatolás mappából…
+	Each Link Separately	Minden csatolás külön
+	Selected Instances	Kijelölt példányok
+	All Instances	Összes példány
+	Missing Links from This Folder	Hiányzó csatolások ebből a mappából
+@msg	scope {v} is not each|selected|all|missingInFolder	a scope {v} nem each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	a scope each és a paths együtt jár: a paths ids és path elemű bejegyzéseket sorol fel az ids, path és folder helyett
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	a paths {i} bejegyzéséhez path és ids kell (olyan objektumazonosítók, amelyek más bejegyzésben nincsenek)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	a scope missingInFolder path értéket vár: a többi hiányzó csatolást a fájl mappájában keresi
 	Relink…	Újracsatolás…
 	Find Linked Files	Csatolt fájlok keresése
 	Find Linked Files in Folder…	Csatolt fájlok keresése mappában…

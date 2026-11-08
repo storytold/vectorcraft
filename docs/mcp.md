@@ -4380,6 +4380,14 @@ path isn't followed) when it isn't. The desktop app also checks the active docum
 comes back to the front, following the same preference. `links.check` reports every link's `status` (`ok`, `modified`,
 `missing`), `links.update {ids?}` reads modified files again and `links.relink {ids?, path | folder}` points images at
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
+`links.relink`'s `scope` picks which links take the new file (Relink's Replace choice): `selected` (the default) relinks `ids`; `all` also relinks every other object in the layers linked to the same file as
+one of them; `missingInFolder` relinks `ids` to `path`, then every other missing link to the file of its name in
+`path`'s folder, and lists the names not there in `notFound` (with `copy`, only missing images are looked for); `each` takes `paths: [{ids, path}]` in place of `ids`,
+`path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
+`path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
+errors, and nothing is relinked. Each call is one undo step. The Links panel's Relink… opens the `relink` dialog
+(`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
+another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
 documents inside symbols, graph designs, patterns and opacity masks that show the same content (by default also for
 those that only that art shows); they have no ids, so the results do not list them. Saving a document also reads it

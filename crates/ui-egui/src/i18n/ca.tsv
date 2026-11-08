@@ -3325,6 +3325,14 @@ digits	Malayalam	Malaiàlam
 	Relink	Torna a enllaçar
 	Relink Linked Files to the Document	Torna a enllaçar els fitxers enllaçats al document
 	Relink to Folder…	Torna a enllaçar a una carpeta…
+	Each Link Separately	Cada enllaç per separat
+	Selected Instances	Instàncies seleccionades
+	All Instances	Totes les instàncies
+	Missing Links from This Folder	Enllaços que falten d’aquesta carpeta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} no és each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths van junts: paths llista entrades amb ids i path, en lloc d’ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	l’entrada {i} de paths necessita path i ids (identificadors d’objecte que cap altra entrada no tingui)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder pren path: a la carpeta d’aquest fitxer es cerquen els altres enllaços que falten
 	Relink…	Torna a enllaçar…
 	Reload Plug-ins	Recarrega els complements
 	Remember Import Matches	Recorda les coincidències d’importació

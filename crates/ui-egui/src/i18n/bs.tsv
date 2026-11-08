@@ -2067,6 +2067,14 @@ digits	Malayalam	Malajalam
 	Location	Lokacija
 	No images	Nema slika
 	Relink to Folder…	Ponovo poveži s folderom…
+	Each Link Separately	Svaku vezu zasebno
+	Selected Instances	Odabrane instance
+	All Instances	Sve instance
+	Missing Links from This Folder	Nedostajuće veze iz ovog foldera
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} nije each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths idu zajedno: paths navodi unose s ids i path, umjesto ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene

@@ -1899,6 +1899,14 @@ digits	Malayalam	Malayalam
 	Location	Placering
 	No images	Ingen billeder
 	Relink to Folder…	Genopret link til mappe…
+	Each Link Separately	Hvert link for sig
+	Selected Instances	Valgte forekomster
+	All Instances	Alle forekomster
+	Missing Links from This Folder	Manglende links fra denne mappe
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} er ikke each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each og paths hører sammen: paths angiver poster med ids og path i stedet for ids, path og folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	post {i} i paths skal have path og ids (objekt-id'er, som ingen anden post har)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder tager path: der søges efter de andre manglende links i den fils mappe
 	Show Missing	Vis manglende
 	Sort by Status	Sortér efter status
 	Clear Overrides	Ryd tilsidesættelser
