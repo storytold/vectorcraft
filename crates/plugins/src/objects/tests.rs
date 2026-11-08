@@ -310,6 +310,244 @@ fn bad_stroke_styles_and_effect_records_are_refused() {
     }
 }
 
+/// A `w` × `h` PNG whose pixels vary with their column, half transparent.
+fn png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 100) as u8, (y * 7) as u8, 30, 128]));
+    let mut out = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    out
+}
+
+/// An image object `w` × `h` pixels showing blob `key`, linked to `link`.
+fn image_node(d: &mut Document, key: &str, (w, h): (u32, u32), link: Option<&str>) -> Node {
+    let im = vectorcraft_doc::ImageObject {
+        key: key.into(),
+        width: w,
+        height: h,
+        xf: Affine::new([2.0, 0.0, 0.0, 2.0, 40.0, 60.0]),
+        link: link.map(vectorcraft_doc::LinkInfo::new),
+        placement: Default::default(),
+        pixels: None,
+    };
+    Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))
+}
+
+/// [`doc`] with, above its paths: point type "T" in two paragraphs, an embedded 2 × 1 image "E", a
+/// linked image "L", an instance "S" of symbol "Star" and an instance "G" of a symbol the document
+/// doesn't have. Returns those five too.
+fn mixed() -> (Document, Vec<NodeId>, NodeId, [NodeId; 5]) {
+    use vectorcraft_doc::{CharStyle, ParaStyle, Symbol, TextObject};
+    let (mut d, ids, layer) = doc();
+    let mut t = TextObject::point(Point::new(5.0, 50.0), "Hi\nthere", CharStyle::default());
+    t.set_paragraph_styles(vec![ParaStyle::default(), ParaStyle { space_before: 6.0, ..Default::default() }]);
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    d.images.insert("e".into(), ImageBlob::png(png(2, 1)));
+    d.images.insert("l".into(), ImageBlob::png(png(4, 4)));
+    let embedded = image_node(&mut d, "e", (2, 1), None);
+    let linked = image_node(&mut d, "l", (4, 4), Some("C:/private/photo.png"));
+    let art = Arc::new(Node::path(d.alloc_id(), square(0.0), Appearance::default()));
+    d.symbols.push(Symbol { name: "Star".into(), art, dynamic: false });
+    let star = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Star".into(), xf: Affine::translate((100.0, 0.0)) });
+    let ghost = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Gone".into(), xf: Affine::IDENTITY });
+    let mut extra = [NodeId(0); 5];
+    for (slot, (mut n, name)) in extra.iter_mut().zip([text, embedded, linked, star, ghost].into_iter().zip(["T", "E", "L", "S", "G"])) {
+        n.name = Some(name.into());
+        *slot = d.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    (d, ids, layer, extra)
+}
+
+/// A filter that doesn't list `inputs` is given what it was before: the selected paths alone, in
+/// the same bytes. One that lists kinds is given those objects too, in paint order, under the same
+/// rules (hidden and locked ones left out, selected ones or ones in a selected layer).
+#[test]
+fn legacy_filter_input_bytes_are_unchanged() {
+    let (mut d, ids, layer, [text, embedded, linked, star, ghost]) = mixed();
+    assert_eq!(filter_targets(&d, &[layer]), ids);
+    assert_eq!(filter_targets_with(&d, &[layer], &[]), ids);
+    let every: Vec<NodeId> = ids.iter().copied().chain([text, embedded, linked, star, ghost]).collect();
+    let (bytes, read_only) = encode_input_with(&d, &every, &[]);
+    assert_eq!(bytes, encode_input(&d, &ids), "the other objects are left out");
+    assert!(read_only.is_empty());
+    let all = filter_targets_with(&d, &[layer], &InputKind::ALL);
+    assert_eq!(all, every);
+    let images: Vec<NodeId> = ids.iter().copied().chain([embedded, linked]).collect();
+    assert_eq!(filter_targets_with(&d, &[layer], &[InputKind::Image]), images);
+    assert_eq!(filter_targets_with(&d, &[star, ids[0]], &InputKind::ALL), [ids[0], star], "selected directly");
+    d.node_mut(text).unwrap().visible = false;
+    d.node_mut(star).unwrap().locked = true;
+    assert_eq!(filter_targets_with(&d, &[layer], &InputKind::ALL), [&ids[..], &[embedded, linked, ghost]].concat());
+    let (bytes, read_only) = encode_input_with(&d, &all, &[InputKind::SymbolInstance]);
+    let v: Value = serde_json::from_slice(&bytes).unwrap();
+    let types: Vec<&str> = v["objects"].as_array().unwrap().iter().map(|o| o["type"].as_str().unwrap()).collect();
+    assert_eq!(types, ["path", "path", "path", "symbolInstance", "symbolInstance"]);
+    assert_eq!(read_only.len(), 2);
+}
+
+/// Type comes with its runs and their character attributes, one paragraph style per paragraph, its
+/// kind and transform; type past [`MAX_INPUT_TEXT`] or [`MAX_INPUT_RUNS`] comes without text.
+#[test]
+fn declared_type_input_has_bounded_runs_and_paragraph_styles() {
+    use vectorcraft_doc::{CharStyle, ParaStyle, TextRun};
+    let (mut d, _, _, [text, ..]) = mixed();
+    let o = encode_read_only(&d, d.node(text).unwrap()).unwrap();
+    assert_eq!((&o["type"], &o["name"], &o["truncated"]), (&json!("type"), &json!("T"), &json!(false)));
+    assert_eq!(o["transform"], json!([1.0, 0.0, 0.0, 1.0, 5.0, 50.0]));
+    assert_eq!((&o["text"]["kind"], &o["text"]["vertical"]), (&json!("point"), &json!(false)));
+    assert_eq!(o["text"]["runs"], json!([{"text": "Hi\nthere", "style": serde_json::to_value(CharStyle::default()).unwrap()}]));
+    let spaced = ParaStyle { space_before: 6.0, ..Default::default() };
+    assert_eq!(o["text"]["paragraphs"], json!([serde_json::to_value(ParaStyle::default()).unwrap(), serde_json::to_value(spaced).unwrap()]));
+    assert!(o.get("path").is_none() && o.get("fills").is_none(), "not made into outlines");
+    let set_runs = |d: &mut Document, runs: Vec<TextRun>| {
+        if let NodeKind::Text(t) = &mut d.node_mut(text).unwrap().kind {
+            t.runs = runs;
+            t.paras.clear();
+        }
+    };
+    let run = |s: String| TextRun::new(s, CharStyle::default());
+    for (runs, truncated) in [
+        (vec![run("x".repeat(MAX_INPUT_TEXT))], false),
+        (vec![run("x".repeat(MAX_INPUT_TEXT - 1)), run("é".into())], true),
+        (vec![run("\n".repeat(MAX_INPUT_RUNS - 1))], false),
+        (vec![run("\n".repeat(MAX_INPUT_RUNS))], true),
+        ((0..MAX_INPUT_RUNS).map(|_| run("a".into())).collect(), false),
+        ((0..=MAX_INPUT_RUNS).map(|_| run("a".into())).collect(), true),
+    ] {
+        let n = runs.len();
+        set_runs(&mut d, runs);
+        let o = encode_read_only(&d, d.node(text).unwrap()).unwrap();
+        assert_eq!(o["truncated"], json!(truncated), "{n} runs");
+        let given = o["text"]["runs"].as_array().unwrap().len();
+        assert_eq!((given, o["text"]["paragraphs"].as_array().unwrap().is_empty()), (if truncated { 0 } else { n }, truncated), "{n} runs");
+    }
+}
+
+/// An embedded image comes with its pixels when they are small; a linked image never does, and
+/// nothing of its file's path is given. The color mode is read from the image.
+#[test]
+fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission() {
+    let (mut d, _, layer, [_, embedded, linked, ..]) = mixed();
+    let e = encode_read_only(&d, d.node(embedded).unwrap()).unwrap();
+    assert_eq!((&e["type"], &e["pixelSize"], &e["colorMode"]), (&json!("image"), &json!([2, 1]), &json!("rgb")));
+    assert_eq!((&e["linked"], &e["pixelsOmitted"], &e["transform"]), (&json!(false), &json!(false), &json!([2.0, 0.0, 0.0, 2.0, 40.0, 60.0])));
+    let pixels = craft_vectorcraft_format::base64::decode(e["pixelsBase64"].as_str().unwrap()).unwrap();
+    assert_eq!(pixels, [0, 0, 30, 128, 100, 0, 30, 128], "straight RGBA, row by row");
+    let l = encode_read_only(&d, d.node(linked).unwrap()).unwrap();
+    assert_eq!((&l["linked"], &l["pixelsOmitted"], &l["pixelSize"]), (&json!(true), &json!(true), &json!([4, 4])));
+    assert!(l.get("pixelsBase64").is_none());
+    assert!(!l.to_string().contains("private"), "the link's path isn't given: {l}");
+    // Past the limit (443 × 443 fits it; 444 × 443 doesn't), and pixels of another size, are omitted.
+    for ((w, h), omitted) in [((443, 443), false), ((444, 443), true)] {
+        d.images.insert("big".into(), ImageBlob::png(png(w, h)));
+        let n = image_node(&mut d, "big", (w, h), None);
+        let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+        let o = encode_read_only(&d, d.node(id).unwrap()).unwrap();
+        assert_eq!((&o["pixelsOmitted"], o.get("pixelsBase64").is_some()), (&json!(omitted), !omitted), "{w} × {h}");
+    }
+    let n = image_node(&mut d, "e", (3, 1), None);
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["pixelsOmitted"], json!(true), "not the size it says");
+    // Gray pixels, and data that isn't an image.
+    let mut gray = vec![];
+    image::GrayImage::from_pixel(2, 2, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();
+    for (blob, mode) in [(ImageBlob::png(gray), "gray"), (ImageBlob::png(b"not an image".to_vec()), "unknown")] {
+        d.images.insert("x".into(), blob);
+        let n = image_node(&mut d, "x", (2, 2), None);
+        let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+        assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["colorMode"], json!(mode));
+    }
+}
+
+/// A symbol instance comes with the symbol it shows and its transform, never its art; one whose
+/// symbol the document lacks says so.
+#[test]
+fn declared_symbol_instance_keeps_identity_and_transform() {
+    let (d, _, _, [.., star, ghost]) = mixed();
+    let s = encode_read_only(&d, d.node(star).unwrap()).unwrap();
+    assert_eq!((&s["type"], &s["symbolId"], &s["overrides"]), (&json!("symbolInstance"), &json!("Star"), &json!({})));
+    assert_eq!(s["transform"], json!([1.0, 0.0, 0.0, 1.0, 100.0, 0.0]));
+    assert!(s.get("missing").is_none() && s.get("path").is_none());
+    let g = encode_read_only(&d, d.node(ghost).unwrap()).unwrap();
+    assert_eq!((&g["symbolId"], &g["missing"]), (&json!("Gone"), &json!(true)));
+}
+
+/// A filter given read-only objects returns each one as `{"id": …}` or exactly as given (numbers by
+/// value), and they stay as they are, new objects listed after one going just above it. Any change,
+/// an object left out or listed twice, and a new object of such a kind are refused before anything
+/// changes.
+#[test]
+fn read_only_kind_field_and_omission_refuse() {
+    let (mut d, ids, layer, [text, embedded, linked, star, ghost]) = mixed();
+    let targets = filter_targets_with(&d, &[layer], &InputKind::ALL);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &InputKind::ALL);
+    assert_eq!(read_only.len(), 5);
+    let input: Value = serde_json::from_slice(&bytes).unwrap();
+    let before = d.clone();
+    let out = decode_output_with(&bytes, &read_only).unwrap();
+    assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5);
+    apply_output(&mut d, &targets, out.objects, None, &keep).unwrap();
+    assert_eq!(d, before, "an exact echo changes nothing");
+    // A filter that doesn't list `inputs` could never hand them back.
+    assert!(decode_output(&bytes).is_err());
+    // Numbers written another way are the same numbers.
+    let mut echo = input.clone();
+    echo["objects"][3]["transform"] = json!([1, 0, 0, 1, 5, 50]);
+    assert!(decode_output_with(echo.to_string().as_bytes(), &read_only).is_ok());
+    // `{"id"}` alone keeps it; the paths left out are deleted and a new path goes above the type.
+    let ro = |id: NodeId| json!({"id": id.0});
+    let out = json!({"objects": [ro(text), {"name": "new", "path": square(0.0)}, ro(embedded), ro(linked), ro(star), ro(ghost)]});
+    let made = apply_output(&mut d, &targets, decode_output_with(out.to_string().as_bytes(), &read_only).unwrap().objects, None, &keep).unwrap();
+    assert_eq!(names(&d, layer), ["?", "?", "T", "new", "E", "L", "S", "G"]);
+    assert_eq!(made.len(), 6);
+    assert!(ids.iter().all(|id| d.node(*id).is_none()));
+    assert_eq!(d.node(text), before.node(text), "the type is as it was");
+    // Refused, naming the object and the field.
+    let t = text.0;
+    let changed = |f: &dyn Fn(&mut Value)| {
+        let mut v = input.clone();
+        f(&mut v);
+        v
+    };
+    for (out, says) in [
+        (
+            changed(&|v| v["objects"][3]["text"]["runs"][0]["text"] = json!("Bye")),
+            format!("objects[3] (id {t}): read-only field 'text.runs[0].text' changed"),
+        ),
+        (changed(&|v| v["objects"][3]["type"] = json!("path")), format!("(id {t}): read-only field 'type' changed")),
+        (changed(&|v| v["objects"][3]["opacity"] = json!(0.5)), format!("(id {t}): read-only field 'opacity' changed")),
+        (changed(&|v| v["objects"][3]["transform"][4] = json!(6)), format!("(id {t}): read-only field 'transform[4]' changed")),
+        (
+            changed(&|v| {
+                v["objects"][4].as_object_mut().unwrap().remove("pixelsBase64");
+            }),
+            format!("(id {}): read-only field 'pixelsBase64' changed", embedded.0),
+        ),
+        (changed(&|v| v["objects"][6]["symbolId"] = json!("Moon")), format!("(id {}): read-only field 'symbolId' changed", star.0)),
+        (
+            changed(&|v| {
+                v["objects"].as_array_mut().unwrap().remove(3);
+            }),
+            format!("objects (id {t}): a read-only object was left out"),
+        ),
+        (changed(&|v| v["objects"].as_array_mut().unwrap().push(json!({"id": ghost.0}))), format!("objects[8] (id {}): is listed twice", ghost.0)),
+        (
+            changed(&|v| v["objects"].as_array_mut().unwrap().push(json!({"type": "type", "path": square(0.0)}))),
+            "`type` must be \"path\" or \"compound\"".to_string(),
+        ),
+    ] {
+        let e = decode_output_with(out.to_string().as_bytes(), &read_only).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+    }
+    // Writing one or leaving one out is refused when applying too, whatever decoded the output.
+    let mut d = before.clone();
+    let write = vec![OutObject { id: Some(text), name: Some("Renamed".into()), ..OutObject::default() }];
+    let e = apply_output(&mut d, &[text], write, None, &keep).unwrap_err().to_string();
+    assert!(e.contains("is read-only"), "{e}");
+    let e = apply_output(&mut d, &[text], vec![], None, &keep).unwrap_err().to_string();
+    assert!(e.contains("a read-only object was left out"), "{e}");
+    assert_eq!(d, before);
+}
+
 /// A filter's `documentData`: absent keeps what the plug-in keeps, `null` forgets it, any other JSON
 /// of at most [`MAX_DOCUMENT_DATA`] bytes is kept, and more refuses the whole output.
 #[test]

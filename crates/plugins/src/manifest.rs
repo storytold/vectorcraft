@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, PROGRESS_API, Permission};
+use crate::permissions::{self, API_LEVEL, INPUTS_API, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -43,6 +43,39 @@ impl Kind {
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
         }
+    }
+}
+
+/// A kind of object a filter may ask to be given besides paths and compound paths (its manifest's
+/// `inputs`, plug-in API level 2). The filter reads these objects and returns each one as it was
+/// given: it can't change or delete them ([`crate::objects::decode_output_with`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InputKind {
+    /// Point, area and path type: its text runs with their character attributes, and its
+    /// paragraph attributes.
+    Type,
+    /// An embedded or linked image: its size, color mode and, when small, its pixels.
+    Image,
+    /// A symbol instance: the symbol it shows and its transform.
+    SymbolInstance,
+}
+
+impl InputKind {
+    /// Every kind, in the order the docs list them.
+    pub const ALL: [InputKind; 3] = [InputKind::Type, InputKind::Image, InputKind::SymbolInstance];
+
+    /// Its name in `inputs`, which is also the `type` of such an object in a filter's input.
+    pub fn name(self) -> &'static str {
+        match self {
+            InputKind::Type => "type",
+            InputKind::Image => "image",
+            InputKind::SymbolInstance => "symbolInstance",
+        }
+    }
+
+    /// The kind named `name`.
+    pub fn parse(name: &str) -> Option<InputKind> {
+        InputKind::ALL.into_iter().find(|k| k.name() == name)
     }
 }
 
@@ -250,6 +283,11 @@ pub struct Manifest {
     /// installed. Left out, it gets the ones its kind implies ([`Permission::implied`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Vec<String>>,
+    /// The kinds of object a filter asks to be given besides paths and compound paths, by
+    /// [`InputKind::name`]: only a filter at `api` 2 or later lists them. Left out or empty, it is
+    /// given paths and compound paths alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "input_names")]
+    pub inputs: Vec<String>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
@@ -285,6 +323,7 @@ impl Manifest {
             author: String::new(),
             api: 1,
             permissions: None,
+            inputs: Vec::new(),
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
@@ -313,6 +352,7 @@ impl Manifest {
         {
             return Err(Error::Manifest(format!("permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
+        self.validate_inputs()?;
         self.validate_extensions()?;
         match (self.budget, self.kind) {
             (Budget::Light, _) | (Budget::Heavy, Kind::Filter) => {}
@@ -334,6 +374,38 @@ impl Manifest {
             return Err(Error::Manifest(format!("at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`")));
         }
         Ok(())
+    }
+
+    /// `inputs` names each [`InputKind`] at most once, and only a filter at `api` 2 or later lists
+    /// any, with `doc.read` among its permissions when it lists them.
+    fn validate_inputs(&self) -> Result<()> {
+        if self.inputs.is_empty() {
+            return Ok(());
+        }
+        if self.kind != Kind::Filter {
+            return Err(Error::Manifest("only a filter declares `inputs`".into()));
+        }
+        for (i, name) in self.inputs.iter().enumerate() {
+            let shown = permissions::display_text(name, permissions::MAX_SHOWN_FIELD);
+            if InputKind::parse(name).is_none() {
+                return Err(Error::Manifest(format!("`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance")));
+            }
+            if self.inputs.get(..i).is_some_and(|before| before.contains(name)) {
+                return Err(Error::Manifest(format!("`inputs` lists `{shown}` twice")));
+            }
+        }
+        if self.api < INPUTS_API {
+            return Err(Error::Manifest("`inputs` needs `api` 2 or later".into()));
+        }
+        if self.permissions.as_ref().is_some_and(|p| !p.iter().any(|n| n == Permission::DocRead.name())) {
+            return Err(Error::Manifest("`inputs` needs the permission `doc.read`".into()));
+        }
+        Ok(())
+    }
+
+    /// The kinds of object besides paths and compound paths it asks to be given (`inputs`).
+    pub fn input_kinds(&self) -> Vec<InputKind> {
+        self.inputs.iter().filter_map(|n| InputKind::parse(n)).collect()
     }
 
     /// An exporter lists 1 to [`MAX_EXTENSIONS`] distinct extensions of 1 to 16 lower-case
@@ -489,6 +561,17 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
         }
     }
     d.deserialize_any(V)
+}
+
+/// Reads `inputs`: a list of names (`null`: none). Anything else is an error that names the key, as
+/// [`Manifest::validate_inputs`] names a wrong entry.
+fn input_names<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<String>, D::Error> {
+    let wrong = || serde::de::Error::custom("`inputs` must be a list of object kinds: type, image or symbolInstance");
+    match Value::deserialize(d)? {
+        Value::Null => Ok(Vec::new()),
+        Value::Array(names) => names.into_iter().map(|n| if let Value::String(s) = n { Ok(s) } else { Err(wrong()) }).collect(),
+        _ => Err(wrong()),
+    }
 }
 
 fn params_as_object<S: serde::Serializer>(p: &[(String, Param)], s: S) -> std::result::Result<S::Ok, S::Error> {
@@ -672,6 +755,48 @@ mod tests {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");
         }
+    }
+
+    /// A filter at `api` 2 may ask for type, images and symbol instances (`inputs`), each kind once,
+    /// with `doc.read` when it lists permissions. Left out or empty, it asks for none and isn't
+    /// written back. Anything else is refused naming `inputs`.
+    #[test]
+    fn a_filter_at_api_2_lists_the_inputs_it_reads() {
+        let m =
+            Manifest::parse(br#"{"id":"org.example.inspect","name":"Inspect","kind":"filter","api":2,"inputs":["type","image","symbolInstance"]}"#)
+                .unwrap();
+        assert_eq!(m.input_kinds(), InputKind::ALL);
+        assert_eq!(serde_json::to_value(&m).unwrap()["inputs"], json!(["type", "image", "symbolInstance"]));
+        let some = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"inputs":["image"]}"#).unwrap();
+        assert_eq!(some.input_kinds(), [InputKind::Image]);
+        for none in [
+            r#"{"id":"a","name":"x","kind":"filter"}"#,
+            r#"{"id":"a","name":"x","kind":"filter","inputs":[]}"#,
+            r#"{"id":"a","name":"x","kind":"filter","inputs":null}"#,
+            r#"{"id":"a","name":"x","kind":"effect","inputs":[]}"#,
+        ] {
+            let m = Manifest::parse(none.as_bytes()).unwrap();
+            assert!(m.input_kinds().is_empty(), "{none}");
+            assert!(serde_json::to_value(&m).unwrap().get("inputs").is_none(), "{none}");
+        }
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":["text"]}"#, "`inputs` names an unknown object kind `text`"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":["Type"]}"#, "unknown object kind `Type`"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":["image","image"]}"#, "`inputs` lists `image` twice"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":"type"}"#, "`inputs` must be a list"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":[1]}"#, "`inputs` must be a list"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":{"type":true}}"#, "`inputs` must be a list"),
+            (r#"{"id":"a","name":"x","kind":"filter","inputs":["type"]}"#, "`inputs` needs `api` 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":1,"inputs":["type"]}"#, "`inputs` needs `api` 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.write"],"inputs":["type"]}"#, "needs the permission `doc.read`"),
+            (r#"{"id":"a","name":"x","kind":"effect","api":2,"inputs":["type"]}"#, "only a filter declares `inputs`"),
+            (r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"api":2,"inputs":["image"]}"#, "only a filter declares `inputs`"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+        let long = format!(r#"{{"id":"a","name":"x","kind":"filter","api":2,"inputs":[{}]}}"#, vec![r#""type""#; 1000].join(","));
+        assert!(Manifest::parse(long.as_bytes()).unwrap_err().to_string().contains("twice"));
     }
 
     #[test]

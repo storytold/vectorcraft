@@ -25,7 +25,12 @@
 //! [`vectorcraft_doc::cancel::scope`] (the app's heavy filters and background exports), its
 //! progress goes to the scope's sink and it sees the scope's Cancel; its log lines go to the log
 //! under its id.
+//!
+//! A filter whose manifest lists `inputs` (plug-in API level 2) is also given the selected type,
+//! images or symbol instances of those kinds, to read only: its output must return each of them
+//! unchanged ([`objects::decode_output_with`]).
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
@@ -64,6 +69,9 @@ pub fn describe(p: &Plugin) -> Value {
     if m.budget == Budget::Heavy {
         v["budget"] = json!("heavy");
     }
+    if !m.inputs.is_empty() {
+        v["inputs"] = json!(m.inputs);
+    }
     v
 }
 
@@ -98,6 +106,9 @@ pub struct FilterRun {
     params: Vec<u8>,
     /// The objects the plug-in is given, and the container new objects go in.
     inputs: Vec<NodeId>,
+    /// The type, images and symbol instances among them (a filter that asks for them), as given:
+    /// its output must return each one unchanged.
+    read_only: HashMap<NodeId, Value>,
     parent: Option<NodeId>,
     /// The document it was made from, and that document's revision then.
     document: (u64, u64),
@@ -140,8 +151,10 @@ impl FilterRun {
         let may = m.permissions();
         let st = s.doc()?;
         let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
-        // Without `doc.read` a filter is given no objects: it can only add new ones.
-        let inputs = if may.contains(&Permission::DocRead) { objects::filter_targets(&st.doc, &selected) } else { Vec::new() };
+        // Without `doc.read` a filter is given no objects: it can only add new ones. Type, images
+        // and symbol instances only when its manifest asks for them (`inputs`).
+        let kinds = m.input_kinds();
+        let inputs = if may.contains(&Permission::DocRead) { objects::filter_targets_with(&st.doc, &selected, &kinds) } else { Vec::new() };
         let parent = st.insertion_parent();
         let bounds = st.doc.bounds_of(&inputs, false);
         let board = bounds.and_then(|b| st.doc.artboard_at(b.center())).and_then(|i| st.doc.artboards.get(i)).or(st.doc.artboards.first());
@@ -149,10 +162,10 @@ impl FilterRun {
         // What the plug-in keeps with the document, as it last wrote it.
         let data = st.doc.plugin_data(&m.id).filter(|_| may.contains(&Permission::State)).cloned().unwrap_or(Value::Null);
         params["_context"] = json!({"mode": "filter", "bounds": bounds.map(rect), "artboard": board.map(|a| rect(a.rect)), "documentData": data});
-        let input = objects::encode_input(&st.doc, &inputs);
+        let (input, read_only) = objects::encode_input_with(&st.doc, &inputs, &kinds);
         let params = serde_json::to_vec(&params).map_err(|e| bad(C, e.to_string()))?;
         let document = (st.uid, st.revision);
-        Ok(FilterRun { plugin, input, params, inputs, parent, document })
+        Ok(FilterRun { plugin, input, params, inputs, read_only, parent, document })
     }
 
     /// The plug-in, for its name and budget.
@@ -192,12 +205,13 @@ impl FilterRun {
     }
 
     /// Applies the plug-in's `output` to the active document as one undo step: its objects, and what
-    /// it keeps with the document from now on. An output its permissions don't allow is refused,
-    /// and the document stays as it was.
+    /// it keeps with the document from now on. An output its permissions don't allow, and one that
+    /// changes or leaves out a read-only object it was given, is refused, and the document stays as
+    /// it was.
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
-        let out = objects::decode_output(output).map_err(err)?;
+        let out = objects::decode_output_with(output, &self.read_only).map_err(err)?;
         if out.document_data.is_some() && !may.contains(&Permission::State) {
             return Err(not_granted(&m.name, Permission::State));
         }
@@ -499,7 +513,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
             always,
             list
         ),
@@ -517,7 +531,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [..] (default: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance) is also given the selected objects of those kinds to read: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer) → {plugin, ids}",
             has_doc,
             run
         ),

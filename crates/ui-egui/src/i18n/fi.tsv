@@ -5874,6 +5874,11 @@ axis	Y Axis	Y-akseli
 @msg	at most {MAX_PERMISSIONS} `permissions`	enintään {MAX_PERMISSIONS} `permissions`
 @msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	käyttöoikeus `{shown}` ei koske lajin `{_1}` laajennusta
 @msg	permission `{shown}` is listed twice	käyttöoikeus `{shown}` on lueteltu kahdesti
+@msg	only a filter declares `inputs`	vain suodatin voi määrittää `inputs`-avaimen
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
+@msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
+@msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	”{name}” pyytää käyttöoikeuksia {asked}: asenna se `grant`-luettelolla, jossa ne ovat, kun käyttäjä suostuu

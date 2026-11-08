@@ -6422,6 +6422,8 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "craft-vectorcraft-format",
+ "image",
  "log",
  "serde",
  "serde_json",

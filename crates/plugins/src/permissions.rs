@@ -20,6 +20,9 @@ pub const API_LEVEL: u32 = 2;
 /// permission they need.
 pub const PROGRESS_API: u32 = 2;
 
+/// The API level that adds a filter's `inputs` ([`crate::InputKind`]).
+pub const INPUTS_API: u32 = 2;
+
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;
 

@@ -10,10 +10,12 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
-use vectorcraft_geom::{FillRule, PathData, Point, Rect};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, TextKind, TextObject,
+};
+use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 
-use crate::{Error, Result};
+use crate::{Error, InputKind, Result};
 
 /// Coordinates a plug-in may return, in points (the document's own canvas limit).
 pub const MAX_COORD: f64 = 4.0e6;
@@ -32,6 +34,14 @@ pub const MITER_LIMIT: std::ops::RangeInclusive<f64> = 1.0..=500.0;
 pub const MAX_EFFECT_ID: usize = 128;
 /// Largest data a plug-in may keep with a document (`documentData`), in bytes of JSON.
 pub const MAX_DOCUMENT_DATA: usize = 1 << 20;
+/// Most text a filter is given of one type object, in bytes of UTF-8 over all its runs: longer
+/// type comes with `truncated` and no runs or paragraphs.
+pub const MAX_INPUT_TEXT: usize = 256 * 1024;
+/// Most runs, and most paragraphs, a filter is given of one type object (as [`MAX_INPUT_TEXT`]).
+pub const MAX_INPUT_RUNS: usize = 4_096;
+/// Largest pixels a filter is given of one embedded image, in characters of base64: a larger
+/// image comes with `pixelsOmitted`.
+pub const MAX_INPUT_PIXELS: usize = 1 << 20;
 
 /// One object returned by a plug-in. `None` fields keep the object's value (new objects take the
 /// defaults: a path, non-zero rule, no fills or strokes, full opacity).
@@ -56,6 +66,9 @@ pub struct OutObject {
     pub guide: Option<bool>,
     /// Locks or unlocks the object (as Object › Lock and Unlock do).
     pub locked: Option<bool>,
+    /// A read-only input object (type, an image or a symbol instance) returned as it was given:
+    /// it stays as it is, and new objects listed after it go above it.
+    pub kept: bool,
 }
 
 /// One stroke of an [`OutObject`]. `None` fields keep the stroke's value (a new stroke's
@@ -158,8 +171,153 @@ pub fn encode(n: &Node) -> Option<Value> {
 /// The input document of a filter run: `{"objects": [...]}` for `ids` (paths and compound paths;
 /// others are left out).
 pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
-    let objects: Vec<Value> = ids.iter().filter_map(|id| doc.node(*id)).filter_map(encode).collect();
-    serde_json::to_vec(&json!({ "objects": objects })).unwrap_or_default()
+    encode_input_with(doc, ids, &[]).0
+}
+
+/// [`encode_input`] for a filter that asks for `kinds` too: objects of those kinds among `ids` are
+/// in it as [`encode_read_only`] gives them. Also returns those objects by id, which the filter must
+/// return as they were ([`decode_output_with`]).
+pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind]) -> (Vec<u8>, HashMap<NodeId, Value>) {
+    let mut read_only = HashMap::new();
+    let objects: Vec<Value> = ids
+        .iter()
+        .filter_map(|id| doc.node(*id))
+        .filter_map(|n| match input_kind(n).filter(|k| kinds.contains(k)) {
+            Some(_) => {
+                let o = encode_read_only(doc, n)?;
+                read_only.insert(n.id, o.clone());
+                Some(o)
+            }
+            None => encode(n),
+        })
+        .collect();
+    (serde_json::to_vec(&json!({ "objects": objects })).unwrap_or_default(), read_only)
+}
+
+/// The kind of read-only object `n` is: type, an image or a symbol instance (`None` for others).
+pub fn input_kind(n: &Node) -> Option<InputKind> {
+    match &n.kind {
+        NodeKind::Text(_) => Some(InputKind::Type),
+        NodeKind::Image(_) => Some(InputKind::Image),
+        NodeKind::SymbolInstance { .. } => Some(InputKind::SymbolInstance),
+        _ => None,
+    }
+}
+
+fn affine_json(xf: Affine) -> Value {
+    json!(xf.as_coeffs())
+}
+
+/// Type, an image or a symbol instance of `doc` as a filter that asks for its kind reads it (`None`
+/// for other objects). Each has `{id, type, name?, bounds, transform}`, `transform` mapping its own
+/// space (text space, pixel space, the symbol's art) into the document, and:
+/// - type (`"type"`): `text: {kind: "point"|"area"|"path", vertical, runs: [{text, style, inline?}],
+///   paragraphs: [style]}` with the native character and paragraph attributes, one paragraph style
+///   for each paragraph, and `truncated`: true, with no runs or paragraphs, past [`MAX_INPUT_TEXT`]
+///   or [`MAX_INPUT_RUNS`];
+/// - an image (`"image"`): `pixelSize: [w, h]`, `colorMode: "rgb"|"cmyk"|"gray"|"unknown"`,
+///   `linked`, `pixelsOmitted`, and for an embedded image of at most [`MAX_INPUT_PIXELS`]
+///   `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top. A linked image's file
+///   and path are never read or given;
+/// - a symbol instance (`"symbolInstance"`): `symbolId` (the symbol's name), `missing: true` when
+///   the document has no such symbol, and `overrides: {}`.
+pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
+    let mut o = json!({"id": n.id.0, "type": input_kind(n)?.name(), "bounds": rect_json(doc.bounds_of(&[n.id], false))});
+    match &n.kind {
+        NodeKind::Text(t) => {
+            o["transform"] = affine_json(t.xf);
+            let (text, truncated) = text_json(t);
+            o["text"] = text;
+            o["truncated"] = json!(truncated);
+        }
+        NodeKind::Image(im) => {
+            o["transform"] = affine_json(im.xf);
+            let linked = im.link.is_some();
+            let blob = doc.image_blob(im);
+            // A linked image's pixels are its file's: never given (nor its path).
+            let pixels = blob.filter(|_| !linked).and_then(|b| rgba_pixels(b, im.width, im.height));
+            o["pixelSize"] = json!([im.width, im.height]);
+            o["colorMode"] = json!(blob.map_or("unknown", color_mode));
+            o["linked"] = json!(linked);
+            o["pixelsOmitted"] = json!(pixels.is_none());
+            if let Some(p) = pixels {
+                o["pixelsBase64"] = json!(craft_vectorcraft_format::base64::encode(&p));
+            }
+        }
+        NodeKind::SymbolInstance { symbol, xf } => {
+            o["transform"] = affine_json(*xf);
+            o["symbolId"] = json!(symbol);
+            if !doc.symbols.iter().any(|s| s.name == *symbol) {
+                o["missing"] = json!(true);
+            }
+            o["overrides"] = json!({});
+        }
+        _ => return None,
+    }
+    if let Some(name) = &n.name {
+        o["name"] = json!(name);
+    }
+    Some(o)
+}
+
+/// The text of type `t` as a filter reads it, and whether it was too long to give
+/// ([`MAX_INPUT_TEXT`], [`MAX_INPUT_RUNS`]).
+fn text_json(t: &TextObject) -> (Value, bool) {
+    let kind = match t.kind {
+        TextKind::Point => "point",
+        TextKind::Area { .. } => "area",
+        TextKind::OnPath { .. } => "path",
+    };
+    let bytes = t.runs.iter().fold(0usize, |n, r| n.saturating_add(r.text.len()));
+    let paragraphs = t.paragraph_count();
+    let truncated = bytes > MAX_INPUT_TEXT || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
+    let (runs, paras): (Vec<Value>, Vec<Value>) = if truncated {
+        (Vec::new(), Vec::new())
+    } else {
+        let value = |v: std::result::Result<Value, serde_json::Error>| v.unwrap_or(Value::Null);
+        (
+            t.runs.iter().map(|r| value(serde_json::to_value(r))).collect(),
+            (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect(),
+        )
+    };
+    (json!({"kind": kind, "vertical": t.vertical, "runs": runs, "paragraphs": paras}), truncated)
+}
+
+/// How image `b` stores its colors, read from its header: `"cmyk"`, `"gray"`, `"rgb"`, or
+/// `"unknown"` when it can't be read or only a linked image's preview is there.
+fn color_mode(b: &ImageBlob) -> &'static str {
+    if b.proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &b.bytes) || **p == *b.bytes) {
+        return "unknown";
+    }
+    if b.is_cmyk() {
+        return "cmyk";
+    }
+    if b.gray_source().is_some() {
+        return "gray";
+    }
+    let readable =
+        image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
+    if readable.is_some() { "rgb" } else { "unknown" }
+}
+
+/// The pixels of image `b` as straight RGBA, when it is `w` × `h` pixels and they fit
+/// [`MAX_INPUT_PIXELS`] in base64; the size is checked from the header before anything is decoded.
+fn rgba_pixels(b: &ImageBlob, w: u32, h: u32) -> Option<Vec<u8>> {
+    let bytes = u64::from(w) * u64::from(h) * 4;
+    if bytes == 0 || bytes.div_ceil(3) * 4 > MAX_INPUT_PIXELS as u64 {
+        return None;
+    }
+    let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
+    if reader()?.into_dimensions().ok()? != (w, h) {
+        return None;
+    }
+    let mut r = reader()?;
+    let mut limits = image::Limits::default();
+    // The decoder's own buffers besides the RGBA it gives.
+    limits.max_alloc = Some(64 << 20);
+    r.limits(limits);
+    let img = r.decode().ok()?.into_rgba8();
+    (img.dimensions() == (w, h)).then(|| img.into_raw())
 }
 
 fn out_err(at: &str, msg: impl std::fmt::Display) -> Error {
@@ -397,8 +555,16 @@ pub struct Output {
 /// Parses a filter's output: `{"objects": [...], "documentData"?: …}`, or `{"error": "message"}`
 /// when the plug-in declined (the message reaches the user).
 pub fn decode_output(bytes: &[u8]) -> Result<Output> {
+    decode_output_with(bytes, &HashMap::new())
+}
+
+/// [`decode_output`] for a filter given `read_only` objects ([`encode_input_with`]): it must list
+/// each of them exactly once, as `{"id": …}` alone or exactly as it was given (numbers compared by
+/// value), and such an entry is [`OutObject::kept`]. Any other entry for one of them, and one left
+/// out, is refused naming the object and the first field that differs, before anything changes.
+pub fn decode_output_with(bytes: &[u8], read_only: &HashMap<NodeId, Value>) -> Result<Output> {
     let mut v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
-    let objects = decode_objects(&v)?;
+    let objects = decode_objects(&v, read_only)?;
     let document_data = match v.get_mut("documentData").map(Value::take) {
         None => None,
         Some(Value::Null) => Some(None),
@@ -417,11 +583,12 @@ pub fn decode_output(bytes: &[u8]) -> Result<Output> {
 /// declined (the message reaches the user). A live effect's other keys don't matter.
 pub fn decode(bytes: &[u8]) -> Result<Vec<OutObject>> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| Error::Output(format!("not JSON: {e}")))?;
-    decode_objects(&v)
+    decode_objects(&v, &HashMap::new())
 }
 
-/// The objects of output `v`, or its decline.
-fn decode_objects(v: &Value) -> Result<Vec<OutObject>> {
+/// The objects of output `v`, or its decline; entries for `read_only` objects as
+/// [`decode_output_with`] reads them.
+fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<OutObject>> {
     if let Some(e) = declined(v) {
         return Err(e);
     }
@@ -430,7 +597,83 @@ fn decode_objects(v: &Value) -> Result<Vec<OutObject>> {
         return Err(Error::Output(format!("{} objects (limit {MAX_OBJECTS})", objects.len())));
     }
     let mut anchors = 0;
-    objects.iter().enumerate().map(|(i, o)| decode_object(o, &format!("objects[{i}]"), &mut anchors)).collect()
+    let mut returned: HashSet<NodeId> = HashSet::new();
+    let out = objects
+        .iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let id = o.get("id").and_then(Value::as_u64).map(NodeId);
+            match id.and_then(|id| Some((id, read_only.get(&id)?))) {
+                Some((id, given)) => {
+                    let at = format!("objects[{i}] (id {})", id.0);
+                    if !returned.insert(id) {
+                        return Err(out_err(&at, "is listed twice"));
+                    }
+                    check_unchanged(o, given, &at)?;
+                    Ok(OutObject { id: Some(id), kept: true, ..OutObject::default() })
+                }
+                None => decode_object(o, &format!("objects[{i}]"), &mut anchors),
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut missing: Vec<NodeId> = read_only.keys().filter(|id| !returned.contains(id)).copied().collect();
+    missing.sort();
+    if let Some(id) = missing.first() {
+        return Err(out_err(
+            &format!("objects (id {})", id.0),
+            "a read-only object was left out: return it, as {\"id\": …} alone or as it was given",
+        ));
+    }
+    Ok(out)
+}
+
+/// Checks entry `o` of a filter's output for a read-only object it was `given`: `{"id": …}` alone,
+/// or `given` itself, numbers compared by value. Otherwise the error names the first field that
+/// differs (`text.runs[0].text`): a field the entry gives before one it leaves out.
+fn check_unchanged(o: &Value, given: &Value, at: &str) -> Result<()> {
+    if o.as_object().is_some_and(|m| m.len() == 1) {
+        return Ok(());
+    }
+    let changed = match (o, given) {
+        (Value::Object(x), Value::Object(y)) => {
+            let mut keys: Vec<&String> = x.keys().collect();
+            keys.sort();
+            keys.into_iter().find_map(|k| match y.get(k) {
+                Some(q) => first_difference(&x[k], q, k),
+                None => Some(k.clone()),
+            })
+        }
+        _ => None,
+    };
+    match changed.or_else(|| first_difference(o, given, "")) {
+        None => Ok(()),
+        Some(field) => Err(out_err(at, format!("read-only field '{field}' changed"))),
+    }
+}
+
+/// The path of the first place `a` and `b` differ (`""`: they differ as a whole), `None` when they
+/// are the same JSON with numbers compared by value.
+fn first_difference(a: &Value, b: &Value, at: &str) -> Option<String> {
+    let key = |k: &str| if at.is_empty() { k.to_string() } else { format!("{at}.{k}") };
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => (x.as_f64() != y.as_f64()).then(|| at.into()),
+        (Value::Object(x), Value::Object(y)) => {
+            let mut keys: Vec<&String> = x.keys().chain(y.keys()).collect();
+            keys.sort();
+            keys.dedup();
+            keys.into_iter().find_map(|k| match (x.get(k), y.get(k)) {
+                (Some(p), Some(q)) => first_difference(p, q, &key(k)),
+                _ => Some(key(k)),
+            })
+        }
+        (Value::Array(x), Value::Array(y)) => {
+            if x.len() != y.len() {
+                return Some(at.into());
+            }
+            x.iter().zip(y).enumerate().find_map(|(i, (p, q))| first_difference(p, q, &format!("{at}[{i}]")))
+        }
+        (a, b) => (a != b).then(|| at.into()),
+    }
 }
 
 /// The decline in a plug-in's output `v`, `{"error": "…"}`: its message as the user reads it,
@@ -625,22 +868,30 @@ pub fn selectable(n: &Node) -> bool {
 /// guides too) and clipping paths are left out (so are paths inside compound paths, blends and
 /// other live objects).
 pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
-    fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, out: &mut Vec<NodeId>) {
-        for n in list {
+    filter_targets_with(doc, selected, &[])
+}
+
+/// [`filter_targets`] for a filter that asks for `kinds` too: type, images and symbol instances of
+/// those kinds join the paths in paint order, under the same rules (type that clips a clip group is
+/// left out, and so is anything inside a symbol, a placed document or a live object).
+pub fn filter_targets_with(doc: &Document, selected: &[NodeId], kinds: &[InputKind]) -> Vec<NodeId> {
+    fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, clips: bool, kinds: &[InputKind], out: &mut Vec<NodeId>) {
+        for (i, n) in list.iter().enumerate() {
             if !n.visible || n.locked {
                 continue;
             }
             let picked = inside || sel.contains(&n.id);
             match &n.kind {
                 NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !is_guide(n) => out.push(n.id),
-                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, out),
+                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, n.clips(), kinds, out),
+                _ if picked && !(clips && i == 0) && input_kind(n).is_some_and(|k| kinds.contains(&k)) => out.push(n.id),
                 _ => {}
             }
         }
     }
     let sel: HashSet<NodeId> = selected.iter().copied().collect();
     let mut out = vec![];
-    visit(&doc.layers, &sel, false, &mut out);
+    visit(&doc.layers, &sel, false, false, kinds, &mut out);
     out
 }
 
@@ -740,7 +991,14 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
                     let why = if wanted.contains(&id) { "is listed twice" } else { "is not the id of an input object" };
                     out_err(&at, format!("{} {why}", id.0))
                 })?;
-                write(doc, &mut n, o, &at, admit)?;
+                // Type, images and symbol instances are only read: writing one would make it a path.
+                if input_kind(&n).is_some() && !o.kept {
+                    return Err(out_err(&at, format!("{} is read-only", id.0)));
+                }
+                let kept = o.kept;
+                if !kept {
+                    write(doc, &mut n, o, &at, admit)?;
+                }
                 if !run.is_empty() {
                     let nodes = std::mem::take(&mut run);
                     match prev {
@@ -748,7 +1006,9 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
                         None => plan.before.insert(id, nodes),
                     };
                 }
-                plan.replace.insert(id, n);
+                if !kept {
+                    plan.replace.insert(id, n);
+                }
                 prev = Some(id);
                 result.push(id);
             }
@@ -774,7 +1034,10 @@ pub fn apply_output(doc: &mut Document, inputs: &[NodeId], out: Vec<OutObject>, 
             None => plan.top = Some((parent, run)),
         }
     }
-    // Input objects the output left out are deleted.
+    // Input objects the output left out are deleted, except read-only ones, which it must return.
+    if let Some(n) = originals.values().filter(|n| input_kind(n).is_some()).min_by_key(|n| n.id) {
+        return Err(out_err(&format!("objects (id {})", n.id.0), "a read-only object was left out"));
+    }
     plan.delete = originals.into_keys().collect();
     if let Some(list) = plan.list(None, &doc.layers) {
         doc.layers = list;
