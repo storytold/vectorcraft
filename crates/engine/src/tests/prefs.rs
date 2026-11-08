@@ -2511,6 +2511,20 @@ fn a_straight_segment_dragged_by_direct_selection_lands_on_a_ruler_guide() {
     }
 }
 
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel starts on: in a new session, in a preferences
+/// file saved before the option existed and after a reset.
+#[test]
+fn scroll_sideways_with_cmd_wheel_is_on_by_default() {
+    assert!(Prefs::default().ctrl_wheel_scrolls_sideways);
+    let old: Prefs = serde_json::from_value(json!({"zoomWithMouseWheel": false})).unwrap();
+    assert!(old.ctrl_wheel_scrolls_sideways);
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(!s.prefs.ctrl_wheel_scrolls_sideways);
+    s.execute("prefs.reset", &json!({})).unwrap();
+    assert!(s.prefs.ctrl_wheel_scrolls_sideways);
+}
+
 /// The Transform panel menu's choice starts as `default` (the panels follow General › Transform
 /// Pattern Tiles): in a new session, in a preferences file saved before the choice existed and
 /// after a reset; `prefs.set` takes it and the three menu choices, and nothing else.
