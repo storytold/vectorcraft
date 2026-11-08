@@ -1373,6 +1373,20 @@ fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
 mod tests {
     use super::*;
 
+    /// Runs `f` again until no plug-in was installed or removed while it ran, and returns what it
+    /// returned. Other tests install and remove plug-ins at any time, and each changes the Effect
+    /// menu's rows.
+    fn with_steady_plugins<T>(mut f: impl FnMut() -> T) -> T {
+        for _ in 0..100 {
+            let revision = menus::plugin_revision();
+            let r = f();
+            if menus::plugin_revision() == revision {
+                return r;
+            }
+        }
+        panic!("the installed plug-ins kept changing");
+    }
+
     #[test]
     fn format_parse_round_trip_for_every_default() {
         for e in entries().iter() {
@@ -1642,18 +1656,26 @@ mod tests {
     fn export_text_lists_the_dialogs_rows_with_their_shortcuts() {
         let mut ov = Overrides::new();
         crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
-        let text = export_text("VectorCraft Defaults", &ov);
+        let (text, km, tool_rows, menu_rows) = with_steady_plugins(|| {
+            let text = export_text("VectorCraft Defaults", &ov);
+            let km = keymap_with(&ov);
+            let names = |tools: bool| -> Vec<String> {
+                entries()
+                    .iter()
+                    .filter(|e| e.is_tool == tools && listed(km.overrides(), e))
+                    .map(|e| if e.is_tool || e.group.is_empty() { format!("{}\t", e.label) } else { format!("{} › {}\t", e.group, e.label) })
+                    .collect()
+            };
+            let rows = (names(true), names(false));
+            (text, km, rows.0, rows.1)
+        });
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines[..4], ["Keyboard Shortcuts", "Set: VectorCraft Defaults", "", "Tools"]);
         let menu_at = lines.iter().position(|l| *l == "Menu Commands").expect("a Menu Commands section");
         assert_eq!(lines[menu_at - 1], "", "a blank line before Menu Commands");
-        let km = keymap_with(&ov);
-        let names = |tools: bool| -> Vec<String> {
-            entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| text_row(&e.key, "")).collect()
-        };
         let names_of = |rows: &[&str]| -> Vec<String> { rows.iter().map(|l| format!("{}\t", l.split('\t').next().unwrap_or_default())).collect() };
-        assert_eq!(names_of(&lines[4..menu_at - 1]), names(true), "the Tools rows, in the dialog's order");
-        assert_eq!(names_of(&lines[menu_at + 1..]), names(false), "the Menu Commands rows, in the dialog's order");
+        assert_eq!(names_of(&lines[4..menu_at - 1]), tool_rows, "the Tools rows, in the dialog's order");
+        assert_eq!(names_of(&lines[menu_at + 1..]), menu_rows, "the Menu Commands rows, in the dialog's order");
         let pen = menus::pretty_shortcut(default_of("tool:pen").expect("the Pen tool has a default key"));
         assert!(lines[4..menu_at].contains(&text_row("tool:pen", &pen).as_str()), "{text}");
         let prefs = menus::pretty_shortcut(&effective_with(&km, "edit.preferences").expect("the shortcut set"));
@@ -1693,7 +1715,11 @@ mod tests {
             Ok(())
         }));
         app.run("shortcuts.import", json!({"data": export_json("Studio", &Overrides::new())})).unwrap();
-        assert_eq!(app.run("shortcuts.exportText", json!({"path": "/sets/Studio.txt"})), Ok(json!({"path": "/sets/Studio.txt"})));
+        let expected = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            assert_eq!(app.run("shortcuts.exportText", json!({"path": "/sets/Studio.txt"})), Ok(json!({"path": "/sets/Studio.txt"})));
+            export_text("Studio", &Overrides::new())
+        });
         assert_eq!(
             app.run("shortcuts.exportText", json!({"path": "/missing/dir/Studio.txt"})),
             Err("can't write /missing/dir/Studio.txt".to_string())
@@ -1703,7 +1729,7 @@ mod tests {
         let [(path, text)] = files.as_slice() else { panic!("{files:?}") };
         assert_eq!(path, "/sets/Studio.txt");
         assert!(text.starts_with("Keyboard Shortcuts\nSet: Studio\n\nTools\n"), "{text}");
-        assert_eq!(*text, export_text("Studio", &Overrides::new()));
+        assert_eq!(*text, expected);
     }
 
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
@@ -2009,8 +2035,9 @@ mod tests {
             assert!(app.ui.shortcut_overrides.is_empty(), "{id} {p}");
             assert_eq!(app.ui.shortcut_set, set, "{id} {p}");
         }
-        let all = app.run("shortcuts.list", json!({})).unwrap();
-        assert_eq!(app.run("shortcuts.list", json!({"query": null})), Ok(all));
+        let (all, null_query) =
+            with_steady_plugins(|| (app.run("shortcuts.list", json!({})).unwrap(), app.run("shortcuts.list", json!({"query": null}))));
+        assert_eq!(null_query, Ok(all));
         let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
         assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
         assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));

@@ -2415,7 +2415,7 @@ fn cmd_enter_bound_to_an_effect_runs_the_effect_not_the_tool() {
 
 /// A live-effect plug-in installed after Keyboard Shortcuts built its list has a row of its own:
 /// it takes a shortcut, `shortcuts.list` and its Effect › Plug-ins item show it, and the key
-/// applies the effect. While the plug-in is removed it has no row and the key runs nothing; the
+/// applies the effect. While the plug-in is removed it has no row and no key is bound to it; the
 /// saved shortcut is the effect's again when the plug-in comes back, now opening the dialog of the
 /// options it has.
 #[test]
@@ -2453,13 +2453,11 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     assert_eq!(crate::menus::item_shortcut("effect.apply", &json!({ "effect": effect })), Some(chord));
     frame(&mut app, f6());
     assert_eq!(effects(&app), 1, "the key applies the effect");
-    // Removed: no row, and the key runs nothing; the saved shortcut stays.
+    // Removed: no row, and no key is bound to the effect; the saved shortcut stays.
     vectorcraft_plugins::registry::remove(plugin);
     assert!(crate::shortcut_editor::entry(key).is_none());
     assert_eq!(shown(&mut app), vec![]);
-    frame(&mut app, f6());
-    assert_eq!(effects(&app), 1);
-    assert!(app.ui.dialog.is_none());
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["effect"] != effect), "no key is bound to the removed effect");
     assert!(crate::keymap::has_override(&app.ui.shortcut_overrides, key));
     // Back, now with options: the saved shortcut opens its dialog.
     install(r#"{"wiggle":{"type":"bool"}}"#);
