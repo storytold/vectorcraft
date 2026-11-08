@@ -82,6 +82,11 @@
 	3 Color Job…	Задание с 3 цветами…
 	30° Angles	Углы 30°
 	3D and Materials	3D и материалы
+	Plane	Плоскость
+	Extrude	Выдавливание
+	Revolve	Вращение
+	Inflate	Надувание
+	Select objects, then pick an object type to give them a 3D effect.	Выделите объекты, затем выберите тип объекта, чтобы придать им 3D-эффект.
 	3D Ribbon	3D-лента
 	45° Angles	Углы 45°
 	60° Angles	Углы 60°
@@ -282,6 +287,8 @@ font-technology	Variable	Вариативные
 	Show Cross Hairs	Показать перекрестие
 	Show Video Safe Areas	Показать безопасные зоны видео
 	Video Ruler Pixel Aspect Ratio:	Соотношение сторон пикселя видео-линеек:
+	Fade Region Outside Artboard	Затемнять область вне монтажной области
+	Update While Dragging	Обновлять при перетаскивании
 	Hide Video Rulers	Скрыть видео-линейки
 	Background Contents	Содержимое фона
 	Background Contents:	Содержимое фона:
@@ -1087,6 +1094,8 @@ font-technology	Variable	Вариативные
 	Export for Screens Settings	Параметры экспорта для экранов
 	Export for Screens…	Экспортировать для экранов…
 	Export Keyboard Shortcuts…	Экспортировать сочетания клавиш…
+	Export Keyboard Shortcuts as Text…	Экспортировать сочетания клавиш как текст…
+	Export Text…	Экспорт текста…
 	Export Option	Параметр экспорта
 	Export PDF	Экспортировать PDF
 	Export PDF Presets	Экспортировать наборы PDF
@@ -1163,6 +1172,7 @@ font-technology	Variable	Вариативные
 	Stroke When Editable	Редактируемая обводка
 	Fill Color	Цвет заливки
 	Fill New Type Objects With Placeholder Text	Заполнять новые текстовые объекты текстом-заполнителем
+	Start Lists From Typed Markers	Начинать списки с введённых маркеров
 	Fill Rule	Правило заливки
 	Fill with Placeholder Text	Заполнить текстом-заполнителем
 	Fill:	Заливка:
@@ -1173,6 +1183,7 @@ font-technology	Variable	Вариативные
 	Find Font…	Найти шрифт…
 	Find Next	Найти далее
 	Find Objects	Найти объекты
+	Compare with Image	Сравнить с изображением
 	First Page	Первая страница
 	First-line Left Indent	Отступ слева в первой строке
 	Fisheye…	Рыбий глаз…
@@ -1385,6 +1396,8 @@ file-filter	Templates	Шаблоны
 	Grays	Серые
 	Grays and Neutrals	Серые и нейтральные
 	Grayscale	Оттенки серого
+	High Color	Много цветов
+	Low Color	Мало цветов
 	Grayscale images	Изображения в оттенках серого
 	Greek & Cyrillic	Греческий и кириллица
 	Green	Зелёный
@@ -1458,6 +1471,7 @@ file-filter	Templates	Шаблоны
 	Step Backward	Шаг назад
 	Step Forward	Шаг вперёд
 	Clear History	Очистить историю
+	New Document from State	Новый документ из состояния
 	Set History Limit…	Задать предел истории…
 	History States	Состояния истории
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1852,6 +1866,9 @@ file-filter	Templates	Шаблоны
 	Live Paint Selection Tool	Инструмент «Выделение быстрой заливки»
 	Live Shape Properties	Свойства динамической фигуры
 	Load Color Profile…	Загрузить профиль цвета…
+	Load Character Styles…	Загрузить стили символов…
+	Load Paragraph Styles…	Загрузить стили абзацев…
+	Load All Styles…	Загрузить все стили…
 	Remove Color Profile…	Удалить профиль цвета…
 	Load Image into Clipboard	Загрузить изображение в буфер обмена
 	Load Metafile into Clipboard	Загрузить метафайл в буфер обмена
@@ -2721,6 +2738,14 @@ digits	Malayalam	Малаялам
 	Relink	Восстановить связь
 	Relink Linked Files to the Document	Восстановить связи связанных файлов с документом
 	Relink to Folder…	Восстановить связь с папкой…
+	Each Link Separately	Каждую связь отдельно
+	Selected Instances	Выбранные экземпляры
+	All Instances	Все экземпляры
+	Missing Links from This Folder	Отсутствующие связи из этой папки
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не является одним из each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each и paths задаются вместе: paths перечисляет записи с ids и path вместо ids, path и folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	записи {i} в paths нужны path и ids (идентификаторы объектов, которых нет в других записях)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder принимает path: в папке этого файла ищутся остальные отсутствующие связи
 	Relink…	Восстановить связь…
 	Find Linked Files	Найти связанные файлы
 	Find Linked Files in Folder…	Найти связанные файлы в папке…
@@ -2765,6 +2790,7 @@ digits	Malayalam	Малаялам
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Замените его другим файлом или игнорируйте: его изображения продолжат показывать предварительный просмотр, сохранённый с документом.
 	Replace Spine	Заменить остов
 	Replace Symbol	Заменить символ
+	Reset Transformation	Сбросить трансформацию
 	Replace With Font	Заменить шрифтом
 	Replace With Font From	Заменить шрифтом из
 	System	Система
@@ -2781,6 +2807,8 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Сбросить функции OpenType
 	Reset Panel	Сбросить панель
 	Reset Preferences	Сбросить настройки
+	Search Preferences	Поиск в настройках
+	No settings found	Настройки не найдены
 	Reset Profiles	Сбросить профили
 	Rotate View	Повернуть вид
 	Reset Rotate View	Сбросить поворот вида
@@ -2836,6 +2864,7 @@ digits	Malayalam	Малаялам
 	Rotate Tool	Инструмент «Поворот»
 	Rotate View Tool	Инструмент «Поворот вида»
 	Trackpad Gesture to Rotate View	Поворачивать вид жестом трекпада
+	Hold a Tool Shortcut to Use the Tool Temporarily	Временно использовать инструмент, удерживая его клавишу
 	Rotate…	Повернуть…
 	Rotation	Поворот
 	Roughen…	Огрубление…
@@ -3064,6 +3093,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Выбранные образцы
 	Selected Swatches Only	Только выбранные образцы
 	Selection	Выделение
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Выделение рамкой
+	Touching	Пересекаемые
+	Fully Enclosed	Полностью внутри
+	Drag Direction	Направление перетаскивания
 	Selection & Anchor Display	Отображение выделения и опорных точек
 	Selection Only	Только выделение
 	Selection Tool	Инструмент «Выделение»
@@ -3201,6 +3235,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Имитировать цветную бумагу
 	Simulate Paper	Имитировать бумагу
 	Double Column	Двойной столбец
+	Keep Tools Beside the Canvas	Инструменты рядом с холстом
 	Single Left Quotation Mark	Одинарная открывающая кавычка
 	Single Quotes:	Одинарные кавычки:
 	Single Right Quotation Mark	Одинарная закрывающая кавычка
@@ -3277,6 +3312,7 @@ digits	Malayalam	Малаялам
 	Spaces	Пробелы
 	Spacing Guides	Направляющие интервалов
 	Invoke Distance Guides	Вызывать направляющие расстояний
+	Snap to Last Location	Привязать к последнему положению
 	Spacing:	Интервал:
 	Spanish	Испанский
 	Specified Distance	Заданное расстояние
@@ -3796,6 +3832,7 @@ digits	Malayalam	Малаялам
 	Zoom to Selection	Масштаб по выделению
 	Zoom Tool	Инструмент «Масштаб»
 	Zoom with Mouse Wheel	Масштабировать колесом мыши
+	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручивать по горизонтали колесом с Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Изменять числовые поля перетаскиванием
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?|Файлов: {n} в {folder} {note}. Показать папку пакета?
 @plural	{n} linked file not found|{n} linked files not found	Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}|Не найдено связанных файлов: {n}
@@ -3966,6 +4003,9 @@ axis	Both	Оба
 	Put back in the toolbar	Вернуть на панель инструментов
 	Float Panel	Сделать панель плавающей
 	Dock Panel	Прикрепить панель
+	Dock to Top	Прикрепить сверху
+	Dock to Bottom	Прикрепить снизу
+	Dock Control Bar	Прикрепить панель управления
 	Drag to float the toolbar	Перетащите, чтобы сделать панель инструментов плавающей
 	Drag to the window's left edge to dock	Перетащите к левому краю окна для прикрепления
 	Float Tool Group	Сделать группу инструментов плавающей
@@ -4413,6 +4453,7 @@ axis	Both	Оба
 @msg	nothing to save: the document has no visible art	нечего сохранять: в документе нет видимого рисунка
 @msg	nothing to undo	нечего отменять
 @msg	no history to clear	нет истории для очистки
+@msg	no history state {v}	нет состояния истории {v}
 @msg	nothing to warp	нечего деформировать
 @msg	nothing to wrap	нечего обтекать
 @msg	object {0} cannot have children	объект {0} не может иметь потомков
@@ -4661,6 +4702,7 @@ axis	Both	Оба
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	не удалось декодировать {n} изображение: оно показано как перечёркнутая рамка|не удалось декодировать {n} изображения: они показаны как перечёркнутые рамки|не удалось декодировать {n} изображений: они показаны как перечёркнутые рамки
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}
@@ -4775,6 +4817,7 @@ axis	Both	Оба
 	Exit	Выйти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — это ссылка на шаг {r}, которую разрешают только `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` должен быть массивом идентификаторов объектов, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` должен быть массивом цветов, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` должен быть массивом индексов опорных точек, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед этим шагом нет шага {i} (шаги считаются с 0; чтобы написать сам $, введите $$)
@@ -4807,6 +4850,9 @@ axis	Both	Оба
 @msg	the Pixar file's image data is damaged	данные изображения в файле Pixar повреждены
 @msg	the JPEG 2000 file can't be read	не удается прочитать файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 содержит неподдерживаемое цветовое пространство или содержимое JPX
+@msg	the HEIC or HEIF file can't be read	не удается прочитать файл HEIC или HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC или HEIF содержит изображение такого типа, которое не удается прочитать
+@msg	HEIC and HEIF images can't be opened in this build	изображения HEIC и HEIF нельзя открыть в этой сборке
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	изображение PSD слишком велико для чтения ({_1} × {_2} пикс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-битные данные изображения PSD со сжатием ZIP с предсказанием не читаются
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-битные файлы PSD в этом цветовом режиме не читаются
@@ -5081,6 +5127,11 @@ lighting	Light	Свет
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 	Load EPS into Clipboard	Загрузить EPS в буфер обмена
 @msg	an image of {w} × {h} pixels is too large to draw	изображение размером {w} × {h} пикселей слишком велико для отрисовки
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: это не изображение PNG, JPEG, WebP, TIFF или BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	размер изображения {iw} × {ih} пикселей, а монтажной области при этой ширине {rw} × {rh} пикселей: их пропорции различаются
+@msg	`threshold` must be a number from 0 to 1	`threshold` должно быть числом от 0 до 1
+@msg	background {v}: a color such as "#808080"	фон {v}: цвет, например "#808080"
+@msg	comparing with an image file isn't available in the browser	сравнение с файлом изображения недоступно в браузере
 @msg	an image of {w} × {h} pixels is shown at reduced size	изображение размером {w} × {h} пикселей показано в уменьшенном размере
 @msg	the image can't be read as a texture	изображение не удаётся прочитать как текстуру
 	Basic	Базовый
@@ -5279,6 +5330,9 @@ lighting	Light	Свет
 @msg	too many library panels were opened in this session	в этом сеансе открыто слишком много панелей библиотек
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Изображение {_1} × {_2} пикселей, больше {LARGE_TRACE_SIDE} по одной стороне: трассировка выполняется, но медленнее. Стиль с меньшей точностью или уменьшенная копия изображения трассируются быстрее.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Изображение трассировано в размере {_1} × {_2} пикселей, уменьшенное с {_3} × {_4} (не более {_5} мегапикселей).
+@msg	byColor must be true or false	byColor должен иметь значение true или false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor не может разделить группы автогруппировки: трассируйте без автогруппировки
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor не может перегруппировать трассировку с действующим эффектом Pathfinder: разверните без byColor
 	Snapping	Привязка
 	Snap to Tangent	Привязать к касательной
 	Snap to Perpendicular	Привязать к перпендикуляру
@@ -5399,6 +5453,33 @@ axis	Y Axis	Ось Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамический эффект выполняется во время отрисовки документа, поэтому он не может быть `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль экспорта всегда получает бюджет экспорта: не указывайте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	«{_1}» запрашивает большой вычислительный бюджет (каждый запуск до {minutes} минут и в {times} раз больше инструкций, чем обычно): установите его с `allowHeavy: true`, когда пользователь согласится
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Установить «{name}», которому нужны эти разрешения?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	File SHA-256: {hash}	SHA-256 файла: {hash}
+	Read the objects it is given	Читать переданные ему объекты
+	Change, add and delete objects in the document	Изменять, добавлять и удалять объекты в документе
+	Keep data of its own with the document	Хранить свои данные в документе
+	Change how the objects its effect is applied to are drawn	Изменять то, как рисуются объекты, к которым применён его эффект
+	Write the document as a file in its own format	Записывать документ в файл собственного формата
+	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `progress` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только `env.vc_progress`, `env.vc_cancelled` и `env.vc_log` (уровень API модулей 2), без WASI, файлов и сети
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
+@msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю вида `{_1}` нужно разрешение `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	не более {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	разрешение `{shown}` не относится к модулю вида `{_1}`
+@msg	permission `{shown}` is listed twice	разрешение `{shown}` указано дважды
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	разрешение `{shown}` зарезервировано для будущего API модулей; этот хост его не выдаёт
+@msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	у модуля не тот SHA-256, что указан в `hash`: ничего не установлено
 # Actions panel: action sets (#3712).
 	New Set…	Новый набор…
 	New Set	Новый набор
@@ -5407,6 +5488,19 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Insert Stop…	Вставить остановку…
+	Insert Stop	Вставить остановку
+	Record Stop	Записать остановку
+	Allow Continue	Разрешить продолжение
+	Continue	Продолжить
+	Continue Action	Продолжить действие
+	Delete Action Step	Удалить шаг действия
+	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
+	Stop: {message}	Остановка: {message}
+@msg	no action is waiting at a stop	ни одно действие не ожидает на остановке
+@msg	message must be text	message должно быть текстом
+@msg	allowContinue must be true or false	allowContinue должно быть true или false
+@msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Playback Options	Параметры воспроизведения
 	Accelerated	Ускоренно
 	Step by Step	Пошагово
@@ -6168,6 +6262,8 @@ breakText	Glyphs	Глифы
 	File + Data Set Name	Файл + имя набора данных
 	Data Set Name	Имя набора данных
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` должно быть `fileNumber`, `fileDataSetName` или `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Каждый набор данных сохраняется поверх одного и того же файла, в котором остаётся только последний набор данных.
+@msg	save the document with Save As before Save and Close	сохраните документ командой «Сохранить как» перед «Сохранить и закрыть»
 @msg	no free data set file name in destination folder	В папке назначения нет свободного имени файла для набора данных
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6211,6 +6307,7 @@ breakText	Glyphs	Глифы
 	Gap 5	Зазор 5
 
 @msg	{_1}: they came in as the page's art	{_1}: импортированы как графика страницы
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	деформированные текстовые объекты, импортированные как графика, а не как редактируемый текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	объекты, которые отрисовывались иначе, чем собственная страница файла, импортированы как графика страницы: {_1}
 
 @msg	You must choose a side pattern.	Выберите боковой узор.

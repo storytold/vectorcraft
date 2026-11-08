@@ -100,7 +100,7 @@ the two can still win that race.
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
 | `ui.move` | `{x, y}` | screen-point pointer move |
 | `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
-| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
+| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls, Cmd-wheel (Ctrl on Windows and Linux) scrolls sideways and Alt-wheel (Option on the Mac) zooms about the pointer (with the `ctrlWheelScrollsSideways` preference off, Cmd-wheel zooms too); with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it. Over the canvas, the wheel preferences in `docs/mcp.md` change what these keys do |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?, imageTracePreview?}` | `outline`: View › Outline for the active document only (each document has its own, a document opens in Preview, and `ui.inspect` shows it as `view.outline`; an error without a document). `imageTracePreview`: the Image Trace panel's Preview (`ui.inspect` shows it as `ui.image_trace_preview`) |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` or `{fields: [{field, value}…]}` | fill and submit the open dialog. `ui.dialog.set` takes the fields the dialog has (`ui.inspect`), `__` fields, `discard` on a dialog with a discard button, `preview` on one with a live preview, the fields that the dialog reads but adds only when a control changes (such as `searchFolder`, or `copy` in the Transform dialogs), and the fields it passes to the command it runs: every parameter of the `command` dialog's command (`ui.paramDialog`), and the `textureImage` that Load Texture… sets in the Glass and Texturizer effects; any other field is an error that lists the dialog's fields, and the dialog stays as it was `fields` sets the list (at most 256 items) in order (a missing `value` is `null`) and checks every item first: when one is refused, the call is an error and no field changes |
 | `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. The inline PNG is capped at 64 MiB: with a `path` the file is still written and `pngBase64` is omitted when the image is larger, while a path-less `data: true` request fails if either the raw RGBA image or the encoded PNG exceeds the cap. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
@@ -328,7 +328,8 @@ not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (th
 modified documents), and empty bar space and the 5 pt window edges move and resize the window. Preferences › User
 Interface › System Title Bar (`systemTitleBar`, read when the app starts) gives the window its OS decorations back
 instead: the OS title then shows the active document (`*name — VectorCraft` with unsaved changes) and the app bar
-drops its brand mark. On macOS the window buttons are centred on the app bar; the web build is unchanged.
+drops its brand mark. On Linux the app bar also drops its brand mark whenever the desktop draws the window's frame, with
+System Title Bar on or off. On macOS the window buttons are centred on the app bar; the web build is unchanged.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
@@ -428,7 +429,9 @@ below). Dragging a tab, a group's drag bar or an icon out of the dock and droppi
 floats it; dropping it on a group's tabs, on a group's upper or lower edge or beside a column docks it there. On
 the desktop each floating window is an OS window of its own; on the web and on Wayland it floats inside the app
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
-`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge.
+`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
+`window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
@@ -685,7 +688,16 @@ art too large at that scale) keeps the dialog open.
 Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?}` for agents) opens the
 `placementOptions` dialog for the selected images (fields `ids`, `preserve`: `transforms`/`bounds`/`fileDimensions`/
 `fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as
-one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
+one undo step.
+
+Relink: the Links panel's Relink… button and flyout item (or `ui.relinkDialog {ids?}` for agents) open the `relink`
+dialog for the selected images and placed documents (fields `ids`, `links`: `[{name, ids}]`, one row per linked file,
+`scope`: `each`/`selected`/`all`/`missingInFolder`, default `selected`, `path` and `paths`). With nothing selected and
+no `ids`, it fails with "select the images to relink, or pass ids". `ui.dialog.set {field: "path", value}` then `ui.dialog.confirm` runs
+`links.relink {ids, path, scope}` as one undo step; without `path` a file is picked. With `scope: "each"`, each confirm
+takes `path` (or picks a file) for the next row of `links`, adds it to `paths` and keeps the dialog open, returning
+`{next}` (the next row's name); the last row's confirm runs `links.relink {scope: "each", paths}` for every row as one
+undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).

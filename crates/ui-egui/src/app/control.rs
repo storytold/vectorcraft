@@ -49,6 +49,7 @@ impl VectorcraftApp {
                 Ok(outcome) => outcome,
                 Err(msg) => {
                     self.picks.recover();
+                    self.session.set_replaying(false);
                     control::err(format!("internal error: {msg} (please report this bug)"))
                 }
             };

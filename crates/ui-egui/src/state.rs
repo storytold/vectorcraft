@@ -204,6 +204,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
+    (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
@@ -370,6 +371,9 @@ pub struct UiState {
     #[serde(skip)]
     pub transient_focus: bool,
     pub control_bar: bool,
+    /// The Control bar is docked to the bottom of the window instead of the top
+    /// (`window.control.dock`).
+    pub control_bar_bottom: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -456,9 +460,14 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
     /// The Tools panel floats with its top-left corner here (dragged out by its title bar); `None`:
-    /// docked at the window's left edge.
+    /// docked at the window's left edge, or beside the canvas with [`Self::tools_beside_canvas`].
     #[serde(default)]
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
+    /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
+    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    #[serde(default)]
+    pub tools_beside_canvas: bool,
     pub status_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -961,6 +970,7 @@ impl Default for UiState {
             transient_panel: None,
             transient_focus: false,
             control_bar: false,
+            control_bar_bottom: false,
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
@@ -987,6 +997,7 @@ impl Default for UiState {
             docking_generation: 0,
             dock_width: None,
             toolbar_pos: None,
+            tools_beside_canvas: false,
             status_bar: true,
             dock: true,
             tab_hid: None,

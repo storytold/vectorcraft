@@ -111,6 +111,8 @@ struct App {
     pending_maximize: bool,
     /// Frames left to retry [`window::apply_pending_maximize`].
     maximize_tries: u8,
+    /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
+    monitors_listed: Option<(f64, f32)>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -465,6 +467,7 @@ fn main() -> std::process::ExitCode {
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
                 app.custom_titlebar = custom_titlebar;
+                app.desktop_frame = !custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());
@@ -505,6 +508,7 @@ fn main() -> std::process::ExitCode {
                     winit_window,
                     pending_maximize,
                     maximize_tries: 8,
+                    monitors_listed: None,
                 }))
             }),
         )

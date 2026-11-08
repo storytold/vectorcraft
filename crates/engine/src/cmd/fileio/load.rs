@@ -103,6 +103,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::jp2read::is_jpeg2000(bytes) {
         return format("jpeg2000");
     }
+    if super::heifread::is_heif(bytes) {
+        return format("heif");
+    }
     if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
         return Some(f);
     }
@@ -373,7 +376,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                 Ok(o) => super::pdfimport::import(bytes, o, opts, format.id != "pdf"),
                 Err(e) => Err(err(e)),
             };
-            let read = restore_or_import(editing, || {
+            let mut read = restore_or_import(editing, || {
                 // Type all from the text document and nothing that needs the PDF part: the layers
                 // alone, the PDF part not imported. Else what was read of the layers is kept for
                 // reading them with the PDF part.
@@ -440,6 +443,13 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             if !read.2 {
                 file_info = opened.as_ref().ok().map(|o| o.file_info());
             }
+            // A restored document opens on the artboard that the editing copy beside it names as
+            // active, as a file read from that copy does (the restored document never holds one).
+            if read.2
+                && let Some(private) = opened.as_ref().ok().and_then(|o| o.illustrator_data())
+            {
+                read.0.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &read.0);
+            }
             read
         }
         "dxf" => {
@@ -468,11 +478,15 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     }
     // Threaded type read from a file flows through its frames (the threaded type of a restored
     // document keeps its text as saved), and every frame of a thread takes its first frame's
-    // Optical Margin Alignment setting.
+    // Optical Margin Alignment setting and writing direction. When that changes the direction of a
+    // frame of a restored document, the story flows through that frame's thread again. Threaded
+    // frames keep their size: Auto Size is off for them.
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {
+        crate::cmd::threads::keep_frame_sizes(&mut doc);
         crate::cmd::threads::share_optical_margin(&mut doc);
+        crate::cmd::threads::share_orientation(&mut doc);
         // A frame whose first paragraph continues from the frame before draws it without the
         // paragraph's first-line indent and list marker.
         crate::cmd::threads::mark_continued(&mut doc);
@@ -715,6 +729,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// [`super::pcxread::decode`], which refuses an image past [`MAX_RASTER_ALLOC`] before decoding.
 /// A Pixar picture file is recognized by its magic number ([`super::pxrread::is_pxr`]) and read by
 /// [`super::pxrread::decode`], which does the same.
+/// A HEIC or HEIF file is recognized by its `ftyp` brands ([`super::heifread::is_heif`]) and read
+/// by [`super::heifread::decode`], which does the same.
 /// A Targa file, which starts with no signature, is recognized by its header
 /// ([`super::tgaread::is_targa`]) and becomes RGBA with the transparency it stores
 /// ([`super::tgaread::fix_alpha`]). An image stored as PNG whose decoded samples, or whose pixels
@@ -732,6 +748,11 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if super::jp2read::is_jpeg2000(bytes) {
         return as_png(super::jp2read::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
+    }
+    if super::heifread::is_heif(bytes) {
+        // The EXIF resolution describes the stored pixels; a quarter turn swaps its axes.
+        let ppi = ppi.map(|(x, y)| if super::heifread::quarter_turned(bytes) { (y, x) } else { (x, y) });
+        return as_png(super::heifread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);
     }
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, ppi);

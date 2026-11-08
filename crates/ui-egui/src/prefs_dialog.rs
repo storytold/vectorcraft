@@ -32,7 +32,156 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     fields.insert("__smartGuides".into(), json!(app.ui.view.smart_guides));
     fields.insert("__snapToGrid".into(), json!(app.ui.view.snap_to_grid));
     fields.insert("__taskBar".into(), json!(app.ui.task_bar));
+    fields.insert("__search".into(), json!(""));
+    fields.insert("__focusSearch".into(), json!(true));
     app.ui.dialog = Some(Dialog { kind: "preferences".into(), fields });
+}
+
+/// A setting the dialog shows, by its key, category, section ("" for none) and label, in English.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Setting {
+    pub key: &'static str,
+    pub category: &'static str,
+    pub section: &'static str,
+    pub label: &'static str,
+}
+
+/// Every setting the dialog shows on this platform: the UI-only fields, then the engine's
+/// preferences, each category's in the order the dialog lists them.
+fn settings() -> impl Iterator<Item = Setting> {
+    let ui_fields = UI_FIELDS.iter().map(|&(key, category, label)| Setting { key, category, section: "", label });
+    let shown = |key: &str| match key {
+        "systemTitleBar" => cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))),
+        "linuxDisplayServer" => cfg!(target_os = "linux"),
+        _ => true,
+    };
+    let prefs =
+        PREF_SPECS.iter().filter(move |s| shown(s.key)).map(|s| Setting { key: s.key, category: s.category, section: s.section, label: s.label });
+    ui_fields.chain(prefs)
+}
+
+/// The settings whose label, section or category contains `query`, ignoring case, in the language
+/// the dialog is drawn in or in English, grouped by category in the dialog's order. An empty
+/// `query` finds none.
+pub(crate) fn search(query: &str) -> Vec<Setting> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return vec![];
+    }
+    let hit = |s: &str| !s.is_empty() && (tl!(s).to_lowercase().contains(&q) || s.to_lowercase().contains(&q));
+    let mut found: Vec<Setting> = settings().filter(|s| hit(s.label) || hit(s.section) || hit(s.category)).collect();
+    found.sort_by_key(|s| PREF_CATEGORIES.iter().position(|c| *c == s.category).unwrap_or(usize::MAX));
+    found
+}
+
+/// Goes to the setting `s` a search found: its category is shown, the list scrolls to it and its
+/// row is highlighted. The search field is cleared.
+fn go_to(d: &mut Dialog, s: &Setting) {
+    d.fields.insert("__category".into(), json!(s.category));
+    d.fields.insert("__found".into(), json!(s.key));
+    d.fields.insert("__scrollTo".into(), json!(true));
+    d.fields.insert("__search".into(), json!(""));
+}
+
+/// The search field's memory key ([`widgets::search_field`]).
+fn search_id() -> egui::Id {
+    egui::Id::unique("prefs-search")
+}
+
+/// The search field's text edit, which takes the keyboard focus.
+pub(crate) fn search_edit_id() -> egui::Id {
+    search_id().with("edit")
+}
+
+/// Whether the search field had the keyboard focus when the dialog was last drawn.
+fn search_focused_id() -> egui::Id {
+    egui::Id::unique("prefs-search-focused")
+}
+
+/// Escape while the Preferences dialog's search field has text and the keyboard focus: the field is
+/// cleared and keeps the focus, and the Escape goes no further. → Whether it did; otherwise Escape
+/// does what it does in any dialog.
+pub(crate) fn clear_search_on_escape(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") else { return false };
+    // egui takes the focus from the field when the frame with Escape begins: the field's focus is
+    // the one recorded when the dialog was last drawn.
+    if d.str("__search").is_empty() || !ctx.data(|m| m.get_temp::<bool>(search_focused_id()).unwrap_or(false)) {
+        return false;
+    }
+    d.fields.insert("__search".into(), json!(""));
+    d.fields.insert("__focusSearch".into(), json!(true));
+    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: egui::Key::Escape, pressed: true, .. })));
+    true
+}
+
+/// The search field above the category list. It takes the keyboard focus when the dialog opens and
+/// on Cmd/Ctrl+F. → Its text.
+fn search_box(ui: &mut egui::Ui, d: &mut Dialog) -> String {
+    let refocus = ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F));
+    if refocus {
+        d.fields.insert("__focusSearch".into(), json!(true));
+    }
+    ui.data_mut(|m| m.insert_temp(search_id(), d.str("__search")));
+    let query = widgets::search_field(ui, search_id(), tl!("Search Preferences"));
+    if d.bool("__focusSearch") {
+        // Not on the window's measuring frame, nor in the frame of the click that opened the
+        // dialog: egui takes the focus from a field such a click missed.
+        if ui.is_sizing_pass() || ui.input(|i| i.pointer.any_click()) {
+            ui.ctx().request_repaint();
+        } else {
+            widgets::focus_field(ui, search_edit_id(), &query);
+            d.fields.remove("__focusSearch");
+        }
+    }
+    let focused = ui.memory(|m| m.has_focus(search_edit_id()));
+    ui.data_mut(|m| m.insert_temp(search_focused_id(), focused));
+    d.fields.insert("__search".into(), json!(query));
+    query
+}
+
+/// The settings `query` finds, in place of the category list: choosing one goes to it.
+fn search_results(ui: &mut egui::Ui, d: &mut Dialog, query: &str) {
+    let t = Tokens::get(ui.ctx());
+    let found = search(query);
+    if found.is_empty() {
+        ui.label(egui::RichText::new(tl!("No settings found")).color(t.text_dim).size(12.0));
+        return;
+    }
+    egui::ScrollArea::vertical().id_salt("prefs-search-results").max_height(380.0).auto_shrink([false, true]).show(ui, |ui| {
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+        for s in &found {
+            let text = egui::RichText::new(tl!(s.label)).size(12.5).color(t.text);
+            let place = if s.section.is_empty() { tl!(s.category).to_string() } else { format!("{} › {}", tl!(s.category), tl!(s.section)) };
+            let b = egui::Button::selectable(false, text).min_size(egui::vec2(180.0, 22.0));
+            if ui.add(b).on_hover_text(&place).clicked() {
+                go_to(d, s);
+            }
+            ui.label(egui::RichText::new(place).color(t.text_dim).size(11.0));
+            ui.add_space(3.0);
+        }
+    });
+}
+
+/// Before a setting's row: where to paint the highlight behind it, when it is the setting a search
+/// went to ([`go_to`]).
+fn found_mark(ui: &mut egui::Ui, d: &Dialog, key: &str) -> Option<(egui::layers::ShapeIdx, f32)> {
+    (d.str("__found") == key).then(|| (ui.painter().add(egui::Shape::Noop), ui.cursor().top()))
+}
+
+/// After the row [`found_mark`] marked: highlights it, and scrolls the list to it once.
+fn found_paint(ui: &mut egui::Ui, d: &mut Dialog, mark: Option<(egui::layers::ShapeIdx, f32)>) {
+    let Some((idx, top)) = mark else { return };
+    let bottom = ui.min_rect().bottom();
+    if bottom <= top {
+        return;
+    }
+    let rect = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=bottom).expand2(egui::vec2(0.0, 2.0));
+    let t = Tokens::get(ui.ctx());
+    ui.painter().set(idx, egui::epaint::RectShape::filled(rect, 3.0, t.accent.gamma_multiply(0.22)));
+    if d.bool("__scrollTo") && !ui.is_sizing_pass() {
+        ui.scroll_to_rect(rect, Some(egui::Align::Center));
+        d.fields.remove("__scrollTo");
+    }
 }
 
 /// OK: validate and apply every preference in the dialog (nothing changes on error).
@@ -189,20 +338,32 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::dialogs::modal::heading(ui, tl!("Preferences"));
         ui.add_space(12.0);
         ui.horizontal_top(|ui| {
-            // Category list.
-            egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
-                ui.set_width(196.0);
-                ui.set_min_height(430.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
-                    for c in PREF_CATEGORIES {
-                        let sel = *c == cat;
-                        let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
-                        let b = egui::Button::selectable(sel, text).min_size(egui::vec2(184.0, 24.0));
-                        if ui.add(b).clicked() {
-                            d.fields.insert("__category".into(), json!(c));
+            ui.vertical(|ui| {
+                ui.set_width(208.0);
+                // Search, above the category list; while it has text, the settings it finds show
+                // in place of the list.
+                let query = search_box(ui, &mut d);
+                ui.add_space(6.0);
+                // Category list.
+                let list = egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6));
+                list.show(ui, |ui| {
+                    ui.set_width(196.0);
+                    ui.set_min_height(396.0);
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 1.0;
+                        if !query.trim().is_empty() {
+                            search_results(ui, &mut d, &query);
+                            return;
                         }
-                    }
+                        for c in PREF_CATEGORIES {
+                            let sel = *c == cat;
+                            let text = egui::RichText::new(tl!(*c)).size(12.5).color(if sel { t.text_strong } else { t.text });
+                            let b = egui::Button::selectable(sel, text).min_size(egui::vec2(184.0, 24.0));
+                            if ui.add(b).clicked() {
+                                d.fields.insert("__category".into(), json!(c));
+                            }
+                        }
+                    });
                 });
             });
             ui.add_space(14.0);
@@ -248,6 +409,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             d.fields.insert(k, v);
         }
     }
+    // The setting a search went to stays highlighted until another category is shown.
+    let found = d.str("__found");
+    if !found.is_empty() && settings().find(|s| s.key == found).is_none_or(|s| s.category != d.str("__category")) {
+        d.fields.remove("__found");
+        d.fields.remove("__scrollTo");
+    }
     app.ui.dialog = Some(d);
     if cancel {
         app.ui.dialog = None;
@@ -263,11 +430,15 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
     let specs: Vec<_> = PREF_SPECS.iter().filter(|s| s.category == cat).collect();
     for (key, c, label) in UI_FIELDS {
         if *c == cat && cat != "Smart Guides" {
+            let mark = found_mark(ui, d, key);
             bool_row(ui, d, key, label);
+            found_paint(ui, d, mark);
         }
     }
     if cat == "Smart Guides" {
+        let mark = found_mark(ui, d, "__smartGuides");
         bool_row(ui, d, "__smartGuides", UI_FIELDS[0].2);
+        found_paint(ui, d, mark);
         ui.add_space(4.0);
     }
     for sp in specs {
@@ -283,7 +454,13 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
         }
         first = false;
         let v = d.fields.get(sp.key).cloned().unwrap_or(Value::Null);
+        let mark = found_mark(ui, d, sp.key);
         match sp.kind {
+            // General › Scroll Sideways with Cmd/Ctrl + Wheel acts only while Zoom with Mouse Wheel
+            // is off: dimmed while it is on.
+            PrefKind::Bool if sp.key == "ctrlWheelScrollsSideways" => {
+                ui.add_enabled_ui(!d.bool("zoomWithMouseWheel"), |ui| bool_row(ui, d, sp.key, sp.label));
+            }
             // Units › Numbers Without Units Are Points only tells points from picas: dimmed
             // unless a unit is Picas.
             PrefKind::Bool if sp.key == "numbersWithoutUnitsArePoints" => {
@@ -409,6 +586,7 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                 });
             }
         }
+        found_paint(ui, d, mark);
     }
 }
 

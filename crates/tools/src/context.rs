@@ -1,5 +1,15 @@
 use super::{Document, NodeId, Paint, Point, Selection, Unit, Vec2, distort, select, xform};
 
+/// Which objects a Selection-tool marquee reaches before E reverses its rule for this drag.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MarqueeMode {
+    #[default]
+    Touching,
+    Enclosed,
+    /// Screen-right takes enclosed objects; screen-left takes touched objects.
+    Directional,
+}
+
 /// Paint defaults for new art (the fill/stroke proxy) and the rest of the new-art template.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaintDefaults {
@@ -120,6 +130,8 @@ pub struct ToolContext<'a> {
     pub selection: &'a Selection,
     /// Screen pixels per document point.
     pub zoom: f64,
+    /// Selection-tool marquee rule; other selection tools keep their own rules.
+    pub marquee_mode: MarqueeMode,
     pub isolation: Option<NodeId>,
     pub paint: &'a PaintDefaults,
     pub outline: bool,
@@ -223,6 +235,9 @@ pub struct ToolContext<'a> {
     /// Type → Fill New Type Objects With Placeholder Text: type the Type tools place starts with
     /// placeholder text, selected.
     pub placeholder_text: bool,
+    /// Type → Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list ([`crate::text::TypeTool`]).
+    pub typed_lists: bool,
     /// Smart Guides → Color: the smart guides' lines and labels (RGB).
     pub smart_guide_color: [u8; 3],
     /// Smart Guides → Alignment Guides: the lines along the edges and centres the art lines up
@@ -242,6 +257,9 @@ pub struct ToolContext<'a> {
     /// object shows how far the selection is from it, and over an empty part of an artboard how
     /// far it is from the artboard's edges ([`guides::distance_guides`]).
     pub distance_guides: bool,
+    /// Smart Guides → Snap to Last Location: a selection moved by dragging goes back to where the
+    /// move began while it is within Snapping Tolerance of it ([`guides::Targets::snap_back`]).
+    pub snap_to_last_location: bool,
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,

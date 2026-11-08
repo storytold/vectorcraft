@@ -111,6 +111,11 @@
 	32 bit	32 bit
 	32 bits/pixel	32 bit/pixel
 	3D and Materials	3D és anyagok
+	Plane	Sík
+	Extrude	Kihúzás
+	Revolve	Forgatás tengely körül
+	Inflate	Felfújás
+	Select objects, then pick an object type to give them a 3D effect.	Jelöljön ki objektumokat, majd válasszon objektumtípust, hogy 3D-effektust kapjanak.
 	3D Ribbon	3D szalag
 	4 bit	4 bit
 	4-Up	4 nézet
@@ -380,6 +385,8 @@ font-technology	Variable	Változó
 	Show Cross Hairs	Szálkereszt megjelenítése
 	Show Video Safe Areas	Biztonságos videoterületek megjelenítése
 	Video Ruler Pixel Aspect Ratio:	Videovonalzók képpont-méretaránya:
+	Fade Region Outside Artboard	A rajztáblán kívüli terület elhalványítása
+	Update While Dragging	Frissítés húzás közben
 	Hide Video Rulers	Videovonalzók elrejtése
 	Background Contents	Háttértartalom
 	Background Contents:	Háttértartalom:
@@ -1073,6 +1080,9 @@ font-technology	Variable	Változó
 	Do Not Scale	Nincs méretezés
 	Do you want to save the changes you made to “{name}”?	Mented a módosításokat ebben: „{name}”?
 	Dock Panel	Panel dokkolása
+	Dock to Top	Dokkolás felülre
+	Dock to Bottom	Dokkolás alulra
+	Dock Control Bar	Vezérlősáv dokkolása
 	Document	Dokumentum
 	Document Color Mode	Dokumentum színmódja
 	Document Info	Dokumentuminformáció
@@ -1101,6 +1111,7 @@ font-technology	Variable	Változó
 	Double Bar	Kettős vonal
 	Double Click To Isolate	Elkülönítés dupla kattintással
 	Double Column	Két oszlop
+	Keep Tools Beside the Canvas	Eszközök a vászon mellett
 	Double Left Quotation Marks	Bal oldali dupla idézőjel
 	Double Quotes:	Dupla idézőjelek:
 	Double Right Quotation Marks	Jobb oldali dupla idézőjel
@@ -1367,6 +1378,8 @@ font-technology	Variable	Változó
 	Export for Screens Settings	Exportálás képernyőkre – beállítások
 	Export for Screens…	Exportálás képernyőkre…
 	Export Keyboard Shortcuts…	Billentyűparancsok exportálása…
+	Export Keyboard Shortcuts as Text…	Billentyűparancsok exportálása szövegként…
+	Export Text…	Szöveg exportálása…
 	Export Library	Könyvtár exportálása
 	Export Library…	Könyvtár exportálása…
 	Export Option	Exportálási beállítás
@@ -1455,6 +1468,7 @@ digits	Malayalam	Malajálam
 	Highlight:	Kiemelés:
 	Stroke When Editable	Körvonal, ha szerkeszthető
 	Fill New Type Objects With Placeholder Text	Új szövegobjektumok kitöltése helykitöltő szöveggel
+	Start Lists From Typed Markers	Listák indítása begépelt jelölőkből
 	Fill Rule	Kitöltési szabály
 	Fill with Placeholder Text	Kitöltés helykitöltő szöveggel
 	Fill:	Kitöltés:
@@ -1472,6 +1486,7 @@ digits	Malayalam	Malajálam
 	Find in Folder…	Keresés mappában…
 	Find Next	Következő keresése
 	Find Objects	Objektumok keresése
+	Compare with Image	Összehasonlítás képpel
 	Fine Dots	Finom pontok
 
 	Simple	Egyszerű
@@ -1742,6 +1757,8 @@ file-filter	Templates	Sablonok
 	Grays	Szürkék
 	Grays and Neutrals	Szürkék és semleges színek
 	Grayscale	Szürkeárnyalatos
+	High Color	Sok szín
+	Low Color	Kevés szín
 	Grayscale images	Szürkeárnyalatos képek
 	Greek & Cyrillic	Görög és cirill
 	Green	Zöld
@@ -1844,6 +1861,7 @@ file-filter	Templates	Sablonok
 	Step Backward	Lépés vissza
 	Step Forward	Lépés előre
 	Clear History	Előzmények törlése
+	New Document from State	Új dokumentum az állapotból
 	Set History Limit…	Előzménykorlát beállítása…
 	History States	Előzmények lépésszáma
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2300,6 +2318,9 @@ file-filter	Templates	Sablonok
 	Live Paint Selection Tool	Élőfestés-kijelölés
 	Live Shape Properties	Élő alakzat tulajdonságai
 	Load Color Profile…	Színprofil betöltése…
+	Load Character Styles…	Karakterstílusok betöltése…
+	Load Paragraph Styles…	Bekezdésstílusok betöltése…
+	Load All Styles…	Az összes stílus betöltése…
 	Remove Color Profile…	Színprofil eltávolítása…
 	Load Image into Clipboard	Kép betöltése a vágólapra
 	Load Metafile into Clipboard	Metafájl betöltése a vágólapra
@@ -3213,6 +3234,14 @@ mark-style	Japanese	Japán
 	Relink	Újracsatolás
 	Relink Linked Files to the Document	Csatolt fájlok újracsatolása a dokumentumhoz
 	Relink to Folder…	Újracsatolás mappából…
+	Each Link Separately	Minden csatolás külön
+	Selected Instances	Kijelölt példányok
+	All Instances	Összes példány
+	Missing Links from This Folder	Hiányzó csatolások ebből a mappából
+@msg	scope {v} is not each|selected|all|missingInFolder	a scope {v} nem each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	a scope each és a paths együtt jár: a paths ids és path elemű bejegyzéseket sorol fel az ids, path és folder helyett
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	a paths {i} bejegyzéséhez path és ids kell (olyan objektumazonosítók, amelyek más bejegyzésben nincsenek)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	a scope missingInFolder path értéket vár: a többi hiányzó csatolást a fájl mappájában keresi
 	Relink…	Újracsatolás…
 	Find Linked Files	Csatolt fájlok keresése
 	Find Linked Files in Folder…	Csatolt fájlok keresése mappában…
@@ -3265,6 +3294,7 @@ mark-style	Japanese	Japán
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Cseréld le egy másik fájlra, vagy hagyd ki: a képei a dokumentummal mentett előnézetet mutatják tovább.
 	Replace Spine	Gerinc cseréje
 	Replace Symbol	Szimbólum cseréje
+	Reset Transformation	Átalakítás visszaállítása
 	Replace With Font	Helyettesítő betűtípus
 	Replace With Font From	Helyettesítő betűtípus forrása
 	System	Rendszer
@@ -3291,6 +3321,8 @@ mark-style	Japanese	Japán
 	Reset Painting	Painting visszaállítása
 	Reset Panel	Panel visszaállítása
 	Reset Preferences	Beállítások visszaállítása
+	Search Preferences	Keresés a beállításokban
+	No settings found	Nincs ilyen beállítás
 	Reset Printing and Proofing	Printing and Proofing visszaállítása
 	Reset Profiles	Profilok visszaállítása
 	Reset Rotate View	Nézetforgatás visszaállítása
@@ -3371,6 +3403,7 @@ mark-style	Japanese	Japán
 	Rotate View	Nézet elforgatása
 	Rotate View Tool	Nézet elforgatása
 	Trackpad Gesture to Rotate View	Nézet elforgatása kézmozdulattal az érintőpadon
+	Hold a Tool Shortcut to Use the Tool Temporarily	Eszköz ideiglenes használata a billentyűparancsa nyomva tartásával
 	Rotate…	Elforgatás…
 	Rotation	Elforgatás
 	Rotation relative to:	Elforgatás viszonyítási alapja:
@@ -3635,6 +3668,11 @@ mark-style	Japanese	Japán
 	Selected Swatches Only	Csak a kijelölt színminták
 	Selected Swatches Only (0)	Csak a kijelölt színminták (0)
 	Selection	Kijelölés
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Téglalapos kijelölés
+	Touching	Érintett objektumok
+	Fully Enclosed	Teljesen befoglalt
+	Drag Direction	Húzás iránya
 	Selection & Anchor Display	Kijelölés és horgonypontok megjelenítése
 	Selection Only	Csak a kijelölés
 	Selection Tool	Kijelölés
@@ -3881,6 +3919,7 @@ mark-style	Japanese	Japán
 	Spacing	Térköz
 	Spacing Guides	Térköz-segédvonalak
 	Invoke Distance Guides	Távolság-segédvonalak előhívása
+	Snap to Last Location	Illesztés az utolsó helyre
 	Spacing:	Térköz:
 	Spanish	Spanyol
 	Spatter	Fröcskölés
@@ -4494,6 +4533,7 @@ mark-style	Japanese	Japán
 	Zoom to Selection	Nagyítás a kijelölésre
 	Zoom Tool	Nagyító
 	Zoom with Mouse Wheel	Nagyítás egérgörgővel
+	Scroll Sideways with Cmd/Ctrl + Wheel	Vízszintes görgetés Cmd/Ctrl + görgővel
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Fájlok: {n}, mappa: {folder} {note}. Megnyitod a csomag mappáját?
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
@@ -4581,6 +4621,7 @@ imageTrace	Outline	Körvonal
 @msg	`groupColors` must be an array	`groupColors`: tömb kell
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	az `id` lépéshivatkozás ({r}), ezt csak a `run` és a `command_batch` oldja fel
 @msg	`ids` must be an array of object ids, not {v}	`ids`: objektumazonosítók tömbje kell, ez nem az: {v}
+@msg	`colors` must be an array of colors, not {v}	`colors`: színek tömbje kell, ez nem az: {v}
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell
@@ -5056,6 +5097,7 @@ imageTrace	Outline	Körvonal
 @msg	nothing to save: the document has no visible art	nincs mit menteni: a dokumentumban nincs látható grafika
 @msg	nothing to undo	nincs mit visszavonni
 @msg	no history to clear	nincs törölhető előzmény
+@msg	no history state {v}	nincs {v} előzményállapot
 @msg	nothing to warp	nincs mit torzítani
 @msg	nothing to wrap	nincs mit körbefuttatni
 @msg	object ids are non-negative integers, not {v}	az objektumazonosító nemnegatív egész szám, ez nem az: {v}
@@ -5125,6 +5167,7 @@ imageTrace	Outline	Körvonal
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {n}; áthúzott keretként látszanak
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	a dokumentum kifutót állít be, amelyet ez a PDF/X-fájl kihagy: kapcsolja be „A dokumentum kifutóbeállításainak használata” beállítást
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
@@ -5292,6 +5335,9 @@ imageTrace	Outline	Körvonal
 @msg	the Pixar file's image data is damaged	a Pixar-fájl képadatai sérültek
 @msg	the JPEG 2000 file can't be read	a JPEG 2000 fájl nem olvasható
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	a JPEG 2000 fájl nem támogatott színteret vagy JPX-tartalmat tartalmaz
+@msg	the HEIC or HEIF file can't be read	a HEIC- vagy HEIF-fájl nem olvasható
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	a HEIC- vagy HEIF-fájl olyan képtípust tartalmaz, amely nem olvasható
+@msg	HEIC and HEIF images can't be opened in this build	a HEIC- és HEIF-képek ebben a buildben nem nyithatók meg
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
 @msg	the scale is not a usable number	a méretarány nem használható szám
@@ -5461,6 +5507,11 @@ imageTrace	Outline	Körvonal
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 	Load EPS into Clipboard	EPS betöltése a vágólapra
 @msg	an image of {w} × {h} pixels is too large to draw	egy {w} × {h} pixeles kép túl nagy a kirajzoláshoz
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: nem PNG, JPEG, WebP, TIFF vagy BMP kép
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	a kép {iw} × {ih} pixeles, a rajztábla ilyen szélességben {rw} × {rh} pixeles: az arányaik eltérnek
+@msg	`threshold` must be a number from 0 to 1	a `threshold` értéke 0 és 1 közötti szám lehet
+@msg	background {v}: a color such as "#808080"	background {v}: egy szín, például "#808080"
+@msg	comparing with an image file isn't available in the browser	a képfájllal való összehasonlítás a böngészőben nem érhető el
 @msg	an image of {w} × {h} pixels is shown at reduced size	egy {w} × {h} pixeles kép csökkentett méretben jelenik meg
 @msg	the image can't be read as a texture	a kép nem olvasható be textúraként
 	Fill and Stroke Controls	Kitöltés és körvonal vezérlői
@@ -5654,6 +5705,9 @@ imageTrace	Outline	Körvonal
 @msg	too many library panels were opened in this session	ebben a munkamenetben túl sok könyvtárpanel nyílt meg
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	A kép {_1} × {_2} képpont, egyik oldalán több mint {LARGE_TRACE_SIDE}: a vektorizálás megtörténik, de lassabban. Kisebb hűségű előbeállítással vagy a kép kisebb másolatával gyorsabb.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	A kép vektorizálása {_1} × {_2} képponton történt, {_3} × {_4} méretről kicsinyítve (legfeljebb {_5} megapixel).
+@msg	byColor must be true or false	a byColor értéke true vagy false lehet
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	a byColor nem bontja fel az Automatikus csoportosítás csoportjait: vektorizáljon Automatikus csoportosítás nélkül
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	a byColor nem csoportosíthatja át az élő Pathfinder-effektussal rendelkező vektorizálást: bővítse ki byColor nélkül
 	Snapping	Illesztés
 	Snap to Tangent	Illesztés érintőre
 	Snap to Perpendicular	Illesztés merőlegesre
@@ -5771,6 +5825,33 @@ axis	Y Axis	Y tengely
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): telepítsd az `allowHeavy: true` megadásával, miután a felhasználó beleegyezett
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Telepíted a(z) „{name}” bővítményt, amely ezeket az engedélyeket kéri?
+	ID: {id}	Azonosító: {id}
+	Version: {version}	Verzió: {version}
+	File SHA-256: {hash}	A fájl SHA-256 értéke: {hash}
+	Read the objects it is given	Olvashatja a kapott objektumokat
+	Change, add and delete objects in the document	Módosíthat, hozzáadhat és törölhet objektumokat a dokumentumban
+	Keep data of its own with the document	Saját adatokat tárolhat a dokumentummal
+	Change how the objects its effect is applied to are drawn	Módosíthatja, hogyan rajzolódnak ki az objektumok, amelyekre az effektusa alkalmazva van
+	Write the document as a file in its own format	Saját formátumú fájlba írhatja a dokumentumot
+	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a `progress` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	a modul az `env.{name}` elemet a gazdaprogramétól eltérő típussal importálja: a gazdaprogram típusa {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a `progress` engedéllyel használhat
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak az `env.vc_progress`, `env.vc_cancelled` és `env.vc_log` elemet importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
+@msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
+@msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre
+@msg	at most {MAX_PERMISSIONS} `permissions`	legfeljebb {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	a(z) `{shown}` engedély nem vonatkozik `{_1}` fajtájú bővítményre
+@msg	permission `{shown}` is listed twice	a(z) `{shown}` engedély kétszer szerepel
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
+@msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	a(z) „{name}” a következő engedélyeket kéri: {asked}; telepítsd egy őket felsoroló `grant` értékkel, ha a felhasználó beleegyezik
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a(z) „{name}” nem kapta meg a(z) `{p}` engedélyt, amelyre a kimenetének szüksége van: semmi sem változott
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	a modul SHA-256 értéke nem az, amit a `hash` megad: semmi sem lett telepítve
 # Actions panel: action sets (#3712).
 	New Set…	Új készlet…
 	New Set	Új készlet
@@ -5779,6 +5860,19 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Insert Stop…	Megállás beszúrása…
+	Insert Stop	Megállás beszúrása
+	Record Stop	Megállás rögzítése
+	Allow Continue	Folytatás engedélyezése
+	Continue	Folytatás
+	Continue Action	Művelet folytatása
+	Delete Action Step	Műveletlépés törlése
+	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
+	Stop: {message}	Megállás: {message}
+@msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
+@msg	message must be text	message: szöveg kell
+@msg	allowContinue must be true or false	allowContinue: true vagy false kell
+@msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Playback Options	Lejátszási beállítások
 	Accelerated	Gyorsított
 	Step by Step	Lépésenként
@@ -6175,6 +6269,8 @@ breakText	Glyphs	Glifák
 	File + Data Set Name	Fájl + adatkészlet neve
 	Data Set Name	Adatkészlet neve
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	A `datasetFileNaming` értéke `fileNumber`, `fileDataSetName` vagy `dataSetName` lehet
+	Each data set saves over the same file, which keeps only the last data set.	Minden adatkészlet ugyanabba a fájlba mentődik, amely csak az utolsó adatkészletet őrzi meg.
+@msg	save the document with Save As before Save and Close	mentse a dokumentumot a „Mentés másként” paranccsal a „Mentés és bezárás” előtt
 @msg	no free data set file name in destination folder	Nincs szabad adatkészlet-fájlnév a célmappában
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -6218,6 +6314,7 @@ breakText	Glyphs	Glifák
 	Gap 5	Hézag 5
 
 @msg	{_1}: they came in as the page's art	{_1}: az oldal rajzaként lettek importálva
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	hajlított szövegobjektumok, amelyek rajzként, nem szerkeszthető szövegként lettek importálva: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	a fájl saját oldalától eltérően rajzolt objektumok az oldal rajzaként lettek importálva: {_1}
 
 @msg	You must choose a side pattern.	Válasszon oldalsó mintát.

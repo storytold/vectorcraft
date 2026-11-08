@@ -319,6 +319,11 @@ impl Session {
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
             selection_tolerance: self.prefs.selection_tolerance,
+            marquee_mode: match self.prefs.marquee_selection.as_str() {
+                "enclosed" => vectorcraft_tools::MarqueeMode::Enclosed,
+                "directional" => vectorcraft_tools::MarqueeMode::Directional,
+                _ => vectorcraft_tools::MarqueeMode::Touching,
+            },
             anchor_size: self.prefs.anchor_size,
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,
@@ -332,6 +337,7 @@ impl Session {
             pen_rubber_band: self.prefs.pen_rubber_band,
             curvature_rubber_band: self.prefs.curvature_rubber_band,
             placeholder_text: self.prefs.placeholder_text,
+            typed_lists: self.prefs.typed_lists,
             smart_guide_color: rgb(&self.prefs.smart_guide_color, vectorcraft_tools::guides::MAGENTA),
             alignment_guides: self.prefs.alignment_guides,
             anchor_path_labels: self.prefs.anchor_path_labels,
@@ -339,6 +345,7 @@ impl Session {
             transform_tools_guides: self.prefs.transform_tools_guides,
             spacing_guides: self.prefs.spacing_guides,
             distance_guides: self.prefs.distance_guides,
+            snap_to_last_location: self.prefs.snap_to_last_location,
             snapping_tolerance: self.prefs.snapping_tolerance,
             construction_angles: if self.prefs.construction_guides {
                 vectorcraft_tools::guides::construction_angles(&self.prefs.construction_angles)
@@ -576,6 +583,11 @@ impl Session {
         }
         let acts = self.with_tool_cx(view, |t, cx| t.key(cx, key, mods));
         self.take_tool_panic()?;
+        // A key that cancels a gesture may put back options the gesture changed (Escape on an
+        // arc, spiral or grid drag): keep them.
+        if acts.contains(&Action::Cancel) {
+            self.keep_tool_settings();
+        }
         self.apply_actions(acts)
     }
 
@@ -1041,23 +1053,13 @@ impl Session {
 /// `crates/ui-egui/src/canvas/outline.rs`). Past it the selection's bounds are drawn instead.
 const FEEDBACK_MAX_POINTS: usize = 100_000;
 
-/// The outline of every selected object, or the selection's bounds when the outlines have more than
-/// [`FEEDBACK_MAX_POINTS`] points.
+/// The outlines of every selected object, a group's members each with their own, or the selection's
+/// bounds when the outlines' points and the objects evaluated to make them come to more than
+/// [`FEEDBACK_MAX_POINTS`].
 fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    let mut left = FEEDBACK_MAX_POINTS;
-    let mut outlines = vec![];
-    for &id in &selection.objects {
-        let Some((path, _)) = doc.node(id).and_then(|n| vectorcraft_render::drawn_outline(doc, n)) else { continue };
-        let points = path.elements().iter().filter(|el| !matches!(el, kurbo::PathEl::ClosePath)).count();
-        let Some(l) = left.checked_sub(points) else {
-            return doc
-                .bounds_of(&selection.objects, true)
-                .map(|b| Overlay::Path { path: vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color: FEEDBACK, width: 1.0, dashed: false })
-                .into_iter()
-                .collect();
-        };
-        left = l;
-        outlines.push(Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false });
-    }
-    outlines
+    let nodes = selection.objects.iter().filter_map(|&id| doc.node(id));
+    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS).unwrap_or_else(|| {
+        doc.bounds_of(&selection.objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect()
+    });
+    outlines.into_iter().map(|path| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false }).collect()
 }

@@ -670,7 +670,7 @@ fn find_preset(s: &Session, name: &str) -> Option<ScreenExportPreset> {
 }
 
 /// `p` over the settings of its `exportPreset`, when it names one (its own keys win).
-fn with_preset(s: &Session, p: &Value) -> Result<Value> {
+pub(super) fn with_preset(s: &Session, p: &Value) -> Result<Value> {
     let Some(name) = str_param(p, "exportPreset") else { return Ok(p.clone()) };
     let preset = find_preset(s, name).ok_or_else(|| bad(C, format!("no export preset `{name}` (see document.exportPresets.list)")))?;
     let mut merged = preset.settings;
@@ -1019,11 +1019,14 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     let mut out = Output::default();
     // The encoders' warnings for every file, each once.
     let mut warnings: Vec<String> = Vec::new();
+    // Include Bleed: a grown artboard already holds the bleed. Assets, layers and a selection are
+    // written on a page of their own bounds, which it doesn't grow.
+    let bleed_on_page = o.include_bleed && o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, notes) = vectorcraft_doc::cancel::quiet(|| encode_with_warnings(doc, format, options))?;
         for w in notes {
-            if !warnings.contains(&w) {
+            if !(bleed_on_page && w == super::pdf::BLEED_LEFT_OUT) && !warnings.contains(&w) {
                 warnings.push(w);
             }
         }

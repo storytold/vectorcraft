@@ -696,6 +696,62 @@ pub(super) fn symbol_replace(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+/// How far a transform coefficient may be from Reset Transformation's for the instance to count as
+/// already reset.
+const RESET_TOLERANCE: f64 = 1e-9;
+
+/// The transform Reset Transformation gives instance `n` of the document of `boxes`: its symbol's
+/// own scale, without rotation, shear or reflection, with the center of its art's bounding box
+/// where it is. `None` when [`reset_transformation_changes`] is false for `n`.
+fn reset_transformation(boxes: &vectorcraft_doc::SymbolBoxes, n: &Node) -> Option<Affine> {
+    let d = boxes.document();
+    if !reset_transformation_changes(d, n) {
+        return None;
+    }
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
+    let scale = d.symbol_natural_xf(symbol);
+    // The art's box in symbol space (the ±HALF square when the art cannot be measured): its
+    // center keeps its place on the page.
+    let art = boxes.art_bounds(symbol).unwrap_or_else(|| vectorcraft_geom::Rect::new(-HALF, -HALF, HALF, HALF));
+    let center = xf.transform_rect_bbox(art).center();
+    Some(Affine::translate(center - scale * art.center()) * scale)
+}
+
+/// Does Reset Transformation change `n`? True for an instance of a symbol `d` holds, not in
+/// perspective, whose scale, rotation, shear or reflection differs from the symbol's own scale
+/// (its stored natural size, or the art unscaled when that size is not positive and finite).
+/// It does not measure the art.
+pub fn reset_transformation_changes(d: &Document, n: &Node) -> bool {
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return false };
+    if n.extras().perspective.is_some() || !d.symbols.iter().any(|s| s.name == *symbol) {
+        return false;
+    }
+    let natural = d.symbol_natural_xf(symbol).as_coeffs();
+    xf.as_coeffs()[..4].iter().zip(&natural[..4]).any(|(a, b)| (a - b).abs() > RESET_TOLERANCE)
+}
+
+pub(super) fn symbol_instance_reset_transform(s: &mut Session, p: &Value) -> Result<Value> {
+    let ids = selected_instances(s, p)?;
+    if ids.is_empty() {
+        return Err(EngineError::Other("no symbol instances selected".into()));
+    }
+    let d = &s.doc()?.doc;
+    let boxes = d.symbol_boxes();
+    let changes: Vec<(NodeId, Affine)> = ids.iter().filter_map(|id| Some((*id, reset_transformation(&boxes, d.node(*id)?)?))).collect();
+    if !changes.is_empty() {
+        s.edit("Reset Transformation", |d, _| {
+            for (id, new) in &changes {
+                if let Some(NodeKind::SymbolInstance { xf, .. }) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    *xf = *new;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    let changed: Vec<NodeId> = changes.iter().map(|(id, _)| *id).collect();
+    Ok(json!({ "ids": ids_json(&changed) }))
+}
+
 pub(super) fn symbol_set_current(s: &mut Session, p: &Value) -> Result<Value> {
     let name = resolve_symbol(&s.doc()?.doc, p, "symbol.setCurrent")?;
     set_unknown(s, CURRENT_SYMBOL, Some(json!(name)))?;

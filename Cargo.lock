@@ -2287,6 +2287,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "heic-rs"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8883c3bfa6b4ff19a40e52a6dc051c5612cbe21bf408fc6d4875e8dfd777cb66"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2978,8 +2987,7 @@ checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
 [[package]]
 name = "linesweeper"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25df1b0c5432893f41bba817150e323703ee5f6d974f3a6808ac7fd7f046d18"
+source = "git+https://github.com/storytold/craft-libs?rev=481f66d287b2a06845f3667a19daf35f0fe958ed#481f66d287b2a06845f3667a19daf35f0fe958ed"
 dependencies = [
  "arrayvec",
  "kurbo 0.13.1",
@@ -6247,10 +6255,12 @@ dependencies = [
  "crc32fast",
  "flate2",
  "hayro-jpeg2000",
+ "heic-rs",
  "image",
  "kurbo 0.13.1",
  "log",
  "proptest",
+ "rayon",
  "roxmltree 0.21.2",
  "rustix 1.1.6",
  "ruzstd",
@@ -6265,6 +6275,7 @@ dependencies = [
  "vectorcraft-eps",
  "vectorcraft-format",
  "vectorcraft-geom",
+ "vectorcraft-js",
  "vectorcraft-metafile",
  "vectorcraft-pathops",
  "vectorcraft-pdf",
@@ -6283,6 +6294,7 @@ dependencies = [
 name = "vectorcraft-eps"
 version = "0.21.0"
 dependencies = [
+ "craft-pdf",
  "fax",
  "flate2",
  "hayro-ccitt",
@@ -6330,6 +6342,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "vectorcraft-testkit",
+]
+
+[[package]]
+name = "vectorcraft-js"
+version = "0.21.0"
+dependencies = [
+ "proptest",
+ "unicode-general-category",
 ]
 
 [[package]]
@@ -6413,8 +6433,10 @@ dependencies = [
 name = "vectorcraft-plugins"
 version = "0.21.0"
 dependencies = [
+ "log",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "vectorcraft-color",
  "vectorcraft-doc",

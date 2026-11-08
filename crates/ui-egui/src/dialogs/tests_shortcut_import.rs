@@ -500,6 +500,25 @@ fn apply_rows(app: &mut VectorcraftApp, start: &str, rows: &[(&str, &str, &str, 
     (out, dialog(app).fields["overrides"].clone())
 }
 
+#[test]
+fn resetting_an_imported_function_key_restores_its_edit_default() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
+        let mut app = app();
+        let (out, value) = apply_rows(&mut app, "defaults", &[("Acme Duplicate", "Menus", "edit.duplicate", alias)]);
+        assert_eq!(out["applied"], 1);
+        let mut saved = crate::keymap::stored::from_value(value);
+        assert!(!crate::keymap::has_override(&saved, edit), "{alias} saved edit override");
+        shortcut_editor::reset_one(&mut saved, "edit.duplicate");
+        assert_eq!(
+            crate::keymap::lookup(&crate::keymap::keymap_with(&saved), &crate::keymap::vc_chord(alias).unwrap()),
+            Some(crate::keymap::command_of(edit)),
+        );
+    }
+}
+
 /// Cmd and Ctrl are one key off the Mac: the review lets both rows through, and the later one takes
 /// the shortcut.
 #[test]

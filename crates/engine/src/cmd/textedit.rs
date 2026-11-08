@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Bullets and Numbering",
             [],
             None,
-            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), or \"* \", \"# \", \"> \" or \"+ \" (a bulleted list with the filled dot), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
+            "{id, at?: byte (default: the end of the text)} start a list from typed characters, what the Type tool runs when a space is typed on its own: when the text from the start of the paragraph that `at` is in up to `at` is \"1. \" or \"1) \" (a numbered list in 1, 2, 3), \"A. \" or \"A) \" (a numbered list in A, B, C), \"* \" (a bulleted list with the filled dot), \"+ \" (the hollow circle), \"# \" (the filled square) or \"> \" (the dash), and the paragraph is in no list, those characters are removed and the paragraph joins that list as one undo step (left and first-line indents of 0 become 18 and -18, as text.setFormat sets them); otherwise nothing changes → {id, started: bool, caret: byte (the paragraph's start when started, else `at`)}",
             has_doc,
             start_list
         ),
@@ -1676,7 +1676,7 @@ pub(crate) fn type_ranges(
     at_caret: impl Fn(&str, usize) -> Option<(usize, usize)>,
 ) -> Result<Vec<(NodeId, usize, usize, bool)>> {
     // (text, its range; None: all of it).
-    let targets: Vec<(NodeId, Option<(usize, usize)>)> = match id_param(p, "id") {
+    let targets: Vec<(NodeId, Option<(usize, usize)>)> = match super::object_param(p, "id", c)? {
         // An object that isn't type is refused as `ids` of it is.
         Some(id) if s.doc()?.doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Text(_))) => {
             return Err(bad(c, "no text objects selected"));

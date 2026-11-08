@@ -16,15 +16,21 @@ use super::{
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -33,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -139,8 +145,10 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step.
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
     s.edit("Text Orientation", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
@@ -298,6 +306,18 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     t.cached_baselines = lay.baselines();
 }
 
+/// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
+/// ([`vectorcraft_text::take_kept_layout`]) instead of laying the object out again.
+pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
+    t.normalize_paras();
+    auto_height(t);
+    let stamp = vectorcraft_text::LayoutStamp::now();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    t.cached_bounds = Some(lay.bounds);
+    t.cached_baselines = lay.baselines();
+    vectorcraft_text::keep_layout(t, stamp, lay);
+}
+
 /// The text-space bounds of area type's frame, when Auto Size can fit it: a rectangle (one
 /// subpath, as large as its bounds) of horizontal type in one row, with some height.
 fn auto_height_frame(t: &TextObject) -> Option<vectorcraft_geom::Rect> {
@@ -432,7 +452,7 @@ fn columns_hold(lines: &[vectorcraft_text::LineInfo], cols: usize, y0: f64, inse
 /// Transform panel and hit testing would fall back to [`TextObject::estimate_bounds`] (a rough
 /// 0.55 em per character) until the text is edited — the box comes up short and alignment looks off.
 pub(crate) fn refresh_bounds_of(d: &mut Document, ids: &[NodeId]) {
-    for id in text_ids(d, ids) {
+    for id in text_ids_where(d, ids, |t| t.cached_bounds.is_none()) {
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
             && t.cached_bounds.is_none()
         {
@@ -498,11 +518,22 @@ fn overflow_note(ids: &[NodeId], left_out: &str) -> Option<String> {
 
 /// Text objects among `ids` and their descendants.
 fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    text_ids_where(d, ids, |_| true)
+}
+
+/// The text objects among `ids` and their descendants that `keep` accepts, each once, in the order
+/// they are found. All of `ids` are looked up in one walk of the tree.
+fn text_ids_where(d: &Document, ids: &[NodeId], keep: impl Fn(&TextObject) -> bool) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
+        if let Some(n) = paths.get(id).and_then(|p| d.node_at(p)) {
             n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                if let NodeKind::Text(t) = &c.kind
+                    && keep(t)
+                    && seen.insert(c.id)
+                {
                     out.push(c.id);
                 }
             });
@@ -554,6 +585,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
         let threaded = super::threads::frames(d);
@@ -648,6 +680,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                 new_sel.push(gid);
             }
         }
+        super::dimension::restore_unchanged(d, ended);
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
         sel.set(new_sel);

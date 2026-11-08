@@ -9,9 +9,9 @@ use vectorcraft_geom::{Affine, Point, Vec2};
 
 use super::clipboard::SwatchChoices;
 use super::{
-    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, cmd, f64_or, f64_req,
-    finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param, index, ok,
-    point_param, str_param, switch_or,
+    CommandSpec, Result, Session, always, bad, bool_or, can_clear_history, can_redo, can_undo, checked_ids_param, clock_date, cmd, date_param,
+    f64_or, f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, id_param,
+    index, ok, point_param, str_param, switch_or,
 };
 use crate::{Clipboard, EngineError, inspect};
 
@@ -41,6 +41,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
+        cmd!(
+            query "document.compare",
+            "Compare with Image",
+            [],
+            None,
+            "{path: an image file (PNG, JPEG, WebP, TIFF or BMP), artboard?: index=0, background?: \"#rrggbb\"=\"#ffffff\" (the render and the image are both flattened on it), threshold?: 0.08 (0–1), diffPath?: a PNG to write (each pixel's absolute R, G and B differences)} render the artboard at the image's size (the image's width in pixels over the artboard's width in points), drawn as document.export draws a PNG (linked images and placed documents from their files), and compare it with the image; an image whose height differs by more than a pixel from the artboard's height at that scale is refused (not in the browser) → {width, height, rmse: the root mean square of the R, G and B differences, 0–1 (6 decimals), over: the pixels with a channel that differs by more than threshold, total: the pixels, threshold, diffPath?, warnings?: as a PNG export's (type that doesn't fit its frame, an image that couldn't be decoded, type in a font or style that isn't available, previews drawn because a linked file can't be read)}",
+            has_doc,
+            doc_compare
+        ),
         cmd!(query "document.json", "Document JSON", [], None, "{} → complete document model", has_doc, |s, _| Ok(serde_json::to_value(&*s.doc()?.doc).unwrap_or(Value::Null))),
         cmd!(
             "document.setUnits",
@@ -117,6 +126,15 @@ pub fn specs() -> Vec<CommandSpec> {
             clear_history
         ),
         cmd!(
+            "edit.newDocumentFromState",
+            "New Document from State",
+            [],
+            None,
+            "{index?: a row of the History panel (0: the oldest state kept; default: the current state), created?: Unix seconds|null (File Info's created date; default now, recorded in the journal so a replay matches)} make a new document holding the art as it was at that state, and make it the active document (the History panel's New Document from State button). The new document is named with the next Untitled-N, has nothing selected and no steps to undo or redo, is marked unsaved and links to the same files. It is out of symbol, opacity-mask and pattern editing, with the art drawn in a pattern's tile stored in the pattern as object.pattern.done stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step, as edit.undo keeps it; `index` names the row as it was listed before that. An index that names no state is an error and changes nothing → {index: the new document's, title}",
+            has_doc,
+            new_document_from_state
+        ),
+        cmd!(
             "edit.undoGroup.begin",
             "Begin Undo Group",
             [],
@@ -139,7 +157,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut",
             ["Edit"],
             Some("Cmd+X"),
-            "{} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.cut)} (selected ruler guides go too; the Artboard tool chosen: artboard.cut)",
             has_selection_guides_or_artboard_tool,
             cut
         ),
@@ -148,7 +166,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy",
             ["Edit"],
             Some("Cmd+C"),
-            "{} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
+            "{lockedAndHidden?: bool (the Artboard tool chosen, as artboard.copy)} the selection with what it uses, and the selected ruler guides (pasted on the layer new art goes to, moved as the objects are; alone, where they were); the Artboard tool chosen: artboard.copy → {copied, guides}",
             has_selection_guides_or_artboard_tool,
             copy
         ),
@@ -374,6 +392,155 @@ fn select_found(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<Value> {
     super::select::select_where(s, "document.find", p, |d, n| {
         found.contains(&n.id) && (members || !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
     })
+}
+
+/// Render an artboard at an image's size, drawn as a PNG export draws it (linked images and placed
+/// documents from their files, with the export's warnings), and measure how far the
+/// two are apart: both flattened on `background`, the root mean square of the R, G and B
+/// differences (0–1), and the pixels with a channel that differs by more than `threshold`.
+#[cfg(not(target_arch = "wasm32"))]
+fn doc_compare(s: &mut Session, p: &Value) -> Result<Value> {
+    use vectorcraft_render::encode::{RasterExportOptions, RasterFormat, png};
+    const C: &str = "document.compare";
+    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let diff_path = match p.get("diffPath") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(v)) => Some(v.as_str()),
+        Some(_) => {
+            let key = "diffPath";
+            return Err(bad(C, format!("`{key}` must be a string")));
+        }
+    };
+    let background = match p.get("background") {
+        None | Some(Value::Null) => [255; 3],
+        Some(v) => match super::fileio::background(v) {
+            Ok(Some(rgb)) => rgb,
+            _ => return Err(bad(C, format!("background {v}: a color such as \"#808080\""))),
+        },
+    };
+    let threshold = match p.get("threshold") {
+        None | Some(Value::Null) => 0.08,
+        Some(v) => v.as_f64().filter(|t| (0.0..=1.0).contains(t)).ok_or_else(|| bad(C, "`threshold` must be a number from 0 to 1"))?,
+    };
+    let doc = &s.doc()?.doc;
+    let count = doc.artboards.len();
+    let i = opt_u64(p, C, "artboard")?.unwrap_or(0);
+    let region = usize::try_from(i)
+        .ok()
+        .and_then(|i| doc.artboards.get(i))
+        .map(|a| a.rect)
+        .ok_or_else(|| bad(C, format!("no artboard {i} (0-based; the document has {count})")))?;
+    if let Some(d) = diff_path {
+        crate::file_access::check_write(d).map_err(EngineError::Other)?;
+    }
+    let image = compare_image(path)?;
+    let (iw, ih) = image.dimensions();
+    // The image's width sets the scale; its height may differ from the artboard's at that scale by
+    // the pixel the rounding of a render takes.
+    let scale = f64::from(iw) / region.width();
+    let rendered_height = region.height() * scale;
+    if iw == 0 || ih == 0 || !rendered_height.is_finite() || (rendered_height - f64::from(ih)).abs() > 1.0 {
+        let (rw, rh) = (iw, rendered_height.round());
+        return Err(bad(
+            C,
+            format!("the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ"),
+        ));
+    }
+    vectorcraft_render::raster_size(region, scale).map_err(|e| bad(C, e))?;
+    vectorcraft_render::raster_size(vectorcraft_geom::Rect::new(0.0, 0.0, f64::from(iw), f64::from(ih)), 1.0).map_err(|e| bad(C, e))?;
+    let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+    let opts = RasterExportOptions { background: Some(background), ..Default::default() }.render_options(RasterFormat::Png);
+    // As a PNG export: linked images and placed documents drawn from their files, not the
+    // previews saved for them.
+    let (full, linked) = super::place::document::full_documents(doc);
+    let failed = vectorcraft_render::decode_failures();
+    let rendered = vectorcraft_render::Renderer::new().render(&full, iw, ih, view, &opts);
+    // A canceled render stops drawing: the picture is not whole.
+    vectorcraft_doc::cancel::check()?;
+    // As a PNG export says, in its order: type on the artboard that doesn't fit its frame, an image
+    // the renderer couldn't decode (missing from the render), type in a missing font or style (drawn
+    // in another one), and linked files drawn from their previews.
+    let mut warnings: Vec<String> = super::fonts::export_overflow_warning(&full, &full.layers, Some(&[region])).into_iter().collect();
+    if let Some(w) = super::rasterfx::undecoded_warning(failed) {
+        warnings.push(w.into());
+    }
+    if let Some(w) = super::fonts::substitution_warning(&full) {
+        warnings.push(w);
+    }
+    warnings.extend(linked);
+    let rendered = rendered.to_straight();
+    let flat = |px: &[u8; 4]| {
+        let a = u32::from(px[3]);
+        [0, 1, 2].map(|k| ((u32::from(px[k]) * a + u32::from(background[k]) * (255 - a) + 127) / 255) as u8)
+    };
+    let row = iw as usize * 4;
+    let limit = threshold * 255.0;
+    let (mut squares, mut over) = (0.0f64, 0u64);
+    let mut diff = diff_path.map(|_| Vec::with_capacity(row * ih as usize));
+    for (a, b) in rendered.chunks_exact(row).zip(image.as_raw().chunks_exact(row)) {
+        vectorcraft_doc::cancel::check()?;
+        for (pa, pb) in a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0) {
+            let (fa, fb) = (flat(pa), flat(pb));
+            let d = [0, 1, 2].map(|k| fa[k].abs_diff(fb[k]));
+            squares += d.iter().map(|&x| f64::from(x) * f64::from(x)).sum::<f64>();
+            if d.iter().any(|&x| f64::from(x) > limit) {
+                over += 1;
+            }
+            if let Some(out) = &mut diff {
+                out.extend_from_slice(&[d[0], d[1], d[2], 255]);
+            }
+        }
+    }
+    let total = u64::from(iw) * u64::from(ih);
+    let rmse = (squares / (total as f64 * 3.0)).sqrt() / 255.0;
+    let mut out = json!({
+        "width": iw,
+        "height": ih,
+        "rmse": (rmse * 1e6).round() / 1e6,
+        "over": over,
+        "total": total,
+        "threshold": threshold,
+    });
+    if let (Some(d), Some(pixels)) = (diff_path, diff) {
+        let bytes = png::encode(&pixels, iw, ih, &png::PngOptions { ppi: None, interlaced: false }).map_err(EngineError::Other)?;
+        super::fileio::write_file(d, &bytes)?;
+        out["diffPath"] = json!(d);
+    }
+    if !warnings.is_empty() {
+        out["warnings"] = json!(warnings);
+    }
+    Ok(out)
+}
+
+/// The image `document.compare` reads from `path` (through the automation read root), as straight
+/// RGBA: a PNG, JPEG, WebP, TIFF or BMP within the allocation an opened image may take.
+#[cfg(not(target_arch = "wasm32"))]
+fn compare_image(path: &str) -> Result<image::RgbaImage> {
+    use image::ImageDecoder as _;
+    const C: &str = "document.compare";
+    let bytes = super::fileio::read_file(path)?;
+    if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(&bytes) {
+        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| bad(C, format!("{path}: {e}")))?;
+    let readable = [image::ImageFormat::Png, image::ImageFormat::Jpeg, image::ImageFormat::WebP, image::ImageFormat::Tiff, image::ImageFormat::Bmp];
+    if !reader.format().is_some_and(|f| readable.contains(&f)) {
+        return Err(bad(C, format!("{path}: not a PNG, JPEG, WebP, TIFF or BMP image")));
+    }
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
+    reader.limits(limits);
+    let decoder = reader.into_decoder().map_err(|e| bad(C, format!("{path}: {e}")))?;
+    let (w, h) = decoder.dimensions();
+    if decoder.total_bytes() > vectorcraft_doc::MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > vectorcraft_doc::MAX_RASTER_ALLOC {
+        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
+    }
+    Ok(image::DynamicImage::from_decoder(decoder).map_err(|e| bad(C, format!("{path}: {e}")))?.to_rgba8())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn doc_compare(_: &mut Session, _: &Value) -> Result<Value> {
+    Err(bad("document.compare", "comparing with an image file isn't available in the browser"))
 }
 
 /// Document Setup's units (also `document.setup {units}`).
@@ -606,6 +773,53 @@ fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "cleared": cleared }))
 }
 
+/// History panel › New Document from State: a new document with the art of a state, and without
+/// the editing state that state may hold (opacity-mask or symbol editing, Puppet Warp pins, new art).
+/// Its links point at the files the source finds, which may be in the source's folder away from
+/// the links' paths. Later artboards in the two documents take their ids separately. A later save of the new document
+/// over the file its art was read from asks first, as a save of the source does.
+fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.newDocumentFromState";
+    let created = date_param(p, "created", C)?;
+    let st = s.doc()?;
+    // The row as the panel lists it now: keeping an edit in progress below changes the rows.
+    let chosen = match p.get("index") {
+        None | Some(Value::Null) => None,
+        Some(v) => {
+            let state = v.as_u64().and_then(|row| st.history.state(&st.doc, index(row)));
+            Some(state.ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
+        }
+    };
+    settle_interaction(s)?;
+    let st = s.doc()?;
+    let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
+    let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
+    if let Some(path) = st.path.as_deref() {
+        // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
+        let roots = crate::file_access::current().or_else(|| opened_by.clone());
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+    }
+    doc.drop_edit_modes();
+    if doc.pattern_edit.is_some() {
+        super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
+    }
+    doc.puppet = None;
+    doc.new_art.set(Arc::default());
+    let retired = vectorcraft_doc::RetiredArtboardId::default();
+    retired.raise(doc.retired_artboard_id.get());
+    doc.retired_artboard_id = retired;
+    doc.title = s.next_untitled();
+    doc.metadata.created = clock_date(s, "created", created);
+    doc.metadata.modified = None;
+    let i = s.add_document(doc, None);
+    let st = s.doc_mut()?;
+    st.imported_from = imported_from;
+    st.import_losses = import_losses;
+    st.opened_by = st.opened_by.take().or(opened_by);
+    st.mark_unsaved();
+    Ok(json!({ "index": i, "title": st.title() }))
+}
+
 /// `selection` for an undo (redo) step, sharing that of `like`, the step beside it, when the same.
 fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::HistoryEntry>) -> Arc<vectorcraft_doc::Selection> {
     match like {
@@ -701,10 +915,15 @@ fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     Ok((direct, roots))
 }
 
-fn copy(s: &mut Session, _: &Value) -> Result<Value> {
+/// The params edit.copy and edit.cut pass on to `artboard.copy` and `artboard.cut`.
+fn artboard_clipboard_params(p: &Value) -> Value {
+    p.get("lockedAndHidden").map_or_else(|| json!({}), |v| json!({ "lockedAndHidden": v }))
+}
+
+fn copy(s: &mut Session, p: &Value) -> Result<Value> {
     // The Artboard tool copies its artboard (and the art on it).
     if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), false);
+        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), false);
     }
     let (direct, targets) = copy_cut_targets(s)?;
     let st = s.doc()?;
@@ -744,7 +963,7 @@ fn copy(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn cut(s: &mut Session, p: &Value) -> Result<Value> {
     if s.tool_id() == "artboard" {
-        return super::panelcmds::artboard_copy(s, &json!({}), true);
+        return super::panelcmds::artboard_copy(s, &artboard_clipboard_params(p), true);
     }
     // Ruler guides selected on their own: Copy takes them, Clear removes them.
     if s.doc()?.selection.is_empty() {
