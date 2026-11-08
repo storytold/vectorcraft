@@ -6476,6 +6476,24 @@ breakText	Glyphs	Glifler
 	3D Box	3B Kutu
 	3D Box Tool	3B Kutu Aracı
 
+# Safe Mode
+	Safe Mode…	Güvenli Mod…
+	Safe Mode	Güvenli Mod
+	Help › Safe Mode…	Yardım › Güvenli Mod…
+	Enable on Re-launch	Sonraki Başlatmada Etkinleştir
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft'ın son başlatılması, {name} eklentisi yüklenirken durdu. Nedeni bu eklenti olmayabilir.
+	Disable and Continue	Devre Dışı Bırak ve Devam Et
+	Start Normally	Normal Başlat
+	Start in Safe Mode	Güvenli Modda Başlat
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft Güvenli Mod'da: normal başlatılana kadar hiçbir eklenti yüklenmez veya çalıştırılmaz.
+	Disabled plug-ins	Devre dışı eklentiler
+	No plug-ins are disabled.	Devre dışı bırakılmış eklenti yok.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Güvenli Mod açık: VectorCraft normal başlatılana kadar eklentiler yüklenmez veya çalıştırılmaz
+@msg	give `id` or `file` (see plugin.safeMode)	`id` veya `file` belirtin (bkz. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	bu eklenti devre dışı değil (bkz. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Devre dışı eklentiler bir sonraki başlatma için kaydedilemedi
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Görünümü Genişlet: seçimdeki bir eklenti efekti Güvenli Mod'da genişletilemez
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Piksel Izgarasına Hizala
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir

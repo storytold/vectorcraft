@@ -6351,5 +6351,23 @@ breakText	Glyphs	Glyffer
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
 
+# Safe Mode
+	Safe Mode…	Sikker tilstand…
+	Safe Mode	Sikker tilstand
+	Help › Safe Mode…	Hjælp › Sikker tilstand…
+	Enable on Re-launch	Aktivér ved næste start
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Sidste start af VectorCraft stoppede, mens plug-in'et {name} blev indlæst. Det er måske ikke årsagen.
+	Disable and Continue	Deaktiver og fortsæt
+	Start Normally	Start normalt
+	Start in Safe Mode	Start i sikker tilstand
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft er i sikker tilstand: ingen plug-ins indlæses eller køres, før programmet startes normalt.
+	Disabled plug-ins	Deaktiverede plug-ins
+	No plug-ins are disabled.	Ingen plug-ins er deaktiveret.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Sikker tilstand er slået til: plug-ins indlæses og køres ikke, før VectorCraft startes normalt
+@msg	give `id` or `file` (see plugin.safeMode)	angiv `id` eller `file` (se plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	det plug-in er ikke deaktiveret (se plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	De deaktiverede plug-ins kunne ikke gemmes til næste start
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Udvid udseende: en plug-in-effekt i markeringen kan ikke udvides i sikker tilstand
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Juster efter pixelgitter

@@ -6100,6 +6100,24 @@ breakText	Glyphs	글리프
 	3D Box	3D 상자
 	3D Box Tool	3D 상자 도구
 
+# Safe Mode
+	Safe Mode…	안전 모드…
+	Safe Mode	안전 모드
+	Help › Safe Mode…	도움말 › 안전 모드…
+	Enable on Re-launch	다음 실행 시 활성화
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	지난번 VectorCraft 실행이 플러그인 {name}을(를) 불러오는 중에 중지되었습니다. 이 플러그인이 원인이 아닐 수도 있습니다.
+	Disable and Continue	비활성화하고 계속
+	Start Normally	정상적으로 시작
+	Start in Safe Mode	안전 모드로 시작
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft가 안전 모드입니다. 정상적으로 시작할 때까지 플러그인을 불러오거나 실행하지 않습니다.
+	Disabled plug-ins	비활성화된 플러그인
+	No plug-ins are disabled.	비활성화된 플러그인이 없습니다.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	안전 모드가 켜져 있습니다. VectorCraft가 정상적으로 시작할 때까지 플러그인을 불러오거나 실행하지 않습니다
+@msg	give `id` or `file` (see plugin.safeMode)	`id` 또는 `file`을 지정하세요(plugin.safeMode 참조)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	해당 플러그인은 비활성화되어 있지 않습니다(plugin.safeMode 참조)
+@msg	Couldn't save the disabled plug-ins for the next launch	비활성화된 플러그인을 다음 실행을 위해 저장할 수 없습니다
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	모양새 확장: 선택 항목의 플러그인 효과는 안전 모드에서 확장할 수 없습니다
+
 # Align to Pixel Grid
 	Align to Pixel Grid	픽셀 격자에 정렬
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다

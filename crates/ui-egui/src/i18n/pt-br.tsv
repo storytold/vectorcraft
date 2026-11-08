@@ -6592,6 +6592,24 @@ swatch	Yellow Green	Verde-amarelado
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
 
+# Safe Mode
+	Safe Mode…	Modo de Segurança…
+	Safe Mode	Modo de Segurança
+	Help › Safe Mode…	Ajuda › Modo de Segurança…
+	Enable on Re-launch	Ativar na Próxima Inicialização
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	A última inicialização do VectorCraft parou enquanto o plug-in {name} era carregado. Ele pode não ser a causa.
+	Disable and Continue	Desativar e Continuar
+	Start Normally	Iniciar Normalmente
+	Start in Safe Mode	Iniciar no Modo de Segurança
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	O VectorCraft está no Modo de Segurança: nenhum plug-in é carregado ou executado até que ele seja iniciado normalmente.
+	Disabled plug-ins	Plug-ins desativados
+	No plug-ins are disabled.	Nenhum plug-in está desativado.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	O Modo de Segurança está ativado: os plug-ins não são carregados nem executados até que o VectorCraft seja iniciado normalmente
+@msg	give `id` or `file` (see plugin.safeMode)	informe `id` ou `file` (veja plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	esse plug-in não está desativado (veja plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Não foi possível salvar os plug-ins desativados para a próxima inicialização
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandir aparência: um efeito de plug-in na seleção não pode ser expandido no Modo de Segurança
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinhar à Grade de Pixels
 @msg	only paths and compound paths can be aligned to the pixel grid	somente caminhos e caminhos compostos podem ser alinhados à grade de pixels

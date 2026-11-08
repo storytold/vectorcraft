@@ -6502,6 +6502,24 @@ breakText	Glyphs	Glifs
 	3D Box	Caixa 3D
 	3D Box Tool	Eina Caixa 3D
 
+# Safe Mode
+	Safe Mode…	Mode segur…
+	Safe Mode	Mode segur
+	Help › Safe Mode…	Ajuda › Mode segur…
+	Enable on Re-launch	Activa en el proper inici
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	L'últim inici de VectorCraft es va aturar mentre es carregava el complement {name}. Pot ser que no en sigui la causa.
+	Disable and Continue	Desactiva i continua
+	Start Normally	Inicia normalment
+	Start in Safe Mode	Inicia en mode segur
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft és en mode segur: cap complement no es carrega ni s'executa fins que s'iniciï normalment.
+	Disabled plug-ins	Complements desactivats
+	No plug-ins are disabled.	No hi ha cap complement desactivat.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	El mode segur és actiu: els complements no es carreguen ni s'executen fins que VectorCraft s'iniciï normalment
+@msg	give `id` or `file` (see plugin.safeMode)	indiqueu `id` o `file` (vegeu plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	aquest complement no està desactivat (vegeu plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	No s’han pogut desar els complements desactivats per al proper inici
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandeix l’aparença: un efecte d’un complement de la selecció no es pot expandir en mode segur
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Alinea a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels

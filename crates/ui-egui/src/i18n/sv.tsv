@@ -8006,6 +8006,24 @@ digits	Hindi	Hindi
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
 
+# Safe Mode
+	Safe Mode…	Felsäkert läge…
+	Safe Mode	Felsäkert läge
+	Help › Safe Mode…	Hjälp › Felsäkert läge…
+	Enable on Re-launch	Aktivera vid nästa start
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Den senaste starten av VectorCraft stoppades medan pluginet {name} lästes in. Det är kanske inte orsaken.
+	Disable and Continue	Inaktivera och fortsätt
+	Start Normally	Starta normalt
+	Start in Safe Mode	Starta i felsäkert läge
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft är i felsäkert läge: inga plugins läses in eller körs förrän programmet startas normalt.
+	Disabled plug-ins	Inaktiverade plugins
+	No plug-ins are disabled.	Inga plugins är inaktiverade.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Felsäkert läge är på: plugins läses inte in eller körs förrän VectorCraft startas normalt
+@msg	give `id` or `file` (see plugin.safeMode)	ange `id` eller `file` (se plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	det pluginet är inte inaktiverat (se plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	De inaktiverade pluginen kunde inte sparas till nästa start
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Expandera utseende: en plugin-effekt i markeringen kan inte expanderas i felsäkert läge
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Justera mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet

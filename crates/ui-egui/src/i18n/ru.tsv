@@ -6608,6 +6608,24 @@ shape	Open	Открытый
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
 
+# Safe Mode
+	Safe Mode…	Безопасный режим…
+	Safe Mode	Безопасный режим
+	Help › Safe Mode…	Справка › Безопасный режим…
+	Enable on Re-launch	Включить при следующем запуске
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Последний запуск VectorCraft остановился во время загрузки модуля {name}. Возможно, причина не в нём.
+	Disable and Continue	Отключить и продолжить
+	Start Normally	Запустить в обычном режиме
+	Start in Safe Mode	Запустить в безопасном режиме
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft работает в безопасном режиме: модули не загружаются и не выполняются, пока программа не будет запущена в обычном режиме.
+	Disabled plug-ins	Отключённые модули
+	No plug-ins are disabled.	Нет отключённых модулей.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Безопасный режим включён: модули не загружаются и не выполняются, пока VectorCraft не будет запущен в обычном режиме
+@msg	give `id` or `file` (see plugin.safeMode)	укажите `id` или `file` (см. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	этот модуль не отключён (см. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Не удалось сохранить отключённые модули для следующего запуска
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Разбор оформления: эффект модуля в выделении нельзя разобрать в безопасном режиме
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Выровнять по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры

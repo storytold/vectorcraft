@@ -6471,6 +6471,24 @@ breakText	Glyphs	Γλύφοι
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
 
+# Safe Mode
+	Safe Mode…	Ασφαλής λειτουργία…
+	Safe Mode	Ασφαλής λειτουργία
+	Help › Safe Mode…	Βοήθεια › Ασφαλής λειτουργία…
+	Enable on Re-launch	Ενεργοποίηση στην επόμενη εκκίνηση
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Η τελευταία εκκίνηση του VectorCraft σταμάτησε ενώ φορτωνόταν το πρόσθετο {name}. Ίσως δεν είναι αυτό η αιτία.
+	Disable and Continue	Απενεργοποίηση και συνέχεια
+	Start Normally	Κανονική εκκίνηση
+	Start in Safe Mode	Εκκίνηση σε ασφαλή λειτουργία
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	Το VectorCraft είναι σε ασφαλή λειτουργία: κανένα πρόσθετο δεν φορτώνεται ούτε εκτελείται μέχρι να ξεκινήσει κανονικά.
+	Disabled plug-ins	Απενεργοποιημένα πρόσθετα
+	No plug-ins are disabled.	Δεν υπάρχουν απενεργοποιημένα πρόσθετα.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Η ασφαλής λειτουργία είναι ενεργή: τα πρόσθετα δεν φορτώνονται ούτε εκτελούνται μέχρι το VectorCraft να ξεκινήσει κανονικά
+@msg	give `id` or `file` (see plugin.safeMode)	δώστε `id` ή `file` (δείτε plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	αυτό το πρόσθετο δεν είναι απενεργοποιημένο (δείτε plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Δεν ήταν δυνατή η αποθήκευση των απενεργοποιημένων πρόσθετων για την επόμενη εκκίνηση
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Επέκταση εμφάνισης: ένα εφέ πρόσθετου στην επιλογή δεν μπορεί να επεκταθεί σε ασφαλή λειτουργία
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων

@@ -7976,6 +7976,24 @@ swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
 
+# Safe Mode
+	Safe Mode…	सुरक्षित मोड…
+	Safe Mode	सुरक्षित मोड
+	Help › Safe Mode…	मदद › सुरक्षित मोड…
+	Enable on Re-launch	अगली बार शुरू होने पर सक्षम करें
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft का पिछला लॉन्च प्लग-इन {name} के लोड होते समय रुक गया। हो सकता है कि वह इसका कारण न हो।
+	Disable and Continue	अक्षम करें और जारी रखें
+	Start Normally	सामान्य रूप से शुरू करें
+	Start in Safe Mode	सुरक्षित मोड में शुरू करें
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft सुरक्षित मोड में है: जब तक यह सामान्य रूप से शुरू नहीं होता, कोई भी प्लग-इन लोड या चलाया नहीं जाता।
+	Disabled plug-ins	अक्षम प्लग-इन
+	No plug-ins are disabled.	कोई प्लग-इन अक्षम नहीं है।
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	सुरक्षित मोड चालू है: जब तक VectorCraft सामान्य रूप से शुरू नहीं होता, प्लग-इन लोड या चलाए नहीं जाते
+@msg	give `id` or `file` (see plugin.safeMode)	`id` या `file` दें (plugin.safeMode देखें)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	वह प्लग-इन अक्षम नहीं है (plugin.safeMode देखें)
+@msg	Couldn't save the disabled plug-ins for the next launch	अगली बार लॉन्च के लिए अक्षम प्लग-इन सहेजे नहीं जा सके
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	उपस्थिति का विस्तार: सिलेक्शन में किसी प्लग-इन इफ़ेक्ट का सुरक्षित मोड में विस्तार नहीं किया जा सकता
+
 # Align to Pixel Grid
 	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
 @msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
