@@ -2077,7 +2077,7 @@ fn a_dropped_press_keeps_the_text_loaded() {
     t.pointer(&cx, &ev(PointerKind::Drag, 80.0, 90.0));
     assert!(t.drop_press(&cx).is_empty());
     assert!(t.pointer(&cx, &ev(PointerKind::Up, 80.0, 90.0)).is_empty(), "the release threads nothing");
-    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "the new frame's outline is removed");
+    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_) | Overlay::SelectionMarquee { .. })), "the new frame's outline is removed");
     assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
     // A press on the port that loaded the text puts it down; dropped, it leaves the text loaded.
     t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
@@ -2295,7 +2295,7 @@ fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
     let a = t.pointer(&c, &ev(PointerKind::Drag, 450.0, 450.0));
     assert!(a.is_empty(), "{a:?}");
-    assert!(matches!(t.overlays(&c).first(), Some(Overlay::Marquee(_))), "a marquee");
+    assert!(matches!(t.overlays(&c).first(), Some(Overlay::SelectionMarquee { .. })), "a marquee");
 }
 
 /// A Shift-press on a selected object's centre point moves the selection too, held to 45° steps,
