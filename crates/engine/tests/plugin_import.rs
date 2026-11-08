@@ -316,3 +316,23 @@ fn a_file_past_the_input_limit_is_refused() {
     assert!(s.documents().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file past the importer's input limit whose start shows a built-in format opens as that format,
+/// whatever its extension; named, the importer's limit applies to it.
+#[test]
+fn a_built_in_file_past_the_input_limit_still_opens() {
+    let dir = tmp_dir("largebuiltin");
+    let mut s = Session::new();
+    echo(&mut s, "test.largepng", r#"["tsp"]"#);
+    let path = dir.join("big.tsp");
+    let mut png = std::io::Cursor::new(vec![]);
+    image::RgbaImage::new(2, 2).write_to(&mut png, image::ImageFormat::Png).unwrap();
+    std::fs::write(&path, png.get_ref()).unwrap();
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 + 1).unwrap();
+    let e = s.execute("document.open", &json!({"path": path_of(&path), "importer": "plugin.test.largepng"})).unwrap_err();
+    assert!(e.to_string().contains("larger than"), "{e}");
+    assert!(s.documents().is_empty());
+    let r = s.execute("document.open", &json!({"path": path_of(&path)})).unwrap();
+    assert_eq!(r["format"], "png");
+    let _ = std::fs::remove_dir_all(&dir);
+}

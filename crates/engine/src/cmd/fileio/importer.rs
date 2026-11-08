@@ -58,22 +58,36 @@ pub(super) fn pick(name: &str, bytes: &[u8], p: &Value) -> Result<Option<Arc<Plu
 /// The file at `path` for `document.open`'s params `p`. A file that only an importer reads (one
 /// `importer` names, or an extension no built-in format reads that an importer lists) is read up
 /// to [`import::MAX_INPUT_BYTES`]: past that, it is an error, unless the start of the file shows a
-/// built-in format and no importer was named, which is read whole as any other file is.
+/// built-in format and no importer was named, which is read whole as any other file is. A file past
+/// the limit that isn't read whole is reported from its size, without reading it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn read_path(path: &str, p: &Value) -> Result<Vec<u8>> {
+    /// How much of the file [`detect`] is given: more than its content checks read.
+    const SNIFF_BYTES: usize = 64 << 10;
+
     let ext = extension(path);
     let explicit = named(p)?.is_some();
     if !explicit && (super::readable_format(&ext).is_some() || import::for_extension(&ext).is_empty()) {
         return super::read_file(path);
     }
-    let head = super::read_file_head(path, import::MAX_INPUT_BYTES + 1)?;
-    if head.len() <= import::MAX_INPUT_BYTES {
+    let head = super::read_file_head(path, SNIFF_BYTES)?;
+    if head.len() < SNIFF_BYTES {
         return Ok(head);
     }
     if !explicit && detect(path, &head).is_some() {
         return super::read_file(path);
     }
-    Err(err(format!("can't open `{}`: {}", file_name(path), import::too_large())))
+    let too_large = || err(format!("can't open `{}`: {}", file_name(path), import::too_large()));
+    let size = std::fs::metadata(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?.len();
+    if size > import::MAX_INPUT_BYTES as u64 {
+        return Err(too_large());
+    }
+    // The file can grow after the size is read.
+    let file = super::read_file_head(path, import::MAX_INPUT_BYTES + 1)?;
+    if file.len() > import::MAX_INPUT_BYTES {
+        return Err(too_large());
+    }
+    Ok(file)
 }
 
 #[cfg(target_arch = "wasm32")]
