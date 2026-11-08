@@ -69,7 +69,10 @@ extensions with that importer (on the web, File › Open's picker opens instead)
 desktop the importer runs off the UI thread, and a run that takes a while shows a progress window with Cancel, which
 stops it. An importer
 with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open
-button opens the file; File › Open runs an importer with its parameters' defaults. **File › Open** of a `.wasm` file installs
+button opens the file; File › Open runs an importer with its parameters' defaults. Open Recent opens a file the way
+File › Open does: it does not remember the importer or the parameters given to Open With. A built-in format reads the
+file if one can, and otherwise the first importer by id that lists its extension reads it with its parameters' defaults.
+**File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
 background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).

@@ -6442,7 +6442,8 @@ breakText	Glyphs	Γλύφοι
 @msg	missing `importer` (see document.formats)	λείπει το `importer` (δείτε document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	το `importer` πρέπει να είναι αναγνωριστικό μορφής πρόσθετου (δείτε document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	το «{shown}» ανοίγει αρχεία {_1}, όχι `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	το `{_1}` είναι {_2}, όχι πρόσθετο εισαγωγής
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εισαγωγής
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	το `{_1}` είναι πρόσθετο τύπου `{_2}`, όχι πρόσθετο εξαγωγής
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	το `{_1}` είναι πρόσθετο εισαγωγής: ανοίξτε ένα αρχείο με document.open {{"importer"}"}}
 @msg	the importer returned no objects	το πρόσθετο εισαγωγής δεν επέστρεψε κανένα αντικείμενο
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ένα πρόσθετο εισαγωγής επιστρέφει `objects` και `warnings`, όχι `{key}`

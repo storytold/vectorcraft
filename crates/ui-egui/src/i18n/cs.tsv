@@ -6490,7 +6490,8 @@ breakText	Glyphs	Glyfy
 @msg	missing `importer` (see document.formats)	chybí `importer` (viz document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` musí být ID formátu zásuvného modulu (viz document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ otevírá soubory {_1}, ne `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` je {_2}, ne importní zásuvný modul
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` je zásuvný modul druhu `{_2}`, ne importní zásuvný modul
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` je zásuvný modul druhu `{_2}`, ne exportní zásuvný modul
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` je importní zásuvný modul: otevřete soubor pomocí document.open {{"importer"}"}}
 @msg	the importer returned no objects	importní zásuvný modul nevrátil žádné objekty
 @msg	an importer returns `objects` and `warnings`, not `{key}`	importní zásuvný modul vrací `objects` a `warnings`, ne `{key}`

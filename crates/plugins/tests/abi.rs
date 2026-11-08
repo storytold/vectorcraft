@@ -272,7 +272,11 @@ fn an_exporter_returns_its_file_with_an_export_s_budget() {
     // Its parameters are checked, and a filter is not an exporter.
     assert!(matches!(export::run(&p, b"{}", &json!({"level": "high"}), target), Err(Error::Params(_))));
     let filter = Plugin::load(&ok_module("(i64.const 0)"), Limits::default()).unwrap();
-    assert!(matches!(export::run(&filter, b"{}", &Value::Null, target), Err(Error::Params(_))));
+    let e = export::run(&filter, b"{}", &Value::Null, target).unwrap_err();
+    assert!(matches!(e, Error::Params(_)) && e.to_string().contains("is a plug-in of kind `filter`, not an exporter"), "{e}");
+    let importer = Plugin::load(&build(&tpl::returning(&tpl::importer("test.reads", r#"["tst"]"#, "{}"), "{}")), Limits::default()).unwrap();
+    let e = export::run(&importer, b"{}", &Value::Null, target).unwrap_err();
+    assert!(e.to_string().contains("is a plug-in of kind `importer`, not an exporter"), "{e}");
 }
 
 /// The echo exporter the engine and UI tests read back what they hand a plug-in with: its file is

@@ -6128,7 +6128,8 @@ breakText	Glyphs	字符
 @msg	missing `importer` (see document.formats)	未提供 `importer` (請參閱 document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必須是增效模組的格式 ID (請參閱 document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」開啟的是 {_1} 檔案，不是 `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` 是 {_2}，不是匯入增效模組
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 類型的增效模組，不是匯入增效模組
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 類型的增效模組，不是匯出增效模組
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是匯入增效模組：請用 document.open {{"importer"}"}} 開啟檔案
 @msg	the importer returned no objects	匯入增效模組未傳回任何物件
 @msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`

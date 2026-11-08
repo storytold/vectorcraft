@@ -83,7 +83,7 @@ pub fn limits(plugin: &Plugin) -> Limits {
 pub fn run(plugin: &Plugin, document: &[u8], params: &Value, target: Target) -> Result<Exported> {
     let m = plugin.manifest();
     if m.kind != Kind::Exporter {
-        return Err(Error::Params(format!("`{}` is a {}, not an exporter", m.id, m.kind.name())));
+        return Err(Error::Params(format!("`{}` is a plug-in of kind `{}`, not an exporter", m.id, m.kind.name())));
     }
     let mut params = Value::Object(m.resolve_params(params)?);
     params["_context"] = json!({"mode": "export", "extension": target.extension, "name": target.name});

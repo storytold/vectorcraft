@@ -6447,7 +6447,8 @@ breakText	Glyphs	Glifler
 @msg	missing `importer` (see document.formats)	`importer` eksik (bkz. document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` bir eklentinin biçim kimliği olmalıdır (bkz. document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} dosyalarını açar, `{_2}` dosyasını değil
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` bir {_2}, içe aktarma eklentisi değil
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`, `{_2}` türünde bir eklentidir, içe aktarma eklentisi değildir
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`, `{_2}` türünde bir eklentidir, dışa aktarma eklentisi değildir
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` bir içe aktarma eklentisidir: dosyayı document.open {{"importer"}"}} ile açın
 @msg	the importer returned no objects	içe aktarma eklentisi hiç nesne döndürmedi
 @msg	an importer returns `objects` and `warnings`, not `{key}`	içe aktarma eklentisi `{key}` değil, `objects` ve `warnings` döndürür

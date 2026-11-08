@@ -6579,7 +6579,8 @@ shape	Open	Открытый
 @msg	missing `importer` (see document.formats)	не указан `importer` (см. document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` должен быть идентификатором формата модуля (см. document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» открывает файлы {_1}, а не `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` — это {_2}, а не модуль импорта
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` является модулем вида `{_2}`, а не модулем импорта
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` является модулем вида `{_2}`, а не модулем экспорта
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer"}"}}
 @msg	the importer returned no objects	модуль импорта не вернул ни одного объекта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль импорта возвращает `objects` и `warnings`, а не `{key}`

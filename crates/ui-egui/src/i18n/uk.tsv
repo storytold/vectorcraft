@@ -6090,7 +6090,8 @@ breakText	Glyphs	Гліфи
 @msg	missing `importer` (see document.formats)	не вказано `importer` (див. document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` має бути ідентифікатором формату модуля (див. document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» відкриває файли {_1}, а не `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` - це {_2}, а не модуль імпорту
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` є модулем виду `{_2}`, а не модулем імпорту
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` є модулем виду `{_2}`, а не модулем експорту
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` - модуль імпорту: відкрийте файл за допомогою document.open {{"importer"}"}}
 @msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`

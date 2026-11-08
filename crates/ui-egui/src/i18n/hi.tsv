@@ -5376,7 +5376,7 @@
 @msg	`{_1}` can't be edited or removed	`{_1}` को संपादित या हटाया नहीं जा सकता है
 @msg	`{_1}` has no brushes to apply	`{_1}` को लागू करने के लिए कोई ब्रश नहीं है
 @msg	`{_1}` has no symbols to place	`{_1}` के पास कोई सिंबल नहीं है
-@msg	`{_1}` is a {_2}, not an exporter	`{_1}` एक {_2} है, एक निर्यातक नहीं है
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` `{_2}` प्रकार का प्लग-इन है, निर्यातक नहीं
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect"}"}}	`{_1}` एक लाइव इफ़ेक्ट है: इसे effect.apply {{"effect"}"}} के साथ लागू करें
 @msg	`{_1}` is an exporter: export with document.export {{"format"}"}}	`{_1}` एक एक्सपोर्टर है: document.export {{"format"}"}} से एक्सपोर्ट करें
 @msg	`{_1}` is built in and always listed	`{_1}` बनाया गया है और हमेशा सूचीबद्ध है
@@ -7969,7 +7969,7 @@ theme	Appearance	अपीयरेंस
 @msg	missing `importer` (see document.formats)	`importer` नहीं दिया गया (document.formats देखें)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` किसी प्लग-इन का फ़ॉर्मेट id होना चाहिए (document.formats देखें)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” {_1} फ़ाइलें खोलता है, `{_2}` नहीं
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` एक {_2} है, इंपोर्टर नहीं
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` `{_2}` प्रकार का प्लग-इन है, इंपोर्टर नहीं
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` एक इंपोर्टर है: document.open {{"importer"}"}} से फ़ाइल खोलें
 @msg	the importer returned no objects	इंपोर्टर ने कोई ऑब्जेक्ट नहीं लौटाया
 @msg	an importer returns `objects` and `warnings`, not `{key}`	इंपोर्टर `objects` और `warnings` लौटाता है, `{key}` नहीं

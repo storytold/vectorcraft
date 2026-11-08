@@ -6110,7 +6110,8 @@ breakText	Glyphs	Glifi
 @msg	missing `importer` (see document.formats)	manca `importer` (vedi document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` deve essere l’id di formato di un plug-in (vedi document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» apre file {_1}, non `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` è un {_2}, non un plug-in di importazione
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` è un plug-in di tipo `{_2}`, non un plug-in di importazione
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` è un plug-in di tipo `{_2}`, non un plug-in di esportazione
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` è un plug-in di importazione: apri un file con document.open {{"importer"}"}}
 @msg	the importer returned no objects	il plug-in di importazione non ha restituito alcun oggetto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un plug-in di importazione restituisce `objects` e `warnings`, non `{key}`

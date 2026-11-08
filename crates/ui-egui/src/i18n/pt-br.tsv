@@ -6563,7 +6563,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	missing `importer` (see document.formats)	falta `importer` (consulte document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` deve ser o id de formato de um plug-in (consulte document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” abre arquivos {_1}, não `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` é um {_2}, não um plug-in de importação
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de importação
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` é um plug-in do tipo `{_2}`, não um plug-in de exportação
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` é um plug-in de importação: abra um arquivo com document.open {{"importer"}"}}
 @msg	the importer returned no objects	o plug-in de importação não retornou nenhum objeto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	um plug-in de importação retorna `objects` e `warnings`, não `{key}`

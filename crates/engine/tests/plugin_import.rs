@@ -51,6 +51,14 @@ fn objects(s: &Session) -> usize {
     s.doc().unwrap().doc.layers[0].children().unwrap().len()
 }
 
+/// The open documents' count, the active one's index, its undo and redo steps, whether it has
+/// unsaved changes, and its content.
+fn state(s: &mut Session) -> (usize, Option<usize>, usize, usize, bool, Value) {
+    let content = s.execute("document.inspect", &json!({})).unwrap();
+    let d = s.doc().unwrap();
+    (s.documents().len(), s.active_index(), d.history.undo.len(), d.history.redo.len(), d.is_dirty(), content)
+}
+
 /// A fresh folder for files this test writes.
 fn tmp_dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("vc-plugin-import-{tag}-{}", std::process::id()));
@@ -195,9 +203,11 @@ fn importer_names_that_do_not_fit_are_errors() {
     let mut s = Session::new();
     echo(&mut s, "test.names", r#"["tsn"]"#);
     install(&mut s, &tpl::returning(&tpl::manifest("test.names.filter", "filter", "{}"), r#"{"objects":[]}"#));
+    install(&mut s, &tpl::returning(&tpl::exporter("test.names.exporter", r#"["tsx"]"#, "{}"), r#"{"dataBase64":""}"#));
     let cases = [
         (json!({"importer": "plugin.test.names"}), "x.png", "opens .tsn files, not `x.png`"),
-        (json!({"importer": "plugin.test.names.filter"}), "x.tsn", "is a filter, not an importer"),
+        (json!({"importer": "plugin.test.names.filter"}), "x.tsn", "is a plug-in of kind `filter`, not an importer"),
+        (json!({"importer": "plugin.test.names.exporter"}), "x.tsn", "is a plug-in of kind `exporter`, not an importer"),
         (json!({"importer": "plugin.test.nothere"}), "x.tsn", "test.nothere"),
         (json!({"importer": 3}), "x.tsn", "`importer` must be a plug-in format id"),
     ];
@@ -257,6 +267,26 @@ fn failures_open_nothing() {
     install(&mut s, &tpl::module(&tpl::importer("test.fail.traps", r#"["tsf"]"#, "{}"), "(unreachable)", "", 1));
     assert!(open(&mut s, "x.tsf", b"?", json!({"importer": "plugin.test.fail.traps"})).is_err());
     assert!(s.documents().is_empty(), "nothing opened");
+
+    // A document that is already open keeps its tab, content and undo and redo steps.
+    install(&mut s, &tpl::returning(&tpl::importer("test.fail.opens", r#"["tsk"]"#, "{}"), RECT));
+    install(&mut s, &tpl::module(&tpl::importer("test.fail.spins", r#"["tsf"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
+    open(&mut s, "Kept.tsk", b"?", json!({})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let before = state(&mut s);
+    assert!(before.2 > 0 && before.3 > 0, "{before:?}");
+    for id in cases.iter().map(|c| c.0).chain(["test.fail.traps"]) {
+        assert!(open(&mut s, "x.tsf", b"?", json!({"importer": format!("plugin.{id}")})).is_err(), "{id}");
+        assert_eq!(state(&mut s), before, "{id}");
+    }
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || open(&mut s, "x.tsf", b"?", json!({"importer": "plugin.test.fail.spins"})));
+    assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
+    assert_eq!(state(&mut s), before, "cancelled");
 }
 
 /// Cancel stops an importer between two slices of its budget, and nothing opens: here one that

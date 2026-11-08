@@ -6091,7 +6091,8 @@ breakText	Glyphs	Glyph
 @msg	missing `importer` (see document.formats)	thiếu `importer` (xem document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` phải là id định dạng của một plug-in (xem document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` là {_2}, không phải plug-in nhập
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
 @msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
 @msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`

@@ -51,7 +51,7 @@ pub fn named(importer: &str) -> Result<Arc<Plugin>> {
 
 /// The error of plug-in `m`, which is not an importer, asked to import.
 fn not_importer(m: &crate::Manifest) -> Error {
-    Error::Params(format!("`{}` is a {}, not an importer", m.id, m.kind.name()))
+    Error::Params(format!("`{}` is a plug-in of kind `{}`, not an importer", m.id, m.kind.name()))
 }
 
 /// The installed importers that list extension `ext` (any case, leading dot allowed), by plug-in

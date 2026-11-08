@@ -6502,7 +6502,8 @@ font-script	Japanese	იაპონური
 @msg	missing `importer` (see document.formats)	`importer` აკლია (იხ. document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` უნდა იყოს პლაგინის ფორმატის ID (იხ. document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}“ ხსნის {_1} ფაილებს და არა `{_2}`-ს
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` არის {_2} და არა იმპორტის პლაგინი
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` არის `{_2}` სახის პლაგინი და არა იმპორტის პლაგინი
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` არის `{_2}` სახის პლაგინი და არა ექსპორტის პლაგინი
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` იმპორტის პლაგინია: გახსენით ფაილი document.open {{"importer"}"}}-ით
 @msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
 @msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს

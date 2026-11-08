@@ -6525,7 +6525,8 @@ breakText	Glyphs	Merkit
 @msg	missing `importer` (see document.formats)	`importer` puuttuu (katso document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` on oltava laajennuksen muototunnus (katso document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	”{shown}” avaa {_1}-tiedostoja, ei `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` on {_2}, ei tuontilaajennus
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` on lajin `{_2}` laajennus, ei tuontilaajennus
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` on lajin `{_2}` laajennus, ei vientilaajennus
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` on tuontilaajennus: avaa tiedosto komennolla document.open {{"importer"}"}}
 @msg	the importer returned no objects	tuontilaajennus ei palauttanut objekteja
 @msg	an importer returns `objects` and `warnings`, not `{key}`	tuontilaajennus palauttaa `objects` ja `warnings`, ei `{key}`

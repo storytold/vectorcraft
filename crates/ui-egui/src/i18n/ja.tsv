@@ -6175,7 +6175,8 @@ breakText	Glyphs	字形
 @msg	missing `importer` (see document.formats)	`importer` がありません (document.formats を参照)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` にはプラグインの形式 ID を指定してください (document.formats を参照)
 @msg	“{shown}” opens {_1} files, not `{_2}`	「{shown}」が開くのは {_1} ファイルで、`{_2}` ではありません
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` は {_2} で、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` は種類 `{_2}` のプラグインで、読み込みプラグインではありません
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` は種類 `{_2}` のプラグインで、書き出しプラグインではありません
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` は読み込みプラグインです: document.open {{"importer"}"}} でファイルを開いてください
 @msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
 @msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません

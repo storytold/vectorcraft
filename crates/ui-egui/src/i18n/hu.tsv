@@ -6474,7 +6474,8 @@ breakText	Glyphs	Glifák
 @msg	missing `importer` (see document.formats)	hiányzik az `importer` (lásd document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	az `importer` egy bővítmény formátumazonosítója kell legyen (lásd document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” {_1} fájlokat nyit meg, nem `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}`: {_2}, nem importáló bővítmény
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}`: `{_2}` fajtájú bővítmény, nem importáló bővítmény
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}`: `{_2}` fajtájú bővítmény, nem exportáló bővítmény
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` importáló bővítmény: nyisson meg egy fájlt a document.open {{"importer"}"}} paranccsal
 @msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
 @msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`

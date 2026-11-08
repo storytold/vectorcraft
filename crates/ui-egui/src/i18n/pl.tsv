@@ -6345,7 +6345,8 @@ breakText	Glyphs	Glify
 @msg	missing `importer` (see document.formats)	brak `importer` (zobacz document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` musi być identyfikatorem formatu wtyczki (zobacz document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	„{shown}” otwiera pliki {_1}, a nie `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` to {_2}, a nie wtyczka importu
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka importu
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` to wtyczka rodzaju `{_2}`, a nie wtyczka eksportu
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` to wtyczka importu: otwórz plik za pomocą document.open {{"importer"}"}}
 @msg	the importer returned no objects	wtyczka importu nie zwróciła żadnych obiektów
 @msg	an importer returns `objects` and `warnings`, not `{key}`	wtyczka importu zwraca `objects` i `warnings`, a nie `{key}`

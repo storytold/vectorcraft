@@ -6331,7 +6331,8 @@ breakText	Glyphs	字形
 @msg	missing `importer` (see document.formats)	缺少 `importer` (参见 document.formats)
 @msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必须是增效工具的格式 ID (参见 document.formats)
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
-@msg	`{_1}` is a {_2}, not an importer	`{_1}` 是 {_2}，不是导入增效工具
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 类型的增效工具，不是导入增效工具
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 类型的增效工具，不是导出增效工具
 @msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
 @msg	the importer returned no objects	导入增效工具未返回任何对象
 @msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
