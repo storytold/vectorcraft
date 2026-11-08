@@ -242,6 +242,11 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.transform")?;
     check_switches(p, &["anchors", "releaseOutside"], "object.transform")?;
     let m = matrix_param(p, "matrix").ok_or_else(|| bad("object.transform", "missing matrix [a,b,c,d,e,f]"))?;
+    // An object selected in a symbol instance's art stays where the symbol puts it: the selection
+    // is left as it is, and the reply's warning goes to the status bar.
+    if p.get("ids").is_none() && crate::cmd::brushsym::selected_part(s)?.is_some() {
+        return Ok(json!({ "warning": crate::cmd::brushsym::part_only().to_string() }));
+    }
     let (ids, anchors) = match ids_param(p, "ids") {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),

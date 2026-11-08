@@ -6007,6 +6007,7 @@ breakText	Glyphs	Glyph
 	Reset Symbol Instance	Đặt lại đối tượng ký hiệu
 @msg	type must be static or dynamic, not {v}	type phải là static hoặc dynamic, không phải {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` là ký hiệu tĩnh: trước tiên hãy đặt Kiểu ký hiệu thành Động
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Chỉ có thể thay đổi màu đặc của màu tô và nét của đường dẫn, đường dẫn phức hoặc chữ được chọn trong một đối tượng ký hiệu
 @msg	path must be a list of child indices	path phải là danh sách chỉ số con
 @msg	no object at path {shown} in the symbol's art	không có đối tượng tại đường dẫn {shown} trong hình của ký hiệu
 @msg	give fill, stroke, opacity and/or blend	hãy cung cấp fill, stroke, opacity và/hoặc blend
