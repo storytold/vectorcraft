@@ -997,6 +997,7 @@ font-technology	Variable	Biến thiên
 	Dots	Chấm
 	Double Click To Isolate	Bấm đúp để cô lập
 	Double Column	Hai cột
+	Keep Tools Beside the Canvas	Công cụ cạnh vùng vẽ
 	Double Left Quotation Marks	Dấu ngoặc kép trái đôi
 	Double Quotes:	Dấu ngoặc kép:
 	Double Right Quotation Marks	Dấu ngoặc kép phải đôi
@@ -1345,6 +1346,7 @@ digits	Malayalam	Malayalam
 	Highlight:	Làm nổi bật:
 	Stroke When Editable	Nét khi có thể chỉnh sửa
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
+	Start Lists From Typed Markers	Bắt đầu danh sách từ ký hiệu đã gõ
 	Fill Rule	Quy tắc tô
 	Fill with Placeholder Text	Tô bằng văn bản giữ chỗ
 	Fill:	Tô:
@@ -1389,6 +1391,7 @@ digits	Malayalam	Malayalam
 	Find Linked Files in Folder…	Tìm tệp liên kết trong thư mục…
 	Find Next	Tìm tiếp
 	Find Objects	Tìm đối tượng
+	Compare with Image	So sánh với ảnh
 	Fine Dots	Chấm mịn
 
 	Simple	Đơn giản
@@ -3416,6 +3419,11 @@ mark-style	Japanese	Kiểu Nhật
 	Selected Swatches	Mẫu màu đã chọn
 	Selected Swatches Only	Chỉ mẫu màu đã chọn
 	Selection	Vùng chọn
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Chọn bằng khung
+	Touching	Đối tượng chạm khung
+	Fully Enclosed	Nằm hoàn toàn trong khung
+	Drag Direction	Hướng kéo
 	Selection & Anchor Display	Hiển thị vùng chọn & điểm neo
 	Selection Only	Chỉ vùng chọn
 	Selection Tool	Công cụ Chọn
@@ -4188,6 +4196,7 @@ mark-style	Japanese	Kiểu Nhật
 	Zoom to Selection	Thu phóng đến vùng chọn
 	Zoom Tool	Công cụ thu phóng
 	Zoom with Mouse Wheel	Thu phóng bằng con lăn chuột
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cuộn ngang bằng Cmd/Ctrl + con lăn
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tệp trong {folder} {note}. Hiện thư mục gói?
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} thư mục hoặc tệp không thể đọc được
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {n} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn
@@ -4985,6 +4994,9 @@ theme	Appearance	Giao diện
 @msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
+@msg	the HEIC or HEIF file can't be read	không thể đọc tệp HEIC hoặc HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	tệp HEIC hoặc HEIF chứa loại ảnh không thể đọc được
+@msg	HEIC and HEIF images can't be opened in this build	không thể mở ảnh HEIC và HEIF trong bản dựng này
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
 @msg	the scale is not a usable number	tỷ lệ không phải là số dùng được
@@ -5104,6 +5116,11 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: không phải ảnh PNG, JPEG, WebP, TIFF hay BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	ảnh có kích thước {iw} × {ih} điểm ảnh, còn bảng vẽ ở chiều rộng đó có kích thước {rw} × {rh} điểm ảnh: tỉ lệ của chúng khác nhau
+@msg	`threshold` must be a number from 0 to 1	`threshold` phải là một số từ 0 đến 1
+@msg	background {v}: a color such as "#808080"	background {v}: màu như "#808080"
+@msg	comparing with an image file isn't available in the browser	không thể so sánh với tệp ảnh trong trình duyệt
 @msg	an image of {w} × {h} pixels is shown at reduced size	ảnh {w} × {h} điểm ảnh được hiển thị ở kích thước thu nhỏ
 	Basic	Cơ bản
 	Fill and Stroke Controls	Điều khiển tô và nét
@@ -5299,6 +5316,9 @@ theme	Appearance	Giao diện
 @msg	too many library panels were opened in this session	đã mở quá nhiều bảng thư viện trong phiên này
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Ảnh có kích thước {_1} × {_2} điểm ảnh, hơn {LARGE_TRACE_SIDE} ở một cạnh: ảnh vẫn được dò, nhưng chậm hơn. Một thiết lập sẵn có độ trung thực thấp hơn hoặc một bản sao nhỏ hơn của ảnh sẽ dò nhanh hơn.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Ảnh đã được dò ở {_1} × {_2} điểm ảnh, thu nhỏ từ {_3} × {_4} (tối đa {_5} megapixel).
+@msg	byColor must be true or false	byColor phải là true hoặc false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor không thể tách các nhóm của Tự động nhóm: hãy dò mà không bật Tự động nhóm
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor không thể nhóm lại bản dò có hiệu ứng Pathfinder đang hoạt động: mở rộng mà không dùng byColor
 	Snapping	Hút
 	Snap to Tangent	Hút vào tiếp tuyến
 	Snap to Perpendicular	Hút vào đường vuông góc
@@ -5865,6 +5885,8 @@ breakText	Glyphs	Glyph
 	File + Data Set Name	Tệp + tên tập dữ liệu
 	Data Set Name	Tên tập dữ liệu
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` phải là `fileNumber`, `fileDataSetName` hoặc `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Mỗi tập dữ liệu được lưu đè lên cùng một tệp, nên tệp chỉ giữ lại tập dữ liệu cuối cùng.
+@msg	save the document with Save As before Save and Close	hãy lưu tài liệu bằng Lưu thành trước khi dùng Lưu và đóng
 @msg	no free data set file name in destination folder	Không có tên tệp tập dữ liệu còn trống trong thư mục đích
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
