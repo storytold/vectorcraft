@@ -60,7 +60,7 @@ use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::{MeshEdit, grid_of};
 use crate::pathtype::{self, BracketDrag, near_bracket};
 use crate::rulerguide::GuideEdit;
-use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at};
+use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Debug)]
@@ -200,6 +200,10 @@ pub struct DirectSelectionTool {
     /// What the anchor holding paths moved whole snaps to while Alt makes a copy: the original left
     /// behind too. Gathered with [`Self::anchor_snap`], before the previews move the original.
     copy_snap: Option<PointSnap>,
+    /// With Smart Guides › Snap to Last Location, for paths selected whole that an anchor holds
+    /// while they move: the targets that put the move back where it began, and the bounds it began
+    /// with. Set when the move begins.
+    last_location: Option<(Targets, Option<Rect>)>,
     /// What the dragged handle snaps to.
     handle_snap: HandleSnap,
     /// What the objects being moved snap to, gathered when the move begins.
@@ -249,6 +253,7 @@ impl DirectSelectionTool {
             anchor_snap: None,
             line_end: None,
             copy_snap: None,
+            last_location: None,
             handle_snap: HandleSnap::default(),
             move_snap: None,
             partial_snap: None,
@@ -724,6 +729,7 @@ impl Tool for DirectSelectionTool {
         self.state = State::Idle;
         self.guides.clear();
         (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
+        self.last_location = None;
         (self.click, self.click_segment, self.click_group, self.frame_click) = (None, None, None, None);
         if frame { vec![Action::Cancel, Action::Notify(FRAME_PICKED.into())] } else { vec![Action::Cancel] }
     }
@@ -1440,6 +1446,9 @@ impl DirectSelectionTool {
                 // Alt can go down or up at any time: gather both while nothing has moved.
                 self.anchor_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
                 self.copy_snap = Some(PointSnap::new(cx, || Targets::for_anchor_drag(cx.doc, &Selection::default())));
+                // As a move with the Selection tool does ([`MoveSnap::new`]).
+                let back = cx.smart_guides && !cx.snap_to_grid && cx.snap_to_last_location;
+                self.last_location = back.then(|| (Targets::last_location(cx), selection_bounds(cx)));
             } else {
                 self.move_snap = Some(MoveSnap::new(cx));
             }
@@ -1463,7 +1472,10 @@ impl DirectSelectionTool {
             return out;
         }
         let snap = if ev.mods.alt { &self.copy_snap } else { &self.anchor_snap };
-        if let (Some(grab), Some(snap)) = (grab, snap) {
+        let back = self.last_location.as_ref().filter(|_| !ev.mods.alt).and_then(|(t, from)| t.snap_back(*from, d, cx.snap_tol()));
+        if let (Some(_), Some(ov)) = (grab, back) {
+            (d, self.guides) = (Vec2::ZERO, ov);
+        } else if let (Some(grab), Some(snap)) = (grab, snap) {
             let shift = ev.mods.shift.then(|| Leave::segment(cx, grab, true));
             let (q, guides) = snap.snap_from(cx, grab + (p - start), shift.as_ref());
             (d, self.guides) = (q - grab, guides);
@@ -1487,6 +1499,7 @@ impl DirectSelectionTool {
         self.state = State::Idle;
         self.guides.clear();
         (self.anchor_snap, self.copy_snap, self.move_snap) = (None, None, None);
+        self.last_location = None;
         let group = self.click_group.take();
         // A click on one of several selected frame anchors selects it alone.
         if let (false, Some((id, anchor))) = (began, self.frame_click.take()) {

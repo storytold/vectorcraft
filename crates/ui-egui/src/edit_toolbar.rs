@@ -598,6 +598,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // it open.
         app.ui.tools_drawer = false;
     }
+    if app.ui.tools_drawer {
+        crate::toolbar::mark_flyout_open(ctx);
+    }
     ghost(ctx, &t);
 }
 

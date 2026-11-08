@@ -2,6 +2,7 @@ use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::Value;
 use vectorcraft_engine::Session;
 
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, fx_menu_ends};
 use super::*;
 
 /// One frame of the panel with `events` → the texts painted, with their rects.
@@ -28,6 +29,19 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, texts: &[(String, Rect)]
     let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
     frame(app, ctx, vec![b(false)]);
+}
+
+/// The Appearance section's fx button opens the Add Effect popup, with one row per effect group,
+/// plug-in groups included: in a short window the wheel reaches its last row.
+#[test]
+fn the_fx_popup_scrolls_inside_a_short_window() {
+    let (first, last) = fx_menu_ends();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let fx = |window: &PopupWindow| window.text("fx").expect("the fx button").center();
+    assert_last_row_scrolls_into_view(&mut app, 190.0, appearance_section, fx, &first, &last);
 }
 
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,

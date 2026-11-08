@@ -105,6 +105,40 @@ fn a_missing_link_warns_and_keeps_a_placeholder_in_its_box() {
     assert!(!w.is_empty());
 }
 
+/// Missing files show the same placeholder, each under a key of its own: the images of one file
+/// share a key, and those of another file have a different one.
+#[test]
+fn each_missing_file_has_its_own_placeholder_key() {
+    let dir = folder("missing-keys");
+    let body = r#"<image href="img/a.png" width="10" height="10"/><image href="img/b.png" x="20" width="10" height="10"/><image href="img/a.png" x="40" width="10" height="10"/>"#;
+    let (d, _) = open_in(&dir, body);
+    let [(_, a), (_, b), (_, a2)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    assert_eq!(Path::new(&a.link.as_ref().unwrap().path), dir.join("img").join("a.png"));
+    assert_eq!(Path::new(&b.link.as_ref().unwrap().path), dir.join("img").join("b.png"));
+    assert_ne!(a.key, b.key, "two files, two keys");
+    assert_eq!(a.key, a2.key, "one file, one key");
+    assert!(d.images[&a.key].is_proxy() && d.images[&b.key].is_proxy(), "placeholders, not the files");
+    assert_eq!(d.images[&a.key].bytes, d.images[&b.key].bytes, "the same placeholder");
+}
+
+/// Two files with the same pixels are linked under keys of their own: the images of one file share
+/// a key, and those of the other file have a different one.
+#[test]
+fn files_with_the_same_pixels_have_keys_of_their_own() {
+    let dir = folder("same-pixels");
+    let bytes = png(40, 20);
+    std::fs::write(dir.join("img").join("a.png"), &bytes).unwrap();
+    std::fs::write(dir.join("img").join("b.png"), &bytes).unwrap();
+    let body = r#"<image href="img/a.png" width="10" height="10"/><image href="img/b.png" x="20" width="10" height="10"/><image href="img/a.png" x="40" width="10" height="10"/>"#;
+    let (d, w) = open_in(&dir, body);
+    assert!(w.is_empty(), "{w:?}");
+    let [(_, a), (_, b), (_, a2)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    assert_ne!(a.key, b.key, "two files, two keys");
+    assert_eq!(a.key, a2.key, "one file, one key");
+    assert_eq!(*d.images[&a.key].bytes, bytes);
+    assert_eq!(*d.images[&b.key].bytes, bytes);
+}
+
 #[test]
 fn svg_images_import_as_vector_art() {
     let dir = folder("svgimage");
