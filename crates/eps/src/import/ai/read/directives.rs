@@ -503,7 +503,15 @@ impl<'a> Reader<'a> {
         let Some(tile) = head.tile.filter(|t| whole && sane(*t) && t.width() > 0.0 && t.height() > 0.0 && !frame.children.is_empty()) else {
             return;
         };
-        let art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
         // The objects of the art linked to graphic styles, by their ids in the document.
         if !sub.style_links.is_empty() {
             let mut ids = HashMap::new();
@@ -671,7 +679,7 @@ impl<'a> Reader<'a> {
         named
     }
 
-    /// Give the art of the opacity masks in `n` (a copy of a symbol's art or of a clipping path with ids of this
+    /// Give the art of the opacity masks in `n` (a copy of a symbol's, a pattern's or a brush's art, or of a clipping path, with ids of this
     /// document, [`vectorcraft_doc::Document::reid`], which leaves masks as they are) ids of this
     /// document too.
     pub(super) fn reid_masks(&mut self, n: &mut Node, depth: usize) {
@@ -783,7 +791,15 @@ impl<'a> Reader<'a> {
             && sub.doc.images.is_empty();
         let Some(frame) = sub.frames.pop().filter(|f| whole && !f.children.is_empty()) else { return };
         self.brush_art_looks.insert(name.clone(), sub.drawn_looks);
-        let mut art: Vec<Arc<Node>> = frame.children.iter().map(|n| Arc::new(self.doc.reid(n))).collect();
+        let mut art: Vec<Arc<Node>> = frame
+            .children
+            .iter()
+            .map(|n| {
+                let mut kept = self.doc.reid(n);
+                self.reid_masks(&mut kept, 0);
+                Arc::new(kept)
+            })
+            .collect();
         let node = match art.len() {
             1 => art.pop().map(Arc::unwrap_or_clone),
             _ => Some(Node::group(self.doc.alloc_id(), art)),
