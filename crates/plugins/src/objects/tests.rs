@@ -653,6 +653,31 @@ fn objects_that_clip_a_clip_group_are_not_inputs() {
     assert_eq!(filter_targets(&d, &[by_paths]), [clipped_by_paths.id], "a filter without inputs");
 }
 
+/// A TIFF with more strips and planes than the decoder can count comes as `"unknown"`, without its
+/// pixels, and never reaches the decoder.
+#[test]
+fn a_tiff_too_large_to_count_is_unknown_and_has_no_pixels() {
+    let entries: [(u16, u16, u32); 9] =
+        [(256, 4, 1), (257, 4, 1 << 31 | 1), (258, 3, 8), (262, 3, 1), (273, 4, 0), (277, 3, 2), (278, 4, 1), (279, 4, 0), (284, 3, 2)];
+    let mut tiff = b"II*\0\x08\0\0\0".to_vec();
+    tiff.extend(u16::try_from(entries.len()).unwrap().to_le_bytes());
+    for (tag, ty, v) in entries {
+        tiff.extend(tag.to_le_bytes());
+        tiff.extend(ty.to_le_bytes());
+        tiff.extend(1u32.to_le_bytes());
+        tiff.extend(v.to_le_bytes());
+    }
+    tiff.extend([0; 4]);
+    let (mut d, _, layer, _) = mixed();
+    d.images.insert("big".into(), ImageBlob::new("image/tiff", tiff));
+    let big = image_node(&mut d, "big", (1, 1), None);
+    let big = d.insert(Some(layer), usize::MAX, big).unwrap();
+    let (bytes, _) = encode_input_with(&d, &[big], &[InputKind::Image], usize::MAX).unwrap();
+    let input: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(input["objects"][0]["colorMode"], "unknown");
+    assert_eq!(input["objects"][0]["pixelsOmitted"], true);
+}
+
 /// A field a plug-in adds to a read-only object is named in the refusal with its control and
 /// direction characters escaped, and cut short.
 #[test]
@@ -692,6 +717,14 @@ fn read_only_kind_field_and_omission_refuse() {
     let mut echo = input.clone();
     echo["objects"][3]["transform"] = json!([1, 0, 0, 1, 5, 50]);
     assert!(decode_output_with(echo.to_string().as_bytes(), &read_only).is_ok());
+    // So is an id written as a float; a fractional one names no object.
+    let id = input["objects"][3]["id"].as_u64().unwrap();
+    let mut echo = input.clone();
+    echo["objects"][3]["id"] = json!(id as f64);
+    let out = decode_output_with(echo.to_string().as_bytes(), &read_only).unwrap();
+    assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5);
+    echo["objects"][3]["id"] = json!(id as f64 + 0.5);
+    assert!(decode_output_with(echo.to_string().as_bytes(), &read_only).is_err());
     // `{"id"}` alone keeps it; the paths left out are deleted and a new path goes above the type.
     let ro = |id: NodeId| json!({"id": id.0});
     let out = json!({"objects": [ro(text), {"name": "new", "path": square(0.0)}, ro(embedded), ro(linked), ro(star), ro(ghost)]});

@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, CmykLut, lab};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::cmyk::oversized_tiff;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, SymbolBoxes,
     TextKind, TextObject,
@@ -437,8 +438,12 @@ fn text_json(t: &TextObject, left: Option<&mut usize>) -> (Value, bool) {
 }
 
 /// How image `b` stores its colors, read from its header: `"cmyk"`, `"gray"`, `"rgb"`, or
-/// `"unknown"` when it can't be read or only a linked image's preview is there.
+/// `"unknown"` when it can't be read, is a TIFF too large for the decoder to count, or only a
+/// linked image's preview is there.
 fn color_mode(b: &ImageBlob) -> &'static str {
+    if oversized_tiff(&b.bytes).is_some() {
+        return "unknown";
+    }
     if b.proxy.as_ref().is_some_and(|p| Arc::ptr_eq(p, &b.bytes) || **p == *b.bytes) {
         return "unknown";
     }
@@ -457,7 +462,7 @@ fn color_mode(b: &ImageBlob) -> &'static str {
 /// characters of base64; the size is checked, and read from the header, before anything is decoded.
 fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
     let bytes = u64::from(w).checked_mul(u64::from(h))?.checked_mul(4)?;
-    if bytes == 0 || bytes.div_ceil(3).saturating_mul(4) > max as u64 {
+    if bytes == 0 || bytes.div_ceil(3).saturating_mul(4) > max as u64 || oversized_tiff(&b.bytes).is_some() {
         return None;
     }
     if b.is_cmyk() {
@@ -802,19 +807,16 @@ fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<O
     let out = objects
         .iter()
         .enumerate()
-        .map(|(i, o)| {
-            let id = o.get("id").and_then(Value::as_u64).map(NodeId);
-            match id.and_then(|id| Some((id, read_only.get(&id)?))) {
-                Some((id, given)) => {
-                    let at = format!("objects[{i}] (id {})", id.0);
-                    if !returned.insert(id) {
-                        return Err(out_err(&at, "is listed twice"));
-                    }
-                    check_unchanged(o, given, &at)?;
-                    Ok(OutObject { id: Some(id), kept: true, ..OutObject::default() })
+        .map(|(i, o)| match output_id(o).and_then(|id| Some((id, read_only.get(&id)?))) {
+            Some((id, given)) => {
+                let at = format!("objects[{i}] (id {})", id.0);
+                if !returned.insert(id) {
+                    return Err(out_err(&at, "is listed twice"));
                 }
-                None => decode_object(o, &format!("objects[{i}]"), &mut anchors),
+                check_unchanged(o, given, &at)?;
+                Ok(OutObject { id: Some(id), kept: true, ..OutObject::default() })
             }
+            None => decode_object(o, &format!("objects[{i}]"), &mut anchors),
         })
         .collect::<Result<Vec<_>>>()?;
     let mut missing: Vec<NodeId> = read_only.keys().filter(|id| !returned.contains(id)).copied().collect();
@@ -826,6 +828,12 @@ fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<O
         ));
     }
     Ok(out)
+}
+
+/// The id entry `o` gives, a whole number written either way (`17` or `17.0`).
+fn output_id(o: &Value) -> Option<NodeId> {
+    let id = o.get("id")?;
+    id.as_u64().or_else(|| id.as_f64().filter(|f| f.fract() == 0.0 && (0.0..=9_007_199_254_740_992.0).contains(f)).map(|f| f as u64)).map(NodeId)
 }
 
 /// Checks entry `o` of a filter's output for a read-only object it was `given`: `{"id": …}` alone,
