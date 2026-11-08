@@ -367,6 +367,42 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
     Ok(Some(o))
 }
 
+/// Counts the bytes written to it and fails past `left`, so nothing is held to find a size.
+struct Measure {
+    bytes: usize,
+    left: usize,
+}
+
+impl std::io::Write for Measure {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.bytes = self.bytes.saturating_add(buf.len());
+        if self.bytes > self.left { Err(std::io::ErrorKind::OutOfMemory.into()) } else { Ok(buf.len()) }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Adds `item` as JSON to `list` when it fits what is left of `limit` after `used`, counting the
+/// comma before it; `false`, with nothing built, when it doesn't.
+fn push_within<T: serde::Serialize>(item: &T, list: &mut Vec<Value>, used: &mut usize, limit: usize) -> bool {
+    let comma = usize::from(!list.is_empty());
+    let Some(left) = limit.checked_sub(used.saturating_add(comma)) else { return false };
+    if serde_json::to_writer(Measure { bytes: 0, left }, item).is_err() {
+        return false;
+    }
+    let Ok(value) = serde_json::to_value(item) else { return false };
+    // A `Value` writes a number in its widest form, so the bytes given are counted from it.
+    let mut measure = Measure { bytes: 0, left };
+    if serde_json::to_writer(&mut measure, &value).is_err() {
+        return false;
+    }
+    *used += comma + measure.bytes;
+    list.push(value);
+    true
+}
+
 /// The text of type `t` as a filter reads it, and whether it was too long to give
 /// ([`MAX_INPUT_TEXT`], [`MAX_INPUT_RUNS`], or more bytes of JSON than `left`, which what it gives
 /// is taken from, with the commas between them). With `left` `None`, its kind and direction with no
@@ -385,16 +421,15 @@ fn text_json(t: &TextObject, left: Option<&mut usize>) -> (Value, bool) {
         // The text alone is never more bytes than its JSON, so type that can't fit isn't built.
         truncated = bytes > MAX_INPUT_TEXT.min(*left) || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
         if !truncated {
-            let value = |v: std::result::Result<Value, serde_json::Error>| v.unwrap_or(Value::Null);
-            runs = t.runs.iter().map(|r| value(serde_json::to_value(r))).collect();
-            paras = (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect();
-            let commas = runs.len().saturating_sub(1) + paras.len().saturating_sub(1);
-            let size = runs.iter().chain(&paras).fold(commas, |n, v| n.saturating_add(serde_json::to_vec(v).map_or(usize::MAX, |b| b.len())));
-            match left.checked_sub(size) {
-                Some(rest) => *left = rest,
-                None => {
-                    (runs, paras, truncated) = (Vec::new(), Vec::new(), true);
-                }
+            // Each run and paragraph is measured before it is built, with the comma before it, so
+            // no more than `left` is held before the type is found too long.
+            let (limit, mut used) = (*left, 0usize);
+            let fits = t.runs.iter().all(|r| push_within(r, &mut runs, &mut used, limit))
+                && (0..paragraphs).all(|i| push_within(&t.para_at(i), &mut paras, &mut used, limit));
+            if fits {
+                *left -= used;
+            } else {
+                (runs, paras, truncated) = (Vec::new(), Vec::new(), true);
             }
         }
     }

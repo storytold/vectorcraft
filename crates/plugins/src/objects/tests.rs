@@ -547,6 +547,22 @@ fn object_fields_count_toward_the_input_capacity() {
     }
 }
 
+/// Type with fractional colors counts the bytes the input gives it: one byte under its exact size
+/// it comes with `truncated`, not a limit.
+#[test]
+fn fractional_colors_count_as_the_input_writes_them() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let (mut d, ids, layer, _) = mixed();
+    let style = CharStyle { fill: Paint::solid(Color::rgb(0.1, 0.2, 0.3)), ..CharStyle::default() };
+    let t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(0.0, 0.0), "Hi", style))));
+    let text = d.insert(Some(layer), usize::MAX, t).unwrap();
+    let order = [ids[0], text];
+    let (bytes, _) = encode_input_with(&d, &order, &[InputKind::Type], usize::MAX).unwrap();
+    let (under, _) = encode_input_with(&d, &order, &[InputKind::Type], bytes.len() - 1).unwrap();
+    let v: Value = serde_json::from_slice(&under).unwrap();
+    assert_eq!(v["objects"][1]["truncated"], json!(true));
+}
+
 /// A read-only object whose fields other than its pixels and text alone don't fit what is left of
 /// the input fails the run with a limit naming it and its size, rather than being left out.
 #[test]
