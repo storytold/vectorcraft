@@ -136,9 +136,9 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
         nodes.extend(layout.glyphs.iter().filter_map(|g| g.placed_colour(t.xf)).map(Arc::new));
         Node::group(vectorcraft_doc::NodeId(0), nodes)
     }
-    fn plain(nodes: &mut Vec<Arc<Node>>, o: &LegacyAiOptions, images: &mut std::collections::BTreeMap<String, ImageBlob>) {
+    fn plain(doc: &Document, nodes: &mut Vec<Arc<Node>>, o: &LegacyAiOptions, images: &mut std::collections::BTreeMap<String, ImageBlob>) {
         nodes.retain(|n| match &n.kind {
-            NodeKind::Text(t) => o.outline_text || !writable(t),
+            NodeKind::Text(t) => o.outline_text || !writable(doc, t),
             NodeKind::Layer { printable, .. } => *printable,
             _ => true,
         });
@@ -160,13 +160,13 @@ fn as_printed(doc: &Document, o: &LegacyAiOptions) -> Document {
                 }
             }
             if let Some(c) = n.children_mut() {
-                plain(c, o, images);
+                plain(doc, c, o, images);
             }
         }
     }
     let mut d = doc.clone();
     let mut images = std::mem::take(&mut d.images);
-    plain(&mut d.layers, o, &mut images);
+    plain(doc, &mut d.layers, o, &mut images);
     d.images = images;
     d
 }

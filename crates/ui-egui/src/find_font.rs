@@ -1087,7 +1087,8 @@ mod tests {
         let system = replacement_rows(&app, "system", &used);
         assert!(system.iter().any(|r| r.family == "Source Sans 3" && r.style == "Regular"), "{system:?}");
         assert!(!system.iter().any(|r| r.family.starts_with('.')), "the font menu's hidden families stay out");
-        assert!(system.iter().all(|r| !r.style.is_empty()), "no nameless rows: {system:?}");
+        // A composite font is a family without styles of its own, listed by its name alone.
+        assert!(system.iter().all(|r| !r.style.is_empty() || db.styles(&r.family).is_empty()), "no nameless rows: {system:?}");
         let menu = db.menu_family_list();
         let listed: std::collections::BTreeSet<&str> = system.iter().map(|r| r.family.as_str()).collect();
         assert_eq!(listed.len(), menu.len(), "every family the font menu shows is listed");
