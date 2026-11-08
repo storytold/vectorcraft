@@ -70,10 +70,12 @@ pub(crate) fn transforms_objects(p: &Value) -> bool {
 /// check them with [`check_switches`] before they change anything.
 pub(super) const TRANSFORM_SWITCHES: [&str; 6] = ["copy", "strokes", "corners", "patterns", "objects", "typeAreas"];
 
-/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off.
+/// `xf` on `n` with Transform Objects (`objects`, see [`transforms_objects`]) on or off. The objects
+/// in `n` that are aligned to the pixel grid snap to it again ([`super::pixelgrid::keep_pixel_aligned`]).
 pub(crate) fn transform_node(n: &mut Node, xf: Affine, sc: Scaling, objects: bool) {
     if objects {
         n.transform(xf, sc);
+        super::pixelgrid::keep_pixel_aligned(n, sc);
     } else if sc.patterns {
         vectorcraft_doc::pattern::transform_patterns_only(n, xf);
     }
@@ -112,7 +114,7 @@ fn apply_transform_moving_guides(
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));
-    let with_guides = objects && ids_param(p, "ids").is_none() && is_translation;
+    let with_guides = objects && p.get("ids").is_none_or(Value::is_null) && is_translation;
     let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
@@ -166,6 +168,11 @@ fn apply_transform_moving_guides(
                     && !(objects && areas && resize_type_area(n, xf))
                 {
                     transform_node(n, xf, sc, objects);
+                }
+            }
+            if objects {
+                for id in &targets {
+                    super::pixelgrid::keep_compound_aligned(d, *id, sc);
                 }
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
@@ -247,7 +254,7 @@ pub(super) fn transform(s: &mut Session, p: &Value) -> Result<Value> {
     if p.get("ids").is_none() && crate::cmd::brushsym::selected_part(s)?.is_some() {
         return Ok(json!({ "warning": crate::cmd::brushsym::part_only().to_string() }));
     }
-    let (ids, anchors) = match ids_param(p, "ids") {
+    let (ids, anchors) = match ids_param(p, "ids", "object.transform")? {
         Some(v) => (outermost(&s.doc()?.doc, v), false),
         None => (selected_roots_to_transform(s)?, bool_or(p, "anchors", false)),
     };

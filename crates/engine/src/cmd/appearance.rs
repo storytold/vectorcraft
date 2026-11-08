@@ -598,6 +598,9 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     n.appearance.items.push(item);
                     added.push((*id, fill));
                 }
+                if !fill {
+                    super::object::snap_if_aligned(n);
+                }
             }
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -620,6 +623,7 @@ fn clear_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
                 clear(n);
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -661,6 +665,35 @@ fn painted_rows(d: &vectorcraft_doc::Document, rows: impl IntoIterator<Item = (N
     rows.into_iter().filter(|(id, fill)| d.node(*id).is_some_and(|n| !super::graph::shown_paint(n, *fill).0.is_none())).collect()
 }
 
+/// Store on the graph what an edit of `ids` (from `before` to `d`) leaves on the topmost visible fill and stroke of the
+/// series marks among them: a paint, weight or opacity that changed, and the paint (`paints`) and opacity (`opacities`) of
+/// the kinds of row the edit wrote, as (fill, stroke). With `top_only` the edit wrote the topmost row of each kind, which
+/// counts only when it is visible. Returns whether the stored paint changed.
+pub(super) fn capture_series_writes(
+    before: &vectorcraft_doc::Document,
+    d: &mut vectorcraft_doc::Document,
+    ids: &[NodeId],
+    paints: (bool, bool),
+    opacities: (bool, bool),
+    top_only: bool,
+) -> bool {
+    let top_shows = |d: &vectorcraft_doc::Document, id: NodeId, kind: bool| {
+        let items = d.node(id).map_or(&[][..], |n| &n.appearance.items[..]);
+        items.iter().rev().find(|it| it.is_fill() == kind).is_some_and(AppearanceItem::visible)
+    };
+    let written = |d: &vectorcraft_doc::Document, (fill, stroke): (bool, bool)| -> Vec<(NodeId, bool)> {
+        let rows = ids.iter().flat_map(|id| [fill.then_some((*id, true)), stroke.then_some((*id, false))]).flatten();
+        painted_rows(d, rows.filter(|(id, kind)| !top_only || top_shows(d, *id, *kind)))
+    };
+    let mut opacity_rows = top_opacity_changed(before, d, ids);
+    opacity_rows.extend(written(d, opacities));
+    let mut rows = top_paint_changed(before, d, ids);
+    rows.extend(written(d, paints));
+    let kept = super::graph::capture_series_opacity(d, &opacity_rows);
+    let painted = super::graph::capture_series_top_paints(d, &rows);
+    kept || painted
+}
+
 /// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
 fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
     let fill = ap.items.get(at)?.is_fill();
@@ -698,9 +731,11 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         }
         to.appearance = ap;
         (to.opacity, to.blend, to.isolate, to.knockout, to.knockout_shape) = (src.opacity, src.blend, src.isolate, src.knockout, src.knockout_shape);
+        super::object::snap_if_aligned(to);
         if !copy && let Some(n) = d.node_mut(source) {
             clear(n);
             (n.isolate, n.knockout, n.knockout_shape) = (false, Default::default(), false);
+            super::object::snap_if_aligned(n);
         }
         let changed = if copy { vec![target] } else { vec![source, target] };
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&changed));
@@ -759,6 +794,7 @@ fn reduce_basic(s: &mut Session, p: &Value) -> Result<Value> {
                     st.blend = BlendMode::Normal;
                     n.appearance.items.push(AppearanceItem::Stroke(st));
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &both_kinds(&ids));
@@ -818,6 +854,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = p.get("visible").and_then(Value::as_bool) {
                 *vis = v;
             }
+            super::object::snap_if_aligned(n);
             let items = &n.appearance.items;
             if let Some(fill) =
                 items.get(idx).map(AppearanceItem::is_fill).filter(|f| items.iter().rposition(|it| it.is_fill() == *f && it.visible()) == Some(idx))
@@ -878,6 +915,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
                 for &i in idx.iter().rev() {
                     n.appearance.remove_item(i);
                 }
+                super::object::snap_if_aligned(n);
             }
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
@@ -982,7 +1020,19 @@ fn show_all_hidden(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = require_targets(s, p, "appearance.showAllHidden")?;
     let before = s.doc()?.doc.clone();
     let ids = s.edit("Show All Hidden Attributes", |d, _| {
-        let shown: Vec<NodeId> = roots.iter().copied().filter(|id| d.node_mut(*id).is_some_and(|n| n.appearance.show_all())).collect();
+        let shown: Vec<NodeId> = roots
+            .iter()
+            .copied()
+            .filter(|id| {
+                d.node_mut(*id).is_some_and(|n| {
+                    let shown = n.appearance.show_all();
+                    if shown {
+                        super::object::snap_if_aligned(n);
+                    }
+                    shown
+                })
+            })
+            .collect();
         if shown.is_empty() {
             return Err(EngineError::Other("Show All Hidden Attributes: nothing is hidden".into()));
         }
@@ -1180,7 +1230,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let selected = if defaults_only {
         vec![]
     } else {
-        match ids_param(p, "ids") {
+        match ids_param(p, "ids", C)? {
             Some(v) => outermost(&s.doc()?.doc, v),
             None => selected_roots(s)?,
         }
@@ -1379,6 +1429,7 @@ impl Picked {
             let placed = self.placed(n.geometric_bounds());
             n.appearance.items.extend(placed.items.into_iter().filter(|it| if it.is_fill() { ap.fill.color } else { ap.stroke.color }));
             n.appearance.effects.extend(placed.effects);
+            super::object::snap_if_aligned(n);
             return;
         }
         if let NodeKind::Text(t) = &mut n.kind {
@@ -1402,6 +1453,7 @@ impl Picked {
         } else {
             focal_attrs(&mut n.appearance, &placed, ap);
         }
+        super::object::snap_if_aligned(n);
     }
 }
 

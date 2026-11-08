@@ -262,11 +262,19 @@ pub(crate) fn transform_anchors(s: &mut Session, label: &str, xf: vectorcraft_ge
                             *a = a.transform(xf);
                         }
                     }
+                    // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps
+                    // to the pixel grid again after its anchors move.
+                    let top = compound_or_self(doc, *id);
+                    if let Some(n) = doc.node_mut(top) {
+                        super::object::snap_if_aligned(n);
+                    }
                 }
                 None => {
                     if let Some(n) = doc.node_mut(*id) {
                         n.transform(xf, sc);
+                        super::object::keep_pixel_aligned(n, sc);
                     }
+                    super::object::keep_compound_aligned(doc, *id, sc);
                 }
             }
         }
@@ -308,6 +316,12 @@ fn move_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
         *a = a.transform(vectorcraft_geom::Affine::translate(pos - a.p));
+        // A pixel-aligned path, or the pixel-aligned compound path that holds it, snaps to the
+        // pixel grid again.
+        let top = compound_or_self(d, id);
+        if let Some(n) = d.node_mut(top) {
+            super::object::snap_if_aligned(n);
+        }
         Ok(())
     })?;
     ok()
@@ -337,6 +351,7 @@ fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     );
     s.edit("Reshape", |d, _| {
         *path_mut(d, id)? = data;
+        super::object::resnap(d, id);
         Ok(())
     })?;
     ok()
@@ -582,7 +597,7 @@ pub(super) fn join(s: &mut Session, p: &Value) -> Result<Value> {
         },
     };
 
-    if let Some(ids) = ids_param(p, "ids") {
+    if let Some(ids) = ids_param(p, "ids", C)? {
         if ends.is_some() && ids.len() > 2 {
             return Err(bad(C, "`ends` applies to joining exactly two paths"));
         }
@@ -1086,7 +1101,7 @@ fn average_join_ends(s: &Session, p: &Value, c: &str) -> Result<Option<[End; 2]>
     let doc = &st.doc;
     let subpath = |id: NodeId, si: usize| doc.node(id)?.path_data()?.subpaths.get(si).filter(|sp| !sp.closed && !sp.anchors.is_empty());
     let last = |sp: &SubPath| sp.anchors.len().saturating_sub(1);
-    let ids = ids_param(p, "ids");
+    let ids = ids_param(p, "ids", c)?;
     let ends = if ids.is_none() && !st.selection.anchors.is_empty() {
         let picked: Vec<End> = st.selection.anchors.iter().flat_map(|(&id, set)| set.iter().map(move |&(si, ai)| (id, si, ai))).collect();
         match picked.as_slice() {

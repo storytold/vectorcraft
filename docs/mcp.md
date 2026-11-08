@@ -106,7 +106,7 @@ the suite) keep the agent to the folders you give it:
 
 - Every file a command reads must lie inside a **read root**: `open_file`, `file.place`, relinking and
   updating links, the images an SVG links to, swatch library, graphic style library, symbol library, brush library and colour-profile loads, plug-ins,
-  `file.newFromTemplate`, preset imports, shortcut sets (`shortcutSet.read`), the folders `text.findFontFiles` and `links.findFiles` search, the
+  `file.newFromTemplate`, preset imports, shortcut sets (`shortcutSet.read`), action sets (`actionSet.read`), the folders `text.findFontFiles` and `links.findFiles` search, the
   scripts `script.check` reads and the files they include.
 - Every file a command writes must lie inside a **write root**: `save_file`, `export`, the save and
   export commands, Export for Screens, Package, Export for Web, print to file, `screenshot {path}`,
@@ -403,7 +403,10 @@ counterparts, `image.info`, `links.info`, `links.goTo`, `links.unembed`, `shaper
 `transparency.editOpacityMask`, `transparency.viewOpacityMask`, `symbol.edit`, the `object.blend.spine.*` commands
 and `path.curvature`) refuse an `id` that is not a non-negative integer (`"abc"`, `"5"`, `true`) with an error and
 change nothing; an omitted or null `id` keeps the default. A command that leaves out an object selected inside a
-selected group also leaves it out when `ids` list it together with a group that holds it.
+selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
+`ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
+that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
+the entry's index (from 0) and its value: "`ids` entry 1 is true, not a non-negative integer object id".
 
 Paint values (`fill`, `stroke`) accept `"#rrggbb"`, `"none"`, `[r,g,b]` (0..1), `{"c","m","y","k"}`, `{"gray"}`,
 or a full `paint.setFill` params object (`{"gradient": …}`, `{"swatch": "name"}`).
@@ -464,7 +467,7 @@ opens the picker through `run_command` with the remote backend.
 | `open_file` | `{path}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a Photoshop file as its merged image). Templates (`.vctemplate`, `.ait`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a `.ai` file reads `compress` but not `version`, `preview` or `precision`). For a `.ai` file, these warnings name the kind of `.ai` written: a legacy .ai (version 7) for `aiVersion: "7"`, a non-PDF-compatible .ai for `pdfCompatible: false`, and a PDF-compatible .ai otherwise, including a save that reuses the options the document was last saved with. `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warnings for a top-level `compress`, `version`, `preview` or `precision` and for each key in `options` that the format doesn't read. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF and WMF write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
-| `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
+| `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning); `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
 | `apply_effect` | `{effect?, params?, ids?}` | Appends a live effect. Without `effect`, returns the effect catalogue with parameters and defaults. |
 | `pathfinder` | `{operation, ids?}` | `unite`, `minusFront`, `intersect`, `exclude`, `divide`, `trim`, `merge`, `crop`, `outline`, `minusBack`. For a live version, apply the `pathfinder.*` effect to a group (`effect.apply` groups several loose selected objects first). In remote desktop mode, `run_command` and `invoke_menu` can both call `pathfinder.repeat` with `{}`. Successful panel operations, direct `object.pathfinder.*` commands, and `command.batch` steps (including Actions panel playback) set its history. Repeat applies it to the current selection using current Pathfinder Options. Trap, compound-shape edits, live effects and `action.batch` do not set history. With no history it returns "no Pathfinder operation applied yet". |
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. With `copy`, the first step duplicates. |
@@ -566,18 +569,23 @@ stroke instead of the whole object: `run_command effect.apply {"effect": "path.o
 
 On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
 `appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
-`appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer` and `appearance.copyFrom` store the paint,
-weight and opacity of the topmost visible fill and stroke on the graph. When the graph is drawn again, columns, bars,
-wedges, areas, markers and legend swatches take the stored fill and stroke. A thin line takes the stored stroke and has
-no fill. A Filled Lines band takes the stored fill, or the stored stroke when no fill is stored and that stroke has
-paint, and has a 0.25 pt black outline, so these commands do not store a stroke paint or weight for a series that
-draws a band. They still store a stroke opacity set on a band, and the band's outline takes it. Graph
-designs keep their own paint. A row that had no paint before the command and has none after it does not change what the
-graph stores. `paint.setFill`, `paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other
-store the topmost row of the kind even when it is hidden, and store a stroke set on a band.
-`stroke.set`, `paint.editGradient`, `paint.swap`, `paint.default`, graphic styles and the recolor commands do not store a
-series' paint. An `appearance.*` command given a series group's id edits the group's own rows, and the graph does not
-store them.
+`appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer`, `appearance.copyFrom`, `paint.default`,
+`graphicStyle.apply` and `graphicStyle.redefine` (on the marks still linked to the style) store the paint, weight and
+opacity of the topmost visible fill and stroke on the graph. `graphicStyle.apply` with `add` stores only the kinds of row
+that are visible in the style. `paint.swap` stores the swapped paints and the stroke weight, keeps the stored opacity,
+and does not store a hidden topmost row that it swaps. The graph does not store the rest of a graphic style's look (more
+fill and stroke rows, effects, the object's opacity and blend mode, and the link to the style), and a mark loses it when
+the graph is drawn again. When the graph is drawn again, columns, bars, wedges, areas, markers and legend swatches take
+the stored fill and stroke. A thin line takes the stored stroke and has no fill. A Filled Lines band takes the stored
+fill, or the stored stroke when no fill is stored and that stroke has paint, and has a 0.25 pt black outline, so these
+commands do not store a stroke paint or weight for a series that draws a band. Except for `paint.swap`, they still store
+a stroke opacity set on a band, and the band's outline takes it. Graph designs keep their own paint. A row that had no
+paint before the command and has none after it does not change what the graph stores. `paint.setFill`,
+`paint.setStroke`, `paint.none` and the commands that apply one paint kind to the other store the topmost row of the kind
+even when it is hidden, and store a stroke set on a band. `stroke.set`, `paint.editGradient` and the recolor commands do
+not store a series' paint. An `appearance.*` command or `graphicStyle.apply` given a series group's id, and
+`graphicStyle.redefine` on a series group linked to the style, edit the group's own rows, and the graph does not store
+them.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape
@@ -592,7 +600,8 @@ global or spot swatch follow its colour and name, as one undo step, in the art, 
 designs, pattern tiles, graphic styles and the art of brushes); `swatch.delete {names, unlink?}` deletes
 swatches and colour groups in one undo step (art using a deleted global swatch keeps its colour, unlinked).
 `swatch.new {color?, mode?, spot?, global?, group?}` saves a colour (into a colour group with `group`), gradient
-or pattern; `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
+or pattern (a gradient swatch holds no link to the swatch its gradient came from, and a pattern swatch holds the
+pattern untransformed); `swatch.newGroup {fromArtwork: true, toGlobal?, includeTints?}` makes a colour group of the selected
 art's colours (by default as global swatches the art links to).
 `swatch.move {names, to?, group?}` reorders swatches or moves them into or out of a colour group (as dragging
 them in the Swatches panel does); give colour group names instead to reorder the groups. Dropping a swatch on art
@@ -687,8 +696,8 @@ effect colors that new art takes; Undo restores their original values and Redo r
 colors of 3D effects stay RGB.
 Gray colors stay Gray and print
 on the black plate only. RGB grays are colors like any
-other: to CMYK they separate through the profile into four-colour greys and a rich black, as Illustrator converts
-them. `grays: "black"` puts RGB greys with R = G = B on the black plate instead, K = their grey value (the inks Edit Colors ›
+other: to CMYK they separate through the profile into light grays in cyan, magenta and yellow only, darker
+four-color grays and a rich black. `grays: "black"` puts RGB greys with R = G = B on the black plate instead, K = their grey value (the inks Edit Colors ›
 Convert to Grayscale before the switch would give); other colors convert as usual. The reply's `changed` counts the
 colors that changed in the art, symbols, graph designs and pattern tiles; it does not count the colors of graphic
 styles and brushes.
@@ -1788,9 +1797,14 @@ already walks Image Trace. Short agent entry points:
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
   root; `[1, 0]` is the first object of the art's second member when that member is a group). `fill` and `stroke` take
-  a colour string or the paint params of `paint.setFill` (`color`, `none`, `swatch`, `tint`, `gradient`), `opacity` is
-  0..100 and `blend` a blend mode name; `null` gives one back to the symbol. It is refused for a static symbol and for
-  a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
+  a colour string or the paint params of `paint.setFill` (`color`, `none`, `swatch`, `tint`, `gradient`). Paths,
+  compound paths, type, groups and layers take both. A symbol instance takes a solid color or `none` as its fill,
+  which stains its art, and no gradient or pattern fill and no stroke. An image takes a fill or stroke only when that
+  fill or stroke has a Convert to Shape or Outline Object effect. A guide, blend, envelope, Repeat, Intertwine group,
+  gradient mesh or placed document takes neither. A refused fill or stroke (VectorCraft's own rule) gives an error
+  that names the key and the object, and nothing of the call is applied; `opacity`, `blend` and `null` are taken for
+  every object, so a stored change can be taken back. `opacity` is 0..100 and `blend` a blend mode name; `null` gives
+  one back to the symbol. It is refused for a static symbol and for a path that names no object. On the canvas (VectorCraft's own rule), a Direct Selection click on an instance of a
   dynamic symbol selects the path, compound path or type object of its art under the pointer and outlines it
   (`symbol.instance.selectPart {id, path}`; Alt or Shift selects the instance whole). While it is selected,
   `paint.setFill` and `paint.setStroke` with a solid color or none, `paint.invert` and `paint.complement` on a solid
@@ -1973,7 +1987,8 @@ already walks Image Trace. Short agent entry points:
   instead of playing the excluded steps or failing at a stop; other files use version 1. A file with another `format` or a `version` other than
   1, 2 or 3, a stop whose message is not text or whose `allowContinue` is not true or false, a file larger than 8 MiB, one with more than 1,000 actions and one with an action of more than 10,000 steps are
   refused, and no set is added. The Actions panel menu's Save Actions… and Load Actions… run these; Load Actions… is
-  disabled where there is no open dialog (the web).
+  disabled where there is no open dialog (the web). `ui.actionSet.load` also reads the action sets other apps save as
+  text (`.aia`); see "Action sets from other apps".
 - Actions: `ui.action.rename {set, action, name}` renames the Actions panel's action at `action` in set `set` (0 is
   the top set) to `name` with spaces trimmed from both ends, keeps its steps, function key and color, and returns
   `{name}`. An index past the last set or action, or an empty name, is an error, and then nothing is renamed.
@@ -3170,6 +3185,63 @@ it. The native format keeps the events and the files.
 {"name":"run_command","arguments":{"command":"svgInteractivity.addFile","params":{"file":"menu.js"}}}
 ```
 
+## SVG filters
+
+Effect › SVG Filters lists the document's SVG filters below Apply SVG Filter… and Import SVG Filter…; choosing one
+applies it to the selection. `svgFilter.list {}` returns them as `filters: [{name, xml}]`. Each is one `<filter>`
+element whose `id` is its name, with 1 to 64 primitives and at most 64 KB of XML (`feTurbulence` octaves up to 10,
+`feConvolveMatrix` kernels up to 9 cells a side, `feMorphology` radii and `kernelUnitLength` up to 100 and
+`stdDeviation` up to 500 user units, elements nested at most 16 deep). It holds only filter primitives,
+what they hold, and `desc` and `title`: no scripts, no event attributes, and images only as PNG, JPEG, GIF or WebP
+`data:` URLs of at most 4096 × 4096 pixels. A document
+holds at most 64. `svgFilter.define {xml, replace?}` adds
+a filter after the others, or with `replace` replaces the filter of that name, which keeps its name; a name another
+filter has is refused, and the same filter again records no undo step. `svgFilter.delete {name}` removes one, and `svgFilter.import
+{path?|svg?}` adds the `<filter>` elements of an SVG file (at most 16 MB, not SVGZ, the first 256 filters) or of SVG text, leaving out the names the
+document already has and the filters `svgFilter.define` would refuse (`{added, skipped}`). Each change is one undo
+step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
+in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
+what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
+filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
+empty) until a filter of that name is defined or imported again. Opened from such an effect, Apply SVG Filter shows the
+name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
+directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
+SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
+`ui.importSvgFilter {}` picks an SVG file and imports its filters.
+
+The canvas, raster export, printing and PDF draw the filter with the object as its source graphic, its user space
+starting at `origin` (`[x, y]` in points, `[0, 0]` by default) with its units `scale` points (1 by default), its
+object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
+filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
+deviation more than 512. An effect whose XML these rules refuse (from a file or a script) is not drawn or exported. The
+filter is drawn and written rebuilt from its filter elements and their filter attributes alone, without comments,
+text, descriptions or other attributes. An image in a filter is drawn only when its bytes are a PNG, JPEG, GIF or WebP
+within the pixel limit. A filter region in user space given in percentages is measured against the object's box (x
+and y from its top-left corner), and one in em or ex or left out takes the default region of that box (10% beyond
+each side); these are VectorCraft's own rules. Scale Strokes & Effects scales
+`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect, its only pixel
+effect and `scale` is 1 (with a region measured against the object's box, its only raster effect), with the object in a
+group that places the filter's user space and such a region written in user units. The filter is written in SVG 1.1
+terms: `feImage`'s reference as `xlink:href`; each `feDropShadow` as the blur, offset, flood, composite and merge that
+[Filter Effects](https://www.w3.org/TR/filter-effects-1/#feDropShadowElement) gives as its equivalent; colors as
+`#rrggbb` with a flood color's alpha in `flood-opacity`; `image-rendering` as `optimizeSpeed` or `optimizeQuality`;
+the inputs `BackgroundImage`, `BackgroundAlpha`, `FillPaint` and `StrokePaint` as `SourceGraphic`, and an input that
+names no earlier result as the previous primitive's result;
+and an `feComposite` operator SVG 1.1 lacks, or `edgeMode` on a primitive other than `feConvolveMatrix`, left out, as
+the canvas draws them. A filter with an `feBlend` mode SVG 1.1 lacks (`overlay` and the others), an `feDropShadow`
+whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox"`, or more than 64 primitives once
+its shadows are expanded, has no SVG 1.1 form. Neither does a filter whose written form, with its region and id, is
+one SVG import would not read, such as one longer than 64 KB. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
+becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
+glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
+`origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
+to a unit, or the filter is styled by the document's style sheets: such a filter is left out with a warning. The native format keeps the document's filters and the effects.
+
+```json
+{"name":"run_command","arguments":{"command":"svgFilter.define","params":{"xml":"<filter id=\"Soft\"><feGaussianBlur stdDeviation=\"2\"/></filter>"}}}
+{"name":"run_command","arguments":{"command":"svgFilter.apply","params":{"name":"Soft","ids":[12]}}}
+```
+
 ## Removing anchor points
 
 `path.removeAnchors {}` (Object › Path › Remove Anchor Points) removes the direct-selected anchors (`select.anchors
@@ -3423,6 +3495,56 @@ Absolute target, so it leaves objects that already have that size as they are; r
 {"name":"run_command","arguments":{"command":"object.transformEach","params":{"relative":false,"scaleH":50,"scaleV":50}}}
 ```
 
+## Align to Pixel Grid
+
+`object.setPixelAligned {ids?|id?, on?}` turns the pixel-aligned property of the objects given (default: the selected
+objects) on or off (`on` defaults to true), as the Transform panel's Align to Pixel Grid checkbox does (described on
+the help page,
+<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>).
+It returns `{ids}`, the objects whose property changed. While the property is on:
+
+- The object's horizontal and vertical straight segments sit on whole points, or on half points when a stroke centered
+  on the path has an odd weight, so that the stroke's edges fall on the pixel grid. A stroke that is hidden or has no
+  paint does not count. Its stroke weights are whole points, at least 1.
+- Every move, scale, rotation, reflection, shear, Transform Each, Align or Distribute move (of objects or of
+  direct-selected anchors), Transform panel change, move of direct-selected anchors or of one anchor
+  (`path.moveAnchor`), new anchors from `path.setAnchors`, live shape change (`object.setLiveShape`), move of a
+  compound path's path on its own, and artboard move or resize that carries the art (`artboard.move` with
+  `moveArt`, `artboard.setProps` with art, Rearrange Artboards) snaps those segments again, as do the art copies of `artboard.move` with `copy` and Duplicate
+  Artboards, the copies that `edit.duplicate` and the paste commands move, and `object.slice.move` of an object slice,
+  and so does every `stroke.set`, `stroke.weightUp` and `stroke.weightDown` edit, which also rounds the new weight. An
+  appearance edit that adds, removes, hides, repaints or reweighs a stroke snaps them again too:
+  `appearance.setItem`, `appearance.addStroke`, `appearance.removeItem`, `appearance.clear`,
+  `appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer` (both objects), `appearance.copyFrom`
+  (the Eyedropper), `paint.setStroke` and `graphicStyle.apply`, in the same undo step as the edit, as is every member
+  of an active Global Edit that such an edit or move reaches. Every other command that changes a pixel-aligned object
+  (for example Object › Path › Average) snaps it again as part of its undo step. Each anchor that such a segment shares moves with its handles, so diagonal segments and curves keep their shape apart from those
+  anchors. A rotated shape with no horizontal or vertical segment is left as it is. Pixel-aligned art of a linked
+  opacity mask snaps when its object moves.
+- Coordinates that differ stay at least 1 pt apart within a subpath, so a narrow shape does not collapse. A
+  coordinate on a whole point snaps to the half point above it and one on a half point to the whole point below it, so
+  hiding and showing an odd stroke returns the path to where it was. A placed gradient and the art of a linked opacity
+  mask move with the snapped anchors, and so do pattern tiles when the move transforms patterns. A pixel-aligned member
+  of an Objects on Path group snaps again after the group places it on its path.
+- A live rectangle, polygon, line or pie is moved and scaled as a whole to the snapped bounds, and stays live. A full
+  ellipse has only curves and is left as it is. A path with Live Corners snaps the outline its corners are cut from and keeps
+  its Live Corners. A compound path snaps each of its paths with the compound path's stroke.
+- Make Compound Path from paths or compound paths that include a pixel-aligned one gives a pixel-aligned compound path
+  and snaps it; its paths do not keep the property, and a path inside a compound path cannot take it alone (an error).
+  Release Compound Path gives each released path the property of the compound path. A path pasted into a compound
+  path, alone or from a pasted compound path, drops its own property and snaps with the compound path.
+
+Turning the property on snaps the objects at once; turning it off keeps their geometry. These rules are VectorCraft's
+own: only paths and compound paths can be aligned, and type, images, groups, guides and other objects are an error
+that leaves the document as it was. The change is one undo step, and when every object already has the value nothing
+changes and no undo step is made. The property is saved in the native file (`pixel_aligned` in `document.node`), and
+files saved without it read back with it off.
+
+```json
+{"name":"run_command","arguments":{"command":"object.setPixelAligned","params":{"on":true}}}
+{"name":"run_command","arguments":{"command":"object.setPixelAligned","params":{"ids":[12],"on":false}}}
+```
+
 ## Live Corners
 
 `object.setLiveShape {id?, ids?, radius?, kind?, corners?, items?}` sets the corners of any path (one undo step): a live
@@ -3539,6 +3661,13 @@ They list such a command while the user has changed its shortcut (`overridden: t
 `shortcuts.set` can change or clear it. When every menu bar item that runs a command gives it the same params, a
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
+
+Each installed filter plug-in's Object › Plug-ins item is its own row, with id `plugin:<id>` (the plug-in's id), its
+menu label and no default shortcut, so two filters with the same name have two rows. `shortcuts.set {id:
+"plugin:<id>", shortcut}`, `shortcuts.list` and Import Shortcut Set use that id, `shortcuts.exportText` writes one line
+for the row under its menu path and label, and the key runs what a click on the item runs, `plugin.dialog {id}`. A
+removed plug-in's row goes away and its key runs nothing; its shortcut stays saved and applies again when a plug-in
+with the same id is installed.
 
 `shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
 Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
@@ -4027,7 +4156,7 @@ field with text clears it, and Escape in the empty field closes the dialog.
 `document.setup` with no params reports the document setup: units, the bleed ([top, bottom, left, right] in pt, drawn
 as a red outline around each artboard), the transparency grid (size and two colours; the first is also the simulated
 paper colour), the flattener preset and Discard White Overprint (Overprint Preview keeps white overprints visible while
-it is on), the type options (language and its quotes, Use Typographer's Quotes for typed quotes, superscript, subscript
+it is on), the type options (language and its quotes, Use Typographer's Quotes for typed straight quotes and a typed `”` where a quote opens, superscript, subscript
 and small caps proportions, SVG text export) and the background contents (white: raster exports are white behind the
 art). Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
@@ -4181,6 +4310,15 @@ selects them. `edit.paste {artboardsAt: [x, y]}` instead centers the copied artb
 value that is not `[x, y]` fails with `` `artboardsAt` must be [x, y] ``. `artboard.duplicate {index? | indices?, art?}` does the same in one step → `{index, indices, ids}`.
 Window › Artboards › Duplicate Artboards passes the selected artboards (those the Artboard tool has selected, else the
 active one) as `indices`, and a row dragged onto New Artboard passes its artboard as `index`.
+`artboard.new {beside?, side}` adds an empty artboard the size of artboard `beside` (default: the last), 20 pt from
+that side of it, and `artboard.duplicate {index, side}` puts the copies there instead, together as they lay on that side
+of the artboards they copy; `side` is `"left"`, `"right"`, `"top"` or `"bottom"`. Another `side` fails with
+`` `side` must be "left", "right", "top" or "bottom" ``, `beside` without `side` fails with `` `beside` needs `side` ``,
+and `artboard.new` refuses `side` given with `x`, `y`, `width` or `height`; each leaves the document and its undo
+history as they were. With the Artboard tool and one artboard selected, a button with a plus shows just outside the
+middle of each edge where an artboard of the same size fits on that side (within the canvas and overlapping no other
+artboard): a click runs `artboard.new {beside, side}`, an Alt-click `artboard.duplicate {index, side, art: true}`, and
+the new artboard becomes the active one. An Alt-click on a locked artboard's button does nothing.
 `artboard.move {copy: true, moveArt: true}` is the Artboard tool's Alt-drag. `artboard.duplicate` and `artboard.move`
 also move the pattern tiles of the copies when `patterns` is true (default: prefs `transformPatternTiles`);
 `edit.paste` leaves the tiles of a pasted artboard's art where they were.
@@ -4470,6 +4608,14 @@ its file was found. Only files on this computer, or on the network share the doc
 on, are looked at: a path to another computer, a device or a URL counts as missing. On Windows, a document opened from
 a mapped drive (`Z:\…`) is on the share the drive is mapped to, and links on that share (`\\server\share\…`) are
 looked at. A link on a drive mapped to another share (`Y:\…`) counts as missing, from a document on this computer too.
+The links of an open document keep their relative paths from the file it was opened from (for a `.ai` file another
+app wrote, that file), also after a save to another folder. When a link's file is not at its path, a save and Package
+write the path relative to the new file of the place the file is found, or for a missing file of the place that
+relative path names, and a document made with New Document from State keeps the same places, so a document moved while
+its linked files were missing finds them once they are back in that folder. In the open document, a link
+is looked for at its path, then at its relative path from the folder of the file the document was opened from and from
+the document's own folder, then by name in those two folders. A link found away from its path takes the relative path
+of the place it was found.
 The result lists `missingLinks`
 (their images show the preview), `modifiedLinks` (left as they were; read again only with the preference
 `updateLinks: "automatically"`, then they are in `updatedLinks`), each as `{name, path, ids}`, with `refused` (why the
@@ -4815,7 +4961,8 @@ The Slice tool (`slice`, Shift+K) and the Slice Selection tool (`sliceSelection`
 `object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps to ruler guides), `object.slice.select
 {slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
 `object.slice.setRect {id, x, y, width, height}` (user slices) and `object.slice.delete {slices?}`. Slice ids are user
-slice ids and the ids of objects with an object slice.
+slice ids and the ids of objects with an object slice. `object.slice.select` with `slices` left out or null deselects
+the slices.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.slice.create","params":{"x":0,"y":0,"width":200,"height":80}}}
@@ -5137,6 +5284,38 @@ renderer measures for what the art draws, its effects included.
 ```
 A layer id in `ids` (12 above) is the same as Collect for Export on that Layers row: every object under the layer
 becomes an asset (or one asset with `multiple: false`).
+
+### 3D assets
+
+Asset Export's menu item Export 3D Object (`assets.add3D {ids?, format?}`) collects each selected object (or `ids`)
+that carries Extrude & Bevel, Revolve, Inflate or Rotate as a 3D asset, named after the object; an object already
+collected as a 3D asset keeps it, and an object without such an effect is refused. A 3D asset's Format is `usda` (the
+default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D assets it would export, and
+`assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
+asset's `format3D` (null for a picture asset).
+
+`assets.export3D {assets?, folder?, zip?}` writes each 3D asset (default: all of them) as a mesh file named after it:
+`.usda`, `.usdz`, `.gltf` (glTF 2.0, its buffer embedded) or `.obj` with its `.mtl` (whitespace and `#` in an OBJ's
+name become `_`). Every solid of the object (the
+fill's, each stroke's, a group's members') is its own mesh, with a two-sided material in the color it is painted
+(a gradient's stops averaged, a pattern gray). The mesh holds the solid's faces before they are projected onto the
+page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
+about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+With `zip`, the files go into one ZIP named after the document with `-3D` added (`Untitled-1-3D.zip`), or
+`3D Assets.zip` when the document's title gives no file name.
+An object whose face has a hole that crosses the face's outline or another hole is refused, by `assets.add3D` and
+`assets.export3D` alike, rather than exported with the hole filled. So is an object whose meshes would hold more than
+2,000,000 triangles together, VectorCraft's own limit.
+`assets.export` leaves 3D assets out and refuses one named in its `assets`. On the 3D export page
+(<https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/export-3d-vector-artwork.html>)
+the 3D asset's Format is picked in Asset Export, with USDA first; the file layouts follow the glTF 2.0 specification
+(<https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html>) and OpenUSD (<https://openusd.org/release/index.html>).
+
+```json
+{"name":"run_command","arguments":{"command":"assets.add3D","params":{"ids":[12],"format":"gltf"}}}
+{"name":"run_command","arguments":{"command":"assets.set3DFormat","params":{"assets":[40],"format":"obj"}}}
+{"name":"run_command","arguments":{"command":"assets.export3D","params":{"folder":"/tmp/meshes"}}}
+```
 
 ## CSS Properties
 
@@ -5667,6 +5846,53 @@ dialog open.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":4,"tateChuYoko":true,"tcyUpDown":2,"tcyLeftRight":-1}}}
 ```
 
+## Composite Fonts
+
+A composite font sets each class of character in a font of its own
+([Creating composite fonts](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347)).
+`type.compositeFonts.set {fonts: [{name, parts}]}` replaces the active document's composite fonts as one undo step,
+and adds no step when nothing changes. `parts` holds `kanji` (the base font), `kana`, `punctuation`, `symbols`, `roman`
+and `numerals`, each `{font, style?, size?, baseline?, hScale?, vScale?, scaleAtCenter?}`; a part left out copies the
+`kanji` part. Which characters fall in each class is VectorCraft's own rule: Kanji takes ideographs, full-width
+letters and digits and every character no other class takes; Kana takes hiragana and katakana of both widths;
+Punctuation takes East Asian and full-width punctuation, quotes and dashes; Symbols takes arrows, math, shapes and
+other symbols; Roman takes half-width letters, their punctuation and spaces; Numerals takes the digits 0 to 9.
+
+`size` (10 to 400, 100 by default) and `baseline` (-100 to 100, 0 by default; positive raises) are percentages of the
+type's size, VectorCraft's own ranges. `hScale` and `vScale` (10 to 400, 100 by default) scale Kana, Roman and
+Numerals only, and `scaleAtCenter` (Kana only) scales kana from the center of the em box instead of the baseline. A
+value out of range, a scale on another class, an unknown class or key, a name that is empty, longer than 255
+characters, shared by two fonts (in any case) or the name of an installed font, and a part set in a composite font are
+each refused with an error, and nothing changes. A document keeps at most 256.
+
+Type set in a composite font names it as its family (`text.setStyle {font: "My Composite"}`), and the font menus list
+composite fonts first. The layout sets each character in its class's font, a letter and its combining marks together.
+A composite font taken out of the document leaves its type naming it, and the type shows as missing. Composite fonts
+are saved with the document. SVG and legacy `.ai` write type in one of the document's composite fonts as outlines, and
+SVG, PDF, EPS and legacy `.ai` export draw it in the font's parts also when the document was read without an open app.
+`type.compositeFonts.list` returns the document's composite fonts.
+
+`text.replaceFont` and `addon.cleanup.replaceFonts` with a composite font as the new font set the type in it by its own
+name, and the type keeps its style. `text.fonts` lists a composite font by its name; its `status` is the worst among the
+parts its characters are drawn in, and `missingGlyphs` counts the characters that their part's font lacks.
+`text.missingFonts`, File › Package and the warnings about fonts that aren't available name the part fonts that the
+characters are drawn in. `text.glyphAlternates` lists the alternates of a character from its part's font.
+
+`type.compositeFonts.export {path?, names?, fonts?}` writes the document's composite fonts (all, or those `names`
+lists), or the `fonts` given, to a `.vccomposite` file; without `path` it returns the file's text as `data`.
+`type.compositeFonts.import {path | data | dataBase64, apply?}` reads a file of at most 4 MB. With `apply` (the
+default) its fonts join the document's, replacing a font of the same name, as one undo step; with `apply: false` it
+only returns them. Opening a `.vccomposite` file imports it.
+
+Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
+Font picks one, and a table sets each class's font, style, size, baseline and scales. New adds a font based on the one
+picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one picked. OK runs
+`type.compositeFonts.set` with every font as one undo step; a refused font keeps the dialog open.
+
+```json
+{"name":"run_command","arguments":{"command":"type.compositeFonts.set","params":{"fonts":[{"name":"My Composite","parts":{"kanji":{"font":"Source Han Sans"},"roman":{"font":"Source Sans 3","size":95,"baseline":-2},"numerals":{"font":"Source Sans 3"}}}]}}}
+```
+
 ## Optical Margin Alignment
 
 `type.opticalMarginAlignment {on?: bool}` (Type › Optical Margin Alignment) turns Optical Margin Alignment on or off
@@ -5752,13 +5978,37 @@ the text. Return at the end of a list item starts another item in the same list.
 set, and paragraph styles carry it: a style captured from a paragraph without a list turns the list off. Reset Panel
 turns it off. The change is one undo step.
 
+`text.setFormat {listAlign: "left"|"right"}` (Bullets and Numbering › Alignment) sets where the marker stands before
+the first line's text. With `"left"`, the default, the marker starts where the first line starts, at the left indent
+plus the first-line indent. With `"right"` the marker ends where the text starts, against the text. The text starts at
+the same place with either alignment, so numbers of different widths aligned right end at the same place, and a number
+that reaches past the left indent ends at the next tab stop, where the text starts. In a right-to-left list paragraph a
+marker aligned right starts where the text ends. `listAlign` sets the paragraphs that are in a list, and those that the
+same call puts in one; a paragraph in no list stays out of one. A list keeps its alignment when it changes between
+bullets and numbers, and a list that is turned off and on again starts aligned left. An unknown value is an error and
+changes nothing. The list saves the alignment (`"align": "right"`) only when it is right.
+
+`text.setFormat {listLevel: 1..9}` (Bullets and Numbering › Level) sets the level of the list paragraphs it touches, and
+of those that the same call puts in a list; a paragraph in no list stays out of one. The value is a whole number from 1
+to 9 (`2` or `2.0`); any other value is an error and changes nothing. Each level past the first
+sets the paragraph 18 pt further in than its left indent: its marker, its text and the lines it wraps to move together,
+and in a right-to-left list paragraph they move in from the right. A list keeps its level when it changes between
+bullets and numbers, and a list that is turned off and on again starts at level 1. The list saves the level
+(`"level": 3`) only when it is not 1. In the Type tool, Tab with the caret at the start of a list paragraph (before its
+first character, with nothing selected) runs `text.setFormat {listLevel}` with the next level, and Shift+Tab with the
+level before; each is one undo step, and the text is unchanged. Tab at level 9 and Shift+Tab at level 1 do nothing.
+Anywhere else, with characters selected, or in a paragraph in no list, Tab and Shift+Tab insert a tab.
+
 A numbered paragraph's number counts the numbered paragraphs of its story up to and including it: the count runs through
 consecutive list paragraphs, through the frames of threaded type in thread order, and starts again at 1 after a
 paragraph in no list. An empty paragraph has no number and is not counted, and a bulleted paragraph keeps its bullet and
-is not counted. Letters run from A to Z, then AA to ZZ, then AAA; roman numerals use IV, IX, XL, XC, CD and CM; 01 and
+is not counted. Each level counts its own numbers: a list paragraph that has text sets the counts of the levels
+deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a
+shallower level goes on with that level's count. Letters run from A to Z, then AA to ZZ, then AAA; roman numerals use IV, IX, XL, XC, CD and CM; 01 and
 001 keep every digit past 99 and 999; letters and roman numerals past 3999 are written in Arabic digits. In a
 right-to-left paragraph the number reads left to right with its period at its left. Each threaded frame saves the count
-that its earlier frames carry into it (`listCount`, only when it is not 0). Type that is in no thread counts from 1:
+that its earlier frames carry into it at level 1 (`listCount`, only when it is not 0) and at the levels past it
+(`listLevelCounts`, level 2 first, only when one of them is not 0). Type that is in no thread counts from 1:
 after Remove Threading or Release Selection, in a frame converted to point type, and in every copy of a frame (pasted,
 duplicated, copied in the Layers panel, or taken out of a symbol or a placed file). A symbol made of a thread keeps the
 numbers in the symbol's art.
@@ -5779,12 +6029,29 @@ Type › Bullets and Numbering › Apply Bullets and the canvas context menu's B
 same menus runs `type.applyNumbers {number?}`. Without `number` it runs `text.setFormat {list: "number"}`, and with it
 it runs `text.setFormat {number}`.
 
+More Options at the end of the Paragraph panel's Bullets and Numbered List presets runs `ui.bulletsAndNumbering {tab?: "bullets"|"numbers"}`. It opens the Bullets and Numbering
+dialog (`bulletsAndNumbering`) on the paragraphs the Paragraph panel acts on, on that tab; without `tab` it opens on
+Numbers when the paragraphs are a numbered list and on Bullets otherwise. On both tabs the Level field, above the
+presets, holds the paragraphs' list level (1 to 9; 1 for paragraphs in no list). The Bullets tab has the five bullet
+presets and the Numbers tab has None and the seven number styles. The Position group has Alignment (Left or Right),
+Left Indent and First Line Indent. The dialog opens with the values the Paragraph panel shows; where the paragraphs
+differ, no preset is picked and the field is blank. Its fields are `tab`, `list` (`none`, `bullet` or `number`: the
+kind of the preset picked), `bullet`, `number`, `listAlign`, `listLevel`, `leftIndent` and `firstLineIndent` (points),
+and `ui.dialog.set` sets them, including those the dialog opened blank or without. The type shows the dialog's values while it is open. A preset picked for paragraphs that are in no list and have
+no indents fills in 18 pt and -18 pt, and None takes them out again while they are unchanged. OK runs `text.setFormat`
+with the values that changed, as one undo step, and Cancel puts the type back as it was. When a preset puts the
+paragraphs in a list, OK also sends the indents the dialog shows, and the paragraphs take them, 0 included. OK does not
+send an Alignment or Level change for paragraphs that stay in no list. With no type selected, or
+with an unknown `tab`, `ui.bulletsAndNumbering` is an error.
+
 Type › Bullets and Numbering › Convert to Text runs `type.convertListToText` on the selected type's paragraphs, or on
 those the Type tool's selection touches, and that runs `text.convertListToText {ids?, start?, end?}`. The marker of
 each list paragraph becomes characters at the start of the paragraph: the bullet, or the number and its period as the
 paragraph showed it, then a tab. They are set in the marker's font, size and color: the style of the paragraph's first
-character without the attributes the marker leaves out. The paragraph leaves its list. When the marker's tab went to
-the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, so that
+character without the attributes the marker leaves out. The paragraph leaves its list. A paragraph at a list level
+past the first keeps the level's indent in its left indent, so its marker and text stay where they were. A marker aligned right
+(`listAlign` `right`) is written the same way: its characters go to the first line's start, where a marker aligned left
+is drawn, and the text after its tab stays where it was. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, so that
 the text after the tab starts where it started after the marker. When the marker's tab went to a tab stop, the
 converted tab goes to the same place when that stop is left-aligned and no stop there or past it has a leader. When a
 stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker
@@ -5828,6 +6095,9 @@ the paragraph's text now starts; when the text before `at` starts no list, nothi
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"bullet":"square"}}}
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"number":"upperRoman"}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"listAlign":"right"}}}
+{"name":"run_command","arguments":{"command":"text.setFormat","params":{"listLevel":2,"start":4,"end":4}}}
+{"name":"invoke_menu","arguments":{"command":"ui.bulletsAndNumbering","params":{"tab":"numbers"}}}
 {"name":"run_command","arguments":{"command":"text.convertListToText","params":{}}}
 ```
 
@@ -6049,8 +6319,12 @@ Type on a path flows between a start and an end bracket, stored as fractions of 
 Path Options: `end: null` puts the end bracket back at the end of the path (or once round a closed one); `flip`
 then turns the type to the other side of its path, the path running the other way and the brackets swapping ends so
 the type keeps its stretch of the path; `alignToPath` runs the `ascender`, `descender`, `center` or `baseline` (the
-default) along the path; `spacing` (points) closes glyphs up round the outside of curves and opens them up round the
-inside. With none of them it queries the first selected type on a path:
+default) along the path, each character by its own font, size and vertical scale: `ascender` runs the top of the
+font's em box along it (its ideographic em box, else an em box centered on the cap height), `descender` runs the
+bottom of the font's bounding box along it, and `center` runs a line at half the height of the top of the font's H
+above the baseline along it (in vertical type, `ascender` and `descender` move the characters half an em with their
+horizontal scale, and `center` leaves them on the path); `spacing` (points) closes glyphs up round the outside of
+curves and opens them up round the inside. With none of them it queries the first selected type on a path:
 `{start, end, flip: false, effect, alignToPath, spacing}`. The Options dialog shows Effect, Flip, Align to Path and
 Spacing and leaves the brackets where they are. As in the reference app, the Selection and Direct Selection tools
 show selected type on a path's brackets: dragging the start or end bracket (`pointer_gesture`) sets where the type
@@ -6210,22 +6484,67 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
 the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash; a module
-with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
+an error naming the permissions needed. The grant is kept with the module's hash; without a `Plug-ins` folder, a
+module with the same id that lists no new permission installs without `grant`. A grant kept in a `Plug-ins` folder
+covers only the module with that hash, so another module under the id needs `grant` again. `plugin.remove` forgets the
+grant. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
-under its id. A module that imports anything else, or imports these without `api` 2 and `progress`, is refused by
-`plugin.install` and `plugin.inspect` with an error naming the import.
+under its id. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
+(VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
+size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
+`{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that
+isn't installed but still has them). A module with other bytes than the plug-in installed with its id, or, with none
+installed, one whose id has settings or a cache in the
+`Plug-ins` folder (`needsReplace: true` in its `plugin.inspect` entry), installs only with `replace: true`: ask the
+user first, since it takes that plug-in's place and gets its settings and cache. Without it, `plugin.install` returns
+an error naming the plug-in. The same module installs again without `replace`, and `replace: false` refuses a module
+whose id is installed. A module that imports
+anything else, or imports one of these without `api` 2 and the import's permission, is refused by `plugin.install` and
+`plugin.inspect` with an error naming the import and the permission.
 `plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean, a `grant` that is not a list of
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
 
+Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
+the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
+Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. Until the user picks Disable and
+Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
+`vectorcraft --safe-mode` opens its files in a window of its own, and on Windows and Linux a file opened from the file
+manager while the app is in Safe Mode starts a window with plug-ins. Files given on the command line, or opened from
+the file manager while the choice is up, open after the user picks. On Windows and Linux, when the choice is Start in Safe
+Mode, the files from the file manager open in a new window with plug-ins. `vectorcraft-cli --safe-mode mcp` serves a headless
+session and refuses `--connect`. In Safe Mode no plug-in loads or
+runs: `plugin.install`, `plugin.run`, `plugin.reload` and exporters return an error, and a live-effect plug-in draws its
+object's geometry unchanged while the object keeps the effect: `effect.list` gives that effect `skipped: true`, and the
+Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
+error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. `vectorcraft` rejects an option it does not know (such as
+`--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
+no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
+pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
+off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
+now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
+on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved
+over that file, the plug-in stays disabled. `plugin.list` reports `safeMode` and `disabled`, and
+`plugin.reload` skips disabled plug-ins. A change to the disabled list is saved on top of the list the file holds at
+that moment, so a change another window saved to the same preferences meanwhile is kept. When the list file can't be
+read (it is too large) or holds another format or version, it is left as it is; a file that isn't JSON is replaced.
+`plugin.setEnabled` returns `saved: false` when its change isn't in the plug-in folder: the session has none (a server
+confined with `--automation-read-root` or `--automation-write-root`), the list there can't be read or written, or it
+already holds 1,000 plug-ins, as another window may have saved it. The
+change stays in the process and is saved with the next change that saves, and the app shows a status message. When
+Disable and Continue can't save the plug-in it turns off, this launch skips it and the next launch asks again.
+
 ```json
+{"name":"run_command","arguments":{"command":"plugin.safeMode","params":{}}}
+{"name":"run_command","arguments":{"command":"plugin.setEnabled","params":{"id":"org.example.wobble","enabled":true}}}
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/tiles-2.wasm","replace":true}}}
+{"name":"run_command","arguments":{"command":"plugin.clearCache","params":{"id":"org.example.tiles"}}}
 ```
 
 ## Colour adjustments
@@ -6488,6 +6807,18 @@ Object → Envelope Distort wraps the selection in a live envelope: `object.enve
 arcLower, arcUpper, arch, bulge, shellLower, shellUpper, flag, wave, fish, rise, fisheye, inflate, squeeze or twist;
 `bend`, `h` and `v` in % from -100 to 100; `horizontal` or `orientation`), `object.envelope.makeWithMesh` (`rows`,
 `cols`: 1–50) and `object.envelope.makeWithTopObject` (the topmost selected path becomes the envelope).
+A top object's outline is split into four sides at four corners. Each corner is the anchor nearest a corner of the
+outline's bounding box among the anchors within 47.5% of the box's width and height from that box corner that count as
+corners: an anchor with a handle 0.01 pt long or shorter, or one whose tangent unit vectors differ by 0.01 or more in
+x or y and turn out of the outline. In this test a straight segment counts as having its handles a third of the way
+along it, so an anchor between two straight segments longer than 0.03 pt is a corner only when it turns out of the
+outline. On a tie, the anchor met first along the outline in the order it was drawn wins.
+Without such an anchor, the corner is the outline's point nearest the box corner, moved onto the anchor at the end of
+its segment when within 0.5% of the segment's parameter. Each piece of a side between anchors and corners takes a
+share of the content's width or height in proportion to the length of its control polygon, spread along the piece by
+its curve parameter, so content spreads evenly along a segment without handles. An envelope opened from an `.ai` file
+keeps the corners the file saves, and they stay on the same anchors when the envelope is moved, rotated or
+reflected. These are VectorCraft's own rules, and existing top-object envelopes redraw by them.
 `object.envelope.info` reads the selected envelope's settings (`type`, the warp's or mesh's values, `fidelity` and
 the options, `editing`), or with no envelope selected the options new envelopes get. With an envelope selected,
 `object.envelope.resetWithWarp` and `object.envelope.resetWithMesh` (`rows`, `cols`, `maintainShape`: true keeps
@@ -6854,6 +7185,40 @@ the entry names and decodes the codes that VectorCraft's default shortcuts agree
 ```json
 {"name":"run_command","arguments":{"command":"shortcutSet.read","params":{"path":"/Users/me/Studio.kys"}}}
 {"name":"run_command","arguments":{"command":"importMatches.set","params":{"matches":[{"kind":"name","name":"Group","target":"object.group"},{"kind":"key","name":"901","target":"G"}]}}}
+```
+
+## Action sets from other apps
+
+`actionSet.read {path? | data? | dataBase64?, name?}` reads an action set another app saved as text (an `.aia` file
+that starts with `/version`) without changing anything. Give exactly one of `path`, `data` and `dataBase64`. It returns
+the set's name (`set`, else the file's name, else empty), its `version`, and its `actions`, each with its `name` and
+`steps`. A step lists its `name` (the file's `/internalName`), its `label` (the `/localizedName` it is shown with, or
+null when it has none or it is blank), `on` (false when the file sets `/isOn 0`), `params` (how many recorded values it
+has) and its `line`. `unread` lists the tokens the reader skipped, with their lines. The reader stops at 8 MiB, 16 open
+blocks, 1,000 actions, 10,000 steps in an action and 100,000 steps in the set, and cuts names at 1,024 bytes. It sets
+`truncated` when it reaches one of these limits, when the text ends inside a block or a value or after a field's name,
+when `/actionCount`, `/eventCount` or a step's `/parameterCount` differs from the actions, steps or recorded values read
+(a negative count, one too large for a number and one that is not a number always differ), or when a hexadecimal name,
+label or recorded `/value` is not as many bytes as its count says. Text that does not start with `/version` and a
+number is an error.
+
+`ui.actionSet.load` (the Actions panel menu's Load Actions…) reads such a file too, from `path`, a picked file or
+`data`, and adds its set after the other sets with all its actions. The set's name is the file's `/name`, else the
+file's name, else `Actions`. A step with a label and no recorded values comes in as the VectorCraft command with that
+label, in English or in the interface language, in any case and without a final `…`, when exactly one menu command has
+that label and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with
+no values and opens no dialog (Group, Ungroup). A submenu's items, file and document commands, Paste, Undo, Redo and
+add-on commands are never matched. The step runs with no params, and a step that is off in the file is excluded from
+playback. Other steps are left out, including every step with no label and every step recorded with values (recorded
+menu items too). The reply lists the first 1,000 in `skipped` (`{action, step}`, the step by its label, else its name),
+`leftOut` counts them, and the status bar says how many were left out. An action with no name is called `Action N`, by
+its place in the file. Function keys and colors are not read. A file marked `truncated` is refused, and no set is added.
+Text that starts `/version` and is not an action set gives "not an action set file". Tokens in `unread` do not stop a
+load.
+
+```json
+{"name":"run_command","arguments":{"command":"actionSet.read","params":{"path":"/Users/me/Prep.aia"}}}
+{"name":"run_command","arguments":{"command":"ui.actionSet.load","params":{"path":"/Users/me/Prep.aia"}}}
 ```
 
 ## Artwork Cleanup add-on

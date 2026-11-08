@@ -314,13 +314,18 @@ fn expand(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// After an edit: put the objects of every Objects on Path group that changed back on its path
 /// ([`place`]), inner groups first. Only the parts of the tree that the edit changed are searched.
-pub(crate) fn refresh(before: &Document, doc: &mut Document) {
+/// Returns the groups that placing changed.
+pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Vec<NodeId> {
     let mut groups = vec![];
     changed_groups(&before.layers, &doc.layers, &mut groups);
+    let mut placed = vec![];
     for id in groups.iter().rev() {
         follow_replacements(before, doc, *id);
-        place_in(doc, *id);
+        if place_in(doc, *id) {
+            placed.push(*id);
+        }
     }
+    placed
 }
 
 /// Members of the group `id` that the edit replaced with new art at the same index keep their
@@ -339,14 +344,17 @@ fn follow_replacements(before: &Document, doc: &mut Document, id: NodeId) {
 }
 
 /// [`place`] the Objects on Path group `id` of `doc`, measuring symbol instances by their art.
-fn place_in(doc: &mut Document, id: NodeId) {
-    let Some(n) = doc.node(id) else { return };
+/// Returns whether the group changed.
+fn place_in(doc: &mut Document, id: NodeId) -> bool {
+    let Some(n) = doc.node(id) else { return false };
     let mut g = n.clone();
     if place(&mut g, &doc.symbol_boxes())
         && let Some(slot) = doc.node_mut(id)
     {
         *slot = g;
+        return true;
     }
+    false
 }
 
 /// The Objects on Path groups among `after` and inside them that are not the same nodes as before

@@ -327,7 +327,7 @@ fn font_change(before: &CharStyle, mut st: CharStyle, attrs: &Map<String, Value>
 
 /// Change text in layers, symbols, graph designs, pattern tiles, saved pattern tiles restored by
 /// Cancel, and brush art, including opacity masks in those trees.
-fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+pub(crate) fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
     fn has_text(n: &Node) -> bool {
         matches!(n.kind, NodeKind::Text(_))
             || n.extras().mask.as_ref().is_some_and(|mask| has_text(&mask.art))

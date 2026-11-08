@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight (exceptions: docs/mcp.md)",
             has_doc,
             swap
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight and opacity of the topmost visible fill and stroke (exceptions: docs/mcp.md)",
             has_doc,
             default_paint
         ),
@@ -577,6 +577,9 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
                 // A stroke without paint has no weight; painting it again restores the 1 pt default.
                 stroke.width = 0.0;
             }
+            if !fill {
+                super::object::snap_if_aligned(n);
+            }
             Ok(())
         },
         |d, changed| {
@@ -851,7 +854,9 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
                 restore_unpainted_stroke(&mut n.appearance, None, &f);
                 n.appearance.set_stroke(f);
             }
-            Ok(super::appearance::count_changed(d, &before, &ids))
+            // The swap writes the paint of the topmost fill and stroke, not their opacity.
+            let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
@@ -879,7 +884,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                     _ => n.appearance = Appearance::default_art().into(),
                 }
             }
-            Ok(super::appearance::count_changed(d, &before, &ids))
+            let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
         })?;
     }
     super::newart::reset(s);
@@ -944,7 +950,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, label, f)?, None)
+            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
         }
     };
     let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };

@@ -89,6 +89,7 @@ impl VectorcraftApp {
                 view_moved: None,
                 hover_cursor: None,
                 presented: None,
+                opening_fit: None,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
             },
@@ -122,6 +123,7 @@ impl VectorcraftApp {
             frame_rate: Default::default(),
             canvas_rect: None,
             hover_doc: None,
+            titlebar_from_env: false,
             custom_titlebar: false,
             desktop_frame: false,
             last_window_title: String::new(),
@@ -364,6 +366,7 @@ impl VectorcraftApp {
         }
         crate::keymap::note_os(ctx);
         shortcut_editor::sync(&self.ui);
+        crate::dialogs::svg_filter::sync(self);
         crate::panels::actions::sync_function_keys(&self.ui);
         prefs_dialog::apply_runtime(self, ctx);
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the

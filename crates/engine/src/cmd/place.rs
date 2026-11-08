@@ -254,7 +254,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
             ));
         }
         // Linked images show their files, found from its folder.
-        super::links::resolve(&mut l.doc, src.path, false, false);
+        super::links::resolve(&mut l.doc, super::links::LinkBase::file(src.path), false, false);
         (l.doc, l.warnings)
     };
     doc.drop_edit_modes();
@@ -308,9 +308,11 @@ pub(crate) fn pdf_art(
         read = Err(e);
     }
     let (mut doc, warnings, alone) = fileio::page_or_editing_data(src, bytes, &o, index, read).map_err(|e| bad(cmd, format!("{name}: {e}")))?;
-    if alone {
-        // Linked images show their files, found from its folder.
-        super::links::resolve(&mut doc, path, false, false);
+    // Linked images show their files, found from its folder. Its placed documents can place this
+    // file again: one already being read further up, or past the most nested reads, keeps its links
+    // as stored, as a VectorCraft document's do.
+    if alone && let Some(_reading) = document::Reading::enter(bytes) {
+        super::links::resolve(&mut doc, super::links::LinkBase::file(path), false, false);
     }
     doc.drop_edit_modes();
     let layers = std::mem::take(&mut doc.layers);

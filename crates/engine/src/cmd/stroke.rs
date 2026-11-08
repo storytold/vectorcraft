@@ -266,6 +266,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             set(st);
         }
+        super::object::snap_if_aligned(n);
         Ok(())
     })?;
     // Commit the new-art template only after the complete request is validated
@@ -329,6 +330,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             st.width = step_weight(st.width, unit, up);
         }
+        super::object::snap_if_aligned(n);
         Ok(())
     })?;
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))

@@ -26,7 +26,11 @@ impl Session {
             if let Some(ge) = &st.global_edit {
                 spread = cmd::globaledit::propagate(&before, doc, ge, [&before_sel.objects, &st.selection.objects]);
             }
-            cmd::objects_on_path::refresh(&before, doc);
+            // Pixel-aligned objects the edit changed go back on the pixel grid.
+            cmd::refresh_pixel_aligned(&before, doc);
+            let placed = cmd::objects_on_path::refresh(&before, doc);
+            // Pixel-aligned members that placing moved go back on the pixel grid.
+            cmd::keep_aligned_in(doc, &placed);
             dim_changed = cmd::dimension::refresh(&before, doc)?;
             Ok(v)
         }) {
@@ -35,7 +39,9 @@ impl Session {
                 Ok(shaper_changed) => {
                     // Attached Shaper groups whose art was rebuilt go back on their path.
                     if shaper_changed || dim_changed {
-                        cmd::objects_on_path::refresh(&before, Arc::make_mut(&mut st.doc));
+                        let doc = Arc::make_mut(&mut st.doc);
+                        let placed = cmd::objects_on_path::refresh(&before, doc);
+                        cmd::keep_aligned_in(doc, &placed);
                     }
                     // Symbol editing: the symbol follows its art on the editing layer, before
                     // inline graphics follow their symbols.

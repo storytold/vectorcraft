@@ -142,6 +142,7 @@
 	Report copied	Izvještaj kopiran
 	Line {line}	Red {line}
 	Line {line}: {name}: {status}	Red {line}: {name}: {status}
+	Read Action Set File	Pročitaj datoteku skupa akcija
 	Read Shortcut Set File	Pročitaj datoteku skupa prečica
 	Import Matches	Uparivanja uvoza
 	Remember Import Matches	Zapamti uparivanja uvoza
@@ -331,6 +332,12 @@
 	Apply Bullets	Primijeni oznake
 	Numbered List	Numerisana lista
 	Apply Numbers	Primijeni brojeve
+	Bullets and Numbering…	Oznake i numerisanje…
+	Numbers	Brojevi
+	Bullet Character:	Znak oznake:
+	Number Style:	Stil broja:
+	Left Indent:	Lijeva uvlaka:
+	First Line Indent:	Uvlaka prvog reda:
 	Convert to Text	Pretvori u tekst
 	Filled Dot	Ispunjena tačka
 	Dash	Crtica
@@ -880,6 +887,9 @@
 	Stained Glass…	Vitraž…
 	Texturizer…	Teksturizator…
 	System Title Bar	Sistemska naslovna traka
+	VectorCraft Title Bar on Every Desktop	Naslovna traka VectorCrafta na svakoj radnoj površini
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dok je varijabla okruženja VECTORCRAFT_TITLEBAR postavljena, ona bira naslovnu traku.
+	System Title Bar takes precedence over this option while it is on.	Dok je uključena, Sistemska naslovna traka ima prednost pred ovom opcijom.
 	Exit	Izlaz
 	Distort	Izobliči
 	Diffuse Glow…	Difuzni sjaj…
@@ -1497,6 +1507,15 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
 	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Composite Fonts…	Kompozitni fontovi…
+	Composite Fonts	Kompozitni fontovi
+	Export Composite Fonts	Izvezi kompozitne fontove
+	Import Composite Fonts	Uvezi kompozitne fontove
+	Delete Font	Izbriši font
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Brojevi
+	Scale at Center	Skaliraj od centra
 	Up/Down:	Gore/dolje:
 	Left/Right:	Lijevo/desno:
 	Underline	Podvučeno
@@ -3148,6 +3167,9 @@ theme	Appearance	Izgled
 	Asset Export Settings	Postavke izvoza resursa
 	Assets	Resursi
 	Export Assets	Izvezi resurse
+	Export 3D Object	Izvezi 3D objekat
+	3D Export Format	Format 3D izvoza
+	Export 3D Assets	Izvezi 3D resurse
 	Remove Asset	Ukloni resurs
 	Rename Asset	Preimenuj resurs
 	Fill Rule	Pravilo ispune
@@ -3993,6 +4015,7 @@ effect	Regular	Obično
 	Find in Folder…	Pronađi u folderu…
 	Replace With Font	Zamijeni fontom
 	Replace With Font From	Zamijeni fontom iz
+	Find In	Traži u
 	System	Sistem
 	  — substituted by {style}	  — zamijenjeno stilom {style}
 	  — {n} characters from another font	  — {n} znakova iz drugog fonta
@@ -4237,7 +4260,7 @@ imageTrace	Outline	Obris
 @plural	{n} stroke|{n} strokes	{n} potez|{n} poteza|{n} poteza
 @msg	no library `{id}`	nema biblioteke `{id}`
 @msg	select some type first	prvo odaberite tekst
-@msg	kerning must be a number, "auto", or "optical"	Podrezivanje mora biti broj, „auto” ili „optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning mora biti broj, „auto” ili „optical”
 @msg	the selection has no gradient fill	odabir nema ispunu gradijentom
 @msg	the selection has no gradient stroke	odabir nema potez gradijentom
 @msg	the selection has no pattern fill	odabir nema ispunu uzorkom
@@ -4448,7 +4471,7 @@ imageTrace	Outline	Obris
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art ili type
 @msg	artboard {0} does not exist	radna ploča {0} ne postoji
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	u ovoj skali crtež je {w} × {h} pt, više nego što platno može primiti: odaberite manju skalu ili ga uklopite u radnu ploču
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	osa mora biti "vertical", "horizontal" ili ugao u stepenima, a ne `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis mora biti "vertical", "horizontal" ili ugao u stepenima, a ne `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	pozadina {other}: transparent, white, black ili boja poput "#ff8800"
 @msg	bad color {v}	loša boja {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	videoRulerPixelAspectRatio mora biti broj od 0,1 do 10
@@ -4462,7 +4485,7 @@ imageTrace	Outline	Obris
 @msg	bad shortcut	loša prečica
 @msg	bad stream length	loša dužina toka
 @msg	bad trailer	loš trailer
-@msg	balance must be between 0 and 100	balans mora biti između 0 i 100
+@msg	balance must be between 0 and 100	balance mora biti između 0 i 100
 @msg	batch step {_1} (`{id}`) failed: {e}	korak paketa {_1} (`{id}`) nije uspio: {e}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness mora biti dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	nije moguće kodirati dokument: {0}
@@ -4613,6 +4636,8 @@ imageTrace	Outline	Obris
 @msg	no such action set	nema takvog skupa akcija
 @msg	the action sets changed; nothing was deleted	skupovi akcija su se promijenili; ništa nije izbrisano
 @msg	no action set to save	nema skupa akcija za čuvanje
+@msg	the action set file can't be read in full	datoteka skupa akcija ne može se pročitati u cijelosti
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Učitano „{name}”: {n} korak je izostavljen|Učitano „{name}”: {n} koraka su izostavljena|Učitano „{name}”: {n} koraka je izostavljeno
 @msg	not an action set file	nije datoteka skupa akcija
 @msg	the action set file is larger than 8 MiB	datoteka skupa akcija je veća od 8 MiB
 @msg	the action set file holds more than 1,000 actions	datoteka skupa akcija sadrži više od 1.000 akcija
@@ -4687,7 +4712,7 @@ imageTrace	Outline	Obris
 @msg	replace: the object to replace was changed or deleted	replace: objekat za zamjenu je promijenjen ili izbrisan
 @msg	pattern missing	uzorak nedostaje
 @msg	patterns nested too deeply are filled with mid-grey	previše duboko ugniježđeni uzorci ispunjavaju se srednje sivom
-@msg	percent must be above 0 and at most 6400, not {p}	postotak mora biti iznad 0 i najviše 6400, a ne {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent mora biti iznad 0 i najviše 6400, a ne {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	odaberite boju, gradijent ili uzorak za čuvanje kao uzorak boje
 @msg	plane must be left, right or ground	plane mora biti left, right ili ground
 @msg	plug-in ABI: {0}	ABI dodatka: {0}
@@ -4708,8 +4733,8 @@ imageTrace	Outline	Obris
 @msg	result would exceed the canvas (coordinates out of range)	rezultat bi premašio platno (koordinate izvan raspona)
 @msg	objects can't be nested more than 32 deep	objekti ne mogu biti ugniježđeni dublje od 32 nivoa
 @msg	the SVG's elements are nested more than {0} deep	elementi SVG-a ugniježđeni su dublje od {0} nivoa
-@msg	scale must be a number from {_1} to {_2}, not {_3}	skala mora biti broj od {_1} do {_2}, a ne {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	skala mora biti broj od {_1} do {_2}, a ne {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale mora biti broj od {_1} do {_2}, a ne {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale mora biti broj od {_1} do {_2}, a ne {s}
 @msg	select (or target) objects whose appearance isn't basic	odaberite (ili ciljajte) objekte čiji izgled nije osnovni
 @msg	select a Live Paint group	odaberite grupu živog bojenja
 @msg	select a blend	odaberite stapanje
@@ -4968,6 +4993,7 @@ imageTrace	Outline	Obris
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradijent „{name}” nije definisan u datoteci: umjesto njega koristi se obična boja
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ugrađena slika od {_1} × {_2} piksela smanjena je na {_3} × {_4} piksela kako bi se zadržali slojevi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
@@ -5003,6 +5029,7 @@ imageTrace	Outline	Obris
 @msg	object ids are non-negative integers, not {v}	ID-ovi objekata su nenegativni cijeli brojevi, a ne {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} mora biti niz nenegativnih cjelobrojnih ID-ova objekata
 @msg	invalid object id {value}: expected a non-negative integer	nevažeći ID objekta {value}: očekuje se nenegativan cijeli broj
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	stavka {index} u `{key}` je {value}, a ne ID objekta (nenegativan cijeli broj)
 @msg	no such object id {value}	nema objekta s ID-om {value}
 @msg	id {value} is a layer, not an object	id {value} je sloj, a ne objekat
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} je sloj, a ne objekat; slojeve pomjerajte s layer.move
@@ -5040,7 +5067,7 @@ imageTrace	Outline	Obris
 @msg	the PSD file's image data can't be read: {e}	podaci slike PSD datoteke se ne mogu pročitati: {e}
 @msg	Imported library {name}	Uvezena biblioteka {name}
 @msg	Invalid panel layout; restored the default dock	Nevažeći raspored panela; vraćeno je zadano sidrište
-@msg	action is required	akcija je obavezna
+@msg	action is required	action je obavezan
 @msg	anchor must name a registered panel	anchor mora navesti registrovani panel
 @msg	before must name a panel	before mora navesti panel
 @msg	docking action contains an unknown panel or an excessive split path	akcija sidrenja sadrži nepoznat panel ili prekomjernu putanju podjele
@@ -5742,6 +5769,9 @@ axis	Y Axis	Y osa
 	Install “{name}”, which asks for these permissions?	Instalirati „{name}”, koji traži ove dozvole?
 	ID: {id}	ID: {id}
 	Version: {version}	Verzija: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Instalirati „{name}” umjesto dodatka s istim ID-om?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ova datoteka nije dodatak ranije instaliran s ovim ID-om. Dobija postavke i predmemoriju sačuvane za taj ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
 	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
@@ -5749,10 +5779,13 @@ axis	Y Axis	Y osa
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
 	Write the document as a file in its own format	Zapisati dokument kao datoteku u vlastitom formatu
 	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `progress` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
+	Keep settings of its own	Čuvati vlastite postavke
+	Keep a cache of its own, which you can clear	Čuvati vlastitu predmemoriju koju možete očistiti
+	Clear Plug-in Cache	Očisti predmemoriju dodatka
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `{permission}` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul uvozi `env.{name}`, koji dodatak smije koristiti samo na nivou API-ja dodataka {PROGRESS_API} (`api` {PROGRESS_API}) i s dozvolom `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul uvozi `{from}.{name}`, koji domaćin ne nudi: dodatak smije uvoziti samo `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivo API-ja dodataka 2), a nikakav WASI, datoteke ni mrežu
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modul uvozi `env.{name}`, koji dodatak smije koristiti samo na nivou API-ja dodataka {PROGRESS_API} (`api` {PROGRESS_API}) i s dozvolom `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modul uvozi `{from}.{name}`, koji domaćin ne nudi: dodatak smije uvoziti samo funkcije `env.vc_*` koje navodi docs/plugins.md (nivo API-ja dodataka 2), a nikakav WASI, datoteke ni mrežu
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; ovaj domaćin podržava nivoe API-ja dodataka od 1 do {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` mora biti lista naziva dozvola
 @msg	`grant` names an unknown permission `{shown}`	`grant` navodi nepoznatu dozvolu `{shown}`
@@ -5840,7 +5873,7 @@ axis	Y Axis	Y osa
 @msg	the document has no symbols to save	dokument nema simbola za čuvanje
 @msg	Trap: select two or more objects filled with solid colours	Zamka: odaberite dva ili više objekata ispunjenih punim bojama
 @msg	Trap: no edges of different colours meet among the selected objects	Zamka: među odabranim objektima ne susreću se ivice različitih boja
-@msg	thickness must be from 0.01 to 5000 pt	debljina mora biti od 0,01 do 5000 pt
+@msg	thickness must be from 0.01 to 5000 pt	thickness mora biti od 0,01 do 5000 pt
 @msg	heightWidth must be from 1 to 1000 %	heightWidth mora biti od 1 do 1000 %
 @msg	tintReduction must be from 0 to 100 %	tintReduction mora biti od 0 do 100 %
 	Rectangular Grid Tool Options	Opcije alata pravougaona mreža
@@ -5848,7 +5881,7 @@ axis	Y Axis	Y osa
 	Fill Line	Ispuni liniju
 	Pathfinder Options	Opcije Pathfindera
 	Divide and Outline Will Remove Unpainted Artwork	Podijeli i Obris uklanjaju neobojenu grafiku
-@msg	precision must be from 0.001 to 10 pt	preciznost mora biti od 0,001 do 10 pt
+@msg	precision must be from 0.001 to 10 pt	precision mora biti od 0,001 do 10 pt
 @msg	`pathfinder` must be an object	`pathfinder` mora biti objekat
 	Add to Brushes	Dodaj u četkice
 	Brush Library	Biblioteka četkica
@@ -6282,6 +6315,16 @@ shape	Open	Otvoren
 @msg	path must be a list of child indices	path mora biti lista indeksa podređenih objekata
 @msg	no object at path {shown} in the symbol's art	nema objekta na putanji {shown} u grafici simbola
 @msg	give fill, stroke, opacity and/or blend	navedite fill, stroke, opacity i/ili blend
+@msg	{key} cannot be set on a guide	{key} se ne može postaviti na vodilicu
+@msg	{key} cannot be set on a blend	{key} se ne može postaviti na stapanje
+@msg	{key} cannot be set on an envelope	{key} se ne može postaviti na omotnicu
+@msg	{key} cannot be set on a gradient mesh	{key} se ne može postaviti na gradijentnu mrežu
+@msg	{key} cannot be set on a Repeat	{key} se ne može postaviti na ponavljanje
+@msg	{key} cannot be set on a placed document	{key} se ne može postaviti na postavljeni dokument
+@msg	{key} cannot be set on an Intertwine group	{key} se ne može postaviti na Intertwine grupu
+@msg	stroke cannot be set on a symbol instance	stroke se ne može postaviti na instancu simbola
+@msg	fill on a symbol instance must be a solid color or none	fill instance simbola mora biti puna boja ili none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} se ne može postaviti na sliku bez efekta „Pretvori u oblik“ ili „Objekat u obrisu“
 @msg	pass newName, registration, exportType, nineSlice and/or type	navedite newName, registration, exportType, nineSlice i/ili type
 	Text Flow	Tok teksta
 	By Rows	Po redovima
@@ -6378,3 +6421,24 @@ shape	Open	Otvoren
 # 3D Box add-on
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
+
+# Safe Mode
+	Safe Mode…	Sigurni način rada…
+	Safe Mode	Sigurni način rada
+	Help › Safe Mode…	Pomoć › Sigurni način rada…
+	Enable on Re-launch	Omogući pri sljedećem pokretanju
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Posljednje pokretanje programa VectorCraft zaustavilo se dok se učitavao dodatak {name}. Možda on nije uzrok zaustavljanja.
+	Disable and Continue	Onemogući i nastavi
+	Start Normally	Pokreni normalno
+	Start in Safe Mode	Pokreni u sigurnom načinu rada
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft je u sigurnom načinu rada: dodaci se ne učitavaju niti pokreću dok se program ne pokrene normalno.
+	Disabled plug-ins	Onemogućeni dodaci
+	No plug-ins are disabled.	Nijedan dodatak nije onemogućen.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Sigurni način rada je uključen: dodaci se ne učitavaju niti pokreću dok se VectorCraft ne pokrene normalno
+@msg	give `id` or `file` (see plugin.safeMode)	navedite `id` ili `file` (vidi plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	taj dodatak nije onemogućen (vidi plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Onemogućeni dodaci nisu mogli biti sačuvani za sljedeće pokretanje
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Proširi izgled: efekat dodatka u odabiru ne može se proširiti u sigurnom načinu rada
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Poravnaj s mrežom piksela

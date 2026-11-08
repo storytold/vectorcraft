@@ -794,11 +794,14 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let mut doc = Document::clone(chosen.as_ref().unwrap_or(&st.doc));
     let (imported_from, import_losses, opened_by) = (st.imported_from.clone(), st.import_losses.clone(), st.opened_by.clone());
-    if let Some(path) = st.path.as_deref() {
+    let base = super::links::LinkBase::of(st);
+    if base.doc.is_some() {
         // Files are looked for within the asking caller's roots, else within those of the caller that opened the source.
         let roots = crate::file_access::current().or_else(|| opened_by.clone());
-        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, path));
+        crate::file_access::confine(roots.as_ref(), || super::links::with_found_paths(&mut doc, base));
     }
+    // The copy's links keep their relative paths, which name places from the same file.
+    let links_from = base.relative.map(str::to_string);
     doc.drop_edit_modes();
     if doc.pattern_edit.is_some() {
         super::patterncmds::finish_edit(&mut doc, &mut vectorcraft_doc::Selection::default())?;
@@ -815,6 +818,7 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
     st.imported_from = imported_from;
     st.import_losses = import_losses;
+    st.links_from = links_from;
     st.opened_by = st.opened_by.take().or(opened_by);
     st.mark_unsaved();
     Ok(json!({ "index": i, "title": st.title() }))
@@ -930,7 +934,10 @@ fn without_inner(doc: &Document, placed: Vec<(NodeId, Option<Vec<usize>>)>) -> i
 /// The direct-selection flag and resolved root nodes for Copy and Cut operations.
 fn copy_cut_targets(s: &Session) -> Result<(bool, Vec<NodeId>)> {
     let st = s.doc()?;
-    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature");
+    // The Pen and the Curvature tool leave the anchor they placed or edited selected: Copy takes
+    // the whole path then (#2122), unless a selection tool Cmd lent them picked the anchors (#6123).
+    let picked = s.lent_selection.as_ref().is_some_and(|(uid, sel)| *uid == st.uid && *sel == st.selection);
+    let in_drawing_tool = matches!(s.tool_id(), "pen" | "curvature") && !picked;
     let direct = !in_drawing_tool && (!st.selection.anchors.is_empty() || !st.selection.segments.is_empty());
     let in_isolated_compound = st.isolation.is_some_and(|iso| st.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
     let roots = roots_within(&st.doc, st.selection.in_paint_order(&st.doc), |_compound, member| {
@@ -1299,10 +1306,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
                 imported.apply(&mut c);
+                let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
                     // including the pattern phase, independently of transform-tool settings.
-                    c.transform(xf, vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() });
+                    c.transform(xf, sc);
                 }
                 let layer = match clip.source_layers.get(k) {
                     Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
@@ -1338,6 +1346,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                                 if let NodeKind::Path { live, .. } = &mut child_node.kind {
                                     *live = None;
                                 }
+                                if child_node.extras().pixel_aligned {
+                                    child_node.extras_mut().pixel_aligned = false;
+                                }
                                 let insert_idx = if idx == usize::MAX { usize::MAX } else { idx.saturating_add(offset) };
                                 new_ids.push(d.insert(par, insert_idx, child_node)?);
                             }
@@ -1350,6 +1361,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             if let NodeKind::Path { live, .. } = &mut c.kind {
                                 *live = None;
                             }
+                            // A path inside a compound path snaps with the compound path, whose property it takes.
+                            if c.extras().pixel_aligned {
+                                c.extras_mut().pixel_aligned = false;
+                            }
                             new_ids.push(d.insert(par, idx, c)?);
                         }
                         _ => {
@@ -1358,13 +1373,18 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             let offset = *placed.entry(outer_par).or_default();
                             *placed.entry(outer_par).or_default() += 1;
                             let insert_idx = if beside_idx == usize::MAX { usize::MAX } else { beside_idx.saturating_add(offset) };
+                            super::object::keep_pixel_aligned(&mut c, sc);
                             new_ids.push(d.insert(outer_par, insert_idx, c)?);
                         }
                     }
                 } else {
+                    super::object::keep_pixel_aligned(&mut c, sc);
                     new_ids.push(d.insert(par, idx, c)?);
                 }
             }
+        }
+        for id in &new_ids {
+            super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
@@ -1437,7 +1457,10 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Duplicate `roots` directly above each original, transform the copies, select them
 /// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let out = copy_above(d, roots, |_, _, c| c.transform(xf, true))?;
+    let out = copy_above(d, roots, |_, _, c| {
+        c.transform(xf, true);
+        super::object::keep_pixel_aligned(c, true.into());
+    })?;
     sel.set(out.iter().copied());
     Ok(out)
 }
