@@ -1,7 +1,8 @@
 use super::artboards::names_an_artboard;
 use super::input::marquee_through;
-use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors, walk_drawn};
-use super::{Color32, CornerRadius, NodeKind, Overlay, Point, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
+use super::outline::{KEY_OUTLINE, c32, node_outline, selection_hit_at, stroke_path, to_screen_path, too_many_anchors};
+use super::selection_marks::{MarkOptions, SelectionMarks};
+use super::{Color32, CornerRadius, NodeKind, Overlay, Pos2, Shape, Stroke, StrokeKind, Tokens, VectorcraftApp, Xf, vec2};
 
 pub(super) fn hover_highlight(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     let Some(h) = app.hover_doc else { return };
@@ -54,9 +55,9 @@ pub(super) fn selected_anchor(c: Color32) -> Color32 {
 #[derive(Clone, Copy)]
 pub(super) struct HandleLook<'a> {
     /// Points bigger (or smaller) than the default size 3, per step of Size (1–7).
-    grow: f32,
+    pub(super) grow: f32,
     /// `solid` (the default), `hollow` or `large`.
-    style: &'a str,
+    pub(super) style: &'a str,
 }
 
 impl<'a> HandleLook<'a> {
@@ -65,17 +66,21 @@ impl<'a> HandleLook<'a> {
     }
 
     /// A direction handle's end at `c`: a solid dot, a hollow one or a larger solid one.
-    fn draw(self, p: &egui::Painter, c: Pos2, color: Color32) {
+    pub(super) fn shapes(self, c: Pos2, color: Color32) -> [Option<Shape>; 2] {
         let r = 2.75 + self.grow / 2.0;
         let hollow = self.style == "hollow";
-        p.circle_filled(c, if self.style == "large" { r + 1.5 } else { r }, if hollow { Color32::WHITE } else { color });
-        if hollow {
-            p.circle_stroke(c, r, Stroke::new(1.0, color));
+        let dot = Shape::circle_filled(c, if self.style == "large" { r + 1.5 } else { r }, if hollow { Color32::WHITE } else { color });
+        [Some(dot), hollow.then(|| Shape::circle_stroke(c, r, Stroke::new(1.0, color)))]
+    }
+
+    pub(super) fn draw(self, p: &egui::Painter, c: Pos2, color: Color32) {
+        for shape in self.shapes(c, color).into_iter().flatten() {
+            p.add(shape);
         }
     }
 }
 
-fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
+pub(super) fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     let r = egui::Rect::from_center_size(c, vec2(size, size));
     if filled {
         p.rect_filled(r, 0.0, color);
@@ -85,11 +90,23 @@ fn anchor_square(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size:
     }
 }
 
-fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
+pub(super) fn curve_point(p: &egui::Painter, c: Pos2, color: Color32, filled: bool, size: f32) {
     p.circle(c, size / 2.0, if filled { color } else { Color32::WHITE }, Stroke::new(1.0, color));
 }
 
-pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool) {
+/// How the current tool and preferences draw the selection's marks.
+pub(super) fn mark_options(app: &VectorcraftApp, curve_points_from_tool: bool) -> MarkOptions<'_> {
+    let tool = app.session.tool_id();
+    MarkOptions {
+        direct: vectorcraft_tools::catalog::edits_anchors(tool),
+        curvature: tool == "curvature",
+        curve_points_from_tool,
+        look: HandleLook::of(&app.session.prefs),
+        all_handles: app.session.prefs.show_handles_multiple_anchors,
+    }
+}
+
+pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf, curve_points_from_tool: bool, marks: &mut SelectionMarks) {
     // The Selection tool's bounding box (rotated with the objects after a rotation), also shown by
     // the shape tools that keep a shape just drawn ready to adjust while they draw none (#5477). It
     // hides while a drag moves or resizes the selection, so only the art is seen going with the
@@ -121,130 +138,29 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
     let symbols = st.doc.symbol_boxes();
     let tool = app.session.tool_id();
     let direct = vectorcraft_tools::catalog::edits_anchors(tool);
-    let curvature = tool == "curvature";
     // Selection & Anchor Display › Size (1–7, 3 the default): anchors, handles and the bounding
     // box's handles a point bigger or smaller per step.
-    let look = HandleLook::of(&app.session.prefs);
-    let grow = look.grow;
+    let options = mark_options(app, curve_points_from_tool);
+    let grow = options.look.grow;
     let anchor = |direct: bool| grow + if direct { 5.0 } else { 4.0 };
-    // The selected anchors' handles (drawn once they are counted: Show handles when multiple
-    // anchors are selected off shows them for a single one only).
-    let (mut handles, mut with_handles) = (vec![], 0);
     // Too many paths to outline: the selection's bounds stand for them.
     if let Some((b, id)) = big_bounds.zip(st.selection.objects.first()) {
         stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(1.0, c32(st.doc.layer_color(*id))));
     }
     // The key object (Align to Key Object): its outline drawn thicker, or its bounds when it has
     // too many paths to outline.
-    if let Some((k, n)) = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?))) {
-        let outline = if too_many_anchors([n]) {
-            n.geometric_bounds_with(&symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath())
-        } else {
-            Some(node_outline(n, &symbols))
-        };
-        if let Some(bp) = outline {
-            stroke_path(p, &bp, xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
-        }
+    let key = st.selection.key.and_then(|k| Some((k, st.doc.node(k)?)));
+    let (key_bounds, key_outline) = match key {
+        Some((k, n)) if too_many_anchors([n]) => (Some((k, n)), None),
+        Some((k, _)) => (None, Some(k)),
+        None => (None, None),
+    };
+    if let Some((k, n)) = key_bounds
+        && let Some(b) = n.geometric_bounds_with(&symbols)
+    {
+        stroke_path(p, &vectorcraft_geom::shapes::rectangle(b).to_bezpath(), xf, Stroke::new(KEY_OUTLINE, c32(st.doc.layer_color(k))));
     }
-    for id in st.selection.objects.iter().filter(|_| !big) {
-        let Some(n) = st.doc.node(*id) else { continue };
-        let color = c32(st.doc.layer_color(*id));
-        let partial = st.selection.partial(*id);
-        // Path outlines (and area type / placed document / image / mesh / symbol outlines;
-        // point type baselines and origin are drawn below).
-        if !matches!(n.kind, NodeKind::Text(ref tx) if matches!(tx.kind, vectorcraft_doc::TextKind::Point)) {
-            stroke_path(p, &node_outline(n, &symbols), xf, Stroke::new(1.0, color));
-        }
-        // Anchors (and handles for selected anchors in direct mode); a gradient mesh's or a mesh
-        // envelope's points.
-        walk_drawn(n, &mut |c| {
-            let envelope = vectorcraft_doc::live::envelope_overlay(c).and_then(|(_, grid)| grid);
-            let grid = match &c.kind {
-                NodeKind::Mesh(m) => Some(m),
-                _ => envelope.as_ref(),
-            };
-            if let Some(grid) = grid {
-                for q in &grid.points {
-                    anchor_square(p, xf.to_screen(q.p), color, false, anchor(direct));
-                }
-                return;
-            }
-            let NodeKind::Path { path, .. } = &c.kind else { return };
-            // The Curvature tool owns its points while drawing; existing paths use this overlay.
-            if curvature && curve_points_from_tool {
-                return;
-            }
-            let selected_segments = st.selection.segments.get(&c.id);
-            if let Some(segments) = selected_segments {
-                for &(si, seg) in segments {
-                    let Some(sp) = path.subpaths.get(si).filter(|sp| seg < sp.segment_count()) else { continue };
-                    let curve = sp.segment(seg);
-                    let mut outline = vectorcraft_geom::BezPath::new();
-                    outline.move_to(curve.p0);
-                    if sp.segment_is_line(seg) {
-                        outline.line_to(curve.p3);
-                    } else {
-                        outline.curve_to(curve.p1, curve.p2, curve.p3);
-                    }
-                    stroke_path(p, &outline, xf, Stroke::new(2.0, color));
-                }
-            }
-            for (si, ai, a) in path.anchors() {
-                // An object selected whole has all its anchors selected, and so do the paths inside a
-                // group, compound path or clip group selected whole. Direction handles show only on a
-                // path that is selected itself: those are the handles that `handle_anchors` in
-                // `vectorcraft-tools` lets the tools drag.
-                let (sel, handles_shown) = match partial {
-                    Some(set) => {
-                        let sel = set.contains(&(si, ai));
-                        (sel, sel)
-                    }
-                    None => (true, direct && c.id == *id),
-                };
-                let sp = xf.to_screen(a.p);
-                if !curvature && handles_shown {
-                    with_handles += 1;
-                    let sides = path.subpaths.get(si).map(|subpath| st.selection.handle_sides(c.id, si, ai, subpath)).unwrap_or((true, true));
-                    handles.extend(
-                        [(a.h_in, sides.0), (a.h_out, sides.1)]
-                            .into_iter()
-                            .filter(|(h, show)| *show && h.distance(a.p) > 1e-6)
-                            .map(|(h, _)| (sp, xf.to_screen(h), color)),
-                    );
-                }
-                let anchor_selected = sel && selected_segments.is_none();
-                let ink = if anchor_selected && partial.is_some() { selected_anchor(color) } else { color };
-                if curvature {
-                    curve_point(p, sp, ink, anchor_selected && partial.is_some(), grow + 6.0);
-                } else {
-                    anchor_square(p, sp, ink, anchor_selected, anchor(partial.is_some() || direct));
-                }
-            }
-        });
-        // Centre point (Attributes panel → Show Center).
-        if n.shows_center()
-            && let Some(b) = n.geometric_bounds_with(&symbols)
-        {
-            anchor_square(p, xf.to_screen(b.center()), color, true, anchor(false));
-        }
-        // Point type: each line's baseline, where a click selects it (`hit`), whatever its
-        // alignment and rotation, and the anchor (area type shows its frame instead, which may
-        // not be a rectangle, and type on a path its path).
-        if let NodeKind::Text(tx) = &n.kind
-            && matches!(tx.kind, vectorcraft_doc::TextKind::Point)
-        {
-            for (a, b) in tx.baselines() {
-                p.line_segment([xf.to_screen(tx.xf * a), xf.to_screen(tx.xf * b)], Stroke::new(1.0, color));
-            }
-            p.circle_filled(xf.to_screen(tx.xf * Point::ZERO), 2.5, color);
-        }
-    }
-    if app.session.prefs.show_handles_multiple_anchors || with_handles <= 1 {
-        for (sp, hp, color) in handles {
-            p.line_segment([sp, hp], Stroke::new(1.0, color));
-            look.draw(p, hp, color);
-        }
-    }
+    marks.paint(st, p, xf, &options, key_outline, if big { &[] } else { &st.selection.objects });
     // The spine of each selected blend (or of the blend a selected key object belongs to).
     let mut spines = vec![];
     for id in &st.selection.objects {

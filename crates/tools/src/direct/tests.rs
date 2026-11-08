@@ -542,6 +542,73 @@ fn pressing_an_anchor_of_a_fully_selected_path_keeps_the_selection() {
     assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": [[0, 0]], "mode": "toggle"}))]);
 }
 
+/// Smart Guides › Snap to Last Location: a path selected whole that Direct Selection moves held by
+/// one of its anchors goes back to where it began within Snapping Tolerance, labeled "last
+/// location", a move Shift keeps to its line too; farther out, or with the option off, it moves as
+/// dragged.
+#[test]
+fn snap_to_last_location_puts_a_path_moved_by_its_anchor_back() {
+    let (mut d, id) = doc_with_rect();
+    // An artboard whose edges and center are out of reach.
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let on = ToolContext { snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    // A press on the top-left anchor, then a drag to `to` with `m` held.
+    let moved = |c: &ToolContext, to: (f64, f64), m: Mods| {
+        let mut t = DirectSelectionTool::new(false);
+        assert!(t.pointer(c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0)).is_empty());
+        let a = t.pointer(c, &PointerEvent::new(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+        assert_eq!(command, "object.transform");
+        let labels: Vec<String> =
+            t.overlays(c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN)), labels)
+    };
+    let none = Mods::default();
+    let (back, labels) = moved(&on, (106.0, 105.0), none);
+    assert!(back.hypot() < 1e-9, "{back:?}: 7.8 pt away, within 10");
+    assert_eq!(labels, ["last location"]);
+    let shift = Mods { shift: true, ..none };
+    let (back, _) = moved(&on, (107.0, 100.0), shift);
+    assert!(back.hypot() < 1e-9, "{back:?}: a Shift move goes back too");
+    let (out, labels) = moved(&on, (109.0, 108.0), none);
+    assert!((out - Vec2::new(9.0, 8.0)).hypot() < 1e-9, "{out:?}: 12 pt away, out of reach");
+    assert!(labels.is_empty(), "{labels:?}");
+    let off = ToolContext { snap_to_last_location: false, ..on };
+    let (stays, _) = moved(&off, (106.0, 105.0), none);
+    assert!((stays - Vec2::new(6.0, 5.0)).hypot() < 1e-9, "{stays:?}: the option off");
+}
+
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location for a path selected whole
+/// that Direct Selection moves held by an anchor: a short move puts the held anchor, off the
+/// pixel grid before, on whole pixels and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location_for_a_path_moved_by_its_anchor() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.3, 100.4)).is_empty());
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 106.3, 105.4));
+    let Some(Action::Preview(command, v)) = a.last() else { panic!("{a:?}") };
+    assert_eq!(command, "object.transform");
+    let m = Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN));
+    // The held anchor (106.3, 105.4) rounds to (106, 105).
+    assert!((m - Vec2::new(5.7, 4.6)).hypot() < 1e-9, "{m:?}");
+    let labels: Vec<String> =
+        t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A click (no drag) on an anchor that is selected with others, whether the whole path is or
 /// some of its anchors, selects that anchor alone, as in Illustrator: a press keeps the
 /// selection so a drag moves it all, the release without a drag narrows it. Shift still
@@ -1860,6 +1927,29 @@ fn a_move_of_objects_lands_an_edge_on_the_grid() {
         let (v, _) = drag(&mut t, &c, (110.0, 110.0), (132.0, 110.0), Mods::default());
         assert_eq!(v["matrix"], json!([1.0, 0.0, 0.0, 1.0, 18.0, 0.0]), "group: {group}");
     }
+}
+
+/// #3835: with Snap to Grid on, a straight segment dragged by a point along it lands its anchors
+/// on the grid, not that point. B's top edge, (300, 300)–(400, 300), pressed at (350, 300) and
+/// dragged by (22, 23), moves its anchors to 322–422 across and 323 down: the right end is nearest
+/// the gridline 423 and the edge nearest 324, so the move is (23, 24). Snapping the pressed point
+/// instead would move it by (19, 24), onto the intersection (369, 324), leaving both anchors off
+/// the grid. An anchor pressed on still lands on an intersection itself.
+#[test]
+fn a_dragged_segment_lands_its_anchors_on_the_grid() {
+    let (d, _, b) = two_squares();
+    let p = paint();
+    let mut s = anchors_of(b, &[(0, 0), (0, 1)]);
+    s.segments.insert(b, [(0, 0)].into_iter().collect());
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(drag(&mut t, &c, (350.0, 300.0), (372.0, 323.0), Mods::default()).0, json!({"dx": 23.0, "dy": 24.0}));
+    let (v, _) = drag(&mut t, &c, (350.0, 300.0), (363.0, 301.0), Mods { shift: true, ..Mods::default() });
+    let (x, y) = (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap());
+    assert!((x - 14.0).abs() < 1e-9 && y.abs() < 1e-9, "{v}");
+    let one = anchors_of(b, &[(0, 0)]);
+    let c = ToolContext { snap_to_grid: true, ..cx(&d, &one, &p) };
+    assert_eq!(drag(&mut t, &c, (300.0, 300.0), (322.0, 323.0), Mods::default()).0, json!({"dx": 24.0, "dy": 24.0}));
 }
 
 /// Group Selection and Direct Selection on a whole path keep a Shift-constrained move on its

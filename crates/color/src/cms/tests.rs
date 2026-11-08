@@ -259,6 +259,46 @@ fn generic_cmyk_black_round_trips_with_bpc() {
     assert!(raw.iter().all(|v| *v > 0.05), "{raw:?}");
 }
 
+/// A color whose solve holds cyan at 0 separates to the same inks when its values change by a few
+/// float steps: hex ed1e79 with its red stepped one `f32` at a time over 4,001 values (about 0.00024
+/// in all) stays within 0.001 on every ink.
+#[test]
+fn generic_cmyk_separates_nearby_colors_at_the_gamut_edge_alike() {
+    let c = cms();
+    let pink = [237.0f32 / 255.0, 30.0 / 255.0, 121.0 / 255.0];
+    let (mut lo, mut hi) = ([f32::MAX; 4], [f32::MIN; 4]);
+    for step in -2000i32..=2000 {
+        let mut rgb = pink;
+        rgb[0] = f32::from_bits(pink[0].to_bits().wrapping_add_signed(step));
+        let ink = c.srgb_to_cmyk(rgb, Intent::RelativeColorimetric);
+        for i in 0..4 {
+            lo[i] = lo[i].min(ink[i]);
+            hi[i] = hi[i].max(ink[i]);
+        }
+    }
+    assert!((0..4).all(|i| hi[i] - lo[i] < 1e-3), "{lo:?} to {hi:?}");
+    assert_eq!(lo[0], 0.0, "{lo:?}");
+}
+
+/// A color whose solve holds cyan and magenta at 1 separates to the same inks when its values change
+/// by a few float steps: sRGB (0, 0, 0.25) with its blue stepped one `f32` at a time over 121 values
+/// stays within 0.001 on every ink.
+#[test]
+fn generic_cmyk_separates_nearby_colors_with_inks_at_full_alike() {
+    let c = cms();
+    let (mut lo, mut hi) = ([f32::MAX; 4], [f32::MIN; 4]);
+    for step in -60i32..=60 {
+        let blue = f32::from_bits(0.25f32.to_bits().wrapping_add_signed(step));
+        let ink = c.srgb_to_cmyk([0.0, 0.0, blue], Intent::RelativeColorimetric);
+        for i in 0..4 {
+            lo[i] = lo[i].min(ink[i]);
+            hi[i] = hi[i].max(ink[i]);
+        }
+    }
+    assert!((0..4).all(|i| hi[i] - lo[i] < 1e-3), "{lo:?} to {hi:?}");
+    assert_eq!((lo[0], lo[1]), (1.0, 1.0), "{lo:?}");
+}
+
 #[test]
 fn lab_colours_round_trip_through_the_cms() {
     let c = cms_no_bpc();

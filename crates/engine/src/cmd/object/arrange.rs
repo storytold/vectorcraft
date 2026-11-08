@@ -1,5 +1,5 @@
 use super::align::choice;
-use super::{Document, EngineError, Node, NodeId, NodeKind, Result, Session, Value, bad, id_param, json, ok, selected_roots};
+use super::{Document, EngineError, Node, NodeId, NodeKind, Result, Session, Value, bad, json, object_param, ok, selected_roots};
 
 pub(super) enum Arrange {
     Front,
@@ -293,7 +293,7 @@ pub(super) fn show_all(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
-    let id = id_param(p, "id")
+    let id = object_param(p, "id", "object.isolate")?
         .or_else(|| s.active().and_then(|d| d.selection.objects.first().copied()))
         .ok_or_else(|| bad("object.isolate", "missing id"))?;
     let guides_locked = s.menu.guides_locked;

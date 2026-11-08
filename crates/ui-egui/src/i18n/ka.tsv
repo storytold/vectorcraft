@@ -380,6 +380,11 @@
 	Document Raster Effects Settings…	დოკუმენტის რასტრული ეფექტების პარამეტრები…
 	Vector Effects	ვექტორული ეფექტები
 	3D and Materials	3D და მასალები
+	Plane	სიბრტყე
+	Extrude	ამოწევა
+	Revolve	ბრუნვა
+	Inflate	გაბერვა
+	Select objects, then pick an object type to give them a 3D effect.	აირჩიეთ ობიექტები, შემდეგ აირჩიეთ ობიექტის ტიპი, რომ მათ 3D ეფექტი მიეცეთ.
 	Extrude & Bevel…	ამოწევა და წაკვეთა…
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
@@ -703,6 +708,9 @@
 	Put back in the toolbar	ხელსაწყოთა ზოლში დაბრუნება
 	Float Panel	მცურავი პანელი
 	Dock Panel	პანელის მიმაგრება
+	Dock to Top	ზემოთ მიმაგრება
+	Dock to Bottom	ქვემოთ მიმაგრება
+	Dock Control Bar	მართვის ზოლის მიმაგრება
 	Float Tool Group	მცურავი ხელსაწყოთა ჯგუფი
 	Services	სერვისები
 	Hide VectorCraft	VectorCraft-ის დამალვა
@@ -831,6 +839,8 @@ lighting	Light	სინათლე
 	Expand Layers Panel Rows	შრეების პანელის სტრიქონების გაშლა
 	Export CSS…	CSS-ის ექსპორტირება…
 	Export Keyboard Shortcuts…	კლავიატურის მალსახმობების ექსპორტირება…
+	Export Keyboard Shortcuts as Text…	კლავიატურის მალსახმობების ტექსტად ექსპორტირება…
+	Export Text…	ტექსტის ექსპორტი…
 	File Info Dialog	ფაილის ინფორმაციის დიალოგი
 	Go to Artboard	სამუშაო დაფაზე გადასვლა
 	Graphic Style Options…	გრაფიკული სტილის პარამეტრები…
@@ -1666,6 +1676,9 @@ digits	Malayalam	მალაიალამური
 	More Paragraph options	აბზაცის სხვა პარამეტრები
 	No document open	დოკუმენტი გახსნილი არ არის
 	Quick Actions	სწრაფი მოქმედებები
+	Rearrange	გადალაგება
+	Select All Artboards	ყველა სამუშაო დაფის მონიშვნა
+	Switch Orientation	ორიენტაციის გადართვა
 	Rearrange All	ყველას გადალაგება
 	Rulers & Grids	სახაზავები და ბადეები
 	Select a text object	მონიშნეთ ტექსტური ობიექტი
@@ -1793,6 +1806,14 @@ digits	Malayalam	მალაიალამური
 	Location	მდებარეობა
 	No images	გამოსახულებები არ არის
 	Relink to Folder…	საქაღალდეში ხელახლა დაკავშირება…
+	Each Link Separately	თითოეული ბმული ცალ-ცალკე
+	Selected Instances	არჩეული ეგზემპლარები
+	All Instances	ყველა ეგზემპლარი
+	Missing Links from This Folder	დაკარგული ბმულები ამ საქაღალდიდან
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} არ არის each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each და paths ერთად გამოიყენება: paths ჩამოთვლის ჩანაწერებს ids-ით და path-ით, ids-ის, path-ისა და folder-ის ნაცვლად
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-ის ჩანაწერს {i} სჭირდება path და ids (ობიექტის ID-ები, რომლებიც სხვა ჩანაწერს არ აქვს)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder იღებს path-ს: სხვა დაკარგული ბმულები ამ ფაილის საქაღალდეში იძებნება
 	Show Missing	დაკარგულების ჩვენება
 	Sort by Status	სტატუსის მიხედვით სორტირება
 	Clear Overrides	ცვლილებების გასუფთავება
@@ -2274,6 +2295,8 @@ digits	Malayalam	მალაიალამური
 	Show Cross Hairs	ჯვარედინი ხაზების ჩვენება
 	Show Video Safe Areas	ვიდეოს უსაფრთხო არეების ჩვენება
 	Video Ruler Pixel Aspect Ratio:	ვიდეოს სახაზავების პიქსელის თანაფარდობა:
+	Fade Region Outside Artboard	სამუშაო დაფის გარეთ არის დაბნელება
+	Update While Dragging	განახლება გადათრევისას
 	Hide Video Rulers	ვიდეოს სახაზავების დამალვა
 	Client-side (.html)	კლიენტის მხარე (.html)
 	Color Reduction:	ფერების შემცირება:
@@ -2760,6 +2783,7 @@ theme	Appearance	იერსახე
 	Redefine Symbol	სიმბოლოს ხელახლა განსაზღვრა
 	Remove Brush Stroke	ფუნჯის შტრიხის მოხსნა
 	Replace Symbol	სიმბოლოს ჩანაცვლება
+	Reset Transformation	გარდაქმნის ჩამოყრა
 	Select All Instances	ყველა ეგზემპლარის მონიშვნა
 	Symbol Sprayer	სიმბოლოების სპრეი
 	Symbolism Tool	სიმბოლოების ხელსაწყო
@@ -2787,6 +2811,9 @@ theme	Appearance	იერსახე
 	Convert Document Color Mode	დოკუმენტის ფერის რეჟიმის გარდაქმნა
 	Gamut Warning	ფერთა გამიდან გასვლის გაფრთხილება
 	Load Color Profile…	ფერის პროფილის ჩატვირთვა…
+	Load Character Styles…	სიმბოლოს სტილების ჩატვირთვა…
+	Load Paragraph Styles…	აბზაცის სტილების ჩატვირთვა…
+	Load All Styles…	ყველა სტილის ჩატვირთვა…
 	Plates	ფირფიტები
 	Spot Color	სპოტ-ფერი
 	Add to Swatches	ფერის ნიმუშებში დამატება
@@ -3047,6 +3074,7 @@ theme	Appearance	იერსახე
 	Character / Paragraph	სიმბოლო / აბზაცი
 	Copy Artboard	სამუშაო დაფის კოპირება
 	Cut Artboard	სამუშაო დაფის ამოჭრა
+	Rename Artboards	სამუშაო დაფების სახელის შეცვლა
 	Move Artboard Up/Down	სამუშაო დაფის აწევა/ჩამოწევა
 	Add Anchor (Pen)	საყრდენი წერტილის დამატება (კალამი)
 	Add Anchor Point	საყრდენი წერტილის დამატება
@@ -3213,6 +3241,8 @@ theme	Appearance	იერსახე
 	Real-time Drawing and Editing	რეალურ დროში ხატვა და რედაქტირება
 	Render Threads (-1 = Automatic)	ნაკადები (-1 = ავტომატური)
 	Reset Preferences	პარამეტრების ჩამოყრა
+	Search Preferences	პარამეტრებში ძიება
+	No settings found	პარამეტრები ვერ მოიძებნა
 	Scale Corners	კუთხეების მასშტაბირება
 	Scale Cursor Proportional to UI	კურსორის მასშტაბირება ინტერფეისის პროპორციულად
 	Scale Strokes & Effects	კონტურებისა და ეფექტების მასშტაბირება
@@ -3233,6 +3263,7 @@ theme	Appearance	იერსახე
 	Snapping Tolerance	მიბმის დაშვება
 	Spacing Guides	შუალედის დამხმარე ხაზები
 	Invoke Distance Guides	მანძილის დამხმარე ხაზების გამოძახება
+	Snap to Last Location	ბოლო მდებარეობაზე მიბმა
 	Spanish	ესპანური
 	Subdivisions	ქვედანაყოფები
 	Templates Folder	შაბლონების საქაღალდე
@@ -3378,6 +3409,8 @@ axis	Both	ორივე
 	Center	ცენტრში
 	Transform in Perspective	პერსპექტივაში გარდაქმნა
 	Grayscale	ნაცრისფერი გრადაციები
+	High Color	ბევრი ფერი
+	Low Color	ცოტა ფერი
 	Embed	ჩაშენება
 	Star	ვარსკვლავი
 	Power Saving (integrated)	ენერგიის დაზოგვა (ინტეგრირებული)
@@ -4358,6 +4391,7 @@ font-technology	Variable	ცვლადი
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
@@ -4434,6 +4468,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for it is taken in the Fonts folder	შრიფტების საქაღალდეში მისთვის ყველა დანომრილი სახელი დაკავებულია
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` არის ნაბიჯის მიმართვა {r}, რომელსაც მხოლოდ `run` და `command_batch` ხსნის
 @msg	`ids` must be an array of object ids, not {v}	`ids` უნდა იყოს ობიექტების id-ების მასივი და არა {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` უნდა იყოს ფერების მასივი და არა {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` უნდა იყოს საყრდენი წერტილების ინდექსების მასივი და არა {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: ნაბიჯ {i}-ის შედეგს ასეთი მნიშვნელობა არ აქვს (ლიტერალური $-ისთვის დაწერეთ $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: ამის წინ ნაბიჯი {i} არ არის (ნაბიჯები 0-დან ითვლება; ლიტერალური $-ისთვის დაწერეთ $$)
@@ -4783,6 +4818,7 @@ font-technology	Variable	ცვლადი
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	არის ტექსტს ჩარჩოებში, რომლებიც მისი შრიფტის ერთი სტრიქონისთვის ზედმეტად დაბალი იყო, ჩარჩოები გაეზარდა ({_1}): სხვაგვარად ტექსტი არ გამოჩნდებოდა
@@ -5495,6 +5531,7 @@ imageTrace	Outline	კონტური
 	The name in the save panel was “{typed}”; VectorCraft added the file type's extension. Replacing the file overwrites its contents.	შენახვის პანელში სახელი იყო „{typed}“; VectorCraft-მა ფაილის ტიპის გაფართოება დაამატა. ფაილის ჩანაცვლება მის შიგთავსს გადააწერს.
 	Thread Text	ტექსტის დაკავშირება
 	Trackpad Gesture to Rotate View	ხედის შემობრუნება ტრეკპადის ჟესტით
+	Hold a Tool Shortcut to Use the Tool Temporarily	ხელსაწყოს დროებით გამოყენება მისი მალსახმობის დაჭერით
 	Typing	აკრეფა
 	Uniformly Scaled	თანაბრად მასშტაბირებული
 	Unlock Variables	ცვლადების განბლოკვა
@@ -5556,6 +5593,7 @@ imageTrace	Outline	კონტური
 @plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
 	Clear History	ისტორიის გასუფთავება
+	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
 	Artboard {n} of {total}	სამუშაო დაფა {n} / {total}
 	File {n} of {total}	ფაილი {n} / {total}
@@ -5574,6 +5612,7 @@ imageTrace	Outline	კონტური
 @msg	its editing data is for a {w} × {h} pt page, not the file's {pw} × {ph} pt page	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის და არა ფაილის {pw} × {ph} pt გვერდს
 @msg	its editing data is for a {w} × {h} pt page, the file's {pw} × {ph} pt page at {scale}	მისი რედაქტირების მონაცემები {w} × {h} pt გვერდს ეკუთვნის: ეს ფაილის {pw} × {ph} pt გვერდია მასშტაბით {scale}
 @msg	no history to clear	გასასუფთავებელი ისტორია არ არის
+@msg	no history state {v}	ისტორიის მდგომარეობა {v} არ არსებობს
 @msg	{_1} files are written by file.saveAsTemplate	{_1} ფაილებს წერს file.saveAsTemplate
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 წერს ძველი ფორმატის .ai ფაილებს და არა .ait შაბლონებს
 @msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	ფაილის ცვლადების ყველა კავშირი არ იქნა წაკითხული (გამოტოვებული კავშირები: {_1}): ეს ობიექტები არ არის დაკავშირებული თავიანთ ცვლადებთან
@@ -5706,6 +5745,33 @@ axis	Y Axis	Y ღერძი
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ცოცხალი ეფექტი დოკუმენტის დახატვისას ეშვება, ამიტომ ის ვერ იქნება `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	ექსპორტის პლაგინი ყოველთვის ექსპორტის ბიუჯეტს იღებს: გამოტოვეთ `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}“ დიდ გამოთვლით ბიუჯეტს ითხოვს (თითო გაშვება {minutes} წუთამდე და ჩვეულებრივზე {times}-ჯერ მეტი ინსტრუქცია): მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `allowHeavy: true` პარამეტრით
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	დავაყენოთ „{name}“, რომელიც ამ ნებართვებს ითხოვს?
+	ID: {id}	ID: {id}
+	Version: {version}	ვერსია: {version}
+	File SHA-256: {hash}	ფაილის SHA-256: {hash}
+	Read the objects it is given	მიღებული ობიექტების წაკითხვა
+	Change, add and delete objects in the document	დოკუმენტში ობიექტების შეცვლა, დამატება და წაშლა
+	Keep data of its own with the document	საკუთარი მონაცემების დოკუმენტთან ერთად შენახვა
+	Change how the objects its effect is applied to are drawn	იმის შეცვლა, თუ როგორ იხატება ობიექტები, რომლებზეც მისი ეფექტია გამოყენებული
+	Write the document as a file in its own format	დოკუმენტის ჩაწერა ფაილად საკუთარ ფორმატში
+	Show its progress, see Cancel and write log lines	პროგრესის ჩვენება, გაუქმების შემჩნევა და ჟურნალის სტრიქონების ჩაწერა
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	ნებართვას `progress` სჭირდება პლაგინის API-ის დონე {PROGRESS_API}: მიუთითეთ `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	მოდულს შემოაქვს `env.{name}` ჰოსტისგან განსხვავებული ტიპით: ჰოსტის ტიპია {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `progress` შეუძლია
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ `env.vc_progress`, `env.vc_cancelled` და `env.vc_log` (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
+@msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
+@msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` სახის პლაგინს სჭირდება ნებართვა `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	მაქსიმუმ {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	ნებართვა `{shown}` არ ეხება `{_1}` სახის პლაგინს
+@msg	permission `{shown}` is listed twice	ნებართვა `{shown}` ორჯერაა ჩამოთვლილი
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
+@msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}“ ითხოვს ნებართვებს {asked}: მომხმარებლის თანხმობის შემდეგ დააყენეთ ის `grant` პარამეტრით, რომელშიც ისინი ჩამოთვლილია
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}“-ს არ მიეცა `{p}`, რომელიც მის შედეგს სჭირდება: არაფერი შეცვლილა
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	მოდულს არ აქვს `hash`-ში მითითებული SHA-256: არაფერი დაყენებულა
 # Actions panel: action sets (#3712).
 	New Set…	ახალი ნაკრები…
 	New Set	ახალი ნაკრები
@@ -5714,6 +5780,19 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Insert Stop…	გაჩერების ჩასმა…
+	Insert Stop	გაჩერების ჩასმა
+	Record Stop	გაჩერების ჩაწერა
+	Allow Continue	გაგრძელების დაშვება
+	Continue	გაგრძელება
+	Continue Action	მოქმედების გაგრძელება
+	Delete Action Step	მოქმედების ნაბიჯის წაშლა
+	Press Play Current Selection in the Actions panel to go on.	გასაგრძელებლად მოქმედებების პანელზე დააჭირეთ „მიმდინარე მონიშნულის შესრულებას“.
+	Stop: {message}	გაჩერება: {message}
+@msg	no action is waiting at a stop	გაჩერებაზე არცერთი მოქმედება არ ელოდება
+@msg	message must be text	message უნდა იყოს ტექსტი
+@msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
+@msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
 	Playback Options	შესრულების პარამეტრები
 	Accelerated	დაჩქარებული
 	Step by Step	ნაბიჯ-ნაბიჯ
@@ -6226,6 +6305,7 @@ breakText	Glyphs	გლიფები
 	Gap 5	შუალედი 5
 
 @msg	{_1}: they came in as the page's art	{_1}: იმპორტირებულია გვერდის გამოსახულების სახით
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	გაღუნული ტექსტური ობიექტები, რომლებიც იმპორტირებულია გამოსახულების და არა რედაქტირებადი ტექსტის სახით: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	ობიექტები, რომლებიც ფაილის საკუთარი გვერდისგან განსხვავებულად იხატებოდა, იმპორტირებულია გვერდის გამოსახულების სახით: {_1}
 
 @msg	You must choose a side pattern.	აირჩიეთ გვერდითი ნიმუში.

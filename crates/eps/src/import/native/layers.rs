@@ -223,6 +223,15 @@ impl AiLayers {
     }
 }
 
+/// The id of the artboard of `doc` that the editing copy `private` (as [`layered_ai`] takes it)
+/// names as its active one (`CropAreaActive`, an index into its `ArtboardArray`), for `doc`
+/// restored from the document a `.ai` file carries beside that copy: `None` when the copy names
+/// the first artboard, names none, can't be decoded, or names an artboard `doc` doesn't have.
+pub fn ai_opened_artboard(private: &[u8], doc: &Document) -> Option<u32> {
+    let data = ai::decode_private(private).ok()?;
+    active_page(ai::active_artboard(&data), doc)
+}
+
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
 /// sets, active data set and lock of the variable library of its editing data `data`, as [`build`]
 /// gives a document read from the layers, and the note about what of the library wasn't read

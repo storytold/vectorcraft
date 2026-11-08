@@ -435,7 +435,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));
@@ -507,8 +507,8 @@ fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     ui.horizontal(|ui| {
-        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() && app.run("artboard.new", json!({})).is_ok() {
-            super::artboards::select(app, n);
+        if widgets::flat_button(ui, tl!("New Artboard"), w).clicked() {
+            super::artboards::add_new(app);
         }
         let deletable = n > 1 && !super::artboards::deletable(app, n).is_empty();
         if ui.add_enabled_ui(deletable, |ui| widgets::flat_button(ui, tl!("Delete Artboard"), w)).inner.clicked() {

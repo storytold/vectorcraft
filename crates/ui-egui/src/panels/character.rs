@@ -499,18 +499,16 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
 }
 
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
-/// in thread order; `None` when its selection is in one type object.
+/// in the order of the edited frame's thread as the document holds it now; `None` when its
+/// selection is in one type object.
 pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     let o = app.session.tool_options();
     let st = app.session.active()?;
-    let ids: Vec<NodeId> = o
-        .get("story")?
-        .as_array()?
-        .iter()
-        .filter_map(Value::as_u64)
-        .map(NodeId)
-        .filter(|id| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))))
-        .collect();
+    let id = NodeId(o.get("editing")?.as_u64()?);
+    if o.get("story")?.as_array()?.is_empty() {
+        return None;
+    }
+    let ids = st.doc.story_of(id);
     (ids.len() >= 2).then_some(ids)
 }
 
@@ -540,11 +538,13 @@ static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
 fn text_copy(app: &mut VectorcraftApp) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
-    if a == b {
+    let story = text_story(app);
+    // An empty selection has nothing to copy, unless the story's text is in the other frames.
+    if a == b && (story.is_none() || app.session.active().is_none_or(|st| st.doc.story_text(id).is_empty())) {
         return false;
     }
     // After Select All in threaded text: the whole story.
-    let range = if text_story(app).is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
+    let range = if story.is_some() { json!({"id": id.0, "story": true}) } else { json!({"id": id.0, "start": a, "end": b}) };
     let Ok(r) = app.session.execute("text.getRange", &range) else { return false };
     let runs = r["runs"].clone();
     app.session.set_tool_option("copy", &runs);
@@ -1321,7 +1321,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.prefs.show_indic_options {
         let digits = shared(app, |s| s.digits);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Digits")), |ui| digits_items(app, ui, digits));
+            ui.menu_button(format!("   {}", tl!("Digits")), |ui| widgets::menu_scroll(ui, |ui| digits_items(app, ui, digits)));
         });
         ui.add_enabled_ui(has, |ui| {
             ui.menu_button(format!("   {}", tl!("Character Direction")), |ui| char_direction_items(app, ui));
