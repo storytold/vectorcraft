@@ -833,6 +833,40 @@ fn nested_symbol_instances_stop_at_the_symbol_art_limit() {
     assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
 }
 
+/// On a canvas of the usual size, nested symbols whose instances multiply, written as their art in
+/// art cut to a clipping object, stop at [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects of symbol art
+/// in all, with a warning.
+#[test]
+fn clipped_nested_symbol_instances_stop_at_the_symbol_art_limit() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    // Empty paths: counted, but written as nothing, so the test stays small; and one filled square.
+    let empty = Arc::new(Node::path(doc.alloc_id(), PathData::new(vec![]), Appearance::default()));
+    let mut members = vec![empty; 4999];
+    let square_art = shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0));
+    members.push(Arc::new(Node::path(doc.alloc_id(), square_art, Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0))));
+    let leaves = Node::group(doc.alloc_id(), members);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(leaves) });
+    let leaf = Arc::new(Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Leaf".into(), xf: Affine::IDENTITY }));
+    let trees = Node::group(doc.alloc_id(), vec![leaf; 5000]);
+    doc.symbols.push(Symbol { dynamic: false, name: "Tree".into(), art: Arc::new(trees) });
+    let tree = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Tree".into(), xf: Affine::IDENTITY });
+    // A group as the clipping object cuts the art instead of clipping it with a path, so the
+    // instances in it are written as their art. Its square is unpainted, so the only filled squares
+    // are the leaves'.
+    let outline = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default());
+    let clip = group(&mut doc, vec![outline], false);
+    let clipped = group(&mut doc, vec![clip, tree], true);
+    doc.insert(Some(layer), usize::MAX, clipped).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_LIMIT), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::SYMBOL_ART), "{:?}", out.warnings);
+    // 5,001 objects for the tree and each leaf: 3,198 leaves fit in 16,000,000.
+    let text = String::from_utf8(out.program).unwrap();
+    let layers = text.split_once("%%EndSetup").unwrap().1;
+    assert_eq!(layers.matches("\r\nf\r\n").count(), 3198, "the squares of the leaves written");
+}
+
 #[test]
 fn a_stained_symbol_instance_is_written_in_its_stained_colors() {
     let mut doc = Document::new(200.0, 100.0);
@@ -2011,6 +2045,37 @@ fn gradients_and_patterns_are_read_back() {
     let out = export_ai_editing(&doc, &opts()).unwrap();
     assert!(out.warnings.is_empty(), "{:?}", out.warnings);
     same_lines(&gradient_looks(&read_back(&doc)), &gradient_looks(&doc));
+}
+
+/// A new document's gradient swatches read back with the paint they were written with, not linked
+/// to a swatch, and art filled with one of them reads back linked to it.
+#[test]
+fn gradient_swatches_read_back_unlinked() {
+    let mut doc = Document::new(200.0, 100.0);
+    let Some(Paint::Gradient(sunset)) = doc.swatch("Sunset").map(|s| s.paint.clone()) else { panic!("no Sunset swatch") };
+    let layer = doc.layers[0].id;
+    let linked = gradient_paint(sunset.gradient.clone(), None, Some("Sunset"));
+    let rect = painted(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 50.0)), vec![AppearanceItem::Fill(FillLayer::new(linked))]);
+    doc.insert(Some(layer), usize::MAX, rect).unwrap();
+    let back = read_back(&doc);
+    let gradients = |d: &Document| -> Vec<String> {
+        d.swatches_iter()
+            .filter_map(|s| match &s.paint {
+                Paint::Gradient(g) => {
+                    Some(format!("{} {:?} stops={} geom={:?} swatch={:?}", s.name, g.gradient.kind, g.gradient.stops.len(), g.geom, g.swatch))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let want = gradients(&doc);
+    assert_eq!(want.len(), 4, "{want:?}");
+    assert_eq!(gradients(&back), want);
+    let link = back.layers[0].children().and_then(|c| c.first()).map(|n| match n.appearance.items.first().map(AppearanceItem::paint) {
+        Some(Paint::Gradient(g)) => g.swatch.clone(),
+        other => panic!("{other:?}"),
+    });
+    assert_eq!(link, Some(Some("Sunset".to_string())));
 }
 
 #[test]
@@ -3328,7 +3393,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
         for r in &t.runs {
             let s = &r.style;
             out.push(format!(
-                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={}",
+                "  run {:?} {} {} {} {:?} {} {} {} {} fill {} stroke {} {} caps={} small={:?} tcy={} roman={}",
                 r.text,
                 s.font_family,
                 s.font_style,
@@ -3344,6 +3409,7 @@ fn type_lines(doc: &Document) -> Vec<String> {
                 s.all_caps,
                 s.small_caps.map(r3),
                 s.tate_chu_yoko,
+                s.standard_vertical_roman,
             ));
         }
     }
@@ -3489,6 +3555,62 @@ fn type_is_written_again_as_the_same_bytes() {
     let text = |p: &[u8]| text_document(&String::from_utf8_lossy(p).replace("\r\n", "\n"));
     assert_eq!(text(&again.program), text(&first.program));
     assert_eq!(String::from_utf8_lossy(&again.program), String::from_utf8_lossy(&first.program));
+}
+
+/// Standard Vertical Roman Alignment comes back on or off, in vertical type and in horizontal
+/// type, and Tate-chu-yoko stays as it was: each run's key 35 is 1 (Standard) when it's on, 2
+/// (rotated) when it's off and 3 for Tate-chu-yoko, and the document's defaults and the normal
+/// character style carry 1. Each object lays out as it did. A Tate-chu-yoko run with the
+/// setting on comes back without it, and that is reported.
+#[test]
+fn standard_vertical_roman_alignment_comes_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(14.0, Color::BLACK);
+    let roman = CharStyle { standard_vertical_roman: true, ..plain.clone() };
+    let tcy = CharStyle { tate_chu_yoko: true, ..plain.clone() };
+    let mut doc = Document::new(200.0, 200.0);
+    let layer = doc.layers[0].id;
+    let mut down = TextObject::point(vectorcraft_geom::Point::new(150.0, 20.0), "", plain.clone());
+    down.runs = vec![TextRun::new("Up AB ", roman.clone()), TextRun::new("turned CD ", plain.clone()), TextRun::new("12", tcy.clone())];
+    down.vertical = true;
+    let mut across = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "", plain.clone());
+    across.runs = vec![TextRun::new("Marked ", roman.clone()), TextRun::new("plain", plain.clone())];
+    for t in [down, across] {
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    same_lines(&type_lines(&back), &type_lines(&doc));
+    let texts = |d: &Document| -> Vec<TextObject> {
+        d.layers[0].children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
+    };
+    let flags = |t: &TextObject| t.runs.iter().map(|r| (r.style.standard_vertical_roman, r.style.tate_chu_yoko)).collect::<Vec<_>>();
+    let (written, read) = (texts(&doc), texts(&back));
+    assert_eq!(read.iter().map(flags).collect::<Vec<_>>(), [vec![(true, false), (false, false), (false, true)], vec![(true, false), (false, false)]]);
+    let origins = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| (r3(g.origin.x), r3(g.origin.y))).collect::<Vec<_>>()
+    };
+    for (w, r) in written.iter().zip(&read) {
+        assert_eq!(origins(r), origins(w), "vertical={}", w.vertical);
+    }
+    let decoded = text_document(&program(&doc));
+    // Two runs on, two off and one Tate-chu-yoko; the defaults and the normal style add a 1 each.
+    for (key, count) in [("/35 1 ", 4), ("/35 2 ", 2), ("/35 3 ", 1)] {
+        assert_eq!(decoded.matches(key).count(), count, "{key}: {decoded}");
+    }
+    let normal = decoded.find("[Normal Character Style]").unwrap();
+    let sheet = &decoded[normal..decoded.find("[Normal Paragraph Style]").unwrap()];
+    assert!(sheet.contains("/35 1 "), "{sheet}");
+    // Key 35 holds one value: Tate-chu-yoko wins, and the setting it leaves out is reported.
+    let mut both = doc.clone();
+    let id = both.layers[0].children().unwrap()[0].id;
+    if let Some(NodeKind::Text(t)) = both.node_mut(id).map(|n| &mut n.kind) {
+        t.runs[2].style.standard_vertical_roman = true;
+    }
+    assert_eq!(export_ai_editing(&both, &opts()).unwrap().warnings, [writer::TYPE_ATTRIBUTES]);
+    assert_eq!(flags(&texts(&read_back(&both))[0])[2], (false, true));
 }
 
 /// The text document of program `text` (LF line ends), decoded, with its UTF-16 strings' zero

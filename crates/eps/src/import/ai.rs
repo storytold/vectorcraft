@@ -40,11 +40,15 @@ pub(crate) use envelope::MAX_CHECKED;
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
+#[cfg(test)]
+pub(crate) use read::with_image_limits;
 pub use read::{
-    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
-    read, read_beside, variables,
+    BindingRef, Brushes, PaletteSwatches, PlacedPage, Structure, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, read,
+    read_beside, variables,
 };
-pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, read_style_list, slot_frame, slot_of, style_moves_with, symbol_art_member};
+pub(crate) use read::{
+    MAX_SYMBOLS, join_and, read_art_style, read_over_page, read_style_list, slot_frame, slot_of, style_moves_with, symbol_art_member,
+};
 
 pub(crate) use read::is_look_slot;
 pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
