@@ -177,21 +177,33 @@ pub fn pathfinder_with(op: PathfinderOp, shapes: &[Shape], precision: f64) -> Ve
             subpaths.into_iter().zip(shapes).filter(|(sp, _)| !sp.is_empty()).flat_map(|(sp, s)| one(PathData::new(sp), s.key)).collect()
         }
         PathfinderOp::Merge => {
+            // The distinct keys in first-seen order, and the index in `keys` of each shape's key.
             let mut keys: Vec<u64> = Vec::new();
-            for s in shapes {
-                if !keys.contains(&s.key) {
-                    keys.push(s.key);
-                }
-            }
-            let mut out = Vec::new();
-            for k in keys {
-                // topmost(m) is a shape with key k
-                let c = arr.contours_where(|w| arr.covered(w).next_back().is_some_and(|t| shapes[t].key == k));
-                for g in c.grouped() {
-                    out.extend(one(contours_to_path(&c, g, p), k));
-                }
-            }
-            out
+            let mut index: HashMap<u64, usize> = HashMap::new();
+            let class: Vec<usize> = shapes
+                .iter()
+                .map(|s| {
+                    *index.entry(s.key).or_insert_with(|| {
+                        keys.push(s.key);
+                        keys.len() - 1
+                    })
+                })
+                .collect();
+            // topmost(m) is a shape with key k; a same-key island in a hole stays with the
+            // contour around it, as `Contours::grouped` keeps it.
+            let mut faces: Vec<Vec<PathData>> = vec![Vec::new(); keys.len()];
+            each_classified_group(
+                &arr,
+                keys.len(),
+                |w| arr.covered(w).next_back().and_then(|t| class.get(t).copied()),
+                |c, owner| contour_trees(c, owner, false),
+                |i, c, group| {
+                    if let Some(f) = faces.get_mut(i) {
+                        f.push(contours_to_path(c, group.iter().copied(), p));
+                    }
+                },
+            );
+            keys.into_iter().zip(faces).flat_map(|(k, fs)| fs.into_iter().flat_map(move |f| one(f, k))).collect()
         }
         PathfinderOp::Crop => {
             if n < 2 {
@@ -276,9 +288,21 @@ fn each_classified_face(
     arr: &Arrangement,
     num_classes: usize,
     classify: impl Fn(&Multi) -> Option<usize>,
+    f: impl FnMut(usize, &Contours, &[ContourIdx]),
+) {
+    each_classified_group(arr, num_classes, classify, face_groups, f);
+}
+
+/// [`each_classified_face`] with each contour pass split into groups by `group` instead of
+/// [`face_groups`]: `group` gets a pass and the class of each of its contours.
+fn each_classified_group(
+    arr: &Arrangement,
+    num_classes: usize,
+    classify: impl Fn(&Multi) -> Option<usize>,
+    group: impl Fn(&Contours, &[usize]) -> Vec<(usize, Vec<ContourIdx>)>,
     mut f: impl FnMut(usize, &Contours, &[ContourIdx]),
 ) {
-    let _ = each_classified_face_until(arr, num_classes, classify, |m, c, group| {
+    let _ = each_classified_group_until(arr, num_classes, classify, group, |m, c, group| {
         f(m, c, group);
         ControlFlow::Continue(())
     });
@@ -289,6 +313,17 @@ fn each_classified_face_until(
     arr: &Arrangement,
     num_classes: usize,
     classify: impl Fn(&Multi) -> Option<usize>,
+    f: impl FnMut(usize, &Contours, &[ContourIdx]) -> ControlFlow<()>,
+) -> ControlFlow<()> {
+    each_classified_group_until(arr, num_classes, classify, face_groups, f)
+}
+
+/// [`each_classified_group`] until `f` breaks: no group after that one is walked.
+fn each_classified_group_until(
+    arr: &Arrangement,
+    num_classes: usize,
+    classify: impl Fn(&Multi) -> Option<usize>,
+    group: impl Fn(&Contours, &[usize]) -> Vec<(usize, Vec<ContourIdx>)>,
     mut f: impl FnMut(usize, &Contours, &[ContourIdx]) -> ControlFlow<()>,
 ) -> ControlFlow<()> {
     if num_classes == 0 {
@@ -343,16 +378,16 @@ fn each_classified_face_until(
             for m in (0..num_classes).filter(|m| batch[*m] == b) {
                 let c = arr.contours_where(|w| classify(w) == Some(m));
                 let owner = vec![m; c.contours().count()];
-                for (_, group) in face_groups(&c, &owner) {
-                    if f(m, &c, &group).is_break() {
+                for (_, g) in group(&c, &owner) {
+                    if f(m, &c, &g).is_break() {
                         return ControlFlow::Break(());
                     }
                 }
             }
             continue;
         };
-        for (m, group) in face_groups(&c, &owner) {
-            if f(m, &c, &group).is_break() {
+        for (m, g) in group(&c, &owner) {
+            if f(m, &c, &g).is_break() {
                 return ControlFlow::Break(());
             }
         }
@@ -433,11 +468,20 @@ fn face_groups(c: &Contours, owner: &[usize]) -> Vec<(usize, Vec<ContourIdx>)> {
     if c.contours().zip(&areas).any(|(ct, &a)| ct.outer != (a > 0.0)) {
         return face_groups_by_winding(c, owner, &areas);
     }
+    contour_trees(c, owner, true)
+}
+
+/// Groups a contour pass by the sweep's tree, within each mask (`owner` gives each contour's
+/// mask): a contour goes under the nearest enclosing contour of its mask, and each contour with
+/// none starts a group, with every contour under it in depth-first order. With `islands_apart`,
+/// an outer contour also starts a group of its own ([`face_groups`]); without it, each group is
+/// what [`Contours::grouped`] gives for a pass of that mask alone.
+fn contour_trees(c: &Contours, owner: &[usize], islands_apart: bool) -> Vec<(usize, Vec<ContourIdx>)> {
     let mut children = vec![Vec::new(); owner.len()];
     let mut roots = Vec::new();
     for (i, &m) in owner.iter().enumerate() {
         let ct = &c[ContourIdx(i)];
-        let mut up = if ct.outer { None } else { ct.parent };
+        let mut up = if islands_apart && ct.outer { None } else { ct.parent };
         while let Some(p) = up.filter(|p| owner.get(p.0) != Some(&m)) {
             up = c[p].parent;
         }
@@ -1585,5 +1629,86 @@ mod tests {
         let trim_cov_expected = old_trim(&covered, DEFAULT_PRECISION);
         assert_eq!(trim_cov_actual.len(), 1);
         assert_eq!(trim_cov_actual, trim_cov_expected);
+    }
+
+    /// Merge with one contour pass per distinct key, each face of a key its own result.
+    fn old_merge(shapes: &[Shape], precision: f64) -> Vec<Shape> {
+        let Some(arr) = arrangement(shapes, precision) else { return Vec::new() };
+        let mut keys: Vec<u64> = Vec::new();
+        for s in shapes {
+            if !keys.contains(&s.key) {
+                keys.push(s.key);
+            }
+        }
+        let mut out = Vec::new();
+        for k in keys {
+            let c = arr.contours_where(|w| arr.covered(w).next_back().is_some_and(|t| shapes[t].key == k));
+            for g in c.grouped() {
+                out.extend(one(contours_to_path(&c, g, &arr.tidy), k));
+            }
+        }
+        out
+    }
+
+    /// Overlapping squares on a grid with repeated fills, touching squares with two fills, and a
+    /// fill's island inside a hole of the same fill, with another fill around it: Merge gives the
+    /// same results, in the same order, as a contour pass per fill.
+    #[test]
+    fn merge_matches_a_contour_pass_per_fill() {
+        let mut grid = Vec::new();
+        for row in 0..5u32 {
+            for col in 0..5u32 {
+                let (x, y) = (10.0 * f64::from(col), 10.0 * f64::from(row));
+                grid.push(Shape::new(rect(x, y, x + 15.0, y + 15.0), FillRule::NonZero, u64::from((row * 5 + col) * 7 % 4)));
+            }
+        }
+        let mut ring = rect(0.0, 0.0, 100.0, 100.0);
+        ring.subpaths.extend(rect(30.0, 30.0, 70.0, 70.0).subpaths);
+        let nested = vec![
+            Shape::new(ring, FillRule::EvenOdd, 1),
+            Shape::new(rect(40.0, 40.0, 60.0, 60.0), FillRule::NonZero, 2),
+            Shape::new(rect(45.0, 45.0, 55.0, 55.0), FillRule::NonZero, 1),
+        ];
+        // A fill's island sits inside a ring of another fill that shares no point with it, both
+        // inside a hole of the first fill.
+        let mut frame = rect(0.0, 0.0, 100.0, 100.0);
+        frame.subpaths.extend(rect(30.0, 30.0, 70.0, 70.0).subpaths);
+        let mut between = rect(35.0, 35.0, 65.0, 65.0);
+        between.subpaths.extend(rect(42.0, 42.0, 58.0, 58.0).subpaths);
+        let apart = vec![
+            Shape::new(frame, FillRule::EvenOdd, 1),
+            Shape::new(between, FillRule::EvenOdd, 3),
+            Shape::new(rect(45.0, 45.0, 55.0, 55.0), FillRule::NonZero, 1),
+        ];
+        let touching: Vec<Shape> = (0..16u32)
+            .map(|k| {
+                let (x, y) = (10.0 * f64::from(k % 4), 10.0 * f64::from(k / 4));
+                Shape::new(rect(x, y, x + 10.0, y + 10.0), FillRule::NonZero, u64::from((k % 4 + k / 4) % 2))
+            })
+            .collect();
+        for (label, shapes) in [("grid", grid), ("nested", nested), ("apart", apart), ("touching", touching)] {
+            let actual = pathfinder_with(PathfinderOp::Merge, &shapes, DEFAULT_PRECISION);
+            let expected = old_merge(&shapes, DEFAULT_PRECISION);
+            assert!(!expected.is_empty(), "{label}");
+            assert_eq!(actual, expected, "{label}");
+        }
+    }
+
+    /// 40 squares in a row, each overlapping the next and each with a fill of its own: Merge walks
+    /// the arrangement a few times, not once per fill.
+    #[test]
+    fn merge_with_many_fills_walks_the_arrangement_a_few_times() {
+        let v: Vec<Shape> = (0..40u32)
+            .map(|k| {
+                let x = 10.0 * f64::from(k);
+                Shape::new(rect(x, 0.0, x + 15.0, 40.0), FillRule::NonZero, u64::from(k))
+            })
+            .collect();
+        CONTOUR_PASSES.with(|n| n.set(0));
+        let merged = pathfinder_with(PathfinderOp::Merge, &v, DEFAULT_PRECISION);
+        let passes = CONTOUR_PASSES.with(std::cell::Cell::get);
+        assert!(passes <= 8, "{passes} contour passes");
+        assert_eq!(merged.len(), 40);
+        assert!(merged.iter().enumerate().all(|(k, s)| s.key == k as u64));
     }
 }
