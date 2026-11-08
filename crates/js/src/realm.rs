@@ -188,6 +188,7 @@ impl Realm {
         interp.stack.clear();
         interp.frames.clear();
         interp.temp_roots.clear();
+        interp.join_stack.clear();
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {

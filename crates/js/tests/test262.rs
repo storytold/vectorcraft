@@ -19,6 +19,10 @@
 //! passes when it completes, or, for `negative: phase: runtime`, when it throws an object whose
 //! `constructor` is the global its `type:` names. Its counts are printed apart from the parse
 //! counts, and its failures go to `run-failures.txt`.
+//!
+//! A third test runs the tests of the ES5 built-ins the same way: those under the folders
+//! [`ES5_BUILT_INS`] names that have an `es5id:` (or, under `annexB/`, any edition's id) and no
+//! `features:` tag. Its failures go to `built-ins-failures.txt`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -193,15 +197,37 @@ fn es5_parse_subset() {
     );
 }
 
-/// Globals and method names the interpreter does not provide yet: a test that names one is
-/// skipped.
-const MISSING_BUILTINS: &str = "Array String Number Boolean Math JSON Date RegExp parseInt parseFloat isNaN isFinite encodeURI \
-    decodeURI encodeURIComponent decodeURIComponent escape unescape print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
-    WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array defineProperty defineProperties getOwnPropertyDescriptor \
-    getOwnPropertyNames getPrototypeOf create keys freeze isFrozen seal isSealed preventExtensions isExtensible push pop shift unshift \
-    slice splice concat join reverse sort indexOf lastIndexOf every some forEach map filter reduce reduceRight charAt charCodeAt \
-    fromCharCode substring substr split replace match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential \
-    bind now isArray compareArray verifyProperty fnGlobalObject";
+/// Globals and method names the interpreter does not provide yet: a test that names one, in its
+/// own source or in a harness file it includes, is skipped.
+const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+    WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
+    match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
+
+/// The directories under `test/built-ins/` and `test/annexB/built-ins/` that hold tests of the
+/// ES5 built-ins (ECMA-262 5.1 sections 15.1 to 15.12 and Annex B.2).
+const ES5_BUILT_INS: &[&str] = &[
+    "built-ins/Object",
+    "built-ins/Function",
+    "built-ins/Array",
+    "built-ins/Error",
+    "built-ins/NativeErrors",
+    "built-ins/Math",
+    "built-ins/JSON",
+    "built-ins/global",
+    "built-ins/Infinity",
+    "built-ins/NaN",
+    "built-ins/undefined",
+    "built-ins/parseInt",
+    "built-ins/parseFloat",
+    "built-ins/isNaN",
+    "built-ins/isFinite",
+    "built-ins/encodeURI",
+    "built-ins/encodeURIComponent",
+    "built-ins/decodeURI",
+    "built-ins/decodeURIComponent",
+    "annexB/built-ins/escape",
+    "annexB/built-ins/unescape",
+];
 
 /// The stand-in for `String` that the harness's failure messages call.
 const HARNESS_STRING: &str = "function String(value) { return '' + value; }";
@@ -245,12 +271,28 @@ fn es5_language_subset_runs() {
     };
     // Each test runs on a thread with a stack large enough for the nested runs the re-entry limit
     // allows in an unoptimized build.
-    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_language_subset(&dir)).unwrap();
+    let roots = vec![(dir.join("test").join("language"), true)];
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_subset(&dir, &roots, "language", "run-failures.txt")).unwrap();
     handle.join().unwrap();
 }
 
-fn run_language_subset(dir: &Path) {
-    let language = dir.join("test").join("language");
+#[test]
+fn es5_built_ins_subset_runs() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 built-ins: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    // The Annex B tests name the edition they were written for with `esid:`, so they run without
+    // an `es5id:`.
+    let roots = ES5_BUILT_INS.iter().map(|d| (dir.join("test").join(d), !d.starts_with("annexB"))).collect::<Vec<_>>();
+    let handle =
+        std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_subset(&dir, &roots, "built-ins", "built-ins-failures.txt")).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under each root (with `true`, only those that name an ES5 section), prints the
+/// counts and writes the failures to `report` beside the suite.
+fn run_subset(dir: &Path, roots: &[(PathBuf, bool)], label: &str, report: &str) {
     let harness_dir = dir.join("harness");
     // A file that cannot be read gives an empty source.
     let read = |p: &Path| String::from_utf8_lossy(&std::fs::read(p).unwrap_or_default()).into_owned();
@@ -262,11 +304,12 @@ fn run_language_subset(dir: &Path) {
     let verbose = std::env::var_os("VECTORCRAFT_TEST262_VERBOSE").is_some();
     let (mut tests, mut skipped, mut passed, mut failed, mut panicked) = (0usize, 0usize, 0usize, 0usize, 0usize);
     let mut failures = String::new();
-    for path in test_files(&language) {
+    let files = roots.iter().flat_map(|(root, es5_only)| test_files(root).into_iter().map(move |p| (p, *es5_only)));
+    for (path, es5_only) in files {
         let source = read(&path);
         let meta = meta(&source);
         let negative_parse = matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution"));
-        if !meta.es5 || !meta.features.is_empty() || negative_parse || meta.flags.iter().any(|f| f == "module") {
+        if (es5_only && !meta.es5) || !meta.features.is_empty() || negative_parse || meta.flags.iter().any(|f| f == "module") {
             continue;
         }
         let includes: String = meta.includes.iter().map(|i| read(&harness_dir.join(i)) + "\n").collect();
@@ -307,12 +350,12 @@ fn run_language_subset(dir: &Path) {
             }
         }
     }
-    let report = dir.join("run-failures.txt");
+    let report = dir.join(report);
     if let Err(e) = std::fs::write(&report, &failures) {
         println!("could not write {}: {e}", report.display());
     }
     println!(
-        "test262 ES5 language subset through the interpreter: {tests} tests that need only the built-ins present, {passed} runs passed, \
+        "test262 ES5 {label} subset through the interpreter: {tests} tests that need only the built-ins present, {passed} runs passed, \
          {failed} failed ({panicked} panicked). Skipped {skipped} tests that need other built-ins, use syntax after ES5 or are asynchronous. Failures: {}",
         report.display()
     );
