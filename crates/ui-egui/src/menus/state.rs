@@ -64,6 +64,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
             Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
@@ -174,7 +175,7 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 /// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
 /// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
 /// on their keys.
-pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
+pub(super) const SUBJECT_COMMANDS: [&str; 3] = ["appearance.addFill", "appearance.addStroke", "svgFilter.apply"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
 pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
@@ -245,7 +246,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             let min = crate::panels::pathfinder::minimum_operands(op);
             crate::panels::pathfinder::operands(app) >= min
         }),
-        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
+            app.session.active().is_some()
+        }
+        "ui.importSvgFilter" => {
+            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
+        }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),

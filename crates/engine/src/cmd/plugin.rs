@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry};
+use vectorcraft_plugins::{Budget, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
 
@@ -139,7 +139,15 @@ impl FilterRun {
         let mut params = Value::Object(m.resolve_params(&plugin_params(p)).map_err(|e| bad(C, e.to_string()))?);
         let may = m.permissions();
         let st = s.doc()?;
-        let selected = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.clone());
+        // While an object of a dynamic symbol instance's art is selected, the selection is refused,
+        // as `selected_roots` refuses it.
+        let selected = match ids_param(p, "ids") {
+            Some(ids) => ids,
+            None => {
+                super::edit::refuse_symbol_part(s)?;
+                st.selection.objects.clone()
+            }
+        };
         // Without `doc.read` a filter is given no objects: it can only add new ones.
         let inputs = if may.contains(&Permission::DocRead) { objects::filter_targets(&st.doc, &selected) } else { Vec::new() };
         let parent = st.insertion_parent();
@@ -377,7 +385,21 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
         s.store_grant(&m.id, Some(g));
     }
     // Installed plug-ins stay installed after a restart (#2541).
-    s.store_plugin(plugin.id(), &bytes);
+    let stored = s.store_plugin(plugin.id(), &bytes);
+    // Installing a disabled plug-in again (an updated version) turns it on for the next launch too,
+    // also when it is disabled by its stored file alone (it stopped a launch while loading). When
+    // the new version could not replace the stored file, the old one stays disabled.
+    let file = s.stored_plugin_file(plugin.id());
+    let mut changed = false;
+    if file.is_none() || stored {
+        changed = safe_mode::set_enabled(&safe_mode::Item::of(&plugin), true);
+        if let Some(file) = file {
+            changed |= safe_mode::set_enabled(&safe_mode::Item::file(file), true);
+        }
+    }
+    if changed {
+        s.store_disabled_plugins();
+    }
     Ok(describe(&registry::install(plugin)))
 }
 
@@ -414,7 +436,8 @@ static FOLDER: Mutex<Option<(String, Option<std::path::PathBuf>, Value)>> = Mute
 /// (startup, `prefs.set`). Native only.
 pub(crate) fn sync_prefs(s: &Session) {
     let folder = s.prefs.plugins_folder.trim();
-    if folder.is_empty() {
+    // In Safe Mode nothing loads, and the folder is loaded once it ends ([`load_prefs_folder`]).
+    if folder.is_empty() || safe_mode::active() {
         return;
     }
     let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
@@ -424,8 +447,24 @@ pub(crate) fn sync_prefs(s: &Session) {
     *last = Some((folder.to_string(), s.plugin_dir.clone(), load_folder(s, folder)));
 }
 
+/// Turns Safe Mode on for `--safe-mode`, before the plug-in folder is attached: no plug-in loads or
+/// runs in this process from then on.
+pub fn start_in_safe_mode() {
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+}
+
+/// Loads the stored plug-ins and the Additional Plug-ins Folder preference: the app calls it when
+/// the user leaves the choice after a launch that stopped with Disable or Start Normally, which
+/// turns Safe Mode off first.
+pub fn load_prefs_folder(s: &mut Session) {
+    s.load_stored_plugins();
+    *FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    sync_prefs(s);
+}
+
 /// Loads the plug-ins in `folder`, those that list permissions only when `s` has them granted
-/// ([`Session::plugin_approved`], with the store's grants read once).
+/// ([`Session::plugin_approved`], with the store's grants read once) → its report; saves the
+/// disabled list when loading changed it.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_folder(s: &Session, folder: &str) -> Value {
     if let Err(e) = crate::file_access::check_read(folder) {
@@ -440,6 +479,9 @@ fn load_folder(s: &Session, folder: &str) -> Value {
     };
     match registry::load_folder_where(std::path::Path::new(folder), allow, s.plugin_approver()) {
         Ok(r) => {
+            if r.disabled_changed {
+                s.store_disabled_plugins();
+            }
             json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>()})
         }
         Err(e) => json!({"folder": folder, "error": e.to_string()}),
@@ -470,7 +512,59 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
     let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| r.clone());
-    Ok(json!({"plugins": registry::list().iter().map(|p| describe(p)).collect::<Vec<_>>(), "folder": folder}))
+    let disabled: Vec<Value> = safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect();
+    Ok(
+        json!({"plugins": registry::list().iter().map(|p| describe(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
+    )
+}
+
+/// `plugin.safeMode`: whether Safe Mode is on and why, the plug-ins disabled for the next launch,
+/// and the plug-in the last launch was loading when it stopped while the user hasn't chosen yet.
+fn safe_mode_state(_: &mut Session, _: &Value) -> Result<Value> {
+    Ok(json!({
+        "active": safe_mode::active(),
+        "source": safe_mode::source().map(safe_mode::Source::name),
+        "disabled": safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect::<Vec<_>>(),
+        "pendingItem": safe_mode::previous().map(|i| i.to_json()),
+    }))
+}
+
+/// `plugin.setEnabled`: turns a plug-in on or off for the next launch, by `id` or by `file` (a
+/// plug-in that stopped a launch while loading may be known by its file alone). It neither loads
+/// nor unloads anything now, and uninstalls nothing.
+fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "plugin.setEnabled";
+    let Some(enabled) = p.get("enabled").and_then(Value::as_bool) else {
+        let key = "enabled";
+        return Err(bad(C, format!("`{key}` must be true or false")));
+    };
+    let text = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(v)) => Ok(Some(v.trim().to_string()).filter(|v| !v.is_empty())),
+        Some(_) => Err(bad(C, format!("`{key}` must be a string"))),
+    };
+    // Turning on by id also matches the plug-in's stored file, which names it when it stopped a
+    // launch while loading.
+    let (item, stored) = match (text("id")?, text("file")?) {
+        (Some(id), _) => {
+            let stored = if enabled { s.stored_plugin_file(&id).map(safe_mode::Item::file) } else { None };
+            (registry::get(&id).map(|p| safe_mode::Item::of(&p)).unwrap_or(safe_mode::Item { id: Some(id), ..Default::default() }), stored)
+        }
+        (None, Some(file)) => (safe_mode::Item::file(file), None),
+        (None, None) => return Err(bad(C, "give `id` or `file` (see plugin.safeMode)")),
+    };
+    let items: Vec<&safe_mode::Item> = std::iter::once(&item).chain(stored.as_ref()).collect();
+    if enabled && !safe_mode::disabled().iter().any(|i| items.iter().any(|item| i.same(item))) {
+        return Err(bad(C, "that plug-in isn't disabled (see plugin.safeMode)"));
+    }
+    let mut changed = false;
+    for item in items {
+        changed |= safe_mode::set_enabled(item, enabled);
+    }
+    // Without a plug-in folder (a session confined to automation roots), or when the list there
+    // can't take the change, the change stays in this process and goes with the next change that saves.
+    let saved = !changed || s.store_disabled_plugins();
+    Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(safe_mode::Item::to_json).collect::<Vec<_>>()}))
 }
 
 fn info(_: &mut Session, p: &Value) -> Result<Value> {
@@ -491,8 +585,8 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     if registry::remove(id) { Ok(json!({"removed": id})) } else { Err(err(vectorcraft_plugins::Error::NotFound(id.into()))) }
 }
 
-/// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove` and
-/// `.reload`.
+/// This module's commands: `plugin.list`, `.info`, `.run`, `.install`, `.inspect`, `.remove`,
+/// `.reload`, `.safeMode` and `.setEnabled`.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -500,7 +594,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's format id, plugin.<id>, for document.export, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null, safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -546,9 +640,27 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included) → {folder, loaded: [id], failed: [{file, error}]}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}]}",
             always,
             reload
+        ),
+        cmd!(
+            query "plugin.safeMode",
+            "Safe Mode",
+            [],
+            None,
+            "{} → {active: bool (no plug-in loads or runs: plugin.install, .run, .reload and exporters fail, live effects draw their object's geometry unchanged and the objects keep their effects), source: \"flag\" (started with --safe-mode) | \"startup\" (the user chose Safe Mode, or hasn't chosen yet, after a launch that stopped while a plug-in was loading) | null, disabled: [{id, file, name, label}] (turned off for the next launch; id is null for one known only by its file), pendingItem: {id, file, name, label} | null (the plug-in the last launch was loading when it stopped, until the user chooses; it may not be what stopped it)}. Safe Mode is chosen at launch, never by a command",
+            always,
+            safe_mode_state
+        ),
+        cmd!(
+            query "plugin.setEnabled",
+            "Enable on Re-launch",
+            [],
+            None,
+            "{id | file: a plug-in as plugin.safeMode's disabled lists it, enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
+            always,
+            set_enabled
         ),
     ]
 }

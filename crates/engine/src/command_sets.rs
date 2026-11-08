@@ -73,6 +73,11 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
     }
 }
 
+/// Journaled commands that write a file and change nothing in the document: with an object of a
+/// dynamic symbol instance's art selected, they read the instance as queries do
+/// ([`crate::Session::execute`]).
+pub(crate) const JOURNALED_READS: &[&str] = &["css.export"];
+
 /// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
 /// its checks), then running as on the selection: the result and the selection afterwards are the
 /// menu command's (#2130).

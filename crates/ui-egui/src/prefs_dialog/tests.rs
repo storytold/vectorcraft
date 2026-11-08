@@ -2,6 +2,24 @@ use super::*;
 use crate::Services;
 use vectorcraft_engine::Session;
 
+/// The three marquee choices are available in Preferences and saved through the same path as
+/// other selection preferences.
+#[test]
+fn marquee_selection_choices_are_saved_from_preferences() {
+    let mut app = app();
+    open(&mut app, Some("Selection & Anchor Display"));
+    let text = crate::tests_labels::painted_text(&mut app, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Marquee Selection") && text.contains("Touching"), "{text}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("marqueeSelection".into(), json!("directional"));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.prefs.marquee_selection, "directional");
+    let saved: Prefs = serde_json::from_value(app.ui.engine_prefs.clone()).unwrap();
+    assert_eq!(saved.marquee_selection, "directional");
+    open(&mut app, Some("Selection & Anchor Display"));
+    let text = crate::tests_labels::painted_text(&mut app, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Drag Direction"), "{text}");
+}
+
 #[test]
 fn geometric_snapping_is_a_saved_smart_guides_preference() {
     let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -281,6 +299,97 @@ fn system_title_bar_preference_shows_and_persists() {
     assert!(a.session.prefs.system_title_bar);
     let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
     assert_eq!(saved["engine_prefs"]["systemTitleBar"], json!(true));
+}
+
+/// User Interface › VectorCraft Title Bar on Every Desktop: shown on Linux and the BSDs only, under
+/// System Title Bar with the next-launch note once, and saved under the key the desktop app reads
+/// before the window opens.
+#[test]
+fn app_title_bar_preference_shows_and_persists() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let mut a = app();
+    open(&mut a, Some("User Interface"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let mut shown = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    assert_eq!(shown.iter().any(|t| t == "VectorCraft Title Bar on Every Desktop"), supported, "{shown:?}");
+    let notes = shown.iter().filter(|t| *t == "Applies the next time VectorCraft starts.").count();
+    assert_eq!(notes, usize::from(cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos")))), "{shown:?}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("appTitleBar".into(), json!(true));
+    confirm(&mut a).unwrap();
+    assert!(a.session.prefs.app_title_bar);
+    let saved: Value = serde_json::from_slice(&serde_json::to_vec(&a.ui).unwrap()).unwrap();
+    assert_eq!(saved["engine_prefs"]["appTitleBar"], json!(true));
+}
+
+/// VectorCraft Title Bar on Every Desktop does not take clicks while System Title Bar is on or
+/// VECTORCRAFT_TITLEBAR is set. With the variable set its note names the variable in place of the
+/// next-launch note, and with System Title Bar on a note says that System Title Bar takes precedence.
+#[test]
+fn app_title_bar_is_dimmed_while_something_takes_precedence() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let note = "The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.";
+    let system_note = "System Title Bar takes precedence over this option while it is on.";
+    let restart_note = "Applies the next time VectorCraft starts.";
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    for (from_env, system) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut a = app();
+        a.titlebar_from_env = from_env;
+        open(&mut a, Some("User Interface"));
+        a.ui.dialog.as_mut().unwrap().fields.insert("systemTitleBar".into(), json!(system));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+        out.textures_delta.clear();
+        let mut shown = vec![];
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+        assert_eq!(shown.iter().any(|t| t == note), supported && from_env, "{shown:?}");
+        assert_eq!(shown.iter().any(|t| t == system_note), supported && system, "{shown:?}");
+        // The next-launch note stays under this row on Linux and the BSDs, where it also covers
+        // System Title Bar, and under System Title Bar on Windows.
+        let restart_shown = if supported { !from_env } else { cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))) };
+        assert_eq!(shown.iter().filter(|t| *t == restart_note).count(), usize::from(restart_shown), "{shown:?}");
+        // A click on the checkbox's label turns the preference on only when nothing takes precedence.
+        let label = out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == "VectorCraft Title Bar on Every Desktop" => Some(t.visual_bounding_rect()),
+            _ => None,
+        });
+        assert_eq!(label.is_some(), supported);
+        if let Some(r) = label {
+            for pressed in [true, false] {
+                let input = egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(r.center()),
+                        egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() },
+                    ],
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+            }
+            assert_eq!(a.ui.dialog.as_ref().unwrap().bool("appTitleBar"), !from_env && !system, "variable {from_env}, System Title Bar {system}");
+        }
+    }
 }
 
 /// Performance › Linux Display Server (#2028): on Linux it shows the drawing-tablet note, and

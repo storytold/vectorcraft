@@ -1081,6 +1081,14 @@ font-technology	Variable	Варіативні
 	Export As SVG…	Експортувати як SVG…
 	Export Asset	Експортувати ресурс
 	Export Assets	Експортувати ресурси
+	Export 3D Object	Експортувати 3D-об’єкт
+	3D Export Format	Формат 3D-експорту
+	Export 3D Assets	Експортувати 3D-ресурси
+@msg	{what} can't be exported in 3D: {e}	{what} неможливо експортувати в 3D: {e}
+@msg	asset {id} isn't a 3D asset	ресурс {id} не є 3D-ресурсом
+@msg	asset {id} is a 3D asset: assets.export3D writes it	ресурс {id} є 3D-ресурсом: його записує assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D-ресурсів ще немає: спершу зберіть об’єкт із 3D-ефектом (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	виберіть об’єкт із 3D-ефектом (або вкажіть його ідентифікатори)
 	Export As…	Експортувати як…
 	Export CSS	Експортувати CSS
 	Export CSS…	Експортувати CSS…
@@ -1740,6 +1748,7 @@ file-filter	Templates	Шаблони
 	Line {line}	Рядок {line}
 	Line {line}: {name}: {status}	Рядок {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Імпортовано. Натисніть «ОК», щоб зберегти імпортований набір.
+	Read Action Set File	Прочитати файл набору дій
 	Read Shortcut Set File	Прочитати файл набору сполучень клавіш
 	Import Matches	Зіставлення імпорту
 	Remember Import Matches	Запам’ятати зіставлення імпорту
@@ -3090,6 +3099,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Вибрані зразки
 	Selected Swatches Only	Тільки вибрані зразки
 	Selection	Виділення
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Виділення рамкою
+	Touching	Перетнуті
+	Fully Enclosed	Повністю всередині
+	Drag Direction	Напрямок перетягування
 	Selection & Anchor Display	Відображення виділення та опорних точок
 	Selection Only	Тільки виділення
 	Selection Tool	Інструмент «Виділення»
@@ -3227,6 +3241,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Імітувати кольоровий папір
 	Simulate Paper	Імітувати папір
 	Double Column	Подвійний стовпець
+	Keep Tools Beside the Canvas	Інструменти поруч із полотном
 	Single Left Quotation Mark	Одинарна лапка, що відкриває
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
@@ -3999,7 +4014,7 @@ axis	Both	Обидві
 	Float Tool Group	Від’єднати групу інструментів
 @msg	no library `{id}`	немає бібліотеки `{id}`
 @msg	select some type first	спочатку виділіть текст
-@msg	kerning must be a number, "auto", or "optical"	Кернінг має бути числом, «auto» або «optical»
+@msg	kerning must be a number, "auto", or "optical"	kerning має бути числом, «auto» або «optical»
 @msg	the selection has no gradient fill	виділення не має градієнтної заливки
 @msg	the selection has no gradient stroke	виділення не має градієнтного обведення
 @msg	the selection has no pattern fill	виділення не має візерункової заливки
@@ -4226,9 +4241,9 @@ axis	Both	Обидві
 @msg	bad shortcut	неприпустиме поєднання клавіш
 @msg	bad stream length	неприпустима довжина потоку
 @msg	bad trailer	неприпустимий трейлер
-@msg	balance must be between 0 and 100	баланс має бути від 0 до 100
+@msg	balance must be between 0 and 100	balance має бути від 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	крок пакету {_1} (`{id}`) не виконано: {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	яскравість має бути dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	brightness має бути dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не вдалося закодувати документ: {0}
 @msg	can't parse shortcut `{c}`	не вдалося розібрати поєднання `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	не вдалося розібрати поєднання `{s}` для `{k}`
@@ -4253,7 +4268,7 @@ axis	Both	Обидві
 @msg	compound paths can only contain paths	складені контури можуть містити лише контури
 @msg	compressed (RLE) bitmaps can't be read yet	стислі (RLE) растрові зображення поки не читаються
 @msg	damaged	пошкоджено
-@msg	decimals must be {_1}–{_2} (got {_3})	число десяткових знаків має бути {_1}–{_2} (отримано {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals має бути {_1}–{_2} (отримано {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	розділіть на 1–{MAX_PIECES} фрагментів
 @msg	effect {k} is `{_1}`, not `{id}`	ефект {k} - це `{_1}`, а не `{id}`
 @msg	empty brush stroke	порожній мазок пензля
@@ -4378,6 +4393,8 @@ axis	Both	Обидві
 @msg	no such action set	такого набору дій немає
 @msg	the action sets changed; nothing was deleted	набори дій змінилися; нічого не видалено
 @msg	no action set to save	немає набору дій для збереження
+@msg	the action set file can't be read in full	файл набору дій неможливо прочитати повністю
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
 @msg	the action set file holds more than 1,000 actions	файл набору дій містить понад 1000 дій
@@ -4452,9 +4469,9 @@ axis	Both	Обидві
 @msg	replace: the object to replace was changed or deleted	replace: об’єкт для заміни було змінено або видалено
 @msg	pattern missing	візерунок відсутній
 @msg	patterns nested too deeply are filled with mid-grey	надто глибоко вкладені візерунки заповнюються сірим
-@msg	percent must be above 0 and at most 6400, not {p}	відсоток має бути більше 0 і не більше 6400, а не {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent має бути більше 0 і не більше 6400, а не {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	виберіть колір, градієнт або візерунок, щоб зберегти як зразок
-@msg	plane must be left, right or ground	площина повинна бути left, right або ground
+@msg	plane must be left, right or ground	plane має бути left, right або ground
 @msg	plug-in ABI: {0}	ABI модуля: {0}
 @msg	plug-in exceeded its {0}	модуль перевищив свій {0}
 @msg	plug-in failed: {0}	модуль завершився помилково: {0}
@@ -4473,8 +4490,8 @@ axis	Both	Обидві
 @msg	result would exceed the canvas (coordinates out of range)	результат перевищив би полотно (координати поза діапазоном)
 @msg	objects can't be nested more than 32 deep	об’єкти не можна вкладати глибше ніж на 32 рівні
 @msg	the SVG's elements are nested more than {0} deep	елементи SVG вкладено глибше ніж на {0} рівнів
-@msg	scale must be a number from {_1} to {_2}, not {_3}	масштаб має бути числом від {_1} до {_2}, а не {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	масштаб має бути числом від {_1} до {_2}, а не {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale має бути числом від {_1} до {_2}, а не {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale має бути числом від {_1} до {_2}, а не {s}
 @msg	select (or target) objects whose appearance isn't basic	виділіть (або вкажіть як об’єкт) об’єкти, оформлення яких не є основним
 @msg	select a Live Paint group	виділіть групу швидкої заливки
 @msg	select a blend	виділіть перехід
@@ -4831,6 +4848,9 @@ axis	Both	Обидві
 @msg	the Pixar file's image data is damaged	дані зображення у файлі Pixar пошкоджені
 @msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
+@msg	the HEIC or HEIF file can't be read	не вдається прочитати файл HEIC або HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
+@msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються
@@ -4892,6 +4912,9 @@ axis	Both	Обидві
 	Bottom Right	Знизу праворуч
 	Edge	Край
 	System Title Bar	Системний рядок заголовка
+	VectorCraft Title Bar on Every Desktop	Рядок заголовка VectorCraft на будь-якій стільниці
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Поки змінну середовища VECTORCRAFT_TITLEBAR задано, рядок заголовка вибирає вона.
+	System Title Bar takes precedence over this option while it is on.	Поки ввімкнено «Системний рядок заголовка», він має пріоритет над цим параметром.
 	Value Axis	Вісь значень
 	On Left Side	Ліворуч
 	On Right Side	Праворуч
@@ -4938,7 +4961,7 @@ axis	Both	Обидві
 @msg	before must name a panel	before має вказувати панель
 @msg	docking action contains an unknown panel or an excessive split path	Дія прикріплення містить невідому панель або надто довгий шлях поділів
 @msg	group must be true or false	group має мати значення true або false
-@msg	panel is not in a dock group	панель не входить до групи дока
+@msg	panel is not in a dock group	panel не входить до групи дока
 @msg	only a dock group above or below others collapses, not one beside another	згорнути можна лише групу дока над або під іншими, а не поруч з ними
 @msg	icon must be true or false	icon має бути true або false
 @msg	icon only docks a panel in the icon column, with no anchor	icon лише закріплює панель у стовпці значків, без anchor
@@ -5997,6 +6020,7 @@ breakText	Glyphs	Гліфи
 	Reset Symbol Instance	Скинути екземпляр символу
 @msg	type must be static or dynamic, not {v}	type має бути static або dynamic, а не {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` — статичний символ: спершу встановіть для нього тип символу «Динамічний»
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	У контуру, складеного контуру або тексту, виділеного в екземплярі символу, можна змінити лише суцільний колір заливки й обведення
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
@@ -6094,3 +6118,25 @@ breakText	Glyphs	Гліфи
 # 3D Box add-on
 	3D Box	3D-паралелепіпед
 	3D Box Tool	Інструмент «3D-паралелепіпед»
+
+# Safe Mode
+	Safe Mode…	Безпечний режим…
+	Safe Mode	Безпечний режим
+	Help › Safe Mode…	Довідка › Безпечний режим…
+	Enable on Re-launch	Увімкнути під час наступного запуску
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Останній запуск VectorCraft зупинився під час завантаження модуля {name}. Можливо, причина не в ньому.
+	Disable and Continue	Вимкнути й продовжити
+	Start Normally	Запустити у звичайному режимі
+	Start in Safe Mode	Запустити в безпечному режимі
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft працює в безпечному режимі: модулі не завантажуються й не виконуються, доки програму не буде запущено у звичайному режимі.
+	Disabled plug-ins	Вимкнені модулі
+	No plug-ins are disabled.	Немає вимкнених модулів.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Безпечний режим увімкнено: модулі не завантажуються й не виконуються, доки VectorCraft не буде запущено у звичайному режимі
+@msg	give `id` or `file` (see plugin.safeMode)	укажіть `id` або `file` (див. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	цей модуль не вимкнено (див. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Не вдалося зберегти вимкнені модулі для наступного запуску
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Розбір оформлення: ефект модуля у виділенні не можна розібрати в безпечному режимі
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Вирівняти за піксельною сіткою
+@msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури

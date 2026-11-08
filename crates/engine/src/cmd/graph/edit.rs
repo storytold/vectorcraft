@@ -58,12 +58,16 @@ pub(super) fn create(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The graph `id` names (or the graph containing it), else the selected graph (or the graph
-/// containing the selection).
+/// containing the selection). Refused while an object of a dynamic symbol instance's art is
+/// selected.
 pub(super) fn target(s: &Session, p: &Value, cmd: &str) -> Result<NodeId> {
     let st = s.doc()?;
     let start = match named_id(p)? {
         Some(id) => vec![id],
-        None => st.selection.objects.clone(),
+        None => {
+            crate::cmd::edit::refuse_symbol_part(s)?;
+            st.selection.objects.clone()
+        }
     };
     for id in start {
         let mut cur = Some(id);

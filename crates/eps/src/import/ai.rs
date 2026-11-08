@@ -41,8 +41,8 @@ pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 pub use read::{
-    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, Structure, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
-    read, read_beside, variables,
+    BindingRef, Brushes, IMAGE_TOO_LARGE, PaletteSwatches, PlacedPage, Structure, active_artboard, artboards, bindings_note, brushes, graphic_styles,
+    palette, read, read_beside, variables,
 };
 pub(crate) use read::{MAX_SYMBOLS, join_and, read_art_style, slot_frame, slot_of, symbol_art_member};
 
