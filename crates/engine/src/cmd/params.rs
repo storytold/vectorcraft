@@ -536,10 +536,56 @@ const NO_FORMAT: &str = "no format takes it (see document.formats)";
 /// Why a save option that no save format reads is refused.
 const NO_SAVE_FORMAT: &str = "no save format takes it (see file.formatOptions)";
 
-/// The format ids Export for Screens writes: the writable formats but those it doesn't write.
-fn screen_formats() -> Vec<&'static str> {
-    use super::fileio::{FORMATS, SCREEN_UNWRITTEN_FORMATS};
-    FORMATS.iter().filter(|f| f.write && !SCREEN_UNWRITTEN_FORMATS.contains(&f.id)).map(|f| f.id).collect()
+/// The format ids Export for Screens writes: the writable formats, those exporter plug-ins add
+/// included, but those it doesn't write.
+pub fn screen_formats() -> Vec<&'static str> {
+    use super::fileio::{FORMATS, SCREEN_UNWRITTEN_FORMATS, plugin_formats};
+    let added = plugin_formats();
+    FORMATS.iter().chain(added.iter().copied()).filter(|f| f.write && !SCREEN_UNWRITTEN_FORMATS.contains(&f.id)).map(|f| f.id).collect()
+}
+
+/// The keys a format row of Export for Screens, and the settings of a format, take: the row's own
+/// (`format`, `scale`…), `includeArtboardFill` and `richBlack`, which the encoders read from a
+/// row's options (`with_artboard_fills`, the render options), `params`, an exporter plug-in's own,
+/// and a key some format reads, as `document.export` takes them.
+fn screen_option_keys() -> Vec<&'static str> {
+    use super::fileio::{FORMATS, SCREEN_ROW_KEYS};
+    let mut keys: Vec<&str> = SCREEN_ROW_KEYS.to_vec();
+    keys.extend(["includeArtboardFill", "richBlack", "params"]);
+    keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+    keys
+}
+
+/// A format row of Export for Screens, or the settings of a format, without the keys the export
+/// refuses in it ([`check_screen_rows`]), inside `marks`, `svg` and the other object options too:
+/// a saved row or preset that holds a key that is no longer read loads without it.
+pub fn drop_unread_row_options(row: &mut serde_json::Map<String, Value>) {
+    fn retain_tree(o: &mut serde_json::Map<String, Value>, schema: &serde_json::Map<String, Value>) {
+        o.retain(|k, _| schema.contains_key(k));
+        for (k, v) in o.iter_mut() {
+            if let (Some(Value::Object(inner)), Value::Object(v)) = (schema.get(k), v) {
+                retain_tree(v, inner);
+            }
+        }
+    }
+    let keys = screen_option_keys();
+    row.retain(|k, _| keys.contains(&k.as_str()));
+    let trees = screen_option_trees();
+    for (k, v) in row.iter_mut() {
+        if let (Some(Value::Object(schema)), Value::Object(v)) = (trees.get(k), v) {
+            retain_tree(v, schema);
+        }
+    }
+}
+
+/// [`option_trees`] of Export for Screens: its remembered settings mark PDF security whose
+/// passwords were left out with `security.passwordRequired`, which the export reads.
+fn screen_option_trees() -> Value {
+    let mut trees = option_trees();
+    if let Some(security) = trees.get_mut("security").and_then(Value::as_object_mut) {
+        security.insert("passwordRequired".into(), Value::Null);
+    }
+    trees
 }
 
 /// The object options an export or save checks key by key: PDF's `marks`, `bleed` and the others,
@@ -559,14 +605,10 @@ fn option_trees() -> Value {
 
 /// The format rows (`formats`) and the per-format `settings` of Export for Screens params `p`, at
 /// `within` (`settings.` in `document.exportPresets.save`). A row, and the settings of a format,
-/// take its own keys (`format`, `scale`…), `includeArtboardFill`, `richBlack` and a key some
-/// format reads, as `document.export` does; `settings` takes the formats Export for Screens writes.
-fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>, trees: &Value) -> Result<()> {
-    use super::fileio::{FORMATS, SCREEN_ROW_KEYS};
-    let mut keys: Vec<&str> = SCREEN_ROW_KEYS.to_vec();
-    // The encoders read both from a row's options (`with_artboard_fills`, the render options).
-    keys.extend(["includeArtboardFill", "richBlack"]);
-    keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
+/// take [`screen_option_keys`]; `settings` takes the formats Export for Screens writes.
+fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>) -> Result<()> {
+    let keys = screen_option_keys();
+    let trees = &screen_option_trees();
     if let Some(Value::Array(rows)) = p.get("formats") {
         for (i, row) in rows.iter().enumerate() {
             if let Value::Object(row) = row {
@@ -599,23 +641,28 @@ fn check_screen_rows(id: &str, within: &str, p: &serde_json::Map<String, Value>,
 /// `document.exportDxf` one that DXF reads. `document.save`, `file.saveAs`, `file.saveCopy` and
 /// `file.saveAsTemplate` take, beside the path and in `options`, a key that some save format
 /// reads. `document.exportForScreens` takes the keys it reads, and checks its format rows and
-/// settings ([`check_screen_rows`]), as `document.exportPresets.save` does in its `settings`.
+/// settings ([`check_screen_rows`]), as `document.exportPresets.save` does in its `settings` and
+/// `assets.export` and `assets.settings.set` do in theirs.
 /// Where a command takes `marks`, `bleed`, `flattener`, `svg` or another object option of PDF,
 /// EPS or SVG, only the object's own keys pass ([`option_trees`]). Saved presets are not checked:
 /// one with a key that is no longer read keeps loading.
 fn check_export_options(id: &str, params: &Value) -> Result<()> {
-    use super::fileio::{FORMATS, SAVE_FORMATS, TEMPLATE_FORMATS, dxf, eps, pdf};
+    use super::fileio::{FORMATS, SAVE_FORMATS, SCREEN_PARAM_KEYS, TEMPLATE_FORMATS, dxf, eps, pdf};
     let Value::Object(given) = params else { return Ok(()) };
-    const NO_SCREENS: &str = "Export for Screens doesn't take it";
     match (id, given.get("settings")) {
         ("document.exportForScreens", _) => {
-            check_option_keys(id, "", given, &super::fileio::SCREEN_PARAM_KEYS, NO_SCREENS, &Value::Null)?;
-            return check_screen_rows(id, "", given, &option_trees());
+            if let Some(key) = given.keys().find(|k| !SCREEN_PARAM_KEYS.contains(&k.as_str())) {
+                return Err(unknown(id, key, &SCREEN_PARAM_KEYS));
+            }
+            return check_screen_rows(id, "", given);
         }
         ("document.exportPresets.save", Some(Value::Object(settings))) => {
-            check_option_keys(id, "settings.", settings, &super::fileio::SCREEN_PARAM_KEYS, NO_SCREENS, &Value::Null)?;
-            return check_screen_rows(id, "settings.", settings, &option_trees());
+            let why = format!("`settings` takes: {}", SCREEN_PARAM_KEYS.join(", "));
+            check_option_keys(id, "settings.", settings, &SCREEN_PARAM_KEYS, &why, &Value::Null)?;
+            return check_screen_rows(id, "settings.", settings);
         }
+        // Export Assets exports with, and stores, Export for Screens' format rows and settings.
+        ("assets.export" | "assets.settings.set", _) => return check_screen_rows(id, "", given),
         _ => {}
     }
     let mut keys: Vec<&str> = vec!["path", "format", "acknowledgeLoss"];

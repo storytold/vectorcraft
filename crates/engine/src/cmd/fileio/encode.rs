@@ -27,7 +27,6 @@ pub const ARTBOARD_PARAMS: [&str; 3] = ["artboard", "artboards", "range"];
 /// Which artboards an export covers: `range` (`"1-3, 5"`, 1-based, or `"all"`) wins over
 /// `artboards` (0-based), which wins over `artboard`.
 #[derive(Debug, Default, Deserialize)]
-#[cfg_attr(test, derive(serde::Serialize))]
 #[serde(default)]
 pub struct ArtboardPick {
     pub artboard: Option<usize>,

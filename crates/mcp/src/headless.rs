@@ -137,11 +137,7 @@ impl Headless {
             "file.open" => self.open(params),
             "file.save" => self.save(params),
             "file.export" => self.export(params),
-            "file.exportForScreens" => {
-                // The key check of `document.exportForScreens` runs before any file is written.
-                self.session.check_params("document.exportForScreens", params).map_err(|e| e.to_string())?;
-                self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string())
-            }
+            "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
             "tool.setOption" => self.session.set_tool_option_cmd(params),
             _ => self.session.execute(id, params).map_err(|e| e.to_string()),
@@ -313,8 +309,6 @@ impl Headless {
         if s(p, "path").is_none() && st.path.is_none() {
             return Err("missing `path` (document was never saved)".into());
         }
-        // The key check of `document.save` runs before the file is written.
-        self.session.check_params("document.save", p).map_err(|e| e.to_string())?;
         let roots = self.roots.clone();
         file_access::confine(roots.as_ref(), || self.session.execute("document.save", p)).map_err(|e| e.to_string())
     }

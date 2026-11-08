@@ -247,7 +247,9 @@ fn save_options_pass_every_listed_key() {
 #[test]
 fn export_for_screens_refuses_a_key_no_format_reads() {
     let id = "document.exportForScreens";
-    assert_eq!(refusal(id, json!({"folder": "out", "noSuchOption": true})), "unknown parameter `noSuchOption`; Export for Screens doesn't take it");
+    assert!(
+        refusal(id, json!({"folder": "out", "noSuchOption": true})).starts_with("unknown parameter `noSuchOption`; the command takes: artboard, ")
+    );
     assert_eq!(refusal(id, json!({"subfolder": true})), "unknown parameter `subfolder`; did you mean `subfolders`?");
     let no_format = "no format takes it (see document.formats)";
     for (given, message) in [
@@ -289,10 +291,21 @@ fn export_for_screens_refuses_a_key_no_format_reads() {
         refusal(save, json!({"name": "a", "settings": {"formtas": [{"format": "png"}]}})),
         "unknown parameter `settings.formtas`; did you mean `settings.formats`?"
     );
-    assert_eq!(
-        refusal(save, json!({"name": "a", "settings": {"noSuchOption": true}})),
-        "unknown parameter `settings.noSuchOption`; Export for Screens doesn't take it"
+    assert!(
+        refusal(save, json!({"name": "a", "settings": {"noSuchOption": true}}))
+            .starts_with("unknown parameter `settings.noSuchOption`; `settings` takes: artboard, ")
     );
+    // Export Assets takes the same rows and settings, and stores them.
+    for asset in ["assets.export", "assets.settings.set"] {
+        assert_eq!(
+            refusal(asset, json!({"formats": [{"format": "png", "noSuchOption": 1}]})),
+            format!("unknown parameter `formats[0].noSuchOption`; {no_format}")
+        );
+        assert!(refusal(asset, json!({"settings": {"pdf": {"marks": {"x": 1}}}})).starts_with("unknown parameter `settings.pdf.marks.x`;"));
+        check_params(asset, &json!({"formats": [{"format": "jpg", "scale": "2x", "quality": 80}]})).unwrap();
+    }
+    // An exporter plug-in's `params` in a row (its format is a plug-in's: tests/plugin_export.rs).
+    check_params(id, &json!({"formats": [{"format": "png", "params": {}}]})).unwrap();
     // Keys the preset leaves out are still Export for Screens params.
     check_params(save, &json!({"name": "a", "settings": {"zip": true, "formats": [{"format": "jpg", "quality": 80}]}})).unwrap();
     // The encoders read Include Artboard Fill and Appearance of Black from a row or a format's
@@ -313,6 +326,11 @@ fn export_for_screens_passes_every_listed_key() {
     let id = "document.exportForScreens";
     let keys = doc_keys(find_command(id).unwrap().params).unwrap().keys;
     assert!(keys.len() > 20, "{keys:?}");
+    // The keys the check takes are the ones the description names.
+    let (mut named, mut taken) = (keys.clone(), crate::cmd::fileio::SCREEN_PARAM_KEYS.to_vec());
+    named.sort_unstable();
+    taken.sort_unstable();
+    assert_eq!(named, taken);
     let refused: Vec<&str> = keys.into_iter().filter(|key| check_params(id, &json!({*key: null})).is_err()).collect();
     assert_eq!(refused, Vec::<&str>::new(), "{id} names and refuses these");
     check_params(id, &json!({"artboard": 0, "openLocation": true})).unwrap();
@@ -330,6 +348,34 @@ fn export_for_screens_passes_every_listed_key() {
         let settings = serde_json::Value::Object(preset.settings);
         check_params(id, &settings).unwrap_or_else(|e| panic!("{}: {e}", preset.name));
         check_params("document.exportPresets.save", &json!({"name": "a", "settings": settings})).unwrap();
+    }
+}
+
+/// A saved row loses the keys Export for Screens refuses in it, inside its object options too, and
+/// keeps the others.
+#[test]
+fn a_saved_row_drops_the_keys_no_format_reads() {
+    use crate::cmd::params::drop_unread_row_options;
+    let serde_json::Value::Object(mut row) = json!({
+        "format": "pdf", "scale": "1x", "noSuchOption": 1, "params": {"x": 1},
+        "marks": {"useDocumentBleed": true, "trim": true}, "preset": "High Quality Print",
+        "security": {"passwordRequired": true, "noSuchLock": 1}
+    }) else {
+        panic!("an object")
+    };
+    drop_unread_row_options(&mut row);
+    assert_eq!(
+        serde_json::Value::Object(row.clone()),
+        json!({
+            "format": "pdf", "scale": "1x", "params": {"x": 1}, "marks": {"trim": true}, "preset": "High Quality Print",
+            "security": {"passwordRequired": true}
+        })
+    );
+    check_params("document.exportForScreens", &json!({"formats": [row]})).unwrap();
+    // Remembered security whose passwords were left out, with one given again.
+    let security = json!({"passwordRequired": true, "openPassword": "x"});
+    for id in ["document.exportForScreens", "assets.export", "assets.settings.set"] {
+        check_params(id, &json!({"formats": [{"format": "pdf", "security": security}], "settings": {"pdf": {"security": security}}})).unwrap();
     }
 }
 

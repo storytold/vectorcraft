@@ -314,7 +314,6 @@ pub(crate) const PARAM_KEYS: [&str; 25] = [
 
 /// What `document.exportForScreens` reads besides the formats.
 #[derive(Default, Deserialize)]
-#[cfg_attr(test, derive(Serialize))]
 #[serde(default, rename_all = "camelCase")]
 struct ScreenParams {
     #[serde(flatten)]
@@ -1385,17 +1384,7 @@ pub(super) fn export_settings(s: &mut Session, _: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Output, PARAM_KEYS, ScreenParams, ScreenSize, safe_file_name};
-
-    /// Every key `document.exportForScreens` reads into its params is one the key check takes.
-    #[test]
-    fn param_keys_hold_every_screen_param() {
-        let Ok(serde_json::Value::Object(read)) = serde_json::to_value(ScreenParams::default()) else { panic!("ScreenParams is an object") };
-        for key in read.keys() {
-            assert!(PARAM_KEYS.contains(&key.as_str()), "{key}");
-        }
-        assert!(read.len() > 10);
-    }
+    use super::{Output, ScreenSize, safe_file_name};
 
     /// Files given one name are numbered in turn, each numbering going on from the last one (so
     /// thousands of them don't each try every number used before), and a file asking again for

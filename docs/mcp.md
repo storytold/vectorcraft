@@ -1196,11 +1196,15 @@ that only another save format takes. It warns when that key is given in `options
 `document.exportForScreens` and `file.exportForScreens` refuse a key the command doesn't take. In each row of `formats`
 and in the options `settings` gives a format, they refuse a key that no format takes, as `document.export` does, and an
 unknown key inside a PDF, EPS or SVG option object; `settings` takes only the formats the command writes. A row and a
-format's settings also take `includeArtboardFill` and `richBlack`. The error names the row
-(`formats[1].marks.useDocumentBleed`). `document.exportPresets.save` checks its `settings`, with the rows and settings
-in it, the same way.
+format's settings also take `includeArtboardFill`, `richBlack`, `params` (an exporter plug-in's own) and
+`security.passwordRequired` (which remembered settings hold where PDF passwords were left out), and `settings`
+takes an exporter plug-in's format. The error names the row (`formats[1].marks.useDocumentBleed`).
+`document.exportPresets.save` checks its `settings`, with the rows and settings in it, the same way, and `assets.export`
+and `assets.settings.set` check the rows and settings they are given.
 
-A saved PDF preset or Export for Screens preset that holds a key that is no longer read keeps loading.
+A saved PDF preset or Export for Screens preset that holds a key that is no longer read keeps loading. The Export for
+Screens dialog opens remembered settings and presets without such keys, and the Asset Export panel leaves them out of
+the settings it sends, so their export is not refused.
 
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:
