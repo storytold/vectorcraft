@@ -8,7 +8,7 @@ use std::ops::Range;
 
 use craft_proof::{IssueKind, Options, ProofLang};
 use serde_json::{Value, json};
-use vectorcraft_doc::NodeKind;
+use vectorcraft_doc::{Document, NodeId, NodeKind};
 
 use super::menucmds::whole_or;
 use super::typemenu::{all_texts, text_ids};
@@ -23,6 +23,7 @@ pub const MAX_SUGGESTIONS: u64 = 20;
 /// Longest word suggestions are looked for, in bytes: the search costs more with the length.
 const MAX_WORD_LEN: usize = 128;
 
+/// The Edit › Spelling commands.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -30,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Check Spelling",
             [],
             None,
-            "{ids?: [id…] (type objects, or groups holding them; default: every visible, unlocked type object)} the words the dictionaries don't know, each in its run's language (English when it has none; none in a language without a dictionary), in paint order → {words: [{id, start: byte, end: byte, word, lang}…], more: bool (more than 10000 words, the rest left out)}. text.editRange {id, start, end, insert} changes one",
+            "{ids?: [id…] (type objects, or groups holding them; default: every visible, unlocked type object)} the words the dictionaries don't know, each in its run's language (English when it has none; none in a language without a dictionary), each paragraph on its own, in paint order (given ids too) → {words: [{id, start: byte, end: byte, word, lang}…], more: bool (more than 10000 words, the rest left out)}. text.editRange {id, start, end, insert} changes one",
             has_doc,
             check
         ),
@@ -46,12 +47,14 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// `text.spelling.check`: the unknown words of the given type objects (or every visible, unlocked
+/// one), in paint order, each paragraph checked on its own, at most [`MAX_WORDS`] of them.
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.spelling.check";
     // Given `ids` are checked like Find and Replace's, so a malformed one is an error rather than
     // a check of the whole document.
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
-        Some(_) => text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?),
+        Some(_) => in_paint_order(&s.doc()?.doc, text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?)),
         None => all_texts(&s.doc()?.doc),
     };
     let st = s.doc()?;
@@ -69,21 +72,47 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
             spans.push((at..end, ProofLang::from_tag(r.style.language.as_deref())));
             at = end;
         }
-        for issue in craft_proof::check_text_with(&text, &spans, &opts, false, false) {
-            if issue.kind != IssueKind::Spelling {
-                continue;
+        // craft-proof checks one paragraph at a time (its language detection reads the
+        // paragraph), and the check stops at the paragraph where the list fills up rather than
+        // proofing the rest of the text.
+        let mut para_start = 0;
+        for para in text.split('\n') {
+            let para_end = para_start + para.len();
+            let para_spans: Vec<(Range<usize>, ProofLang)> = spans
+                .iter()
+                .filter_map(|(r, lang)| {
+                    let (a, b) = (r.start.max(para_start), r.end.min(para_end));
+                    (a < b).then(|| (a - para_start..b - para_start, *lang))
+                })
+                .collect();
+            for issue in craft_proof::check_text_with(para, &para_spans, &opts, false, false) {
+                if issue.kind != IssueKind::Spelling {
+                    continue;
+                }
+                let (start, end) = (para_start + issue.start, para_start + issue.end);
+                let Some(word) = text.get(start..end) else { continue };
+                if words.len() == MAX_WORDS {
+                    more = true;
+                    break 'texts;
+                }
+                words.push(json!({ "id": id.0, "start": start, "end": end, "word": word, "lang": issue.lang.tag() }));
             }
-            let Some(word) = text.get(issue.start..issue.end) else { continue };
-            if words.len() == MAX_WORDS {
-                more = true;
-                break 'texts;
-            }
-            words.push(json!({ "id": id.0, "start": issue.start, "end": issue.end, "word": word, "lang": issue.lang.tag() }));
+            // Past the paragraph and its `\n`.
+            para_start = para_end + 1;
         }
     }
     Ok(json!({ "words": words, "more": more }))
 }
 
+/// `ids` sorted back to front, as the document paints them: by their index paths, which are in
+/// paint order.
+fn in_paint_order(d: &Document, mut ids: Vec<NodeId>) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    ids.sort_by(|a, b| paths.get(a).cmp(&paths.get(b)));
+    ids
+}
+
+/// `text.spelling.suggest`: up to `max` of the words the dictionary of `lang` suggests for `word`.
 fn suggest(_s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.spelling.suggest";
     let word = str_param(p, "word").map(str::trim).filter(|w| !w.is_empty()).ok_or_else(|| bad(C, "missing `word`"))?;

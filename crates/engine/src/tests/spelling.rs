@@ -5,16 +5,19 @@ use serde_json::{Value, json};
 
 use crate::*;
 
+/// A session with a new 400 × 400 document.
 fn session() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
     s
 }
 
+/// Runs a command that must succeed and gives its result.
 fn run(s: &mut Session, id: &str, p: Value) -> Value {
     s.execute(id, &p).unwrap()
 }
 
+/// New point type at (10, `y`) holding `t`.
 fn text(s: &mut Session, y: f64, t: &str) -> NodeId {
     NodeId(run(s, "text.create", json!({"x": 10, "y": y, "text": t}))["id"].as_u64().unwrap())
 }
@@ -60,6 +63,8 @@ fn check_goes_through_visible_unlocked_type_in_paint_order_or_the_ids_given() {
     assert_eq!(ids, [a.0, b.0], "hidden and locked type are left out");
     assert_eq!(unknown(&mut s, json!({"ids": [b.0]})), [(b.0, 7, 12, "wvxzq".to_string())]);
     assert_eq!(unknown(&mut s, json!({"ids": null})).len(), 2, "null ids is the default");
+    let both = [(a.0, 6, 11, "qzxvw".to_string()), (b.0, 7, 12, "wvxzq".to_string())];
+    assert_eq!(unknown(&mut s, json!({"ids": [b.0, a.0]})), both, "given ids are listed in paint order too");
     for ids in [json!(b.0), json!("all"), json!({"id": b.0}), json!([-1]), json!(["x"]), json!([999_999])] {
         assert!(s.execute("text.spelling.check", &json!({"ids": ids})).is_err(), "malformed ids {ids} is refused");
     }
@@ -86,4 +91,15 @@ fn suggest_offers_dictionary_words() {
     for max in [json!(0), json!(21), json!(-1), json!("3")] {
         assert!(s.execute("text.spelling.suggest", &json!({"word": "drawng", "max": max})).is_err(), "max {max}");
     }
+}
+
+#[test]
+fn each_paragraph_is_checked_on_its_own_at_the_bytes_of_the_whole_text() {
+    let mut s = session();
+    // Read as one block, the Vietnamese first paragraph would make the whole text Vietnamese,
+    // which has no dictionary, and the English typo below it would go unmarked.
+    let vi = "Cảm ơn những người bạn";
+    let t = text(&mut s, 50.0, &format!("{vi}\ndrawing qzxvw tools"));
+    let at = vi.len() + 1 + "drawing ".len();
+    assert_eq!(unknown(&mut s, json!({})), [(t.0, at as u64, at as u64 + 5, "qzxvw".to_string())]);
 }

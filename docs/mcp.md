@@ -5468,8 +5468,10 @@ returns the new value.
 
 `text.spelling.check {ids?}` lists the words of the document's type that its dictionaries don't know: every
 visible, unlocked type object in paint order, or those in `ids` (and in the groups `ids` names). Each run is checked
-in its Character panel Language (English when it has none) by craft-proof; a language without a spelling dictionary
-marks nothing. Words in capitals, words with digits and web addresses are taken as correct. The result is
+in its Character panel Language (English when it has none) by craft-proof, one paragraph at a time; a language without
+a spelling dictionary marks nothing. English words come from the first dictionary craft-proof finds: a Hunspell
+dictionary in the user's dictionaries folder, the SCOWL dictionary for that English built in from craft-i18n, a
+system Hunspell dictionary, and last the public-domain Moby word list built into craft-proof. Words in capitals, words with digits and web addresses are taken as correct. The result is
 `{words: [{id, start, end, word, lang}], more}`: `start` and `end` are byte offsets in the type object's text, the
 ones `text.editRange` takes, so `text.editRange {id, start, end, insert}` changes a word as one undo step. At most
 10,000 words are listed; `more` is `true` when there were more. `text.spelling.suggest {word, max?, lang?}` gives
