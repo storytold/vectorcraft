@@ -41,6 +41,37 @@ fn pieces_keep_their_own_paints_in_order() {
     assert_eq!((pieces[2].rule, &pieces[2].fills, &pieces[2].strokes), (FillRule::NonZero, &None, &None));
 }
 
+/// A solid paint or gradient stop linked to a global swatch takes the swatch's color at its own
+/// tint. A link to a swatch that isn't global and a paint without a link keep the color given.
+#[test]
+fn linked_paints_take_the_global_swatch_color() {
+    let brand = Color::rgb(0.2, 0.4, 0.6);
+    let mut doc = Document::new(100.0, 100.0);
+    doc.swatches.push(Swatch { name: "Brand".into(), paint: Paint::solid(brand), global: true, spot: false });
+    doc.swatches.push(Swatch { name: "Plain".into(), paint: Paint::solid(brand), global: false, spot: false });
+    let given = json!({"model": "rgb", "r": 1, "g": 1, "b": 0});
+    let solid = |extra: Value| {
+        let mut p = json!({"type": "solid", "color": given});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        p
+    };
+    let stop = json!({"offset": 0, "color": given, "swatch": "Brand", "tint": 0.5});
+    let gradient = json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": [stop]}});
+    let fills = json!([solid(json!({"swatch": "Brand", "tint": 0.5})), solid(json!({"swatch": "Plain"})), solid(json!({})), gradient]);
+    let strokes = json!([{"paint": solid(json!({"swatch": "Brand"}))}]);
+    let pieces = decode(&out(json!([{"path": square(), "fills": fills, "strokes": strokes}])), Scope::Object, FillRule::NonZero).unwrap();
+    let pieces = with_swatch_colors(std::sync::Arc::new(pieces), &doc);
+    let color = |p: &Paint| match p {
+        Paint::Solid { color, .. } => *color,
+        Paint::Gradient(g) => g.gradient.stops[0].color,
+        _ => panic!("{p:?}"),
+    };
+    let fills = pieces[0].fills.as_ref().unwrap();
+    let old = Color::rgb(1.0, 1.0, 0.0);
+    assert_eq!([color(&fills[0]), color(&fills[1]), color(&fills[2]), color(&fills[3])], [brand.tinted(0.5), old, old, brand.tinted(0.5)]);
+    assert_eq!(color(&pieces[0].strokes.as_ref().unwrap()[0].paint), brand);
+}
+
 /// What a piece is drawn with: the object's appearance with the paints the piece gives in place of
 /// its own (kept, cleared or replaced), and for an effect on one fill or stroke, copies of that item.
 #[test]

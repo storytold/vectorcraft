@@ -5493,6 +5493,7 @@ axis	Y Axis	Вісь Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише функції `env.vc_*`, перелічені в docs/plugins.md (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` може бути лише true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`

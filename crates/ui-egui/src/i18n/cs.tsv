@@ -5897,6 +5897,7 @@ axis	Y Axis	osa Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modul importuje `env.{name}`, který zásuvný modul smí používat jen na úrovni API zásuvných modulů {PROGRESS_API} (`api` {PROGRESS_API}) a s oprávněním `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modul importuje `{from}.{name}`, který hostitel nenabízí: zásuvný modul smí importovat jen funkce `env.vc_*`, které uvádí docs/plugins.md (úroveň API zásuvných modulů 2), a žádné WASI, soubory ani síť
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` může být jen true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` je jen pro živý efekt (`kind` "effect") s `api` 2
 @msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
 @msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`

@@ -788,6 +788,32 @@ fn kept_art_follows_the_swatches_painted_pieces_name() {
     assert_eq!(draw(&s), (GREEN, WHITE), "the swatch back, the piece again");
 }
 
+/// A piece linked to a global swatch shows the swatch's edited color, in art a renderer keeps and
+/// in a kept raster of a blur over it, and its earlier color after Undo.
+#[test]
+fn a_piece_linked_to_a_global_swatch_takes_its_edited_color() {
+    for blur in [false, true] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.globalleaf", true), &leaf_square()));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.globalleaf"}));
+        if blur {
+            run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+        }
+        run(&mut s, "select.none", json!({}));
+        run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00", "global": true}));
+        let mut r = vectorcraft_render::Renderer::new();
+        let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut at_piece = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50);
+        assert!(near(at_piece(&s), GREEN), "the piece, in the swatch's color (blur {blur})");
+        run(&mut s, "swatch.edit", json!({"name": "Leaf", "color": "#0000ff"}));
+        let px = at_piece(&s);
+        assert!(near(px, BLUE), "the swatch's new color (blur {blur}): {px:?}");
+        run(&mut s, "edit.undo", json!({}));
+        assert!(near(at_piece(&s), GREEN), "the swatch's color after Undo (blur {blur})");
+    }
+}
+
 /// Art a renderer keeps for an object whose plug-in starts to paint its pieces when it is replaced
 /// follows the swatches those pieces name from then on.
 #[test]

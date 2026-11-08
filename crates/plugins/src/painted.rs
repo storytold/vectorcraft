@@ -340,6 +340,56 @@ pub fn check_references(pieces: &[Piece], doc: Option<&Document>) -> Result<()> 
     Ok(())
 }
 
+/// The current color of a paint or stop linked to global swatch `name` at `tint`, when it differs
+/// from `color`.
+fn newer_color(color: Color, name: Option<&str>, tint: f32, doc: &Document) -> Option<Color> {
+    doc.global_color(name?).map(|c| c.tinted(tint)).filter(|c| *c != color)
+}
+
+/// Does `p` hold a color older than the global swatch it is linked to?
+fn behind_swatches(p: &Paint, doc: &Document) -> bool {
+    match p {
+        Paint::Solid { color, swatch, tint } => newer_color(*color, swatch.as_deref(), *tint, doc).is_some(),
+        Paint::Gradient(g) => g.gradient.stops.iter().any(|s| newer_color(s.color, s.swatch.as_deref(), s.tint, doc).is_some()),
+        Paint::None | Paint::Pattern { .. } => false,
+    }
+}
+
+/// Gives a solid paint or gradient stop of `p` linked to a global swatch that swatch's current
+/// color at its own tint.
+fn take_swatch_colors(p: &mut Paint, doc: &Document) {
+    match p {
+        Paint::Solid { color, swatch, tint } => {
+            if let Some(c) = newer_color(*color, swatch.as_deref(), *tint, doc) {
+                *color = c;
+            }
+        }
+        Paint::Gradient(g) => {
+            for s in &mut g.gradient.stops {
+                if let Some(c) = newer_color(s.color, s.swatch.as_deref(), s.tint, doc) {
+                    s.color = c;
+                }
+            }
+        }
+        Paint::None | Paint::Pattern { .. } => {}
+    }
+}
+
+/// `pieces` with every paint linked to a global swatch of `doc` in that swatch's current color, as
+/// a global swatch edit changes linked art. A paint linked to a swatch that isn't global keeps the
+/// color the plug-in gave.
+pub(crate) fn with_swatch_colors(mut pieces: std::sync::Arc<Vec<Piece>>, doc: &Document) -> std::sync::Arc<Vec<Piece>> {
+    let behind =
+        |p: &Piece| p.fills.iter().flatten().any(|f| behind_swatches(f, doc)) || p.strokes.iter().flatten().any(|s| behind_swatches(&s.paint, doc));
+    if pieces.iter().any(behind) {
+        for p in std::sync::Arc::make_mut(&mut pieces) {
+            p.fills.iter_mut().flatten().for_each(|f| take_swatch_colors(f, doc));
+            p.strokes.iter_mut().flatten().for_each(|s| take_swatch_colors(&mut s.paint, doc));
+        }
+    }
+    pieces
+}
+
 /// How many paints, gradient stops and freeform points `pieces` hold: what a cache counts them as
 /// besides their anchors.
 pub(crate) fn paint_count(pieces: &[Piece]) -> usize {

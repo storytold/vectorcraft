@@ -11,10 +11,18 @@ use super::{
     RasterFx, Rect, RenderContext, Renderer, Shape, blend_mode, effects, fill_rule, paint, peniko,
 };
 
-/// A hash of the names of `doc`'s swatches and patterns.
+/// A hash of the names of `doc`'s swatches and patterns, of the paints and spot flags of its global
+/// swatches, and of the Spot Colors option those colors depend on.
 pub(crate) fn paint_names(doc: &Document) -> u64 {
     let mut h = DefaultHasher::new();
-    doc.swatches_iter().for_each(|s| s.name.hash(&mut h));
+    doc.spot_use_lab.hash(&mut h);
+    doc.swatches_iter().for_each(|s| {
+        s.name.hash(&mut h);
+        if s.global {
+            s.spot.hash(&mut h);
+            format!("{:?}", s.paint).hash(&mut h);
+        }
+    });
     doc.patterns.iter().for_each(|p| p.name.hash(&mut h));
     h.finish()
 }

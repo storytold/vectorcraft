@@ -5531,6 +5531,7 @@ axis	Y Axis	Y 軸
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `{permission}` 時才能使用它
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 docs/plugins.md 列出的 `env.vc_*` 函式（增效模組 API 層級 2），不能使用 WASI、檔案或網路
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` 只能為 true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` 僅適用於 `api` 2 的即時效果 (`kind` "effect")
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`

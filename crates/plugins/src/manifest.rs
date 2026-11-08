@@ -262,16 +262,8 @@ pub struct Manifest {
     pub budget: Budget,
     /// A live effect at `api` 2 that returns painted pieces ([`crate::painted`]): `true` when the
     /// manifest has `"paintOutput": true`, the only value the key may hold.
-    #[serde(default, rename = "paintOutput", deserialize_with = "true_only", skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, rename = "paintOutput", skip_serializing_if = "std::ops::Not::not")]
     pub paint_output: bool,
-}
-
-/// Reads a key that may only be `true` when present (`paintOutput`).
-fn true_only<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<bool, D::Error> {
-    match Value::deserialize(d)? {
-        Value::Bool(true) => Ok(true),
-        _ => Err(serde::de::Error::custom("`paintOutput` may only be true")),
-    }
 }
 
 impl Manifest {
@@ -281,6 +273,9 @@ impl Manifest {
             return Err(Error::Manifest(format!("manifest is {} bytes (limit {MAX_MANIFEST_BYTES})", bytes.len())));
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Manifest("manifest is not UTF-8".into()))?;
+        if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
+            return Err(Error::Manifest("`paintOutput` may only be true".into()));
+        }
         let man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
         man.validate()?;
         Ok(man)

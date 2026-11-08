@@ -5920,6 +5920,7 @@ axis	Y Axis	Y-axel
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera de `env.vc_*`-funktioner som docs/plugins.md listar (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` får bara vara true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` gäller bara en liveeffekt (`kind` "effect") med `api` 2
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`

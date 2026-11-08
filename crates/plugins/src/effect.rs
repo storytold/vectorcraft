@@ -265,7 +265,8 @@ pub fn apply(id: &str, params: &Value, path: &PathData, bounds: Rect, rule: Fill
 /// Runs live-effect plug-in `id`, which declares `paintOutput`, as [`apply`] does: its painted
 /// pieces, each to draw by itself in order with the paints it gives ([`painted::appearance`],
 /// [`painted::items`]). Every swatch and pattern the pieces name must be in `doc`; without a
-/// document, pieces that name one are refused ([`painted::check_references`]). `None` when the
+/// document, pieces that name one are refused ([`painted::check_references`]). A paint linked to a
+/// global swatch has that swatch's current color. `None` when the
 /// plug-in isn't installed, doesn't declare `paintOutput`, fails, or Safe Mode is on; the caller then
 /// draws its input unchanged, and [`last_error`] says why a run failed (a refusal for want of a
 /// document is not recorded).
@@ -281,7 +282,10 @@ pub fn apply_painted(
     let (plugin, out) = evaluate(id, params, path, bounds, rule, paints)?;
     let Out::Pieces(pieces) = out else { return None };
     references_found(id, &plugin, &pieces, doc)?;
-    Some(pieces)
+    Some(match doc {
+        Some(d) => painted::with_swatch_colors(pieces, d),
+        None => pieces,
+    })
 }
 
 /// `Some` when every swatch and pattern `pieces` name is in `doc` ([`painted::check_references`]),

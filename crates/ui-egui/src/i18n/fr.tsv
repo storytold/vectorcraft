@@ -5892,6 +5892,7 @@ axis	Y Axis	Axe Y
 @msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `{permission}`
 @msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que les fonctions `env.vc_*` que liste docs/plugins.md (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` ne peut valoir que true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` est réservé à un effet dynamique (`kind` "effect") avec `api` 2
 @msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
 @msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`

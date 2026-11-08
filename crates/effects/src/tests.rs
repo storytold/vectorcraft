@@ -491,7 +491,7 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
     let corners = json!({"corners": [[-4.5, -4.5], [5.5, -4.5], [5.5, 5.5], [-4.5, 5.5]]});
     for grow in [fx("distort.transform", json!({"scaleH": 1000, "scaleV": 1000})), fx("distort.freeDistort", corners)] {
         let mut art = layer();
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget, None);
         let circle = art.children().unwrap()[1].geometric_bounds().unwrap();
         assert!(circle.width() < 101.0, "{}: the hidden circle keeps its shape: {circle:?}", grow.id);
         let square = art.children().unwrap()[0].geometric_bounds().unwrap();
@@ -500,7 +500,7 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
         carry.apply(&mut own);
         assert_eq!(end(&own), Some(550.0), "{}: the layer's gradient, as the art", grow.id);
         let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
-        crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget);
+        crate::reshape::reshape_leaves_within(&mut art, &[&grow], budget, None);
         assert_eq!(end(&art.children().unwrap()[0].appearance), Some(550.0), "{}: the layer's gradient, inside the art", grow.id);
     }
 }
@@ -531,7 +531,7 @@ fn edited_freeform_points_follow_a_transform_effect_and_free_distort() {
         inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
         let mut art = Node::group(NodeId(9), vec![square(Appearance::basic(freeform.clone(), Paint::None, 0.0)), Arc::new(inner)]);
         art.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
-        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS);
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS, None);
         let members = art.children().unwrap();
         assert_eq!(xs(&members[0].appearance), Some(vec![30.0, 130.0]), "{}: the path's points", e.id);
         assert_eq!(xs(&members[1].appearance), Some(vec![30.0, 130.0]), "{}: the inner group's points", e.id);

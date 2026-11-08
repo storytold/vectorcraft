@@ -183,7 +183,7 @@ with an error rather than a pause the host resumes, and the run stopped with mos
 Drawing evaluates effects often, so live-effect results are cached by plug-in installation, parameters, input
 geometry, fill rule, reference box and the paints the effect is given: a plug-in runs again only when one of them
 changes. Failures are cached too. The swatches and patterns a painted result names are checked against the document
-each time it is drawn.
+each time it is drawn, and a paint linked to a global swatch is drawn in that swatch's current color at its own tint.
 
 ## ABI v1
 
