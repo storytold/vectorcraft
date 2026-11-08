@@ -863,7 +863,6 @@ font-technology	Variable	Варіативні
 	at the end of a word	наприкінці слова
 	standing alone	в окремому вигляді
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} не є альтернативою символу {sel} (U+{code}) у тому вигляді, в якому він стоїть у своєму слові.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Жодна функція OpenType не дає {glyph}, тому його не можна застосувати до тексту.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Двічі клацніть, щоб вставити замість нього {base} (U+{code}): форма подання не з’єднується, літера з’єднується.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Замість форми подання вставлено {base} (U+{code}): шрифт з’єднує його із сусідніми за положенням.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Жодна функція OpenType не малює тут цей гліф, тому він замінює гліф символу й може не з’єднуватися із сусідніми символами.

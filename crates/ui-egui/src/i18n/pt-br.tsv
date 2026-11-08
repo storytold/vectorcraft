@@ -779,7 +779,6 @@
 	at the end of a word	no fim de uma palavra
 	standing alone	quando está sozinho
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} não é uma alternativa de {sel} (U+{code}) como ele está em sua palavra.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Nenhum recurso OpenType chega a {glyph}, então ele não pode ser aplicado ao texto.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Clique duplo para inserir {base} (U+{code}) no lugar: uma forma de apresentação não se une, a letra sim.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) foi inserido no lugar de uma forma de apresentação: a fonte o une aos vizinhos conforme a posição.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nenhum recurso OpenType desenha este glifo aqui, então ele substitui o glifo do caractere e pode não se unir aos caracteres vizinhos.

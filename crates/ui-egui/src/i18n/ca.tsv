@@ -1216,7 +1216,6 @@
 	at the end of a word	al final d’una paraula
 	standing alone	quan va sol
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no és una alternativa de {sel} (U+{code}) tal com es troba a la seva paraula.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Cap funció OpenType arriba a {glyph}, de manera que no es pot aplicar al text.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Feu doble clic per inserir {base} (U+{code}): una forma de presentació no s’uneix, la lletra sí.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	S’ha inserit {base} (U+{code}) en lloc d’una forma de presentació: el tipus de lletra l’uneix als veïns segons la posició.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Cap funció OpenType dibuixa aquest glif aquí, de manera que substitueix el glif del caràcter i pot no unir-se als caràcters veïns.

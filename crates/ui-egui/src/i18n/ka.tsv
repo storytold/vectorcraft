@@ -1422,7 +1422,6 @@ digits	Malayalam	მალაიალამური
 	at the end of a word	სიტყვის ბოლოს
 	standing alone	როცა ცალკე დგას
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} არ არის {sel} (U+{code})-ის ალტერნატივა იმ სახით, როგორც ის თავის სიტყვაშია.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	არც ერთი OpenType ფუნქცია არ იძლევა {glyph}-ს, ამიტომ მისი ტექსტზე გამოყენება შეუძლებელია.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	ორჯერ დაწკაპეთ ამის ნაცვლად {base} (U+{code}) ჩასასმელად: გამოსახვის ფორმა არ უკავშირდება, ასო უკავშირდება.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	გამოსახვის ფორმის ნაცვლად ჩასმულია {base} (U+{code}): შრიფტი მას მეზობლებს პოზიციის მიხედვით აკავშირებს.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	აქ არც ერთი OpenType ფუნქცია არ ხატავს ამ გლიფს, ამიტომ ის ანაცვლებს სიმბოლოს გლიფს და შეიძლება არ დაუკავშირდეს მეზობელ სიმბოლოებს.

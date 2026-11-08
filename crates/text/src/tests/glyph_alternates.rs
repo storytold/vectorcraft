@@ -346,6 +346,100 @@ fn a_variant_no_feature_draws_has_no_feature_to_apply() {
     assert!(face.unencoded_glyphs().contains(&u1) && !face.unencoded_glyphs().contains(&face.glyph_for('a')));
 }
 
+/// The alternates are listed `aalt` first, then `salt`, the stylistic sets, `swsh` and `cv01`, each
+/// glyph once under the first feature that lists it, whichever feature draws it in the text.
+#[test]
+fn alternates_are_listed_aalt_first_under_the_first_feature_that_lists_them() {
+    use crate::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(alternates_font(true).expect("the test font builds"));
+    let [u1, u2, u3, u4] = unencoded_glyphs().expect("unencoded glyphs");
+    let face = db.face(alternates_family(true), "Regular").expect("the test face");
+    let st = CharStyle { font_family: alternates_family(true).into(), size: 100.0, ..CharStyle::default() };
+    let found = alternates_in_context(&db, &TextObject::point(Point::ZERO, "xay", st), 1).expect("the a");
+    let listed: Vec<(u32, [u8; 4], Option<String>)> = found.alternates.iter().map(|a| (a.gid, a.feature, a.apply.clone())).collect();
+    let (a, b, c) = (face.glyph_for('a'), face.glyph_for('b'), face.glyph_for('c'));
+    assert_eq!(
+        listed,
+        [
+            (a, *b"aalt", Some("aalt".to_string())),
+            (u1, *b"aalt", Some("swsh=2".to_string())),
+            (b, *b"aalt", Some("salt".to_string())),
+            (u2, *b"ss01", Some("ss01".to_string())),
+            (u4, *b"ss02", Some("ss02".to_string())),
+            (u3, *b"swsh", Some("swsh".to_string())),
+            (c, *b"cv01", None),
+        ],
+        "aalt's set first, with the default glyph it lists; b is aalt's though salt draws it"
+    );
+}
+
+/// A glyph that more than its character makes (the lam-alef ligature) has no alternates of its own
+/// there, though the font substitutes it (`salt`).
+#[test]
+fn a_ligature_has_no_alternates_in_context() {
+    use crate::test_fonts::{LAM_ALEF_SALT, lam_alef_family, lam_alef_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(lam_alef_font(b"rlig").expect("the test font builds"));
+    let family = lam_alef_family(b"rlig");
+    let face = db.face(family, "Regular").expect("the test face");
+    let lam_alef = TextObject::point(Point::ZERO, "\u{0644}\u{0627}", style(family, &[]));
+    let ligature = g('H');
+    assert_eq!(
+        face.substitutions(ligature).iter().map(|s| s.glyphs.clone()).collect::<Vec<_>>(),
+        [vec![g(LAM_ALEF_SALT)]],
+        "the font gives the ligature an alternate"
+    );
+    let found = alternates_in_context(&db, &lam_alef, 0).expect("the ligature");
+    assert_eq!((found.default, found.current), (ligature, ligature));
+    assert!(found.alternates.is_empty(), "{:?}", found.alternates);
+    // The lam alone is its own character: it has no alternates because the font gives it none.
+    let alone = alternates_in_context(&db, &TextObject::point(Point::ZERO, "\u{0644}", style(family, &[])), 0).expect("the lam");
+    assert_eq!(alone.default, g('l'));
+}
+
+/// A word is shaped as one piece (to 256 characters each side of the selected one), the selected
+/// character found in it by its offset: a letter deep in a long word and the letters next to a
+/// space, a line feed or a line separator each get the form their place in their own word gives.
+#[test]
+fn the_probe_finds_the_character_in_its_word_across_a_long_word_and_breaks() {
+    let db = db();
+    let text = |s: &str| TextObject::point(Point::ZERO, s, style(JOINING_ALTERNATES_FAMILY, &[]));
+    let default_of = |t: &TextObject, byte: usize| {
+        let found = alternates_in_context(&db, t, byte).expect("a character");
+        (found.default, found.alternates.len())
+    };
+    // 700 letters: beh, 698 teh, noon. Each is found at its own offset, 300 of them past the
+    // 256 characters either side that are shaped.
+    let long = text(&format!("{BEH}{}{NOON}", TEH.repeat(698)));
+    assert_eq!(default_of(&long, 0), (g('B'), 0), "the first letter is initial");
+    assert_eq!(default_of(&long, 2 * 300), (g('u'), 3), "a medial teh deep in the word, with its alternates");
+    assert_eq!(default_of(&long, 2 * 699), (g('M'), 0), "the last letter is final");
+    // Two words: the break leaves each its own initial and final letters. The teh before the break
+    // ends its word (final) and the one after starts the next (initial), not medial.
+    for brk in [" ", "\n", "\u{2028}", "\u{2029}"] {
+        let two = text(&format!("{BEH}{TEH}{brk}{TEH}{NOON}"));
+        let after = 2 * 2 + brk.len();
+        assert_eq!(default_of(&two, 2), (g('U'), 2), "{brk:?}: final teh before the break, with its two alternates");
+        assert_eq!(default_of(&two, after), (g('T'), 0), "{brk:?}: initial teh after it");
+        assert_eq!(default_of(&two, after + 2), (g('M'), 0), "{brk:?}: the noon after it is final");
+    }
+}
+
+/// A word of alternates longer than the candidates tried (512) leaves the features after it
+/// untried: `aalt`'s 512 values use them all, so `salt`'s glyph is listed but no feature is applied
+/// for it.
+#[test]
+fn the_candidates_tried_are_capped() {
+    use crate::test_fonts::{CAPPED_CANDIDATES_FAMILY, capped_candidates_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(capped_candidates_font().expect("the test font builds"));
+    let face = db.face(CAPPED_CANDIDATES_FAMILY, "Regular").expect("the test face");
+    let found = alternates_in_context(&db, &TextObject::point(Point::ZERO, "xay", style(CAPPED_CANDIDATES_FAMILY, &[])), 1).expect("the a");
+    let listed: Vec<(u32, Option<String>)> = found.alternates.iter().map(|a| (a.gid, a.apply.clone())).collect();
+    assert_eq!(listed, [(face.glyph_for('b'), Some("aalt".to_string())), (face.glyph_for('c'), None)]);
+}
+
 /// A feature on a one-byte character (Latin) reaches that character: the range of a feature is
 /// its source bytes, and harfrust applies a range `a..b` to clusters `a..b - 1` unless the end is
 /// inclusive, which would leave a one-byte character out.

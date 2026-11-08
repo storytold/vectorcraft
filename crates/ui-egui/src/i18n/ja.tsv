@@ -1432,7 +1432,6 @@ digits	Malayalam	マラヤーラム数字
 	at the end of a word	語末
 	standing alone	単独のとき
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} は、{sel} (U+{code}) が単語の中で置かれている位置での異体字ではありません。
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	{glyph} に到達する OpenType フィーチャーはないため、テキストに適用できません。
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	ダブルクリックで代わりに {base} (U+{code}) を挿入: 表示形は前後とつながりませんが、文字はつながります。
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	表示形の代わりに {base} (U+{code}) を挿入しました。フォントが位置に応じて前後の文字とつなげます。
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	このグリフを表示する OpenType フィーチャーがないため、文字のグリフが置き換わり、前後の文字とつながらないことがあります。

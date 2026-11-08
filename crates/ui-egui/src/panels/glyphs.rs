@@ -292,7 +292,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     ui.painter().rect_stroke(rect.shrink(0.5), 0, edge, StrokeKind::Inside);
                     // A glyph no character maps is dimmed when it cannot go on the selection.
                     let pick = match (c, &fit) {
-                        (None, Some(fit)) => Some(fit.pick(gid)),
+                        (None, Some(fit)) => Some(fit.pick(&face, gid)),
                         _ => None,
                     };
                     let ink = if matches!(pick, Some(None)) { t.text_disabled } else { t.text_strong };
@@ -585,20 +585,24 @@ impl Fit {
 
     /// What a double-click on glyph `gid` does to the selected character: the way to draw it with
     /// that glyph, when it is the character's default glyph or one of its alternates as it stands
-    /// in its word, in the face the selected text is set in. `None` when it is not.
-    fn pick(&self, gid: u32) -> Option<Pick> {
+    /// in its word, in the face the selected text is set in; or a glyph no feature reaches that
+    /// the font's naming does not give to another letter (`A.salt` for `A`, `s.ss1` in a font
+    /// with no `ss01`), which is drawn as a glyph choice. `None` when it is not.
+    fn pick(&self, face: &vectorcraft_text::FontFace, gid: u32) -> Option<Pick> {
         let t = self.target.as_ref().filter(|t| t.available)?;
         let found = t.found.as_ref().filter(|f| f.font_id == self.face_id)?;
         if gid == found.default {
             return Some(Pick::Default);
         }
-        let a = found.alternates.iter().find(|a| a.gid == gid)?;
-        Some(a.apply.clone().map_or(Pick::Glyph(gid), Pick::Feature))
+        if let Some(a) = found.alternates.iter().find(|a| a.gid == gid) {
+            return Some(a.apply.clone().map_or(Pick::Glyph(gid), Pick::Feature));
+        }
+        face.is_unlisted_alternate(t.ch, gid).then_some(Pick::Glyph(gid))
     }
 
     /// Why [`Self::pick`] finds nothing for glyph `gid` of `face`, in the user's words: what the
     /// glyph belongs to (its letter and place in a word, from the font's own substitutions) and what
-    /// the selection is, that no feature reaches it, or that nothing is selected.
+    /// the selection is, or that nothing is selected.
     fn why(&self, face: &vectorcraft_text::FontFace, gid: u32) -> String {
         let Some(t) = &self.target else { return tl!("Select one character with the Type tool first.").to_string() };
         if !t.available {
@@ -619,12 +623,7 @@ impl Fit {
                 &[("glyph", &name), ("sel", &sel), ("code", &sel_code)],
             )
         };
-        let Some(origin) = face.glyph_origin(gid) else {
-            return match face.feature_reaching(gid) {
-                Some(_) => not_alternate(),
-                None => crate::i18n::fmt(tl!("No OpenType feature reaches {glyph}, so it cannot be applied to text."), &[("glyph", &name)]),
-            };
-        };
+        let Some(origin) = face.glyph_origin(gid) else { return not_alternate() };
         let place = match origin.position() {
             Some(vectorcraft_text::JoiningPosition::Initial) => Some(tl!("at the start of a word")),
             Some(vectorcraft_text::JoiningPosition::Medial) => Some(tl!("in the middle of a word")),
@@ -1303,7 +1302,7 @@ mod tests {
         let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, TALL)), ..Default::default() };
         let mut frame = ctx.run_ui(raw, |ui| {
             let fit = Fit::of(app, ui, face);
-            out = fit.pick(gid).ok_or_else(|| fit.why(face, gid));
+            out = fit.pick(face, gid).ok_or_else(|| fit.why(face, gid));
         });
         frame.textures_delta.clear();
         out
@@ -1422,7 +1421,7 @@ mod tests {
         assert_eq!(ink, Tokens::get(&ctx).text_strong);
         double_click_in(&ctx, &mut app, at, TALL);
         assert_eq!(glyph_ids(&app, &id).last(), Some(&glyph));
-        // Nothing selected, a glyph no feature reaches, and a variant of the letter's other form.
+        // Nothing selected, and a variant of the letter's other form.
         select(&mut app, 0, 0);
         assert_eq!(verdict(&ctx, &app, &face, glyph).err().as_deref(), Some("Select one character with the Type tool first."));
         let (_, ink) = entire_font_cell(&ctx, &mut app, &face, glyph);
@@ -1434,11 +1433,50 @@ mod tests {
             Some("yehfarsi.medi.alt1 is not an alternate of ی (U+06CC) as it stands in its word."),
             "its own letter, another place in a word"
         );
-        let unreached = face.unencoded_glyphs().iter().copied().find(|g| face.glyph_origin(*g).is_none() && face.feature_reaching(*g).is_none());
-        if let Some(g) = unreached {
-            let why = verdict(&ctx, &app, &face, g).err().expect("not applicable");
-            assert!(why.starts_with("No OpenType feature reaches "), "{why}");
+    }
+
+    /// A glyph no feature reaches (`a.a`, `a.b` of a font with no feature for them) is applied by
+    /// Entire Font to the selected character as a glyph choice, not dimmed; one the font's naming
+    /// gives to another letter (`a.a` on `y`) stays dimmed, and so does every glyph with no
+    /// character selected.
+    #[test]
+    fn entire_font_applies_a_glyph_no_feature_reaches_to_its_letter() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let glyph = gid_named(&face, "a.a");
+        assert!(face.feature_reaching(glyph).is_none() && face.glyph_origin(glyph).is_none(), "no feature reaches it");
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        let ctx = egui::Context::default();
+        let t = Tokens::get(&ctx);
+        let plain = glyph_ids(&app, &id);
+        // The cell of the glyph and its colour: this font's grid is longer than the panel is tall,
+        // but the glyph is in the first rows.
+        let cell_of = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let chars = face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).count();
+            let at = chars + face.unencoded_glyphs().iter().position(|g| *g == glyph).expect("an unencoded glyph");
+            let cells = inks(&tall_shapes(ctx, app));
+            (cells[at].0.center(), cells[at].1)
+        };
+        // Another letter, and nothing selected: dimmed, and a double-click changes nothing.
+        for (start, end) in [(2, 3), (0, 0)] {
+            select(&mut app, start, end);
+            assert!(verdict(&ctx, &app, &face, glyph).is_err());
+            let (at, ink) = cell_of(&ctx, &mut app);
+            assert_eq!(ink, t.text_disabled, "{start}..{end}: dimmed");
+            double_click_in(&ctx, &mut app, at, TALL);
+            assert_eq!(glyph_ids(&app, &id), plain);
         }
+        // The letter itself: enabled, one undo step, drawn with that glyph.
+        select(&mut app, 1, 2);
+        assert!(matches!(verdict(&ctx, &app, &face, glyph), Ok(Pick::Glyph(g)) if g == glyph));
+        let (at, ink) = cell_of(&ctx, &mut app);
+        assert_eq!(ink, t.text_strong);
+        let undo = app.session.active().unwrap().history.undo.len();
+        double_click_in(&ctx, &mut app, at, TALL);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        assert_eq!(glyph_ids(&app, &id), [plain[0], glyph, plain[2]]);
     }
 
     /// A presentation form picked in Entire Font (beh medial, U+FE92) with the caret before the last

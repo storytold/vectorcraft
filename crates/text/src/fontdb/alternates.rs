@@ -67,6 +67,38 @@ impl FontFace {
             .clone()
     }
 
+    /// Is glyph `gid` one no character maps and no feature reaches, whose name does not give it
+    /// to another letter than `c` (`a.salt` for `a` in a font with no `salt`; `A.salt` is not
+    /// `a`'s)? Such a glyph is not among [`Self::alternates`], yet it can be drawn for `c` as a
+    /// glyph choice ([`Self::choice`]).
+    pub fn is_unlisted_alternate(&self, c: char, gid: u32) -> bool {
+        self.unencoded_glyphs().binary_search(&gid).is_ok()
+            && self.feature_reaching(gid).is_none()
+            && self.glyph_origin(gid).is_none()
+            && self.name_owner(gid).is_none_or(|owner| owner == c)
+    }
+
+    /// The character a glyph's name says it belongs to: the one whose glyph carries the name up
+    /// to its first `.` (`A` for `A.salt`, `s` for `s.ss1`; the lowest character when several map
+    /// that glyph). `None` when the glyph has no name, or no character maps a glyph of that name.
+    fn name_owner(&self, gid: u32) -> Option<char> {
+        let base = self.glyph_name(gid)?;
+        let base = base.split('.').next().unwrap_or_default();
+        let names = self.named_chars.get_or_init(|| {
+            let Some(font) = self.skrifa() else { return Default::default() };
+            let mut by_char: Vec<(char, u32)> = font.charmap().mappings().filter_map(|(c, g)| Some((char::from_u32(c)?, g.to_u32()))).collect();
+            by_char.sort_unstable();
+            let mut out = std::collections::HashMap::new();
+            for (c, g) in by_char {
+                if let Some(name) = self.glyph_name(g) {
+                    out.entry(name).or_insert(c);
+                }
+            }
+            out
+        });
+        names.get(base).copied()
+    }
+
     /// How many glyphs the face has (its `maxp` table; 0 when it can't be read).
     pub fn glyph_count(&self) -> u32 {
         self.skrifa().and_then(|f| f.maxp().ok()).map_or(0, |m| u32::from(m.num_glyphs()))

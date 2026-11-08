@@ -856,7 +856,6 @@ font-technology	Variable	Variabla
 	at the end of a word	i slutet av ett ord
 	standing alone	när det står ensamt
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} är inget alternativ till {sel} (U+{code}) som det står i sitt ord.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Ingen OpenType-funktion ger {glyph}, så den kan inte användas på text.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dubbelklicka för att infoga {base} (U+{code}) i stället: en presentationsform ansluter inte, bokstaven gör det.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) infogades i stället för en presentationsform: typsnittet ansluter det till grannarna efter position.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion ritar den här glyfen här, så den ersätter tecknets glyf och ansluter kanske inte till grannteckenen.

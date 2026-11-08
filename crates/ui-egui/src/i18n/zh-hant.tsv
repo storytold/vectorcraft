@@ -831,7 +831,6 @@ font-technology	Variable	可變
 	at the end of a word	位於詞尾
 	standing alone	單獨出現時
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其單字中所處位置的替代字。
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	沒有任何 OpenType 功能能得到 {glyph}，因此無法套用到文字。
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	按兩下以改為插入 {base}（U+{code}）：表現形式不會連接，字母會連接。
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以取代表現形式：字體會依位置將其與相鄰字元連接。
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	沒有任何 OpenType 功能會在此處繪製該字形，因此它會取代該字元的字形，且可能無法與相鄰字元連接。

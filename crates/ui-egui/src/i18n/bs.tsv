@@ -1562,7 +1562,6 @@ digits	Malayalam	Malajalam
 	at the end of a word	na kraju riječi
 	standing alone	kad stoji sam
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} nije alternativa znaku {sel} (U+{code}) onako kako stoji u svojoj riječi.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Nijedna OpenType funkcija ne daje {glyph}, pa se ne može primijeniti na tekst.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvostruki klik za umetanje znaka {base} (U+{code}): oblik za prikaz se ne spaja, slovo se spaja.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Umetnut je znak {base} (U+{code}) umjesto oblika za prikaz: font ga spaja sa susjedima prema položaju.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Nijedna OpenType funkcija ne crta ovaj glif ovdje, pa on zamjenjuje glif znaka i možda se neće spajati sa susjednim znakovima.

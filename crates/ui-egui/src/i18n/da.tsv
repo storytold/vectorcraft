@@ -1496,7 +1496,6 @@ digits	Malayalam	Malayalam
 	at the end of a word	i slutningen af et ord
 	standing alone	når det står alene
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} er ikke et alternativ til {sel} (U+{code}), som det står i sit ord.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Ingen OpenType-funktion giver {glyph}, så det kan ikke anvendes på tekst.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dobbeltklik for at indsætte {base} (U+{code}) i stedet: en præsentationsform forbindes ikke, bogstavet gør.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) er indsat i stedet for en præsentationsform: skrifttypen forbinder det med naboerne efter position.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ingen OpenType-funktion tegner dette glyf her, så det erstatter tegnets glyf og forbindes måske ikke med nabotegnene.

@@ -1586,7 +1586,6 @@ digits	Malayalam	Malajálamské
 	at the end of a word	na konci slova
 	standing alone	když stojí samostatně
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} není alternativou znaku {sel} (U+{code}) tak, jak stojí ve svém slově.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Žádná funkce OpenType nedává {glyph}, proto ho nelze použít na text.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Dvojklikem vložíte {base} (U+{code}): prezentační tvar se nespojuje, písmeno ano.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Vloženo {base} (U+{code}) místo prezentačního tvaru: písmo ho podle polohy spojí se sousedy.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Žádná funkce OpenType tento glyf zde nekreslí, proto nahradí glyf znaku a nemusí se spojit se sousedními znaky.

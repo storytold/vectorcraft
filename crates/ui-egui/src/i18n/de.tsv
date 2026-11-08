@@ -848,7 +848,6 @@ font-technology	Variable	Variabel
 	at the end of a word	am Wortende
 	standing alone	allein stehend
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ist keine Alternative zu {sel} (U+{code}), so wie es in seinem Wort steht.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Keine OpenType-Funktion liefert {glyph}, daher lässt es sich nicht auf Text anwenden.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doppelklicken, um stattdessen {base} (U+{code}) einzufügen: Eine Darstellungsform verbindet sich nicht, der Buchstabe schon.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	{base} (U+{code}) statt einer Darstellungsform eingefügt: Die Schrift verbindet es je nach Position mit den Nachbarn.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Keine OpenType-Funktion zeichnet diese Glyphe hier, daher ersetzt sie die Glyphe des Zeichens und verbindet sich möglicherweise nicht mit den Nachbarzeichen.

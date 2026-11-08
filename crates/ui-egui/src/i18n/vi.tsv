@@ -1007,7 +1007,6 @@ font-technology	Variable	Biến thiên
 	at the end of a word	ở cuối từ
 	standing alone	khi đứng riêng
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} không phải glyph thay thế của {sel} (U+{code}) như ký tự đó đang đứng trong từ của nó.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Không có tính năng OpenType nào đạt tới {glyph}, nên không thể áp dụng cho văn bản.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Bấm đúp để chèn {base} (U+{code}) thay thế: dạng trình bày không nối, còn chữ cái thì nối.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Đã chèn {base} (U+{code}) thay cho dạng trình bày: phông chữ nối nó với các ký tự bên cạnh theo vị trí.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Không có tính năng OpenType nào vẽ glyph này ở đây, nên nó thay glyph của ký tự và có thể không nối với các ký tự bên cạnh.

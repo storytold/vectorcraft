@@ -204,6 +204,8 @@ pub struct FontFace {
     pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
     /// [`Self::unencoded_glyphs`], read once.
     pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
+    /// [`Self::name_owner`]'s glyph names to characters, read once.
+    pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance

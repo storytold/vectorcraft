@@ -1559,7 +1559,6 @@ digits	Malayalam	Malajalam
 	at the end of a word	sanan lopussa
 	standing alone	yksinään
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} ei ole merkin {sel} (U+{code}) vaihtoehto sellaisena kuin se on sanassaan.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Mikään OpenType-ominaisuus ei tuota glyfiä {glyph}, joten sitä ei voi käyttää tekstiin.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Lisää kaksoisnapsauttamalla sen sijaan {base} (U+{code}): esitysmuoto ei liity, kirjain liittyy.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Lisättiin {base} (U+{code}) esitysmuodon sijaan: fontti liittää sen naapureihin sijainnin mukaan.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Mikään OpenType-ominaisuus ei piirrä tätä glyfiä tässä, joten se korvaa merkin glyfin eikä välttämättä liity viereisiin merkkeihin.

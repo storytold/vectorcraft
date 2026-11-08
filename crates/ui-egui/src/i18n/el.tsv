@@ -827,7 +827,6 @@ font-technology	Variable	Μεταβλητές
 	at the end of a word	στο τέλος μιας λέξης
 	standing alone	όταν στέκεται μόνος
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	Ο γλύφος {glyph} δεν είναι εναλλακτικός του {sel} (U+{code}) όπως βρίσκεται στη λέξη του.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	Καμία λειτουργία OpenType δεν δίνει τον γλύφο {glyph}, οπότε δεν μπορεί να εφαρμοστεί στο κείμενο.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Διπλό κλικ για εισαγωγή του {base} (U+{code}): μια μορφή παρουσίασης δεν συνδέεται, το γράμμα συνδέεται.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Εισήχθη το {base} (U+{code}) αντί για μορφή παρουσίασης: η γραμματοσειρά το συνδέει με τους γείτονες ανάλογα με τη θέση.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Καμία λειτουργία OpenType δεν σχεδιάζει αυτόν τον γλύφο εδώ, οπότε αντικαθιστά τον γλύφο του χαρακτήρα και μπορεί να μην συνδέεται με τους γειτονικούς χαρακτήρες.

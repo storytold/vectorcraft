@@ -1352,7 +1352,6 @@
 	at the end of a word	शब्द के अंत में
 	standing alone	अकेले खड़े होने पर
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}, {sel} (U+{code}) का विकल्प नहीं है, जैसा वह अपने शब्द में खड़ा है।
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	कोई OpenType फ़ीचर {glyph} तक नहीं पहुँचता, इसलिए इसे टेक्स्ट पर लागू नहीं किया जा सकता।
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	इसके बजाय {base} (U+{code}) सम्मिलित करने के लिए डबल क्लिक करें: प्रेज़ेंटेशन फ़ॉर्म नहीं जुड़ता, अक्षर जुड़ता है।
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	प्रेज़ेंटेशन फ़ॉर्म की जगह {base} (U+{code}) सम्मिलित किया गया: फ़ॉन्ट उसे स्थिति के अनुसार पड़ोसियों से जोड़ता है।
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	यहाँ कोई OpenType फ़ीचर इस ग्लिफ़ को नहीं बनाता, इसलिए यह कैरेक्टर के ग्लिफ़ की जगह लेता है और पड़ोसी कैरेक्टरों से जुड़ नहीं भी सकता।

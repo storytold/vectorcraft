@@ -1422,7 +1422,6 @@ digits	Malayalam	말라얄람어
 	at the end of a word	단어 끝
 	standing alone	단독일 때
 	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph}은(는) 단어 안에 있는 {sel}(U+{code})의 대체 글리프가 아닙니다.
-	No OpenType feature reaches {glyph}, so it cannot be applied to text.	{glyph}에 도달하는 OpenType 기능이 없으므로 텍스트에 적용할 수 없습니다.
 	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	더블클릭하여 대신 {base}(U+{code}) 삽입: 표시 형태는 연결되지 않지만 글자는 연결됩니다.
 	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	표시 형태 대신 {base}(U+{code})을(를) 삽입했습니다. 글꼴이 위치에 따라 이웃 문자와 연결합니다.
 	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	이 글리프를 그리는 OpenType 기능이 없으므로 문자의 글리프를 대체하며 이웃 문자와 연결되지 않을 수 있습니다.

@@ -735,6 +735,49 @@ pub fn alternates_font(aalt: bool) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`capped_candidates_font`].
+pub const CAPPED_CANDIDATES_FAMILY: &str = "Captest Sans";
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table for `a` of an `aalt`
+/// alternate substitution that lists `b` 512 times (the longest set read: 512 values to try) and a
+/// `salt` single substitution that gives `c`. Family [`CAPPED_CANDIDATES_FAMILY`]. `None` when it
+/// can't be built.
+pub fn capped_candidates_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, SingleSubst, SingleSubstFormat2, SubstitutionLookup, SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let name =
+        name_table(&[(1, CAPPED_CANDIDATES_FAMILY), (2, "Regular"), (4, "Captest Sans Regular"), (5, "Version 1.000"), (6, "CaptestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let a = gid('a')?;
+    let cover = || CoverageFormat1::new(vec![a]);
+    let alternates = AlternateSubstFormat1::new(cover().into(), vec![AlternateSet::new(vec![gid('b')?; 512])]);
+    let salt = SingleSubst::from(SingleSubstFormat2::new(cover().into(), vec![gid('c')?]));
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Alternate(Lookup::new(Default::default(), vec![alternates])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt])),
+    ]);
+    let records =
+        vec![FeatureRecord::new(Tag::new(b"aalt"), Feature::new(None, vec![0])), FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1]))];
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`joining_alternates_font`].
 pub const JOINING_ALTERNATES_FAMILY: &str = "Jointest Sans";
 
