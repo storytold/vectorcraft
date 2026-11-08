@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Selection tool: Cmd/Ctrl-drag a bounding-box handle to move the selection and snap from that handle, #5482; Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -39,6 +39,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-05 | minor | Selection tool: Cmd/Ctrl-dragging a bounding-box handle moves the selection, unscaled, with the handle as the point that snaps; without the modifier the handle still scales (#5482, a VectorCraft addition); scores and estimates unchanged |
 | 2026-10-30 | minor | Home screen: welcome, New / Open and Community are centred and the large Discord button uses the theme accent, part of #4684; scores and estimates unchanged (estimated) |
 | 2026-11-06 | minor | Snap to Grid: a straight segment dragged with Direct Selection lands its anchors on the grid, not the pressed point (#3835); scores and estimates unchanged |
 | 2026-11-06 | minor | Drop Shadow: a swatch beside Color follows the hex and a double-click opens the Color Picker over the dialog, whose OK fills Color (#5364); scores and estimates unchanged |
@@ -233,6 +234,7 @@ tools, never checked side by side) isn't captured row by row.
 |---|---|---|
 | Moving a rounded rectangle with Craquelure at high DPI | partial | Distance searches optimized; moved-viewport pixels unchanged for three texture effects; `texture_drag_perf` probe available. Idle Windows mouse-drag QA remains (#1257) |
 | Bounding-box handles: Shift proportional, Alt from centre, rotate outside the corners | done | |
+| Cmd/Ctrl-drag a bounding-box handle to move the selection by it: the handle is the point that snaps (move cursor over the handle while the modifier is held) | done | #5482, a VectorCraft addition: the reference application moves by the point grabbed with Snap to Point ([public source](https://helpx.adobe.com/illustrator/desktop/measure-and-align/grids-and-guides/align-graphic-objects-with-guides.html)); this extends it to the handles; test `a_cmd_drag_on_a_bbox_handle_moves_the_selection_and_snaps_the_handle` |
 | Rotated objects keep a rotated bounding box and their angle; Reset Bounding Box | done | |
 | Free Transform, Scale and Reflect along a rotated box | missing | |
 | Free Transform widget: constrain, free distort, perspective distort; the key-held variants | done | |
