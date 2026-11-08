@@ -21,7 +21,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, artboards) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
 | Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
-| Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
+| Formats exported | ~16 | 18 | missing: DWG; extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
 EPS editing-data follow-up (2026-10-16): both mesh-corner layouts (with and without opacity)
@@ -282,7 +282,7 @@ A Scatter brush in the editing data whose last 15 numbers start with 1 comes int
 | Word `.docx` | place | place (area type with the document's styles and its fonts, size, bold, italic, underline, strikethrough, caps, superscript and subscript, color, alignment, indents and paragraph spacing) | no | `tests/textimport.rs`, `place/docx.rs`; fuzzed (`text_import_fuzz.rs`); list numbers, pictures and text boxes are left out |
 | Word `.doc` | place | place (area type with the same formatting as `.docx`, from the style sheet's styles and direct formatting; Word 97 and later) | no | `tests/textimport.rs`, `place/doc.rs`; fuzzed (`text_import_fuzz.rs`); pictures, headers, footers, notes, comments and text boxes are left out with a warning; encrypted and fast-saved documents are refused |
 | CSS | export (CSS Properties) | — | yes | |
-| OBJ / USDA / glTF | 3D export | — | no | needs 3D (gap G3) |
+| OBJ / USDA / glTF | 3D export | — | yes, also USDZ (a 3D asset of Asset Export: `assets.add3D`, `assets.export3D`) | each solid of an object with Extrude & Bevel, Revolve, Inflate or Rotate is a triangle mesh of its faces before projection, at the object's 3D rotation, y up, with a two-sided material in its paint's color; glTF 2.0 is one `.gltf` with its buffer embedded, in meters; USDA and OBJ are in points (USDA says its `metersPerUnit`), OBJ with an `.mtl`; USDZ stores the USDA uncompressed on a 64-byte boundary; tests in `crates/three-d/src/mesh/tests.rs`, `crates/engine/src/cmd/fileio/mesh3d/tests.rs` and `crates/engine/src/tests/assets_3d.rs` |
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296) |
 

@@ -1084,6 +1084,14 @@ font-technology	Variable	Вариативные
 	Export As SVG…	Экспортировать как SVG…
 	Export Asset	Экспортировать ресурс
 	Export Assets	Экспортировать ресурсы
+	Export 3D Object	Экспортировать 3D-объект
+	3D Export Format	Формат 3D-экспорта
+	Export 3D Assets	Экспортировать 3D-ресурсы
+@msg	{what} can't be exported in 3D: {e}	{what} невозможно экспортировать в 3D: {e}
+@msg	asset {id} isn't a 3D asset	ресурс {id} не является 3D-ресурсом
+@msg	asset {id} is a 3D asset: assets.export3D writes it	ресурс {id} является 3D-ресурсом: его записывает assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D-ресурсов пока нет: сначала соберите объект с 3D-эффектом (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	выберите объект с 3D-эффектом (или укажите его идентификаторы)
 	Export As…	Экспортировать как…
 	Export CSS	Экспортировать CSS
 	Export CSS…	Экспортировать CSS…

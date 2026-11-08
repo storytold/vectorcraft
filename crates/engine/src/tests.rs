@@ -10,6 +10,7 @@ mod ai_open_path;
 mod appearance;
 mod areafit;
 mod assets;
+mod assets_3d;
 mod attributes;
 mod bboxrotate;
 mod blendfidelity;

@@ -2752,6 +2752,14 @@ theme	Appearance	იერსახე
 	Asset Export Settings	რესურსის ექსპორტის პარამეტრები
 	Assets	რესურსები
 	Export Assets	რესურსების ექსპორტირება
+	Export 3D Object	3D ობიექტის ექსპორტირება
+	3D Export Format	3D ექსპორტის ფორმატი
+	Export 3D Assets	3D რესურსების ექსპორტირება
+@msg	{what} can't be exported in 3D: {e}	{what} 3D-ში ვერ ექსპორტირდება: {e}
+@msg	asset {id} isn't a 3D asset	რესურსი {id} არ არის 3D რესურსი
+@msg	asset {id} is a 3D asset: assets.export3D writes it	რესურსი {id} 3D რესურსია: მას assets.export3D წერს
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D რესურსები ჯერ არ არის: ჯერ შეაგროვეთ 3D ეფექტის მქონე ობიექტი (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	აირჩიეთ 3D ეფექტის მქონე ობიექტი (ან მიუთითეთ მისი ID)
 	Remove Asset	რესურსის წაშლა
 	Rename Asset	რესურსის სახელის შეცვლა
 	Fill Rule	შევსების წესი

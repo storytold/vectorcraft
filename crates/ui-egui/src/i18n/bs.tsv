@@ -3152,6 +3152,9 @@ theme	Appearance	Izgled
 	Asset Export Settings	Postavke izvoza resursa
 	Assets	Resursi
 	Export Assets	Izvezi resurse
+	Export 3D Object	Izvezi 3D objekat
+	3D Export Format	Format 3D izvoza
+	Export 3D Assets	Izvezi 3D resurse
 	Remove Asset	Ukloni resurs
 	Rename Asset	Preimenuj resurs
 	Fill Rule	Pravilo ispune

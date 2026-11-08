@@ -1589,6 +1589,14 @@ digits	Malayalam	マラヤーラム数字
 	PDF Print	印刷用 PDF
 	Export As	形式を指定して書き出し
 	Export Assets	アセットを書き出し
+	Export 3D Object	3D オブジェクトを書き出し
+	3D Export Format	3D 書き出し形式
+	Export 3D Assets	3D アセットを書き出し
+@msg	{what} can't be exported in 3D: {e}	{what} は 3D で書き出せません: {e}
+@msg	asset {id} isn't a 3D asset	アセット {id} は 3D アセットではありません
+@msg	asset {id} is a 3D asset: assets.export3D writes it	アセット {id} は 3D アセットです: assets.export3D で書き出します
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	3D アセットがまだありません: まず 3D 効果のあるオブジェクトを追加してください (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D 効果のあるオブジェクトを選択してください (または ID を指定)
 	Export CSS	CSS を書き出し
 	Export CSS…	CSS を書き出し…
 	Export DXF	DXF を書き出し

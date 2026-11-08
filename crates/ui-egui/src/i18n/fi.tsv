@@ -3130,6 +3130,14 @@ theme	Appearance	Ulkoasu
 	Asset Export Settings	Resurssien vientiasetukset
 	Assets	Resurssit
 	Export Assets	Vie resurssit
+	Export 3D Object	Vie 3D-objekti
+	3D Export Format	3D-vientimuoto
+	Export 3D Assets	Vie 3D-resurssit
+@msg	{what} can't be exported in 3D: {e}	kohdetta {what} ei voi viedä 3D-muodossa: {e}
+@msg	asset {id} isn't a 3D asset	resurssi {id} ei ole 3D-resurssi
+@msg	asset {id} is a 3D asset: assets.export3D writes it	resurssi {id} on 3D-resurssi: assets.export3D kirjoittaa sen
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	ei vielä 3D-resursseja: kerää ensin objekti, jossa on 3D-tehoste (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	valitse objekti, jossa on 3D-tehoste (tai anna sen tunnukset)
 	Remove Asset	Poista resurssi
 	Rename Asset	Nimeä resurssi uudelleen
 	Fill Rule	Täyttösääntö

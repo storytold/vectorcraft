@@ -84,11 +84,12 @@ pub use reshape::{
 };
 pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
 pub use solids::{
-    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
-    three_d_params_as, validate_solid, validate_three_d, view_options,
+    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, SolidMesh, THREE_D_TYPES, extrude_options, has_solid, inflate_options, is_three_d, solid_art,
+    three_d_meshes, three_d_params_as, validate_solid, validate_three_d, view_options,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use trap::TRAP;
+pub use vectorcraft_three_d::Mesh;
 pub use warp::{WarpStyle, warp_point};
 
 mod catalog;

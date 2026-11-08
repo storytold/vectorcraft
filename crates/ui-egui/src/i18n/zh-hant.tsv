@@ -1051,6 +1051,14 @@ font-technology	Variable	可變
 	Export As SVG…	匯出為 SVG…
 	Export Asset	匯出資產
 	Export Assets	匯出資產
+	Export 3D Object	匯出 3D 物件
+	3D Export Format	3D 匯出格式
+	Export 3D Assets	匯出 3D 資產
+@msg	{what} can't be exported in 3D: {e}	無法將 {what} 匯出為 3D：{e}
+@msg	asset {id} isn't a 3D asset	資產 {id} 不是 3D 資產
+@msg	asset {id} is a 3D asset: assets.export3D writes it	資產 {id} 是 3D 資產：由 assets.export3D 寫入
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	尚無 3D 資產：請先收集具有 3D 效果的物件 (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	請選取具有 3D 效果的物件 (或提供其 ID)
 	Export As…	匯出為…
 	Export CSS	匯出 CSS
 	Export CSS…	匯出 CSS…

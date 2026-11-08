@@ -2949,6 +2949,9 @@ theme	Appearance	Vormgeving
 	Asset Export Settings	Exportinstellingen voor assets
 	Assets	Assets
 	Export Assets	Assets exporteren
+	Export 3D Object	3D-object exporteren
+	3D Export Format	3D-exportindeling
+	Export 3D Assets	3D-assets exporteren
 	Remove Asset	Asset verwijderen
 	Rename Asset	Asset hernoemen
 	Fill Rule	Vulregel

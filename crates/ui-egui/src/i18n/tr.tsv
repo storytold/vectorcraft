@@ -1057,6 +1057,14 @@ font-technology	Variable	Değişken
 	Export As SVG…	SVG Olarak Dışa Aktar…
 	Export Asset	Varlığı Dışa Aktar
 	Export Assets	Varlıkları Dışa Aktar
+	Export 3D Object	3D Nesneyi Dışa Aktar
+	3D Export Format	3D Dışa Aktarma Biçimi
+	Export 3D Assets	3D Varlıkları Dışa Aktar
+@msg	{what} can't be exported in 3D: {e}	{what} 3D olarak dışa aktarılamıyor: {e}
+@msg	asset {id} isn't a 3D asset	{id} varlığı bir 3D varlık değil
+@msg	asset {id} is a 3D asset: assets.export3D writes it	{id} varlığı bir 3D varlık: onu assets.export3D yazar
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	henüz 3D varlık yok: önce 3D efekti olan bir nesne toplayın (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	3D efekti olan bir nesne seçin (veya kimliklerini verin)
 	Export As…	Farklı Dışa Aktar…
 	Export CSS	CSS'yi dışa aktar
 	Export CSS…	CSS'yi dışa aktar…

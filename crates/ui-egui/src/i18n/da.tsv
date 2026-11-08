@@ -2935,6 +2935,9 @@ theme	Appearance	Udseende
 	Asset Export Settings	Indstillinger for eksport af aktiver
 	Assets	Aktiver
 	Export Assets	Eksportér aktiver
+	Export 3D Object	Eksportér 3D-objekt
+	3D Export Format	3D-eksportformat
+	Export 3D Assets	Eksportér 3D-aktiver
 	Remove Asset	Fjern aktiv
 	Rename Asset	Omdøb aktiv
 	Fill Rule	Udfyldningsregel
