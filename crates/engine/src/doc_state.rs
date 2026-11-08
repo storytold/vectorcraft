@@ -76,6 +76,11 @@ pub struct DocState {
     /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
     /// save and restores it when the document opens.
     pub view: Option<vectorcraft_doc::SavedView>,
+    /// The id of the view's active artboard, which the UI keeps current before each command it
+    /// runs: a `.ai` save or export names that artboard as the file's active one. `None`, or an
+    /// artboard the document no longer has: the artboard the document opened on
+    /// ([`vectorcraft_doc::Document::opened_artboard`]), else the first.
+    pub active_artboard: Option<u32>,
     /// Restored by Data Recovery: the title says "[Recovered]" and Save asks where to save it
     /// (suggesting `path`, the file it was copied from) instead of overwriting that file.
     pub recovered: bool,
@@ -97,6 +102,24 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What [`DocState::any_empty_artboards`] last measured. Not saved.
+    empty_artboards: std::cell::RefCell<EmptyArtboards>,
+}
+
+/// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
+/// was measured.
+#[derive(Clone, Debug, Default)]
+struct EmptyArtboards {
+    /// The document measured. While this reference lasts, its allocation holds no other document,
+    /// and `Arc::make_mut` moves a document it changes to a new allocation.
+    doc: std::sync::Weak<Document>,
+    any: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`DocState::any_empty_artboards`] measured a document on this thread.
+    pub(crate) static EMPTY_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -266,6 +289,7 @@ impl DocState {
             save_artboards: vec![],
             converted: false,
             view,
+            active_artboard: None,
             recovered: false,
             recovery: None,
             print_tiling: false,
@@ -274,7 +298,20 @@ impl DocState {
             import_losses: vec![],
             last_perspective: None,
             opened_by: file_access::current(),
+            empty_artboards: Default::default(),
         }
+    }
+    /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
+    /// so a menu that asks on every frame measures it once, and a change of the selection or the view
+    /// keeps the answer.
+    pub(crate) fn any_empty_artboards(&self, measure: impl FnOnce(&Document) -> bool) -> bool {
+        let mut last = self.empty_artboards.borrow_mut();
+        if !std::ptr::eq(last.doc.as_ptr(), Arc::as_ptr(&self.doc)) {
+            #[cfg(test)]
+            EMPTY_ARTBOARD_MEASURES.with(|c| c.set(c.get() + 1));
+            *last = EmptyArtboards { doc: Arc::downgrade(&self.doc), any: measure(&self.doc) };
+        }
+        last.any
     }
     /// Unsaved changes: the document differs from the saved one (selection changes and changes that
     /// are not edits to save don't count, [`DocState::same_content`]).

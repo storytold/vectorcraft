@@ -1607,6 +1607,19 @@ fn messages_with_a_count_take_the_plural_form() {
     assert_eq!(message(cs, "Packaged 21 files"), "Zabaleno 21 souborů");
 }
 
+/// The import's note for warped type that opened as drawn art is translated in every complete
+/// catalog. It is built from a constant, which the scan of message literals doesn't see.
+#[test]
+fn warped_type_note_is_translated() {
+    let note = "warped text objects that came in as drawn art, not as editable type: 3";
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let shown = message(lang, note);
+        assert_ne!(shown, note, "{code}");
+        assert!(shown.contains('3'), "{code}: {shown}");
+    }
+}
+
 /// The Gamut Check status line names a count of 1 in the singular and other counts in the plural,
 /// and every complete catalog translates it, in the form its plural rule picks.
 #[test]
@@ -1904,6 +1917,20 @@ fn dataset_import_repeated_column_error_is_translated() {
     }
 }
 
+/// The warning for a PDF/X file that leaves out the document's bleed is translated in every catalog,
+/// alone and in the status bar's note.
+#[test]
+fn pdfx_bleed_warning_is_translated() {
+    let w = vectorcraft_engine::cmd::fileio::pdf::BLEED_LEFT_OUT;
+    let status = format!("Saved /tmp/a.pdf with 1 note: {w}");
+    // A catalog's `{a}: {b}` row can translate the colon alone, so the check looks for the English words.
+    for lang in Lang::all().filter(|l| l.code() != Lang::EN.code()) {
+        for shown in [message(lang, w), message(lang, &status)] {
+            assert!(!shown.contains("leaves out") && !shown.contains("turn on"), "{}: {shown}", lang.code());
+        }
+    }
+}
+
 /// The errors of saving, renaming and deleting a tracing preset are translated in every language
 /// that translates every message.
 #[test]
@@ -2061,6 +2088,113 @@ fn shared_param_check_errors_show_their_values_as_given() {
             assert!(as_given, "{}: {shown}", lang.code());
         }
     }
+}
+
+/// The spans of `s` between pairs of backticks, such as a parameter key or a command id; none when
+/// its backticks don't pair up.
+fn backticked(s: &str) -> Vec<&str> {
+    let parts: Vec<&str> = s.split('`').collect();
+    if parts.len().is_multiple_of(2) {
+        return Vec::new();
+    }
+    parts.into_iter().skip(1).step_by(2).filter(|t| !t.is_empty()).collect()
+}
+
+#[test]
+fn backticked_finds_the_spans_between_paired_backticks() {
+    assert_eq!(backticked("`ids` must be an array, see `plugin.list`"), ["ids", "plugin.list"]);
+    assert_eq!(backticked("no backticks"), Vec::<&str>::new());
+    assert_eq!(backticked("a lone ` backtick"), Vec::<&str>::new());
+}
+
+/// A translated row keeps each backticked span of its English text, in backticks and as the
+/// English spells it: the span names a parameter key, a command id or a placeholder, which the
+/// command reads as written.
+#[test]
+fn translations_keep_the_backticked_names_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in &entries {
+            let plural = ctx == "@plural" || ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for token in backticked(english) {
+                    if !form.contains(&format!("`{token}`")) {
+                        missing.push(format!("{}: `{token}` in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a backticked name:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// The spans of `s` between pairs of straight double quotes outside its backticked spans, such as
+/// a value a parameter takes; none when those quotes don't pair up.
+fn double_quoted(s: &str) -> Vec<&str> {
+    let outside: Vec<&str> = s.split('`').step_by(2).collect();
+    let quotes: usize = outside.iter().map(|part| part.matches('"').count()).sum();
+    if !quotes.is_multiple_of(2) {
+        return Vec::new();
+    }
+    let mut spans = Vec::new();
+    let mut open = false;
+    for part in outside {
+        for (i, piece) in part.split('"').enumerate() {
+            if i > 0 {
+                open = !open;
+            }
+            if open && !piece.is_empty() {
+                spans.push(piece);
+            }
+        }
+    }
+    spans
+}
+
+/// Whether `text` holds `word` with no letter or digit right before or after it.
+fn holds_word(text: &str, word: &str) -> bool {
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back().is_none_or(|c| !c.is_alphanumeric());
+        let after = text[at + word.len()..].chars().next().is_none_or(|c| !c.is_alphanumeric());
+        before && after
+    })
+}
+
+#[test]
+fn double_quoted_finds_the_spans_between_paired_quotes() {
+    assert_eq!(double_quoted(r#"span must be "object" or "selection", got {v}"#), ["object", "selection"]);
+    assert_eq!(double_quoted(r#"`{"a": 1}` is "left""#), ["left"]);
+    assert_eq!(double_quoted(r#"a lone " quote"#), Vec::<&str>::new());
+    assert!(holds_word("“auto” veya “optical”", "auto"));
+    assert!(!holds_word(r#""content""#, "contents"));
+    assert!(!holds_word(r#""none""#, "one"));
+}
+
+/// A translated status or error message keeps each value its English text puts in double quotes,
+/// spelled as the English spells it, since the value is what a command reads; the quote marks may
+/// be the language's own. Menu and control labels quote names of the interface, which translate.
+#[test]
+fn translated_messages_keep_the_double_quoted_values_of_their_english() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for value in double_quoted(english) {
+                    if !holds_word(form, value) {
+                        missing.push(format!("{}: \"{value}\" in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a double-quoted value:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists

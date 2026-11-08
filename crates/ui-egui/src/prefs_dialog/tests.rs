@@ -324,6 +324,157 @@ fn the_category_shown_is_highlighted() {
     assert_eq!(filled, vec![3], "{rows:?}");
 }
 
+/// One frame of the Preferences dialog with `events`, keys first as the app takes them.
+fn search_frame(a: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
+        crate::shortcuts::handle(a, ui.ctx());
+        show(a, ui.ctx());
+    });
+    out.textures_delta.clear();
+    out
+}
+
+/// A key pressed and let go in one frame.
+fn key_press(key: egui::Key, modifiers: egui::Modifiers) -> Vec<egui::Event> {
+    [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }).to_vec()
+}
+
+fn search_text(a: &VectorcraftApp) -> String {
+    a.ui.dialog.as_ref().map(|d| d.str("__search")).unwrap_or_default()
+}
+
+/// Preferences' search finds a setting by its label, ignoring case; an empty search finds nothing.
+#[test]
+fn a_search_finds_a_setting_by_its_label() {
+    let keys = |q: &str| search(q).iter().map(|s| s.key).collect::<Vec<_>>();
+    assert!(keys("tool tips").contains(&"showToolTips"), "{:?}", keys("tool tips"));
+    assert!(keys("SHOW TOOL TIPS").contains(&"showToolTips"));
+    assert!(keys("snap to grid").contains(&"__snapToGrid"));
+    let found = search("gridline every");
+    assert_eq!(found.iter().map(|s| (s.key, s.category)).collect::<Vec<_>>(), [("gridlineEvery", "Guides & Grid")]);
+    assert!(search("").is_empty() && search("   ").is_empty());
+    assert!(search("no such setting at all").is_empty());
+}
+
+/// A translated label matches while the dialog is drawn in that language.
+#[test]
+fn a_translated_label_matches_in_the_interface_language() {
+    let de = crate::i18n::Lang::from_code("de").expect("de registered");
+    let label = crate::i18n::tr(de, "Show Tool Tips");
+    assert_ne!(label, "Show Tool Tips", "German has a row for the label");
+    crate::i18n::set_current(de);
+    let found: Vec<_> = search(&label.to_uppercase()).iter().map(|s| s.key).collect();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert!(found.contains(&"showToolTips"), "{label}: {found:?}");
+}
+
+/// An empty search field shows the category list; a search that finds nothing says so.
+#[test]
+fn an_empty_search_lists_the_categories_and_no_match_says_so() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(PREF_CATEGORIES.iter().all(|c| text.contains(c)), "{text}");
+    assert!(!text.contains("No settings found"), "{text}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("__search".into(), json!("no such setting at all"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("No settings found"), "{text}");
+    assert!(!text.contains("Plug-ins & Scratch Disks"), "the list is hidden: {text}");
+    a.ui.dialog.as_mut().unwrap().fields.insert("__search".into(), json!("  "));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(PREF_CATEGORIES.iter().all(|c| text.contains(c)), "{text}");
+}
+
+/// Choosing a setting the search found shows its category, clears the search and highlights the
+/// setting's row.
+#[test]
+fn choosing_a_found_setting_goes_to_its_category() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    a.ui.dialog.as_mut().unwrap().fields.insert("__search".into(), json!("gridline"));
+    search_frame(&mut a, &ctx, vec![]);
+    let out = search_frame(&mut a, &ctx, vec![]);
+    let mut at = None;
+    fn find(s: &egui::Shape, label: &str, at: &mut Option<egui::Pos2>) {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == label => *at = Some(t.pos + t.galley.rect.center().to_vec2()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| find(s, label, at)),
+            _ => {}
+        }
+    }
+    out.shapes.iter().for_each(|c| find(&c.shape, "Gridline every", &mut at));
+    let at = at.expect("the found setting is listed");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    search_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at), button(true)]);
+    search_frame(&mut a, &ctx, vec![button(false)]);
+    let d = a.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("__category").as_str(), d.str("__found").as_str(), d.str("__search").as_str()), ("Guides & Grid", "gridlineEvery", ""));
+    search_frame(&mut a, &ctx, vec![]);
+    let out = search_frame(&mut a, &ctx, vec![]);
+    fn rects(s: &egui::Shape, out: &mut Vec<(egui::Rect, egui::Color32)>) {
+        match s {
+            egui::Shape::Rect(r) => out.push((r.rect, r.fill)),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| rects(s, out)),
+            _ => {}
+        }
+    }
+    let mut shown = vec![];
+    out.shapes.iter().for_each(|c| rects(&c.shape, &mut shown));
+    let mut label = None;
+    out.shapes.iter().for_each(|c| find(&c.shape, "Gridline every:", &mut label));
+    let label = label.expect("the setting's row is shown");
+    // A tinted band across the fields column, behind the setting's label.
+    let band = shown.iter().any(|(r, fill)| r.width() >= 500.0 && r.height() < 40.0 && fill.a() > 0 && r.contains(label));
+    assert!(band, "the setting's row is highlighted: {shown:?}");
+    assert!(!a.ui.dialog.as_ref().unwrap().bool("__scrollTo"), "the list scrolled to it");
+    // Another category: the highlight goes.
+    a.ui.dialog.as_mut().unwrap().fields.insert("__category".into(), json!("Units"));
+    search_frame(&mut a, &ctx, vec![]);
+    assert_eq!(a.ui.dialog.as_ref().unwrap().str("__found"), "");
+}
+
+/// The search field has the keyboard focus when the dialog opens, and Cmd/Ctrl+F gives it back.
+#[test]
+fn the_search_field_takes_the_focus_on_open_and_on_cmd_f() {
+    let mut a = app();
+    open(&mut a, None);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let focused = |ctx: &egui::Context| ctx.memory(|m| m.has_focus(search_edit_id()));
+    search_frame(&mut a, &ctx, vec![]);
+    search_frame(&mut a, &ctx, vec![]);
+    assert!(focused(&ctx), "focused on open");
+    ctx.memory_mut(|m| m.surrender_focus(search_edit_id()));
+    search_frame(&mut a, &ctx, vec![]);
+    assert!(!focused(&ctx));
+    search_frame(&mut a, &ctx, key_press(egui::Key::F, egui::Modifiers::COMMAND));
+    assert!(focused(&ctx), "focused on Cmd/Ctrl+F");
+    assert!(a.ui.dialog.is_some());
+}
+
+/// Escape in the search field with text clears it and keeps the dialog open with the field
+/// focused; Escape in the empty field closes the dialog.
+#[test]
+fn escape_clears_the_search_then_closes_the_dialog() {
+    let mut a = app();
+    open(&mut a, None);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    search_frame(&mut a, &ctx, vec![]);
+    search_frame(&mut a, &ctx, vec![]);
+    search_frame(&mut a, &ctx, vec![egui::Event::Text("grid".into())]);
+    assert_eq!(search_text(&a), "grid");
+    search_frame(&mut a, &ctx, key_press(egui::Key::Escape, egui::Modifiers::NONE));
+    assert!(a.ui.dialog.is_some(), "the first Escape leaves the dialog open");
+    assert_eq!(search_text(&a), "");
+    search_frame(&mut a, &ctx, vec![]);
+    assert!(ctx.memory(|m| m.has_focus(search_edit_id())), "the field keeps the focus");
+    search_frame(&mut a, &ctx, key_press(egui::Key::Escape, egui::Modifiers::NONE));
+    assert!(a.ui.dialog.is_none(), "Escape in the empty field closes the dialog");
+}
+
 /// Units › Numbers Without Units Are Points (#394): the preference reaches the fields when it
 /// changes, and its checkbox is dimmed unless a unit is Picas.
 #[test]
@@ -615,6 +766,7 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
             assert_eq!(confirm(&mut a), Err(format!("{path} is not a folder")), "{key}");
             assert!(a.ui.dialog.is_some(), "{key}: the dialog stays open");
             assert_eq!(a.session.prefs.to_json(), before, "{key}: no preference changes");
+            assert!(!a.prefs_changed, "{key}: nothing to save");
         }
         // A typed folder that passes is saved, with the spaces around it as typed.
         let typed = format!(" {} ", dir.to_string_lossy());
@@ -627,7 +779,9 @@ fn ok_refuses_a_typed_folder_that_choose_would_refuse() {
         confirm(&mut a).unwrap();
         assert_eq!(a.session.prefs.to_json()[key], json!(""), "{key}");
         // A folder already saved is not checked again, so OK works while it is unavailable.
+        std::fs::create_dir(&missing).unwrap();
         a.run("prefs.set", json!({"key": key, "value": missing})).unwrap();
+        std::fs::remove_dir(&missing).unwrap();
         open(&mut a, Some("File Handling"));
         a.ui.dialog.as_mut().unwrap().fields.insert("showToolTips".into(), json!(!a.session.prefs.show_tool_tips));
         confirm(&mut a).unwrap();

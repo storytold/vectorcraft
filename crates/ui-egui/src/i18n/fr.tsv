@@ -85,6 +85,11 @@
 	3 Color Job…	Travail en 3 couleurs…
 	30° Angles	Angles de 30°
 	3D and Materials	3D et matières
+	Plane	Plan
+	Extrude	Extrusion
+	Revolve	Révolution
+	Inflate	Gonfler
+	Select objects, then pick an object type to give them a 3D effect.	Sélectionnez des objets, puis choisissez un type d’objet pour leur donner un effet 3D.
 	3D Ribbon	Ruban 3D
 	45° Angles	Angles de 45°
 	60° Angles	Angles de 60°
@@ -285,6 +290,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Afficher le réticule
 	Show Video Safe Areas	Afficher les zones de sécurité vidéo
 	Video Ruler Pixel Aspect Ratio:	Format des pixels des règles vidéo :
+	Fade Region Outside Artboard	Assombrir la zone hors du plan de travail
+	Update While Dragging	Mettre à jour pendant le déplacement
 	Hide Video Rulers	Masquer les règles vidéo
 	Background Contents	Contenu de l’arrière-plan
 	Background Contents:	Contenu de l’arrière-plan :
@@ -890,6 +897,7 @@ font-technology	Variable	Variables
 	Duplicate Artboard	Dupliquer le plan de travail
 	Copy Artboard	Copier le plan de travail
 	Cut Artboard	Couper le plan de travail
+	Rename Artboards	Renommer les plans de travail
 	Duplicate Artboards	Dupliquer les plans de travail
 	Duplicate Brush	Dupliquer la forme
 	Duplicate Character Style	Dupliquer le style de caractère
@@ -1083,6 +1091,8 @@ font-technology	Variable	Variables
 	Export for Screens Settings	Paramètres d’Exporter pour les écrans
 	Export for Screens…	Exporter pour les écrans…
 	Export Keyboard Shortcuts…	Exporter les raccourcis clavier…
+	Export Keyboard Shortcuts as Text…	Exporter les raccourcis clavier en texte…
+	Export Text…	Exporter le texte…
 	Export Option	Option d’exportation
 	Export PDF	Exporter en PDF
 	Export PDF Presets	Exporter les paramètres prédéfinis PDF
@@ -1371,6 +1381,8 @@ font-technology	Variable	Variables
 	Grays	Gris
 	Grays and Neutrals	Gris et neutres
 	Grayscale	Niveaux de gris
+	High Color	Beaucoup de couleurs
+	Low Color	Peu de couleurs
 	Grayscale images	Images en niveaux de gris
 	Greek & Cyrillic	Grec et cyrillique
 	Green	Vert
@@ -1444,6 +1456,7 @@ font-technology	Variable	Variables
 	Step Backward	Pas en arrière
 	Step Forward	Pas en avant
 	Clear History	Effacer l’historique
+	New Document from State	Nouveau document à partir de l’état
 	Set History Limit…	Définir la limite de l’historique…
 	History States	États de l’historique
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1821,6 +1834,9 @@ font-technology	Variable	Variables
 	Live Paint Selection Tool	Outil Sélection de peinture dynamique
 	Live Shape Properties	Propriétés de la forme dynamique
 	Load Color Profile…	Charger un profil colorimétrique…
+	Load Character Styles…	Charger les styles de caractère…
+	Load Paragraph Styles…	Charger les styles de paragraphe…
+	Load All Styles…	Charger tous les styles…
 	Remove Color Profile…	Supprimer un profil colorimétrique…
 	Load Image into Clipboard	Charger une image dans le presse-papiers
 	Load Metafile into Clipboard	Charger un métafichier dans le presse-papiers
@@ -2566,6 +2582,9 @@ digits	Malayalam	Malayalam
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
 	Rearrange All Artboards	Réorganiser tous les plans de travail
+	Rearrange	Réorganiser
+	Select All Artboards	Sélectionner tous les plans de travail
+	Switch Orientation	Changer d’orientation
 	Rearrange All	Tout réorganiser
 	Layout Order:	Ordre de disposition :
 	Change to Left-to-Right Layout	Passer à la disposition de gauche à droite
@@ -2683,6 +2702,14 @@ digits	Malayalam	Malayalam
 	Relink	Lier à nouveau
 	Relink Linked Files to the Document	Lier à nouveau les fichiers liés au document
 	Relink to Folder…	Lier à nouveau à un dossier…
+	Each Link Separately	Chaque lien séparément
+	Selected Instances	Occurrences sélectionnées
+	All Instances	Toutes les occurrences
+	Missing Links from This Folder	Liens manquants de ce dossier
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} n’est pas each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each et paths vont ensemble : paths liste des entrées avec ids et path, à la place de ids, path et folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	l’entrée {i} de paths nécessite path et ids (des identifiants d’objet qu’aucune autre entrée n’a)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder prend path : les autres liens manquants sont cherchés dans le dossier de ce fichier
 	Relink…	Lier à nouveau…
 	Find Linked Files	Rechercher des fichiers liés
 	Find Linked Files in Folder…	Rechercher des fichiers liés dans un dossier…
@@ -2727,6 +2754,7 @@ digits	Malayalam	Malayalam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Remplacez-le par un autre fichier ou ignorez-le : ses images continueront d’afficher l’aperçu enregistré avec le document.
 	Replace Spine	Remplacer la dorsale
 	Replace Symbol	Remplacer le symbole
+	Reset Transformation	Réinitialiser la transformation
 	Replace With Font	Remplacer par la police
 	Replace With Font From	Remplacer par une police de
 	System	Système
@@ -2743,6 +2771,8 @@ digits	Malayalam	Malayalam
 	Reset OpenType Features	Réinitialiser les fonctions OpenType
 	Reset Panel	Réinitialiser le panneau
 	Reset Preferences	Réinitialiser les préférences
+	Search Preferences	Rechercher dans les préférences
+	No settings found	Aucun réglage trouvé
 	Reset Profiles	Réinitialiser les profils
 	Reset Rotate View	Réinitialiser la rotation de l’affichage
 	Rotate View to Selection	Faire pivoter l’affichage selon la sélection
@@ -2797,6 +2827,7 @@ digits	Malayalam	Malayalam
 	Rotate Tool	Outil Rotation
 	Rotate View Tool	Outil Faire pivoter l’affichage
 	Trackpad Gesture to Rotate View	Faire pivoter l’affichage avec un geste du trackpad
+	Hold a Tool Shortcut to Use the Tool Temporarily	Maintenir le raccourci d’un outil pour l’utiliser temporairement
 	Rotate…	Rotation…
 	Rotation	Rotation
 	Roughen…	Rugosité…
@@ -3236,6 +3267,7 @@ digits	Malayalam	Malayalam
 	Spaces	Espaces
 	Spacing Guides	Repères d’espacement
 	Invoke Distance Guides	Appeler les repères de distance
+	Snap to Last Location	Magnétisme du dernier emplacement
 	Spacing:	Espacement :
 	Spanish	Espagnol
 	Specified Distance	Distance définie
@@ -3917,6 +3949,9 @@ axis	Both	Les deux
 	Put back in the toolbar	Remettre dans la barre d’outils
 	Float Panel	Rendre le panneau flottant
 	Dock Panel	Ancrer le panneau
+	Dock to Top	Ancrer en haut
+	Dock to Bottom	Ancrer en bas
+	Dock Control Bar	Ancrer la barre de contrôle
 	Drag to float the toolbar	Faire glisser pour rendre la barre d’outils flottante
 	Drag to the window's left edge to dock	Faire glisser vers le bord gauche de la fenêtre pour ancrer
 	Float Tool Group	Rendre le groupe d’outils flottant
@@ -4364,6 +4399,7 @@ axis	Both	Les deux
 @msg	nothing to save: the document has no visible art	rien à enregistrer : le document n’a aucune illustration visible
 @msg	nothing to undo	rien à annuler
 @msg	no history to clear	aucun historique à effacer
+@msg	no history state {v}	aucun état d’historique {v}
 @msg	nothing to warp	rien à déformer
 @msg	nothing to wrap	rien à envelopper
 @msg	object {0} cannot have children	l’objet {0} ne peut pas avoir d’enfants
@@ -4610,6 +4646,7 @@ axis	Both	Les deux
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} image impossible à décoder, affichée sous forme de cadre barré d’une croix|{n} images impossibles à décoder, affichées sous forme de cadres barrés d’une croix
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} image liée modifiée sur le disque : Mettre à jour les liens affiche la nouvelle version|{n} images liées modifiées sur le disque : Mettre à jour les liens affiche les nouvelles versions
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	{n} fichier lié modifié sur le disque mis à jour|{n} fichiers liés modifiés sur le disque mis à jour
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	le document définit un fond perdu que ce fichier PDF/X omet : activez « Utiliser les paramètres de fond perdu du document »
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} exporté avec {n} remarque : {first}|{what} exporté avec {n} remarques : {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} fichier de polices se trouve maintenant dans {folder}|{n} fichiers de polices se trouvent maintenant dans {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} fichier de polices se trouve maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}|{n} fichiers de polices se trouvent maintenant dans {folder} ; {failed} n’ont pas pu être ajoutés : {reason}
@@ -4670,6 +4707,7 @@ axis	Both	Les deux
 @msg	an image whose data is cut short was left out	une image aux données tronquées a été ignorée
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	le texte captif dans des cadres trop bas pour une ligne de la police dans laquelle il s’affiche a reçu des cadres plus hauts ({_1}) : il ne s’afficherait pas autrement
@@ -4741,6 +4779,7 @@ axis	Both	Les deux
 	ICF Bottom/Left	ICF bas/gauche
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` est la référence d’étape {r}, que seuls `run` et `command_batch` résolvent
 @msg	`ids` must be an array of object ids, not {v}	`ids` doit être une liste d’identifiants d’objet, pas {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` doit être une liste de couleurs, pas {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` doit être une liste d’indices de points d’ancrage, pas {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}` : le résultat de l’étape {i} n’a pas cette valeur (écrivez $$ pour un $ littéral)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}` : il n’y a pas d’étape {i} avant celle-ci (les étapes sont comptées à partir de 0 ; écrivez $$ pour un $ littéral)
@@ -5780,6 +5819,33 @@ axis	Y Axis	Axe Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un effet dynamique s’exécute pendant le tracé du document, il ne peut donc pas être `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un module externe d’exportation reçoit toujours le budget d’une exportation : omettez `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	« {_1} » demande un budget de calcul important (chaque exécution jusqu’à {minutes} minutes et {times} fois les instructions habituelles) : installez-le avec `allowHeavy: true` une fois que l’utilisateur l’accepte
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Installer « {name} », qui demande ces autorisations ?
+	ID: {id}	ID : {id}
+	Version: {version}	Version : {version}
+	File SHA-256: {hash}	SHA-256 du fichier : {hash}
+	Read the objects it is given	Lire les objets qui lui sont transmis
+	Change, add and delete objects in the document	Modifier, ajouter et supprimer des objets du document
+	Keep data of its own with the document	Conserver ses propres données avec le document
+	Change how the objects its effect is applied to are drawn	Modifier le rendu des objets auxquels son effet est appliqué
+	Write the document as a file in its own format	Écrire le document dans un fichier à son propre format
+	Show its progress, see Cancel and write log lines	Afficher sa progression, détecter l’annulation et écrire des lignes de journal
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorisation `progress` nécessite le niveau d’API de module externe {PROGRESS_API} : indiquez `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	le module importe `env.{name}` avec un autre type que celui de l’hôte : celui de l’hôte est {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	le module importe `env.{name}`, qu’un module externe ne peut utiliser qu’au niveau d’API de module externe {PROGRESS_API} (`api` {PROGRESS_API}) et avec l’autorisation `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	le module importe `{from}.{name}`, que l’hôte ne propose pas : un module externe ne peut importer que `env.vc_progress`, `env.vc_cancelled` et `env.vc_log` (niveau d’API de module externe 2), et aucun WASI, fichier ni réseau
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` vaut {_1} ; cet hôte prend en charge les niveaux d’API de module externe 1 à {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` doit être une liste de noms d’autorisations
+@msg	`grant` names an unknown permission `{shown}`	`grant` nomme une autorisation inconnue `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un module externe de type `{_1}` a besoin de l’autorisation `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	au plus {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	l’autorisation `{shown}` ne s’applique pas à un module externe de type `{_1}`
+@msg	permission `{shown}` is listed twice	l’autorisation `{shown}` figure deux fois
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorisation `{shown}` est réservée à une future API de module externe ; cet hôte ne l’accorde pas
+@msg	unknown permission `{shown}`	autorisation inconnue `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	« {name} » demande les autorisations {asked} : installez-le avec `grant` qui les liste une fois que l’utilisateur l’accepte
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	« {name} » n’a pas reçu `{p}`, dont sa sortie a besoin : rien n’a été modifié
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	le module n’a pas le SHA-256 indiqué par `hash` : rien n’a été installé
 # Actions panel: action sets (#3712).
 	New Set…	Nouveau jeu…
 	New Set	Nouveau jeu
@@ -5788,6 +5854,19 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Playback Options…	Options d’exécution…
+	Insert Stop…	Insérer un arrêt…
+	Insert Stop	Insérer un arrêt
+	Record Stop	Enregistrer un arrêt
+	Allow Continue	Autoriser la poursuite
+	Continue	Continuer
+	Continue Action	Continuer le script
+	Delete Action Step	Supprimer l’étape du script
+	Press Play Current Selection in the Actions panel to go on.	Pour continuer, cliquez sur Exécuter la sélection actuelle dans le panneau Scripts.
+	Stop: {message}	Arrêt : {message}
+@msg	no action is waiting at a stop	aucun script n’attend à un arrêt
+@msg	message must be text	message doit être du texte
+@msg	allowContinue must be true or false	allowContinue doit valoir true ou false
+@msg	Batch cannot play an action with a stop	Le traitement par lots ne peut pas exécuter un script comportant un arrêt
 	Playback Options	Options d’exécution
 	Accelerated	Accélérée
 	Step by Step	Pas à pas
@@ -6226,6 +6305,7 @@ breakText	Glyphs	Glyphes
 	Gap 5	Écart 5
 
 @msg	{_1}: they came in as the page's art	{_1} : ils ont été importés comme le dessin de la page
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objets texte déformés importés comme dessin et non comme texte modifiable : {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	les objets dessinés différemment de la page du fichier lui-même ont été importés comme le dessin de la page : {_1}
 
 @msg	You must choose a side pattern.	Vous devez choisir un motif latéral.

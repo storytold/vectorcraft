@@ -1,6 +1,8 @@
 //! Fonts built in code for tests, so no font file is committed: a small variable font (#296).
 //! Compiled for this crate's tests and, with the `test-fonts` feature, for other crates' tests.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use skrifa::instance::{LocationRef, Size};
 use skrifa::raw::TableProvider;
 use skrifa::raw::tables::glyf::Glyph;
@@ -9,6 +11,39 @@ use write_fonts::FontBuilder;
 use write_fonts::tables::fvar::{AxisInstanceArrays, Fvar, InstanceRecord, VariationAxisRecord};
 use write_fonts::tables::gvar::{GlyphDelta, GlyphDeltas, GlyphVariations, Gvar, Tent};
 use write_fonts::types::{F2Dot14, Fixed, NameId, Tag};
+
+/// Whether faces use and keep shaping plans ([`keep_shape_plans`]).
+static KEEP_SHAPE_PLANS: AtomicBool = AtomicBool::new(true);
+
+/// Sets whether font faces use and keep shaping plans, for the whole process. When `keep` is false,
+/// every shaped segment makes a plan of its own, so a test can compare what kept plans produce with
+/// what its own plan produces. Plans a face already holds stay and are used again when it is true.
+pub fn keep_shape_plans(keep: bool) {
+    KEEP_SHAPE_PLANS.store(keep, Ordering::SeqCst);
+}
+
+pub(crate) fn keeps_shape_plans() -> bool {
+    KEEP_SHAPE_PLANS.load(Ordering::SeqCst)
+}
+
+std::thread_local! {
+    /// How many layouts this thread has started ([`layouts_on_this_thread`]).
+    static LAYOUTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn count_layout() {
+    LAYOUTS.with(|n| n.set(n.get() + 1));
+}
+
+/// How many layouts this thread has started.
+pub fn layouts_on_this_thread() -> u64 {
+    LAYOUTS.with(std::cell::Cell::get)
+}
+
+/// Drop every layout kept for a first frame, so that a test can draw what laying out again draws.
+pub fn drop_kept_layouts() {
+    crate::kept::drop_kept_layouts();
+}
 
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";
@@ -970,6 +1005,34 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
         }
     }
     Some(builder.build())
+}
+
+/// The family of [`tall_ideograph_font`].
+pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
+
+/// A face that maps the ideograph 编 to the bundled Source Sans 3 `H` outline, which stands on the
+/// baseline, with a taller ascent (1,058 units per 1,000) and descent (262) than Source Sans 3 in
+/// its `hhea` and `OS/2` tables and no line gap: the vertical proportions of a CJK system face.
+pub fn tall_ideograph_font() -> Option<Vec<u8>> {
+    const ASCENT: i16 = 1058;
+    const DESCENT: i16 = 262;
+    let mut data = remapped_source_sans(TALL_IDEOGRAPH_FAMILY, "TallIdeographSans-Regular", &[('编', 'H')])?;
+    let tables: Vec<(Tag, usize)> = {
+        let font = skrifa::FontRef::new(&data).ok()?;
+        font.table_directory.table_records().iter().map(|r| (Tag::new(&r.tag().to_be_bytes()), r.offset() as usize)).collect()
+    };
+    let (ascent, descent, gap) = (ASCENT.to_be_bytes(), (-DESCENT).to_be_bytes(), [0, 0]);
+    for (tag, at) in tables {
+        if tag == Tag::new(b"hhea") {
+            // ascender, descender and lineGap at bytes 4 to 10.
+            data.get_mut(at + 4..at + 10)?.copy_from_slice(&[ascent, descent, gap].concat());
+        } else if tag == Tag::new(b"OS/2") {
+            // sTypoAscender, sTypoDescender, sTypoLineGap, usWinAscent and usWinDescent at bytes 68 to 78.
+            let win = [ASCENT.unsigned_abs().to_be_bytes(), DESCENT.unsigned_abs().to_be_bytes()];
+            data.get_mut(at + 68..at + 78)?.copy_from_slice(&[ascent, descent, gap, win[0], win[1]].concat());
+        }
+    }
+    Some(data)
 }
 
 /// The family of [`soft_hyphen_outline_font`].

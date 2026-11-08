@@ -156,7 +156,11 @@ pub(super) fn live_paint_gap_overlays(app: &mut VectorcraftApp) -> Vec<Overlay> 
 /// View › Show Missing Links (#5547): a red outline round the bounds of each image and placed
 /// document whose file can't be found ([`crate::addons::select::link_status::marked`]), with the
 /// Links panel's red ? badge on its top left corner. Drawn on the canvas only: never in the art.
+/// Nothing is drawn while the view is off or the Revolve gizmo is being edited.
 pub(super) fn missing_link_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, t: &Tokens) {
+    if !app.ui.view.missing_links || app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
+        return;
+    }
     let Some(st) = app.session.active() else { return };
     let clip = p.clip_rect();
     for id in crate::addons::select::link_status::marked(app) {

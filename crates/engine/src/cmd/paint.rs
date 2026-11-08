@@ -128,7 +128,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Recent Colors",
             [],
             None,
-            "{} → {colors: [{hex, color}] newest first (fed by every paint command and the eyedropper), lastColor: {hex, color}, lastGradient: gradient paint}",
+            "{} → {colors: [{hex, color}] newest first, at most 30, each once, kept across documents for the session (fed by every paint command and the eyedropper), lastColor: {hex, color}, lastGradient: gradient paint}",
             always,
             |s, _| {
                 let c = |c: &Color| json!({"hex": c.to_hex(), "color": c});
@@ -152,8 +152,9 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
 }
 
 impl Session {
-    /// How many colours the Recent Colors rows keep.
-    pub const RECENT_MAX: usize = 10;
+    /// How many colors Recent Colors keeps. The Session holds the list, so it stays the same when
+    /// another document is opened or made active.
+    pub const RECENT_MAX: usize = 30;
 
     /// Remember an applied paint: a solid colour becomes the last colour and the newest recent
     /// colour, a gradient the last gradient. During a live preview this waits for the commit.

@@ -782,6 +782,80 @@ fn an_alt_copy_snaps_to_the_original_left_behind() {
     assert_eq!(dx(&t.pointer(&c, &ev(PointerKind::Drag, 253.0, 150.0))), 103.0);
 }
 
+/// Smart Guides › Snap to Last Location: a move that comes within Snapping Tolerance of where it
+/// began goes back there, labeled "last location", a Shift move too; farther out, with the option
+/// or Smart Guides off, it stays where it is dragged, and an Alt copy snaps as it does with the
+/// option off.
+#[test]
+fn snap_to_last_location_puts_a_move_back_where_it_began() {
+    let (mut d, id) = doc_with_rect();
+    // An artboard whose edges and center are out of reach.
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let on = ToolContext { snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let moved = |c: &ToolContext, to: (f64, f64), m: Mods| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let labels: Vec<String> =
+            t.overlays(c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), labels)
+    };
+    let none = Mods::default();
+    let (back, labels) = moved(&on, (156.0, 155.0), none);
+    assert!(moved_by(back, (0.0, 0.0)), "{back:?}: 7.8 pt away, within 10");
+    assert_eq!(labels, ["last location"]);
+    let shift = Mods { shift: true, ..none };
+    assert!(moved_by(moved(&on, (157.0, 150.0), shift).0, (0.0, 0.0)), "a Shift move goes back too");
+    let (out, labels) = moved(&on, (159.0, 158.0), none);
+    assert!(moved_by(out, (9.0, 8.0)), "{out:?}: 12 pt away, out of reach");
+    assert!(labels.is_empty(), "{labels:?}");
+    let off = ToolContext { snap_to_last_location: false, ..on };
+    assert!(moved_by(moved(&off, (156.0, 155.0), none).0, (6.0, 5.0)), "the option off");
+    let no_guides = ToolContext { smart_guides: false, ..on };
+    assert!(moved_by(moved(&no_guides, (156.0, 155.0), none).0, (6.0, 5.0)), "Smart Guides off");
+    // An Alt copy lines up with the original it leaves behind, as it does with the option off.
+    let alt = Mods { alt: true, ..none };
+    let (copy, labels) = moved(&on, (156.0, 155.0), alt);
+    assert_eq!((copy, labels.contains(&"last location".to_string())), (moved(&off, (156.0, 155.0), alt).0, false), "{labels:?}");
+}
+
+/// View › Snap to Pixel wins over Smart Guides › Snap to Last Location, as over every other
+/// snap: a short move of a square whose top-left is off the pixel grid puts that corner on whole
+/// pixels, a Shift move on its own axis, and shows no "last location" label.
+#[test]
+fn snap_to_pixel_wins_over_snap_to_last_location() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let square = vectorcraft_geom::shapes::rectangle(Rect::new(100.3, 100.4, 200.3, 200.4));
+    d.insert(Some(l), 0, vectorcraft_doc::Node::path(id, square, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = ToolContext { snap_to_pixel: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..cx(&d, &s, &p) };
+    let moved = |to: (f64, f64), m: Mods| {
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let a = t.pointer(&c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        let labels: Vec<String> =
+            t.overlays(&c).into_iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text) } else { None }).collect();
+        (Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), labels)
+    };
+    // By (6, 5) the top-left (106.3, 105.4) rounds to (106, 105).
+    let (m, labels) = moved((156.0, 155.0), Mods::default());
+    assert!(moved_by(m, (5.7, 4.6)), "{m:?}");
+    assert!(labels.is_empty(), "{labels:?}");
+    let (m, labels) = moved((157.0, 150.0), Mods { shift: true, ..Mods::default() });
+    assert!(moved_by(m, (6.7, 0.0)), "{m:?}: a Shift move");
+    assert!(labels.is_empty(), "{labels:?}");
+}
+
 /// A move shows the filled arrow, hollow while it snaps (here B's left side onto A's right
 /// one); Alt, which leaves a copy behind, the double arrowhead.
 #[test]
@@ -2138,4 +2212,118 @@ fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
     });
     assert_eq!(double(&d, Some(l), 300.0, 300.0), vec![]);
     assert_eq!(double(&d, Some(l), 450.0, 50.0), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
+}
+
+/// #4891 for the Selection tool: a press on a selected object's centre point (Attributes › Show
+/// Center) moves the selection, also where no art is painted (an unfilled shape), which the press
+/// would otherwise take for a marquee; anywhere else a press still starts one.
+#[test]
+fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 150.0);
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move);
+    // Cmd/Ctrl selects the object behind, not the centre point, so the pointer says neither.
+    assert_ne!(t.cursor(&c, centre, Mods { cmd: true, ..Mods::default() }), Cursor::Move);
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 160.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
+    assert!(
+        matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.transform" && v["matrix"] == json!([1.0, 0.0, 0.0, 1.0, 20.0, 10.0])),
+        "{a:?}"
+    );
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit]);
+    // Empty canvas away from it: a marquee, as before.
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, Point::new(400.0, 400.0), Mods::default()), Cursor::Arrow);
+    t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 450.0, 450.0));
+    assert!(a.is_empty(), "{a:?}");
+    assert!(matches!(t.overlays(&c).first(), Some(Overlay::Marquee(_))), "a marquee");
+}
+
+/// A Shift-press on a selected object's centre point moves the selection too, held to 45° steps,
+/// and a Shift-click there (no drag) takes the object out of the selection, as a Shift-press on
+/// the object itself does.
+#[test]
+fn a_shift_press_on_the_centre_point_moves_or_deselects() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let centre = Point::new(150.0, 150.0);
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y).with_mods(shift)).is_empty());
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 160.0).with_mods(shift));
+    assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{a:?}");
+    let Some(Action::Preview(cmd, v)) = a.last().filter(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")) else { panic!("{a:?}") };
+    assert_eq!(cmd, "object.transform");
+    let [_, _, _, _, dx, dy] = [0, 1, 2, 3, 4, 5].map(|i| v["matrix"][i].as_f64().unwrap_or_default());
+    // A 45° move, within the rounding of the matrix's own floats.
+    assert!(dx != 0.0 && (dx - dy).abs() < 1e-9, "held to 45°: {dx} {dy}");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 170.0, 160.0).with_mods(shift)), vec![Action::Commit]);
+    // A Shift-click there takes the object out of the selection on release.
+    let mut t = SelectionTool::default();
+    assert!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y).with_mods(shift)).is_empty());
+    assert_eq!(
+        t.pointer(&c, &ev(PointerKind::Up, centre.x, centre.y).with_mods(shift)),
+        vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))]
+    );
+}
+
+/// On a box too thin for its centre point to clear the handles, the handles take the pointer and
+/// the press, as they take the press itself: the centre is within their 5 pt reach.
+#[test]
+fn a_thin_shapes_centre_point_gives_the_handles_the_pointer() {
+    use vectorcraft_doc::{Appearance, LiveShape, Node, NodeKind};
+    let shape = LiveShape::Rectangle {
+        w: 100.0,
+        h: 8.0,
+        radii: [0.0; 4],
+        kinds: Default::default(),
+        radii_relative: false,
+        xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+    };
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let (layer, id) = (d.layers[0].id, d.alloc_id());
+    let mut n = Node::path(id, shape.to_path(), Appearance::default());
+    if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+        *slot = Some(Box::new(shape));
+    }
+    d.insert(Some(layer), 0, n).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 104.0);
+    assert!(hit_center(&c, centre, c.point_tol()).is_some(), "the centre point is there");
+    let mut t = SelectionTool::default();
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::ResizeV, "the top and bottom handles take it");
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y)), vec![Action::Begin("Scale".into())]);
+}
+
+/// A ruler guide under a selected object's centre point keeps the pointer and the press, as it
+/// keeps them over the art.
+#[test]
+fn a_ruler_guide_under_the_centre_point_keeps_the_pointer() {
+    let (mut d, id) = doc_with_live_rect();
+    d.guides.push(vectorcraft_doc::Guide::new(true, 150.0));
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let centre = Point::new(150.0, 150.0);
+    assert!(hit_center(&c, centre, c.point_tol()).is_some());
+    let mut t = SelectionTool::default();
+    let cursor = t.cursor(&c, centre, Mods::default());
+    assert_ne!(cursor, Cursor::Move, "the guide's cursor, not the move arrow");
+    let down = t.pointer(&c, &ev(PointerKind::Down, centre.x, centre.y));
+    let drag = t.pointer(&c, &ev(PointerKind::Drag, 170.0, 150.0));
+    assert!(drag.iter().any(|a| matches!(a, Action::Preview(cmd, _) if cmd == "guide.move")), "the guide drags: {down:?} {drag:?}");
 }

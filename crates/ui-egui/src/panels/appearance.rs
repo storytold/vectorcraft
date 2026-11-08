@@ -1035,7 +1035,7 @@ fn contents_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, label: &str, se
     if characters {
         for (k, stroke) in [false, true].into_iter().enumerate() {
             let cr = Rect::from_min_size(pos2(r.left() + EYE_W + 100.0 + 24.0 * k as f32, r.center().y - 9.0), vec2(18.0, 18.0));
-            chip(ui, cr, n.proxy_paint(stroke, None).map_or(&Paint::None, |(p, ..)| p), false);
+            chip(ui, cr, n.proxy_paint_only(stroke, None).unwrap_or(&Paint::None), false);
         }
     }
     // An image's row has no members to target.
@@ -1332,7 +1332,7 @@ fn swatch_button(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, paint: &Paint, 
         open_popup(app, ui.ctx(), "color");
     }
     egui::Popup::menu(&resp).open_memory((resp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
-        swatch_picker(app, ui, target);
+        widgets::menu_scroll(ui, |ui| swatch_picker(app, ui, target));
     });
 }
 
@@ -1608,18 +1608,20 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
-    for (g, items) in groups {
-        ui.menu_button(tl!(&g), |ui| {
-            crate::widgets::menu_scroll(ui, |ui| {
-                for (id, label) in items {
-                    if ui.button(format!("{label}…")).clicked() {
-                        app.run("effect.dialog", json!({"effect": id})).ok();
-                        ui.close();
+    crate::widgets::menu_scroll(ui, |ui| {
+        for (g, items) in groups {
+            ui.menu_button(tl!(&g), |ui| {
+                crate::widgets::menu_scroll(ui, |ui| {
+                    for (id, label) in items {
+                        if ui.button(format!("{label}…")).clicked() {
+                            app.run("effect.dialog", json!({"effect": id})).ok();
+                            ui.close();
+                        }
                     }
-                }
+                });
             });
-        });
-    }
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {

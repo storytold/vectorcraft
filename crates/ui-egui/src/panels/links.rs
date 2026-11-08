@@ -2,8 +2,8 @@
 //! and embedded images, as rows with a thumbnail, name, page and status. Clicking a row selects
 //! its image, Ctrl/Cmd-click adds or removes it, and Shift-click selects the images of the rows
 //! from the last row clicked without Shift to it (with Ctrl/Cmd, adds them); the buttons Relink,
-//! Go To, Update and Edit Original act on the selected rows; Link Info shows the details of the
-//! first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
+//! Go To, Update and Edit Original act on the selected rows (Relink through its dialog, with the
+//! Replace choice: `ui.relinkDialog`); Link Info shows the details of the first. The flyout adds Relink to Folder, Find in Folder (Find Linked Files:
 //! `ui.findLinksInFolder`), Embed / Unembed, Placement Options, Select Linked / Embedded / Missing /
 //! Modified (`addon.select.byLinkStatus`, Shift adds), Show filters, Sort, thumbnail size
 //! and Show in Folder.
@@ -128,16 +128,19 @@ pub(crate) fn updated_status(n: usize) -> String {
     crate::i18n::msg_n(n as u64, "Updated {n} image", "Updated {n} images", &[])
 }
 
-/// Relink images `ids` to a picked file.
-pub(crate) fn relink(app: &mut VectorcraftApp, ids: Vec<u64>) {
-    crate::picks::button(app, move |app| relink_picked(app, ids.clone()));
+/// The status bar's line for `n` relinked images, naming the files `missed` that weren't found.
+pub(crate) fn relinked_status_missed(n: usize, missed: &[&str]) -> String {
+    if missed.is_empty() {
+        relinked_status(n)
+    } else {
+        let (one, other) = ("Relinked {n} image; not in that folder: {names}", "Relinked {n} images; not in that folder: {names}");
+        crate::i18n::msg_n(n as u64, one, other, &[("names", &missed.join(", "))])
+    }
 }
 
-fn relink_picked(app: &mut VectorcraftApp, ids: Vec<u64>) {
-    let pick = crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
-    let Some(path) = crate::picks::open(app, &pick) else { return };
-    let r = app.run("links.relink", json!({ "ids": ids, "path": path }));
-    report(app, r, |v| relinked_status(v["relinked"].as_array().map_or(0, Vec::len)));
+/// The ids of the selected image objects and placed documents (Relink's dialog).
+pub(crate) fn selected_ids(app: &VectorcraftApp) -> Vec<u64> {
+    selected_images(app)
 }
 
 /// Replace images `ids` with a picked file (Control bar, Properties): it keeps its own aspect
@@ -163,13 +166,7 @@ fn relink_to_picked_folder(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let r = app.run("links.relink", json!({ "ids": ids, "folder": folder }));
     report(app, r, |v| {
         let missed: Vec<&str> = v["notFound"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-        let n = v["relinked"].as_array().map_or(0, Vec::len);
-        if missed.is_empty() {
-            relinked_status(n)
-        } else {
-            let (one, other) = ("Relinked {n} image; not in that folder: {names}", "Relinked {n} images; not in that folder: {names}");
-            crate::i18n::msg_n(n as u64, one, other, &[("names", &missed.join(", "))])
-        }
+        relinked_status_missed(v["relinked"].as_array().map_or(0, Vec::len), &missed)
     });
 }
 
@@ -426,7 +423,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 go_to(app, id);
             }
             if widgets::icon_button_enabled(ui, "link", tl!("Relink…"), false, !sel.is_empty() && can_pick(app), 24.0).clicked() {
-                relink(app, ids(&sel, |_| true));
+                crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
             }
             if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link"), false, !linked.is_empty(), 24.0).clicked() {
                 break_link(app, linked.clone());
@@ -548,7 +545,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let any = !sel.is_empty();
     let missing_any = list["missing"].as_u64().unwrap_or(0) > 0;
     if menu_item(ui, tl!("Relink…"), any && can_pick(app), false) {
-        relink(app, ids(&sel, |_| true));
+        crate::menus::invoke(app, "ui.relinkDialog", json!({ "ids": ids(&sel, |_| true) }));
     }
     if menu_item(ui, tl!("Relink to Folder…"), (any || missing_any) && app.services.pick_folder.is_some(), false) {
         relink_to_folder(app, ids(&sel, |_| true));

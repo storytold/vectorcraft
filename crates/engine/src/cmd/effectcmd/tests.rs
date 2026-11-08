@@ -79,6 +79,41 @@ fn solid_effects_apply_save_edit_export_expand_and_undo() {
     }
 }
 
+/// #4506: a 3D effect on a group builds a solid from each member, turned about one shared axis;
+/// the members stay editable, and a group holding what can't become a solid is refused.
+#[test]
+fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
+    for effect in effects::SOLIDS {
+        let (mut s, a) = session_with_rect();
+        let b = s.execute("shape.ellipse", &json!({"x": 250, "y": 120, "width": 80, "height": 60})).unwrap()["id"].clone();
+        s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        s.execute("effect.apply", &json!({"effect": effect, "ids": [g.0], "item": null})).unwrap();
+        let art = effects::solid_art(&node(&s, g)).unwrap_or_else(|| panic!("{effect}"));
+        assert_eq!(node(&s, g).children().unwrap().len(), 2, "{effect}: the members stay as they were");
+        // A member moved, the solid follows.
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": -40, "dy": 0})).unwrap();
+        assert_ne!(effects::solid_art(&node(&s, g)).unwrap(), art, "{effect}");
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        assert!(vectorcraft_testkit::svg_shapes(&svg) >= 4, "{effect}: both members exported as vector faces");
+        s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+        assert!(!effects::has_solid(&node(&s, g)), "{effect}: expanded");
+    }
+    // A clipping group in the group: refused, nothing changed.
+    let (mut s, a) = session_with_rect();
+    let b = s.execute("shape.ellipse", &json!({"x": 120, "y": 120, "width": 60, "height": 60})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [a.0, b]})).unwrap();
+    let clip = s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
+    let c = s.execute("shape.rectangle", &json!({"x": 250, "y": 250, "width": 50, "height": 50})).unwrap()["id"].clone();
+    s.execute("select.set", &json!({"ids": [clip, c]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [g.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("clipping groups"), "{err}");
+    assert!(node(&s, g).appearance.effects.is_empty());
+}
+
 /// #4715: type extrudes as its glyph outlines, painted with its characters' colour, and stays
 /// type: editing its text reshapes the solid.
 #[test]

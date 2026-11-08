@@ -218,6 +218,11 @@ pub fn item_shortcut(id: &str, p: &Value) -> Option<&'static str> {
     match (id, p.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => crate::shortcut_editor::panel_shortcut(panel),
         ("effect.dialog" | "effect.apply", _) => p.get("effect").and_then(Value::as_str).and_then(crate::shortcut_editor::effect_shortcut),
+        // The Artboard tool's canvas menu passes the point its Paste goes to.
+        ("edit.paste", _) => shortcut_of(id),
+        // That menu's Cut and Copy: with the tool chosen, the keys run `edit.cut` and `edit.copy`, which do the same.
+        ("artboard.cut", _) => shortcut_of("edit.cut"),
+        ("artboard.copy", _) => shortcut_of("edit.copy"),
         _ if p.is_null() => shortcut_of(id),
         _ => None,
     }
@@ -235,6 +240,16 @@ pub const CONTEXT_LABELS: &[&str] = &[
     "Unlock Artboards",
     "Unlock Selected",
     "Unlock",
+    "New Artboard",
+    "Duplicate Artboards",
+    "Rename",
+    "Delete Artboards",
+    "Delete Empty Artboards",
+    "Select All Artboards",
+    "Rearrange",
+    "Switch Orientation",
+    "Artboard Options",
+    "Export",
     "Make Clipping Mask",
     "Release Clipping Mask",
     "Make Compound Path",

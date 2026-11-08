@@ -34,6 +34,11 @@
 	3 Color Job…	3 色印刷作業…
 	30° Angles	30° 角度
 	3D and Materials	3D 與材質
+	Plane	平面
+	Extrude	突出
+	Revolve	迴轉
+	Inflate	膨脹
+	Select objects, then pick an object type to give them a 3D effect.	選取物件，然後挑選一種物件類型，為其加上 3D 效果。
 	3D Ribbon	3D 緞帶
 	45° Angles	45° 角度
 	60° Angles	60° 角度
@@ -243,6 +248,8 @@ font-technology	Variable	可變
 	Show Cross Hairs	顯示十字線
 	Show Video Safe Areas	顯示視訊安全區域
 	Video Ruler Pixel Aspect Ratio:	視訊尺標像素長寬比：
+	Fade Region Outside Artboard	調暗工作區域外的區域
+	Update While Dragging	拖曳時更新
 	Hide Video Rulers	隱藏視訊尺標
 	Background Contents	背景內容
 	Background Contents:	背景內容：
@@ -849,6 +856,7 @@ font-technology	Variable	可變
 	Duplicate Artboard	製作工作區域複本
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
+	Rename Artboards	重新命名工作區域
 	Duplicate Artboards	製作工作區域複本
 	Duplicate Brush	製作筆刷複本
 	Duplicate Character Style	製作字元樣式複本
@@ -1053,6 +1061,8 @@ font-technology	Variable	可變
 	Export for Screens Settings	匯出為螢幕適用設定
 	Export for Screens…	匯出為螢幕適用…
 	Export Keyboard Shortcuts…	匯出鍵盤快速鍵…
+	Export Keyboard Shortcuts as Text…	將鍵盤快速鍵匯出為文字…
+	Export Text…	匯出文字…
 	Export Option	匯出選項
 	Export PDF	匯出 PDF
 	Export PDF Presets	匯出 PDF 預設集
@@ -1353,6 +1363,8 @@ file-filter	Templates	範本
 	Grays	灰色
 	Grays and Neutrals	灰色與中性色
 	Grayscale	灰階
+	High Color	多色
+	Low Color	少色
 	Flat Logo	扁平標誌
 	Grayscale images	灰階影像
 	Greek & Cyrillic	希臘文與西里爾文
@@ -1427,6 +1439,7 @@ file-filter	Templates	範本
 	Step Backward	後退一步
 	Step Forward	前進一步
 	Clear History	清除步驟記錄
+	New Document from State	從步驟新增文件
 	Set History Limit…	設定步驟記錄上限…
 	History States	步驟記錄狀態
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1778,6 +1791,7 @@ file-filter	Templates	範本
 @msg	nothing to redo	沒有可重做的動作
 @msg	nothing to undo	沒有可復原的動作
 @msg	no history to clear	沒有可清除的步驟記錄
+@msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
@@ -2332,6 +2346,7 @@ file-filter	Templates	範本
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	無法解碼 {n} 張影像：它們顯示為打叉的方框
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	有 {n} 個連結影像已在磁碟上變更：「更新連結」可顯示新版本
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	已更新 {n} 個在磁碟上變更的連結檔案
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	文件設定了出血，但此 PDF/X 檔案未包含：請開啟「使用文件的出血設定」
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	已匯出 {what}，附有 {n} 則註解：{first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} 個字體檔案現已位於 {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} 個字體檔案現已位於 {folder}；有 {failed} 個無法加入：{reason}
@@ -2411,6 +2426,7 @@ file-filter	Templates	範本
 @msg	No linked files to look for	沒有要尋找的連結檔案
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步驟參照 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必須是由物件 id 組成的陣列，而非 {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` 必須是由顏色組成的陣列，而非 {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` 必須是由錨點索引組成的陣列，而非 {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`：步驟 {i} 的結果中沒有此值 (若要表示 $ 本身，請寫 $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`：此步驟之前沒有步驟 {i} (步驟從 0 起算；若要表示 $ 本身，請寫 $$)
@@ -2699,6 +2715,9 @@ file-filter	Templates	範本
 	Live Paint Selection Tool	即時上色選取工具
 	Live Shape Properties	即時形狀內容
 	Load Color Profile…	載入色彩描述檔…
+	Load Character Styles…	載入字元樣式…
+	Load Paragraph Styles…	載入段落樣式…
+	Load All Styles…	載入所有樣式…
 	Remove Color Profile…	移除色彩描述檔…
 	Load Image into Clipboard	將影像載入剪貼簿
 	Load Metafile into Clipboard	將中繼檔載入剪貼簿
@@ -3469,6 +3488,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
 	Rearrange All Artboards	重新排列所有工作區域
+	Rearrange	重新排列
+	Select All Artboards	選取所有工作區域
+	Switch Orientation	切換方向
 	Rearrange All	全部重新排列
 	Layout Order:	版面配置順序：
 	Change to Left-to-Right Layout	變更為由左至右版面配置
@@ -3586,6 +3608,14 @@ digits	Malayalam	馬來亞拉姆數字
 	Relink	重新連結
 	Relink Linked Files to the Document	將連結檔案重新連結至文件
 	Relink to Folder…	重新連結至資料夾…
+	Each Link Separately	逐一連結
+	Selected Instances	所選實例
+	All Instances	所有實例
+	Missing Links from This Folder	此資料夾中遺失的連結
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} 不是 each|selected|all|missingInFolder 其中之一
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each 與 paths 須一起使用：paths 列出含 ids 與 path 的項目，用來取代 ids、path 與 folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths 項目 {i} 需要 path 與 ids（其他項目沒有的物件 ID）
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder 需要 path：會在該檔案所在的資料夾中尋找其他遺失的連結
 	Relink…	重新連結…
 	Find Linked Files	尋找連結檔案
 	Find Linked Files in Folder…	在資料夾中尋找連結檔案…
@@ -3630,6 +3660,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	以其他檔案取代，或忽略：其影像會繼續顯示隨文件儲存的預覽。
 	Replace Spine	取代脊線
 	Replace Symbol	取代符號
+	Reset Transformation	重設變形
 	Replace With Font	取代為字體
 	Replace With Font From	取代字體來源
 	System	系統
@@ -3646,6 +3677,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Reset OpenType Features	重設 OpenType 功能
 	Reset Panel	重設面板
 	Reset Preferences	重設偏好設定
+	Search Preferences	搜尋偏好設定
+	No settings found	找不到設定
 	Reset Profiles	重設描述檔
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
@@ -3701,6 +3734,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Rotate Tool	旋轉工具
 	Rotate View Tool	旋轉檢視工具
 	Trackpad Gesture to Rotate View	使用觸控式軌跡板手勢旋轉檢視
+	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快速鍵以暫時使用該工具
 	Rotate…	旋轉…
 	Rotation	旋轉
 	Roughen…	粗糙效果…
@@ -4140,6 +4174,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Spaces	空格
 	Spacing Guides	間距參考線
 	Invoke Distance Guides	叫用距離參考線
+	Snap to Last Location	靠齊上一個位置
 	Spacing:	間距：
 	Spanish	西班牙文
 	Specified Distance	指定距離
@@ -4501,6 +4536,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串連文字區域已略過
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字物件內變更書寫方向的文字會依其第一個字元的方向開啟
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串連區域、繞圖文字或複合路徑中用作遮色片的文字不會剪裁
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	檔案中沒有預覽的連結圖片在找到其檔案之前顯示預留位置：請在「連結」面板中重新連結
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	框架高度不足以容納所顯示字體一行的區域文字已加高框架 ({_1})：否則文字不會顯示
@@ -4841,6 +4877,9 @@ axis	Both	兩者
 	Put back in the toolbar	放回工具列
 	Float Panel	浮動面板
 	Dock Panel	停駐面板
+	Dock to Top	停駐到頂部
+	Dock to Bottom	停駐到底部
+	Dock Control Bar	停駐控制列
 	Drag to float the toolbar	拖曳以浮動工具列
 	Drag to the window's left edge to dock	拖曳到視窗左側邊緣以停駐
 	Float Tool Group	浮動工具組
@@ -5419,6 +5458,33 @@ axis	Y Axis	Y 軸
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	即時效果會在繪製文件時執行，因此不能是 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	匯出增效模組一律使用匯出的預算：請移除 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	「{_1}」需要大量運算預算（每次執行最多 {minutes} 分鐘，指令數為一般的 {times} 倍）：請在使用者同意後以 `allowHeavy: true` 安裝
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	要安裝需要這些權限的「{name}」嗎？
+	ID: {id}	ID：{id}
+	Version: {version}	版本：{version}
+	File SHA-256: {hash}	檔案 SHA-256：{hash}
+	Read the objects it is given	讀取交給它的物件
+	Change, add and delete objects in the document	變更、新增和刪除文件中的物件
+	Keep data of its own with the document	在文件中保存自己的資料
+	Change how the objects its effect is applied to are drawn	變更套用其效果的物件的繪製方式
+	Write the document as a file in its own format	將文件寫成其自有格式的檔案
+	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `progress` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `progress` 時才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效模組 API 層級 2），不能使用 WASI、檔案或網路
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
+@msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	`{_1}` 類型的增效模組需要權限 `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	最多 {MAX_PERMISSIONS} 個 `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	權限 `{shown}` 不適用於 `{_1}` 類型的增效模組
+@msg	permission `{shown}` is listed twice	權限 `{shown}` 列出了兩次
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	權限 `{shown}` 保留給日後的增效模組 API；此主機不授予該權限
+@msg	unknown permission `{shown}`	未知權限 `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	「{name}」需要權限 {asked}：請在使用者同意後以列出這些權限的 `grant` 安裝
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	「{name}」未獲授予其輸出所需的 `{p}`：未做任何變更
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	模組的 SHA-256 與 `hash` 提供的不符：未安裝任何內容
 # Actions panel: action sets (#3712).
 	New Set…	新增組…
 	New Set	新增組
@@ -5427,6 +5493,19 @@ axis	Y Axis	Y 軸
 	Action Options…	動作選項…
 	Action Options	動作選項
 	Playback Options…	播放選項…
+	Insert Stop…	插入停止…
+	Insert Stop	插入停止
+	Record Stop	記錄停止
+	Allow Continue	允許繼續
+	Continue	繼續
+	Continue Action	繼續動作
+	Delete Action Step	刪除動作步驟
+	Press Play Current Selection in the Actions panel to go on.	若要繼續，請按「動作」面板中的「播放目前選取項目」。
+	Stop: {message}	停止：{message}
+@msg	no action is waiting at a stop	沒有動作在停止處等待
+@msg	message must be text	message 必須是文字
+@msg	allowContinue must be true or false	allowContinue 必須是 true 或 false
+@msg	Batch cannot play an action with a stop	批次無法播放含有停止的動作
 	Playback Options	播放選項
 	Accelerated	加速
 	Step by Step	逐步
@@ -5869,6 +5948,7 @@ breakText	Glyphs	字符
 	Gap 5	間隙 5
 
 @msg	{_1}: they came in as the page's art	{_1}：已作為頁面圖稿匯入
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	作為圖稿而非可編輯文字匯入的彎曲文字物件：{_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	與檔案本身頁面繪製不同的物件已作為頁面圖稿匯入：{_1}
 
 @msg	You must choose a side pattern.	必須選擇側邊圖樣。

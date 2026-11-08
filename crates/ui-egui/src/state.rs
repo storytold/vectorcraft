@@ -204,6 +204,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::links::ID, "Links", "link"),
     (crate::panels::asset_export::ID, "Asset Export", "share-2"),
     (crate::panels::css_properties::ID, "CSS Properties", "globe"),
+    (crate::panels::three_d::ID, "3D and Materials", "dc-cube"),
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
@@ -375,6 +376,9 @@ pub struct UiState {
     #[serde(skip)]
     pub transient_focus: bool,
     pub control_bar: bool,
+    /// The Control bar is docked to the bottom of the window instead of the top
+    /// (`window.control.dock`).
+    pub control_bar_bottom: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
     /// Advanced toolbar (every tool group) instead of the categorized Basic toolbar.
@@ -402,6 +406,10 @@ pub struct UiState {
     /// is open. Not saved.
     #[serde(skip)]
     pub context_intertwine: Option<(u64, vectorcraft_doc::NodeId, vectorcraft_geom::Point, vectorcraft_doc::NodeId)>,
+    /// What the last right-click on the canvas with the Artboard tool measured, for the context menu
+    /// while it is open ([`crate::panels::artboards::MenuFacts`]). Not saved.
+    #[serde(skip)]
+    pub context_artboards: Option<crate::panels::artboards::MenuFacts>,
     /// Which link statuses the active document's images and placed documents have, for Select ›
     /// Linked, Embedded, Missing and Modified to be on only when some do (refreshed by
     /// [`crate::addons::select::link_status::refresh`]). Not saved.
@@ -962,6 +970,7 @@ impl Default for UiState {
             transient_panel: None,
             transient_focus: false,
             control_bar: false,
+            control_bar_bottom: false,
             toolbar: true,
             toolbar_double: false,
             toolbar_advanced: false,
@@ -970,6 +979,7 @@ impl Default for UiState {
             shape_modes_compound: false,
             context_locked: None,
             context_intertwine: None,
+            context_artboards: None,
             link_statuses: Default::default(),
             slot_tool: Default::default(),
             floating_flyouts: vec![],

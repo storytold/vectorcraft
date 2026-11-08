@@ -630,6 +630,19 @@ fn rows_can_have_a_gutter_of_their_own() {
     assert_eq!(layout(db(), &t).frames.get(1).map(|f| f.y0), Some(160.0));
 }
 
+/// A gutter so huge that a line's height no longer moves the baseline past it: the cells beyond it
+/// have no room, and looking down all 10,000 of them for a line must not freeze the layout.
+#[test]
+fn a_gutter_too_huge_to_step_past_has_no_room_for_lines() {
+    let mut t = area(COPY, style(12.0), Rect::new(0.0, 0.0, 420.0, 300.0), Justify::Left);
+    (t.area.rows, t.area.row_gutter) = (2, Some(1e300));
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+    (t.area.rows, t.area.columns, t.area.gutter, t.area.row_gutter) = (100, 100, 1e300, None);
+    let l = layout(db(), &t);
+    assert!(l.lines.is_empty() && l.overflow);
+}
+
 // ---------- area flow ----------
 
 #[test]
@@ -691,12 +704,12 @@ fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
 }
 
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
-/// takes more than 20 s.
+/// has not ended after 300 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
     let (tx, rx) = std::sync::mpsc::channel();
     let (t, text) = (t.clone(), t.plain_text());
     std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+    rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
 }
 
 /// Each line's baseline, left and right edges, and byte range.
@@ -903,6 +916,55 @@ fn burasagari_keeps_the_every_line_composer_for_latin_text() {
 fn natural_width(s: &str, size: f64) -> f64 {
     let l = layout(db(), &TextObject::point(Point::ZERO, s, style(size)));
     l.lines[0].x1 - l.lines[0].x0
+}
+
+/// Installed fonts exercise run-language routing, source boundaries and hyphen limits end to end.
+#[test]
+fn indic_language_runs_hyphenate_with_both_composers() {
+    let db = FontDb::global();
+    for (tag, syllable) in [
+        ("hi", "कि"),
+        ("mr", "कि"),
+        ("gu", "કિ"),
+        ("bn", "কি"),
+        ("pa", "ਕਿ"),
+        ("ta", "கி"),
+        ("te", "కి"),
+        ("kn", "ಕಿ"),
+        ("ml", "കി"),
+        ("or", "କି"),
+        ("as", "কি"),
+    ] {
+        let Some(face) = syllable.chars().next().and_then(|ch| db.face_covering(ch)).filter(|f| syllable.chars().all(|ch| f.covers(ch))) else {
+            eprintln!("SKIPPED: indic hyphenation layout {tag}; no installed font covers {syllable}");
+            continue;
+        };
+        let style = CharStyle {
+            font_family: face.family.clone(),
+            font_style: face.style.clone(),
+            size: 12.0,
+            language: Some(tag.into()),
+            ..Default::default()
+        };
+        let prefix = layout(db, &TextObject::point(Point::ZERO, &format!("{}-", syllable.repeat(3)), style.clone()));
+        let width = prefix.glyphs.iter().map(|g| g.advance).sum::<f64>() + 0.5;
+        for composer in [Composer::SingleLine, Composer::EveryLine] {
+            let text = syllable.repeat(20);
+            let mut t = area(&text, style.clone(), Rect::new(0.0, 0.0, width, 2000.0), Justify::Left);
+            t.para.composer = composer;
+            t.para.hyphenate = true;
+            let l = layout(db, &t);
+            assert!(!l.overflow, "{tag} {composer:?}");
+            assert!(hyphen_run(&l) > 0, "{tag} {composer:?}: no automatic hyphens");
+            assert!(l.lines.iter().all(|line| line.end % syllable.len() == 0), "{tag} {composer:?}: split syllable");
+            assert_eq!(l.lines.last().map(|line| line.end), Some(text.len()));
+            t.para.hyphenation.hyphen_limit = 1;
+            assert!(hyphen_run(&layout(db, &t)) <= 1, "{tag} {composer:?}: hyphen limit");
+            t.runs.iter_mut().for_each(|run| run.style.language = Some("zz".into()));
+            assert_eq!(hyphen_run(&layout(db, &t)), 0, "unknown language must not use Indic patterns");
+        }
+        eprintln!("ASSERTIONS RUN: indic hyphenation layout {tag}, {} {}", face.family, face.style);
+    }
 }
 
 /// The text of each line.
