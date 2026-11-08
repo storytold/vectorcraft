@@ -351,6 +351,13 @@ font-technology	Variable	Değişken
 	Apply Bullets	Madde İşaretlerini Uygula
 	Numbered List	Numaralı Liste
 	Apply Numbers	Numaralandırmayı Uygula
+	Bullets and Numbering…	Madde İşaretleri ve Numaralandırma…
+	Numbers	Numaralar
+	Level:	Düzey:
+	Bullet Character:	Madde İşareti Karakteri:
+	Number Style:	Numara Stili:
+	Left Indent:	Sol Girinti:
+	First Line Indent:	İlk Satır Girintisi:
 	Convert to Text	Metne Dönüştür
 	Filled Dot	Dolu Nokta
 	Dash	Tire
@@ -3276,6 +3283,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko Ayarları…
 	Tate-chu-yoko Settings	Tate-chu-yoko Ayarları
+	Composite Fonts…	Bileşik Fontlar…
+	Composite Fonts	Bileşik Fontlar
+	Export Composite Fonts	Bileşik Fontları Dışa Aktar
+	Import Composite Fonts	Bileşik Fontları İçe Aktar
+	Delete Font	Fontu Sil
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Rakamlar
+	Scale at Center	Merkezden Ölçekle
 	Up/Down:	Yukarı/Aşağı:
 	Left/Right:	Sol/Sağ:
 	Temperature	Sıcaklık
@@ -4473,6 +4489,7 @@ axis	Both	Her İkisi
 @msg	an image VectorCraft can't read was left out	VectorCraft'ın okuyamadığı bir resim dışarıda bırakıldı
 @msg	graphs come in as plain art, without their data or settings	grafikler, verileri ve ayarları olmadan düz çizim olarak içe aktarılır
 @msg	an image whose data is cut short was left out	verileri kısa kesilen bir resim dışarıda bırakıldı
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
@@ -5531,6 +5548,7 @@ theme	Appearance	Görünüm
 @msg	missing integer `{key}`	`{key}` tam sayısı eksik
 @msg	{key} must be an array of non-negative integer object ids	{key}, negatif olmayan tam sayı nesne kimlikleri dizisi olmalıdır
 @msg	invalid object id {value}: expected a non-negative integer	geçersiz nesne kimliği {value}: negatif olmayan bir tam sayı bekleniyordu
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` içindeki {index} dizinli öğe {value}, negatif olmayan tam sayı bir nesne kimliği değil
 @msg	no such object id {value}	böyle bir nesne kimliği yok: {value}
 @msg	id {value} is a layer, not an object	{value} kimliği bir katmana ait, bir nesneye değil
 @msg	id {value} is a layer, not an object; move layers with layer.move	{value} kimliği bir katmana ait, bir nesneye değil; katmanları layer.move ile taşıyın
@@ -5818,6 +5836,9 @@ axis	Y Axis	Y ekseni
 	Install “{name}”, which asks for these permissions?	Bu izinleri isteyen “{name}” yüklensin mi?
 	ID: {id}	Kimlik: {id}
 	Version: {version}	Sürüm: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Aynı kimliğe sahip eklentinin yerine “{name}” yüklensin mi?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Bu dosya, daha önce bu kimlikle yüklenen eklenti değil. O kimlik için saklanan ayarları ve önbelleği alır.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”, {_1} kimlikli eklentiden farklı bir modül ve onun için saklanan ayarları ve önbelleği alacak: kullanıcı onayladıktan sonra `replace: true` ile yükleyin
 	File SHA-256: {hash}	Dosya SHA-256: {hash}
 	Read the objects it is given	Kendisine verilen nesneleri okuma
 	Change, add and delete objects in the document	Belgedeki nesneleri değiştirme, ekleme ve silme
@@ -5825,10 +5846,13 @@ axis	Y Axis	Y ekseni
 	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
 	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
 	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
+	Keep settings of its own	Kendi ayarlarını saklama
+	Keep a cache of its own, which you can clear	Temizleyebileceğiniz kendi önbelleğini saklama
+	Clear Plug-in Cache	Eklenti Önbelleğini Temizle
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modül `env.{name}` öğesini ana bilgisayarınkinden farklı bir türle içe aktarıyor: ana bilgisayarın türü {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `progress` izniyle kullanabilir
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca `env.vc_progress`, `env.vc_cancelled` ve `env.vc_log` öğelerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `{permission}` izniyle kullanabilir
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca docs/plugins.md dosyasında listelenen `env.vc_*` işlevlerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`

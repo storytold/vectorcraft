@@ -390,8 +390,10 @@ impl<'a> Reader<'a> {
             "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).
             "XI" if self.raster.is_some() => {
+                let max = self.sample_bytes(&vals);
                 if let Some(r) = self.raster.as_mut() {
                     r.operands = Some(vals);
+                    r.max = max;
                 }
             }
             // A linked image (§8.2, §8.3): `(path) modified XG` names the file of the `XF` image after
