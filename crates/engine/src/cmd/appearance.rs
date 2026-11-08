@@ -687,11 +687,15 @@ pub(super) fn capture_series_writes(
         let items = d.node(id).map_or(&[][..], |n| &n.appearance.items[..]);
         items.iter().rev().find(|it| it.is_fill() == kind).is_some_and(AppearanceItem::visible)
     };
-    let written = |d: &vectorcraft_doc::Document, (fill, stroke): (bool, bool)| -> Vec<(NodeId, bool)> {
+    let kinds = |(fill, stroke): (bool, bool)| -> Vec<(NodeId, bool)> {
         let rows = ids.iter().flat_map(|id| [fill.then_some((*id, true)), stroke.then_some((*id, false))]).flatten();
-        painted_rows(d, rows.filter(|(id, kind)| !top_only || top_shows(d, *id, *kind)))
+        rows.filter(|(id, kind)| !top_only || top_shows(d, *id, *kind)).collect()
     };
+    let written = |d: &vectorcraft_doc::Document, rows: (bool, bool)| painted_rows(d, kinds(rows));
     let mut opacity_rows = top_opacity_changed(before, d, ids);
+    // A written row that had paint before the edit counts too when the edit left it without paint: only a row without
+    // paint both before and after keeps what the graph stores.
+    opacity_rows.extend(painted_rows(before, kinds(opacities)));
     opacity_rows.extend(written(d, opacities));
     let mut rows = top_paint_changed(before, d, ids);
     rows.extend(written(d, paints));

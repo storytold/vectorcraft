@@ -1218,6 +1218,32 @@ fn a_filled_line_bands_outline_keeps_a_stroke_opacity_and_blend_mode() {
     assert_eq!((st.opacity, st.blend), (0.5, BlendMode::Multiply));
 }
 
+/// A graphic style without a stroke applied to a marker whose stroke had paint replaces the stroke opacity and blend mode
+/// the series' Filled Lines band left: the band's outline is drawn opaque and Normal again. A marker that had no stroke
+/// before the style leaves them as they are.
+#[test]
+fn a_style_that_removes_a_marks_stroke_replaces_the_kept_stroke_opacity() {
+    for stroked in [true, false] {
+        let (mut s, id, band) = band_graph();
+        let marker = series_parts(&s, id, 0)[1].id;
+        if stroked {
+            let row = top_row(&s, marker, false);
+            s.execute("appearance.setItem", &json!({"ids": [marker.0], "index": row, "color": "#ff0000"})).unwrap();
+        }
+        let row = top_row(&s, band, false);
+        s.execute("appearance.setItem", &json!({"ids": [band.0], "index": row, "opacity": 40, "blend": "multiply"})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0].stroke_opacity, Some(0.4));
+        blue_style(&mut s, "Blue", false);
+        s.execute("graphicStyle.apply", &json!({"name": "Blue", "ids": [marker.0]})).unwrap();
+        let kept = spec(&s, id).series_paints[0].clone();
+        let want = if stroked { (None, None) } else { (Some(0.4), Some(BlendMode::Multiply)) };
+        assert_eq!((kept.stroke_opacity, kept.stroke_blend), want, "stroked {stroked}");
+        redrawn_band(&mut s, id);
+        let st = series_parts(&s, id, 0)[0].appearance.stroke().unwrap().clone();
+        assert_eq!((Some(st.opacity).filter(|o| *o < 1.0), Some(st.blend).filter(|b| *b != BlendMode::Normal)), want, "stroked {stroked}");
+    }
+}
+
 /// A Filled Lines band's stroke row removed with the Appearance panel or set to None with `paint.setStroke` leaves the
 /// band its color: an empty stored stroke is not a color for the band.
 #[test]
