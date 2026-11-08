@@ -5,7 +5,8 @@
 //! pattern with a loop and a stack of open groups, and the matcher keeps its choice points and the
 //! values it must restore on its own stack, so neither recurses however deeply the groups nest.
 //! Quantifiers count their iterations in registers instead of repeating their atom's code. Every
-//! instruction run, every capture slot cleared and every choice point taken back costs fuel, and
+//! instruction run, every capture slot cleared, every choice point taken back and every 16 units a
+//! backreference compares cost fuel, and
 //! the compiler's work, the matcher's state and its stack are held against the heap limit, so a
 //! pattern that backtracks without end stops at a limit.
 
@@ -1294,12 +1295,19 @@ impl<'r> Matcher<'r> {
                         true
                     } else {
                         let len = e - s;
-                        let hit = pos + len <= input.len()
-                            && (0..len).all(|k| match (input.get(s + k), input.get(pos + k)) {
+                        let mut hit = pos + len <= input.len();
+                        // The units are compared 16 at a time, and each 16, or fewer at the end,
+                        // count as a step taken before they are compared.
+                        let mut k = 0;
+                        while hit && k < len {
+                            let end = len.min(k + 16);
+                            self.step(interp)?;
+                            hit = (k..end).all(|i| match (input.get(s + i), input.get(pos + i)) {
                                 (Some(&a), Some(&b)) => re.canon(a) == re.canon(b),
                                 _ => false,
                             });
-                        self.steps += len as u64 / 16;
+                            k = end;
+                        }
                         if hit {
                             pos += len;
                         }

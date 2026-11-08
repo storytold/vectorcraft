@@ -448,6 +448,33 @@ fn the_matcher_state_counts_against_the_heap() {
 }
 
 #[test]
+fn a_backreference_takes_fuel_for_the_units_it_compares() {
+    let mut realm = Realm::with_options(Options::default(), Limits::default());
+    let interp = realm.interp();
+    let mut fuel_for = |pattern: &str, input: &str, want: bool| {
+        let input: Vec<u16> = input.encode_utf16().collect();
+        let Ok(re) = compile_within(pattern, usize::MAX, u64::MAX).0 else { panic!("the pattern compiles") };
+        let Ok(mut m) = crate::regexp_vm::Matcher::new(&re, interp) else { panic!("the state fits") };
+        interp.fuel = 1 << 40;
+        assert!(matches!(m.match_at(interp, &input, 0), Ok(hit) if hit == want), "{pattern}");
+        (1u64 << 40) - interp.fuel
+    };
+    // The same 20,000 iterations, each running a one-unit backreference instead of a character:
+    // each comparison takes a step besides the instruction's own.
+    let a = "a".repeat(20_001);
+    let (by_char, by_backref) = (fuel_for("(a)(?:a)*$", &a, true), fuel_for("(a)(?:\\1)*$", &a, true));
+    assert!(by_backref >= by_char + 20_000, "{by_backref} < {by_char} + 20000");
+    // A long comparison takes a step for each 16 units it compares.
+    let long = fuel_for("^(a{10000})\\1", &a, true);
+    let plain = fuel_for("^(a{10000})", &a, true);
+    assert!(long >= plain + 625, "{long} < {plain} + 625");
+    // One that fails on its first unit takes a step for those 16 units only.
+    let ab = format!("{}{}", "a".repeat(10_000), "b".repeat(10_000));
+    let (by_backref, by_char) = (fuel_for("^(a{10000})\\1", &ab, false), fuel_for("^(a{10000})c", &ab, false));
+    assert!(by_backref <= by_char + 2, "{by_backref} > {by_char} + 2");
+}
+
+#[test]
 fn clearing_matcher_state_takes_fuel() {
     let limits = Limits { fuel: 500_000, ..Limits::default() };
     let groups = "var p = ''; for (var i = 0; i < 1000; i++) p += '(x)'; var s = ''; for (var i = 0; i < 2000; i++) s += 'a';";
