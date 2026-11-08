@@ -834,6 +834,16 @@ pub fn logical_order(visual: &str) -> Option<(Vec<usize>, bool)> {
     Some((unicode_bidi::BidiInfo::reorder_visual(&levels), para.level.is_rtl()))
 }
 
+/// Line metrics of the font at `index` of `data`, at its default axis settings, in font units:
+/// (units per em, ascent, descent (negative below the baseline), line gap). egui builds its text
+/// rows from these values. `None` if the font can't be read.
+pub fn line_metrics(data: &[u8], index: u32) -> Option<(f32, f32, f32, f32)> {
+    use skrifa::MetadataProvider;
+    let f = skrifa::FontRef::from_index(data, index).ok()?;
+    let m = f.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+    Some((f32::from(m.units_per_em.max(1)), m.ascent, m.descent, m.leading))
+}
+
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
