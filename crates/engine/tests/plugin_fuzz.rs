@@ -681,7 +681,17 @@ proptest! {
         use vectorcraft_plugins::host::STORAGE_BUDGET;
         use vectorcraft_plugins::storage::Meter;
         const FUNCS: [&str; 6] = ["vc_settings_get", "vc_settings_set", "vc_cache_read", "vc_cache_write", "vc_settings_delete", "vc_cache_clear"];
-        let folder = std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id()));
+        // Each case starts with an empty store, and the store is deleted when the case ends, also
+        // when it fails.
+        struct Store(std::path::PathBuf);
+        impl Drop for Store {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let store = Store(std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id())));
+        let _ = std::fs::remove_dir_all(&store.0);
+        let folder = store.0.clone();
         let mut s = Session::new();
         s.attach_plugin_store(folder.clone());
         let storing = |id: &str| format!(r#"{{"id":"{id}","name":"F","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
@@ -704,8 +714,11 @@ proptest! {
         let text: String = key.iter().map(|b| format!("\\{b:02x}")).collect();
         let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::STORAGE_IMPORTS);
         let wasm = wat::parse_str(tpl::with_imports(&storing("fuzz.storage"), &imports, &format!("(local $r i32) {body}"), r#"{"objects":[]}"#)).unwrap();
+        // A failed case leaves its module installed, and the cases that shrink it install others
+        // under the same id.
         let r = catch_quiet(|| {
-            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).map_err(|e| e.to_string())?;
+            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true}))
+                .map_err(|e| e.to_string())?;
             let p = vectorcraft_plugins::registry::get("fuzz.storage").ok_or("not installed")?;
             p.run(b"{\"objects\":[]}", b"{}").map_err(|e| e.to_string())
         });
