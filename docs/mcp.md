@@ -3230,7 +3230,8 @@ names no earlier result as the previous primitive's result;
 and an `feComposite` operator SVG 1.1 lacks, or `edgeMode` on a primitive other than `feConvolveMatrix`, left out, as
 the canvas draws them. A filter with an `feBlend` mode SVG 1.1 lacks (`overlay` and the others), an `feDropShadow`
 whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox"`, or more than 64 primitives once
-its shadows are expanded, has no SVG 1.1 form. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
+its shadows are expanded, has no SVG 1.1 form. Neither does a filter whose written form, with its region and id, is
+one SVG import would not read, such as one longer than 64 KB. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
 becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
 glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
 `origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
