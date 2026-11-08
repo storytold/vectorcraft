@@ -6139,6 +6139,24 @@ breakText	Glyphs	Glifi
 	3D Box	Scatola 3D
 	3D Box Tool	Strumento Scatola 3D
 
+# Safe Mode
+	Safe Mode…	Modalità provvisoria…
+	Safe Mode	Modalità provvisoria
+	Help › Safe Mode…	Aiuto › Modalità provvisoria…
+	Enable on Re-launch	Attiva al prossimo avvio
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	L'ultimo avvio di VectorCraft si è interrotto durante il caricamento del plug-in {name}. Potrebbe non esserne la causa.
+	Disable and Continue	Disattiva e continua
+	Start Normally	Avvia normalmente
+	Start in Safe Mode	Avvia in modalità provvisoria
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft è in modalità provvisoria: nessun plug-in viene caricato o eseguito finché non si avvia normalmente.
+	Disabled plug-ins	Plug-in disattivati
+	No plug-ins are disabled.	Nessun plug-in disattivato.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	La modalità provvisoria è attiva: i plug-in non vengono caricati né eseguiti finché VectorCraft non si avvia normalmente
+@msg	give `id` or `file` (see plugin.safeMode)	indica `id` o `file` (vedi plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	quel plug-in non è disattivato (vedi plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Impossibile salvare i plug-in disattivati per il prossimo avvio
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Espandi aspetto: un effetto plug-in nella selezione non può essere espanso in modalità provvisoria
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Allinea alla griglia pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	solo i tracciati e i tracciati composti possono essere allineati alla griglia pixel

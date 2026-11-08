@@ -6374,6 +6374,24 @@ breakText	Glyphs	Glify
 	3D Box	Bryła 3D
 	3D Box Tool	Narzędzie Bryła 3D
 
+# Safe Mode
+	Safe Mode…	Tryb awaryjny…
+	Safe Mode	Tryb awaryjny
+	Help › Safe Mode…	Pomoc › Tryb awaryjny…
+	Enable on Re-launch	Włącz przy następnym uruchomieniu
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Ostatnie uruchomienie programu VectorCraft zatrzymało się podczas wczytywania wtyczki {name}. Może ona nie być przyczyną.
+	Disable and Continue	Wyłącz i kontynuuj
+	Start Normally	Uruchom normalnie
+	Start in Safe Mode	Uruchom w trybie awaryjnym
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft działa w trybie awaryjnym: żadne wtyczki nie są wczytywane ani uruchamiane, dopóki program nie zostanie uruchomiony normalnie.
+	Disabled plug-ins	Wyłączone wtyczki
+	No plug-ins are disabled.	Żadna wtyczka nie jest wyłączona.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Tryb awaryjny jest włączony: wtyczki nie są wczytywane ani uruchamiane, dopóki VectorCraft nie zostanie uruchomiony normalnie
+@msg	give `id` or `file` (see plugin.safeMode)	podaj `id` lub `file` (patrz plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	ta wtyczka nie jest wyłączona (patrz plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Nie można zapisać wyłączonych wtyczek na następne uruchomienie
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Rozszerz wygląd: efektu wtyczki w zaznaczeniu nie można rozszerzyć w trybie awaryjnym
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Wyrównaj do siatki pikseli
 @msg	only paths and compound paths can be aligned to the pixel grid	do siatki pikseli można wyrównać tylko ścieżki i ścieżki złożone

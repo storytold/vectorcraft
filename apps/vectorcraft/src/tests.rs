@@ -36,6 +36,33 @@ fn shortcut_overrides_from_an_earlier_version_load() {
     assert!(km.problems().iter().any(|p| format!("{p:?}") == r#"UnknownCommand { key: "test.unknown" }"#), "reported");
 }
 
+/// The command line's files wait for the choice about a stopped plug-in, so they open with the
+/// plug-ins it loads; with no choice up they open at once.
+#[test]
+fn command_line_files_wait_for_the_choice_about_a_stopped_plug_in() {
+    let temp = tempfile::Builder::new().prefix("vectorcraft-held-files-").tempdir().unwrap();
+    let file = temp.path().join("a.svg");
+    std::fs::write(&file, r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#).unwrap();
+    let files = vec![file.to_string_lossy().into_owned()];
+    // The files the app reads to open them.
+    let read = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let reads = read.clone();
+    let services = vectorcraft_ui_egui::Services {
+        read: Some(Box::new(move |p: &str| {
+            reads.borrow_mut().push(p.to_owned());
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    app.ui.stopped_plugin = Some(serde_json::json!({"id": "test.held", "name": "Held"}));
+    assert_eq!(open_or_hold(&mut app, files.clone()), files, "held while the choice is up");
+    assert!(read.borrow().is_empty(), "nothing opened before the choice");
+    app.ui.stopped_plugin = None;
+    assert!(open_or_hold(&mut app, files.clone()).is_empty());
+    assert_eq!(*read.borrow(), files, "opened with no choice up");
+}
+
 #[test]
 fn opening_files_unminimizes_and_focuses_the_window() {
     let ctx = egui::Context::default();

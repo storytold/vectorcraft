@@ -6397,5 +6397,23 @@ breakText	Glyphs	Glyphs
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
 
+# Safe Mode
+	Safe Mode…	Veilige modus…
+	Safe Mode	Veilige modus
+	Help › Safe Mode…	Help › Veilige modus…
+	Enable on Re-launch	Inschakelen bij volgende start
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	De laatste start van VectorCraft stopte terwijl de plug-in {name} werd geladen. Deze is mogelijk niet de oorzaak.
+	Disable and Continue	Uitschakelen en doorgaan
+	Start Normally	Normaal starten
+	Start in Safe Mode	Starten in veilige modus
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft is in veilige modus: er worden geen plug-ins geladen of uitgevoerd totdat het normaal start.
+	Disabled plug-ins	Uitgeschakelde plug-ins
+	No plug-ins are disabled.	Er zijn geen plug-ins uitgeschakeld.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Veilige modus is aan: plug-ins worden niet geladen of uitgevoerd totdat VectorCraft normaal start
+@msg	give `id` or `file` (see plugin.safeMode)	geef `id` of `file` op (zie plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	die plug-in is niet uitgeschakeld (zie plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	De uitgeschakelde plug-ins konden niet worden opgeslagen voor de volgende start
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Vormgeving uitbreiden: een plug-in-effect in de selectie kan niet worden uitgebreid in veilige modus
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Uitlijnen op pixelraster

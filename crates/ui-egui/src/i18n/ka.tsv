@@ -6531,6 +6531,24 @@ font-script	Japanese	იაპონური
 	3D Box	3D ყუთი
 	3D Box Tool	3D ყუთის ხელსაწყო
 
+# Safe Mode
+	Safe Mode…	უსაფრთხო რეჟიმი…
+	Safe Mode	უსაფრთხო რეჟიმი
+	Help › Safe Mode…	დახმარება › უსაფრთხო რეჟიმი…
+	Enable on Re-launch	ჩართვა შემდეგ გაშვებისას
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft-ის ბოლო გაშვება შეჩერდა, როცა პლაგინი {name} იტვირთებოდა. შესაძლოა, მიზეზი ის არ იყოს.
+	Disable and Continue	გამორთვა და გაგრძელება
+	Start Normally	ჩვეულებრივ გაშვება
+	Start in Safe Mode	უსაფრთხო რეჟიმში გაშვება
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft უსაფრთხო რეჟიმშია: პლაგინები არ იტვირთება და არ ეშვება, სანამ პროგრამა ჩვეულებრივ არ გაეშვება.
+	Disabled plug-ins	გამორთული პლაგინები
+	No plug-ins are disabled.	გამორთული პლაგინები არ არის.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	უსაფრთხო რეჟიმი ჩართულია: პლაგინები არ იტვირთება და არ ეშვება, სანამ VectorCraft ჩვეულებრივ არ გაეშვება
+@msg	give `id` or `file` (see plugin.safeMode)	მიუთითეთ `id` ან `file` (იხ. plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	ეს პლაგინი გამორთული არ არის (იხ. plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	გამორთული პლაგინების შენახვა შემდეგი გაშვებისთვის ვერ მოხერხდა
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	იერსახის გაშლა: მონიშნულში პლაგინის ეფექტის გაშლა უსაფრთხო რეჟიმში შეუძლებელია
+
 # Align to Pixel Grid
 	Align to Pixel Grid	პიქსელურ ბადეზე გასწორება
 @msg	only paths and compound paths can be aligned to the pixel grid	პიქსელურ ბადეზე მხოლოდ ტრაექტორიების და შედგენილი ტრაექტორიების გასწორებაა შესაძლებელი

@@ -6105,6 +6105,24 @@ breakText	Glyphs	Glyphen
 	3D Box	3D-Quader
 	3D Box Tool	3D-Quader-Werkzeug
 
+# Safe Mode
+	Safe Mode…	Abgesicherter Modus…
+	Safe Mode	Abgesicherter Modus
+	Help › Safe Mode…	Hilfe › Abgesicherter Modus…
+	Enable on Re-launch	Beim nächsten Start aktivieren
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Der letzte Start von VectorCraft wurde beendet, während das Plug-in {name} geladen wurde. Es ist möglicherweise nicht die Ursache.
+	Disable and Continue	Deaktivieren und fortfahren
+	Start Normally	Normal starten
+	Start in Safe Mode	Im abgesicherten Modus starten
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft läuft im abgesicherten Modus: Plug-ins werden weder geladen noch ausgeführt, bis VectorCraft normal startet.
+	Disabled plug-ins	Deaktivierte Plug-ins
+	No plug-ins are disabled.	Keine Plug-ins sind deaktiviert.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Der abgesicherte Modus ist aktiv: Plug-ins werden weder geladen noch ausgeführt, bis VectorCraft normal startet
+@msg	give `id` or `file` (see plugin.safeMode)	`id` oder `file` angeben (siehe plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	dieses Plug-in ist nicht deaktiviert (siehe plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Die deaktivierten Plug-ins konnten nicht für den nächsten Start gespeichert werden
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Aussehen umwandeln: Ein Plug-in-Effekt in der Auswahl kann im abgesicherten Modus nicht umgewandelt werden
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Am Pixelraster ausrichten
 @msg	only paths and compound paths can be aligned to the pixel grid	nur Pfade und zusammengesetzte Pfade können am Pixelraster ausgerichtet werden

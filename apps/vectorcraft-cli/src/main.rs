@@ -1,6 +1,7 @@
 //! `vectorcraft-cli`: VectorCraft from the command line.
 //!
 //! ```text
+//! vectorcraft-cli --safe-mode SUBCOMMAND ...
 //! vectorcraft-cli mcp [--connect 127.0.0.1:7979 | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
 //! vectorcraft-cli run [--in FILE] [--cmd id [--params '{json}'] | --commands FILE|-]... [--export out.svg]... [--scale 2] [--ppi 300]
 //! vectorcraft-cli commands
@@ -72,6 +73,11 @@ const USAGE: &str = "\
 vectorcraft-cli — VectorCraft automation
 
 USAGE:
+  vectorcraft-cli --safe-mode SUBCOMMAND ...
+      Run any subcommand without plug-ins: none loads or runs, and plug-in commands report that
+      Safe Mode is on. Plug-ins stay installed. `--safe-mode mcp` serves a headless session and
+      does not take --connect.
+
   vectorcraft-cli mcp [--connect ADDR | --headless] [--automation-read-root DIR]... [--automation-write-root DIR]...
       Run the MCP server on stdio. Default: connect to a running app at 127.0.0.1:7979
       (vectorcraft --control 7979), falling back to a headless in-process session.
@@ -180,12 +186,18 @@ fn main() -> ExitCode {
     #[cfg(target_os = "macos")]
     mac_fonts::install();
     prefs_dir::install_fonts();
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // Before any subcommand attaches the plug-in folder.
+    let safe_mode = args.first().is_some_and(|a| a == "--safe-mode");
+    if safe_mode {
+        args.remove(0);
+        vectorcraft_engine::cmd::plugin::start_in_safe_mode();
+    }
     let r = match args.first().map(String::as_str) {
         // `commands` and `info` take no options, so `--help` or `-h` anywhere after them prints the
         // usage. The other subcommands check for it themselves.
         Some("commands" | "info") if help_requested(&args[1..], &[]) => help(),
-        Some("mcp") => mcp(&args[1..]),
+        Some("mcp") => mcp(&args[1..], safe_mode),
         Some("run") => run(&args[1..]),
         Some("commands") => commands(),
         Some("convert") => convert(&args[1..]),
@@ -218,7 +230,9 @@ fn with_stores(mut h: Headless) -> Headless {
     h
 }
 
-fn mcp(args: &[String]) -> Result<(), String> {
+/// `mcp`. With `--safe-mode` (`safe_mode`) it serves a headless session: a running app loads its own
+/// plug-ins, so `--connect` is refused and the default does not connect.
+fn mcp(args: &[String], safe_mode: bool) -> Result<(), String> {
     if help_requested(args, &["--connect", "--automation-read-root", "--automation-write-root"]) {
         return help();
     }
@@ -245,6 +259,9 @@ fn mcp(args: &[String]) -> Result<(), String> {
     if headless && connect.is_some() {
         return Err("use either --connect or --headless".into());
     }
+    if safe_mode && connect.is_some() {
+        return Err("--safe-mode runs a headless session without plug-ins; a running app loads its own: start it with `vectorcraft --safe-mode --control <port>`".into());
+    }
     let read: Vec<&Path> = read_roots.iter().map(Path::new).collect();
     let write: Vec<&Path> = write_roots.iter().map(Path::new).collect();
     let roots = AutomationRoots::new(&read, &write)?;
@@ -257,7 +274,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
         file_access::confine_process(roots.clone());
         eprintln!("vectorcraft-cli: files confined: {}", roots.describe());
         Box::new(Headless::with_document().with_automation_roots(Some(roots)))
-    } else if headless {
+    } else if headless || safe_mode {
         Box::new(with_stores(Headless::with_document()))
     } else if let Some(addr) = connect {
         // Explicit address: fail loudly if the app isn't there.

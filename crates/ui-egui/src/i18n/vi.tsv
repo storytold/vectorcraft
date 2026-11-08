@@ -6120,6 +6120,24 @@ breakText	Glyphs	Glyph
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
 
+# Safe Mode
+	Safe Mode…	Chế độ an toàn…
+	Safe Mode	Chế độ an toàn
+	Help › Safe Mode…	Trợ giúp › Chế độ an toàn…
+	Enable on Re-launch	Bật ở lần khởi chạy tiếp theo
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Lần khởi chạy VectorCraft trước đã dừng khi đang tải plug-in {name}. Có thể plug-in đó không phải là nguyên nhân.
+	Disable and Continue	Tắt và tiếp tục
+	Start Normally	Khởi động bình thường
+	Start in Safe Mode	Khởi động ở chế độ an toàn
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft đang ở chế độ an toàn: không plug-in nào được tải hay chạy cho đến khi ứng dụng khởi động bình thường.
+	Disabled plug-ins	Plug-in đã tắt
+	No plug-ins are disabled.	Không có plug-in nào bị tắt.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Chế độ an toàn đang bật: plug-in không được tải hay chạy cho đến khi VectorCraft khởi động bình thường
+@msg	give `id` or `file` (see plugin.safeMode)	cung cấp `id` hoặc `file` (xem plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	plug-in đó không bị tắt (xem plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Không thể lưu các plug-in đã tắt cho lần khởi chạy tiếp theo
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Mở rộng diện mạo: không thể mở rộng hiệu ứng plug-in trong vùng chọn ở chế độ an toàn
+
 # Align to Pixel Grid
 	Align to Pixel Grid	Căn theo lưới pixel
 @msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được

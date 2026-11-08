@@ -6157,6 +6157,24 @@ breakText	Glyphs	字符
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
 
+# Safe Mode
+	Safe Mode…	安全模式…
+	Safe Mode	安全模式
+	Help › Safe Mode…	說明 › 安全模式…
+	Enable on Re-launch	下次啟動時啟用
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft 上次啟動時在載入增效模組 {name} 期間停止。該增效模組不一定是原因。
+	Disable and Continue	停用並繼續
+	Start Normally	正常啟動
+	Start in Safe Mode	以安全模式啟動
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft 處於安全模式：在正常啟動之前，不會載入或執行任何增效模組。
+	Disabled plug-ins	已停用的增效模組
+	No plug-ins are disabled.	沒有停用的增效模組。
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	安全模式已開啟：在 VectorCraft 正常啟動之前，增效模組不會載入或執行
+@msg	give `id` or `file` (see plugin.safeMode)	請提供 `id` 或 `file` (請參閱 plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	該增效模組未停用 (請參閱 plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	無法為下次啟動儲存已停用的增效模組
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	展開外觀：在安全模式下無法展開選取範圍中的增效模組效果
+
 # Align to Pixel Grid
 	Align to Pixel Grid	對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點

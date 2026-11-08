@@ -96,6 +96,7 @@ pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
 pub(crate) mod revolve_gizmo;
+pub mod safe_mode;
 pub mod saturate;
 pub mod save_brush_library;
 mod save_changes;
@@ -381,6 +382,8 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
+    PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
+    SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
     DxfImport: [dxf_import::KIND] => dxf_import::SPEC,
     RasterFormatOptions: ["tiffOptions", "bmpOptions", "tgaOptions"] => png_options::SPEC,
     SaveForWeb: [save_for_web::KIND] => save_for_web::SPEC,
@@ -551,6 +554,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         if d.kind == swatch_conflict::KIND {
             crate::placing::cancel_swatch_paste(app);
         }
+        if d.kind == safe_mode::STOPPED {
+            safe_mode::cancel_stopped(app);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -592,13 +598,15 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
-/// that dialog is gone, and with no dialog open the next document's Missing Fonts dialog opens
-/// (one dialog at a time).
+/// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
+/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
     missing_fonts::requeue_replaced(app);
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
+    safe_mode::reopen(app);
     missing_fonts::open_next(app);
 }
 

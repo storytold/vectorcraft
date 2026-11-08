@@ -6204,6 +6204,24 @@ breakText	Glyphs	字形
 	3D Box	3Dボックス
 	3D Box Tool	3Dボックスツール
 
+# Safe Mode
+	Safe Mode…	セーフモード…
+	Safe Mode	セーフモード
+	Help › Safe Mode…	ヘルプ › セーフモード…
+	Enable on Re-launch	次回起動時に有効にする
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	前回の VectorCraft の起動は、プラグイン {name} の読み込み中に停止しました。これが原因とは限りません。
+	Disable and Continue	無効にして続行
+	Start Normally	通常どおり起動
+	Start in Safe Mode	セーフモードで起動
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft はセーフモードです: 通常どおり起動するまで、プラグインは読み込まれず実行もされません。
+	Disabled plug-ins	無効なプラグイン
+	No plug-ins are disabled.	無効なプラグインはありません。
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	セーフモードがオンです: VectorCraft が通常どおり起動するまで、プラグインは読み込まれず実行もされません
+@msg	give `id` or `file` (see plugin.safeMode)	`id` または `file` を指定してください (plugin.safeMode を参照)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	そのプラグインは無効になっていません (plugin.safeMode を参照)
+@msg	Couldn't save the disabled plug-ins for the next launch	無効なプラグインを次回の起動用に保存できませんでした
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	アピアランスを分割: 選択範囲のプラグイン効果はセーフモードでは分割できません
+
 # Align to Pixel Grid
 	Align to Pixel Grid	ピクセルグリッドに整合
 @msg	only paths and compound paths can be aligned to the pixel grid	ピクセルグリッドに整合できるのはパスと複合パスのみです

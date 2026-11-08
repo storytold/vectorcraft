@@ -6319,7 +6319,38 @@ permission names, and a `hash` that is not the module's SHA-256. `prefs.set` ret
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
 value or the folder the preference already holds, and the web build does not check folders.
 
+Safe Mode starts VectorCraft without plug-ins: `vectorcraft --safe-mode`, `vectorcraft-cli --safe-mode <subcommand>`, or
+the choice the desktop app offers when the last launch stopped while a plug-in was loading (Disable and Continue, Start
+Normally, Start in Safe Mode). It names that plug-in without saying it caused the stop. Until the user picks Disable and
+Continue or Start Normally, the next launch asks again, also after a `--safe-mode` launch, which asks nothing.
+`vectorcraft --safe-mode` opens its files in a window of its own, and on Windows and Linux a file opened from the file
+manager while the app is in Safe Mode starts a window with plug-ins. Files given on the command line, or opened from
+the file manager while the choice is up, open after the user picks. On Windows and Linux, when the choice is Start in Safe
+Mode, the files from the file manager open in a new window with plug-ins. `vectorcraft-cli --safe-mode mcp` serves a headless
+session and refuses `--connect`. In Safe Mode no plug-in loads or
+runs: `plugin.install`, `plugin.run`, `plugin.reload` and exporters return an error, and a live-effect plug-in draws its
+object's geometry unchanged while the object keeps the effect: `effect.list` gives that effect `skipped: true`, and the
+Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
+error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. `vectorcraft` rejects an option it does not know (such as
+`--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
+no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
+pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or
+off for the next launch, as Help › Safe Mode's Enable on Re-launch does; it does not load, unload or uninstall anything
+now, and `plugin.install` of a disabled plug-in turns it on. Turning a plug-in on by `id` or by installing it also turns
+on the file it is stored in, which names it when it stopped a launch while loading; when the new version can't be saved
+over that file, the plug-in stays disabled. `plugin.list` reports `safeMode` and `disabled`, and
+`plugin.reload` skips disabled plug-ins. A change to the disabled list is saved on top of the list the file holds at
+that moment, so a change another window saved to the same preferences meanwhile is kept. When the list file can't be
+read (it is too large) or holds another format or version, it is left as it is; a file that isn't JSON is replaced.
+`plugin.setEnabled` returns `saved: false` when its change isn't in the plug-in folder: the session has none (a server
+confined with `--automation-read-root` or `--automation-write-root`), the list there can't be read or written, or it
+already holds 1,000 plug-ins, as another window may have saved it. The
+change stays in the process and is saved with the next change that saves, and the app shows a status message. When
+Disable and Continue can't save the plug-in it turns off, this launch skips it and the next launch asks again.
+
 ```json
+{"name":"run_command","arguments":{"command":"plugin.safeMode","params":{}}}
+{"name":"run_command","arguments":{"command":"plugin.setEnabled","params":{"id":"org.example.wobble","enabled":true}}}
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
