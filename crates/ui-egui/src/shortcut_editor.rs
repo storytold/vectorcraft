@@ -453,8 +453,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Commands whose params are all optional that do nothing, or fail, when a key press runs them
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
-/// and the library, data set and text style loaders a file, which their panel menu items ask for.
-const NEEDS_A_PARAM: [&str; 19] = [
+/// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
+/// for.
+const NEEDS_A_PARAM: [&str; 20] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -474,6 +475,7 @@ const NEEDS_A_PARAM: [&str; 19] = [
     "charStyle.load",
     "paraStyle.load",
     "textStyle.loadAll",
+    "svgFilter.import",
 ];
 
 /// The (label, params) of each menu bar item, by command id.

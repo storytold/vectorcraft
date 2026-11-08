@@ -3176,6 +3176,62 @@ it. The native format keeps the events and the files.
 {"name":"run_command","arguments":{"command":"svgInteractivity.addFile","params":{"file":"menu.js"}}}
 ```
 
+## SVG filters
+
+Effect › SVG Filters lists the document's SVG filters below Apply SVG Filter… and Import SVG Filter…; choosing one
+applies it to the selection. `svgFilter.list {}` returns them as `filters: [{name, xml}]`. Each is one `<filter>`
+element whose `id` is its name, with 1 to 64 primitives and at most 64 KB of XML (`feTurbulence` octaves up to 10,
+`feConvolveMatrix` kernels up to 9 cells a side, `feMorphology` radii and `kernelUnitLength` up to 100 and
+`stdDeviation` up to 500 user units, elements nested at most 16 deep). It holds only filter primitives,
+what they hold, and `desc` and `title`: no scripts, no event attributes, and images only as PNG, JPEG, GIF or WebP
+`data:` URLs of at most 4096 × 4096 pixels. A document
+holds at most 64. `svgFilter.define {xml, replace?}` adds
+a filter after the others, or with `replace` replaces the filter of that name, which keeps its name; a name another
+filter has is refused, and the same filter again records no undo step. `svgFilter.delete {name}` removes one, and `svgFilter.import
+{path?|svg?}` adds the `<filter>` elements of an SVG file (at most 16 MB, not SVGZ, the first 256 filters) or of SVG text, leaving out the names the
+document already has and the filters `svgFilter.define` would refuse (`{added, skipped}`). Each change is one undo
+step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
+in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
+what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
+filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
+empty) until a filter of that name is defined or imported again. Opened from such an effect, Apply SVG Filter shows the
+name above the list, not selectable. `effect.apply {effect: "svg.filter", params: {xml}}` takes a filter
+directly and names it by its `id`; an `xml` that isn't one such filter is an error. `ui.svgFilterDialog {}` opens Apply
+SVG Filter (New, Edit, Delete, Import…), and from the Appearance panel it edits which filter an applied effect runs;
+`ui.importSvgFilter {}` picks an SVG file and imports its filters.
+
+The canvas, raster export, printing and PDF draw the filter with the object as its source graphic, its user space
+starting at `origin` (`[x, y]` in points, `[0, 0]` by default) with its units `scale` points (1 by default), its
+object bounding box the drawn object's, and at the Document Raster Effects resolution when the view is finer. The
+filter runs on coarser pixels when a morphology radius or kernel unit would span more than 32 of them, or a standard
+deviation more than 512. An effect whose XML these rules refuse (from a file or a script) is not drawn or exported. The
+filter is drawn and written rebuilt from its filter elements and their filter attributes alone, without comments,
+text, descriptions or other attributes. An image in a filter is drawn only when its bytes are a PNG, JPEG, GIF or WebP
+within the pixel limit. A filter region in user space given in percentages is measured against the object's box (x
+and y from its top-left corner), and one in em or ex or left out takes the default region of that box (10% beyond
+each side); these are VectorCraft's own rules. Scale Strokes & Effects scales
+`scale`. SVG export writes the filter as a `<filter>` element when it is the object's last effect, its only pixel
+effect and `scale` is 1 (with a region measured against the object's box, its only raster effect), with the object in a
+group that places the filter's user space and such a region written in user units. The filter is written in SVG 1.1
+terms: `feImage`'s reference as `xlink:href`; each `feDropShadow` as the blur, offset, flood, composite and merge that
+[Filter Effects](https://www.w3.org/TR/filter-effects-1/#feDropShadowElement) gives as its equivalent; colors as
+`#rrggbb` with a flood color's alpha in `flood-opacity`; `image-rendering` as `optimizeSpeed` or `optimizeQuality`;
+the inputs `BackgroundImage`, `BackgroundAlpha`, `FillPaint` and `StrokePaint` as `SourceGraphic`, and an input that
+names no earlier result as the previous primitive's result;
+and an `feComposite` operator SVG 1.1 lacks, or `edgeMode` on a primitive other than `feConvolveMatrix`, left out, as
+the canvas draws them. A filter with an `feBlend` mode SVG 1.1 lacks (`overlay` and the others), an `feDropShadow`
+whose `flood-color` is `currentColor` or with `primitiveUnits="objectBoundingBox"`, or more than 64 primitives once
+its shadows are expanded, has no SVG 1.1 form. In that case, otherwise, and with the SVG Tiny 1.2 profile, the object
+becomes an image. SVG import keeps a filter that the live effects (Drop Shadow, the
+glows, Gaussian Blur, Feather) can't express as an `svg.filter` effect holding the filter's XML, with `scale` and
+`origin` from the object's user space, unless that user space is turned, skewed or scaled past 0.001 to 1000 points
+to a unit, or the filter is styled by the document's style sheets: such a filter is left out with a warning. The native format keeps the document's filters and the effects.
+
+```json
+{"name":"run_command","arguments":{"command":"svgFilter.define","params":{"xml":"<filter id=\"Soft\"><feGaussianBlur stdDeviation=\"2\"/></filter>"}}}
+{"name":"run_command","arguments":{"command":"svgFilter.apply","params":{"name":"Soft","ids":[12]}}}
+```
+
 ## Removing anchor points
 
 `path.removeAnchors {}` (Object › Path › Remove Anchor Points) removes the direct-selected anchors (`select.anchors

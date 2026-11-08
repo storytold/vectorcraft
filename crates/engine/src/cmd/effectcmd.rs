@@ -18,6 +18,22 @@ use super::expand::has_seeded;
 use super::rasterfx;
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param, switch_or};
 
+/// The name of the `svg.filter` effect drawing `xml`: its `<filter>` id. An effect names the
+/// document's filter of that name, so `xml` that differs from the document's filter of the same
+/// name is refused.
+fn svg_filter_name(s: &Session, xml: &str, cmd: &str) -> Result<String> {
+    let name = effects::svg_filter::check(xml).map_err(|e| bad(cmd, e))?;
+    if let Some(held) = s.doc()?.doc.svg_filters.iter().find(|f| f.name == name)
+        && held.xml != xml.trim()
+    {
+        return Err(bad(
+            cmd,
+            format!("the document has another SVG filter named {name:?}: use svgFilter.apply, or svgFilter.define with `replace` to edit it"),
+        ));
+    }
+    Ok(name)
+}
+
 /// The effect commands of the Effect menu and the Appearance panel.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -244,6 +260,11 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if texture_load_effect(id) {
         load_texture(&mut params, C)?;
+    }
+    // An SVG filter needs its <filter> element, and is named by its id.
+    if id == effects::SVG_FILTER {
+        let xml = params.get("xml").and_then(Value::as_str).ok_or_else(|| bad(C, "give `xml`, one SVG <filter> element"))?;
+        params["name"] = json!(svg_filter_name(s, xml, C)?);
     }
     let effect = effects::new_effect(id, &params).ok_or_else(|| bad(C, format!("unknown effect `{id}`")))?;
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
@@ -535,6 +556,12 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
         if !ids.is_empty() && ids.iter().all(|id| *id == to) {
             return Ok(json!({ "ids": [] }));
         }
+    }
+    // An SVG filter is named by its id: another filter renames the effect.
+    if edited.iter().any(|e| e == effects::SVG_FILTER)
+        && let Some(xml) = params.get("xml").and_then(Value::as_str)
+    {
+        params["name"] = json!(svg_filter_name(s, xml, C)?);
     }
     for &(id, target, index) in &targets {
         let n = s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?;

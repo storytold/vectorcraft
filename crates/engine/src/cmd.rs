@@ -84,6 +84,7 @@ pub(crate) mod slices;
 mod stroke;
 mod style;
 pub mod stylelib;
+mod svgfilter;
 mod swatch;
 pub mod swatchlib;
 pub(crate) mod symboledit;
@@ -318,6 +319,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(expand::specs());
         v.extend(attributes::specs());
         v.extend(interactivity::specs());
+        v.extend(svgfilter::specs());
         v.extend(newart::specs());
         v.extend(colortheme::specs());
         v.extend(fileio::pdf::specs());

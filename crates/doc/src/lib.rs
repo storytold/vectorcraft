@@ -150,7 +150,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -310,6 +310,10 @@ pub struct Document {
     /// given) SVG export links with `<script>` elements, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub svg_scripts: Vec<String>,
+    /// Effect › SVG Filters: the SVG filters the document holds (at most [`SvgFilter::MAX`]), in
+    /// the order the submenu lists them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub svg_filters: Vec<SvgFilter>,
     /// Puppet Warp pins on the selected artwork while the tool edits it ([`PuppetPins`]): editing
     /// state, never saved.
     #[serde(skip)]

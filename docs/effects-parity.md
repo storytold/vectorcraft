@@ -11,7 +11,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 
 | Group | Illustrator | VectorCraft | % | Remaining (h) |
 |---|---:|---:|---:|---:|
-| Illustrator effects (vector and stylize) | 50 | 49 | 98% | 4–8 |
+| Illustrator effects (vector and stylize) | 50 | 50 | 100% | — |
 | Photoshop effects (raster, Effect Gallery) | 57 | 57 | 100% | 1–2 (Effect Gallery thumbnails and in-dialog preview) |
 | 3D and Materials | 4 (+3 Classic) | 4 (initial: Extrude & Bevel, Revolve, Inflate, Rotate) | ~25% | 25–45 |
 | Beyond Illustrator: Effect › Color Adjustments (6), effect plug-ins (WebAssembly) | — | 6 + plug-ins | — | — |
@@ -27,7 +27,7 @@ Part of [target-app-parity.md](target-app-parity.md); open work is in [gaps.md](
 | Pathfinder | Add, Intersect, Exclude, Subtract, Minus Back, Divide, Trim, Merge, Crop, Outline, Hard Mix, Soft Mix, Trap | 13/13 | Trap traps only solid fills (gradients and patterns hide what is below them but don't trap) and spreads each colour's visible area as a whole; the public page gives no default values, so Trap's 0.25 pt, 100% and 40% are VectorCraft's own |
 | Rasterize | Rasterize… (as a live effect) | 1/1 | — |
 | Stylize | Drop Shadow, Feather, Inner Glow, Outer Glow, Round Corners, Scribble | 6/6 | Scribble Options' Settings presets |
-| SVG Filters | Apply SVG Filter… and the filter list | 0/1 | the whole submenu (SVG filters on import round-trip already) |
+| SVG Filters | Apply SVG Filter… and the filter list | 1/1 | The submenu lists the document's own filters: VectorCraft ships no default filters. A filter that is the object's last effect is written to SVG as a `<filter>` element; otherwise SVG export draws the object as an image. A filter on a turned or skewed object in an imported SVG is left out with a warning |
 | Warp | Arc, Arc Lower, Arc Upper, Arch, Bulge, Shell Lower, Shell Upper, Flag, Wave, Fish, Rise, Fisheye, Inflate, Squeeze, Twist | 15/15 | warp point editing in envelopes; Arc is a circular arc in the object's own proportions (#1578) |
 
 Document Raster Effects Settings exists. When the 64 million pixel cap on an effect image lowers

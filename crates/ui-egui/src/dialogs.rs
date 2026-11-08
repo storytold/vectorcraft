@@ -114,6 +114,7 @@ pub(crate) mod simplify_slider;
 pub mod slices;
 pub(crate) mod smooth_slider;
 pub mod spot_colors;
+pub mod svg_filter;
 pub(crate) mod svg_options;
 pub mod swatch_conflict;
 pub mod swatch_options;
@@ -350,6 +351,7 @@ registry! {
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,
+    SvgFilter: [svg_filter::KIND] => svg_filter::SPEC,
     NewDocumentMore: [new_document::MORE] => new_document::MORE_SPEC,
     Place: [place::KIND] => place::SPEC,
     RasterOptions: ["pngOptions", "jpgOptions", "webpOptions", "gifOptions", "png8Options"] => png_options::SPEC,
