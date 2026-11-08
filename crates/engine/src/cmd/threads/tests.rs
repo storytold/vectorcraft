@@ -981,6 +981,74 @@ fn outlining_a_numbered_last_frame_keeps_only_the_text_it_has_no_room_for() {
     assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]));
 }
 
+/// As above for a list at level 2: the last frame's numbered paragraphs are counted on from the
+/// count the frames before it reached at that level.
+#[test]
+fn outlining_a_last_frame_numbered_at_a_deeper_level_keeps_only_the_text_it_has_no_room_for() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let items: String = (1..=7).map(|i| format!("Item {i}\n")).collect();
+    let story = format!("{items}{}", TEXT.repeat(4));
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 106}})).unwrap());
+    let c = new_id(s.execute("text.create", &json!({"x": 200, "y": 10, "text": "", "area": {"width": 150, "height": 20}})).unwrap());
+    s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, c], "number": "upperRoman", "listLevel": 2, "leftIndent": 14, "firstLineIndent": -14})).unwrap();
+    let shown = [a, c].map(|id| text(&s, id));
+    assert!(shown[0].ends_with("Item 7\n") && shown[1].starts_with("The quick"), "{shown:?}");
+    let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(c)).cloned() else { panic!("not area type") };
+    assert_eq!((t.list_count, t.list_level_counts.as_slice()), (0, &[7][..]));
+    let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    assert_eq!(laid.markers.first().map(|m| m.text.as_str()), Some("VIII."));
+    assert!(laid.overflow, "the last frame has more text than it shows");
+    let end = laid.lines.last().map_or(0, |l| l.end);
+    let from_one = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &TextObject { list_level_counts: vec![], ..t });
+    assert_ne!(from_one.lines.last().map_or(0, |l| l.end), end, "counted from 1, the frame would show other text");
+    let hidden = shown[1][end..].trim_start_matches(' ');
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]));
+}
+
+/// New Symbol and Redefine Symbol on a thread's last frame numbered at level 2: the symbol's
+/// art holds the text the frame shows, measured with the count the frames before it reached at
+/// that level, and the frame before it takes the rest.
+#[test]
+fn a_symbol_of_a_last_frame_numbered_at_a_deeper_level_holds_the_text_it_shows() {
+    for command in ["symbol.new", "symbol.update"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+        let items: String = (1..=7).map(|i| format!("Item {i}\n")).collect();
+        let story = format!("{items}{}", TEXT.repeat(4));
+        let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": story, "area": {"width": 150, "height": 106}})).unwrap());
+        let c = new_id(s.execute("text.create", &json!({"x": 200, "y": 10, "text": "", "area": {"width": 150, "height": 20}})).unwrap());
+        s.execute("text.thread.add", &json!({"from": a, "to": c})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [a, c], "number": "upperRoman", "listLevel": 2, "leftIndent": 14, "firstLineIndent": -14}))
+            .unwrap();
+        let shown = [a, c].map(|id| text(&s, id));
+        assert!(shown[0].ends_with("Item 7\n") && shown[1].starts_with("The quick"), "{command}: {shown:?}");
+        let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(c)).cloned() else { panic!("not area type") };
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        assert!(laid.overflow, "{command}: the last frame has more text than it shows");
+        let end = laid.lines.last().map_or(0, |l| l.end);
+        let from_one = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &TextObject { list_level_counts: vec![], ..t });
+        assert_ne!(from_one.lines.last().map_or(0, |l| l.end), end, "{command}: counted from 1, the frame would show other text");
+        let hidden = shown[1][end..].trim_start_matches(' ');
+        let name = if command == "symbol.update" {
+            let mark = new_id(s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 20, "height": 20})).unwrap());
+            s.execute("select.set", &json!({"ids": [mark]})).unwrap();
+            s.execute("symbol.new", &json!({"name": "Mark"})).unwrap();
+            "Mark"
+        } else {
+            "Story"
+        };
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        s.execute(command, &json!({"name": name})).unwrap();
+        let held = symbol_texts(&s, name);
+        assert_eq!(held.iter().map(|t| t.trim_end()).collect::<Vec<_>>(), [shown[1][..end].trim_end()], "{command}: the symbol's art");
+        assert_eq!(text(&s, a), format!("{}{hidden}", shown[0]), "{command}: the frame before it takes the rest");
+    }
+}
+
 /// A story of one-line paragraphs that each start with a quotation mark, threaded from area
 /// type `a` into the rectangle `b`, which shows the paragraphs that `a` has no room for.
 fn quoted_thread() -> (Session, u64, u64) {
@@ -1090,6 +1158,177 @@ fn a_thread_saved_with_differing_frames_opens_with_the_first_frames_setting() {
     }
 }
 
+/// The writing direction of each of the frames `ids` (true: vertical).
+fn vertical<const N: usize>(s: &Session, ids: [u64; N]) -> [bool; N] {
+    ids.map(|id| {
+        let Some(t) = text_of(&s.doc().unwrap().doc, NodeId(id)) else { panic!("not area type") };
+        t.vertical
+    })
+}
+
+/// Whether each frame of the thread `ids` holds the part of the story that its layout, in its
+/// writing direction, has room for: the parts that [`vectorcraft_text::thread::distribute`]
+/// gives the frames as they are now.
+fn flows_as_laid_out(s: &Session, ids: &[u64]) -> bool {
+    let d = &s.doc().unwrap().doc;
+    let frames: Vec<&TextObject> = ids.iter().map(|id| text_of(d, NodeId(*id)).unwrap()).collect();
+    let story = vectorcraft_text::thread::story(&frames);
+    let paras = vectorcraft_text::thread::story_paras(&frames, &[]);
+    let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &frames, &story, &paras);
+    let texts = |runs: &[TextRun]| runs.iter().map(|r| r.text.as_str()).collect::<String>();
+    parts.iter().zip(&frames).all(|(part, f)| texts(&part.runs) == f.plain_text())
+}
+
+/// Type Orientation is a setting of the whole thread: Type › Type Orientation in any frame sets
+/// it in every frame of the thread, in one undo step, and the story flows through the frames in
+/// that direction. Typing keeps it, and frames taken out of the thread keep it.
+#[test]
+fn type_orientation_is_set_for_every_frame_of_a_thread() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    let r = s.execute("type.orientation.vertical", &json!({})).unwrap();
+    assert_eq!(r, json!({"vertical": true, "ids": [a, b]}));
+    assert_eq!(vertical(&s, [a, b]), [true, true], "the second frame is vertical too");
+    assert!(flows_as_laid_out(&s, &[a, b]));
+    assert_eq!(format!("{}{}", text(&s, a), text(&s, b)), TEXT.repeat(4));
+    // Set back from the second frame, both are horizontal, and one undo makes both vertical.
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    assert_eq!(s.execute("type.orientation.horizontal", &json!({})).unwrap()["ids"], json!([b, a]));
+    assert_eq!(vertical(&s, [a, b]), [false, false]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(vertical(&s, [a, b]), [true, true]);
+    // Typing in the first frame re-flows the story and keeps the direction.
+    s.execute("text.editRange", &json!({"id": a, "start": 0, "end": 0, "insert": "NEW "})).unwrap();
+    assert_eq!(vertical(&s, [a, b]), [true, true]);
+    assert!(flows_as_laid_out(&s, &[a, b]));
+    // Any edit that sets one frame sets the thread.
+    s.edit("Set", |d, _| {
+        let Some(NodeKind::Text(t)) = d.node_mut(NodeId(b)).map(|n| &mut n.kind) else { panic!("not text") };
+        t.vertical = false;
+        refresh_bounds(t);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(vertical(&s, [a, b]), [false, false]);
+    assert!(flows_as_laid_out(&s, &[a, b]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Released or unthreaded, each frame keeps it.
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("text.thread.releaseSelection", &json!({})).unwrap();
+    assert_eq!(vertical(&s, [a, b]), [true, true]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("text.thread.remove", &json!({})).unwrap();
+    assert!(threads(&s).is_empty());
+    assert_eq!(vertical(&s, [a, b]), [true, true]);
+}
+
+/// Threading type gives the joined thread the writing direction of its first frame, and the
+/// story flows through every frame in that direction.
+#[test]
+fn a_thread_takes_its_first_frames_type_orientation() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let area = json!({"width": 150, "height": 60});
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": TEXT.repeat(4), "area": area, "vertical": true})).unwrap());
+    let b = new_id(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 60, "height": 200})).unwrap());
+    let c = new_id(s.execute("shape.rectangle", &json!({"x": 300, "y": 10, "width": 150, "height": 200})).unwrap());
+    s.execute("select.set", &json!({"ids": [a, b, c]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    assert_eq!(vertical(&s, [a, b, c]), [true; 3]);
+    assert!(!text(&s, b).is_empty() && !text(&s, c).is_empty());
+    assert!(flows_as_laid_out(&s, &[a, b, c]), "the middle frame holds what fits it as vertical type");
+    // From `c`'s out port into horizontal area type `d`: `d` joins the thread and becomes vertical.
+    let d = new_id(s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Own text.", "area": {"width": 150, "height": 190}})).unwrap());
+    s.execute("text.thread.add", &json!({"from": c, "to": d})).unwrap();
+    assert_eq!(threads(&s), [[a, b, c, d]]);
+    assert_eq!(vertical(&s, [a, b, c, d]), [true; 4]);
+    assert!(flows_as_laid_out(&s, &[a, b, c, d]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(vertical(&s, [d]), [false], "undo gives `d` its own direction back");
+}
+
+/// A file saved with the frames of one thread in different writing directions opens with the
+/// first frame's direction in every frame, and the story flows through them in it: a native
+/// file, and an EPS file restored from the document it carries.
+#[test]
+fn a_thread_saved_with_differing_orientations_opens_with_the_first_frames() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    for (first, name) in [(true, "old.vectorcraft"), (false, "old.vectorcraft"), (true, "old.eps"), (false, "old.eps")] {
+        for (id, on) in [(a, first), (b, !first)] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.vertical = on;
+            refresh_bounds(t);
+        }
+        let bytes = if name.ends_with(".eps") {
+            let r = s.execute("document.exportEps", &json!({})).unwrap();
+            vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
+        } else {
+            vectorcraft_format::save(&s.doc().unwrap().doc, false)
+        };
+        let r = s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], name.ends_with(".eps"), "{r}");
+        assert_eq!(threads(&s), [[a, b]], "{name}");
+        assert_eq!(vertical(&s, [a, b]), [first, first], "{name}, first frame vertical: {first}");
+        assert!(flows_as_laid_out(&s, &[a, b]), "{name}, first frame vertical: {first}");
+        assert_eq!(format!("{}{}", text(&s, a), text(&s, b)), TEXT.repeat(4), "{name}");
+    }
+}
+
+/// A thread restored from an EPS file whose frames share one writing direction keeps its text
+/// in its frames as saved.
+#[test]
+fn a_restored_thread_in_one_direction_keeps_its_text_as_saved() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let story = TEXT.repeat(4);
+    for (id, part) in [(a, &story[..10]), (b, &story[10..])] {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+        t.runs = vec![TextRun::new(part.to_string(), t.runs[0].style.clone())];
+        refresh_bounds(t);
+    }
+    let r = s.execute("document.exportEps", &json!({})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let r = s.execute("document.open", &json!({"name": "saved.eps", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    assert_eq!(r["restored"], true, "{r}");
+    assert_eq!((text(&s, a), text(&s, b)), (story[..10].to_string(), story[10..].to_string()));
+}
+
+/// A threaded frame restored from a file with Auto Size on keeps its size when it turns from
+/// vertical to horizontal: as the file opens, when the first frame is horizontal, and with Type
+/// Orientation, when the whole thread is vertical.
+#[test]
+fn a_restored_threaded_frame_with_auto_size_keeps_its_size_when_it_turns_horizontal() {
+    for first_vertical in [false, true] {
+        let (mut s, a, b) = setup();
+        s.execute("text.thread.create", &json!({})).unwrap();
+        for (id, on) in [(a, first_vertical), (b, true)] {
+            let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) else { panic!("not text") };
+            t.vertical = on;
+            if id == b {
+                t.area.fit = vectorcraft_doc::AreaFit::AutoHeight;
+            }
+            refresh_bounds(t);
+        }
+        let saved = frame_box(&s, b);
+        let r = s.execute("document.exportEps", &json!({})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+        let r = s.execute("document.open", &json!({"name": "saved.eps", "dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+        assert_eq!(r["restored"], true, "{r}");
+        if first_vertical {
+            s.execute("select.set", &json!({"ids": [a]})).unwrap();
+            s.execute("type.orientation.horizontal", &json!({})).unwrap();
+        }
+        assert_eq!(vertical(&s, [a, b]), [false, false], "first frame vertical: {first_vertical}");
+        assert_eq!(frame_box(&s, b), saved, "first frame vertical: {first_vertical}");
+        assert!(flows_as_laid_out(&s, &[a, b]), "first frame vertical: {first_vertical}");
+    }
+}
+
 /// One count runs through a thread: the second frame's numbered paragraphs go on from the
 /// first frame's, also after an edit, a save and a reopen. A pasted or duplicated copy of a
 /// frame, a frame converted to point type, the frames of a thread that Remove Threading breaks
@@ -1152,6 +1391,41 @@ fn numbered_list_paragraphs_count_on_through_a_thread() {
     s.execute("text.thread.releaseSelection", &json!({})).unwrap();
     assert!(threads(&s).is_empty());
     assert_eq!(numbers(&s, b), all(1), "the frame left holds the story");
+}
+
+/// List levels in a thread: a deeper level's count runs on into the next frame, which saves
+/// it (`listLevelCounts`), and a pasted copy of that frame counts every level from 1.
+#[test]
+fn list_levels_count_on_through_a_thread() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 300})).unwrap();
+    let items = (1..=10).map(|i| format!("Item {i}")).collect::<Vec<_>>().join("\n");
+    let a = new_id(s.execute("text.create", &json!({"x": 10, "y": 10, "text": items, "area": {"width": 150, "height": 60}})).unwrap());
+    let b = new_id(s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 150, "height": 200})).unwrap());
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a, b], "list": "number", "listLevel": 2})).unwrap();
+    s.execute("text.setFormat", &json!({"ids": [a], "listLevel": 1, "start": 0, "end": 0})).unwrap();
+    let frame = |s: &Session, id: u64| text_of(&s.doc().unwrap().doc, NodeId(id)).cloned().unwrap();
+    let numbers =
+        |t: &TextObject| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).markers.iter().map(|m| m.text.clone()).collect::<Vec<_>>();
+    let first = numbers(&frame(&s, a));
+    assert!((2..10).contains(&first.len()), "both frames hold items: {first:?}");
+    let expected: Vec<String> = std::iter::once("1.".to_string()).chain((1..=9).map(|n| format!("{n}."))).collect();
+    assert_eq!([first.clone(), numbers(&frame(&s, b))].concat(), expected);
+    let b_counts = frame(&s, b).list_counts();
+    assert_eq!(b_counts.parts(), (1, vec![first.len() as u32 - 1]));
+    let reopened = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Some(NodeKind::Text(back)) = reopened.node(NodeId(b)).map(|n| &n.kind) else { panic!("text") };
+    assert_eq!((back.list_counts(), numbers(back)), (b_counts, numbers(&frame(&s, b))), "reopened");
+    s.execute("select.set", &json!({"ids": [b]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let copy = s.doc().unwrap().selection.objects.first().copied().unwrap();
+    assert_ne!(copy, NodeId(b));
+    let pasted = frame(&s, copy.0);
+    assert_eq!((pasted.list_count, pasted.list_level_counts.as_slice()), (0, &[][..]));
+    assert_eq!(numbers(&pasted).first().map(String::as_str), Some("1."), "a pasted copy counts from 1");
 }
 
 /// New Symbol from a numbered thread keeps each frame's count in the symbol's art, so the art
