@@ -195,6 +195,22 @@ fn add_used_colors_global_links_every_paint_of_a_new_color() {
     assert!(USED_NAMES.iter().all(|n| doc(&s).swatch(n).unwrap().global));
 }
 
+/// A paint linked to Registration keeps its link when a new global swatch has the same color.
+#[test]
+fn add_used_colors_global_leaves_registration_links_alone() {
+    let mut s = session();
+    let reg_paint = Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(vectorcraft_color::swatch::REGISTRATION.into()), tint: 1.0 };
+    let registration = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, registration, reg_paint.clone());
+    let plain = rect_filled(&mut s, json!({"color": "#000000"}));
+    set_fill(&mut s, plain, Paint::solid(Color::cmyk(1.0, 1.0, 1.0, 1.0)));
+    let r = run(&mut s, "swatch.addUsedColors", json!({"global": true}));
+    assert_eq!(r["linked"], json!(1), "{r}");
+    let name = r["added"][0].as_str().unwrap().to_string();
+    assert_eq!(fill(&s, registration), reg_paint);
+    assert_eq!(fill(&s, plain), Paint::Solid { color: Color::cmyk(1.0, 1.0, 1.0, 1.0), swatch: Some(name), tint: 1.0 });
+}
+
 #[test]
 fn unused_matches_links_tints_colors_gradients_and_patterns_exactly() {
     let mut s = session();

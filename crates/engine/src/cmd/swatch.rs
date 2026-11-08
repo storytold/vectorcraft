@@ -361,13 +361,13 @@ fn stop_key(s: &GradientStop) -> Option<StopKey<'_>> {
 }
 
 /// Link the solid paints in the subtrees of `ids` whose color is one of `links`' to that swatch
-/// (the first one listed for the color), unless they already link to an existing swatch. Returns
-/// the number of paints linked.
+/// (the first one listed for the color), unless they already link to an existing swatch or to the
+/// built-in Registration swatch. Returns the number of paints linked.
 fn link_colors(d: &mut Document, ids: &[NodeId], links: &[(Color, String)]) -> usize {
     if links.is_empty() {
         return 0;
     }
-    let live: HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
+    let live: HashSet<String> = d.swatches_iter().chain([vectorcraft_color::swatch::registration()]).map(|w| w.name.clone()).collect();
     let mut by_color: HashMap<ColorKey, &String> = HashMap::new();
     for (c, n) in links {
         if let Some(k) = color_key(c) {
