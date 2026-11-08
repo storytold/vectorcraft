@@ -118,7 +118,16 @@ pub(super) fn load(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value) -> Resu
         board.rect = artboard_rect(bounds);
     }
     doc.title = file_name(name);
-    Ok(Loaded { doc, format, warnings: imported.warnings, restored: false, converted: false, preview_only: false, editing_data: false })
+    Ok(Loaded {
+        doc,
+        format,
+        warnings: imported.warnings,
+        restored: false,
+        converted: false,
+        preview_only: false,
+        editing_data: false,
+        native_pdf_compatible: None,
+    })
 }
 
 /// The artboard of art with bounds `r`: `r` within ±[`MAX_COORD`], at least 1 pt wide and high
