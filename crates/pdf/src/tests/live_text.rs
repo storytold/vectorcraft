@@ -497,12 +497,18 @@ fn arabic_ligatures_keep_their_letters_in_order() {
     // with the line it sits in (#6072).
     let db = vectorcraft_text::FontDb::global();
     let preferred = ["DejaVu Sans", "Arial", "Times New Roman", "Noto Sans Arabic", "Noto Naskh Arabic"].map(String::from);
-    // An installed Arabic font whose glyphs come back as live type.
+    // Whether `face` draws lam-alef as one glyph, the ligature the fix is about.
+    let ligates = |face: &vectorcraft_text::FontFace| {
+        let style = vectorcraft_doc::CharStyle { font_family: face.family.clone(), font_style: face.style.clone(), ..Default::default() };
+        let t = TextObject::point(kurbo::Point::ORIGIN, "لا", style);
+        vectorcraft_text::layout(db, &t).glyphs.len() == 1
+    };
+    // An installed Arabic font with a lam-alef ligature whose glyphs come back as live type.
     let Some(face) = preferred
         .iter()
         .chain(&db.families())
         .filter_map(|f| db.face(f, "Regular"))
-        .filter(|f| f.covers('\u{0644}') && f.covers('\u{0627}'))
+        .filter(|f| f.covers('\u{0644}') && f.covers('\u{0627}') && ligates(f))
         .find(|f| !imported_texts(f, "بب").is_empty())
     else {
         return; // No such font on this host.
