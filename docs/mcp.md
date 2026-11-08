@@ -6616,6 +6616,15 @@ Object → Envelope Distort wraps the selection in a live envelope: `object.enve
 arcLower, arcUpper, arch, bulge, shellLower, shellUpper, flag, wave, fish, rise, fisheye, inflate, squeeze or twist;
 `bend`, `h` and `v` in % from -100 to 100; `horizontal` or `orientation`), `object.envelope.makeWithMesh` (`rows`,
 `cols`: 1–50) and `object.envelope.makeWithTopObject` (the topmost selected path becomes the envelope).
+A top object's outline is split into four sides at four corners. Each corner is the anchor nearest a corner of the
+outline's bounding box among the anchors within 47.5% of the box's width and height from that box corner that are
+sharp corners pointing out of the outline: a handle shorter than 0.01 pt, or tangents whose unit vectors differ by 0.01
+or more in x or y. The first such anchor along the outline wins a tie. Without one, the corner is the outline's point
+nearest the box corner, moved onto the anchor at the end of its segment when within 0.5% of the segment's parameter.
+Each piece of a side between anchors and corners takes a share of the content's width or height in proportion to the
+length of its control polygon, spread along the piece by its curve parameter, so content spreads evenly along a
+straight segment. An envelope opened from an `.ai` file keeps the corners the file saves. These are VectorCraft's own
+rules, and existing top-object envelopes redraw by them.
 `object.envelope.info` reads the selected envelope's settings (`type`, the warp's or mesh's values, `fidelity` and
 the options, `editing`), or with no envelope selected the options new envelopes get. With an envelope selected,
 `object.envelope.resetWithWarp` and `object.envelope.resetWithMesh` (`rows`, `cols`, `maintainShape`: true keeps

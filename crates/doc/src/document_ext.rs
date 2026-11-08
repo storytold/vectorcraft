@@ -164,7 +164,7 @@ impl Document {
                     }
                 }
                 NodeKind::Envelope { kind, .. } => {
-                    if let EnvelopeKind::TopObject { path } = kind.as_mut() {
+                    if let EnvelopeKind::TopObject { path, .. } = kind.as_mut() {
                         round_path(path);
                     }
                 }

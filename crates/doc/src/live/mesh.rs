@@ -73,13 +73,16 @@ const SIDE: usize = 65;
 
 /// Four boundary curves (top TL→TR, right TR→BR, bottom BL→BR, left TL→BL), each resampled to
 /// [`SIDE`] points, from the outline of a closed path split at the points nearest its bounding
-/// box corners.
+/// box corners. [`Coons::from_top_object`] samples its sides at the places `knots` gives instead.
 #[derive(Clone, Debug)]
 pub struct Coons {
     top: Vec<Point>,
     right: Vec<Point>,
     bottom: Vec<Point>,
     left: Vec<Point>,
+    /// Where along its side (0 to 1, rising) each point of the top, right, bottom and left side
+    /// lies; `None` when the points are evenly spaced.
+    knots: Option<Box<[Vec<f64>; 4]>>,
 }
 
 impl Coons {
@@ -87,9 +90,11 @@ impl Coons {
     pub fn rect(r: Rect) -> Self {
         let line = |a: Point, b: Point| (0..SIDE).map(|i| a.lerp(b, i as f64 / (SIDE - 1) as f64)).collect::<Vec<_>>();
         let (tl, tr, br, bl) = (Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1));
-        Self { top: line(tl, tr), right: line(tr, br), bottom: line(bl, br), left: line(tl, bl) }
+        Self { top: line(tl, tr), right: line(tr, br), bottom: line(bl, br), left: line(tl, bl), knots: None }
     }
 
+    /// The patch of `path`'s outline, each side measured by its length: equal steps in `u` or `v`
+    /// cover equal lengths of the side.
     pub fn from_path(path: &PathData) -> Option<Self> {
         // The largest subpath is the outline.
         let sp = path.subpaths.iter().filter(|s| s.anchors.len() >= 2).max_by(|a, b| a.area().abs().total_cmp(&b.area().abs()))?;
@@ -136,7 +141,134 @@ impl Coons {
         bottom.reverse();
         let mut left = resample(&arc(bl, tl), SIDE);
         left.reverse();
-        Some(Self { top, right, bottom, left })
+        Some(Self { top, right, bottom, left, knots: None })
+    }
+
+    /// The patch of a top object's outline (the largest subpath of `path`), split into four sides
+    /// at its corners. Each piece of a side between two anchors or corners takes a share of `u` or
+    /// `v` in proportion to the length of its control polygon, spread along the piece by its own
+    /// curve parameter. A straight segment counts as a cubic with its handles a third of the way
+    /// along, so the content spreads evenly along it. `corners` are the anchors (indices into the
+    /// outline, in its own order) at the top left, top right, bottom right and bottom left, as a
+    /// saved file gives them; without them, or when they don't fit the outline, each corner is
+    /// found from the outline ([`top_object_corner`]). A straight segment closes an open subpath,
+    /// and segments of no length are left out. A top object's envelope maps onto this patch.
+    pub fn from_top_object(path: &PathData, corners: Option<[u32; 4]>) -> Option<Self> {
+        let sp = path.subpaths.iter().filter(|s| s.anchors.len() >= 2).max_by(|a, b| a.area().abs().total_cmp(&b.area().abs()))?;
+        let mut sp = sp.clone();
+        let count = sp.anchors.len();
+        let mut corners = corners.map(|c| c.map(|i| i as usize));
+        // Orient clockwise in y-down (TL → TR → BR → BL).
+        if sp.signed_area() < 0.0 {
+            sp.reverse();
+            corners = corners.map(|c| c.map(|i| count.saturating_sub(1).saturating_sub(i)));
+        }
+        // Stored corners count only when they are distinct anchors met in order around the outline.
+        let corners = corners.filter(|c| {
+            if !c.iter().all(|i| *i < count) {
+                return false;
+            }
+            let gaps: Vec<usize> = (0..4).map(|k| (c[(k + 1) % 4] + count - c[k]) % count).collect();
+            gaps.iter().all(|g| *g > 0) && gaps.iter().sum::<usize>() == count
+        });
+        // Each segment, and whether it is straight: a straight one's parameter runs evenly along it.
+        let line = |a: Point, b: Point| (CubicBez::new(a, a.lerp(b, 1.0 / 3.0), a.lerp(b, 2.0 / 3.0), b), true);
+        let mut segs: Vec<(usize, (CubicBez, bool))> = (0..sp.segment_count())
+            .map(|i| {
+                let c = sp.segment(i);
+                (i, if sp.segment_is_line(i) { line(c.p0, c.p3) } else { (c, false) })
+            })
+            .collect();
+        if !sp.closed
+            && let (Some(a), Some(b)) = (sp.anchors.last(), sp.anchors.first())
+        {
+            segs.push((count.saturating_sub(1), line(a.p, b.p)));
+        }
+        segs.retain(|(_, (c, _))| [c.p1, c.p2, c.p3].iter().any(|p| p.distance(c.p0) > 1e-9));
+        // The kept segment that anchor `k` starts (a segment of no length starts where the next begins).
+        let starts: Vec<usize> = segs.iter().map(|(i, _)| *i).collect();
+        let segs: Vec<(CubicBez, bool)> = segs.into_iter().map(|(_, s)| s).collect();
+        let r = segs.iter().map(|(c, _)| c.bounding_box()).reduce(|a, b| a.union(b)).or_else(|| path.bounds())?;
+        // An outline of fewer than three points (a straight line there and back) maps onto its
+        // bounding box, as in `from_path`.
+        if segs.len() < 2 || (segs.len() == 2 && segs.iter().all(|(_, straight)| *straight)) {
+            return Some(Self::rect(r));
+        }
+        let n = segs.len() as f64;
+        let at = |s: f64| {
+            let s = s.rem_euclid(n);
+            let i = (s.floor() as usize).min(segs.len() - 1);
+            segs.get(i).map_or(Point::ZERO, |(c, _)| c.eval((s - i as f64).clamp(0.0, 1.0)))
+        };
+        // The side from `a` to `b`: its points, and where along it (0 to 1) each lies. It runs
+        // through pieces of segments, split at `a` and `b`. Each piece takes its share of the side
+        // by the length of its control polygon and holds points at even steps of its parameter
+        // (at least 16, and at least `SIDE` points on the side), its ends included. A side of
+        // many pieces takes fewer points in each, so it holds at most `MAX_SIDE_POINTS` points,
+        // or one for each piece when it has more pieces than that.
+        let side = |a: f64, b: f64| {
+            let span = (b - a).rem_euclid(n);
+            if !(span.is_finite() && span > 0.0) {
+                return (vec![at(a), at(a)], vec![0.0, 1.0]);
+            }
+            let mut pieces: Vec<CubicBez> = vec![];
+            let (mut s, end) = (a, a + span);
+            while s < end - 1e-12 && pieces.len() <= segs.len() {
+                let i = s.floor();
+                let next = (i + 1.0).min(end);
+                if let Some((c, _)) = segs.get((i as usize) % segs.len()) {
+                    pieces.push(c.subsegment((s - i).clamp(0.0, 1.0)..(next - i).clamp(0.0, 1.0)));
+                }
+                s = next;
+            }
+            let polygon = |c: &CubicBez| c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3);
+            let mut weights: Vec<f64> = pieces.iter().map(polygon).collect();
+            let mut total: f64 = weights.iter().sum();
+            if !(total.is_finite() && total > 0.0) {
+                weights.iter_mut().for_each(|w| *w = 1.0);
+                total = weights.len().max(1) as f64;
+            }
+            let count = pieces.len().max(1);
+            let per = 16usize.max((SIDE - 1).div_ceil(count));
+            let per = if count * per < MAX_SIDE_POINTS { per } else { (MAX_SIDE_POINTS / count).max(1) };
+            let mut pts = vec![pieces.first().map_or_else(|| at(a), |c| c.p0)];
+            let mut knots = vec![0.0];
+            let mut before = 0.0;
+            for (c, w) in pieces.iter().zip(&weights) {
+                for k in 1..=per {
+                    let f = k as f64 / per as f64;
+                    pts.push(c.eval(f));
+                    knots.push((before + w * f) / total);
+                }
+                before += w;
+            }
+            if let Some(last) = knots.last_mut() {
+                *last = 1.0;
+            }
+            (pts, knots)
+        };
+        let (tl, tr, br, bl) = match corners {
+            // Anchor `k` sits at the start of the first kept segment from it on.
+            Some(c) => {
+                let place = |k: usize| starts.iter().position(|i| *i >= k).unwrap_or(0) as f64;
+                (place(c[0]), place(c[1]), place(c[2]), place(c[3]))
+            }
+            None => {
+                let corner = |q: Point| top_object_corner(&segs, r, q);
+                (corner(Point::new(r.x0, r.y0)), corner(Point::new(r.x1, r.y0)), corner(Point::new(r.x1, r.y1)), corner(Point::new(r.x0, r.y1)))
+            }
+        };
+        let flip = |(mut p, mut u): (Vec<Point>, Vec<f64>)| {
+            p.reverse();
+            u.reverse();
+            u.iter_mut().for_each(|x| *x = 1.0 - *x);
+            (p, u)
+        };
+        let (top, top_u) = side(tl, tr);
+        let (right, right_u) = side(tr, br);
+        let (bottom, bottom_u) = flip(side(br, bl));
+        let (left, left_u) = flip(side(bl, tl));
+        Some(Self { top, right, bottom, left, knots: Some(Box::new([top_u, right_u, bottom_u, left_u])) })
     }
 
     /// The point at `u` along a side; past its ends the end segments go on straight (art an
@@ -147,10 +279,36 @@ impl Coons {
         side[i].lerp(side[i + 1], s - i as f64)
     }
 
+    /// The point at `u` along a side whose points lie at `knots` (rising, 0 to 1); past its ends
+    /// the end segments go on straight, as in [`Self::sample`].
+    fn sample_at(side: &[Point], knots: &[f64], u: f64) -> Point {
+        if side.len() < 2 || side.len() != knots.len() {
+            return side.first().copied().unwrap_or_default();
+        }
+        let i = knots.partition_point(|k| *k <= u).clamp(1, side.len() - 1) - 1;
+        let (k0, k1) = (knots[i], knots[i + 1]);
+        let f = if k1 > k0 { (u - k0) / (k1 - k0) } else { 0.0 };
+        side[i].lerp(side[i + 1], f)
+    }
+
+    /// The point at `u` along side `which` (0 top, 1 right, 2 bottom, 3 left).
+    fn side_at(&self, which: usize, u: f64) -> Point {
+        let side = match which {
+            0 => &self.top,
+            1 => &self.right,
+            2 => &self.bottom,
+            _ => &self.left,
+        };
+        match self.knots.as_deref().and_then(|k| k.get(which)) {
+            Some(knots) => Self::sample_at(side, knots, u),
+            None => Self::sample(side, u),
+        }
+    }
+
     /// The surface point at (u, v) ∈ [0,1]².
     pub fn eval(&self, u: f64, v: f64) -> Point {
-        let (t, b, l, r) = (Self::sample(&self.top, u), Self::sample(&self.bottom, u), Self::sample(&self.left, v), Self::sample(&self.right, v));
-        let (p00, p10, p01, p11) = (self.top[0], self.top[SIDE - 1], self.bottom[0], self.bottom[SIDE - 1]);
+        let (t, b, l, r) = (self.side_at(0, u), self.side_at(2, u), self.side_at(3, v), self.side_at(1, v));
+        let [p00, p10, p11, p01] = self.corners();
         let c = (1.0 - v) * t.to_vec2() + v * b.to_vec2() + (1.0 - u) * l.to_vec2() + u * r.to_vec2()
             - ((1.0 - u) * (1.0 - v) * p00.to_vec2() + u * (1.0 - v) * p10.to_vec2() + (1.0 - u) * v * p01.to_vec2() + u * v * p11.to_vec2());
         c.to_point()
@@ -158,7 +316,84 @@ impl Coons {
 
     /// The four corners TL, TR, BR, BL.
     pub fn corners(&self) -> [Point; 4] {
-        [self.top[0], self.top[SIDE - 1], self.bottom[SIDE - 1], self.bottom[0]]
+        let end = |side: &[Point]| side.last().copied().unwrap_or_default();
+        [self.top[0], end(&self.top), end(&self.bottom), self.bottom[0]]
+    }
+}
+
+/// The most points one side of [`Coons::from_top_object`] holds while it adds points between its
+/// anchors.
+const MAX_SIDE_POINTS: usize = 1 << 16;
+
+/// How far into the outline's bounding box, as a share of its width and of its height, a corner
+/// of a top object looks for an anchor.
+const CORNER_REACH: f64 = 0.475;
+
+/// A handle shorter than this (in points) makes its anchor a corner of a top object.
+const SHORT_HANDLE: f64 = 0.01;
+
+/// An anchor whose tangent directions, as unit vectors, differ by less than this in x and in y is
+/// smooth, and is not a corner of a top object.
+const SMOOTH_TURN: f64 = 0.01;
+
+/// A top object's corner this close (in curve parameter) to either end of its segment moves onto
+/// the anchor there.
+const CORNER_END_SNAP: f64 = 0.005;
+
+/// Is the anchor at `a`, reached by handle `h_in` and left by handle `h_out` on an outline that
+/// runs clockwise on screen, a corner of a top object? A handle shorter than [`SHORT_HANDLE`]
+/// makes it one. Otherwise its tangent directions must differ by [`SMOOTH_TURN`] or more and turn
+/// clockwise, so it points out of the outline.
+fn top_object_corner_anchor(h_in: Point, a: Point, h_out: Point) -> bool {
+    let (vin, vout) = (a - h_in, h_out - a);
+    let (len_in, len_out) = (vin.hypot(), vout.hypot());
+    if len_in <= SHORT_HANDLE || len_out <= SHORT_HANDLE {
+        return true;
+    }
+    let (ui, uo) = (vin / len_in, vout / len_out);
+    if (ui.x - uo.x).abs() < SMOOTH_TURN && (ui.y - uo.y).abs() < SMOOTH_TURN {
+        return false;
+    }
+    ui.cross(uo) >= 0.0
+}
+
+/// Where along `segs` (segment index + parameter, in [0, n)) the corner of a top object nearest
+/// corner `q` of its bounding box `r` lies, for an outline that runs clockwise on screen. It is
+/// the nearest anchor to `q` that is a corner ([`top_object_corner_anchor`]) and lies within
+/// [`CORNER_REACH`] of the box's width and height from `q`; the first such anchor wins a tie.
+/// Without one, it is the nearest point of the outline to `q`, moved onto its segment's anchor
+/// when within [`CORNER_END_SNAP`] of either end.
+fn top_object_corner(segs: &[(CubicBez, bool)], r: Rect, q: Point) -> f64 {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    let n = segs.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let (reach_x, reach_y) = (r.width() * CORNER_REACH, r.height() * CORNER_REACH);
+    let mut best: Option<(f64, usize)> = None;
+    for i in 0..n {
+        let (Some((prev, _)), Some((cur, _))) = (segs.get((i + n - 1) % n), segs.get(i)) else { continue };
+        let a = cur.p0;
+        if (a.x - q.x).abs() > reach_x || (a.y - q.y).abs() > reach_y || !top_object_corner_anchor(prev.p2, a, cur.p1) {
+            continue;
+        }
+        let d = a.distance_squared(q);
+        if best.is_none_or(|(b, _)| d < b) {
+            best = Some((d, i));
+        }
+    }
+    if let Some((_, i)) = best {
+        return i as f64;
+    }
+    let tol = (r.width() + r.height()).max(1e-6) * 1e-9;
+    let nearest = segs.iter().enumerate().map(|(i, (c, _))| (c.nearest(q, tol), i)).min_by(|a, b| a.0.distance_sq.total_cmp(&b.0.distance_sq));
+    let Some((near, i)) = nearest else { return 0.0 };
+    if near.t > CORNER_END_SNAP && near.t < 1.0 - CORNER_END_SNAP {
+        i as f64 + near.t
+    } else if near.t < 0.5 {
+        i as f64
+    } else {
+        ((i + 1) % n) as f64
     }
 }
 
@@ -1033,7 +1268,7 @@ pub(super) fn surface_of<'a>(kind: &'a EnvelopeKind, src: Rect, frame: Affine) -
             let (rows, cols) = (*rows as usize, *cols as usize);
             Box::new(move |u: f64, v: f64| grid_eval(rows, cols, points, u, v))
         }
-        EnvelopeKind::TopObject { path } => match Coons::from_path(path) {
+        EnvelopeKind::TopObject { path, corners } => match Coons::from_top_object(path, *corners) {
             Some(co) => Box::new(move |u: f64, v: f64| co.eval(u, v)),
             None => Box::new(flat),
         },

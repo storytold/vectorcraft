@@ -508,7 +508,7 @@ impl Node {
                             *h = (lin * h.to_point()).to_vec2();
                         }
                     }
-                    EnvelopeKind::TopObject { path } => path.transform(a),
+                    EnvelopeKind::TopObject { path, .. } => path.transform(a),
                     EnvelopeKind::Warp { .. } => {}
                 }
             }
