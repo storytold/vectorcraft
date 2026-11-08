@@ -284,8 +284,8 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Vec<String>>,
     /// The kinds of object a filter asks to be given besides paths and compound paths, by
-    /// [`InputKind::name`]: only a filter at `api` 2 or later lists them. Left out or empty, it is
-    /// given paths and compound paths alone.
+    /// [`InputKind::name`]: only a filter at `api` 2 or later whose `permissions` list `doc.read`
+    /// lists them. Left out or empty, it is given paths and compound paths alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty", deserialize_with = "input_names")]
     pub inputs: Vec<String>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
@@ -377,7 +377,8 @@ impl Manifest {
     }
 
     /// `inputs` names each [`InputKind`] at most once, and only a filter at `api` 2 or later lists
-    /// any, with `doc.read` among its permissions when it lists them.
+    /// any, with a `permissions` list that holds `doc.read`: installing it then asks the user to
+    /// grant them ([`Manifest::asks_permissions`]).
     fn validate_inputs(&self) -> Result<()> {
         if self.inputs.is_empty() {
             return Ok(());
@@ -397,7 +398,7 @@ impl Manifest {
         if self.api < INPUTS_API {
             return Err(Error::Manifest("`inputs` needs `api` 2 or later".into()));
         }
-        if self.permissions.as_ref().is_some_and(|p| !p.iter().any(|n| n == Permission::DocRead.name())) {
+        if !self.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == Permission::DocRead.name())) {
             return Err(Error::Manifest("`inputs` needs the permission `doc.read`".into()));
         }
         Ok(())
@@ -758,17 +759,20 @@ mod tests {
     }
 
     /// A filter at `api` 2 may ask for type, images and symbol instances (`inputs`), each kind once,
-    /// with `doc.read` when it lists permissions. Left out or empty, it asks for none and isn't
-    /// written back. Anything else is refused naming `inputs`.
+    /// with a `permissions` list holding `doc.read`, so installing it asks for approval. Left out
+    /// or empty, it asks for none and isn't written back. Anything else is refused naming `inputs`.
     #[test]
     fn a_filter_at_api_2_lists_the_inputs_it_reads() {
-        let m =
-            Manifest::parse(br#"{"id":"org.example.inspect","name":"Inspect","kind":"filter","api":2,"inputs":["type","image","symbolInstance"]}"#)
-                .unwrap();
+        let m = Manifest::parse(
+            br#"{"id":"org.example.inspect","name":"Inspect","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type","image","symbolInstance"]}"#,
+        )
+        .unwrap();
         assert_eq!(m.input_kinds(), InputKind::ALL);
+        assert!(m.asks_permissions());
         assert_eq!(serde_json::to_value(&m).unwrap()["inputs"], json!(["type", "image", "symbolInstance"]));
         let some = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.read"],"inputs":["image"]}"#).unwrap();
         assert_eq!(some.input_kinds(), [InputKind::Image]);
+        assert!(some.asks_permissions());
         for none in [
             r#"{"id":"a","name":"x","kind":"filter"}"#,
             r#"{"id":"a","name":"x","kind":"filter","inputs":[]}"#,
@@ -789,6 +793,8 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","inputs":["type"]}"#, "`inputs` needs `api` 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"inputs":["type"]}"#, "`inputs` needs `api` 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["doc.write"],"inputs":["type"]}"#, "needs the permission `doc.read`"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"inputs":["type"]}"#, "`inputs` needs the permission `doc.read`"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":[],"inputs":["image"]}"#, "`inputs` needs the permission `doc.read`"),
             (r#"{"id":"a","name":"x","kind":"effect","api":2,"inputs":["type"]}"#, "only a filter declares `inputs`"),
             (r#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"],"api":2,"inputs":["image"]}"#, "only a filter declares `inputs`"),
         ] {

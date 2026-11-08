@@ -663,16 +663,26 @@ fn a_filter_does_only_what_its_permissions_allow() {
 /// A filter whose manifest lists `inputs` is also given the selected type, read-only: an echo
 /// changes nothing, and an output that leaves the type out or changes it is refused with the
 /// document and undo history as they were, handed in from a run made elsewhere too. A filter
-/// without `inputs` is not given the type and so never deletes it.
+/// without `inputs` is not given the type and so never deletes it. Installing one that lists
+/// `inputs` needs the user's grant.
 #[test]
 fn read_only_kind_field_and_omission_refuse_without_undo() {
     use cmd::plugin::FilterRun;
     let mut s = session();
     let r = rect(&mut s, 10.0, "#ff0000");
     let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 80, "text": "Hi"}))["id"].as_u64().unwrap());
-    let reads = |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"inputs":["type"]}}"#);
+    let reads =
+        |id: &str| format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"inputs":["type"]}}"#);
+    let install_wat = |s: &mut Session, src: &str| {
+        let data = vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap());
+        run(s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]}))
+    };
     let echo = "test.engine.inputs.echo";
-    let listed = install_wat(&mut s, &tpl::module(&reads(echo), tpl::ECHO, "", 1));
+    let module = tpl::module(&reads(echo), tpl::ECHO, "", 1);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(&module).unwrap());
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write"), "{e}");
+    let listed = install_wat(&mut s, &module);
     assert_eq!(listed["inputs"], json!(["type"]));
     let p = |id: &str| json!({"id": id, "ids": [r.0, t.0]});
     let before = s.doc().unwrap().doc.clone();

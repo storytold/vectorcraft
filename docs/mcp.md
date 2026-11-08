@@ -6087,9 +6087,11 @@ them again at startup (`plugin.remove` deletes them there):
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
-(`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) is also given the selected objects of those
-kinds to read: its output returns each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an
-error naming the object and the field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
+(`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
+`plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, with at most 16 MiB of
+pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted` or `truncated`): its output returns
+each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
+field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions

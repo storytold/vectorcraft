@@ -148,7 +148,7 @@ capability model proposed for PhotoCraft plug-ins
   imports](#host-imports-api-level-2) and a filter's `inputs` ([reading type, images and
   symbols](#reading-type-images-and-symbols)). A higher one is refused. `plugin.list` and `plugin.info` give it as
   `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which a filter that lists
-  `permissions` and `inputs` must list.
+  `inputs` must list in `permissions`, so installing it asks the user to grant them.
 - Parameter declarations are unchanged by permissions (`params`, below).
 
 Every run gets a **fresh instance**, so no state survives between calls. Traps, exhausted budgets, malformed
@@ -243,7 +243,7 @@ still returns `1`.
 - `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of
   `"type"`, `"image"` and `"symbolInstance"`, each at most once (`"inputs": ["type", "image"]`). Left out or `[]`, the
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
-  another kind, below `api` 2, or with `permissions` that leave out `doc.read`, is refused when the plug-in is
+  another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
   installed, and so is `api` 2 on hosts from before it.
 - `extensions` (exporters only, and required): 1–8 file extensions, lower-case letters and digits without the dot
   (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both list (`svg`):
@@ -359,12 +359,16 @@ In this example the character and paragraph styles are cut short; a filter gets 
   attributes as the native file stores them (`inline` when a run is an inline graphic), and `paragraphs` holds one
   paragraph style per paragraph (the paragraphs are split at `\n`). No font data or glyph outlines are given. Type
   whose runs hold more than 256 KiB of UTF-8 text, or more than 4,096 runs or paragraphs, comes with `truncated:
-  true` and empty `runs` and `paragraphs`.
+  true` and empty `runs` and `paragraphs`. The runs and paragraphs of all the type in one input take at most 16 MiB
+  of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
+  `truncated: true` too.
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
-  `pixelsOmitted: false`. A larger one, and a linked image (`linked: true`), has `pixelsOmitted: true` and no pixels.
-  The host never reads a linked image's file for a filter and never gives its path.
+  `pixelsOmitted: false`. The pixels of all the images in one input take at most 16 MiB in base64. A larger image, one
+  whose pixels don't fit what the images before it in paint order left, and a linked image (`linked: true`) have
+  `pixelsOmitted: true` and no pixels; the host checks an image's size before it decodes the image. The host never
+  reads a linked image's file for a filter and never gives its path.
 - A symbol instance (`"symbolInstance"`): `symbolId` is the name of the symbol it shows, with `missing: true` when the
   document has no symbol of that name. `overrides` is `{}`.
 
@@ -372,8 +376,9 @@ These objects are read only. The output must list each of them exactly once, as 
 was given (numbers compare by value, so `1` and `1.0` are the same). A changed or added field, one left out, an object
 listed twice or left out, and a new object with one of these types are refused, and the document and undo history
 stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
-object was left out`. New objects listed after one of them go just above it. Their text and pixels count towards the
-input's half of the memory cap, and an echo of them towards the 64 MiB output cap.
+object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
+characters. New objects listed after one of them go just above it. Their text and pixels count toward the input's
+half of the memory cap, and an echo of them toward the 64 MiB output cap.
 
 ### Parameters
 

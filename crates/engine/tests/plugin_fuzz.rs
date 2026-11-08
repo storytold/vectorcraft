@@ -365,7 +365,8 @@ proptest! {
 
     /// Manifests with hostile `inputs` (unknown, repeated and oddly cased kinds, long lists, junk of
     /// every type) with any `api`, kind and permissions parse to an error or to a filter at `api` 2
-    /// or later asking for each kind once. One that installs and echoes its input on a document
+    /// or later asking for each kind once, whose `permissions` list `doc.read` so that installing
+    /// it asks for approval. One that installs and echoes its input on a document
     /// with type, images and symbols leaves the document as it was, and it still renders.
     #[test]
     fn hostile_manifest_inputs_never_crash(
@@ -374,7 +375,7 @@ proptest! {
         long in prop::option::weighted(0.1, 4usize..300),
         inputs in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
         api in prop_oneof![2 => Just(json!(2)), 1 => Just(json!(1)), 1 => Just(json!(3)), 1 => arb_junk()],
-        permissions in prop_oneof![Just(Value::Null), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.write"]))],
+        permissions in prop_oneof![Just(Value::Null), Just(json!([])), Just(json!(["doc.read", "doc.write"])), Just(json!(["doc.write"]))],
     ) {
         let mut m = json!({"id": "fuzz.inputs", "name": "Inputs", "kind": kind, "api": api});
         if kind == "exporter" {
@@ -396,6 +397,8 @@ proptest! {
             prop_assert_eq!(kinds.len(), man.inputs.len(), "{}", text);
             prop_assert!(kinds.iter().enumerate().all(|(i, k)| !kinds[..i].contains(k)), "{}", text);
             prop_assert!(kinds.is_empty() || (man.kind == vectorcraft_plugins::Kind::Filter && man.api >= 2), "{}", text);
+            let reads = man.permissions.as_ref().is_some_and(|p| p.iter().any(|n| n == "doc.read"));
+            prop_assert!(kinds.is_empty() || (man.asks_permissions() && reads), "{}", text);
         }
         let mut s = rich_session();
         let module = wat::parse_str(tpl::module(&text, tpl::ECHO, "", 1)).unwrap();

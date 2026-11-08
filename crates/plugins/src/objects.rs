@@ -11,7 +11,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, TextKind, TextObject,
+    Appearance, AppearanceItem, Document, Effect, FillLayer, ImageBlob, LineCap, LineJoin, Node, NodeId, NodeKind, StrokeLayer, SymbolBoxes,
+    TextKind, TextObject,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 
@@ -42,6 +43,12 @@ pub const MAX_INPUT_RUNS: usize = 4_096;
 /// Largest pixels a filter is given of one embedded image, in characters of base64: a larger
 /// image comes with `pixelsOmitted`.
 pub const MAX_INPUT_PIXELS: usize = 1 << 20;
+/// Most pixels a filter is given over all the images of one input, in characters of base64: an
+/// image whose pixels don't fit what the images before it left comes with `pixelsOmitted`.
+pub const MAX_INPUT_PIXELS_TOTAL: usize = 16 << 20;
+/// Most text a filter is given over all the type of one input, in bytes of the JSON of their runs
+/// and paragraphs: type that doesn't fit what the type before it left comes with `truncated`.
+pub const MAX_INPUT_TEXT_TOTAL: usize = 16 << 20;
 
 /// One object returned by a plug-in. `None` fields keep the object's value (new objects take the
 /// defaults: a path, non-zero rule, no fills or strokes, full opacity).
@@ -175,23 +182,56 @@ pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
 }
 
 /// [`encode_input`] for a filter that asks for `kinds` too: objects of those kinds among `ids` are
-/// in it as [`encode_read_only`] gives them. Also returns those objects by id, which the filter must
-/// return as they were ([`decode_output_with`]).
+/// in it as [`encode_read_only`] gives them, within [`MAX_INPUT_PIXELS_TOTAL`] and
+/// [`MAX_INPUT_TEXT_TOTAL`] over all of them in order. Also returns those objects by id, which the
+/// filter must return as they were ([`decode_output_with`]).
 pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind]) -> (Vec<u8>, HashMap<NodeId, Value>) {
+    encode_input_within(doc, ids, kinds, Allowance::FULL)
+}
+
+/// What an input's images and type may still be given of its totals, as its objects are encoded in
+/// order: characters of base64 for pixels, bytes of JSON for runs and paragraphs.
+#[derive(Clone, Copy, Debug)]
+struct Allowance {
+    pixels: usize,
+    text: usize,
+}
+
+impl Allowance {
+    const FULL: Allowance = Allowance { pixels: MAX_INPUT_PIXELS_TOTAL, text: MAX_INPUT_TEXT_TOTAL };
+}
+
+/// [`encode_input_with`] within `left` of the totals. Each read-only object is kept once, in the map
+/// it returns, and written into the input from there.
+fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut left: Allowance) -> (Vec<u8>, HashMap<NodeId, Value>) {
     let mut read_only = HashMap::new();
-    let objects: Vec<Value> = ids
-        .iter()
-        .filter_map(|id| doc.node(*id))
-        .filter_map(|n| match input_kind(n).filter(|k| kinds.contains(k)) {
-            Some(_) => {
-                let o = encode_read_only(doc, n)?;
-                read_only.insert(n.id, o.clone());
-                Some(o)
-            }
-            None => encode(n),
-        })
-        .collect();
-    (serde_json::to_vec(&json!({ "objects": objects })).unwrap_or_default(), read_only)
+    let symbols = doc.symbol_boxes();
+    let mut out = b"{\"objects\":[".to_vec();
+    let mut first = true;
+    for n in ids.iter().filter_map(|id| doc.node(*id)) {
+        let path;
+        let o: &Value = match input_kind(n).filter(|k| kinds.contains(k)) {
+            Some(_) => match encode_read_only_within(doc, n, &symbols, &mut left) {
+                Some(o) => read_only.entry(n.id).insert_entry(o).into_mut(),
+                None => continue,
+            },
+            None => match encode(n) {
+                Some(o) => {
+                    path = o;
+                    &path
+                }
+                None => continue,
+            },
+        };
+        if !std::mem::take(&mut first) {
+            out.push(b',');
+        }
+        if serde_json::to_writer(&mut out, o).is_err() {
+            return (Vec::new(), HashMap::new());
+        }
+    }
+    out.extend_from_slice(b"]}");
+    (out, read_only)
 }
 
 /// The kind of read-only object `n` is: type, an image or a symbol instance (`None` for others).
@@ -222,11 +262,20 @@ fn affine_json(xf: Affine) -> Value {
 /// - a symbol instance (`"symbolInstance"`): `symbolId` (the symbol's name), `missing: true` when
 ///   the document has no such symbol, and `overrides: {}`.
 pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
-    let mut o = json!({"id": n.id.0, "type": input_kind(n)?.name(), "bounds": rect_json(doc.bounds_of(&[n.id], false))});
+    let mut left = Allowance::FULL;
+    encode_read_only_within(doc, n, &doc.symbol_boxes(), &mut left)
+}
+
+/// [`encode_read_only`] measuring symbol instances from `symbols`, a cache shared across the
+/// objects of one input, and taking the pixels and text it gives from `left`: pixels or text that
+/// don't fit what is left are omitted (`pixelsOmitted`, `truncated`), and an image's size is
+/// checked against it before anything is decoded.
+fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left: &mut Allowance) -> Option<Value> {
+    let mut o = json!({"id": n.id.0, "type": input_kind(n)?.name(), "bounds": rect_json(doc.bounds_of_with(&[n.id], false, symbols))});
     match &n.kind {
         NodeKind::Text(t) => {
             o["transform"] = affine_json(t.xf);
-            let (text, truncated) = text_json(t);
+            let (text, truncated) = text_json(t, &mut left.text);
             o["text"] = text;
             o["truncated"] = json!(truncated);
         }
@@ -235,13 +284,15 @@ pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
             let linked = im.link.is_some();
             let blob = doc.image_blob(im);
             // A linked image's pixels are its file's: never given (nor its path).
-            let pixels = blob.filter(|_| !linked).and_then(|b| rgba_pixels(b, im.width, im.height));
+            let pixels = blob.filter(|_| !linked).and_then(|b| rgba_pixels(b, im.width, im.height, MAX_INPUT_PIXELS.min(left.pixels)));
             o["pixelSize"] = json!([im.width, im.height]);
             o["colorMode"] = json!(blob.map_or("unknown", color_mode));
             o["linked"] = json!(linked);
             o["pixelsOmitted"] = json!(pixels.is_none());
             if let Some(p) = pixels {
-                o["pixelsBase64"] = json!(craft_vectorcraft_format::base64::encode(&p));
+                let b64 = craft_vectorcraft_format::base64::encode(&p);
+                left.pixels = left.pixels.saturating_sub(b64.len());
+                o["pixelsBase64"] = json!(b64);
             }
         }
         NodeKind::SymbolInstance { symbol, xf } => {
@@ -261,8 +312,9 @@ pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
 }
 
 /// The text of type `t` as a filter reads it, and whether it was too long to give
-/// ([`MAX_INPUT_TEXT`], [`MAX_INPUT_RUNS`]).
-fn text_json(t: &TextObject) -> (Value, bool) {
+/// ([`MAX_INPUT_TEXT`], [`MAX_INPUT_RUNS`], or more bytes of JSON than `left`, which what it gives
+/// is taken from).
+fn text_json(t: &TextObject, left: &mut usize) -> (Value, bool) {
     let kind = match t.kind {
         TextKind::Point => "point",
         TextKind::Area { .. } => "area",
@@ -270,16 +322,21 @@ fn text_json(t: &TextObject) -> (Value, bool) {
     };
     let bytes = t.runs.iter().fold(0usize, |n, r| n.saturating_add(r.text.len()));
     let paragraphs = t.paragraph_count();
-    let truncated = bytes > MAX_INPUT_TEXT || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
-    let (runs, paras): (Vec<Value>, Vec<Value>) = if truncated {
-        (Vec::new(), Vec::new())
-    } else {
+    // The text alone is never more bytes than its JSON, so type that can't fit isn't built.
+    let mut truncated = bytes > MAX_INPUT_TEXT.min(*left) || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
+    let (mut runs, mut paras): (Vec<Value>, Vec<Value>) = (Vec::new(), Vec::new());
+    if !truncated {
         let value = |v: std::result::Result<Value, serde_json::Error>| v.unwrap_or(Value::Null);
-        (
-            t.runs.iter().map(|r| value(serde_json::to_value(r))).collect(),
-            (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect(),
-        )
-    };
+        runs = t.runs.iter().map(|r| value(serde_json::to_value(r))).collect();
+        paras = (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect();
+        let size = runs.iter().chain(&paras).fold(0usize, |n, v| n.saturating_add(serde_json::to_vec(v).map_or(usize::MAX, |b| b.len())));
+        match left.checked_sub(size) {
+            Some(rest) => *left = rest,
+            None => {
+                (runs, paras, truncated) = (Vec::new(), Vec::new(), true);
+            }
+        }
+    }
     (json!({"kind": kind, "vertical": t.vertical, "runs": runs, "paragraphs": paras}), truncated)
 }
 
@@ -300,11 +357,11 @@ fn color_mode(b: &ImageBlob) -> &'static str {
     if readable.is_some() { "rgb" } else { "unknown" }
 }
 
-/// The pixels of image `b` as straight RGBA, when it is `w` × `h` pixels and they fit
-/// [`MAX_INPUT_PIXELS`] in base64; the size is checked from the header before anything is decoded.
-fn rgba_pixels(b: &ImageBlob, w: u32, h: u32) -> Option<Vec<u8>> {
+/// The pixels of image `b` as straight RGBA, when it is `w` × `h` pixels and they fit `max`
+/// characters of base64; the size is checked, and read from the header, before anything is decoded.
+fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
     let bytes = u64::from(w) * u64::from(h) * 4;
-    if bytes == 0 || bytes.div_ceil(3) * 4 > MAX_INPUT_PIXELS as u64 {
+    if bytes == 0 || bytes.div_ceil(3) * 4 > max as u64 {
         return None;
     }
     let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
@@ -629,7 +686,9 @@ fn decode_objects(v: &Value, read_only: &HashMap<NodeId, Value>) -> Result<Vec<O
 
 /// Checks entry `o` of a filter's output for a read-only object it was `given`: `{"id": …}` alone,
 /// or `given` itself, numbers compared by value. Otherwise the error names the first field that
-/// differs (`text.runs[0].text`): a field the entry gives before one it leaves out.
+/// differs (`text.runs[0].text`): a field the entry gives before one it leaves out, shown as
+/// [`crate::permissions::display_text`] shows a manifest string, since the entry's keys are the
+/// plug-in's.
 fn check_unchanged(o: &Value, given: &Value, at: &str) -> Result<()> {
     if o.as_object().is_some_and(|m| m.len() == 1) {
         return Ok(());
@@ -647,7 +706,10 @@ fn check_unchanged(o: &Value, given: &Value, at: &str) -> Result<()> {
     };
     match changed.or_else(|| first_difference(o, given, "")) {
         None => Ok(()),
-        Some(field) => Err(out_err(at, format!("read-only field '{field}' changed"))),
+        Some(field) => {
+            let field = crate::permissions::display_text(&field, crate::permissions::MAX_SHOWN_FIELD);
+            Err(out_err(at, format!("read-only field '{field}' changed")))
+        }
     }
 }
 

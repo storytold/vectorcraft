@@ -471,6 +471,57 @@ fn declared_symbol_instance_keeps_identity_and_transform() {
     assert_eq!((&g["symbolId"], &g["missing"]), (&json!("Gone"), &json!(true)));
 }
 
+/// Pixels and type count against totals over the whole input, in order: an image whose pixels
+/// don't fit what the images before it left comes with `pixelsOmitted` (its size checked before it
+/// is decoded), and type whose runs and paragraphs don't fit comes with `truncated`. The read-only
+/// objects returned are the ones in the input.
+#[test]
+fn input_totals_cover_images_and_type_in_order() {
+    let (mut d, _, layer, [text, embedded, ..]) = mixed();
+    let copy = |d: &mut Document, id: NodeId| {
+        let mut n = d.node(id).unwrap().clone();
+        n.id = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, n).unwrap()
+    };
+    let (text2, image2, image3) = (copy(&mut d, text), copy(&mut d, embedded), copy(&mut d, embedded));
+    let one = encode_read_only(&d, d.node(text).unwrap()).unwrap();
+    let size: usize = ["runs", "paragraphs"].iter().flat_map(|k| one["text"][k].as_array().unwrap()).map(|v| v.to_string().len()).sum();
+    // A 2 × 1 image is 12 characters of base64: two fit 30, the third doesn't.
+    let ids = [text, text2, embedded, image2, image3];
+    let (bytes, read_only) = encode_input_within(&d, &ids, &InputKind::ALL, Allowance { pixels: 30, text: size });
+    let v: Value = serde_json::from_slice(&bytes).unwrap();
+    let objects = v["objects"].as_array().unwrap();
+    assert_eq!(objects.len(), 5);
+    let flags: Vec<&Value> = objects.iter().map(|o| if o["type"] == "type" { &o["truncated"] } else { &o["pixelsOmitted"] }).collect();
+    assert_eq!(flags, [&json!(false), &json!(true), &json!(false), &json!(false), &json!(true)]);
+    assert!(objects[1]["text"]["runs"].as_array().unwrap().is_empty() && objects[4].get("pixelsBase64").is_none());
+    assert_eq!(objects[3]["pixelsBase64"], encode_read_only(&d, d.node(embedded).unwrap()).unwrap()["pixelsBase64"]);
+    for o in objects {
+        assert_eq!(Some(o), read_only.get(&NodeId(o["id"].as_u64().unwrap())));
+    }
+    // Within the full totals every one of them is given.
+    let (bytes, _) = encode_input_with(&d, &ids, &InputKind::ALL);
+    let all = String::from_utf8(bytes).unwrap();
+    assert!(!all.contains("\"pixelsOmitted\":true") && !all.contains("\"truncated\":true"), "{all}");
+}
+
+/// A field a plug-in adds to a read-only object is named in the refusal with its control and
+/// direction characters escaped, and cut short.
+#[test]
+fn a_changed_field_is_named_escaped_and_short() {
+    let (d, _, layer, [text, ..]) = mixed();
+    let targets = filter_targets_with(&d, &[layer], &[InputKind::Type]);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type]);
+    let mut v: Value = serde_json::from_slice(&bytes).unwrap();
+    let at = v["objects"].as_array().unwrap().iter().position(|o| o["id"] == json!(text.0)).unwrap();
+    let key = format!("\u{202E}{}", "k".repeat(500));
+    v["objects"][at][key.as_str()] = json!(1);
+    let e = decode_output_with(v.to_string().as_bytes(), &read_only).unwrap_err().to_string();
+    let shown = e.split('\'').nth(1).unwrap_or_default();
+    assert!(!e.contains('\u{202E}') && shown.starts_with("\\u{202E}kkk") && shown.ends_with('…'), "{e}");
+    assert_eq!(shown.chars().count(), crate::permissions::MAX_SHOWN_FIELD, "{e}");
+}
+
 /// A filter given read-only objects returns each one as `{"id": …}` or exactly as given (numbers by
 /// value), and they stay as they are, new objects listed after one going just above it. Any change,
 /// an object left out or listed twice, and a new object of such a kind are refused before anything
