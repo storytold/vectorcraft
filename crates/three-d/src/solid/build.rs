@@ -1,4 +1,4 @@
-use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, resolved, rings, signed_area};
+use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, signed_area, solid_rings};
 use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
 
 /// Turns 3D points into document points and shades faces for one view.
@@ -403,8 +403,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     if o.depth <= 0.0 {
         return plane_faces(path, rule, bounds, view, mesh);
     }
-    let (path, rule) = resolved(path, rule);
-    let rings = rings(&path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     let camera = Camera::new(view, bounds, o.depth);
     let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![], mesh: mesh.then(Vec::new) };
     let steps = steps(&o);
@@ -462,8 +461,7 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
 /// [`plane`], or with `mesh` its face before projection instead of its facet.
 pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
-    let (path, rule) = resolved(path, rule);
-    let rings = rings(&path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
     let camera = Camera::new(view, bounds, 0.0);
     let mut b = Builder { camera: &camera, closed: false, facets: vec![], mesh: mesh.then(Vec::new) };
     let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();

@@ -25,15 +25,105 @@ fn pieces(c: vectorcraft_geom::CubicBez, tolerance: f64) -> u32 {
 const DEBRIS: f64 = 1e-6;
 
 /// `path` with its overlaps resolved under `rule`: simple contours that do not cross,
-/// holes running against their outlines. Type often draws one glyph as overlapping contours (a
-/// "k"'s arm across its stem), and [`rings`] tells a contour's side from one point of it, so a
-/// contour that crosses another must be cut where they meet first. Every contour that fills area
-/// is kept, however narrow ([`DEBRIS`]). A path the boolean refuses is used as it is.
-pub(super) fn resolved(path: &PathData, rule: FillRule) -> (PathData, FillRule) {
+/// holes running against their outlines. Every contour that fills area is kept, however narrow
+/// ([`DEBRIS`]). A path the boolean refuses is used as it is.
+fn resolved(path: &PathData, rule: FillRule) -> (PathData, FillRule) {
     match vectorcraft_pathops::try_unite_all_with(&[(path, rule)], DEBRIS) {
         Ok(p) if !p.subpaths.is_empty() => (p, FillRule::NonZero),
         _ => (path.clone(), rule),
     }
+}
+
+/// The rings of a solid's profile, as [`rings`], with crossing contours resolved first. Type often
+/// draws one glyph as overlapping contours (a "k"'s arm across its stem), and [`rings`] tells a
+/// contour's side from one point of it, so a contour that meets another, or itself, must be cut
+/// where they meet. Only then does the profile go through the boolean ([`resolved`]): most art
+/// has no such contours, and the boolean costs more than the rest of the solid. The `limit` is
+/// checked on the profile as it is, before the boolean, and again on what it gives.
+pub(super) fn solid_rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
+    let sampled = sample(path, size, limit)?;
+    if !edges_meet(&sampled) {
+        return orient(sampled, rule);
+    }
+    let (path, rule) = resolved(path, rule);
+    rings(&path, rule, size, limit)
+}
+
+/// Edges closer than this meet: the floor of the boolean's own snapping, so contours it would join
+/// are resolved and contours it would leave apart are not.
+const TOUCH: f64 = 1e-6;
+
+/// Most pairs of edges [`edges_meet`] compares. Past it the answer is yes, and the boolean, with
+/// its own budget, decides.
+const MAX_EDGE_PAIRS: usize = 1 << 22;
+
+/// Do any two edges of `rings` meet, within [`TOUCH`]: a contour crossing, touching or running
+/// along another, or itself? Neighbouring edges of a ring share a corner and meet only where one
+/// folds back along the other. Edges are swept in order of their left ends, so only pairs whose
+/// bounds overlap across x are compared.
+pub(super) fn edges_meet(rings: &[Vec<Point>]) -> bool {
+    struct Edge {
+        ring: usize,
+        index: usize,
+        a: Point,
+        b: Point,
+        x0: f64,
+        x1: f64,
+    }
+    let mut edges: Vec<Edge> = rings
+        .iter()
+        .enumerate()
+        .flat_map(|(ring, r)| {
+            r.iter().zip(r.iter().cycle().skip(1)).enumerate().map(move |(index, (a, b))| Edge {
+                ring,
+                index,
+                a: *a,
+                b: *b,
+                x0: a.x.min(b.x),
+                x1: a.x.max(b.x),
+            })
+        })
+        .collect();
+    edges.sort_by(|e, f| e.x0.total_cmp(&f.x0));
+    let len = |ring: usize| rings.get(ring).map_or(0, Vec::len);
+    let mut pairs = 0usize;
+    for (i, e) in edges.iter().enumerate() {
+        for f in edges.iter().skip(i + 1) {
+            if f.x0 > e.x1 + TOUCH {
+                break;
+            }
+            pairs += 1;
+            if pairs > MAX_EDGE_PAIRS {
+                return true;
+            }
+            if e.a.y.min(e.b.y) > f.a.y.max(f.b.y) + TOUCH || f.a.y.min(f.b.y) > e.a.y.max(e.b.y) + TOUCH {
+                continue;
+            }
+            let n = len(e.ring);
+            let neighbours = e.ring == f.ring && ((e.index + 1) % n == f.index || (f.index + 1) % n == e.index);
+            if neighbours {
+                // They share a corner; they meet only if one runs back along the other.
+                let (shared, p, q) = if e.b == f.a { (e.b, e.a, f.b) } else { (e.a, e.b, f.a) };
+                if super::build::segment_distance(q, shared, p) <= TOUCH || super::build::segment_distance(p, shared, q) <= TOUCH {
+                    return true;
+                }
+            } else if segments_meet(e.a, e.b, f.a, f.b) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Do segments `a`–`b` and `c`–`d` cross, or come within [`TOUCH`] of each other?
+fn segments_meet(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let side = |p: Point, q: Point, r: Point| (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    let (d1, d2, d3, d4) = (side(c, d, a), side(c, d, b), side(a, b, c), side(a, b, d));
+    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0)) {
+        return true;
+    }
+    use super::build::segment_distance as dist;
+    dist(a, c, d).min(dist(b, c, d)).min(dist(c, a, b)).min(dist(d, a, b)) <= TOUCH
 }
 
 /// The rings of a shape: closed polygons with the filled side on their left, (-dy, dx): outer
@@ -45,6 +135,12 @@ pub(super) fn resolved(path: &PathData, rule: FillRule) -> (PathData, FillRule) 
 /// is left out: a contour inside another that runs the same way doesn't cut a hole, as it would
 /// if nesting alone decided (#1724).
 pub(super) fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
+    orient(sample(path, size, limit)?, rule)
+}
+
+/// The closed polygons that follow `path`'s subpaths, as [`rings`] samples them, each running as
+/// its subpath does.
+fn sample(path: &PathData, size: f64, limit: usize) -> Result<Vec<Vec<Point>>, String> {
     let tolerance = (size / 2000.0).max(0.05);
     let mut count = 0;
     let mut out = vec![];
@@ -79,6 +175,12 @@ pub(super) fn rings(path: &PathData, rule: FillRule, size: f64, limit: usize) ->
             out.push(ring);
         }
     }
+    Ok(out)
+}
+
+/// `out` (sampled rings) turned so the filled side is on each one's left, and under the nonzero
+/// `rule` without the rings that are no edge of the shape, as [`rings`] describes.
+fn orient(mut out: Vec<Vec<Point>>, rule: FillRule) -> Result<Vec<Vec<Point>>, String> {
     // Which rings hold which: each ring against the others, its edges walked only where its
     // bounds hold the point, and within [`MAX_CONTAINMENT_EDGES`] edges and pairs in all (a pair
     // whose bounds miss the point costs a step too: many small rings are a square of pairs).

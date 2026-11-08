@@ -17,6 +17,11 @@ Preview changes are temporary until OK; Cancel restores the document; OK is one 
 3D effect: edit its options in the Appearance panel or the 3D and Materials panel, or remove it before applying
 another.
 
+Each solid follows its shape as it is filled. Separate and nested contours are built as drawn. Contours that cross,
+touch or run along each other or themselves, as type often draws a glyph, are first merged into one outline by
+[`vectorcraft-pathops`](../crates/pathops/README.md), keeping contours however narrow. All three effects then share
+its [limits](../crates/pathops/README.md#limits): a shape it refuses is built from its contours as drawn, where it can be.
+
 ## 3D and Materials panel
 
 **Window › 3D and Materials** opens a panel that edits the 3D effect of the selection without a dialog, as the
@@ -62,8 +67,7 @@ object is where the art was.
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
 
-Holes stay holes, with walls of their own. Contours that cross or overlap, as type often draws a glyph, are merged
-first, so the solid follows the shape as it is filled. Bevels move each corner along its bisector (mitres are limited to four
+Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
 times the width), so a bevel wider than a narrow part of the shape folds over itself.
 
 ## Inflate
@@ -229,7 +233,9 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
   effect per object.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
-  counted on its own), Rotate (which only turns the outline) 65,536.
+  counted on its own), Rotate (which only turns the outline) 65,536. The limit is counted on the shape as drawn and,
+  when its contours meet, again on the merged outline, which can have more points: bars crossing in a grid trace
+  every hole between them.
 - **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
   unbuilt items.
 
@@ -239,6 +245,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
 | 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |
 | 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
 | 2026-10-17 | Smooth colored Inflate lighting and surface batching; legacy white-light appearance and the 0.05 seam minimum preserved; shared light Color and multiple lights remain vector output. |

@@ -777,7 +777,9 @@ fn crossing_contours_make_one_outline() {
         let f = extrude(&k, rule, b, Extrude::default(), front()).unwrap();
         assert_eq!(f.len(), 1, "{rule:?}: straight on, only the front cap shows");
         assert!(close(area(&f), filled, 1e-6), "{rule:?}: Extrude's cap");
-        assert!(inflate(&k, rule, b, Inflate::default(), front()).is_ok_and(|f| close(extent(&f).width(), 70.0, 1e-6)), "{rule:?}: Inflate");
+        let puffed = inflate(&k, rule, b, Inflate::default(), front()).unwrap();
+        assert_eq!(extent(&puffed), b, "{rule:?}: Inflate covers the whole k");
+        assert!(close(area(&puffed), filled, filled * 1e-3), "{rule:?}: Inflate's front, {} against {filled}", area(&puffed));
     }
     // The filled area is the union's: the stem, the arm past it and the leg past the arm.
     assert!(close(vectorcraft_pathops::area(&k, FillRule::NonZero), 20.0 * 100.0 + 40.0 * 20.0 + 20.0 * 50.0 - 10.0 * 10.0, 1e-6));
@@ -790,13 +792,22 @@ fn resolving_overlaps_keeps_narrow_contours() {
     let rect = |r: Rect| {
         vectorcraft_geom::SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true)
     };
+    // A hairline beside a square, and two bars crossing elsewhere so the profile is resolved.
     let hairline = Rect::new(120.0, 0.0, 120.005, 50.0);
-    let p = PathData::new(vec![rect(Rect::new(0.0, 0.0, 100.0, 100.0)), rect(hairline)]);
+    let p = PathData::new(vec![
+        rect(Rect::new(0.0, 0.0, 100.0, 100.0)),
+        rect(hairline),
+        rect(Rect::new(140.0, 40.0, 200.0, 60.0)),
+        rect(Rect::new(160.0, 20.0, 180.0, 80.0)),
+    ]);
     let b = p.bounds().unwrap();
-    let filled = 100.0 * 100.0 + hairline.width() * hairline.height();
+    let filled = |rule: FillRule| {
+        let bars = if rule == FillRule::NonZero { 60.0 * 20.0 + 20.0 * 40.0 } else { 60.0 * 20.0 + 20.0 * 40.0 - 20.0 * 20.0 };
+        100.0 * 100.0 + hairline.width() * hairline.height() + bars
+    };
     for rule in [FillRule::NonZero, FillRule::EvenOdd] {
-        assert!(close(area(&plane(&p, rule, b, front()).unwrap()), filled, 1e-6), "{rule:?}: Rotate");
-        assert!(close(area(&extrude(&p, rule, b, Extrude::default(), front()).unwrap()), filled, 1e-6), "{rule:?}: Extrude's cap");
+        assert!(close(area(&plane(&p, rule, b, front()).unwrap()), filled(rule), 1e-6), "{rule:?}: Rotate");
+        assert!(close(area(&extrude(&p, rule, b, Extrude::default(), front()).unwrap()), filled(rule), 1e-6), "{rule:?}: Extrude's cap");
     }
     // A circle drawn twice, exactly and a hair off, is one outline: no sliver between the copies.
     let circle = |cx: f64, cy: f64, r: f64| {
@@ -814,6 +825,71 @@ fn resolving_overlaps_keeps_narrow_contours() {
         twice.extend(circle(50.0 + dx, 50.0, 40.0).iter());
         let p = PathData::from_bezpath(&twice);
         let f = plane(&p, FillRule::NonZero, p.bounds().unwrap(), front()).unwrap();
+        assert_eq!(f.len(), 1, "{dx}");
         assert_eq!(f[0].contours.len(), 1, "{dx}");
+        let once = PathData::from_bezpath(&circle(50.0, 50.0, 40.0));
+        let one = area(&plane(&once, FillRule::NonZero, once.bounds().unwrap(), front()).unwrap());
+        assert!(close(area(&f), one, one * 1e-6), "{dx}: the area of one circle, {} against {one}", area(&f));
     }
+}
+
+/// Only a profile whose contours meet goes through the boolean: crossing, touching, running along
+/// another or folding back on itself. Separate and nested contours are taken as they are.
+#[test]
+fn contours_meet_when_they_cross_touch_or_fold_back() {
+    let ring = |pts: &[(f64, f64)]| pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>();
+    let square = |x: f64, y: f64, s: f64| ring(&[(x, y), (x + s, y), (x + s, y + s), (x, y + s)]);
+    assert!(!rings::edges_meet(&[square(0.0, 0.0, 10.0), square(20.0, 0.0, 10.0)]), "apart");
+    assert!(!rings::edges_meet(&[square(0.0, 0.0, 10.0), square(3.0, 3.0, 4.0)]), "nested, as an o's hole");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(5.0, 5.0, 10.0)]), "crossing");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 0.0, 10.0)]), "sharing an edge");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 3.0, 4.0)]), "along part of an edge");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0, 10.0, 4.0)]), "at a corner");
+    assert!(rings::edges_meet(&[square(0.0, 0.0, 10.0), square(10.0 + 1e-7, 0.0, 10.0)]), "within the boolean's snapping");
+    assert!(rings::edges_meet(&[ring(&[(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])]), "a bowtie crossing itself");
+    assert!(rings::edges_meet(&[ring(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (10.0, 5.0), (0.0, 10.0)])]), "folding back on itself");
+    // Squares sharing an edge inflate as one puff, not two with a seam between them.
+    let shared = PathData::new(
+        [Rect::new(0.0, 0.0, 50.0, 50.0), Rect::new(50.0, 0.0, 100.0, 50.0)]
+            .iter()
+            .map(|r| {
+                vectorcraft_geom::SubPath::polyline(
+                    &[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)],
+                    true,
+                )
+            })
+            .collect(),
+    );
+    let whole = PathData::from_bezpath(&{
+        let mut b = BezPath::new();
+        b.move_to((0.0, 0.0));
+        b.line_to((100.0, 0.0));
+        b.line_to((100.0, 50.0));
+        b.line_to((0.0, 50.0));
+        b.close_path();
+        b
+    });
+    let b = whole.bounds().unwrap();
+    let puff = |p: &PathData| inflate(p, FillRule::NonZero, b, Inflate::default(), front()).unwrap().len();
+    assert_eq!(puff(&shared), puff(&whole));
+}
+
+/// A profile the boolean can't resolve is used as it is: one with no area builds nothing, as it did,
+/// and one with an invalid coordinate is refused, as it was.
+#[test]
+fn a_profile_the_boolean_refuses_is_taken_as_it_is() {
+    let flat =
+        PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 10.0), Point::new(20.0, 20.0)], true)]);
+    let crossing_flat = PathData::new(vec![
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 10.0), Point::new(20.0, 20.0)], true),
+        vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 20.0), Point::new(10.0, 10.0), Point::new(20.0, 0.0)], true),
+    ]);
+    let b = Rect::new(0.0, 0.0, 20.0, 20.0);
+    for p in [&flat, &crossing_flat] {
+        assert_eq!(area(&plane(p, FillRule::NonZero, b, front()).unwrap()), 0.0);
+        assert_eq!(area(&extrude(p, FillRule::NonZero, b, Extrude::default(), front()).unwrap()), 0.0);
+    }
+    let mut bad = crossing_flat.clone();
+    bad.subpaths[0].anchors[1].p = Point::new(f64::NAN, 10.0);
+    assert_eq!(plane(&bad, FillRule::NonZero, b, front()).unwrap_err(), "The shape contains invalid coordinates");
 }
