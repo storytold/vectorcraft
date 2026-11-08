@@ -1299,10 +1299,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
                 imported.apply(&mut c);
+                let sc = vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() };
                 if xf != Affine::IDENTITY {
                     // A cross-document drag carries the graphic's appearance with it,
                     // including the pattern phase, independently of transform-tool settings.
-                    c.transform(xf, vectorcraft_doc::Scaling { patterns: mode == PasteMode::Drag, ..Default::default() });
+                    c.transform(xf, sc);
                 }
                 let layer = match clip.source_layers.get(k) {
                     Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
@@ -1338,6 +1339,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                                 if let NodeKind::Path { live, .. } = &mut child_node.kind {
                                     *live = None;
                                 }
+                                if child_node.extras().pixel_aligned {
+                                    child_node.extras_mut().pixel_aligned = false;
+                                }
                                 let insert_idx = if idx == usize::MAX { usize::MAX } else { idx.saturating_add(offset) };
                                 new_ids.push(d.insert(par, insert_idx, child_node)?);
                             }
@@ -1350,6 +1354,10 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             if let NodeKind::Path { live, .. } = &mut c.kind {
                                 *live = None;
                             }
+                            // A path inside a compound path snaps with the compound path, whose property it takes.
+                            if c.extras().pixel_aligned {
+                                c.extras_mut().pixel_aligned = false;
+                            }
                             new_ids.push(d.insert(par, idx, c)?);
                         }
                         _ => {
@@ -1358,13 +1366,18 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                             let offset = *placed.entry(outer_par).or_default();
                             *placed.entry(outer_par).or_default() += 1;
                             let insert_idx = if beside_idx == usize::MAX { usize::MAX } else { beside_idx.saturating_add(offset) };
+                            super::object::keep_pixel_aligned(&mut c, sc);
                             new_ids.push(d.insert(outer_par, insert_idx, c)?);
                         }
                     }
                 } else {
+                    super::object::keep_pixel_aligned(&mut c, sc);
                     new_ids.push(d.insert(par, idx, c)?);
                 }
             }
+        }
+        for id in &new_ids {
+            super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a
@@ -1437,7 +1450,10 @@ fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Duplicate `roots` directly above each original, transform the copies, select them
 /// ([`copy_above`]).
 pub(crate) fn duplicate_in(d: &mut Document, sel: &mut vectorcraft_doc::Selection, roots: &[NodeId], xf: Affine) -> Result<Vec<NodeId>> {
-    let out = copy_above(d, roots, |_, _, c| c.transform(xf, true))?;
+    let out = copy_above(d, roots, |_, _, c| {
+        c.transform(xf, true);
+        super::object::keep_pixel_aligned(c, true.into());
+    })?;
     sel.set(out.iter().copied());
     Ok(out)
 }

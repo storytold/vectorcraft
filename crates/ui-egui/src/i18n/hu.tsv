@@ -6502,3 +6502,7 @@ breakText	Glyphs	Glifák
 # 3D Box add-on
 	3D Box	3D doboz
 	3D Box Tool	3D doboz eszköz
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Igazítás a pixelrácshoz
+@msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz

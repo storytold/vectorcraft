@@ -6350,3 +6350,6 @@ breakText	Glyphs	Glyffer
 # 3D Box add-on
 	3D Box	3D-boks
 	3D Box Tool	3D-boksværktøj
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Juster efter pixelgitter

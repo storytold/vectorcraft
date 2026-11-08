@@ -6359,3 +6359,7 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Align to Pixel Grid
+	Align to Pixel Grid	对齐像素网格
+@msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格

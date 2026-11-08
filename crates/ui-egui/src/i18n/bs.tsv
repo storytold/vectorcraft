@@ -6386,3 +6386,6 @@ shape	Open	Otvoren
 # 3D Box add-on
 	3D Box	3D kutija
 	3D Box Tool	Alat za 3D kutiju
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Poravnaj s mrežom piksela

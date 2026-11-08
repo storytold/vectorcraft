@@ -6553,3 +6553,7 @@ breakText	Glyphs	Merkit
 # 3D Box add-on
 	3D Box	3D-laatikko
 	3D Box Tool	3D-laatikkotyökalu
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Tasaa pikseliruudukkoon
+@msg	only paths and compound paths can be aligned to the pixel grid	vain polut ja yhdistelmäpolut voi tasata pikseliruudukkoon

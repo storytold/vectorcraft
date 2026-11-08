@@ -7975,6 +7975,10 @@ swatch	White, Black	सफ़ेद, काला
 swatch	Yellow	पीला
 swatch	Yellow Green	पीला हरा
 theme	Appearance	अपीयरेंस
+
+# Align to Pixel Grid
+	Align to Pixel Grid	पिक्सेल ग्रिड से संरेखित करें
+@msg	only paths and compound paths can be aligned to the pixel grid	केवल पाथ और कंपाउंड पाथ को पिक्सेल ग्रिड से संरेखित किया जा सकता है
 	Start Lists From Typed Markers	टाइप किए गए चिह्नों से सूचियाँ शुरू करें
 	Marquee Selection	मार्की चयन
 	Touching	स्पर्श करते हुए

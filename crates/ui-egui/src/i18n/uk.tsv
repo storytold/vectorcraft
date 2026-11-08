@@ -6118,3 +6118,7 @@ breakText	Glyphs	Гліфи
 # 3D Box add-on
 	3D Box	3D-паралелепіпед
 	3D Box Tool	Інструмент «3D-паралелепіпед»
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Вирівняти за піксельною сіткою
+@msg	only paths and compound paths can be aligned to the pixel grid	за піксельною сіткою можна вирівняти лише контури і складені контури

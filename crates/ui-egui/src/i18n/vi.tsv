@@ -6119,3 +6119,7 @@ breakText	Glyphs	Glyph
 # 3D Box add-on
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Căn theo lưới pixel
+@msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được

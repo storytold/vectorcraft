@@ -6396,3 +6396,6 @@ breakText	Glyphs	Glyphs
 # 3D Box add-on
 	3D Box	3D-doos
 	3D Box Tool	3D-doosgereedschap
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Uitlijnen op pixelraster

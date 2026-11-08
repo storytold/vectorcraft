@@ -6513,3 +6513,7 @@ breakText	Glyphs	Glyphes
 # 3D Box add-on
 	3D Box	Boîte 3D
 	3D Box Tool	Outil Boîte 3D
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Aligner sur la grille de pixels
+@msg	only paths and compound paths can be aligned to the pixel grid	seuls les tracés et les tracés transparents peuvent être alignés sur la grille de pixels

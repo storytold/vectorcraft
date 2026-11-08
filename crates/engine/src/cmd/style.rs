@@ -273,6 +273,7 @@ fn apply_style(d: &mut Document, id: NodeId, g: &GraphicStyle, chars: bool) {
     if let Some(n) = d.node_mut(id) {
         style_node(n, g, chars);
         n.extras_mut().graphic_style = Some(g.id);
+        super::object::snap_if_aligned(n);
     }
 }
 

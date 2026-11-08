@@ -674,6 +674,7 @@ pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use edit::{settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
+pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 pub(crate) use vectorcraft_doc::range::parse_range;
 
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
