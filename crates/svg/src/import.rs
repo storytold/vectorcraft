@@ -48,6 +48,7 @@ mod css_transform;
 mod depth;
 mod files;
 mod fx;
+mod linear_rgb;
 mod spread;
 mod symbol_units;
 mod text;
@@ -60,6 +61,44 @@ fn parse(svg: &str) -> Result<roxmltree::Document<'_>, SvgError> {
     }
     roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() })
         .map_err(|e| SvgError::Parse(e.to_string()))
+}
+
+const SVG_NS: &str = "http://www.w3.org/2000/svg";
+
+/// Refuse the one `feConvolveMatrix` usvg cannot handle: an `order` whose two sides overflow the
+/// `order_x * order_y` u32 multiply its parser makes (`usvg-0.48.1/src/parser/filter.rs:673`, and
+/// `tree/filter.rs:458` through `ConvolveMatrixData::new`). usvg parses `order` through f64 and
+/// `as i32`, so a large finite value like `1066570220609` saturates to i32::MAX — positive, so it
+/// passes the positivity guard — and the multiply overflows: a debug or overflow-checks build
+/// panics while opening the file. A release build wraps instead, and with a one-entry
+/// `kernelMatrix` the wrapped product passes usvg's length check, leaving a filter that claims a
+/// 2147483647×2147483647 kernel (which VectorCraft then drops as an unsupported filter primitive,
+/// so nothing reaches the document). Any order usvg can multiply — however large — keeps
+/// importing exactly as before: a missing, unparseable or non-positive `order` falls back to 3,
+/// and a `kernelMatrix` that fails to parse or match the order leaves the filter empty, which
+/// usvg drops. The attribute read here is the one usvg reads: unprefixed (XML keeps unprefixed
+/// attributes outside any namespace), on an element in the SVG namespace, with entities resolved
+/// by the parse above.
+fn convolve_matrices_ok(xml: &roxmltree::Document) -> Result<(), SvgError> {
+    for fe in xml.descendants() {
+        if !fe.has_tag_name((SVG_NS, "feConvolveMatrix")) {
+            continue;
+        }
+        if let Some(value) = fe.attribute("order") {
+            // The parse usvg does: svgtypes numbers, `as i32` (saturation included), the first
+            // side defaulting the second, and both positive or both back to the 3×3 default.
+            let side = |n: Option<Result<f64, svgtypes::Error>>, default: i32| n.and_then(|v| v.ok()).map(|v| v as i32).unwrap_or(default);
+            let mut numbers = svgtypes::NumberListParser::from(value);
+            let x = side(numbers.next(), 3);
+            let y = side(numbers.next(), x);
+            if x > 0 && y > 0 && (x as u32).checked_mul(y as u32).is_none() {
+                return Err(SvgError::Parse(format!(
+                    "a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The document SVG text `svg` holds, read with `opts`, and the warnings about what it couldn't keep.
@@ -75,17 +114,21 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
-    let (svg, found) = prepass(svg, &scan.markers, &xml, opts);
+    let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
         Cow::Owned(edited) => parse(edited)?,
     };
+    // Before usvg sees the XML: its parser overflows a hostile feConvolveMatrix's order
+    // (`convolve_matrices_ok` below), and there is no panic guard to fall back on.
+    convolve_matrices_ok(&xml)?;
     let svg = svg.as_ref();
     let units = RootUnits::of(xml.root_element());
     let root_name = root_layer_name(xml.root_element());
     let mut warnings = found.warnings;
-    let (src, slots) = text::prepare(svg, &xml, units.dpi, &mut warnings);
+    let text_xml = found.text_source.as_deref().map(parse).transpose()?;
+    let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     let files = found.files;
     let tree = {
         let opt = usvg::Options {
@@ -108,10 +151,14 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         slots,
         patterns: HashMap::new(),
         midpoints: midpoint_stops(&xml),
+        linear_rgb: linear_rgb::linear_rgb_ids(&xml, &tree),
         labels: labels(&xml),
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
+        symbol_names: HashSet::new(),
+        symbol_suffixes: HashMap::new(),
+        pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
         files,
         non_scaling: found.non_scaling,
@@ -120,6 +167,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         foreign: found.foreign,
         sublayers: found.sublayers,
         sublayer_groups: HashSet::new(),
+        ellipses: found.ellipses,
         screen: k,
         converted_nodes: 1,
         max_nodes,
@@ -259,6 +307,8 @@ struct Importer {
     patterns: HashMap<usize, String>,
     /// Midpoint stops by gradient id (see [`midpoint_stops`]).
     midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Ids of the gradients mixed in linear light (see [`linear_rgb::linear_rgb_ids`]).
+    linear_rgb: HashSet<String>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
     /// Ids of the undisplayed objects shown for usvg ([`prepass`]).
@@ -267,6 +317,11 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
+    /// The names of the symbols made so far.
+    symbol_names: HashSet<String>,
+    /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
+    symbol_suffixes: HashMap<String, usize>,
+    pattern_suffixes: HashMap<String, usize>,
     /// Blend modes of the shadows and glows our export wrote, by filter id ([`fx::blends`]).
     blends: HashMap<String, String>,
     /// The files `<image>` elements link to.
@@ -283,6 +338,8 @@ struct Importer {
     sublayers: HashSet<String>,
     /// The groups made of them, made sublayers where they sit in a layer ([`promote_sublayers`]).
     sublayer_groups: HashSet<NodeId>,
+    /// Ids of the `<circle>` and `<ellipse>` elements ([`prepass`]).
+    ellipses: HashSet<String>,
     /// Points per screen pixel (the root's user unit before its `viewBox`): what a non-scaling
     /// stroke's width is measured in.
     screen: f64,

@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind};
+use vectorcraft_doc::live::{self, BlendOrientation, BlendSpacing, EnvelopeKind, PreserveShape};
 use vectorcraft_doc::{Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
@@ -85,6 +85,12 @@ fn refuses_non_boolean(s: &mut Session, cmd: &str, p: &Value, key: &str) {
     let r = s.execute(cmd, p);
     let want = format!("`{key}` must be true or false");
     assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+}
+
+/// `cmd` with `p` fails with the error `want`.
+fn refuses_with(s: &mut Session, cmd: &str, p: &Value, want: &str) {
+    let r = s.execute(cmd, p);
+    assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == want), "{cmd} {p}: {r:?}");
 }
 
 // ---------- Blend ----------
@@ -231,13 +237,13 @@ fn blend_smooth_colour_steps_from_colour_distance() {
     let mut s = session();
     let (_, _, g) = blend(&mut s, json!({}));
     let n = steps_of(&s, g).len() - 2;
-    assert_eq!(n, 128, "black→white: one step per two levels");
-    // Consecutive steps differ by at most ~2 levels.
+    assert_eq!(n, 254, "black→white: one step per level");
+    // Consecutive steps differ by about a level.
     let st = steps_of(&s, g);
     for w in st.windows(2) {
         let x = w[0].appearance.fill_paint().color().unwrap().to_rgb()[0];
         let y = w[1].appearance.fill_paint().color().unwrap().to_rgb()[0];
-        assert!((x - y).abs() <= 2.5 / 255.0);
+        assert!((x - y).abs() <= 1.5 / 255.0);
     }
 }
 
@@ -248,7 +254,9 @@ fn blend_smooth_colour_same_colours_uses_distance() {
     let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
     sel(&mut s, &[a, b]);
     let g = id_of(&s.execute("object.blend.make", &json!({"smooth": true})).unwrap());
-    assert_eq!(steps_of(&s, g).len() - 2, 20);
+    // The edges are 40 pt apart, 3.6 times the keys' 11 pt visible width (their 1 pt strokes
+    // included): rounded, less one.
+    assert_eq!(steps_of(&s, g).len() - 2, 3);
 }
 
 #[test]
@@ -745,6 +753,73 @@ fn envelope_options_refuse_a_boolean_given_as_text() {
     assert!(matches!(&node(&s, warp).kind, NodeKind::Envelope { options, .. } if !options.anti_alias && options.distort_appearance));
 }
 
+/// Make with Warp, Reset with Warp and Envelope Options refuse a warp `style` that is not text or
+/// names no warp, and an `orientation` other than horizontal or vertical: no envelope is made, a
+/// warp envelope keeps its warp, and no undo step is added. Null is read as the key left out.
+#[test]
+fn envelope_warps_refuse_an_invalid_style_or_orientation() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    let calls = [
+        (json!({"style": 5}), "`style` must be a string"),
+        (json!({"style": ["arch"], "bend": 40}), "`style` must be a string"),
+        (json!({"style": "foo"}), "unknown warp style `foo`"),
+        (json!({"orientation": 1}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": true, "horizontal": true}), "`orientation` must be one of horizontal, vertical"),
+        (json!({"orientation": "diagonal"}), "`orientation` must be one of horizontal, vertical"),
+    ];
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.makeWithWarp", p, want);
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "not enveloped");
+    let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": null, "orientation": null, "bend": 30})).unwrap());
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: true, .. } if style == "arc")));
+    let (before, n) = (node(&s, e), undo_len(&s));
+    for cmd in ["object.envelope.resetWithWarp", "object.envelope.options"] {
+        for (p, want) in &calls {
+            refuses_with(&mut s, cmd, p, want);
+        }
+    }
+    assert_eq!((node(&s, e), undo_len(&s)), (before, n), "nothing changed");
+    s.execute("select.none", &json!({})).unwrap();
+    for (p, want) in &calls {
+        refuses_with(&mut s, "object.envelope.options", p, want);
+    }
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.resetWithWarp", &json!({"style": "warp.flag", "orientation": "vertical"})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { kind, .. }
+        if matches!(&**kind, EnvelopeKind::Warp { style, horizontal: false, .. } if style == "flag")));
+}
+
+/// Envelope Options refuses a `preserveShape` that is not text, for the selected envelope and for
+/// the options new envelopes get, and changes neither; null keeps the current value.
+#[test]
+fn envelope_options_refuse_a_preserve_shape_that_is_not_text() {
+    let mut s = session();
+    let a = text_rect(&mut s);
+    sel(&mut s, &[a]);
+    let e = id_of(&s.execute("object.envelope.makeWithMesh", &json!({"rows": 2, "cols": 2})).unwrap());
+    let calls = [json!({"preserveShape": 1}), json!({"preserveShape": true, "antiAlias": false}), json!({"preserveShape": ["transparency"]})];
+    for ids in [vec![e], vec![]] {
+        sel(&mut s, &ids);
+        let before = (node(&s, e), undo_len(&s));
+        for p in &calls {
+            refuses_with(&mut s, "object.envelope.options", p, "`preserveShape` must be a string");
+        }
+        assert_eq!((node(&s, e), undo_len(&s)), before, "nothing changed with {ids:?} selected");
+    }
+    assert_eq!(s.envelope_defaults, None, "the options new envelopes get stayed");
+    sel(&mut s, &[e]);
+    s.execute("object.envelope.options", &json!({"preserveShape": "transparency"})).unwrap();
+    s.execute("object.envelope.options", &json!({"preserveShape": null, "antiAlias": false})).unwrap();
+    assert!(matches!(&node(&s, e).kind, NodeKind::Envelope { options, .. }
+        if options.preserve_shape == PreserveShape::Transparency && !options.anti_alias));
+}
+
 #[test]
 fn envelope_renders_distorted() {
     let mut s = session();
@@ -851,6 +926,28 @@ fn mesh_point_colour_move_and_undo() {
     assert!(s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 99, "color": "#000000"})).is_err());
 }
 
+/// A mesh point's `color` with an alpha part (`#rrggbbaa` or `#rgba`) is refused and changes
+/// nothing, also when `opacity` is given and when Add Mesh Line takes it; `#rrggbb` still sets it.
+#[test]
+fn a_mesh_point_color_with_an_alpha_part_is_refused() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in ["#00ff0080", "00ff0080", "#0f08"] {
+        let set = json!({"id": a.0, "index": 3, "color": bad, "opacity": 0.5});
+        assert!(s.execute("object.mesh.setPointColor", &set).is_err(), "{bad}");
+        assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 50, "y": 50, "color": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": 3, "color": "#00ff00"})).unwrap();
+    assert_eq!(mesh_of(&s, a).points[3].color.to_hex(), "#00ff00");
+    s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 50, "y": 50, "color": "#00ff00"})).unwrap();
+}
+
 /// `object.mesh.movePoints` moves just the points it names (their handles with them), over one or
 /// several meshes, as one undo step; `object.mesh.setPointColor` colours and fades several points
 /// alike. A bad index, a non-number or a move past the coordinate range fails and changes nothing
@@ -925,6 +1022,32 @@ fn mesh_add_line_and_delete_point() {
     let m = mesh_of(&s, a);
     assert_eq!((m.rows, m.cols), (1, 1));
     assert!(s.execute("object.mesh.deletePoint", &json!({"id": a.0, "index": 0})).is_err(), "corner lines can't go");
+}
+
+/// A Mesh tool click that hits a mesh's edge from just outside it adds a mesh line at the
+/// nearest point of the edge; `tolerance` gives `object.mesh.addLine` the same reach.
+#[test]
+fn mesh_add_line_on_the_edge_from_just_outside() {
+    use crate::tooling::ViewInfo;
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("mesh", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 99.0, 160.0), v).unwrap();
+    }
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 1), "a row through the left edge");
+    assert!(m.points.iter().any(|q| q.p.distance(Point::new(100.0, 160.0)) < 0.5), "{:?}", m.points.iter().map(|q| q.p).collect::<Vec<_>>());
+    let r = s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202, "tolerance": 3})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (2, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(140.0, 200.0)) < 0.5);
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 202})).is_err(), "no tolerance: outside");
+    assert!(s.execute("object.mesh.addLine", &json!({"id": a.0, "x": 140, "y": 210, "tolerance": 3})).is_err(), "past the tolerance");
 }
 
 /// A mesh point `index`, and `rows`, `cols` or `columns` for Create Gradient Mesh, that is not a
@@ -1014,16 +1137,57 @@ fn mesh_create_at_point_single_undo() {
     assert!(b.x0 > -3.0 && b.x1 < 103.0, "{b:?}");
 }
 
+/// Create Gradient Mesh with an `at` the new mesh can't place its lines at (outside the object,
+/// or past `tolerance`) is an error that leaves the path a path; within `tolerance` it adds them.
+#[test]
+fn mesh_create_at_a_point_outside_keeps_the_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let n = undo_len(&s);
+    for p in [json!({"at": [300, 300]}), json!({"at": [50, 103]}), json!({"at": [50, 110], "tolerance": 3})] {
+        let r = s.execute("object.mesh.create", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg == "point is outside the object"), "{p}: {r:?}");
+        assert!(matches!(node(&s, a).kind, NodeKind::Path { .. }), "{p}: still a path");
+    }
+    assert_eq!(undo_len(&s), n, "nothing changed");
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 102], "tolerance": 3})).unwrap();
+    let m = mesh_of(&s, a);
+    assert_eq!((m.rows, m.cols), (1, 2), "a column through the bottom edge");
+    assert!(m.points[r["index"].as_u64().unwrap() as usize].p.distance(Point::new(50.0, 100.0)) < 0.5);
+}
+
+/// With several objects selected, Create Gradient Mesh at a point turns the objects that hold the
+/// point into meshes in one undo step and leaves the others paths, without an error.
+#[test]
+fn mesh_create_at_a_point_inside_one_of_two_objects_converts_only_that_one() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let b = rect(&mut s, 200.0, 0.0, 300.0, 100.0);
+    sel(&mut s, &[a, b]);
+    let n = undo_len(&s);
+    let r = s.execute("object.mesh.create", &json!({"at": [50, 50]})).unwrap();
+    assert_eq!(r["ids"], json!([a.0]), "{r}");
+    assert!(matches!(node(&s, a).kind, NodeKind::Mesh(_)), "a holds the point");
+    assert!(matches!(node(&s, b).kind, NodeKind::Path { .. }), "b stays a path");
+    assert_eq!(undo_len(&s), n + 1, "one undo step");
+}
+
 #[test]
 fn mesh_expand_to_flat_pieces() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
     sel(&mut s, &[a]);
     s.execute("object.mesh.create", &json!({"rows": 1, "cols": 2})).unwrap();
+    // The first patch shades from black to white; the second is one colour.
+    for (index, color) in [(0, "#000000"), (3, "#000000"), (1, "#ffffff"), (2, "#ffffff"), (4, "#ffffff"), (5, "#ffffff")] {
+        s.execute("object.mesh.setPointColor", &json!({"id": a.0, "index": index, "color": color})).unwrap();
+    }
     s.execute("object.mesh.expand", &json!({})).unwrap();
     let g = node(&s, a);
     assert!(matches!(g.kind, NodeKind::Group { .. }));
-    assert_eq!(g.children().unwrap().len(), 2 * 64);
+    // 8 × 8 pieces for the shaded patch, one for the flat one.
+    assert_eq!(g.children().unwrap().len(), 64 + 1);
     assert!(g.children().unwrap().iter().all(|c| c.id != NodeId(0)));
 }
 
@@ -1093,9 +1257,10 @@ fn live_objects_round_trip_through_native_format() {
 fn svg_export_expands_live_objects() {
     let s = live_doc();
     let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
-    // 4 blend objects + envelope content + 4 patches × 64 mesh pieces.
+    // 4 blend objects + envelope content + a piece for each of the 4 mesh patches (the mesh is
+    // white, which its highlight leaves white, so a patch is one piece rather than 64 alike).
     let paths = vectorcraft_testkit::svg_shapes(&svg);
-    assert!(paths >= 4 + 1 + 256, "{paths}");
+    assert!(paths >= 4 + 1 + 4, "{paths}");
     assert!(vectorcraft_svg::import(&svg).is_ok());
 }
 

@@ -5,6 +5,7 @@ use super::ruby::ruby_layout;
 use super::vertical::{EM_CENTER, QUARTER_TURN, align_vertically, finish_bounds};
 use super::{
     Affine, BezPath, CharStyle, Ctx, FontDb, LayoutOptions, OtFeatures, Point, Rect, Shape, TextKind, TextLayout, TextObject, VerticalAlign,
+    keep_lone_ligature_carets,
 };
 
 /// Lay out a text object into text-space glyph outlines (default [`LayoutOptions`]).
@@ -14,10 +15,12 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
         rows: a.rows,
         columns: a.columns,
         gutter: a.gutter,
+        row_gutter: a.row_gutter,
         inset: a.inset,
         first_baseline: a.first_baseline,
         first_baseline_min: a.first_baseline_min,
         vertical_align: a.vertical_align,
+        flow: a.flow,
         fit: a.fit,
         ..LayoutOptions::default()
     };
@@ -26,22 +29,30 @@ pub fn layout(db: &FontDb, t: &TextObject) -> TextLayout {
 
 /// Area type in a frame too short for its first line draws nothing (type that doesn't fit its frame
 /// isn't drawn). For importers whose source shows that line: the frame is made taller, from its
-/// top, by what the first line needs. Whether it was.
+/// top, by what the first line needs (vertical type's frame wider, from its right edge, where its
+/// first column is). Whether it was.
 pub fn fit_first_line(db: &FontDb, t: &mut TextObject) -> bool {
     let TextKind::Area { frame } = &t.kind else { return false };
-    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6) else { return false };
+    let across = |b: &Rect| if t.vertical { b.width() } else { b.height() };
+    let Some(b) = frame.bounds().filter(|b| across(b) > 1e-6) else { return false };
     if !layout(db, t).lines.is_empty() {
         return false;
     }
-    // The height of its first line: the line's as point type.
+    // The height of its first line (a column's width): the line's as point type, its baseline at
+    // least Area Type Options › First Baseline's Min from the frame's top.
     let point = TextObject { kind: TextKind::Point, ..t.clone() };
-    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent + l.descent) else { return false };
+    let min = if t.area.first_baseline_min.is_finite() { t.area.first_baseline_min.max(0.0) } else { 0.0 };
+    let Some(need) = layout(db, &point).lines.first().map(|l| l.ascent.max(min) + l.descent) else { return false };
     // (A little more than it, for the rounding of the layout.)
-    let by = (need + 0.05) / b.height();
+    let by = (need + 0.05) / across(&b);
     if !(by.is_finite() && by > 1.0) {
         return false;
     }
-    let taller = frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)));
+    let taller = if t.vertical {
+        frame.transformed(Affine::translate((b.x1, 0.0)) * Affine::scale_non_uniform(by, 1.0) * Affine::translate((-b.x1, 0.0)))
+    } else {
+        frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)))
+    };
     let short = std::mem::replace(&mut t.kind, TextKind::Area { frame: taller });
     // Something else keeps the line out (a frame narrower than a letter): as the source has it.
     if layout(db, t).lines.is_empty() {
@@ -101,12 +112,73 @@ pub fn decorations(layout: &TextLayout, db: &FontDb, t: &TextObject) -> Vec<(usi
     out
 }
 
+/// The box of what `t` draws with text space mapped by `m`: its glyph outlines
+/// ([`TextLayout::ink_bounds_in`]) and its underline and strikethrough bars ([`decorations`]). With
+/// `projection` `(h, after)`, each point `m` maps is then drawn through `h` (a point `h` can't map
+/// stays where it is, as the renderer draws it) and mapped by `after`; the outlines and bars are
+/// flattened to within 1/1000 of their size, and images, color glyphs and inline graphics count by
+/// their boxes' corners. What an envelope maps type from ([`register_envelope_ink`]). `None` when
+/// nothing draws.
+pub fn envelope_ink(t: &TextObject, m: Affine, projection: Option<(vectorcraft_geom::Homography, Affine)>) -> Option<Rect> {
+    let db = FontDb::global();
+    let laid = layout(db, t);
+    let bars = decorations(&laid, db, t).into_iter().map(|(_, bar)| bar);
+    let union = |acc: Option<Rect>, b: Rect| Some(acc.map_or(b, |a| a.union(b)));
+    let Some((h, after)) = projection else {
+        return bars.map(|bar| (m * bar).bounding_box()).fold(laid.ink_bounds_in(m), union);
+    };
+    let draw = |p: Point| {
+        let q = m * p;
+        after * h.apply(q).unwrap_or(q)
+    };
+    let add = |acc: Option<Rect>, p: Point| union(acc, Rect::from_points(p, p));
+    let projected = |path: &BezPath| {
+        let size = path.bounding_box();
+        let tolerance = (size.width().max(size.height()) / 1000.0).max(1e-6);
+        let mut points = vec![];
+        kurbo::flatten(path, tolerance, |el| {
+            if let kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) = el {
+                points.push(draw(p));
+            }
+        });
+        points.into_iter().fold(None, add)
+    };
+    let corners = |r: Rect| {
+        [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)].map(draw).into_iter().fold(None, add)
+    };
+    let glyphs = laid.glyphs.iter().chain(&laid.ruby).filter_map(|g| projected(&g.outline));
+    let boxes = laid.glyphs.iter().flat_map(|g| {
+        let image = g.placed_image().map(|(image, xf)| xf.transform_rect_bbox(image.rect()));
+        let colour = g.colour.as_ref().and_then(|c| c.geometric_bounds()).map(|b| g.xf.transform_rect_bbox(b));
+        [image, colour]
+    });
+    let boxes = boxes.chain(laid.inlines.iter().map(|i| Some(i.bounds))).flatten().filter_map(corners);
+    glyphs.chain(bars.filter_map(|bar| projected(&bar))).chain(boxes).fold(None, union)
+}
+
+/// Make envelopes map type from [`envelope_ink`], measured again when the fonts or the hyphenation
+/// exceptions change (the first registration stays, see `vectorcraft_doc::live::set_type_ink`).
+pub fn register_envelope_ink() {
+    vectorcraft_doc::live::set_type_ink(envelope_ink, envelope_ink_inputs);
+}
+
+/// A number that changes whenever what [`envelope_ink`] reads besides the type changes: the
+/// installed fonts and the hyphenation exceptions.
+pub(crate) fn envelope_ink_inputs() -> u64 {
+    FontDb::global().generation().rotate_left(32) ^ crate::hyphen::exceptions_generation()
+}
+
 /// Most layout passes Shrink Text to Fit runs past the first (bisection plus the final pass).
 const SHRINK_PASSES: usize = 11;
 
 /// Lay out a text object with explicit options (area type rows/columns, inset, first baseline,
-/// fit, composer, OpenType features).
+/// fit, composer, OpenType features). Each run is set at the em size its font height reference
+/// gives it ([`FontDb::font_heights_resolved`]).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    #[cfg(any(test, feature = "test-fonts"))]
+    crate::test_fonts::count_layout();
+    let resolved = db.font_heights_resolved(t);
+    let t = &*resolved;
     let first = layout_once(db, t, opts);
     match (opts.fit.min_scale(), &t.kind) {
         (Some(min), TextKind::Area { .. }) if first.overflow => shrink_to_fit(db, t, opts, min).unwrap_or(first),
@@ -169,7 +241,7 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, opts: &LayoutOptions, min: f64) ->
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading and baseline shift scaled by `f`, inline art's own
+/// `t` with every run's size, explicit leading, baseline shift and tate-chu-yoko offsets scaled by `f`, inline art's own
 /// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 /// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
 /// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
@@ -179,11 +251,29 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         r.style.size *= f;
         r.style.leading = r.style.leading.map(|l| l * f);
         r.style.baseline_shift *= f;
+        r.style.tcy_up_down *= f;
+        r.style.tcy_left_right *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }
     }
     s
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Set while [`layout_faces_per_call`] lays text out: layout keeps no run faces.
+    static FACES_PER_CALL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`layout`] keeping no run faces, so that every lookup of a face asks [`FontDb::style_face`]
+/// again: the reference the faces kept per run are compared with.
+#[cfg(test)]
+pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
+    FACES_PER_CALL.set(true);
+    let l = layout(db, t);
+    FACES_PER_CALL.set(false);
+    l
 }
 
 /// One layout pass, without fitting.
@@ -216,10 +306,14 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
     } else {
         opts
     };
+    let faces = runs.iter().map(|_| std::cell::OnceCell::new()).collect();
+    #[cfg(test)]
+    let faces = if FACES_PER_CALL.get() { Vec::new() } else { faces };
     let mut cx = Ctx {
         on_path: is_on_path,
         db,
         text: &text,
+        faces,
         runs,
         inlines,
         default: CharStyle::default(),
@@ -227,6 +321,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         vertical,
         system_layout: t.system_layout,
         fractional_widths: t.fractional_widths,
+        upright_cluster: None,
         out: TextLayout::default(),
     };
     // Vertical type: line space turned a quarter turn clockwise (lines become columns, each next
@@ -237,7 +332,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         TextKind::OnPath { .. } => Affine::IDENTITY,
         TextKind::Point => {
             let first = cx.style_at(0);
-            let centre = db.style_face(first).map_or(EM_CENTER, |f| f.ideographic_centre());
+            let centre = cx.face_at(0).map_or(EM_CENTER, |f| f.ideographic_centre());
             Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,
@@ -289,6 +384,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         cx.out.vertical = true;
         cx.out.line_xf = line_xf;
     }
+    keep_lone_ligature_carets(&mut cx.out.glyphs);
     finish_bounds(&mut cx.out);
     cx.out
 }

@@ -20,21 +20,31 @@ pub fn story(frames: &[&TextObject]) -> Vec<TextRun> {
 /// paragraph shares that paragraph with the next frame (its first one): the earlier frame's style
 /// wins unless `later_wins[k]` says frame `k`'s first paragraph should (it was just restyled), or
 /// the earlier frame's part of the paragraph is empty (its slice ends with a paragraph break).
+/// An empty frame that was just restyled keeps its style against unedited empty frames after it.
 pub fn story_paras(frames: &[&TextObject], later_wins: &[bool]) -> Vec<ParaStyle> {
     let mut out: Vec<ParaStyle> = vec![];
     let mut prev_empty_tail = true;
+    let mut empty_tail_restyled = false;
     for (k, f) in frames.iter().enumerate() {
+        let text = f.plain_text();
+        let restyled = later_wins.get(k).copied().unwrap_or(false);
         let mut styles = f.paragraph_styles().into_iter();
         if k > 0
             && let Some(first) = styles.next()
-            && (prev_empty_tail || later_wins.get(k).copied().unwrap_or(false))
+            && (restyled || (prev_empty_tail && !(text.is_empty() && empty_tail_restyled)))
             && let Some(last) = out.last_mut()
         {
             *last = first;
         }
         out.extend(styles);
-        let text = f.plain_text();
-        prev_empty_tail = text.is_empty() || text.ends_with('\n') || out.is_empty();
+        // An empty frame has no paragraph boundary of its own. Keep the preceding frame's
+        // boundary state so another empty frame cannot replace a paragraph's edited style.
+        if !text.is_empty() {
+            prev_empty_tail = text.ends_with('\n') || out.is_empty();
+            empty_tail_restyled = false;
+        } else if restyled {
+            empty_tail_restyled = true;
+        }
     }
     out
 }

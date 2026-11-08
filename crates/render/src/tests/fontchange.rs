@@ -162,7 +162,7 @@ fn symbol_type_redraws_when_its_font_becomes_available() {
     let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(-140.0, 25.0), "Hamburg", style))));
     t.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true });
     let art = Node::group(d.alloc_id(), vec![Arc::new(t)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
     let (l, id) = (d.layers[0].id, d.alloc_id());
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) })).unwrap();
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -207,7 +207,7 @@ fn type_with_geometry_effects_redraws_when_its_font_becomes_available() {
             }
             3 => {
                 let art = Node::group(d.alloc_id(), vec![Arc::new(object)]);
-                d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
                 object = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 75.0)) });
                 object.appearance.effects.push(moved());
             }
@@ -243,7 +243,7 @@ fn enveloped_type_redraws_when_its_font_becomes_available() {
     let typed = word(&mut d, Point::new(10.0, 60.0));
     let art = word(&mut d, Point::new(-140.0, 20.0));
     let art = Node::group(d.alloc_id(), vec![Arc::new(art)]);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Word".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Word".into(), art: Arc::new(art) });
     let shown = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Word".into(), xf: Affine::translate((150.0, 120.0)) });
     let l = d.layers[0].id;
     for (i, content) in [typed, shown].into_iter().enumerate() {
@@ -319,4 +319,36 @@ fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
         assert_ne!(before, after, "{what}: drawn in the font that arrived");
         assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "{what}: as a new renderer draws it");
     }
+}
+
+/// Without an engine session, a renderer maps an envelope of type from its glyph outline bounds,
+/// and measures the type again when its font becomes available.
+#[test]
+fn a_renderer_maps_enveloped_type_from_its_glyphs_in_the_current_font() {
+    let _adding = adding_fonts();
+    const FAMILY: &str = "Mapped Serif 4";
+    let style = CharStyle { size: 50.0, font_family: FAMILY.into(), ..Default::default() };
+    let t = TextObject::point(Point::new(10.0, 60.0), "Hamburg", style);
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let envelope = Node::new(
+        vectorcraft_doc::NodeId(1),
+        NodeKind::Envelope {
+            content: vec![Arc::new(Node::new(vectorcraft_doc::NodeId(2), NodeKind::Text(Box::new(t.clone()))))],
+            kind: Box::new(kind),
+            fidelity: 50.0,
+            editing: false,
+            options: Default::default(),
+            frame: Box::new(Affine::IDENTITY),
+        },
+    );
+    let ink = || t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).ink_bounds().unwrap());
+    let src = || vectorcraft_doc::live::EnvelopeMap::of(&envelope).unwrap().src();
+    let off = |a: Rect, b: Rect| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let _ = Renderer::new();
+    let before = ink();
+    assert!(off(src(), before) < 1e-6, "{:?} vs {before:?}", src());
+    assert!(vectorcraft_text::FontDb::global().add_font(serif_as(FAMILY)) > 0);
+    let after = ink();
+    assert!(off(before, after) > 0.5, "the type draws in the font that arrived: {before:?} vs {after:?}");
+    assert!(off(src(), after) < 1e-6, "{:?} vs {after:?}", src());
 }

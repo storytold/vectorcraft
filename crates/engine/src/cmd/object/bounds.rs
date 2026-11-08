@@ -6,7 +6,7 @@ use super::{
 };
 
 pub(super) fn set_bounds(s: &mut Session, p: &Value) -> Result<Value> {
-    match bounds_transform(s, p, selected_roots_to_transform(s)?, 0.0)? {
+    match bounds_transform(s, p, selected_roots_to_transform(s)?, 0.0, true)? {
         Bounds::Anchors(ids, b) => set_anchor_bounds(s, p, ids, b),
         Bounds::Objects(ids, xf) => apply_transform(s, "Transform", ids, xf, p, false),
     }
@@ -32,7 +32,7 @@ pub(crate) fn bounds_rewrite(s: &Session, cmd: &str, params: &Value) -> Option<(
     if cmd != "object.setBounds" {
         return None;
     }
-    let Ok(Bounds::Objects(_, xf)) = bounds_transform(s, params, selected_roots_to_transform(s).ok()?, 1e-4) else { return None };
+    let Ok(Bounds::Objects(_, xf)) = bounds_transform(s, params, selected_roots_to_transform(s).ok()?, 1e-4, true) else { return None };
     let mut p = params.as_object().cloned().unwrap_or_default();
     for k in ["x", "y", "width", "height", "reference", "proportional"] {
         p.remove(k);
@@ -41,14 +41,26 @@ pub(crate) fn bounds_rewrite(s: &Session, cmd: &str, params: &Value) -> Option<(
     Some(("object.transform".to_string(), Value::Object(p)))
 }
 
+/// The transform that gives object `id` on its own the place and size `p` asks for, as
+/// `object.setBounds` measures them (Use Preview Bounds, `strokes`, `reference`, `proportional`),
+/// whatever anchors are direct-selected. The art keeps at least 1e-4 of its width and height.
+pub(crate) fn object_bounds_transform(s: &Session, p: &Value, id: NodeId) -> Result<Affine> {
+    match bounds_transform(s, p, vec![id], 1e-4, false)? {
+        Bounds::Objects(_, xf) => Ok(xf),
+        Bounds::Anchors(..) => Err(EngineError::Other("no bounds".into())),
+    }
+}
+
 /// How `object.setBounds` with params `p` changes the objects `ids`. A scale that would leave the
-/// art with a width or height below `least` of the one it has keeps `least` of it.
-fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64) -> Result<Bounds> {
+/// art with a width or height below `least` of the one it has keeps `least` of it. With `anchors`,
+/// direct-selected anchors are what changes ([`Bounds::Anchors`]).
+fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchors: bool) -> Result<Bounds> {
     check_numbers(p, &["x", "y", "width", "height", "reference"], "object.setBounds")?;
     let st = s.doc()?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.setBounds")?;
     check_switches(p, &["proportional"], "object.setBounds")?;
-    if transforms_objects(p)
+    if anchors
+        && transforms_objects(p)
         && !bool_or(p, "copy", false)
         && let Some(b) = effects::preview::anchor_bounds(&st.selection, &st.doc, s.prefs.use_preview_bounds)
     {

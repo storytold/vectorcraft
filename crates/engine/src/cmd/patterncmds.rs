@@ -161,12 +161,18 @@ fn in_pattern_edit(s: &Session) -> std::result::Result<(), String> {
     editing(s).map(|_| ()).ok_or_else(|| "not in pattern editing mode".into())
 }
 
-/// Make: a selection, and no opacity mask is being edited
-/// ([`super::maskedit::outside_mask_editing`]), since the tile layer would replace the mask editing
-/// layer as the isolated layer.
+/// Make: a selection, and no opacity mask or symbol is being edited
+/// ([`super::maskedit::outside_mask_editing`], [`outside_symbol_editing`]), since the tile layer
+/// would replace that mode's editing layer as the isolated layer.
 fn can_make_pattern(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    super::maskedit::outside_mask_editing(s)
+    super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)
+}
+
+/// No symbol is being edited (symbol editing mode shows the symbol in isolation mode).
+fn outside_symbol_editing(s: &Session) -> std::result::Result<(), String> {
+    if s.active().is_some_and(|st| st.doc.symbol_edit.is_some()) { Err("exit isolation mode first".into()) } else { Ok(()) }
 }
 
 fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
@@ -175,6 +181,7 @@ fn can_edit_pattern(s: &Session) -> std::result::Result<(), String> {
         return Err("already editing a pattern".into());
     }
     super::maskedit::outside_mask_editing(s)?;
+    outside_symbol_editing(s)?;
     if s.active().is_some_and(|st| st.doc.patterns.is_empty()) { Err("the document has no patterns".into()) } else { Ok(()) }
 }
 
@@ -370,18 +377,22 @@ pub(crate) fn pattern_done(s: &mut Session, _: &Value) -> Result<Value> {
     if editing(s).is_some() {
         s.end_text_edit();
     }
-    let name = s.edit("Done Editing Pattern", |d, sel| {
-        let (pe, art) = leave_edit(d, sel)?;
-        if let Some(def) = d.pattern_mut(&pe.pattern) {
-            def.art = art;
-            if def.size_tile_to_art {
-                def.fit_tile_to_art();
-            }
-        }
-        Ok(pe.pattern)
-    })?;
+    let name = s.edit("Done Editing Pattern", finish_edit)?;
     after_edit_mode(s, None)?;
     Ok(json!({ "name": name }))
+}
+
+/// Leave pattern editing mode in `d`, storing the editing layer's art as the pattern's tile art
+/// (resizing the tile to the art when the pattern does so) → the pattern's name.
+pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<String> {
+    let (pe, art) = leave_edit(d, sel)?;
+    if let Some(def) = d.pattern_mut(&pe.pattern) {
+        def.art = art;
+        if def.size_tile_to_art {
+            def.fit_tile_to_art();
+        }
+    }
+    Ok(pe.pattern)
 }
 
 fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {

@@ -88,11 +88,20 @@ fn save_panels_show_the_file_type_they_write() {
     assert_eq!(last_shown(&shown), FilePick::filters([("PostScript", &["ps"][..])]), "Print to a PostScript file");
     app.run("shortcuts.export", json!({})).unwrap();
     assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sets", &["json"][..])]), "Keyboard Shortcuts › Export…");
+    app.run("shortcuts.exportText", json!({})).unwrap();
+    assert_eq!(last_shown(&shown), FilePick::filters([("Text", &["txt"][..])]), "Keyboard Shortcuts › Export Text…");
     let presets = [
         ("pdf.preset.save", json!({"name": "Mine"}), "pdf.preset.export", "PDF presets", pdfcmds::PRESET_EXTS),
         ("print.presets.save", json!({"name": "Mine"}), "print.presets.export", "Print presets", printpresets::PRESET_EXTS),
         ("flattener.presets.save", json!({"name": "Mine"}), "flattener.presets.export", "Flattener presets", flatten::PRESET_EXTS),
         ("perspective.presets.save", json!({"name": "Mine"}), "perspective.presets.export", "Perspective grid presets", perspgrid::PRESET_EXTS),
+        (
+            "document.exportPresets.save",
+            json!({"name": "Mine", "settings": {"formats": [{"format": "svg"}]}}),
+            "document.exportPresets.export",
+            "Export presets",
+            vectorcraft_engine::cmd::fileio::SCREEN_EXPORT_PRESET_EXTS,
+        ),
     ];
     for (save, params, export, label, exts) in presets {
         app.run(save, params).unwrap();

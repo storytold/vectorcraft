@@ -19,6 +19,12 @@ pub(super) fn xml_text(s: &str) -> String {
     xml_escape(&s)
 }
 
+/// `s` without the characters XML 1.0 does not allow, ready for a double-quoted attribute.
+pub(super) fn xml_attr_valid(s: &str) -> String {
+    let s: String = s.chars().filter(|c| valid_xml_value(c.encode_utf8(&mut [0; 4]))).collect();
+    xml_attr_escape(&s)
+}
+
 pub(super) fn valid_xml_value(s: &str) -> bool {
     s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
 }
@@ -359,7 +365,7 @@ impl Writer<'_> {
             line(2, "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">");
             line(3, "<rdf:Description rdf:about=\"\">");
             for (term, value) in dublin_core(self.doc) {
-                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_escape(&value)));
+                line(4, &format!("<dc:{term}>{}</dc:{term}>", xml_text(&value)));
             }
             line(3, "</rdf:Description>");
             line(2, "</rdf:RDF>");

@@ -7,6 +7,56 @@ fn the_active_tab_stays_in_view() {
     assert_eq!(super::first_tab_shown(&widths, None, 350.0), 0);
     assert_eq!(super::first_tab_shown(&widths, Some(4), 50.0), 4, "a tab wider than the room still shows");
 }
+
+/// Tabs 100 wide at 0, 100, 200…, for documents `docs` (a document listed twice has two views).
+fn slots(docs: &[usize]) -> Vec<(usize, egui::Rect)> {
+    docs.iter().enumerate().map(|(k, &d)| (d, egui::Rect::from_min_size(egui::pos2(k as f32 * 100.0, 0.0), egui::vec2(100.0, 30.0)))).collect()
+}
+
+/// A document's view tabs make one group, which moves as one (#5663).
+#[test]
+fn a_documents_view_tabs_make_one_group() {
+    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
+    let spans: Vec<(usize, f32, f32)> = groups.iter().map(|(d, s)| (*d, s.min, s.max)).collect();
+    assert_eq!(spans, vec![(0, 0.0, 100.0), (1, 100.0, 300.0), (2, 300.0, 400.0)]);
+    assert!(super::tab_groups(&[]).is_empty());
+}
+
+/// A dragged tab drops past the middles of the tabs it crossed, as an index among all the open
+/// documents (#5663).
+#[test]
+fn a_dragged_tab_drops_past_the_middles_it_crossed() {
+    let groups = super::tab_groups(&slots(&[0, 1, 2, 3]));
+    let drop = |from, x| super::tab_drop(&groups, from, x);
+    assert_eq!(drop(0, 40.0), None, "still over itself");
+    assert_eq!(drop(0, 140.0), None, "not yet past the next tab's middle");
+    assert_eq!(drop(0, 160.0), Some((1, 200.0)), "past the second tab's middle: between it and the third");
+    assert_eq!(drop(0, 900.0), Some((3, 400.0)), "past the end: last");
+    assert_eq!(drop(3, -50.0), Some((0, 0.0)), "before the start: first");
+    assert_eq!(drop(3, 120.0), Some((1, 100.0)), "between the first two");
+    assert_eq!(drop(2, 260.0), None, "between its neighbours: where it is");
+    assert_eq!(super::tab_drop(&super::tab_groups(&slots(&[0])), 0, 500.0), None, "no other tab");
+    assert_eq!(super::tab_drop(&[], 0, 500.0), None);
+}
+
+/// Documents without a tab on the strip (floating, or past its end) keep their places in the
+/// documents' order; the drop names an index among all of them (#5663).
+#[test]
+fn a_drop_counts_the_documents_the_strip_does_not_show() {
+    // Documents 0, 2 and 5 have tabs; 1, 3 and 4 float.
+    let groups = super::tab_groups(&slots(&[0, 2, 5]));
+    let drop = |from, x| super::tab_drop(&groups, from, x).map(|(to, _)| to);
+    assert_eq!(drop(0, 260.0), Some(5), "after document 5: last, as 0 leaves its place");
+    assert_eq!(drop(0, 160.0), Some(4), "between 2 and 5: just before 5, which is index 4 once 0 has left its place");
+    assert_eq!(drop(5, -10.0), Some(0), "before document 0");
+    assert_eq!(drop(5, 60.0), Some(2), "before document 2: index 2, the floating document 1 stays before it");
+    assert_eq!(drop(2, 260.0), Some(5), "after document 5");
+    // With view tabs: document 1 has two, side by side; it moves as one.
+    let groups = super::tab_groups(&slots(&[0, 1, 1, 2]));
+    assert_eq!(super::tab_drop(&groups, 1, 20.0), Some((0, 0.0)), "both views' document goes first");
+    assert_eq!(super::tab_drop(&groups, 0, 220.0), Some((1, 300.0)), "past document 1's middle, which both its tabs span");
+    assert_eq!(super::tab_drop(&groups, 0, 190.0), None, "not yet past it");
+}
 use std::sync::Arc;
 
 use super::{StatusReadoutWidths, status_readouts};
@@ -866,6 +916,18 @@ fn the_tab_title_names_the_opacity_mask_while_it_is_edited() {
     assert!(title(&s).ends_with("(RGB/Preview)"));
 }
 
+/// #3797: each document's tab names its own Outline or Preview.
+#[test]
+fn only_the_outlined_documents_tab_reads_outline() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    app.run("view.outline", json!({})).unwrap();
+    let titles: Vec<String> = (0..app.session.documents().len()).filter_map(|i| super::document_window_title(&app, (i, 1))).collect();
+    assert!(titles[0].ends_with("(RGB/Preview)"), "{titles:?}");
+    assert!(titles[1].ends_with("(RGB/Outline)"), "{titles:?}");
+}
+
 /// One headless frame of the Control bar; returns the isolation button's rectangle, if it shows.
 fn isolation_button(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Option<egui::Rect> {
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
@@ -973,6 +1035,37 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
 }
 
+/// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
+/// behind them, which only keeps the pointer off the canvas.
+#[test]
+fn tab_skips_the_isolation_bars_background() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let mut frame = |events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::isolation_bar(&mut app, ui, screen);
+        });
+        out.textures_delta.clear();
+    };
+    frame(vec![]);
+    let bar = egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), 24.0));
+    let back = egui::Rect::from_min_size(bar.min + egui::vec2(6.0, 3.0), egui::vec2(18.0, 18.0));
+    let widget =
+        |rect: egui::Rect| ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).find(|w| w.rect == rect).map(|w| w.id));
+    let (bar, back) = (widget(bar).expect("the isolation bar"), widget(back).expect("the back button"));
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 10, frame);
+    assert!(stops.contains(&back), "Tab reaches the back button: {stops:?}");
+    assert!(!stops.contains(&bar), "{stops:?}");
+}
+
 /// The Control bar's Isolate Selected Object isolates a path inside a group that Direct
 /// Selection selected, and Exit Isolation Mode leaves with the path selected. Type, symbol
 /// instances, blends, two objects and an envelope's contents get no isolate button, and pattern
@@ -1029,6 +1122,80 @@ fn the_control_bar_isolates_the_selected_object_and_exits_isolation_mode() {
     app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
     assert!(app.session.active().unwrap().isolation.is_some());
     assert_eq!(isolation_button(&mut app, &ctx, vec![]), None, "the isolation bar ends pattern editing");
+}
+
+/// In symbol editing mode the Control bar's isolation button is Exit Symbol Editing Mode and
+/// leaves the mode. With a group isolated inside the symbol's art it is Exit Isolation Mode and
+/// goes back to the symbol's art.
+#[test]
+fn the_control_bar_exits_symbol_editing_mode() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let layer = app.session.active().unwrap().doc.symbol_edit.as_ref().expect("symbol editing mode").layer;
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    ctx.enable_accesskit();
+    // The isolation button's label (the one exit label the bar shows), and a click on it.
+    let label = |app: &mut crate::VectorcraftApp| {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let exits: Vec<String> = nodes
+            .iter()
+            .filter_map(|(_, n)| n.label().map(|l| l.trim().to_string()))
+            .filter(|l| l == "Exit Symbol Editing Mode" || l == "Exit Isolation Mode")
+            .collect();
+        assert!(exits.len() <= 1, "{exits:?}");
+        exits.into_iter().next()
+    };
+    let click = |app: &mut crate::VectorcraftApp| {
+        let r = isolation_button(app, &ctx, vec![]).expect("the bar shows the isolation button");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: r.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for e in [egui::Event::PointerMoved(r.center()), press(true), press(false)] {
+            isolation_button(app, &ctx, vec![e]);
+        }
+    };
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    // Two rectangles drawn into the symbol's art, grouped and isolated.
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Isolation Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (Some(layer), true), "back to the symbol's art");
+    assert_eq!(label(&mut app).as_deref(), Some("Exit Symbol Editing Mode"));
+    click(&mut app);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.doc.symbol_edit.is_some()), (None::<NodeId>, false), "symbol editing mode ends");
+    // The symbol keeps the art drawn while editing.
+    let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+    assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
+}
+
+/// #4819: with Direct Selection, a selected blend shows the Control bar's and the Properties
+/// panel's Convert buttons, as a path selected whole does; with the Selection tool it doesn't.
+#[test]
+fn a_blend_selected_with_direct_selection_shows_the_convert_buttons() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 200.0));
+    let blend = app.run("object.blend.make", json!({"ids": [a, b], "steps": 1})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [blend]})).unwrap();
+    assert!(super::anchor_controls(&app) == super::AnchorControls::None, "the Selection tool");
+    app.select_tool("directSelection");
+    assert!(super::anchor_controls(&app) == super::AnchorControls::Convert);
 }
 
 /// The Zoom tool's hint follows Performance › Animated Zoom (#394): a drag zooms as it goes,
@@ -1634,6 +1801,139 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// The window the Control bar docking tests draw the bar in.
+const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
+
+/// One headless frame of the Control bar alone; returns its accessibility nodes.
+fn control_bar_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |ui| super::control_bar(app, ui));
+    out.textures_delta.clear();
+    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+}
+
+/// The center of the bounds of the node whose label, without a check mark, is `name`.
+fn node_center(nodes: &[egui::accesskit::Node], name: &str) -> Option<egui::Pos2> {
+    let n = nodes.iter().find(|n| n.label().is_some_and(|l| l.trim_start_matches('✓').trim() == name))?;
+    let b = n.bounds()?;
+    Some(egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+}
+
+/// A primary-button press or release at `pos`.
+fn press_at(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+/// The Control bar's panel menu has Dock to Top and Dock to Bottom, the edge in use checked, and
+/// each docks the bar to that edge of the window.
+#[test]
+fn the_control_bar_panel_menu_docks_it_to_the_top_or_the_bottom() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let pick = |app: &mut crate::VectorcraftApp, item: &str| {
+        control_bar_frame(app, &ctx, vec![]);
+        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar has a panel menu"));
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+        control_bar_frame(app, &ctx, vec![press_at(menu, false)]);
+        let nodes = control_bar_frame(app, &ctx, vec![]);
+        let checked: Vec<String> = nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓')).map(str::to_string).collect();
+        let at = node_center(&nodes, item).unwrap_or_else(|| panic!("the menu lists {item}"));
+        // Below the button at the top, and above it at the bottom: the menu opens inside the window.
+        assert!(DOCK_SCREEN.contains(at) && (at.y < menu.y) == app.ui.control_bar_bottom, "{item} at {at:?}, the button at {menu:?}");
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        control_bar_frame(app, &ctx, vec![press_at(at, false)]);
+        control_bar_frame(app, &ctx, vec![]);
+        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar still shows"));
+        (checked, menu.y)
+    };
+    let (checked, y) = pick(&mut app, "Dock to Bottom");
+    assert_eq!(checked, ["✓ Dock to Top"], "the bar starts docked at the top");
+    assert!(app.ui.control_bar_bottom, "Dock to Bottom docks it at the bottom");
+    assert!(y > DOCK_SCREEN.bottom() - 34.0, "the bar is drawn along the bottom of the window: {y}");
+    let (checked, y) = pick(&mut app, "Dock to Top");
+    assert_eq!(checked, ["✓ Dock to Bottom"]);
+    assert!(!app.ui.control_bar_bottom && y < 34.0, "Dock to Top docks it at the top again: {y}");
+}
+
+/// Dragging the Control bar's gripper docks the bar at the edge of the window the pointer is
+/// released nearer; a drag released nearer the edge it is at leaves it there.
+#[test]
+fn dragging_the_control_bar_gripper_docks_it_at_the_nearer_edge() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // The gripper is the bar's first item, inside its 10-point margin, centered in the 34-point bar.
+    let grip = |bottom: bool| egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 });
+    let drag = |app: &mut crate::VectorcraftApp, from: egui::Pos2, to: egui::Pos2| {
+        control_bar_frame(app, &ctx, vec![]);
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+        for k in 1..=4 {
+            control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+        }
+        control_bar_frame(app, &ctx, vec![press_at(to, false)]);
+    };
+    drag(&mut app, grip(false), egui::pos2(400.0, 200.0));
+    assert!(app.ui.control_bar_bottom, "released nearer the bottom: docked at the bottom");
+    drag(&mut app, grip(true), egui::pos2(400.0, 160.0));
+    assert!(app.ui.control_bar_bottom, "released nearer the bottom again: still at the bottom");
+    drag(&mut app, grip(true), egui::pos2(400.0, 120.0));
+    assert!(!app.ui.control_bar_bottom, "released nearer the top: docked at the top");
+    drag(&mut app, grip(false), egui::pos2(400.0, 140.0));
+    assert!(!app.ui.control_bar_bottom, "released nearer the top again: still at the top");
+}
+
+/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, and
+/// the panel menu checks the edge in use; another edge, or none, is an error and changes nothing.
+#[test]
+fn the_control_bar_dock_command_takes_top_or_bottom() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    assert_eq!(app.run("window.control.dock", json!({"edge": "bottom"})).unwrap(), json!({"edge": "bottom"}));
+    assert!(app.ui.control_bar_bottom);
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "bottom"})), Some(true));
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "top"})), Some(false));
+    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": 1}), json!({})] {
+        let err = app.run("window.control.dock", p.clone()).unwrap_err();
+        assert_eq!(err, "`edge` must be one of top, bottom", "{p}");
+        assert!(app.ui.control_bar_bottom, "{p} leaves the bar at the bottom");
+    }
+    assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
+    assert!(!app.ui.control_bar_bottom);
+}
+
+/// Menus stop above a Control bar docked at the bottom when the status bar is hidden, above the
+/// status and hint bars when they show, and at the bottom of the window when the bar is docked at
+/// the top or a screen mode hides it.
+#[test]
+fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+    let floor = |app: &mut crate::VectorcraftApp, status: bool, bottom: bool, screen_mode: u8| {
+        (app.ui.status_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) = (status, true, bottom, screen_mode);
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        }
+        crate::widgets::menu_floor(&ctx)
+    };
+    let bar_top = screen.bottom() - 34.0;
+    let f = floor(&mut app, false, true, 0);
+    assert!((f - bar_top).abs() < 1.0, "status bar hidden: menus stop at the Control bar's top, {f}");
+    let f = floor(&mut app, false, true, 2);
+    assert_eq!(f, screen.bottom(), "screen mode 2 hides the Control bar: menus stop at the window's bottom");
+    let f = floor(&mut app, false, true, 0);
+    assert!((f - bar_top).abs() < 1.0, "shown again: {f}");
+    let f = floor(&mut app, false, false, 0);
+    assert_eq!(f, screen.bottom(), "docked at the top: menus stop at the window's bottom");
+    let f = floor(&mut app, true, true, 0);
+    assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
+}
+
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
 /// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
 #[test]
@@ -1685,4 +1985,188 @@ fn the_control_bar_shows_the_distribute_buttons_for_two_or_more_objects() {
         app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0
     };
     assert_eq!((left(&app, &a), left(&app, &b), left(&app, &c)), (10.0, 105.0, 200.0), "{}", app.ui.status);
+}
+
+/// The Control bar shows the Global Edit Options dropdown while Start Global Edit can run. Its
+/// options are the session's, which the Properties panel's dropdown also sets: Match Size from
+/// the Control bar narrows the Results and the objects Start Global Edit takes. The dropdown is off
+/// and closed while Global Edit is on, and absent when the selection cannot start it.
+#[test]
+fn the_control_bar_shows_the_global_edit_options() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64, size: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 20, "width": size, "height": size})).unwrap()["id"].clone()
+    };
+    let a = rect(&mut app, 20.0, 40.0);
+    rect(&mut app, 100.0, 40.0);
+    rect(&mut app, 200.0, 80.0);
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 300.0));
+    let frame = |app: &mut crate::VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    type Nodes = Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>;
+    let find = |nodes: &Nodes, name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name) || n.value() == Some(name)).map(|(_, n)| n.clone());
+    let center = |n: &egui::accesskit::Node| {
+        let b = n.bounds().unwrap_or_else(|| panic!("{n:?}"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    let click = |app: &mut crate::VectorcraftApp, at: egui::Pos2| {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(app, vec![egui::Event::PointerMoved(at), press(true)]);
+        frame(app, vec![press(false)]);
+        frame(app, vec![]);
+        frame(app, vec![])
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(find(&frame(&mut app, vec![]), "Global Edit Options").is_none(), "nothing selected: no dropdown");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("one rectangle: the dropdown shows"));
+    let nodes = click(&mut app, center(&button));
+    assert!(find(&nodes, "Results: 3").is_some(), "the options open with their Results");
+    let size = find(&nodes, "Size").unwrap_or_else(|| panic!("the Size check"));
+    let nodes = click(&mut app, center(&size));
+    assert!(app.session.global_edit_options.size, "Match Size is the session's option, shared with Properties");
+    assert!(find(&nodes, "Results: 2").is_some(), "Size narrows the Results");
+    app.run("select.globalEdit", json!({})).unwrap();
+    let ge = app.session.active().unwrap().global_edit.as_ref().map(|g| g.members.len());
+    assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
+    let nodes = frame(&mut app, vec![]);
+    let button = find(&nodes, "Global Edit Options").unwrap_or_else(|| panic!("Global Edit on: the dropdown still shows"));
+    assert!(button.is_disabled(), "the options are off while Global Edit is on");
+    let results = |nodes: &Nodes| nodes.iter().any(|(_, n)| n.label().or(n.value()).is_some_and(|t| t.starts_with("Result")));
+    assert!(!results(&nodes), "Global Edit starting closes the open options");
+    assert!(!results(&frame(&mut app, vec![])));
+    app.run("select.globalEdit", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    assert!(!results(&frame(&mut app, vec![])), "the options stay closed once Global Edit stops");
+    // At any width the button either fits inside the bar or is left out, and a wider bar never
+    // leaves it out once a narrower one showed it.
+    let mut seen = false;
+    for width in (600..=2400).step_by(10) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+            out.textures_delta.clear();
+            nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        }
+        let shown = find(&nodes, "Global Edit Options").and_then(|n| n.bounds());
+        if let Some(b) = shown {
+            assert!(b.x1 <= f64::from(width), "{width}: {b:?}");
+        }
+        assert!(!seen || shown.is_some(), "{width}: left out after a narrower bar showed it");
+        seen |= shown.is_some();
+    }
+    assert!(seen, "a wide bar has room for it");
+}
+
+/// At any width the Control bar shows the inline X, Y, W and H fields whole inside its right margin,
+/// or leaves all four out and keeps the Transform link; a wider bar never leaves them out once a
+/// narrower one showed them. The Align buttons, and for two objects the Distribute buttons, are
+/// trimmed the same way ahead of the Transform link (#5372).
+#[test]
+fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for count in [1, 2] {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let ids: Vec<_> = (0..count)
+            .map(|i| app.run("shape.rectangle", json!({"x": 20 + 100 * i, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone())
+            .collect();
+        app.run("select.set", json!({ "ids": ids })).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let mut seen = false;
+        let mut menu_seen = false;
+        // The Align group, then for two objects the Distribute group (#5372): each by its controls.
+        let mut groups: Vec<(&str, Vec<&str>)> = vec![(
+            "Align",
+            vec![
+                "Horizontal Align Left",
+                "Horizontal Align Center",
+                "Horizontal Align Right",
+                "Horizontal & Vertical Align Center",
+                "Vertical Align Top",
+                "Vertical Align Center",
+                "Vertical Align Bottom",
+            ],
+        )];
+        if count == 2 {
+            groups.push((
+                "Distribute",
+                vec![
+                    "Vertical Distribute Top",
+                    "Vertical Distribute Center",
+                    "Vertical Distribute Bottom",
+                    "Horizontal Distribute Left",
+                    "Horizontal Distribute Center",
+                    "Horizontal Distribute Right",
+                ],
+            ));
+        }
+        let mut groups_seen = vec![false; groups.len()];
+        for width in (600..=2400).step_by(10) {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, 300.0));
+            let mut nodes = Vec::new();
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::control_bar(&mut app, ui));
+                out.textures_delta.clear();
+                nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+            }
+            let spacing = ctx.global_style().spacing.item_spacing.x;
+            // The right edge of the box of the field its label names. The text box sits inside the
+            // field's box with the same inset on both sides, and one item spacing after the label.
+            let right = |name: &str| {
+                let (id, label) = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == Some(name))?;
+                let input = nodes.iter().find(|(_, n)| n.labelled_by().contains(id)).and_then(|(_, n)| n.bounds())?;
+                let inset = input.x0 - label.bounds()?.x1 - f64::from(spacing);
+                Some(input.x1 + inset)
+            };
+            let fields = ["X:", "Y:", "W:", "H:"].map(right);
+            assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
+            assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
+            // The panel menu button takes the bar's right end, and the bar's content ends before it
+            // (without the button, at the bar's 10-point inner margin). Once a bar shows the button,
+            // a wider one keeps it: the fields and groups trim to the room left of it.
+            let menu = nodes.iter().find(|(_, n)| n.label() == Some("Panel menu")).and_then(|(_, n)| n.bounds());
+            assert!(!menu_seen || menu.is_some(), "{count} objects, {width}: the panel menu button left out after a narrower bar showed it");
+            menu_seen |= menu.is_some();
+            let edge = menu.map_or(f64::from(width) - 10.0, |m| m.x0);
+            if let Some(h) = fields[3] {
+                assert!(h <= edge, "{count} objects, {width}: H ends at {h}, the content's room at {edge}");
+            }
+            assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
+            seen |= fields[3].is_some();
+            // The Align and Distribute buttons show whole inside the margin, with the Transform
+            // link after them, or are left out; once shown, a wider bar keeps them.
+            let end = |name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds()).map(|b| b.x1);
+            let inside = |x: f64| x <= edge;
+            for ((group, names), was) in groups.iter().zip(groups_seen.iter_mut()) {
+                let ends: Vec<Option<f64>> = names.iter().map(|n| end(n)).collect();
+                let shown = ends.iter().all(Option::is_some);
+                assert!(shown || ends.iter().all(Option::is_none), "{count} objects, {width}: {group} {ends:?}");
+                if let Some(Some(last)) = ends.last() {
+                    assert!(inside(*last), "{count} objects, {width}: {group} ends at {last}");
+                    let transform = end("Transform");
+                    assert!(transform.is_some_and(inside), "{count} objects, {width}: Transform after {group} ends at {transform:?}");
+                }
+                assert!(!*was || shown, "{count} objects, {width}: {group} left out after a narrower bar showed it");
+                *was |= shown;
+            }
+        }
+        assert!(seen, "{count} objects: a wide bar has room for the fields");
+        assert!(menu_seen, "{count} objects: a wide bar has room for the panel menu button");
+        assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
+    }
 }

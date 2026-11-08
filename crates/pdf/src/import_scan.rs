@@ -634,11 +634,11 @@ impl Walker<'_, '_> {
     fn note_fonts(&mut self, res: &Resources<'_>) {
         for key in res.fonts.keys() {
             if let Some(f) = res.fonts.get::<Dict<'_>>(key.as_ref())
-                && let Some(name) = f.get::<Name<'_>>(b"BaseFont")
+                && let Some(name) = font_name(&f)
             {
                 self.fonts.entry(f.cache_key()).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
-                    FontNote { name: String::from_utf8_lossy(name.as_ref()).into_owned(), embedded, vertical: vertical_metrics(&f, embedded) }
+                    FontNote { name, embedded, vertical: vertical_metrics(&f, embedded) }
                 });
             }
         }
@@ -1007,6 +1007,24 @@ fn cid_ranges(a: &Array<'_>, per: usize, mut each: impl FnMut(u32, &[f64])) {
             return;
         }
     }
+}
+
+/// The PostScript name of font `f`: its `BaseFont`. A composite (Type 0) font's `BaseFont` is its
+/// CIDFont's name, a hyphen and its CMap's (`Name-Identity-H`, ISO 32000-1 §9.7.6.1), so its
+/// descendant CIDFont's `BaseFont` is taken, the font program's own name (§9.7.4.1); without one,
+/// the `BaseFont` without the CMap's name on its end.
+fn font_name(f: &Dict<'_>) -> Option<String> {
+    let base = String::from_utf8_lossy(f.get::<Name<'_>>(b"BaseFont")?.as_ref()).into_owned();
+    if f.get::<Name<'_>>(b"Subtype").is_none_or(|s| s.as_ref() != b"Type0") {
+        return Some(base);
+    }
+    let descendant = f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next());
+    if let Some(name) = descendant.and_then(|d| d.get::<Name<'_>>(b"BaseFont")).filter(|n| !n.as_ref().is_empty()) {
+        return Some(String::from_utf8_lossy(name.as_ref()).into_owned());
+    }
+    let cmap = f.get::<Name<'_>>(b"Encoding").map(|n| String::from_utf8_lossy(n.as_ref()).into_owned());
+    let stripped = cmap.and_then(|c| base.strip_suffix(c.as_str())?.strip_suffix('-').filter(|b| !b.is_empty()).map(str::to_string));
+    Some(stripped.unwrap_or(base))
 }
 
 /// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in

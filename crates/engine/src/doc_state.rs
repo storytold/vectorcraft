@@ -34,6 +34,8 @@ pub struct DocState {
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
     /// ([`cmd::globaledit`]). Editing state: not saved, not undoable.
     pub global_edit: Option<cmd::globaledit::GlobalEdit>,
+    /// What leaving symbol editing mode goes back to ([`cmd::symboledit`]).
+    pub(crate) symbol_edit_return: cmd::symboledit::Return,
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
@@ -50,6 +52,9 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
+    /// the UI opens it in a floating window of its own.
+    pub opened_as_tab: bool,
     /// View Opacity Mask (Alt-click the mask thumbnail): the masked object whose mask the canvas
     /// shows alone, in greyscale, while that mask is edited (see [`DocState::shown_mask`]).
     pub mask_view: Option<NodeId>,
@@ -71,6 +76,11 @@ pub struct DocState {
     /// The view saved into native files (`Document::last_view`); the UI keeps it current before a
     /// save and restores it when the document opens.
     pub view: Option<vectorcraft_doc::SavedView>,
+    /// The id of the view's active artboard, which the UI keeps current before each command it
+    /// runs: a `.ai` save or export names that artboard as the file's active one. `None`, or an
+    /// artboard the document no longer has: the artboard the document opened on
+    /// ([`vectorcraft_doc::Document::opened_artboard`]), else the first.
+    pub active_artboard: Option<u32>,
     /// Restored by Data Recovery: the title says "[Recovered]" and Save asks where to save it
     /// (suggesting `path`, the file it was copied from) instead of overwriting that file.
     pub recovered: bool,
@@ -92,6 +102,24 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What [`DocState::any_empty_artboards`] last measured. Not saved.
+    empty_artboards: std::cell::RefCell<EmptyArtboards>,
+}
+
+/// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
+/// was measured.
+#[derive(Clone, Debug, Default)]
+struct EmptyArtboards {
+    /// The document measured. While this reference lasts, its allocation holds no other document,
+    /// and `Arc::make_mut` moves a document it changes to a new allocation.
+    doc: std::sync::Weak<Document>,
+    any: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`DocState::any_empty_artboards`] measured a document on this thread.
+    pub(crate) static EMPTY_ARTBOARD_MEASURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -246,12 +274,14 @@ impl DocState {
             variables_highlight: None,
             isolation: None,
             global_edit: None,
+            symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
             last_transform: None,
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            opened_as_tab: true,
             mask_view: None,
             transparency_grid,
             format: "vectorcraft",
@@ -259,6 +289,7 @@ impl DocState {
             save_artboards: vec![],
             converted: false,
             view,
+            active_artboard: None,
             recovered: false,
             recovery: None,
             print_tiling: false,
@@ -267,7 +298,20 @@ impl DocState {
             import_losses: vec![],
             last_perspective: None,
             opened_by: file_access::current(),
+            empty_artboards: Default::default(),
         }
+    }
+    /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
+    /// so a menu that asks on every frame measures it once, and a change of the selection or the view
+    /// keeps the answer.
+    pub(crate) fn any_empty_artboards(&self, measure: impl FnOnce(&Document) -> bool) -> bool {
+        let mut last = self.empty_artboards.borrow_mut();
+        if !std::ptr::eq(last.doc.as_ptr(), Arc::as_ptr(&self.doc)) {
+            #[cfg(test)]
+            EMPTY_ARTBOARD_MEASURES.with(|c| c.set(c.get() + 1));
+            *last = EmptyArtboards { doc: Arc::downgrade(&self.doc), any: measure(&self.doc) };
+        }
+        last.any
     }
     /// Unsaved changes: the document differs from the saved one (selection changes and changes that
     /// are not edits to save don't count, [`DocState::same_content`]).
@@ -311,6 +355,16 @@ impl DocState {
                 _ => it.selection,
             };
             self.push_undo(it.label, it.doc, selection);
+            if let Some(paints) = it.color_mode_paints
+                && let Some(e) = self.history.undo.last_mut()
+            {
+                match &mut e.color_mode_paints {
+                    Some((_, after)) => *after = paints.1,
+                    slot => *slot = Some(paints),
+                }
+                e.recost_paints();
+                self.history.trim();
+            }
             self.revision += 1;
         }
     }
@@ -347,6 +401,14 @@ impl DocState {
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
             self.revision += 1;
+        }
+    }
+    /// Clear the Variables panel highlight when the document defines no variable of that name
+    /// (deleted, or taken out by Undo or Redo), so a variable defined later under that name is
+    /// not highlighted without a click.
+    pub(crate) fn drop_stale_variables_highlight(&mut self) {
+        if self.variables_highlight.as_ref().is_some_and(|h| self.doc.variables.variable(h).is_none()) {
+            self.variables_highlight = None;
         }
     }
     /// Count the document as modified, as if never saved (a document restored by Data Recovery).
@@ -427,27 +489,66 @@ impl DocState {
     pub fn current_layer(&self) -> Option<NodeId> {
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()))
     }
+    /// Where new art is inserted: the isolation container (or its parent if the container cannot hold
+    /// the art type), else the active layer.
     pub fn insertion_parent(&self) -> Option<NodeId> {
-        // Ids are reused after undo (the id counter is part of the document), so a remembered
-        // layer or isolated group must still be one: a pasted group must never land in a path.
-        if let Some(i) = self.isolation
-            && self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
-        {
-            return Some(i);
+        self.insertion_parent_for(false)
+    }
+
+    /// Where new path art is inserted. When a compound path is isolated, returns the compound path
+    /// so new paths become members of the compound path.
+    pub fn insertion_parent_for_path(&self) -> Option<NodeId> {
+        self.insertion_parent_for(true)
+    }
+
+    fn insertion_parent_for(&self, for_path: bool) -> Option<NodeId> {
+        if let Some(i) = self.isolation {
+            if self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })) {
+                return Some(i);
+            }
+            if for_path && self.doc.node(i).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                return Some(i);
+            }
         }
-        // A single object isolated: new art goes beside it, in its group or layer.
-        if let Some(p) = self.isolation.filter(|i| self.doc.node(*i).is_some_and(|n| !n.is_container())).and_then(|i| self.doc.parent_of(i))
-            && self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }))
-        {
-            return Some(p);
+        if let Some(p) = self.isolation.filter(|i| self.doc.node(*i).is_some_and(|n| !n.is_container())).and_then(|i| self.doc.parent_of(i)) {
+            if self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })) {
+                return Some(p);
+            }
+            if for_path && self.doc.node(p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                return Some(p);
+            }
+        }
+        // Non-path art created while a compound path is isolated goes into the compound's parent container:
+        if let Some(iso) = self.isolation {
+            let compound = if self.doc.node(iso).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })) {
+                Some(iso)
+            } else {
+                self.doc.parent_of(iso).filter(|p| self.doc.node(*p).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })))
+            };
+            if let Some(c) = compound
+                && let Some(p) = self.doc.parent_of(c)
+                && self.doc.is_editable(p)
+            {
+                return Some(p);
+            }
         }
         // A sublayer takes new art only while it and the layers around it are shown and unlocked.
         self.active_layer.filter(|l| self.doc.node(*l).is_some_and(|n| n.is_layer()) && self.doc.is_editable(*l)).or_else(|| self.doc.default_layer())
     }
+
     /// [`Self::insertion_parent`] for new art, which a locked or hidden layer never takes: an error
     /// when no layer is shown and unlocked, so the art is refused rather than hidden or locked away.
     pub fn target_parent(&self) -> Result<Option<NodeId>> {
-        match self.insertion_parent() {
+        self.target_parent_for(false)
+    }
+
+    /// [`Self::insertion_parent_for_path`] for new path art.
+    pub fn target_parent_for_path(&self) -> Result<Option<NodeId>> {
+        self.target_parent_for(true)
+    }
+
+    fn target_parent_for(&self, for_path: bool) -> Result<Option<NodeId>> {
+        match self.insertion_parent_for(for_path) {
             Some(p) if !self.doc.is_editable(p) => Err(EngineError::Other("the target layer is locked or hidden".into())),
             parent => Ok(parent),
         }

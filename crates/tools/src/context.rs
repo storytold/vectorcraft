@@ -242,6 +242,9 @@ pub struct ToolContext<'a> {
     /// object shows how far the selection is from it, and over an empty part of an artboard how
     /// far it is from the artboard's edges ([`guides::distance_guides`]).
     pub distance_guides: bool,
+    /// Smart Guides → Snap to Last Location: a selection moved by dragging goes back to where the
+    /// move began while it is within Snapping Tolerance of it ([`guides::Targets::snap_back`]).
+    pub snap_to_last_location: bool,
     /// Smart Guides → Snapping Tolerance (screen pixels): how near a smart guide target pulls the
     /// pointer, a dragged edge or a drawn point.
     pub snapping_tolerance: f64,
@@ -253,6 +256,12 @@ pub struct ToolContext<'a> {
     pub screen: Option<ScreenFrame>,
     /// Where the Plane Switching Widget sits (Perspective Grid Options); None while it's hidden.
     pub plane_widget: Option<distort::perspective::widget::WidgetCorner>,
+    /// General › Use Precise Cursors, or Caps Lock while it is on: the drawing tools' pointers are
+    /// crosshairs ([`crate::Cursor::precise`]), and the Blob Brush and the Eraser show no tip outline.
+    pub precise_cursors: bool,
+    /// The objects of the Global Edit in progress (Select › Start Global Edit), the one it started
+    /// from first, each with its transform; empty while Global Edit is off.
+    pub global_edit: &'a [(NodeId, vectorcraft_geom::Affine)],
 }
 
 impl ToolContext<'_> {

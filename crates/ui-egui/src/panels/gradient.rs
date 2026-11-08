@@ -18,7 +18,7 @@
 //!
 //! A freeform gradient shows its section instead of the angle, aspect and slider: the Draw
 //! toggle (Points or Lines: how the Gradient tool adds points) and the selected point's colour
-//! (edited in the Color panel), opacity and spread, with Delete Point.
+//! (click: its popover, as a stop's), opacity and spread, with Delete Point.
 //!
 //! The Presets menu lists ready-made gradients by theme (the built-in gradient libraries), then
 //! the gradients saved with the panel menu's Save Gradient Preset…; choosing one applies it to the
@@ -41,6 +41,8 @@ use crate::{VectorcraftApp, icons};
 
 /// Dragging a stop this far below the ramp removes it.
 const REMOVE_DISTANCE: f32 = 28.0;
+/// The Delete Stop button beside the ramp, points square.
+const DELETE_STOP_SIZE: f32 = 22.0;
 /// The Angle field's preset menu, degrees.
 const ANGLE_PRESETS: [f64; 9] = [-180.0, -135.0, -90.0, -45.0, 0.0, 45.0, 90.0, 135.0, 180.0];
 /// The Aspect Ratio field's preset menu, percent.
@@ -280,7 +282,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if hidden {
         if !freeform {
             ui.add_space(6.0);
-            ramp(app, ui, &g.gradient, is_grad);
+            ramp_row(app, ui, &g.gradient, is_grad);
         }
         return;
     }
@@ -358,7 +360,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     ui.add_space(6.0);
-    ramp(app, ui, &g.gradient, is_grad);
+    ramp_row(app, ui, &g.gradient, is_grad);
     ui.add_space(4.0);
     stop_fields(app, ui, &g.gradient, is_grad);
     // Dither applies to gradient fills only: off and dimmed behind the Stroke proxy.
@@ -484,12 +486,17 @@ fn freeform_section(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint) {
     let point = sel.map(|i| f.points[i]);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Color:"));
-        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
+        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
         let paint = point.map_or(Paint::None, |p| Paint::solid(p.color));
         widgets::swatch_tile(ui, r, &paint, false, resp.hovered());
-        resp.on_hover_text(tl!("Edit the selected point's colour in the Color panel"));
         if let Some(p) = point {
             widgets::dim_label(ui, &p.color.to_hex().to_uppercase());
+        }
+        // The selected point's popover, as a stop's swatch opens the stop's (#4953).
+        if let Some(i) = sel
+            && resp.on_hover_text(tl!("Edit the point")).clicked()
+        {
+            show_popover(app, i, r.left_bottom() + vec2(0.0, 4.0));
         }
     });
     ui.horizontal(|ui| {
@@ -540,31 +547,33 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     icons::paint(ui, "chevron-down", Rect::from_center_size(dr.center(), vec2(12.0, 12.0)), if dresp.hovered() { t.text_strong } else { t.icon });
     let dresp = dresp.on_hover_text(tl!("Gradient swatches"));
     egui::Popup::menu(&dresp).show(|ui| {
-        ui.set_min_width(200.0);
-        let mut chosen = None;
-        let swatches = gradient_swatches(app);
-        if swatches.is_empty() {
-            widgets::dim_label(ui, tl!("No gradient swatches"));
-        }
-        for (name, grad) in &swatches {
-            // The gradient swatch the gradient was applied from is lit.
-            if gradient_row(ui, &t, grad, name, g.swatch.as_ref() == Some(name)).clicked() {
-                chosen = Some(name.clone());
+        widgets::menu_scroll(ui, |ui| {
+            ui.set_min_width(200.0);
+            let mut chosen = None;
+            let swatches = gradient_swatches(app);
+            if swatches.is_empty() {
+                widgets::dim_label(ui, tl!("No gradient swatches"));
             }
-        }
-        ui.separator();
-        if menu_item(ui, tl!("Save to Swatches"), is_grad, false) {
-            save_to_swatches(app, g);
-        }
-        if let Some(name) = chosen {
-            super::apply_click(app, ui, json!({ "swatch": name }));
-            ui.close();
-        }
+            for (name, grad) in &swatches {
+                // The gradient swatch the gradient was applied from is lit.
+                if gradient_row(ui, &t, grad, name, g.swatch.as_ref() == Some(name)).clicked() {
+                    chosen = Some(name.clone());
+                }
+            }
+            ui.separator();
+            if menu_item(ui, tl!("Save to Swatches"), is_grad, false) {
+                save_to_swatches(app, g);
+            }
+            if let Some(name) = chosen {
+                super::apply_click(app, ui, json!({ "swatch": name }));
+                ui.close();
+            }
+        });
     });
 }
 
 /// The selected stop's colour (click: its popover; the eyedropper samples one from the art),
-/// opacity and location (a selected diamond's midpoint instead), and Delete Stop.
+/// opacity and location (a selected diamond's midpoint instead).
 fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
     let stops = &g.stops;
     let sel = app.session.selected_stop().filter(|i| *i < stops.len() && is_grad);
@@ -618,14 +627,29 @@ fn stop_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
                 }
             }
         });
-        let can_del = sel.is_some() && stops.len() > MIN_STOPS;
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Stop"), false, can_del, 22.0).clicked()
-            && let Some(i) = sel
-            && let Some(v) = remove_stop(stops, i)
-        {
-            let next = i.min(v.len() - 1);
-            set_stops(app, &v, Some(next), Live::Released);
-        }
+    });
+}
+
+/// The ramp with Delete Stop at its right end, level with the ramp so it shows whenever the ramp
+/// does: it deletes the selected stop, never below two.
+fn ramp_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let w = (ui.available_width() - DELETE_STOP_SIZE).max(DELETE_STOP_SIZE * 2.0);
+        ramp(app, ui, g, is_grad, w);
+        ui.vertical(|ui| {
+            // Level with the ramp (the bar starts 10 points down and is 18 tall).
+            ui.add_space(8.0);
+            let sel = app.session.selected_stop().filter(|i| *i < g.stops.len() && is_grad);
+            let can_del = sel.is_some() && g.stops.len() > MIN_STOPS;
+            if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Stop"), false, can_del, DELETE_STOP_SIZE).clicked()
+                && let Some(i) = sel
+                && let Some(v) = remove_stop(&g.stops, i)
+            {
+                let next = i.min(v.len().saturating_sub(1));
+                set_stops(app, &v, Some(next), Live::Released);
+            }
+        });
     });
 }
 
@@ -640,6 +664,11 @@ pub(crate) fn stop_eyedropper(app: &mut VectorcraftApp) {
 /// Open the stop popover for stop `i` at screen position `at`.
 fn open_popover(app: &mut VectorcraftApp, i: usize, at: Pos2) {
     select_stop(app, Some(i));
+    show_popover(app, i, at);
+}
+
+/// The popover for the selected stop or freeform point `i`, at screen position `at`.
+fn show_popover(app: &mut VectorcraftApp, i: usize, at: Pos2) {
     app.ui.dialog = Some(Dialog::new("gradientStop", json!({ "index": i, "screen": [at.x, at.y], "tab": "color" })));
 }
 
@@ -699,10 +728,9 @@ fn dropped_swatch(app: &VectorcraftApp, ui: &Ui, g: &Gradient, area_resp: &egui:
     Some(drop_color(g, g.stops.iter().position(|s| marker(s.offset).contains(p)), x_to_offset(p.x, bar.left(), bar.width()), c, link))
 }
 
-/// The gradient slider: ramp, stops below, midpoint diamonds above.
-fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) {
+/// The gradient slider, `w` points wide: ramp, stops below, midpoint diamonds above.
+fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool, w: f32) {
     let t = Tokens::get(ui.ctx());
-    let w = ui.available_width();
     let (area, area_resp) = ui.allocate_exact_size(vec2(w, 50.0), Sense::hover());
     let bar = Rect::from_min_size(area.min + vec2(8.0, 10.0), vec2(w - 16.0, 18.0));
     paint_ramp(ui, g, bar);

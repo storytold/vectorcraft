@@ -178,8 +178,10 @@ pub fn set_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [
     }
 }
 
-/// The Artboard tool's view of the panel: the active artboard's position and size ([`set_artboard`]).
-fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
+/// The Artboard tool's view of the panel, and the Properties panel's Transform section in Edit
+/// Artboards: the reference point, artboard `index`'s position and size at `r` in fields
+/// `fw` wide ([`set_artboard`]), and the Constrain Width and Height Proportions link.
+pub(crate) fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, fw: f32) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi = reference_index(ui);
@@ -191,20 +193,20 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
         ui.add_space(4.0);
         egui::Grid::new("xfp-ab-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             widgets::dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, 80.0) {
+            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
                 set(app, Some(v + origin.x), None, None, None);
             }
             widgets::dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, 80.0) {
+            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, fw) {
                 set(app, None, None, Some(v), None);
             }
             ui.end_row();
             widgets::dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, 80.0) {
+            if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
                 set(app, None, Some(v + origin.y), None, None);
             }
             widgets::dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, 80.0) {
+            if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, fw) {
                 set(app, None, None, None, Some(v));
             }
             ui.end_row();
@@ -254,7 +256,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if let Some((i, r)) = tool_artboard(app) {
-        artboard_fields(app, ui, i, r);
+        artboard_fields(app, ui, i, r, 80.0);
         return;
     }
     if let Some(guides) = selected_guides(app) {
@@ -345,23 +347,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => {
-                widgets::subheader(ui, tl!("Rectangle Properties:"));
-                corner_radius_row(app, ui, &n, "xfp-radius");
-            }
-            vectorcraft_doc::LiveShape::Polygon { .. } => {
-                widgets::subheader(ui, tl!("Polygon Properties:"));
-                polygon_rows(app, ui, &n, live, "xfp-polygon");
-            }
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                pie_rows(app, ui, *pie, "xfp-pie");
-            }
-            _ => {
-                widgets::subheader(ui, tl!("Shape Properties:"));
-                widgets::dim_label(ui, tl!(n.kind_label()));
-            }
+        if !live_shape_rows(app, ui, &n, live, "xfp", true) {
+            widgets::subheader(ui, tl!("Shape Properties:"));
+            widgets::dim_label(ui, tl!(n.kind_label()));
         }
     }
     if pstate::<bool>(ui.ctx(), "xf-hide-options") {
@@ -375,6 +363,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+}
+
+/// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the
+/// Contextual Task Bar), their widget ids under `id`. `headed` adds the Rectangle and Polygon
+/// Properties headings; an ellipse's heading always shows. Returns false, drawing nothing, for
+/// other live shapes.
+pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
+    match live {
+        LiveShape::Rectangle { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Rectangle Properties:"));
+            }
+            corner_radius_row(app, ui, n, &format!("{id}-radius"));
+        }
+        LiveShape::Polygon { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Polygon Properties:"));
+            }
+            polygon_rows(app, ui, n, live, &format!("{id}-polygon"));
+        }
+        LiveShape::Ellipse { pie, .. } => {
+            widgets::subheader(ui, tl!("Ellipse Properties:"));
+            pie_rows(app, ui, *pie, &format!("{id}-pie"));
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
@@ -448,21 +463,50 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
+    let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
 }
 
+/// The Transform link's text, as [`link`] draws it and [`link_width`] measures it.
+fn link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of the Transform [`link`] in `ui`.
+pub fn link_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, link_text(ui))
+}
+
+/// The width and height of [`constrain_link`]'s button.
+pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
+
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
-/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+/// `constrainProportions` preference, which the size fields pass on as `proportional`. It is drawn
+/// after the fields it sits between, so Tab reaches the fields first and the link after them.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, resp) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    constrain_link_at(app, ui, resp);
+}
+
+/// [`constrain_link`]'s toggle, made over `at`: the Control bar keeps the link's place between W
+/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it. With
+/// the keyboard on it, Space or Enter toggles it, as a dialog's button takes them.
+pub fn constrain_link_at(app: &mut VectorcraftApp, ui: &mut Ui, at: egui::Response) {
     let on = app.session.prefs.constrain_proportions;
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
+    let tip = tl!("Constrain Width and Height Proportions");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
         set_pref(app, "constrainProportions", !on);
     }
+}
+
+/// The room the Control bar keeps for [`constrain_link_at`] between its W and H fields.
+pub fn constrain_link_room(ui: &mut Ui) -> egui::Rect {
+    ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::hover()).0
 }
 
 /// The `copy` param of a command that a field of the Transform panel, the Properties panel's

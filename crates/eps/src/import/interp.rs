@@ -4,12 +4,15 @@
 //! Every operation counts against a budget and procedures nest only so deep, so a looping or
 //! recursing program ends with [`PsError::Limit`] instead of hanging.
 
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use vectorcraft_geom::Affine;
 
+use super::data::Stream;
 use super::graphics::{GState, Out};
-use super::lex::{IMMEDIATE, Lexer};
+use super::lex::{IMMEDIATE, Lexer, number};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
 
 /// Most operations one file may run.
@@ -24,6 +27,8 @@ pub(crate) const MAX_ALLOC: usize = 1 << 22;
 const MAX_DICTS: usize = 1000;
 /// Most saved graphics states.
 pub(crate) const MAX_GSAVE: usize = 1000;
+/// Most read-only procedures remembered (see `Interp::readonly`); each keeps its procedure.
+const MAX_READONLY: usize = 1 << 16;
 /// Most memory (bytes) a program may ask for in all: strings, arrays, decoded data, images,
 /// saved paths.
 const MAX_MEMORY: usize = 1 << 30;
@@ -32,6 +37,9 @@ pub(crate) struct Interp<'a> {
     /// The list of the arrays and dictionaries made since this started ([`super::obj::track`]).
     made: u64,
     pub lex: Lexer<'a>,
+    /// The files being run (`cvx exec`), innermost last: the program reads from the last one, and
+    /// it is `currentfile` while it runs.
+    pub running: Vec<Rc<RefCell<Stream>>>,
     pub stack: Vec<Obj>,
     pub dicts: Vec<DictRef>,
     system: DictRef,
@@ -66,6 +74,11 @@ pub(crate) struct Interp<'a> {
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
+    /// Procedures that are read-only: those `bind` went into inside another procedure, and those
+    /// given to `readonly`, `executeonly` or `noaccess`. `bind` leaves them alone (PLRM 3rd ed.,
+    /// `bind` in chapter 8), so a procedure bound when it was defined keeps the names it didn't
+    /// bind then, whatever operators they name by the time a later procedure that holds it is bound.
+    readonly: HashSet<Shared<Obj>>,
 }
 
 /// Where a PostScript error was raised: the operator that raised it (none for an unknown name)
@@ -105,13 +118,18 @@ impl<'a> Interp<'a> {
     pub fn new(src: &'a [u8], g: GState, out: Out) -> Self {
         let made = super::obj::track();
         let system = new_dict();
+        // The standard encodings are also instances of the Encoding category, the same arrays
+        // (PLRM 3rd ed., §3.9.2 and `findencoding`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>).
+        let encodings = new_dict();
         {
             let mut d = system.borrow_mut();
             for (op, name) in Op::ALL {
                 d.insert(Key::name(name), Obj::Op(*op));
             }
             for name in ["StandardEncoding", "ISOLatin1Encoding"] {
-                d.insert(Key::name(name), encoding());
+                let e = encoding();
+                d.insert(Key::name(name), e.clone());
+                encodings.borrow_mut().insert(Key::name(name), e);
             }
             // An integer, as interpreters have it (`systemdict /languagelevel get 2 ge`): run, the
             // name pushes it all the same.
@@ -122,6 +140,7 @@ impl<'a> Interp<'a> {
             CATEGORIES.split_whitespace().map(|c| (Key::name(c), Obj::dict(Dict::from([(Key::name("Category"), Obj::name(c))])))).collect();
         let resources = new_dict();
         resources.borrow_mut().insert(Key::name("Category"), Obj::dict(categories));
+        resources.borrow_mut().insert(Key::name("Encoding"), Obj::Dict(encodings));
         let fonts = new_dict();
         system.borrow_mut().insert(Key::name("FontDirectory"), Obj::Dict(fonts.clone()));
         for name in ["GlobalFontDirectory", "SharedFontDirectory"] {
@@ -145,6 +164,7 @@ impl<'a> Interp<'a> {
         Self {
             made,
             lex: Lexer::new(src),
+            running: vec![],
             stack: vec![],
             dicts: vec![system.clone(), global.clone(), user.clone()],
             system,
@@ -167,6 +187,7 @@ impl<'a> Interp<'a> {
             saved: vec![],
             out,
             illustrator: false,
+            readonly: HashSet::new(),
         }
     }
 
@@ -333,6 +354,12 @@ impl<'a> Interp<'a> {
         self.spend(1)
     }
 
+    /// Charge for work on `n` bytes or objects in one operator: one operation per 256, as `search`
+    /// charges per 64 bytes, so a loop of big copies runs out of the budget.
+    fn spend_bytes(&mut self, n: usize) -> Res {
+        self.spend((n / 256) as u64)
+    }
+
     /// Count `ops` operations' worth of work against [`MAX_OPS`]: what an operator that costs
     /// far more than one operation (laying out type) does in a loop has to end too.
     pub fn spend(&mut self, ops: u64) -> Res {
@@ -376,10 +403,7 @@ impl<'a> Interp<'a> {
     pub fn call(&mut self, v: Obj) -> Res {
         match v {
             Obj::Array { items, exec: true } => self.run_proc(&items),
-            Obj::File { stream, exec: true } => match self.program_of(&stream)? {
-                Some(program) => self.run_program(&program),
-                None => Ok(()),
-            },
+            Obj::File { stream, exec: true } => self.run_file(&stream),
             Obj::ExecStr(s) => self.run_program(&s.to_vec()),
             // Through the depth guard: `stopped` and the like call back into here.
             Obj::Op(op) => {
@@ -416,7 +440,35 @@ impl<'a> Interp<'a> {
         r
     }
 
-    /// Run `program` (what is left of an executable file, an executable string), token by token.
+    /// Run file `f` (`cvx exec`), reading its objects from it as it goes. While it runs it is
+    /// `currentfile`, the topmost file being run (PLRM 3rd ed., `currentfile`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+    /// so data the program reads from there (an inline image's samples) comes from `f`, after the
+    /// object that reads it. The program's own file is being run already.
+    fn run_file(&mut self, f: &Rc<RefCell<Stream>>) -> Res {
+        if matches!(&*f.borrow(), Stream::Current) {
+            return Ok(());
+        }
+        // Its data, decoded from the program it was made over, before it becomes the program.
+        self.materialize(f)?;
+        self.enter()?;
+        self.running.push(f.clone());
+        let r = loop {
+            match self.next_in(f) {
+                Ok((Some(o), immediate)) => {
+                    if let Err(e) = self.scanned(o, immediate).and_then(|o| self.exec_token(o)) {
+                        break Err(e);
+                    }
+                }
+                Ok((None, _)) => break Ok(()),
+                Err(e) => break Err(e),
+            }
+        };
+        self.running.pop();
+        self.depth -= 1;
+        r
+    }
+
+    /// Run `program` (an executable string), token by token.
     fn run_program(&mut self, program: &[u8]) -> Res {
         self.enter()?;
         let mut lex = Lexer::new(program);
@@ -661,6 +713,7 @@ impl<'a> Interp<'a> {
                 let n = self.pop_count()?;
                 let at = self.stack.len().checked_sub(n).ok_or(PsError::Ps("rangecheck", String::new()))?;
                 if n > 0 {
+                    self.spend_bytes(n)?;
                     let k = j.rem_euclid(n as i64) as usize;
                     if let Some(s) = self.stack.get_mut(at..) {
                         s.rotate_right(k);
@@ -687,6 +740,7 @@ impl<'a> Interp<'a> {
                 self.pop_to_mark()?;
             }
             CountToMark => {
+                self.spend_bytes(self.stack.len())?;
                 let n = self.stack.iter().rev().position(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
                 self.push(Obj::Int(n as i64))?;
             }
@@ -721,7 +775,7 @@ impl<'a> Interp<'a> {
             },
             Cvi => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 if !(v.is_finite() && v.abs() < 9e15) {
@@ -731,7 +785,7 @@ impl<'a> Interp<'a> {
             }
             Cvr => {
                 let v = match self.pop()? {
-                    Obj::Str(s) => String::from_utf8_lossy(&s.borrow()).trim().parse::<f64>().map_err(|_| PsError::Ps("typecheck", String::new()))?,
+                    Obj::Str(s) => string_number(&s.borrow())?,
                     o => o.as_num().ok_or(PsError::Ps("typecheck", String::new()))?,
                 };
                 self.push_num(v)?;
@@ -771,7 +825,7 @@ impl<'a> Interp<'a> {
             },
             Bitshift => {
                 let (s, v) = (self.pop_int()?, self.pop_int()?);
-                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr((-s).min(63) as u32) };
+                let r = if s >= 0 { v.checked_shl(s.min(63) as u32) } else { v.checked_shr(s.saturating_neg().min(63) as u32) };
                 self.push(Obj::Int(r.unwrap_or(0)))?;
             }
             True => self.push(Obj::Bool(true))?,
@@ -860,6 +914,7 @@ impl<'a> Interp<'a> {
             }
             Cvn => {
                 let s = self.pop_str()?;
+                self.spend_bytes(s.len())?;
                 // The name is a copy of the string (a bigger one when bytes are replaced).
                 self.alloc(s.len().saturating_mul(3))?;
                 let n: Rc<str> = Rc::from(String::from_utf8_lossy(&s.borrow()).as_ref());
@@ -882,10 +937,9 @@ impl<'a> Interp<'a> {
                 }
                 self.push_interval(Obj::Str(s), 0, text.len())?;
             }
-            ReadOnly | ExecuteOnly | NoAccess | SetPacking | SetGlobal | SetObjectFormat => {
-                if matches!(op, SetPacking | SetGlobal | SetObjectFormat) {
-                    self.pop()?;
-                }
+            ReadOnly | ExecuteOnly | NoAccess => self.restrict_access(),
+            SetPacking | SetGlobal | SetObjectFormat => {
+                self.pop()?;
             }
             Rcheck | Wcheck => {
                 self.pop()?;
@@ -966,8 +1020,14 @@ impl<'a> Interp<'a> {
                 let src = self.pop()?;
                 let at = self.pop_count()?;
                 let written = match (self.pop()?, src) {
-                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => items.write(at, &from.to_vec()),
-                    (Obj::Str(s), Obj::Str(from)) => s.write(at, &from.to_vec()),
+                    (Obj::Array { items, .. }, Obj::Array { items: from, .. }) => {
+                        self.spend_bytes(from.len())?;
+                        items.write(at, &from.to_vec())
+                    }
+                    (Obj::Str(s), Obj::Str(from)) => {
+                        self.spend_bytes(from.len())?;
+                        s.write(at, &from.to_vec())
+                    }
                     _ => return ps_err("typecheck", ""),
                 };
                 if !written {
@@ -1029,10 +1089,10 @@ impl<'a> Interp<'a> {
                 self.insert(&d, k, Some(v))?;
             }
             Known => {
-                let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
+                let k = self.pop()?;
                 let d = self.pop_dict()?;
-                let known = d.borrow().contains_key(&k);
-                self.push(Obj::Bool(known))?;
+                let found = known(&d, &k)?;
+                self.push(Obj::Bool(found))?;
             }
             Where => {
                 let k = self.pop()?.key().ok_or(PsError::Ps("typecheck", String::new()))?;
@@ -1120,9 +1180,12 @@ impl<'a> Interp<'a> {
             PdfMark => {
                 self.pop_to_mark()?;
             }
+            // True for a simple object, and for a composite one in global VM (PLRM 3rd ed., `gcheck`);
+            // every composite here is in local VM. Procsets that copy values into global VM leave
+            // alone those whose `gcheck` is true, such as a halftone's numbers.
             Gcheck | Scheck => {
-                self.pop()?;
-                self.push(Obj::Bool(false))?;
+                let simple = !self.pop()?.is_composite();
+                self.push(Obj::Bool(simple))?;
             }
             CurrentShared => self.push(Obj::Bool(false))?,
             SetShared | SetVmThreshold | VmReclaim | Echo => {
@@ -1171,6 +1234,7 @@ impl<'a> Interp<'a> {
 
     /// The objects above the topmost mark, which is removed.
     fn pop_to_mark(&mut self) -> Res<Vec<Obj>> {
+        self.spend_bytes(self.stack.len())?;
         let at = self.stack.iter().rposition(|o| matches!(o, Obj::Mark)).ok_or(PsError::Ps("unmatchedmark", String::new()))?;
         let items = self.stack.split_off(at + 1);
         self.stack.pop();
@@ -1202,6 +1266,7 @@ impl<'a> Interp<'a> {
             }
             Obj::Str(s) => {
                 let from = self.pop_str()?.to_vec();
+                self.spend_bytes(from.len())?;
                 if !s.write(0, &from) {
                     return ps_err("rangecheck", "copy");
                 }
@@ -1270,7 +1335,7 @@ impl<'a> Interp<'a> {
     /// Replace the names in a procedure that stand for operators by the operators, down through
     /// nested procedures.
     fn bind(&mut self, items: &Shared<Obj>, depth: u32) -> Res {
-        if depth > 64 {
+        if depth > 64 || self.readonly.contains(items) {
             return Ok(());
         }
         for i in 0..items.len() {
@@ -1283,11 +1348,32 @@ impl<'a> Interp<'a> {
                         items.write(i, &[o]);
                     }
                 }
-                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => self.bind(&inner, depth + 1)?,
+                Some(Obj::Array { items: inner, exec: true }) if !inner.shares(items) => {
+                    self.bind(&inner, depth + 1)?;
+                    // `bind` makes each procedure it goes into read-only.
+                    self.mark_readonly(inner);
+                }
                 _ => {}
             }
         }
         Ok(())
+    }
+
+    /// `readonly`, `executeonly`, `noaccess`: the object stays on the stack; a procedure is
+    /// recorded as read-only, the only access the reader keeps (for `bind`).
+    fn restrict_access(&mut self) {
+        if let Some(Obj::Array { items, exec: true }) = self.stack.last() {
+            let items = items.clone();
+            self.mark_readonly(items);
+        }
+    }
+
+    /// Record procedure `items` as read-only, for [`Self::bind`]. Past [`MAX_READONLY`] of them
+    /// the rest stay writable: a later `bind` may then bind their names, as it did before.
+    fn mark_readonly(&mut self, items: Shared<Obj>) {
+        if self.readonly.len() < MAX_READONLY {
+            self.readonly.insert(items);
+        }
     }
 
     /// Put `v` under `k` in `d` (`None`: remove it), within [`MAX_ALLOC`] entries; while a `save`
@@ -1385,10 +1471,32 @@ impl<'a> Interp<'a> {
 }
 
 /// An array or string index.
+/// The number a string holds by the PostScript syntax (`cvi`, `cvr`: PLRM 3rd ed., chapter 8),
+/// radix numbers such as `16#20` included.
+fn string_number(s: &[u8]) -> Res<f64> {
+    let text = String::from_utf8_lossy(s);
+    match number(text.trim_matches(|c: char| c.is_ascii_whitespace() || c == '\0')) {
+        Some(Obj::Int(i)) => Ok(i as f64),
+        Some(Obj::Real(r)) => Ok(r),
+        _ => ps_err("typecheck", ""),
+    }
+}
+
 fn index(k: &Obj) -> Res<usize> {
     match *k {
         Obj::Int(i) if i >= 0 => Ok(i as usize),
         _ => ps_err("rangecheck", "an index"),
+    }
+}
+
+/// `known`: a key may be any object but null (PLRM 3rd ed., §3.3.9, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>),
+/// and one that can't be a key here (an array, a dictionary, a real with a fraction) is in no
+/// dictionary, since `put` here refuses it.
+fn known(d: &DictRef, k: &Obj) -> Res<bool> {
+    match k.key() {
+        Some(key) => Ok(d.borrow().contains_key(&key)),
+        None if matches!(k, Obj::Null) => ps_err("typecheck", "known"),
+        None => Ok(false),
     }
 }
 

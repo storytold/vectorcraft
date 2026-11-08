@@ -1297,7 +1297,16 @@ fn headless_backend_methods() {
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(600), Some(400)));
     let cmds = h.call("engine.commands", json!({})).unwrap();
     assert!(cmds.as_array().unwrap().iter().any(|c| c["id"] == "file.export"));
-    assert!(h.call("ui.tool.list", json!({})).unwrap().is_array());
+    let listed = h.call("ui.tool.list", json!({})).unwrap();
+    let groups = listed.as_array().unwrap();
+    for tool in vectorcraft_tools::addons::GROUPS.iter().flat_map(|group| group.iter()) {
+        let matching: Vec<_> = groups.iter().flat_map(|group| group.as_array().unwrap()).filter(|entry| entry["id"] == tool.id).collect();
+        assert_eq!(matching.len(), 1, "{}", tool.id);
+        assert_eq!(matching[0]["label"], tool.label);
+        assert!(matching[0]["shortcut"].is_null());
+        let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
+        assert_eq!(selected["tool"], tool.id);
+    }
     assert!(h.call("ui.resize", json!({})).is_err());
 }
 
@@ -1422,6 +1431,34 @@ fn pointer_gesture_forwards_backquote_on_each_event() {
     assert_eq!(rect["bounds"]["x"], 100.0, "{doc}");
 }
 
+/// A `backquote` that is not a boolean is an error, and none of the gesture's events runs.
+#[test]
+fn pointer_gesture_rejects_a_backquote_that_is_not_a_boolean() {
+    let mut s = server();
+    let made = call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 50, "height": 50, "fill": "#ff0000"}));
+    let id = serde_json::from_str::<Value>(&text_of(&made)).unwrap()["id"].as_u64().unwrap();
+    let drag = |top: Option<Value>, first: Option<Value>| {
+        let mut down = json!({"kind": "down", "x": 300, "y": 300});
+        if let Some(b) = first {
+            down["backquote"] = b;
+        }
+        let mut a = json!({"tool": "rectangle", "events": [down, {"kind": "drag", "x": 350, "y": 350}, {"kind": "up", "x": 350, "y": 350}]});
+        if let Some(b) = top {
+            a["backquote"] = b;
+        }
+        a
+    };
+    for (n, args) in [drag(Some(json!("true")), None), drag(None, Some(json!(1)))].into_iter().enumerate() {
+        let r = call(&mut s, 2 + n as u64, "pointer_gesture", args);
+        assert_eq!(r["isError"], true, "{r}");
+        assert!(text_of(&r).contains("`backquote` must be a boolean"), "{r}");
+    }
+    let inspected = call(&mut s, 4, "inspect_document", json!({}));
+    let doc = serde_json::from_str::<Value>(&text_of(&inspected)).unwrap();
+    let children = doc["layers"][0]["children"].as_array().unwrap();
+    assert_eq!(children.iter().map(|n| n["id"].as_u64()).collect::<Vec<_>>(), vec![Some(id)], "{doc}");
+}
+
 /// A Shift-drag marquee reaches agents (#483): `pointer_gesture` with `mods.shift` toggles the
 /// objects it reaches, so a selected one leaves the selection and an unselected one joins it.
 #[test]
@@ -1490,6 +1527,56 @@ fn c_and_f_during_an_arc_gesture_go_to_the_arc_tool() {
     assert_eq!(count(&mut s, 6), before + 1);
     let r = call(&mut s, 7, "press_key", json!({"key": "c"}));
     assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{r}");
+}
+
+/// `press_key` with `f`, `v`, `x` and `c` while a rectangular or polar grid is being dragged goes
+/// to the grid tool, and the release draws one grid. With nothing dragged, V is a shortcut again.
+#[test]
+fn f_v_x_and_c_during_a_grid_gesture_go_to_the_grid_tool() {
+    let count = |s: &mut Server, id: u64| {
+        let r = call(s, id, "inspect_document", json!({"depth": 0}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["layers"][0]["childCount"].as_u64().unwrap()
+    };
+    for tool in ["rectangularGrid", "polarGrid"] {
+        let mut s = server();
+        let before = count(&mut s, 1);
+        let begin = json!([{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]);
+        let r = call(&mut s, 2, "pointer_gesture", json!({"tool": tool, "events": begin}));
+        assert_eq!(r["isError"], false, "{r}");
+        for (id, key) in [(3, "f"), (4, "v"), (5, "x"), (6, "c")] {
+            let r = call(&mut s, id, "press_key", json!({"key": key}));
+            assert_eq!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool} {key}: {r}");
+        }
+        let r = call(&mut s, 7, "pointer_gesture", json!({"tool": tool, "events": [{"kind": "up", "x": 200, "y": 180}]}));
+        assert_eq!(r["isError"], false, "{r}");
+        assert_eq!(count(&mut s, 8), before + 1, "{tool}");
+        let r = call(&mut s, 9, "press_key", json!({"key": "v"}));
+        assert_ne!(serde_json::from_str::<Value>(&text_of(&r)).unwrap()["handledBy"], "tool", "{tool}: {r}");
+    }
+}
+
+/// Grid letters with Shift reach the grid tool during a drag; with Ctrl, Cmd or Alt they do not.
+#[test]
+fn shifted_grid_letters_during_a_drag_go_to_the_grid_tool() {
+    let mut s = server();
+    let r = call(
+        &mut s,
+        1,
+        "pointer_gesture",
+        json!({"tool": "polarGrid", "events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, key, mods, tool) in [
+        (2, "v", json!({"shift": true}), true),
+        (3, "f", json!({"ctrl": true}), false),
+        (4, "x", json!({"cmd": true}), false),
+        (5, "c", json!({"cmd": true}), false),
+        (6, "v", json!({"alt": true}), false),
+    ] {
+        let r = call(&mut s, id, "press_key", json!({"key": key, "mods": mods}));
+        let handled = serde_json::from_str::<Value>(&text_of(&r)).ok().is_some_and(|v| v["handledBy"] == "tool");
+        assert_eq!(handled, tool, "{key} {mods}: {r}");
+    }
 }
 
 /// A click on one of two selected objects makes it the key object: `pointer_gesture` replies

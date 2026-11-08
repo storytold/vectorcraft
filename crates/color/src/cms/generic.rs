@@ -231,6 +231,21 @@ impl GenericCmyk {
                 }
                 g[p] = -(0..3).map(|i| j[i][p] * r[i]).sum::<f32>();
             }
+            // An ink at a bound whose descent direction points out of the box stays where it is; the step moves the other inks.
+            for p in 0..3 {
+                if (x[p] <= 0.0 && g[p] < 0.0) || (x[p] >= 1.0 && g[p] > 0.0) {
+                    a[p] = [0.0; 3];
+                    for row in &mut a {
+                        row[p] = 0.0;
+                    }
+                    a[p][p] = 1.0;
+                    g[p] = 0.0;
+                }
+            }
+            // Every ink is held at a bound, or the gradient is zero: no step can lower the error.
+            if g == [0.0; 3] {
+                break;
+            }
             let mut improved = false;
             for _ in 0..8 {
                 let mut al = a;

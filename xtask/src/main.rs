@@ -14,6 +14,7 @@ mod pdf_deps;
 mod pngsuite;
 mod sha256;
 mod stats;
+mod test262;
 mod version;
 mod web_fonts;
 
@@ -41,6 +42,8 @@ commands:
   ico <out.ico> <png>...
                   pack PNGs into a Windows .ico (used by packaging/icons.sh)
   stats [--exact] count tests and lines per crate (--exact: ask the test harness via `-- --list`)
+  test262         fetch the pinned ECMAScript conformance suite into corpus/test262 (sha256
+                  verified) and parse its ES5 subset with vectorcraft-js, printing the counts
   web-fonts       copy the craft-fonts faces in crates/text/web-fonts.txt into the web site (the Trunk
                   post_build hook; a no-op without CRAFT_FONTS_DIR)
 ";
@@ -64,6 +67,7 @@ fn main() -> ExitCode {
         Some("ico") => ico::run(&rest),
         Some("version") => version::run(&root(), &rest),
         Some("stats") => stats::run(&root(), rest.contains(&"--exact")),
+        Some("test262") => test262::run_suite(),
         Some("web-fonts") => web_fonts::run(&root()),
         Some("-h" | "--help" | "help") | None => {
             print!("{USAGE}");
@@ -294,7 +298,7 @@ fn cmd_ci() -> Result<(), String> {
         ("assets", Box::new(|| assets::run(&root()))),
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
-        ("i18n-report", Box::new(cmd_i18n_report)),
+        ("i18n-report", Box::new(cmd_ci_i18n_report)),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];
@@ -333,6 +337,8 @@ Tests that use a corpus skip cleanly when it is absent.
   corpus/raw/        raw.pixls.us samples, CC0 (optional)
   corpus/affinity/   public Affinity documents (CC0/MIT/Apache-2.0) at pinned commits, sha256
                      verified: oracles for the Affinity reader. Fetch: cargo xtask corpus --affinity
+  corpus/test262/    the ECMAScript conformance suite (BSD-3-Clause) at a pinned commit, sha256
+                     verified: the JavaScript parser's ES5 subset. Fetch and run: cargo xtask test262
 ",
         corpus.display()
     );
@@ -348,4 +354,14 @@ fn cmd_i18n_report() -> Result<(), String> {
     let mut c = cargo();
     c.args(["test", "-p", "vectorcraft-ui-egui", "--lib", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
     run(c, "cargo test -p vectorcraft-ui-egui --lib -- i18n::tests::untranslated_report --exact --nocapture")
+}
+
+/// [`cmd_i18n_report`] in `ci`, selecting the packages and targets the test stage did so it
+/// reuses that build: with `-p vectorcraft-ui-egui --lib` alone cargo resolves features
+/// differently and recompiled for about 3.5 minutes. Every other test binary runs with no test
+/// matching the filter.
+fn cmd_ci_i18n_report() -> Result<(), String> {
+    let mut c = cargo();
+    c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
+    run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
 }

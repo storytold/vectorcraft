@@ -5,10 +5,11 @@ use serde_json::{Value, json};
 use vectorcraft_doc::SavedView;
 use vectorcraft_geom::Point;
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, f64_req, finite_numbers, has_doc, str_param, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
+        cmd!(query "view.capsLock", "Caps Lock Cursor State", [], None, "{on?: bool} set or read the Caps Lock state the desktop app reports; while it is on, the drawing tools show the precise crosshair, and Use Precise Cursors keeps its saved value → {on}", always, caps_lock),
         cmd!(
             "view.saved.new",
             "New View…",
@@ -54,9 +55,16 @@ fn glyph_snap_options(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!(s.prefs.glyph_snap))
 }
 
+fn caps_lock(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(on) = p.get("on") {
+        s.caps_lock = on.as_bool().ok_or_else(|| bad("view.capsLock", "on must be true or false"))?;
+    }
+    Ok(json!({ "on": s.caps_lock }))
+}
+
 fn transparency_grid(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc_mut()?;
-    st.transparency_grid = p.get("on").and_then(Value::as_bool).unwrap_or(!st.transparency_grid);
+    st.transparency_grid = switch_or(p, "on", !st.transparency_grid, "view.transparencyGrid")?;
     Ok(json!({ "on": st.transparency_grid }))
 }
 

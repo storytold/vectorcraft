@@ -121,6 +121,9 @@ pub struct Stroke {
     pub dash: Option<(Vec<f64>, f64)>,
     /// Painted below the fill instead of above it.
     pub behind: bool,
+    /// The pressure curve: (position 0..1 along the path, width as a fraction of `width`) in
+    /// order along the path, `None` for a stroke of the same width all along.
+    pub profile: Option<Vec<(f64, f64)>>,
 }
 
 /// Gradient stops per gradient.
@@ -350,10 +353,38 @@ pub(crate) fn stroke(r: &mut Reader, pen: ObjId, ldsc: ObjId, local: Affine, beh
         }
         _ => None,
     };
-    if s.obj(lsty, b"Brus").is_some() || s.obj(ldsc, b"LDeP").is_some() {
-        r.warn("brush and pressure strokes (imported as plain strokes)");
+    if s.obj(lsty, b"Brus").is_some() {
+        r.warn("brush strokes (imported as plain strokes)");
     }
-    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind })
+    // The pressure curve sets the width along the path; one at full width all along is a plain
+    // stroke. Every curve read counts against the document's points: one at full width counts its
+    // points, and one that can't be read counts the most a curve may have. Once the points are
+    // used up the rest are not read.
+    const BEYOND: &str = "pressure strokes beyond the pressure points one document may hold (imported as plain strokes)";
+    let ldep = s.obj(ldsc, b"LDeP");
+    if ldep.is_some() && r.budget.pressure == 0 {
+        r.warn(BEYOND);
+    }
+    let profile = match ldep.filter(|_| r.budget.pressure > 0).map(|p| crate::geometry::pressure(r, p)) {
+        Some(Some(points)) => match r.budget.pressure.checked_sub(points.len()) {
+            Some(left) => {
+                r.budget.pressure = left;
+                (!points.iter().all(|(_, w)| (w - 1.0).abs() < 1e-9)).then_some(points)
+            }
+            None => {
+                r.budget.pressure = 0;
+                r.warn(BEYOND);
+                None
+            }
+        },
+        Some(None) => {
+            r.budget.pressure = r.budget.pressure.saturating_sub(crate::geometry::MAX_PRESSURE_CURVE_POINTS);
+            r.warn("pressure strokes whose pressure curve can't be read (imported as plain strokes)");
+            None
+        }
+        None => None,
+    };
+    Some(Stroke { paint, width, cap, join, miter_limit, align, dash, behind, profile })
 }
 
 #[cfg(test)]

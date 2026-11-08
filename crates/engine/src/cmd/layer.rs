@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
             has_doc,
             set_props
         ),
@@ -128,7 +128,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Artboard",
             ["Window", "Artboards"],
             None,
-            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1)} (default place: right of the last)",
+            "{x?, y?, width?, height?, name?, color?: color (its background color, as artboard.setProps takes it, #rrggbbaa and #rgba refused; default: none), showCenterMark?: bool, showCrossHairs?: bool, showVideoSafeAreas?: bool (as artboard.setProps takes them; default false), videoRulerPixelAspectRatio?: number 0.1–10 (as artboard.setProps takes it; default 1)} (default place: right of the last)",
             has_doc,
             artboard_new
         ),
@@ -155,7 +155,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Artboard Options…",
             ["Window", "Artboards"],
             None,
-            "{index | artboards: [{index, name?, color?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…] (several artboards in one undo step, each with its own fields; the art inside each before any of them changes goes with it, and an object inside several goes with the first listed that moves or scales its art), name?, color?: color (\"#rrggbb\", {c,m,y,k}, … as the paint commands take: the background color the canvas draws the artboard's paper in, multiplied with the Simulate Colored Paper color while that is on; exports and print leave it out) | null (no background color), locked?: bool (the Artboards panel's lock column: a locked artboard keeps its rectangle (a new x, y, width or height is an error unless locked is false), can't be moved, deleted or cut, and Rearrange and Fit to Artwork Bounds leave it as it is; the art on it (each object of a layer or sublayer whose bounds with strokes overlap it, a group as one object) acts as locked art until it is unlocked: clicks, marquees, select.set, select.all and the tools pass over it (art drawn or pasted onto it stays selected and editable until a selection leaves it out or it is moved off the locked artboards), it is deselected, and when another artboard moves or scales it stays unless lockedAndHidden), showCenterMark?: bool (Artboard Options' Show Center Mark: the canvas draws a mark at the artboard's center), showCrossHairs?: bool (Show Cross Hairs: the canvas draws a line from the middle of each side through the center), showVideoSafeAreas?: bool (Show Video Safe Areas: the canvas draws the action-safe area 3.5% and the title-safe area 5% in from each edge, as EBU R 95 sets them; the three are screen-only, as the artboard's edges are: exports and print leave them out), videoRulerPixelAspectRatio?: number 0.1–10 (Video Ruler Pixel Aspect Ratio: the width of one video pixel over its height, which View › Rulers › Show Video Rulers counts the artboard in; default 1, square pixels), x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
+            "{index | artboards: [{index, name?, color?, locked?, showCenterMark?, showCrossHairs?, showVideoSafeAreas?, videoRulerPixelAspectRatio?, x?, y?, width?, height?}…] (several artboards in one undo step, each with its own fields; the art inside each before any of them changes goes with it, and an object inside several goes with the first listed that moves or scales its art), name?, color?: color (\"#rrggbb\", {c,m,y,k}, … as the paint commands take, #rrggbbaa and #rgba refused: the background color the canvas draws the artboard's paper in, multiplied with the Simulate Colored Paper color while that is on; exports and print leave it out) | null (no background color), locked?: bool (the Artboards panel's lock column: a locked artboard keeps its rectangle (a new x, y, width or height is an error unless locked is false), can't be moved, deleted or cut, and Rearrange and Fit to Artwork Bounds leave it as it is; the art on it (each object of a layer or sublayer whose bounds with strokes overlap it, a group as one object) acts as locked art until it is unlocked: clicks, marquees, select.set, select.all and the tools pass over it (art drawn or pasted onto it stays selected and editable until a selection leaves it out or it is moved off the locked artboards), it is deselected, and when another artboard moves or scales it stays unless lockedAndHidden), showCenterMark?: bool (Artboard Options' Show Center Mark: the canvas draws a mark at the artboard's center), showCrossHairs?: bool (Show Cross Hairs: the canvas draws a line from the middle of each side through the center), showVideoSafeAreas?: bool (Show Video Safe Areas: the canvas draws the action-safe area 3.5% and the title-safe area 5% in from each edge, as EBU R 95 sets them; the three are screen-only, as the artboard's edges are: exports and print leave them out), videoRulerPixelAspectRatio?: number 0.1–10 (Video Ruler Pixel Aspect Ratio: the width of one video pixel over its height, which View › Rulers › Show Video Rulers counts the artboard in; default 1, square pixels), x?, y?, width?, height?, moveArt?: bool (default false; a position-only change moves the contained art with its artboard), scaleArt?: bool (Scale Artwork with Artboard: resized, the artboard takes the art fully inside it (locked and hidden art only with lockedAndHidden?: bool, default prefs moveLockedWithArtboard) and its guides from its old rectangle onto the new one, each side by its own ratio; strokes/corners/patterns as object.scale), strokes?: bool, corners?: bool, patterns?: bool (the three as object.scale, for art that moves or scales with the artboard), lockedAndHidden?: bool (locked and hidden art moves along; default: the preference; recorded in the journal so a replay matches)} → null, or with scaleArt {scaled: the art scaled}",
             has_doc,
             artboard_set
         ),
@@ -164,7 +164,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fit to Artwork Bounds",
             ["Object", "Artboards"],
             None,
-            "{index?: n | indices?: [n…] (0-based; the app passes the selected artboards: the Artboard tool's, else the active one; default: the first)} each artboard fits the art on it that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count), in one undo step: an object counts for every artboard its bounds overlap, and a group or clipping layer counts as one object; an artboard with no art, or a locked one, stays as it is, and the command fails when every artboard it names is locked or none has art",
+            "{index?: n | indices?: [n…] (0-based; the app passes the selected artboards: the Artboard tool's, else the active one; default: the first)} each artboard fits the art on it that shows (with its strokes and effects; hidden objects and layers, guides and template layers don't count), in one undo step (none when every artboard already fits): an object counts for every artboard its bounds overlap, and a group or clipping layer counts as one object; an artboard with no art, or a locked one, stays as it is, and the command fails when every artboard it names is locked or none has art",
             has_doc,
             artboard_fit_art
         ),
@@ -297,7 +297,8 @@ pub(crate) fn make_layer(d: &mut Document, name: Option<&str>) -> Node {
     NewLayers::of(d).make(d, name)
 }
 
-/// A layer colour: a preset index (0–26), `#rrggbb` or a preset's name (any case).
+/// A layer colour: a preset index (0–26), `#rrggbb` or a preset's name (any case). A hex color
+/// with an alpha part (`#rrggbbaa` or `#rgba`) is an error.
 pub(super) fn layer_color_param(v: &Value) -> std::result::Result<LayerColor, String> {
     match v {
         Value::Number(n) => match n.as_u64() {
@@ -308,7 +309,13 @@ pub(super) fn layer_color_param(v: &Value) -> std::result::Result<LayerColor, St
             if let Some(i) = LAYER_COLORS.iter().position(|(name, _)| name.eq_ignore_ascii_case(s.trim())) {
                 return Ok(LayerColor::Preset(i as u8));
             }
-            let c = vectorcraft_color::Color::from_hex(s).ok_or_else(|| format!("`{s}` is not a colour (#rrggbb or a preset name)"))?;
+            let refused = || format!("`{s}` is not a colour (#rrggbb or a preset name)");
+            // `Color::from_hex` reads `#rrggbbaa` as `#rrggbb`, dropping the alpha.
+            let digits = s.trim();
+            if digits.strip_prefix('#').unwrap_or(digits).len() == 8 {
+                return Err(refused());
+            }
+            let c = vectorcraft_color::Color::from_hex(s).ok_or_else(refused)?;
             let [r, g, b, _] = c.to_rgba8(1.0);
             Ok(LayerColor::Custom([r, g, b]))
         }
@@ -456,7 +463,12 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
         [id] if matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Group { .. })) => Some(*id),
         _ => None,
     };
-    let id = id_param(p, "id").or(row).or(group).or(st.current_layer()).ok_or_else(|| bad("layer.clippingMask.toggle", "no layer"))?;
+    // An `id` given is used as given: one that isn't an object id fails (#785).
+    let given = match p.get("id").filter(|v| !v.is_null()) {
+        Some(v) => Some(checked_id(s, v, "layer.clippingMask.toggle")?),
+        None => None,
+    };
+    let id = given.or(row).or(group).or(st.current_layer()).ok_or_else(|| bad("layer.clippingMask.toggle", "no layer"))?;
     let clip = s.edit("Make/Release Clipping Mask", |d, _| {
         let n = d.node(id).ok_or(EngineError::NoNode(id))?;
         if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
@@ -519,7 +531,12 @@ fn new_sublayer(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.newSublayer";
     let st = s.doc()?;
     let row = st.highlighted_rows().last().and_then(|r| st.doc.layer_containing(*r));
-    let parent = id_param(p, "parent").or(row).or(st.current_layer()).ok_or_else(|| bad(C, "no parent layer"))?;
+    // A `parent` given is used as given: one that isn't an object id fails (#785).
+    let given = match p.get("parent").filter(|v| !v.is_null()) {
+        Some(v) => Some(checked_id(s, v, C)?),
+        None => None,
+    };
+    let parent = given.or(row).or(st.current_layer()).ok_or_else(|| bad(C, "no parent layer"))?;
     if !st.doc.node(parent).is_some_and(Node::is_layer) {
         return Err(bad(C, "the parent must be a layer or sublayer"));
     }
@@ -928,9 +945,17 @@ pub(crate) fn empty_artboards(d: &Document) -> Vec<usize> {
     empty
 }
 
+/// Is [`empty_artboards`] of `d` not empty? A document with one artboard keeps it, so there is
+/// nothing to delete; with two or more, any unlocked artboard without art settles it (when every
+/// artboard is empty, all but artboard 1 go). [`Document::any_artboard_without_art`] finds an
+/// artboard away from every path without measuring along the paths.
+fn any_empty_artboards(d: &Document) -> bool {
+    d.artboards.len() > 1 && d.any_artboard_without_art(d.artboards.iter().filter(|a| !a.locked).map(|a| a.rect))
+}
+
 fn has_empty_artboards(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
-    if empty_artboards(&st.doc).is_empty() { Err("no empty artboards to delete".into()) } else { Ok(()) }
+    if st.any_empty_artboards(any_empty_artboards) { Ok(()) } else { Err("no empty artboards to delete".into()) }
 }
 
 fn artboard_delete_empty(s: &mut Session, _: &Value) -> Result<Value> {
@@ -1126,6 +1151,11 @@ fn artboard_fit_art(s: &mut Session, p: &Value) -> Result<Value> {
     if fits.is_empty() {
         return Err(EngineError::Other("no artwork".into()));
     }
+    // An artboard that already fits its art changes nothing, and no undo step is recorded for it.
+    fits.retain(|(_, was, now)| [now.x0 - was.x0, now.y0 - was.y0, now.x1 - was.x1, now.y1 - was.y1].iter().any(|d| d.abs() > 1e-6));
+    if fits.is_empty() {
+        return ok();
+    }
     s.edit("Artboard Options", |d, _| {
         for &(i, was, now) in &fits {
             let a = d.artboards.get_mut(i).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
@@ -1146,4 +1176,152 @@ fn artboard_fit_sel(s: &mut Session, p: &Value) -> Result<Value> {
     let i = if p.get("index").is_none() { 0 } else { super::panelcmds::artboard_index(&st.doc, p, "artboard.fitToSelection")? };
     let b = st.doc.bounds_of(&st.selection.objects, true).ok_or_else(|| EngineError::Other("no selection bounds".into()))?;
     s.execute("artboard.setProps", &json!({"index": i, "x": b.x0, "y": b.y0, "width": b.width(), "height": b.height()}))
+}
+
+#[cfg(test)]
+mod tests {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem, LineCap, LineJoin, StrokeAlign, StrokeLayer, SymbolBoxes};
+
+    use super::*;
+
+    /// Does art lie on `rect`, measuring every object's visual bounds: the rule of
+    /// [`Document::artboard_has_art`] with no quick box in front of it.
+    fn measured_has_art(d: &Document, rect: Rect) -> bool {
+        let rect = rect.inflate(1e-6, 1e-6);
+        fn meets(b: Option<Rect>, r: Rect) -> bool {
+            b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1)
+        }
+        fn has(c: &Node, s: &SymbolBoxes, rect: Rect) -> bool {
+            match &c.kind {
+                NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
+                    let Some((clip, rest)) = children.split_first() else { return false };
+                    let paint = clip.clip_paint();
+                    if (paint.fill.is_some() || paint.stroke.is_some()) && meets(clip.visual_bounds_with(s), rect) {
+                        return true;
+                    }
+                    let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
+                    let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
+                    rest.iter().any(|m| has(m, s, inside))
+                }
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect)),
+                NodeKind::Path { guide: true, .. } => false,
+                _ => meets(c.visual_bounds_with(s), rect),
+            }
+        }
+        let symbols = d.symbol_boxes();
+        d.layers.iter().any(|l| has(l, &symbols, rect))
+    }
+
+    /// Would Delete Empty Artboards delete something, by [`measured_has_art`] of each artboard:
+    /// the unlocked artboards without art, less artboard 1 when that is every artboard.
+    fn measured_any_empty(d: &Document) -> bool {
+        let mut empty: Vec<usize> =
+            d.artboards.iter().enumerate().filter(|(_, a)| !a.locked && !measured_has_art(d, a.rect)).map(|(i, _)| i).collect();
+        if empty.len() == d.artboards.len() {
+            empty.retain(|&i| i != 0);
+        }
+        !empty.is_empty()
+    }
+
+    /// On documents made from a fixed seed (one to five artboards placed anywhere, overlapping
+    /// some of the time, some locked; rectangles, long curved paths and symbol instances, some
+    /// with wide strokes reaching past their shape, some grouped or clipped), the menu's check
+    /// [`any_empty_artboards`] gives the same answer as `!empty_artboards(d).is_empty()` and as
+    /// measuring every object against every artboard, and both answers come up.
+    #[test]
+    fn the_empty_artboard_check_matches_measuring_every_artboard() {
+        let mut seed: u64 = 0x0a2d_5eed_e4b7;
+        let mut next = |n: u64| {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) % n
+        };
+        let (mut enabled, mut disabled_with_art) = (0, 0);
+        for _ in 0..120 {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+            for _ in 0..next(5) {
+                let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                s.execute("artboard.new", &json!({"x": x, "y": y, "width": 20 + next(300), "height": 20 + next(200)})).unwrap();
+            }
+            let artboards = s.doc().unwrap().doc.artboards.len();
+            for i in 0..artboards {
+                if next(5) == 0 {
+                    s.execute("artboard.setProps", &json!({"index": i, "locked": true})).unwrap();
+                }
+            }
+            let mut symbol = false;
+            let mut ids = vec![];
+            for _ in 0..next(6) {
+                let id = match next(4) {
+                    0 => {
+                        let (segments, span) = (20 + next(80), 10 + next(700));
+                        let (x, y) = (next(1400) as i64 - 100, next(800) as i64 - 100);
+                        let mut pt = || format!("{} {}", x + next(span) as i64, y + next(span) as i64);
+                        let mut d = format!("M {}", pt());
+                        for _ in 0..segments {
+                            d += &format!(" C {} {} {}", pt(), pt(), pt());
+                        }
+                        s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap()
+                    }
+                    1 => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        if !symbol {
+                            let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5 + next(60), "height": 5 + next(60)})).unwrap();
+                            s.execute("symbol.new", &json!({"name": "Mark", "ids": [r["id"]]})).unwrap();
+                            s.execute("object.delete", &json!({"ids": [r["id"]]})).ok();
+                            symbol = true;
+                        }
+                        s.execute("symbol.place", &json!({"name": "Mark", "x": x, "y": y})).unwrap()["id"].as_u64().unwrap()
+                    }
+                    _ => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        let r = json!({"x": x, "y": y, "width": 1 + next(150), "height": 1 + next(150)});
+                        s.execute("shape.rectangle", &r).unwrap()["id"].as_u64().unwrap()
+                    }
+                };
+                if next(2) == 0 {
+                    let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 1.0 + next(120) as f64);
+                    st.join = [LineJoin::Miter, LineJoin::Round, LineJoin::Bevel][next(3) as usize];
+                    st.cap = [LineCap::Butt, LineCap::Round, LineCap::Square][next(3) as usize];
+                    st.align = [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside][next(3) as usize];
+                    st.miter_limit = 1.0 + next(20) as f64;
+                    let look = Appearance { items: vec![AppearanceItem::Stroke(st)], ..Appearance::default() };
+                    s.edit("Strokes", |d, _| {
+                        d.node_mut(NodeId(id)).unwrap().appearance = look.into();
+                        Ok(())
+                    })
+                    .unwrap();
+                }
+                ids.push(id);
+            }
+            if ids.len() > 1 {
+                match next(3) {
+                    0 => {
+                        s.execute("select.set", &json!({"ids": ids})).unwrap();
+                        s.execute("object.group", &json!({})).unwrap();
+                    }
+                    1 => {
+                        let (x, y) = (next(1400) as f64 - 100.0, next(800) as f64 - 100.0);
+                        let clip = json!({"x": x, "y": y, "width": 1 + next(400), "height": 1 + next(300)});
+                        let clip = s.execute("shape.rectangle", &clip).unwrap()["id"].as_u64().unwrap();
+                        let members: Vec<u64> = ids.iter().copied().chain([clip]).collect();
+                        s.execute("select.set", &json!({"ids": members})).unwrap();
+                        s.execute("object.clippingMask.make", &json!({})).unwrap();
+                    }
+                    _ => {}
+                }
+            }
+            let d = &s.doc().unwrap().doc;
+            let measured = measured_any_empty(d);
+            let at = || d.artboards.iter().map(|a| (a.rect, a.locked)).collect::<Vec<_>>();
+            assert_eq!(any_empty_artboards(d), measured, "{:?}", at());
+            assert_eq!(!empty_artboards(d).is_empty(), measured, "{:?}", at());
+            enabled += usize::from(measured);
+            let several = d.artboards.len() > 1 && !ids.is_empty();
+            disabled_with_art += usize::from(several && !measured);
+        }
+        assert!(enabled > 15 && enabled < 105, "both answers come up: {enabled} of 120 enabled");
+        assert!(disabled_with_art > 3, "documents with several artboards and art come up disabled: {disabled_with_art}");
+    }
 }

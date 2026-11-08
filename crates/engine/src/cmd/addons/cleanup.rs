@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Simplify Anchors (Keep Shape)…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{tolerance?: 1..100 (20; higher removes more anchors and lets the outline move further from where it was, up to tolerance × 0.02 pt), protectCorners?: bool (false; anchors where the path turns by more than 30° stay), ids?: [id…] (default: the selection)} remove the anchors each path under the objects can do without, refitting the handles beside each so the outline keeps its shape, as one undo step; open ends stay → {ids, before, after} anchor counts",
+            "{tolerance?: 1..100 (20; higher removes more anchors and lets the outline move further from where it was, up to tolerance × 0.02 pt), protectCorners?: bool (false; anchors where the path turns by more than 30° stay), ids?: [id…] (default: the selection)} remove the anchors each path under the objects can do without, refitting the handles beside each so the outline keeps its shape, as one undo step; open ends stay, and locked and hidden paths are left out → {ids, before, after} anchor counts",
             has_selection,
             simplify
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Health Check",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
+            "{scope?: \"selection\"|\"document\" (default: the selection, or the document while nothing is selected), kinds?: [kind…] (default: all: emptyText, strayPoints (paths of one anchor), unpainted, zeroOpacity, duplicateObjects (a path stacked on an identical one, or type on the same type within 1 pt), offArtboard, duplicateAnchors (neighbours within 0.01 pt), tinyHandles (under 0.01 pt), collinearAnchors (corners on a straight run, turning less than sine 0.005), nearPoints (anchors within 0.01 pt of other paths' anchors), nearlyClosed (ends within 0.01 pt), filledOpenPaths (filled, unstroked open paths), needlessClipGroups (an unpainted clip that clips nothing, hides everything, or is a rectangle round all its art), needlessCompounds (one path or none), needlessGroups (one member or none, nothing of their own), emptyArtboards (the document only))} find issues without changing anything; locked and hidden objects are left out → {scope, total, findings: [{kind, label, count, ids (the objects, at most 1000), artboards (indexes)}]} for the kinds found",
             has_doc,
             check
         ),
@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Deep Ungroup…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{includeClipGroups?: bool (false: clipping groups, and the art inside them, stay as they are; true: they are ungrouped too and their clipping paths become plain paths), ids?: [id…] (default: the selection)} ungroup every level of the groups among the objects, as one undo step; each object keeps the opacity of the groups it was in → {ids (the objects left, selected), ungrouped (groups)}",
+            "{includeClipGroups?: bool (false: clipping groups, and the art inside them, stay as they are; true: they are ungrouped too and their clipping paths become plain paths), ids?: [id…] (default: the selection)} ungroup every level of the groups among the objects, as one undo step; each object keeps the opacity of the groups it was in; locked and hidden groups stay whole, and locked and hidden objects stay locked or hidden and are not selected → {ids (the objects selected: those left, or with no group to take apart the selection as it was), ungrouped (groups)}",
             has_selection,
             deep_ungroup
         ),
@@ -91,7 +91,8 @@ pub fn specs() -> Vec<CommandSpec> {
     v
 }
 
-/// The paths (not guides) under `roots`, compound path members included.
+/// The paths (not guides) under `roots`, compound path members included; locked and hidden
+/// paths, and those in locked or hidden groups, stay out.
 fn paths_under(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
     let mut out = vec![];
     for n in roots.iter().filter_map(|id| d.node(*id)) {
@@ -101,6 +102,8 @@ fn paths_under(d: &Document, roots: &[NodeId]) -> Vec<NodeId> {
             }
         });
     }
+    let editable = d.editable();
+    out.retain(|id| editable(*id));
     out
 }
 
@@ -256,9 +259,9 @@ fn ungroupable(n: &Node, clips: bool) -> bool {
 
 /// `n` with every level of grouping Deep Ungroup takes apart removed, into `out`; `count` counts
 /// the groups. Members take on the opacity of the groups they were in, and a clipping path
-/// becomes a plain path.
+/// becomes a plain path. A locked or hidden group stays whole.
 fn flatten(n: Node, clips: bool, out: &mut Vec<Node>, count: &mut usize) {
-    if !ungroupable(&n, clips) {
+    if !ungroupable(&n, clips) || n.locked || !n.visible {
         out.push(n);
         return;
     }
@@ -282,6 +285,11 @@ fn deep_ungroup(s: &mut Session, p: &Value) -> Result<Value> {
     let clips = switch_or(p, "includeClipGroups", false, C)?;
     let roots = checked_ids_or_selection(s, p, C)?;
     let d = &s.doc()?.doc;
+    // Locked and hidden objects, and those in locked or hidden groups, stay as they are.
+    let roots: Vec<NodeId> = {
+        let editable = d.editable();
+        roots.into_iter().filter(|id| editable(*id)).collect()
+    };
     let (mut items, mut selected, mut count) = (vec![], vec![], 0);
     for id in &roots {
         match d.node(*id).filter(|n| ungroupable(n, clips)) {
@@ -294,13 +302,18 @@ fn deep_ungroup(s: &mut Session, p: &Value) -> Result<Value> {
             None => selected.push(*id),
         }
     }
-    // With no group to take apart, the document and its undo history stay as they are.
-    if !items.is_empty() {
-        let ids = selected.clone();
-        s.edit("Deep Ungroup", |d, sel| {
+    // With no group to take apart, the document, the selection and the undo history stay as they
+    // are, and the reply lists the selection.
+    if items.is_empty() {
+        selected = s.doc()?.selection.objects.to_vec();
+    } else {
+        selected = s.edit("Deep Ungroup", move |d, sel| {
             d.insert_beside(items, true)?;
-            sel.set(ids);
-            Ok(())
+            // Members that are locked or hidden themselves keep that, and are not selected.
+            let editable = d.editable();
+            selected.retain(|id| editable(*id));
+            sel.set(selected.iter().copied());
+            Ok(selected)
         })?;
     }
     Ok(json!({ "ids": selected.iter().map(|i| i.0).collect::<Vec<_>>(), "ungrouped": count }))
