@@ -494,14 +494,14 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     assert_eq!(name(&app), before, "one undo step");
 }
 
-/// Rename (`ui.rename`) has no default key, F2 being free: it is listed in Keyboard Shortcuts,
+/// Rename (`ui.rename`) has no default key (F2 is Cut's alternate on Windows and Linux): it is listed in Keyboard Shortcuts,
 /// where a key can be assigned to it.
 #[test]
 fn rename_has_no_default_key() {
     use crate::shortcut_editor::{command_for_key, default_command_shortcut};
     crate::shortcut_editor::sync(&crate::state::UiState::default());
     assert_eq!(default_command_shortcut("ui.rename"), None);
-    assert_eq!(command_for_key("F2"), None);
+    assert_ne!(command_for_key("F2"), Some("ui.rename"));
     let (mut app, _, _) = two_rects();
     let listed = app.run("shortcuts.list", json!({"query": "ui.rename"})).unwrap();
     let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
