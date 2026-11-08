@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed}",
             has_selection,
-            |s, p| recolor(s, p, "Invert Colors", &invert)
+            |s, p| recolor(s, p, "edit.colors.invert", "Invert Colors", &invert)
         ),
         cmd!(
             "edit.colors.toCMYK",
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
             has_selection,
-            |s, p| recolor(s, p, "Convert to CMYK", &to_cmyk)
+            |s, p| recolor(s, p, "edit.colors.toCMYK", "Convert to CMYK", &to_cmyk)
         ),
         cmd!(
             "edit.colors.toGrayscale",
@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             None,
             "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
             has_selection,
-            |s, p| recolor(s, p, "Convert to Grayscale", &to_gray)
+            |s, p| recolor(s, p, "edit.colors.toGrayscale", "Convert to Grayscale", &to_gray)
         ),
         cmd!(
             "edit.colors.toRGB",
@@ -60,7 +60,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "{fill?, stroke?, includeImages?, includePatterns?, ids?} (as edit.colors.invert) → {changed}",
             has_selection,
             |s, p| {
-                recolor(s, p, "Convert to RGB", &|c| {
+                recolor(s, p, "edit.colors.toRGB", "Convert to RGB", &|c| {
                     let [r, g, b] = c.to_rgb();
                     Color::rgb(r, g, b)
                 })
@@ -331,26 +331,27 @@ impl ColorVisitor for Visit<'_, '_> {
     }
 }
 
-pub(crate) fn recolor(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
-    run_pass(s, p, label, Recolor::new(Scope::of(p), f))
+pub(crate) fn recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color) -> Result<Value> {
+    run_pass(s, p, cmd, label, Recolor::new(Scope::of(p), f))
 }
 
 /// [`recolor`] with solid colours and gradient stops mapped through `links`, with their swatch
 /// link and tint.
-pub(crate) fn recolor_links(s: &mut Session, p: &Value, label: &str, f: &dyn Fn(Color) -> Color, links: &LinkMap) -> Result<Value> {
-    run_pass(s, p, label, Recolor::with_links(Scope::of(p), f, links))
+pub(crate) fn recolor_links(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(Color) -> Color, links: &LinkMap) -> Result<Value> {
+    run_pass(s, p, cmd, label, Recolor::with_links(Scope::of(p), f, links))
 }
 
-/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step.
-fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Value> {
-    let ids = match ids_param(p, "ids") {
+/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step named `label`;
+/// errors name the command `cmd`.
+fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -> Result<Value> {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(v) => v,
         None => selected_roots(s)?,
     };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let n = s.edit(label, |d, _| {
         let n = pass.run(d, &ids);
-        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
+        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
         Ok(n)
     })?;
     Ok(json!({ "changed": n }))
@@ -358,7 +359,7 @@ fn run_pass(s: &mut Session, p: &Value, label: &str, pass: Recolor) -> Result<Va
 
 fn saturate(s: &mut Session, p: &Value) -> Result<Value> {
     let i = (f64_req(p, "intensity", "edit.colors.saturate")?.clamp(-100.0, 100.0) / 100.0) as f32;
-    recolor(s, p, "Saturate", &move |c| {
+    recolor(s, p, "edit.colors.saturate", "Saturate", &move |c| {
         let [h, sat, v] = c.to_hsb();
         let to = (sat * (1.0 + i)).clamp(0.0, 1.0);
         // A color whose saturation stays the same is returned as it is, so it keeps its swatch link.
@@ -416,12 +417,12 @@ fn adjust_balance(s: &mut Session, p: &Value) -> Result<Value> {
                 (*tint, *c) = (t, base.tinted(t));
                 true
             };
-            return run_pass(s, p, "Adjust Colors", Recolor::links(Scope::of(p), &shift));
+            return run_pass(s, p, C, "Adjust Colors", Recolor::links(Scope::of(p), &shift));
         }
         other => return Err(bad(C, format!("unknown mode `{other}` (rgb|cmyk|gray|global)"))),
     };
     let convert = bool_or(p, "convert", false);
-    recolor(s, p, "Adjust Colors", &move |c| {
+    recolor(s, p, C, "Adjust Colors", &move |c| {
         let out = adjust(c);
         if convert { out } else { keep_model(c, out) }
     })

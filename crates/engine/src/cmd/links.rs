@@ -1079,7 +1079,7 @@ pub(crate) fn with_found_paths(d: &mut Document, doc_path: &str) {
 
 fn check(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let ids = ids_param(p, "ids");
+    let ids = ids_param(p, "ids", "links.check")?;
     let (mut missing, mut modified) = (0, 0);
     let mut links = vec![];
     for g in groups(&st.doc, ids.as_deref()).iter().filter(|g| !g.ids.is_empty()) {
@@ -1100,7 +1100,7 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn update(s: &mut Session, p: &Value) -> Result<Value> {
-    update_where(s, ids_param(p, "ids"), None)
+    update_where(s, ids_param(p, "ids", "links.update")?, None)
 }
 
 /// Update Links in the active document of `s` for objects `ids` (default: the linked files that
@@ -1225,7 +1225,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
             _ => None,
         })
     };
-    let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids")) {
+    let mut ids: Vec<NodeId> = match (&each, ids_param(p, "ids", C)?) {
         (Some(each), _) => each.iter().flat_map(|(ids, _)| ids.iter().copied()).collect(),
         (None, Some(ids)) => ids,
         (None, None) => {
@@ -1603,7 +1603,7 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
         Some(NodeKind::PlacedDocument(_)) => true,
         _ => false,
     };
-    let ids = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.iter().copied().filter(linked).collect());
+    let ids = ids_param(p, "ids", C)?.unwrap_or_else(|| st.selection.objects.iter().copied().filter(linked).collect());
     if let Some(id) = ids.iter().find(|id| !matches!(kind(id), Some(NodeKind::Image(_) | NodeKind::PlacedDocument(_)))) {
         return Err(bad(C, format!("object {} is not an image or a placed document", id.0)));
     }
@@ -1792,7 +1792,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
 fn placement_options(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "links.placementOptions";
     let st = s.doc()?;
-    let ids = ids_param(p, "ids").unwrap_or_else(|| st.selection.objects.iter().copied().filter(|id| placement_of(&st.doc, *id).is_some()).collect());
+    let ids =
+        ids_param(p, "ids", C)?.unwrap_or_else(|| st.selection.objects.iter().copied().filter(|id| placement_of(&st.doc, *id).is_some()).collect());
     if let Some(id) = ids.iter().find(|id| placement_of(&st.doc, **id).is_none()) {
         return Err(bad(C, format!("object {} is not an image or a linked file", id.0)));
     }

@@ -4500,6 +4500,7 @@ font-technology	Variable	ცვლადი
 @msg	object ids are non-negative integers, not {v}	ობიექტების id არაუარყოფითი მთელი რიცხვებია და არა {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} უნდა იყოს ობიექტების id-ების მასივი, სადაც ყოველი id არაუარყოფითი მთელი რიცხვია
 @msg	invalid object id {value}: expected a non-negative integer	ობიექტის არასწორი id {value}: მოსალოდნელია არაუარყოფითი მთელი რიცხვი
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`-ის ელემენტი {index} არის {value} და არა ობიექტის id (არაუარყოფითი მთელი რიცხვი)
 @msg	no such object id {value}	ობიექტი id-ით {value} არ არსებობს
 @msg	id {value} is a layer, not an object	id {value} შრეა და არა ობიექტი
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} შრეა და არა ობიექტი; შრეების გადასატანად გამოიყენეთ layer.move

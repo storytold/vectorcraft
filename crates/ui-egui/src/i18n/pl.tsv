@@ -4906,6 +4906,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	identyfikatory obiektów to nieujemne liczby całkowite, nie {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} musi być tablicą identyfikatorów obiektów, które są nieujemnymi liczbami całkowitymi
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move

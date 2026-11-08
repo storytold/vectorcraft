@@ -5411,6 +5411,7 @@ lighting	Light	光源
 @msg	{key} must be Unix seconds (an integer) or null	{key} 必須是以秒為單位的 Unix 時間 (整數) 或 null
 @msg	{key} must be an array of non-negative integer object ids	{key} 必須是由非負整數物件 id 組成的陣列
 @msg	invalid object id {value}: expected a non-negative integer	無效的物件 id {value}：應為非負整數
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 處的項目為 {value}，不是非負整數物件 id
 @msg	no such object id {value}	沒有 id 為 {value} 的物件
 @msg	id {value} is a layer, not an object	id {value} 是圖層，不是物件
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是圖層，不是物件；請使用 layer.move 移動圖層

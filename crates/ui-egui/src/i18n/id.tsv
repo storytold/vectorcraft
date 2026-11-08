@@ -4704,6 +4704,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	id objek adalah bilangan bulat non-negatif, bukan {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} harus berupa larik id objek yang berupa bilangan bulat non-negatif
 @msg	invalid object id {value}: expected a non-negative integer	id objek {value} tidak valid: harus berupa bilangan bulat non-negatif
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	entri {index} dari `{key}` adalah {value}, bukan id objek (bilangan bulat non-negatif)
 @msg	no such object id {value}	tidak ada objek dengan id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas baca tidak ada: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	akses sistem berkas otomatisasi tidak diberikan: otoritas tulis tidak ada: {path}

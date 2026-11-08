@@ -4590,6 +4590,7 @@ imageTrace	Outline	轮廓
 @msg	object ids are non-negative integers, not {v}	对象 id 是非负整数，而不是 {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} 必须是由非负整数对象 id 组成的数组
 @msg	invalid object id {value}: expected a non-negative integer	无效的对象 id {value}：应为非负整数
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` 中索引 {index} 处的项为 {value}，不是非负整数对象 id
 @msg	no such object id {value}	没有 id 为 {value} 的对象
 @msg	id {value} is a layer, not an object	id {value} 是图层，不是对象
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} 是图层，不是对象；请使用 layer.move 移动图层

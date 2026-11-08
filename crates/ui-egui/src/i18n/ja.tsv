@@ -4881,6 +4881,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	object ids are non-negative integers, not {v}	オブジェクト ID は 0 以上の整数です ({v} は使えません)
 @msg	{key} must be an array of non-negative integer object ids	{key} にはオブジェクト ID (0 以上の整数) の配列を指定してください
 @msg	invalid object id {value}: expected a non-negative integer	オブジェクト ID {value} は正しくありません: 0 以上の整数を指定してください
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` の要素 {index} は {value} で、オブジェクト ID (0 以上の整数) ではありません
 @msg	no such object id {value}	ID が {value} のオブジェクトは見つかりません
 @msg	id {value} is a layer, not an object	ID {value} はオブジェクトではなくレイヤーです
 @msg	id {value} is a layer, not an object; move layers with layer.move	ID {value} はオブジェクトではなくレイヤーです。レイヤーは layer.move で移動してください

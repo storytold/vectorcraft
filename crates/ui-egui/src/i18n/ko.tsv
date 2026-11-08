@@ -4808,6 +4808,7 @@ theme	Appearance	외관
 @msg	object ids are non-negative integers, not {v}	개체 id는 음이 아닌 정수여야 하며 {v}은(는) 안 됩니다
 @msg	{key} must be an array of non-negative integer object ids	{key}은(는) 음이 아닌 정수인 개체 id의 배열이어야 합니다
 @msg	invalid object id {value}: expected a non-negative integer	개체 id {value}이(가) 올바르지 않습니다: 음이 아닌 정수여야 합니다
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`의 항목 {index}은(는) {value}이며, 음이 아닌 정수인 개체 id가 아닙니다
 @msg	no such object id {value}	id가 {value}인 개체가 없습니다
 @msg	id {value} is a layer, not an object	id {value}은(는) 개체가 아닌 레이어입니다
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value}은(는) 개체가 아닌 레이어입니다. 레이어는 layer.move로 이동하세요

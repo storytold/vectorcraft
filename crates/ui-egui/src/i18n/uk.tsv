@@ -4824,6 +4824,7 @@ axis	Both	Обидві
 @msg	object ids are non-negative integers, not {v}	ідентифікатори об’єктів — невід’ємні цілі числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} має бути масивом ідентифікаторів об’єктів, які є невід’ємними цілими числами
 @msg	invalid object id {value}: expected a non-negative integer	неприпустимий ідентифікатор об’єкта {value}: очікується невід’ємне ціле число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} у `{key}` дорівнює {value}, а не ідентифікатору об’єкта (невід’ємному цілому числу)
 @msg	no such object id {value}	об’єкт з ідентифікатором {value} не існує
 @msg	id {value} is a layer, not an object	ідентифікатор {value} належить шару, а не об’єкту
 @msg	id {value} is a layer, not an object; move layers with layer.move	ідентифікатор {value} належить шару, а не об’єкту; переміщуйте шари за допомогою layer.move

@@ -4806,6 +4806,7 @@ axis	Both	Les deux
 @msg	object ids are non-negative integers, not {v}	les identifiants d’objet sont des entiers positifs ou nuls, pas {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} doit être un tableau d’identifiants d’objet, entiers positifs ou nuls
 @msg	invalid object id {value}: expected a non-negative integer	identifiant d’objet {value} non valide (un entier positif ou nul est attendu)
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrée {index} de `{key}` vaut {value}, pas un identifiant d’objet (entier positif ou nul)
 @msg	no such object id {value}	aucun objet ne porte l’identifiant {value}
 @msg	id {value} is a layer, not an object	l’identifiant {value} désigne un calque, pas un objet
 @msg	id {value} is a layer, not an object; move layers with layer.move	l’identifiant {value} désigne un calque, pas un objet ; déplacez les calques avec layer.move

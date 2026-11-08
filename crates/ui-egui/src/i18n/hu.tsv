@@ -5119,6 +5119,7 @@ imageTrace	Outline	Körvonal
 @msg	object ids are non-negative integers, not {v}	az objektumazonosító nemnegatív egész szám, ez nem az: {v}
 @msg	{key} must be an array of non-negative integer object ids	{key}: objektumazonosítók tömbje kell, mindegyik nemnegatív egész szám
 @msg	invalid object id {value}: expected a non-negative integer	érvénytelen objektumazonosító: {value} (nemnegatív egész szám kell)
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` {index} indexű eleme {value}, nem objektumazonosító (nemnegatív egész szám kell)
 @msg	no such object id {value}	nincs ilyen objektumazonosító: {value}
 @msg	id {value} is a layer, not an object	a(z) {value} azonosító egy réteg, nem objektum
 @msg	id {value} is a layer, not an object; move layers with layer.move	a(z) {value} azonosító egy réteg, nem objektum; a rétegeket a layer.move paranccsal helyezheti át

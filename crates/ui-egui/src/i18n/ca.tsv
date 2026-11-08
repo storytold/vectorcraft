@@ -5207,6 +5207,7 @@ digits	Malayalam	Malaiàlam
 @msg	invalid image data for `{0}`	dades d’imatge no vàlides per a `{0}`
 @msg	invalid native panel set	conjunt de panells natius no vàlid
 @msg	invalid object id {value}: expected a non-negative integer	id d’objecte {value} no vàlid: s’esperava un enter no negatiu
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	l’entrada {index} de `{key}` és {value}, no un id d’objecte (un enter no negatiu)
 @msg	Invalid panel layout; restored the default dock	Disposició de panells no vàlida; s’ha restaurat l’acoblament per defecte
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}

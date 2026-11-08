@@ -2104,7 +2104,7 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
     let switch = |k: &str| format!("`{k}` must be true or false");
     let scope = "`scope` must be one of selection, document".to_string();
     let not_a_list = "ids must be an array of non-negative integer object ids".to_string();
-    let not_an_id = "invalid object id \"x\": expected a non-negative integer".to_string();
+    let not_an_id = |entry: usize| format!("`ids` entry {entry} is \"x\", not a non-negative integer object id");
     for (cmd, p, want) in [
         ("edit.findReplace", json!({"find": "cat", "replace": 5}), string("replace")),
         ("edit.findReplace", json!({"find": 5, "replace": "dog"}), string("find")),
@@ -2112,7 +2112,8 @@ fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "wholeWord": "yes"}), switch("wholeWord")),
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": t.0}), not_a_list),
         ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, 999_999]}), "no such object id 999999".to_string()),
-        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": ["x"]}), not_an_id),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": ["x"]}), not_an_id(0)),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, "x"]}), not_an_id(1)),
         ("edit.findNext", json!({"find": ["cat"]}), string("find")),
         ("edit.findNext", json!({"find": "cat", "matchCase": 1}), switch("matchCase")),
         ("edit.findNext", json!({"find": "cat", "wholeWord": "false"}), switch("wholeWord")),
