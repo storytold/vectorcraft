@@ -35,7 +35,7 @@ pub(crate) fn regexp_of(interp: &Interp, v: &Value) -> Option<(ObjId, Rc<Regex>)
 }
 
 /// Checks and compiles a pattern, throwing a `SyntaxError` for a pattern or flags that are not
-/// valid. What compiling holds is held against the heap limit as it grows. The compiled form's
+/// valid. The check takes one unit of fuel for each unit of the pattern. What compiling holds is held against the heap limit as it grows. The compiled form's
 /// bytes are then reserved together with `extra` more and added to the heap, so a caller that
 /// stores the result in an object it allocates next reserves that object here.
 fn compile_regex(interp: &mut Interp, pattern: &[u16], flags: &[u16], extra: usize) -> JsResult<Rc<Regex>> {
@@ -44,6 +44,7 @@ fn compile_regex(interp: &mut Interp, pattern: &[u16], flags: &[u16], extra: usi
         Err(m) => return Err(interp.throw(ErrorType::Syntax, &m)),
     };
     let depth = interp.options.max_depth;
+    use_fuel_n(interp, pattern.len() as u64)?;
     if let Err(m) = crate::regexp::check(pattern, depth) {
         return Err(interp.throw(ErrorType::Syntax, &format!("invalid regular expression: {m}")));
     }

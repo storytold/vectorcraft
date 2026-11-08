@@ -2,6 +2,7 @@
 
 use proptest::prelude::*;
 
+use crate::regexp_vm::{INST_BYTES, ITEM_BYTES};
 use crate::{JsValue, LimitKind, Limits, Options, Realm, RunError, RunErrorKind};
 
 fn run_in(realm: &mut Realm, src: &str) -> JsValue {
@@ -302,18 +303,64 @@ fn compiling_a_pattern_counts_against_the_heap() {
     assert_eq!(run(src), JsValue::Number(131_072.0));
     // The compiler stops while it reads the pattern, before the code it builds passes the room.
     let pattern = "[\\s\\S]a*".repeat(1000);
-    assert!(stopped_by(&compile_within(&pattern, crate::regexp_vm::compile_bytes(400, 0, 0), u64::MAX).0, LimitKind::Heap));
+    assert!(stopped_by(&compile_within(&pattern, 400 * (ITEM_BYTES + INST_BYTES), u64::MAX).0, LimitKind::Heap));
     assert!(compile_within(&pattern, usize::MAX, u64::MAX).0.is_ok());
     // A literal pattern takes what its instructions hold, not the most a unit can take.
-    assert!(compile_within(&"a".repeat(10_000), crate::regexp_vm::compile_bytes(20_000, 0, 0), u64::MAX).0.is_ok());
+    assert!(compile_within(&"a".repeat(10_000), 20_000 * (ITEM_BYTES + INST_BYTES), u64::MAX).0.is_ok());
     // A class's ranges count while they are read, even when they collapse into one range.
     assert!(stopped_by(&compile_within(&format!("[{}]", "a".repeat(10_000)), 1000, u64::MAX).0, LimitKind::Heap));
     // So do the ranges of class escapes, and each atom and range read takes fuel.
     let escapes = format!("[{}]", "\\w".repeat(10_000));
     assert!(stopped_by(&compile_within(&escapes, 64 << 10, u64::MAX).0, LimitKind::Heap));
     assert!(stopped_by(&compile_within(&escapes, usize::MAX, 20_000).0, LimitKind::Fuel));
-    // The joining and flattening after the last unit count too.
-    assert!(stopped_by(&compile_within("ab", crate::regexp_vm::compile_bytes(1, 0, 0), u64::MAX).0, LimitKind::Heap));
+    // The lists count with the room they reserve as they double: 4097 literal units hold room for
+    // 8192 items, and the flattened code after the last unit adds 4098 instructions.
+    let literal = "a".repeat(4097);
+    let (compiled, bytes, _) = compile_within(&literal, usize::MAX, u64::MAX);
+    assert!(compiled.is_ok());
+    assert!(bytes >= 8192 * ITEM_BYTES + 4098 * INST_BYTES, "{bytes}");
+    assert!(stopped_by(&compile_within(&literal, 8192 * ITEM_BYTES + 4000 * INST_BYTES, u64::MAX).0, LimitKind::Heap));
+}
+
+#[test]
+fn compiling_a_pattern_takes_fuel_for_each_scan_of_it() {
+    // The scan for capturing groups takes a unit of fuel for each unit of the pattern, and so does
+    // the compile itself.
+    let literal = "a".repeat(100_000);
+    let (compiled, _, fuel) = compile_within(&literal, usize::MAX, u64::MAX);
+    assert!(compiled.is_ok());
+    assert!(fuel >= 200_000, "{fuel}");
+    assert!(stopped_by(&compile_within(&literal, usize::MAX, 150_000).0, LimitKind::Fuel));
+    // The syntax check before compiling takes a unit for each unit too.
+    let mut realm = Realm::new();
+    let interp = realm.interp();
+    let (source, flags) = (crate::value::Str::from(literal.as_str()), crate::value::Str::from(""));
+    interp.fuel = 1 << 40;
+    assert!(crate::regexp_builtins::new_regexp(interp, &source, &flags).is_ok());
+    let used = (1u64 << 40) - interp.fuel;
+    assert!(used >= 300_000, "{used}");
+    interp.fuel = 250_000;
+    assert!(matches!(crate::regexp_builtins::new_regexp(interp, &source, &flags), Err(crate::interp::Abrupt::Limit(LimitKind::Fuel))));
+}
+
+#[test]
+fn held_bytes_leave_the_heap_total_when_their_holder_is_dropped() {
+    let mut realm = Realm::new();
+    let interp = realm.interp();
+    interp.collect_for_room();
+    let live = interp.heap.bytes;
+    interp.limits.heap_bytes = live + 10_000;
+    let mut held = crate::interp::HeldBytes::new(interp);
+    assert!(held.add(interp, 6000).is_ok());
+    assert_eq!(interp.heap.bytes, live + 6000);
+    assert!(matches!(crate::interp::HeldBytes::new(interp).add(interp, 6000), Err(crate::interp::Abrupt::Limit(LimitKind::Heap))));
+    drop(held);
+    // The next check gives the bytes back without a collection.
+    assert!(interp.reserve_heap(0).is_ok());
+    assert_eq!(interp.heap.bytes, live);
+    let mut again = crate::interp::HeldBytes::new(interp);
+    assert!(again.add(interp, 6000).is_ok());
+    assert_eq!(interp.heap.bytes, live + 6000);
 }
 
 /// Compiles `pattern` with no flags through a charge that allows `heap` bytes and `fuel` units,

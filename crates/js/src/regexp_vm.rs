@@ -328,10 +328,12 @@ impl Frags {
     }
 
     /// The instructions of `top` with every fragment in place, written with a loop, with room for
-    /// one more.
+    /// one more. Its stack holds at most one entry for each fragment and two more, so it never
+    /// grows past [`flatten_bytes`].
     fn flatten(&self, top: &[Item]) -> Vec<Inst> {
         let mut out = Vec::with_capacity(self.len_of(top).saturating_add(1));
-        let mut stack: Vec<(&[Item], usize)> = vec![(top, 0)];
+        let mut stack: Vec<(&[Item], usize)> = Vec::with_capacity(self.items.len().saturating_add(2));
+        stack.push((top, 0));
         while let Some((items, i)) = stack.pop() {
             let Some(item) = items.get(i) else { continue };
             stack.push((items, i + 1));
@@ -365,10 +367,53 @@ impl Ctx {
     }
 }
 
-/// Adds `inst` to `ctx`, counting it in `emitted`.
-fn emit(emitted: &mut usize, ctx: &mut Ctx, inst: Inst) {
-    *emitted += 1;
+/// Adds `inst` to `ctx`.
+fn emit(ctx: &mut Ctx, inst: Inst) {
     ctx.cur.push(Item::Inst(inst));
+}
+
+/// The bytes of one item of code being compiled.
+pub(crate) const ITEM_BYTES: usize = size_of::<Item>();
+
+/// The bytes of one instruction of compiled code.
+pub(crate) const INST_BYTES: usize = size_of::<Inst>();
+
+/// Charges `bytes` that compiling holds.
+fn hold(bytes: usize, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(), CompileFail> {
+    if bytes == 0 {
+        return Ok(());
+    }
+    charge(Cost::Heap(bytes)).map_err(CompileFail::Abrupt)
+}
+
+/// Makes room in `list` for `extra` more entries. When it must grow, its capacity at least
+/// doubles, and the bytes of the added capacity are charged before it is reserved.
+fn room<T>(list: &mut Vec<T>, extra: usize, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<(), CompileFail> {
+    let need = list.len().saturating_add(extra);
+    let cap = list.capacity();
+    if need <= cap {
+        return Ok(());
+    }
+    let new_cap = need.max(cap.saturating_mul(2));
+    hold(size_of::<T>().saturating_mul(new_cap - cap), charge)?;
+    list.reserve_exact(new_cap - list.len());
+    Ok(())
+}
+
+/// The bytes `join` holds for `alts` alternatives besides the fragments it adds: the code that
+/// joins them and their lengths.
+fn join_bytes(alts: usize) -> usize {
+    if alts <= 1 {
+        return 0;
+    }
+    alts.saturating_mul(2 * ITEM_BYTES + size_of::<usize>())
+}
+
+/// The bytes flattening holds: `instructions` and one more, and its stack for `fragments`.
+fn flatten_bytes(instructions: usize, fragments: usize) -> usize {
+    INST_BYTES
+        .saturating_mul(instructions.saturating_add(1))
+        .saturating_add(size_of::<(&[Item], usize)>().saturating_mul(fragments.saturating_add(2)))
 }
 
 fn offset(n: usize) -> Result<i32, CompileFail> {
@@ -593,81 +638,62 @@ fn class(pattern: &[u16], mut i: usize, work: &mut u64, charge: &mut dyn FnMut(C
     }
 }
 
-/// At least the bytes a class escape's set (`\d`, `\S`, ...) holds.
-const ESCAPE_SET_BYTES: usize = size_of::<CharSet>() + 16 * size_of::<(u16, u16)>();
+/// At least the bytes of a class escape's ranges (`\d`, `\S`, ...).
+const ESCAPE_RANGES_BYTES: usize = 16 * size_of::<(u16, u16)>();
 
 /// The bytes a character class's ranges hold.
 fn set_bytes(set: &CharSet) -> usize {
     size_of::<(u16, u16)>().saturating_mul(set.ranges.capacity())
 }
 
-/// The bytes compiling holds: each instruction as an item and in the flattened code, each
-/// fragment with its item, and the classes.
-pub(crate) fn compile_bytes(instructions: usize, fragments: usize, sets_size: usize) -> usize {
-    instructions
-        .saturating_mul(size_of::<Item>() + size_of::<Inst>())
-        .saturating_add(fragments.saturating_mul(size_of::<Item>() + 32))
-        .saturating_add(sets_size)
-}
-
-/// Compiles `pattern`. Groups may nest `max_depth` deep. `charge` takes fuel for the work done, and
-/// heap bytes for what compiling holds before it grows: the instructions, fragments and classes
-/// made so far (with the two instructions each `|` adds), the groups still open and the ranges of
-/// the class being read. An error from `charge` stops compiling.
+/// Compiles `pattern`. Groups may nest `max_depth` deep. `charge` takes fuel for the work done,
+/// counting each unit of the scan for capturing groups and of the compile itself, and heap bytes
+/// for what compiling holds before it is made: the capacity each list reserves as it grows, the
+/// ranges of each class, and the code that joins alternatives and the flattened code. An error
+/// from `charge` stops compiling.
 pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &mut dyn FnMut(Cost) -> JsResult<()>) -> Result<Regex, CompileFail> {
+    let mut work: u64 = 0;
+    add_work(&mut work, pattern.len() as u64, charge)?;
     let total_groups = count_groups(pattern);
+    hold(size_of::<Ctx>(), charge)?;
     let mut sets: Vec<CharSet> = Vec::new();
-    let mut sets_size = 0usize;
     let mut stack: Vec<Ctx> = vec![Ctx::new(Kind::Top, (0, 0))];
     let mut frags = Frags::default();
     let mut groups: u32 = 0;
     let mut loops: u32 = 0;
     let mut i = 0;
-    let mut work: u64 = 0;
-    // The instructions made so far, counting the `Split` and `Jump` each `|` adds when it is joined.
-    let mut emitted = 0usize;
-    // The fragments the joins of the groups still open will add, one for each `|` read in them.
-    let mut joined = 0usize;
-    // The heap bytes charged so far.
-    let mut held = 0usize;
     let canon = |u: u16| if flags.ignore_case { canonicalize(u) } else { u };
     while let Some(&u) = pattern.get(i) {
         add_work(&mut work, 1, charge)?;
-        // One step adds at most three instructions, two fragments, one open group and one class
-        // escape's set (a class charges its own ranges), so their bytes are charged before the
-        // step makes them.
-        let now = compile_bytes(emitted + 3, frags.items.len() + joined + 2, sets_size.saturating_add(ESCAPE_SET_BYTES))
-            .saturating_add(size_of::<Ctx>().saturating_mul(stack.len() + 1));
-        if now > held {
-            charge(Cost::Heap(now - held)).map_err(CompileFail::Abrupt)?;
-            held = now;
-        }
+        // One step adds at most one open group, one class, one alternative and four items to the
+        // current alternative, so those lists have room for them before the step.
+        room(&mut stack, 1, charge)?;
+        room(&mut sets, 1, charge)?;
         let ctx = stack.last_mut().ok_or("unmatched ')'")?;
+        room(&mut ctx.cur, 4, charge)?;
+        room(&mut ctx.alts, 1, charge)?;
         let start = ctx.cur.len();
         let before = groups;
         match u {
             0x5E | 0x24 => {
-                emit(&mut emitted, ctx, if u == 0x5E { Inst::LineStart } else { Inst::LineEnd });
+                emit(ctx, if u == 0x5E { Inst::LineStart } else { Inst::LineEnd });
                 ctx.atom = None;
                 i += 1;
             }
             0x7C => {
-                emitted += 2;
-                joined += 1;
                 let cur = std::mem::take(&mut ctx.cur);
                 ctx.alts.push(cur);
                 ctx.atom = None;
                 i += 1;
             }
             0x2E => {
-                emit(&mut emitted, ctx, Inst::Any);
+                emit(ctx, Inst::Any);
                 ctx.atom = Some((start, before));
                 i += 1;
             }
             0x5B => {
                 let (set, next) = class(pattern, i, &mut work, charge)?;
-                emit(&mut emitted, ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
-                sets_size = sets_size.saturating_add(size_of::<CharSet>() + set_bytes(&set));
+                emit(ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
                 sets.push(set);
                 ctx.atom = Some((start, before));
                 i = next;
@@ -695,27 +721,32 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
                 }
                 let Some(mut done) = stack.pop() else { return Err("unmatched ')'".into()) };
                 let cur = std::mem::take(&mut done.cur);
-                // The fragments counted for this group's `|`s become real ones in the join.
-                joined = joined.saturating_sub(done.alts.len());
                 done.alts.push(cur);
+                // Joining adds a fragment for each alternative when there are several, and the
+                // group's body is one more.
+                let alts = done.alts.len();
+                hold(join_bytes(alts), charge)?;
+                room(&mut frags.items, alts + 1, charge)?;
+                room(&mut frags.lens, alts + 1, charge)?;
                 let body = join(std::mem::take(&mut done.alts), &mut frags)?;
                 work += body.len() as u64;
                 let body_len = frags.len_of(&body);
                 let body = frags.add(body);
                 let (start, before) = done.opened_at;
                 let parent = stack.last_mut().ok_or("unmatched ')'")?;
+                room(&mut parent.cur, 3, charge)?;
                 match done.kind {
                     Kind::Capture(n) => {
-                        emit(&mut emitted, parent, Inst::GroupStart(n));
+                        emit(parent, Inst::GroupStart(n));
                         parent.cur.push(body);
-                        emit(&mut emitted, parent, Inst::GroupEnd(n));
+                        emit(parent, Inst::GroupEnd(n));
                     }
                     Kind::Group | Kind::Top => parent.cur.push(body),
                     Kind::Look(negative) => {
                         let end = offset(body_len + 2)?;
-                        emit(&mut emitted, parent, Inst::Look { negative, end });
+                        emit(parent, Inst::Look { negative, end });
                         parent.cur.push(body);
-                        emit(&mut emitted, parent, Inst::LookEnd);
+                        emit(parent, Inst::LookEnd);
                     }
                 }
                 parent.atom = Some((start, before));
@@ -730,7 +761,7 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
                         Some(b) => b,
                         None => {
                             // Annex B: a `{` that starts no quantifier is itself.
-                            emit(&mut emitted, ctx, Inst::Char(canon(u)));
+                            emit(ctx, Inst::Char(canon(u)));
                             ctx.atom = Some((start, before));
                             i += 1;
                             continue;
@@ -746,23 +777,26 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
                 if min == 1 && max == 1 {
                     continue;
                 }
+                hold(ITEM_BYTES.saturating_mul(ctx.cur.len().saturating_sub(atom_start)), charge)?;
+                room(&mut frags.items, 1, charge)?;
+                room(&mut frags.lens, 1, charge)?;
                 let body: Vec<Item> = ctx.cur.drain(atom_start..).collect();
                 work += body.len() as u64;
                 let reg = loops;
                 loops = loops.checked_add(1).ok_or("too many quantifiers")?;
                 let n = frags.len_of(&body);
                 let body = frags.add(body);
-                emit(&mut emitted, ctx, Inst::RepInit(reg));
-                emit(&mut emitted, ctx, Inst::Rep { reg, min, max, greedy, caps: (atom_groups + 1, groups + 1), exit: offset(n + 2)? });
+                emit(ctx, Inst::RepInit(reg));
+                emit(ctx, Inst::Rep { reg, min, max, greedy, caps: (atom_groups + 1, groups + 1), exit: offset(n + 2)? });
                 ctx.cur.push(body);
-                emit(&mut emitted, ctx, Inst::RepEnd { reg, head: -offset(n + 1)? });
+                emit(ctx, Inst::RepEnd { reg, head: -offset(n + 1)? });
             }
             0x5C => {
                 let next = *pattern.get(i + 1).ok_or("\\ at end of pattern")?;
                 let mut atom = true;
                 match next {
                     0x62 | 0x42 => {
-                        emit(&mut emitted, ctx, Inst::WordBoundary(next == 0x62));
+                        emit(ctx, Inst::WordBoundary(next == 0x62));
                         atom = false;
                         i += 2;
                     }
@@ -774,40 +808,41 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
                             j += 1;
                         }
                         if n <= total_groups as u64 {
-                            emit(&mut emitted, ctx, Inst::BackRef(u32::try_from(n).map_err(|_| "too many groups")?));
+                            emit(ctx, Inst::BackRef(u32::try_from(n).map_err(|_| "too many groups")?));
                             i = j;
                         } else if next <= 0x37 {
                             let (v, end) = octal(pattern, i + 1);
-                            emit(&mut emitted, ctx, Inst::Char(canon(v)));
+                            emit(ctx, Inst::Char(canon(v)));
                             i = end;
                         } else {
-                            emit(&mut emitted, ctx, Inst::Char(canon(next)));
+                            emit(ctx, Inst::Char(canon(next)));
                             i += 2;
                         }
                     }
                     0x30 => {
                         if pattern.get(i + 2).is_some_and(|&d| (0x30..=0x37).contains(&d)) {
                             let (v, end) = octal(pattern, i + 1);
-                            emit(&mut emitted, ctx, Inst::Char(canon(v)));
+                            emit(ctx, Inst::Char(canon(v)));
                             i = end;
                         } else {
-                            emit(&mut emitted, ctx, Inst::Char(0));
+                            emit(ctx, Inst::Char(0));
                             i += 2;
                         }
                     }
                     _ => {
+                        if matches!(next, 0x64 | 0x44 | 0x73 | 0x53 | 0x77 | 0x57) {
+                            hold(ESCAPE_RANGES_BYTES, charge)?;
+                        }
                         if let Some(r) = escape_ranges(next) {
-                            emit(&mut emitted, ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
-                            let set = CharSet { ranges: r, negated: false };
-                            sets_size = sets_size.saturating_add(size_of::<CharSet>() + set_bytes(&set));
-                            sets.push(set);
+                            emit(ctx, Inst::Set(u32::try_from(sets.len()).map_err(|_| "too many classes")?));
+                            sets.push(CharSet { ranges: r, negated: false });
                             i += 2;
                         } else {
                             let (atom_unit, end) = match class_atom(pattern, i)? {
                                 (ClassAtom::Unit(v), end) => (v, end),
                                 (ClassAtom::Ranges(_), end) => (next, end),
                             };
-                            emit(&mut emitted, ctx, Inst::Char(canon(atom_unit)));
+                            emit(ctx, Inst::Char(canon(atom_unit)));
                             i = end;
                         }
                     }
@@ -815,7 +850,7 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
                 ctx.atom = if atom { Some((start, before)) } else { None };
             }
             _ => {
-                emit(&mut emitted, ctx, Inst::Char(canon(u)));
+                emit(ctx, Inst::Char(canon(u)));
                 ctx.atom = Some((start, before));
                 i += 1;
             }
@@ -827,12 +862,14 @@ pub(crate) fn compile(pattern: &[u16], flags: Flags, max_depth: usize, charge: &
     let Some(mut top) = stack.pop() else { return Err("unterminated group".into()) };
     let cur = std::mem::take(&mut top.cur);
     top.alts.push(cur);
-    // Joining adds a fragment for each alternative, and flattening writes every instruction.
-    let now = compile_bytes(emitted + 1, frags.items.len() + joined + 1, sets_size);
-    if now > held {
-        charge(Cost::Heap(now - held)).map_err(CompileFail::Abrupt)?;
-    }
+    // Joining adds a fragment for each alternative when there are several, and flattening writes
+    // every instruction.
+    let alts = top.alts.len();
+    hold(join_bytes(alts), charge)?;
+    room(&mut frags.items, alts, charge)?;
+    room(&mut frags.lens, alts, charge)?;
     let top = join(top.alts, &mut frags)?;
+    hold(flatten_bytes(frags.len_of(&top), frags.items.len()), charge)?;
     let mut insts = frags.flatten(&top);
     insts.push(Inst::Match);
     sets.shrink_to_fit();

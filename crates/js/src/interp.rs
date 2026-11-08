@@ -170,15 +170,18 @@ pub(crate) struct Interp {
     pub(crate) held: Rc<HeldCount>,
 }
 
-/// The bytes all live [`HeldBytes`] hold.
+/// The bytes all live [`HeldBytes`] hold, and the bytes dropped holders released that the heap's
+/// total still counts.
 #[derive(Default)]
 pub(crate) struct HeldCount {
     now: std::cell::Cell<usize>,
+    released: std::cell::Cell<usize>,
 }
 
 /// Bytes that native code holds in Rust memory while it works (a matcher's state and stack, a
-/// replacement being built, a pattern being compiled), counted against the heap limit. A
-/// collection adds them to the live total until the holder is dropped.
+/// replacement being built, a pattern being compiled), counted against the heap limit. They are
+/// in the heap's total, and in the live total of each collection, until the holder is dropped;
+/// the heap's total gives them back before the next limit check.
 pub(crate) struct HeldBytes {
     count: Rc<HeldCount>,
     bytes: usize,
@@ -209,6 +212,7 @@ impl HeldBytes {
 impl Drop for HeldBytes {
     fn drop(&mut self) {
         self.count.now.set(self.count.now.get().saturating_sub(self.bytes));
+        self.count.released.set(self.count.released.get().saturating_add(self.bytes));
     }
 }
 
@@ -439,6 +443,7 @@ impl Interp {
 
     fn tick(&mut self) -> JsResult<()> {
         self.use_fuel()?;
+        self.settle_held();
         if self.heap.bytes > self.gc_threshold {
             self.collect_garbage();
             if self.heap.bytes > self.limits.heap_bytes {
@@ -452,6 +457,7 @@ impl Interp {
     /// Ends the run with the heap limit when `bytes` more would not fit in it after a
     /// collection. Everything the caller still needs must be reachable from the roots.
     pub(crate) fn reserve_heap(&mut self, bytes: usize) -> JsResult<()> {
+        self.settle_held();
         if self.heap.bytes.saturating_add(bytes) <= self.limits.heap_bytes {
             return Ok(());
         }
@@ -461,6 +467,12 @@ impl Interp {
             return Err(Abrupt::Limit(LimitKind::Heap));
         }
         Ok(())
+    }
+
+    /// Takes the bytes that dropped [`HeldBytes`] released off the heap's total.
+    fn settle_held(&mut self) {
+        let released = self.held.released.replace(0);
+        self.heap.bytes = self.heap.bytes.saturating_sub(released);
     }
 
     /// Collects garbage now and sets when the next collection runs.
@@ -497,6 +509,8 @@ impl Interp {
         roots.objects.extend(self.intrinsics.all());
         roots.envs.push(self.global_env);
         self.heap.collect(&roots);
+        // The collection counts the live total again, so bytes already released are not in it.
+        self.held.released.set(0);
         self.heap.bytes = self.heap.bytes.saturating_add(self.held.now.get());
     }
 
