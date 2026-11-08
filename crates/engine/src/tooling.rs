@@ -512,11 +512,22 @@ impl Session {
     /// when the press began, and none of the press's changes to them are stored. A dropped Type
     /// press restores the prior selection. The freeform gradient point selected once the tool
     /// took the press is selected again. A press held while the tool computes an edit on another
-    /// thread has not reached the tool: it is removed from the held input with everything held
-    /// after it, and the tool is left as it is.
+    /// thread has not reached the tool: it is removed from the held input with the pointer events
+    /// and tool keys held after it, and the tool is left as it is. A perspective plane key held
+    /// after it stays held, since the plane it picks outlasts a dropped press. Pointer events held
+    /// after the last held release belong to the press the tool has, and are removed with it.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
-        if let Some(i) = self.held_press() {
-            self.held_input.truncate(i);
+        let (from, held) = self.held_press();
+        let keep: Vec<bool> = (self.held_input.iter().enumerate())
+            .map(|(j, (_, input, _))| match input {
+                _ if j < from => true,
+                HeldInput::Pointer(_) => false,
+                HeldInput::Key(key, _) => !held || self.plane_key(*key).is_some(),
+            })
+            .collect();
+        let mut keep = keep.into_iter();
+        self.held_input.retain(|_| keep.next().unwrap_or(true));
+        if held {
             return Ok(());
         }
         // Nothing to roll back without a document; the tool still drops the press and gets the release.
@@ -560,12 +571,17 @@ impl Session {
         r.map(drop)
     }
 
-    /// Where the press in progress is in the held input: the last held press, when no release is
-    /// held after it.
-    fn held_press(&self) -> Option<usize> {
+    /// Where the input of the press in progress starts in the held input, and whether the press
+    /// itself is held: the last held press when no release is held after it; otherwise the input
+    /// after the last held release (all of it when none is held), which follows a press the tool
+    /// already has.
+    fn held_press(&self) -> (usize, bool) {
         let ends = |kind: PointerKind| matches!(kind, PointerKind::Down | PointerKind::Up);
-        let i = self.held_input.iter().rposition(|(_, input, _)| matches!(input, HeldInput::Pointer(ev) if ends(ev.kind)))?;
-        matches!(self.held_input.get(i), Some((_, HeldInput::Pointer(ev), _)) if ev.kind == PointerKind::Down).then_some(i)
+        match self.held_input.iter().rposition(|(_, input, _)| matches!(input, HeldInput::Pointer(ev) if ends(ev.kind))) {
+            Some(i) if matches!(self.held_input.get(i), Some((_, HeldInput::Pointer(ev), _)) if ev.kind == PointerKind::Down) => (i, true),
+            Some(i) => (i + 1, false),
+            None => (0, false),
+        }
     }
 
     /// The options of `t` that [`Self::store_tool_settings`] stores.

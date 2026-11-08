@@ -941,10 +941,11 @@ fn shape_builder_holds_gestures_made_during_a_merge() {
 
 /// A press held while a merge is computed on another thread, then dropped (a long touch, a
 /// canceled touch, a second finger), is never made: once the merge is applied, the tool is at
-/// rest and the document is the one the input before the press makes. A held click before the
-/// press is still made.
+/// rest and the document is the one the same input makes, dropped the same way, after the merge.
+/// A held click before the press is still made, and so is a perspective plane key held after it.
 #[test]
 fn shape_builder_drops_a_press_held_during_a_merge() {
+    use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
     type Gesture = fn(&mut Session, ViewInfo);
     fn press(s: &mut Session, v: ViewInfo, x: f64, mods: Mods) {
         s.pointer(&PointerEvent::new(PointerKind::Down, x, 10.0).with_mods(mods), v).unwrap();
@@ -954,7 +955,8 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
             s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
         }
     }
-    let cases: [(&str, bool, Gesture); 5] = [
+    // What a case sends, and whether the perspective grid is shown.
+    let cases: [(&str, bool, Gesture); 7] = [
         ("a press", false, |s, v| press(s, v, 75.0, Mods::default())),
         ("a drag", false, |s, v| {
             press(s, v, 75.0, Mods::default());
@@ -965,14 +967,27 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
             press(s, v, 75.0, Mods::default());
             s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
         }),
-        ("a click, then a press", true, |s, v| {
+        ("a press and an arrow key", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        }),
+        ("a press and a plane key", true, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Digit(3), Mods::default(), v).unwrap();
+        }),
+        ("a click, then a press", false, |s, v| {
             click(s, v);
             press(s, v, 135.0, Mods::default());
         }),
     ];
     let v = ViewInfo::default();
-    let start = || {
+    let start = |grid: bool| {
         let mut s = session();
+        s.select_tool("shapeBuilder", v).unwrap();
+        s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "swatches"})).unwrap();
+        if grid {
+            s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        }
         square_row(&mut s);
         click_row(&mut s, v);
         s
@@ -987,15 +1002,18 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
         }
     };
     let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
-    for (what, clicked, send) in cases {
-        // The input before the press, one after the other.
-        let mut one = start();
+    let plane = |s: &Session| PerspectiveGrid::from_doc(&s.doc().unwrap().doc).unwrap().plane;
+    for (what, grid, send) in cases {
+        // The same input after the merge, dropped the same way.
+        let mut one = start(grid);
         settle(&mut one);
-        if clicked {
-            click(&mut one, v);
-            settle(&mut one);
+        send(&mut one, v);
+        one.drop_tool_press(v).unwrap();
+        settle(&mut one);
+        let mut s = start(grid);
+        if grid {
+            assert_ne!(plane(&s), Plane::Right, "{what}: the plane before the key");
         }
-        let mut s = start();
         let from = s.input_count();
         send(&mut s, v);
         let to = s.input_count();
@@ -1005,9 +1023,14 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
         assert!(!s.tool_waiting() && !s.tool_editing() && s.input_applied(from, to), "{what}");
         assert!(!s.tool_busy(), "{what}: the tool is at rest");
         assert_eq!(s.tool_id(), "shapeBuilder", "{what}: no tool is lent");
-        assert!(undated(&s) == undated(&one), "{what}: the document the input before the press makes");
+        assert!(undated(&s) == undated(&one), "{what}: the document the input makes after the merge");
         assert_eq!(labels(&s), labels(&one), "{what}");
         assert_eq!(s.doc().unwrap().selection, one.doc().unwrap().selection, "{what}");
+        assert_eq!(s.paint.fill, one.paint.fill, "{what}");
+        if grid {
+            assert_eq!(plane(&one), Plane::Right, "{what}: the plane key is made after the merge");
+            assert_eq!(plane(&s), Plane::Right, "{what}: the plane key is made");
+        }
     }
 }
 
