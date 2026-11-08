@@ -73,6 +73,11 @@ pub(crate) fn strip_replay_only(id: &str, p: &mut Value) {
     }
 }
 
+/// Journaled commands that write a file and change nothing in the document: with an object of a
+/// dynamic symbol instance's art selected, they read the instance as queries do
+/// ([`crate::Session::execute`]).
+pub(crate) const JOURNALED_READS: &[&str] = &["css.export"];
+
 /// Commands that act on the selection and take `ids` by selecting them first (`select.set`, with
 /// its checks), then running as on the selection: the result and the selection afterwards are the
 /// menu command's (#2130).
@@ -116,13 +121,14 @@ pub(crate) const SELECTS_GIVEN_IDS: &[&str] = &[
 /// The non-empty `ids` given to a command whose params description names `ids` as a key (the
 /// key callers outside the app may pass it, [`cmd::params::takes_key`]), or its `id` as `ids` of
 /// one when no `ids` are given and the description takes `id` so
-/// ([`cmd::params::id_stands_for_ids`]), as [`cmd::targets`] reads them.
+/// ([`cmd::params::id_stands_for_ids`]), as [`cmd::targets`] reads them. Entries of `ids` that are
+/// not ids are left out of this list; `Session::execute` refuses them before it reads it.
 pub(crate) fn given_ids(description: &'static str, params: &Value) -> Option<Vec<NodeId>> {
     if !cmd::params::takes_key(description, "ids") {
         return None;
     }
     match params.get("ids").filter(|v| !v.is_null()) {
-        Some(_) => cmd::ids_param(params, "ids"),
+        Some(v) => v.as_array().map(|a| a.iter().filter_map(Value::as_u64).map(NodeId).collect()),
         None => cmd::id_param(params, "id").filter(|_| cmd::params::id_stands_for_ids(description)).map(|id| vec![id]),
     }
     .filter(|ids| !ids.is_empty())

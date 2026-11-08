@@ -58,6 +58,39 @@ pub fn hex_value(c: u32) -> Option<u32> {
     }
 }
 
+/// The value of the digit values `digits` in `radix` (8 or 16), rounded once to the nearest number
+/// with ties to even (sections 7.8.3 and 9.3.1), or `None` when there are no digits. Digits are
+/// kept exactly in a `u128` while they fit; past that, each later digit counts only for its
+/// position and for whether any of the dropped bits is set.
+pub fn radix_value(digits: impl IntoIterator<Item = u32>, radix: u32) -> Option<f64> {
+    let bits = radix.trailing_zeros();
+    let mut kept: u128 = 0;
+    let mut dropped_bits: u32 = 0;
+    let mut sticky = false;
+    let mut any = false;
+    for d in digits {
+        any = true;
+        if kept.leading_zeros() >= bits {
+            kept = kept << bits | u128::from(d);
+        } else {
+            dropped_bits = dropped_bits.saturating_add(bits);
+            sticky |= d != 0;
+        }
+    }
+    if !any {
+        return None;
+    }
+    // `kept` holds at least 125 bits once a digit is dropped, so its lowest bit lies below the
+    // rounding bit and stands in for every dropped bit.
+    let mut value = (kept | u128::from(sticky)) as f64;
+    while dropped_bits > 0 && value.is_finite() {
+        let step = dropped_bits.min(64);
+        value *= (1_u128 << step) as f64;
+        dropped_bits -= step;
+    }
+    Some(value)
+}
+
 pub fn is_decimal_digit(c: u32) -> bool {
     (0x30..=0x39).contains(&c)
 }
