@@ -348,11 +348,14 @@ impl Document {
             t.cached_bounds = None;
             t.cached_baselines.clear();
         }
+        let on_path = n.extras().objects_on_path.is_some();
         let mut renamed = std::collections::HashMap::new();
         if let Some(ch) = n.children_mut() {
             let old: Vec<Arc<Node>> = std::mem::take(ch);
             *ch = old.iter().map(|c| Arc::new(self.reid(c))).collect();
-            renamed.extend(old.iter().zip(ch.iter()).map(|(o, c)| (o.id, c.id)));
+            if on_path {
+                renamed.extend(old.iter().zip(ch.iter()).map(|(o, c)| (o.id, c.id)));
+            }
         }
         // An Objects on Path group names its path and its objects by id: the copy names the copies.
         if let Some(e) = n.extras_if_any()
