@@ -157,6 +157,27 @@ fn built_in_formats_keep_their_files() {
     assert_eq!(fileio::open_extensions().iter().filter(|e| **e == "svg").count(), 1);
 }
 
+/// File › Open lists an importer's extensions only where it would open the file with the importer:
+/// not those a built-in format reads, and not those it opens as a plug-in, a shortcut set, a
+/// script, presets or a library. An importer with none of its own gets no filter.
+#[test]
+fn file_open_lists_only_the_extensions_it_opens_with_an_importer() {
+    let mut s = Session::new();
+    install(&mut s, &tpl::returning(&tpl::importer("test.claimed", r#"["tcl","ase","wasm","kys","jsx","vcstyles","svg"]"#, "{}"), RECT));
+    install(&mut s, &tpl::returning(&tpl::importer("test.claimedonly", r#"["ase","gpl"]"#, "{}"), RECT));
+    for ext in ["ase", "gpl", "wasm", "kys", "jsx", "vcstyles"] {
+        assert!(fileio::opens_as_other(ext), "{ext}");
+        assert!(!fileio::open_extensions().contains(&ext), "All readable files: {ext}");
+    }
+    assert!(!fileio::opens_as_other("tcl") && !fileio::opens_as_other("svg"));
+    assert!(fileio::open_extensions().contains(&"tcl"));
+    let filters: Vec<_> = fileio::open_filters().collect();
+    assert!(filters.contains(&("Test test.claimed", &["tcl"][..])), "{filters:?}");
+    assert!(!filters.iter().any(|(label, _)| *label == "Test test.claimedonly"), "{filters:?}");
+    s.execute("plugin.remove", &json!({"id": "test.claimed"})).unwrap();
+    s.execute("plugin.remove", &json!({"id": "test.claimedonly"})).unwrap();
+}
+
 /// Several importers list one extension: the one whose id sorts first opens the file, and
 /// `importer` picks another (by its format id or its id).
 #[test]

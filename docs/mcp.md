@@ -6091,7 +6091,7 @@ id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearanc
 `effect.list` lists it. An exporter adds a write-only file format `plugin.<id>` (listed by `document.formats`):
 `document.export {format: "plugin.<id>", params?, path?}` writes it, as does a `path` ending in one of its extensions
 that no built-in format has. An importer adds a read-only file format `plugin.<id>` (listed by `document.formats`
-with `read: true`, its extensions in `openExtensions`): `document.open {path | name, dataBase64, importer?:
+with `read: true`, and `openExtensions` holds the extensions File › Open opens with it, without those a built-in format reads or that File › Open installs, imports or loads as something else, such as `.wasm` or `.ase`): `document.open {path | name, dataBase64, importer?:
 "plugin.<id>", params?}` (and `open_file {path, importer?, params?}`) opens a file whose extension no built-in format reads, by its content or its
 extension, with the installed importer that lists the extension (the one whose id sorts first, when several do).
 `importer` names the importer to use, which must list the file's extension, also one a built-in format reads, such

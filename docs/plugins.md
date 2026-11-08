@@ -41,8 +41,8 @@ An exporter adds a write-only format, `plugin.<id>`, which `document.formats` li
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
 its extensions that no built-in format has; `selectedOnly` hands it the selection, as for the built-in formats.
 
-An importer adds a read-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id, its extensions
-in `openExtensions`. `document.open {"path"}` (or `{"name", "dataBase64"}`) opens a file with it when no built-in format
+An importer adds a read-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id. `openExtensions`
+holds the extensions File › Open opens with the importer (the lists below describe which are left out). `document.open {"path"}` (or `{"name", "dataBase64"}`) opens a file with it when no built-in format
 reads the file, by its content or by its extension, and the importer lists the file's extension; when several do, the
 one whose id sorts first opens it. `document.open {"importer": "plugin.<id>", "params"?: {…}}` names the importer,
 which must list the file's extension, also one a built-in format reads (an importer that lists `svg` opens an `.svg`
@@ -60,7 +60,10 @@ heading and buttons in view. Exporters are formats of **File › Export › Expo
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›
 Open's "All readable files" and under a filter of their own, named after the importer (other open dialogs, such as New
-from Template and Load Styles, list only the files the built-in formats read); **File › Open With** lists the
+from Template and Load Styles, list only the files the built-in formats read). These lists leave out an importer's
+extensions that a built-in format reads, and those File › Open installs, imports or loads as something else (`.wasm`,
+`.kys`, `.jsx`, presets, libraries and swatch or graphic style libraries such as `.ase`). File › Open does not give
+those files to the importer, and Open With does. **File › Open With** lists the
 installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
 extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. An importer
 with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open

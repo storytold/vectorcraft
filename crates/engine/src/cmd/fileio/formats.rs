@@ -669,39 +669,83 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Every extension File › Open reads as a document: [`OPEN_EXTS`], then the extensions the
-/// installed importer plug-ins list that no built-in format reads, in plug-in id order. Made once
-/// for each set of installed plug-ins, so it lives as long as the dialogs that hold it.
-pub fn open_extensions() -> &'static [&'static str] {
+/// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
+/// document: a plug-in (installed), a shortcut set, a script (checked), flattener, PDF, print,
+/// perspective grid or export presets (imported), a Libraries panel library, or a swatch or graphic
+/// style library.
+pub fn opens_as_other(ext: &str) -> bool {
+    [
+        crate::cmd::plugin::EXTS,
+        crate::cmd::shortcutset::EXTS,
+        crate::cmd::scripts::EXTS,
+        crate::cmd::flatten::PRESET_EXTS,
+        crate::cmd::pdfcmds::PRESET_EXTS,
+        crate::cmd::printpresets::PRESET_EXTS,
+        crate::cmd::perspgrid::PRESET_EXTS,
+        screens::PRESET_FILE_EXTS,
+        crate::cmd::library::LIBRARY_EXTS,
+        crate::cmd::swatchlib::LIBRARY_EXTS,
+        std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT),
+    ]
+    .iter()
+    .any(|exts| exts.contains(&ext))
+}
+
+/// File › Open's extensions and filters for the installed importer plug-ins.
+type ImporterPart = (&'static [&'static str], Vec<(&'static str, &'static [&'static str])>);
+
+/// File › Open's part for the installed importer plug-ins: the extensions of "All readable files"
+/// ([`OPEN_EXTS`], then the importers' extensions in plug-in id order) and one filter per importer
+/// that has extensions left, under its name. An importer's extensions leave out those a built-in
+/// format reads, which File › Open reads with that format, and those File › Open opens as something
+/// else ([`opens_as_other`]). Made once for each set of installed plug-ins, so it lives as long as
+/// the dialogs that hold it.
+fn importer_open_part() -> ImporterPart {
     use vectorcraft_plugins::registry;
-    static MADE: std::sync::Mutex<Option<(u64, &'static [&'static str])>> = std::sync::Mutex::new(None);
+    static MADE: std::sync::Mutex<Option<(u64, ImporterPart)>> = std::sync::Mutex::new(None);
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
     let revision = registry::revision();
-    if let Some((r, exts)) = *made
-        && r == revision
+    if let Some((r, part)) = made.as_ref()
+        && *r == revision
     {
-        return exts;
+        return part.clone();
     }
     let mut exts: Vec<&'static str> = OPEN_EXTS.to_vec();
-    for e in importer_formats().iter().flat_map(|f| f.extensions.iter().copied()) {
-        if !exts.contains(&e) && readable_format(e).is_none() {
-            exts.push(e);
+    let mut filters = Vec::new();
+    for f in importer_formats() {
+        let own: Vec<&'static str> = f.extensions.iter().copied().filter(|e| readable_format(e).is_none() && !opens_as_other(e)).collect();
+        if own.is_empty() {
+            continue;
         }
+        for &e in &own {
+            if !exts.contains(&e) {
+                exts.push(e);
+            }
+        }
+        let own: &'static [&'static str] = if own.len() == f.extensions.len() { f.extensions } else { Box::leak(own.into_boxed_slice()) };
+        filters.push((f.label, own));
     }
     let exts: &'static [&'static str] = if exts.len() == OPEN_EXTS.len() { OPEN_EXTS } else { Box::leak(exts.into_boxed_slice()) };
-    *made = Some((revision, exts));
-    exts
+    let part = (exts, filters);
+    *made = Some((revision, part.clone()));
+    part
+}
+
+/// Every extension File › Open reads as a document: [`OPEN_EXTS`], then the extensions the
+/// installed importer plug-ins list that no built-in format reads and that File › Open doesn't open
+/// as something else ([`opens_as_other`]), in plug-in id order.
+pub fn open_extensions() -> &'static [&'static str] {
+    importer_open_part().0
 }
 
 /// File › Open's filters: "All readable files" first, then one per readable format, then one per
-/// importer plug-in (under its name), then swatch libraries (which open in the library panel),
-/// Libraries panel libraries, flattener, PDF, print and export presets (imported), scripts (checked
-/// without running them) and plug-ins (installed).
+/// importer plug-in (under its name, with the extensions [`open_extensions`] takes from it), then
+/// swatch libraries (which open in the library panel), Libraries panel libraries, flattener, PDF,
+/// print and export presets (imported), scripts (checked without running them) and plug-ins
+/// (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", open_extensions()))
-        .chain(format_filters())
-        .chain(importer_formats().into_iter().map(|f| (f.label, f.extensions)))
-        .chain(other_open_filters())
+    let (all, importers) = importer_open_part();
+    std::iter::once(("All readable files", all)).chain(format_filters()).chain(importers).chain(other_open_filters())
 }
 
 /// [`open_filters`] without the importer plug-ins: "All readable files" lists [`OPEN_EXTS`]. For

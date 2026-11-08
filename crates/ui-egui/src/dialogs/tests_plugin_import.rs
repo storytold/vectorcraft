@@ -164,6 +164,47 @@ fn only_file_open_s_dialog_lists_an_importer_s_files() {
     app.run("plugin.remove", json!({"id": "test.ui.filters"})).unwrap();
 }
 
+/// The extensions File › Open's filters leave out of importers' (`fileio::opens_as_other`) are the
+/// ones File › Open installs, imports, checks or loads as something other than a document.
+#[test]
+fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
+    use vectorcraft_engine::cmd::{self, fileio};
+    let lists: [&[&str]; 10] = [
+        cmd::plugin::EXTS,
+        cmd::shortcutset::EXTS,
+        cmd::scripts::EXTS,
+        cmd::flatten::PRESET_EXTS,
+        cmd::pdfcmds::PRESET_EXTS,
+        cmd::printpresets::PRESET_EXTS,
+        cmd::perspgrid::PRESET_EXTS,
+        fileio::SCREEN_EXPORT_PRESET_EXTS,
+        cmd::library::LIBRARY_EXTS,
+        cmd::swatchlib::LIBRARY_EXTS,
+    ];
+    for ext in lists.iter().flat_map(|l| l.iter().copied()).chain([vectorcraft_doc::style_libs::STYLES_EXT]) {
+        assert!(crate::io::opens_as(&format!("a.{ext}")).is_some(), "{ext}");
+        assert!(fileio::opens_as_other(ext), "{ext}");
+    }
+    for ext in ["svg", "tcl", "pdf"] {
+        assert!(crate::io::opens_as(&format!("a.{ext}")).is_none() && !fileio::opens_as_other(ext), "{ext}");
+    }
+    // File › Open's dialog lists an importer's `.tuo` but not its `.ase` (a swatch library there).
+    let mut app = app();
+    install(&mut app, &tpl::module(&tpl::importer("test.ui.claimed", r#"["tuo","ase"]"#, "{}"), tpl::ECHO, "", 1));
+    let asked: std::rc::Rc<std::cell::RefCell<Option<crate::FilePick>>> = Default::default();
+    let seen = asked.clone();
+    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
+        *seen.borrow_mut() = Some(pick.clone());
+        None
+    }));
+    let _ = app.run("file.open", json!({}));
+    let pick = asked.borrow_mut().take().expect("File › Open showed its dialog");
+    let own = pick.filters.iter().find(|(label, _)| label == "Test test.ui.claimed").map(|(_, exts)| exts.clone());
+    assert_eq!(own, Some(vec!["tuo".to_string()]), "{:?}", pick.filters);
+    assert!(!pick.filters[0].1.iter().any(|e| e == "ase"), "All readable files: {:?}", pick.filters[0]);
+    app.run("plugin.remove", json!({"id": "test.ui.claimed"})).unwrap();
+}
+
 /// File › Open reads a file of an extension only an importer lists, and refuses one past the
 /// importer's input limit before reading it, as Open With does.
 #[test]
