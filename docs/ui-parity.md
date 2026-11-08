@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-06 · **Change:** minor (Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-08 · **Change:** minor (floating tab groups collapse into the side icon rail and opened rail panels fold back into it, #5925 in part; Drop Shadow and glow dialogs: spinner arrows, #5367, #5368; Stroke Weight Up and Down shortcuts, #5797; Layers: Rename (`ui.rename`) opens the name field of the selected layer, group or object, #5324; Properties in Edit Artboards: Transform section above the Artboards section, #5219; scrubby labels: the Control bar's Stroke: and Opacity: links and the Properties panel's Stroke link scrub their fields, #4088; Properties: Quick Actions has Repeat Options for one selected repeat, #5181; Direct Selection: Shift-click picks several blend spine points, which drag together, #5285; Direct Selection: Cmd/Ctrl held lends the Selection tool and shows its bounding box, #3901; Join tool trims two crossing open paths and joins them at the crossing, #5844; Control bar: Paragraph: link and Align left/center/right while type is selected, #5372; shape tools: a press on the selection's centre point moves it and one in the rotate zone outside a box corner turns it, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x; Units › East Asian Type acts, with Q and Ha units; scores unchanged)
 
 ## Feature submission evidence
 
@@ -334,6 +334,8 @@ next unit in the order a right-click on a ruler lists them, from Feet back to Po
 
 ## Panels, Control bar, Properties, context menus
 
+- **Panel collapse controls (#5925, in part):** The small » in a floating tab-group header moves that group into the side icon rail, reusing the existing rail or creating one. An opened rail panel has the same control to fold its flyout back into the rail, including after a tab switch. Both controls preserve the tab group and its menu; other floating groups and full-width docked headers stay as they were. Pointer regressions in `crates/ui-egui/src/panel_docking/tests.rs` cover grouped tabs, reopening, separate groups, a missing rail, the menu and flyout closure after switching tabs; `native_tests.rs` covers the native-window click and removal of the empty palette. Scores and estimates unchanged.
+
 | Interaction | Status | Evidence |
 |---|---|---|
 | Selection artwork drag hovers a visible document tab to activate it, then drops editable artwork on its canvas | done | `tests_document_drag`, `edit.dropSelection`, lossless resource and one-step Undo regressions; overflow and cross-window drag remain separate |
@@ -478,6 +480,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-08 | minor | Floating tab groups collapse into the side icon rail and opened rail panels fold back into it (#5925, in part); tab groups remain intact. Scores and estimates unchanged. |
 | 2026-11-06 | minor | Keyboard shortcuts: Cmd/Ctrl+Alt+. and Cmd/Ctrl+Alt+, (Stroke Weight Up and Down) step each selected stroke's weight, or the next object drawn's (#5797); scores and estimates unchanged |
 | 2026-11-06 | minor | Properties: Quick Actions has Repeat Options for one selected radial, grid or mirror repeat, opening Object › Repeat › Options with its values (#5181); scores and estimates unchanged |
 | 2026-11-06 | minor | Control bar: with type selected, a Paragraph: link (the Paragraph panel in a popover) and the Align left, Align center and Align right buttons follow the Character controls; the bar leaves them out from its right end when short of room, after X/Y/W/H and the Align buttons (#5372); scores and estimates unchanged |

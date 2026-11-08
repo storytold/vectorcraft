@@ -759,3 +759,118 @@ fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     assert_eq!(saved.session.doc().unwrap().doc.node_count(), 2, "F12 reloads the saved document");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+fn collapse_to_icons_button(h: &Harness, panel: &str) -> Option<Rect> {
+    let panel = panel.to_string();
+    h.ctx.read_response(area_id().with(("header", &panel)).with(("collapse-to-icons", &panel))).map(|r| r.rect)
+}
+
+#[test]
+fn floating_collapse_arrow_moves_the_whole_group_into_the_icon_rail() {
+    let mut h = Harness::new();
+    assert!(collapse_to_icons_button(&h, "properties").is_none(), "docked headers have no extra button");
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let before = h.layout();
+    let members = group_of(&before, &"layers".into());
+    let columns = end_columns(&before).len();
+    let arrow = collapse_to_icons_button(&h, "layers").expect("floating header offers collapse to icons");
+    assert!(arrow.width() <= 24.0 && arrow.height() <= 24.0, "a compact header control: {arrow:?}");
+    h.click(arrow.center());
+    let layout = h.layout();
+    assert!(floating_window(&layout, "layers").is_none(), "the old floating window is removed");
+    assert_eq!(group_of(&layout, &"layers".into()), members, "all tabs move together");
+    assert!(members.iter().all(|p| in_iconic_column(&layout, p)));
+    assert_eq!(end_columns(&layout).len(), columns, "reuse the existing icon rail");
+    assert!(h.app.ui.open_panel.is_none(), "the group stays collapsed until its icon is clicked");
+    let icon = h.hit(&Hit::Icon("layers".into())).expect("Layers now has a rail icon");
+    h.click(icon.center());
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("layers"));
+    assert!(h.tab("layers").is_some(), "the collapsed group can reopen as a flyout");
+    assert!(collapse_to_icons_button(&h, "layers").is_some(), "the reopened flyout also offers collapse to icons");
+}
+
+#[test]
+fn floating_collapse_arrow_leaves_other_floating_groups_alone() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "color", "below": "layers"})).unwrap();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let arrow = collapse_to_icons_button(&h, "layers").expect("floating group has its own arrow");
+    h.click(arrow.center());
+    let layout = h.layout();
+    assert!(in_iconic_column(&layout, "layers"));
+    assert!(floating_window(&layout, "color").is_some(), "another group in the same window stays floating");
+    assert!(!in_iconic_column(&layout, "color"));
+    assert_eq!(main_panels(&layout), ["properties", "libraries"]);
+}
+
+#[test]
+fn floating_collapse_arrow_creates_a_rail_when_none_exists_and_keeps_the_menu() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers"})).unwrap();
+    let mut layout = h.layout();
+    if let Some(Node::Split { second, .. }) = layout.root.as_mut()
+        && let Node::Dock { columns, .. } = second.as_mut()
+    {
+        columns.retain(|column| !column.iconic);
+    }
+    assert!(icon_column(&end_columns(&layout)).is_none());
+    h.app.ui.docking = Some(layout);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let panel = "layers".to_string();
+    let menu =
+        h.ctx.read_response(area_id().with(("header", &panel)).with(("panel-menu", &panel))).expect("the existing panel menu remains available").rect;
+    let arrow = collapse_to_icons_button(&h, "layers").expect("floating group offers collapse");
+    assert!(!menu.intersects(arrow), "menu and arrow have separate hit targets");
+    h.click(menu.center());
+    assert!(egui::Popup::is_any_open(&h.ctx), "the existing menu still opens");
+    h.press(egui::Key::Escape, egui::Modifiers::NONE);
+    h.click(arrow.center());
+    let layout = h.layout();
+    assert!(in_iconic_column(&layout, "layers"));
+    assert!(floating_window(&layout, "layers").is_none());
+    assert!(h.app.ui.open_panel.is_none(), "collapse does not immediately open a flyout");
+    assert_eq!(main_panels(&layout), ["properties", "libraries"]);
+}
+
+#[test]
+fn rail_flyout_collapse_arrow_folds_the_panel_back_without_moving_it() {
+    let mut h = Harness::new();
+    let icon = h.hit(&Hit::Icon("swatches".into())).unwrap();
+    h.click(icon.center());
+    let before = h.layout();
+    let arrow = collapse_to_icons_button(&h, "swatches").expect("opened rail panels offer collapse to icons");
+    h.click(arrow.center());
+    assert!(h.app.ui.open_panel.is_none());
+    assert!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()).is_none());
+    assert_eq!(h.layout(), before, "folding a flyout leaves the dock layout intact");
+    let icon = h.hit(&Hit::Icon("swatches".into())).expect("the rail icon stays available");
+    h.click(icon.center());
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("swatches"));
+    assert!(h.tab("swatches").is_some());
+}
+
+#[test]
+fn rail_flyout_collapse_arrow_closes_the_opening_icon_after_switching_tabs() {
+    let mut h = Harness::new();
+    h.app.ui.docking = Some(h.layout());
+    let icon = h.hit(&Hit::Icon("swatches".into())).unwrap();
+    h.click(icon.center());
+    let brushes = h.tab("brushes").unwrap();
+    h.click(brushes.center());
+    assert_eq!(h.app.ui.open_panel.as_deref(), Some("swatches"));
+    let before = h.layout();
+    let arrow = collapse_to_icons_button(&h, "brushes").expect("the active tab has a collapse arrow");
+    h.click(arrow.center());
+    assert!(h.app.ui.open_panel.is_none());
+    assert!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()).is_none());
+    assert_eq!(h.layout(), before, "all tabs and their active state stay in the rail");
+}

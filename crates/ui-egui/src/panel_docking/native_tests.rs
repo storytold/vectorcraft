@@ -1163,3 +1163,31 @@ fn wheel_without_a_move_uses_the_floating_viewports_pointer() {
     h.frame(vec![]);
     assert_ne!(h.app.run("text.fonts", json!({})).unwrap(), before);
 }
+
+#[test]
+fn floating_collapse_arrow_in_a_native_window_moves_the_group_to_the_rail() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "layers", "group": true})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "layers"})).unwrap();
+    h.frames(3);
+    let viewport = h.viewport("layers");
+    h.host.borrow_mut().focus = viewport;
+    let arrow = h.host.borrow().windows[&viewport]
+        .texts
+        .iter()
+        .find(|(text, _)| text == "»")
+        .map(|(_, rect)| rect.center())
+        .expect("the native floating header paints a collapse arrow");
+    for pressed in [true, false] {
+        h.host.borrow_mut().windows.get_mut(&viewport).unwrap().events.extend([Event::PointerMoved(arrow), button(arrow, pressed)]);
+        h.frames(1);
+    }
+    h.frames(3);
+    let layout = layout_of(&h.app.ui);
+    assert!(floating_window(&layout, "layers").is_none());
+    assert_eq!(group_of(&layout, &"layers".into()), ["properties", "layers", "libraries"]);
+    assert!(["properties", "layers", "libraries"].iter().all(|p| in_iconic_column(&layout, p)));
+    let frames = h.host.borrow().windows[&viewport].frames;
+    h.frames(3);
+    assert_eq!(h.host.borrow().windows[&viewport].frames, frames, "the emptied palette is no longer rendered");
+}
