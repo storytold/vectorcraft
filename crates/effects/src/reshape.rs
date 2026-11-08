@@ -336,7 +336,7 @@ fn outline_art_with(
         _ if vectorcraft_doc::live::is_live(n) => evaluated_with(doc, n, outline, nodes),
         _ => return None,
     };
-    outline_nested_text(&mut art, false);
+    outline_nested_text(doc, &mut art, false);
     art.opacity = 1.0;
     art.blend = Default::default();
     art.isolate = false;
@@ -443,21 +443,22 @@ fn instances_as_art(doc: Option<&Document>, n: &mut Node, outline: OutlineHook, 
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
 /// its plain outlines ([`outline_text`]) with its visibility, which is what
-/// [`crate::clip_outline`] clips by.
-pub(crate) fn outline_nested_text(n: &mut Node, clipping: bool) {
+/// [`crate::clip_outline`] clips by. The swatches and patterns that live-effect plug-ins painting
+/// their pieces name are looked up in `doc`.
+pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
         let clipping = clipping || (clips && i == 0);
         let art = match &c.kind {
             NodeKind::Text(_) if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
-            NodeKind::Text(_) => as_art(None, c, None),
+            NodeKind::Text(_) => as_art(doc, c, None),
             _ => None,
         };
         if let Some(o) = art {
             *c = Arc::new(o);
         } else if c.children().is_some() {
-            outline_nested_text(Arc::make_mut(c), clipping);
+            outline_nested_text(doc, Arc::make_mut(c), clipping);
         }
     }
 }
@@ -606,20 +607,16 @@ pub(crate) fn geometry_effects(n: &Node) -> Vec<&Effect> {
 /// symbol instances follow a Transform effect the same way ([`transform_placed`]); other geometry
 /// effects leave them as they are (a raster follows a non-affine map only as a mesh warp). The
 /// paths keep to one [`Budget::EFFECTS`] together (or to what they cost, when that is more): a path
-/// whose effect would pass what the others leave of it keeps its shape.
-pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect]) {
-    reshape_leaves_within(art, fx, Budget::EFFECTS);
-}
-
-/// [`reshape_leaves`], with the swatches and patterns that painted live-effect plug-ins name looked
-/// up in `doc` ([`reshape_leaves_apart`]).
-pub(crate) fn reshape_leaves_in(art: &mut Node, fx: &[&Effect], doc: Option<&Document>) {
-    reshape_leaves_apart(art, fx, Budget::EFFECTS, false, doc);
+/// whose effect would pass what the others leave of it keeps its shape. The swatches and patterns
+/// that live-effect plug-ins painting their pieces name are looked up in `doc`
+/// ([`reshape_leaves_apart`]).
+pub(crate) fn reshape_leaves(art: &mut Node, fx: &[&Effect], doc: Option<&Document>) {
+    reshape_leaves_within(art, fx, Budget::EFFECTS, doc);
 }
 
 /// [`reshape_leaves`] whose paths keep to `budget` together, or to what they cost.
-pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget) {
-    reshape_leaves_apart(art, fx, budget, false, None);
+pub(crate) fn reshape_leaves_within(art: &mut Node, fx: &[&Effect], budget: Budget, doc: Option<&Document>) {
+    reshape_leaves_apart(art, fx, budget, false, doc);
 }
 
 /// `art`, the group of the one piece a path's copies are made from ([`outline_art_with`]), holding
@@ -1247,7 +1244,7 @@ pub(crate) fn outlined_members(doc: Option<&Document>, n: &Node) -> Node {
 /// ([`evaluated_with`]).
 pub(crate) fn outlined_members_with(doc: Option<&Document>, n: &Node, outline: OutlineHook, nodes: &SymbolNodes) -> Node {
     let mut art = evaluated_with(doc, n, outline, nodes);
-    outline_nested_text(&mut art, false);
+    outline_nested_text(doc, &mut art, false);
     art
 }
 

@@ -307,7 +307,7 @@ pub(crate) fn pf_leaves(d: &Document, n: &Node, out: &mut Vec<Node>) {
     match &n.kind {
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             let hook = |c: &Node| vectorcraft_render::effects::outline_object(Some(d), c);
-            match vectorcraft_render::effects::compound_shape_art(n, Some(&hook)) {
+            match vectorcraft_render::effects::compound_shape_art(Some(d), n, Some(&hook)) {
                 Some(art) => out.push(art),
                 None => children.iter().for_each(|c| pf_leaves(d, c, out)),
             }

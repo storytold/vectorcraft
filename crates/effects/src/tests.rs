@@ -394,7 +394,7 @@ fn stacked_effects_on_art_stay_within_the_anchor_budget() {
     let leaf = |x: f64| Arc::new(Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0)), Appearance::default()));
     let mut art = Node::group(id, (0..10).map(|k| leaf(k as f64 * 120.0)).collect());
     let rough = fx("distort.roughen", json!({"size": 50, "detail": 100}));
-    crate::reshape::reshape_leaves_within(&mut art, &[&rough, &rough, &rough], Budget { anchors: 5_000, lines: usize::MAX });
+    crate::reshape::reshape_leaves_within(&mut art, &[&rough, &rough, &rough], Budget { anchors: 5_000, lines: usize::MAX }, None);
     let mut total = 0;
     let mut reshaped = 0;
     for c in art.children().into_iter().flatten() {
@@ -473,7 +473,7 @@ fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
     let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
 
     let start = std::time::Instant::now();
-    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS, None);
     let elapsed = start.elapsed();
     assert!(elapsed < std::time::Duration::from_secs(2));
 
@@ -500,7 +500,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let mut art_evenodd = Node::group(id, vec![Arc::new(leaf)]);
     let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 2}));
     let offset = fx("path.offsetPath", json!({"offset": 4.0}));
-    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_evenodd, &[&transform, &offset], Budget::EFFECTS, None);
     let p = art_evenodd.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "EvenOdd does not swap; copies union into 1 outer subpath");
 
@@ -508,7 +508,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let leaf_round = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
     let mut art_round = Node::group(id, vec![leaf_round]);
     let round_corners = fx("stylize.roundCorners", json!({"radius": 2.0}));
-    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_round, &[&transform, &offset, &round_corners], Budget::EFFECTS, None);
     let p = art_round.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "Non-terminal Offset Path does not swap; copies union into 1 outer subpath");
 
@@ -516,7 +516,7 @@ fn reshape_leaves_within_preserves_order_when_not_terminal_or_not_style_safe() {
     let leaf_miter = Arc::new(Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default()));
     let mut art_miter = Node::group(id, vec![leaf_miter]);
     let offset_miter = fx("path.offsetPath", json!({"offset": 4.0, "joins": "miter"}));
-    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS);
+    crate::reshape::reshape_leaves_within(&mut art_miter, &[&transform, &offset_miter], Budget::EFFECTS, None);
     let p = art_miter.children().unwrap()[0].path_data().unwrap();
     assert_eq!(p.subpaths.len(), 1, "Miter join does not swap; copies union into 1 outer subpath");
 }

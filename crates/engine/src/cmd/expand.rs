@@ -687,7 +687,7 @@ fn expand_live_with_transparent_image_patterns(
         let Some(n) = d.node(*id) else { continue };
         // Random Transform effects take their seed from the ids: bake them first ([`bake_seeded`]),
         // and leave the object live when that can't be done.
-        let Some(mut g) = bake_seeded(&vectorcraft_render::effects::expand_live_deep(Some(d), n)) else { continue };
+        let Some(mut g) = bake_seeded(d, &vectorcraft_render::effects::expand_live_deep(Some(d), n)) else { continue };
         // An object whose art would take the expanded art past the budget stays live.
         let size = g.count_with_masks();
         if size > budget - made.get() {
@@ -856,7 +856,7 @@ fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect, b
     if !moves_only(xf) && def.art.iter().any(|a| has_instances(a)) {
         return Some(vec![]);
     }
-    let Some(def) = seeds_baked(def) else {
+    let Some(def) = seeds_baked(d, def) else {
         return Some(vec![]);
     };
     let brushes = vectorcraft_brush::library(d);
@@ -889,13 +889,14 @@ fn pattern_tiles(d: &mut Document, def: &PatternDef, xf: Affine, bounds: Rect, b
 /// effect baked into filled art ([`bake_appearance`](vectorcraft_render::effects::bake_appearance))
 /// while it keeps its own id: the effect takes its seed from the id, and the canvas draws the art
 /// with those ids for every tile, while the tiles get ids of their own. `None` when something
-/// other than a path has such an effect.
-fn seeds_baked(def: &PatternDef) -> Option<std::borrow::Cow<'_, PatternDef>> {
+/// other than a path has such an effect. The swatches and patterns that live-effect plug-ins
+/// painting their pieces name are looked up in `d`.
+fn seeds_baked<'a>(d: &Document, def: &'a PatternDef) -> Option<std::borrow::Cow<'a, PatternDef>> {
     if !def.art.iter().any(|a| has_seeded(a)) {
         return Some(std::borrow::Cow::Borrowed(def));
     }
     let mut def = def.clone();
-    def.art = def.art.iter().map(|a| bake_seeded(a).map(Arc::new)).collect::<Option<_>>()?;
+    def.art = def.art.iter().map(|a| bake_seeded(d, a).map(Arc::new)).collect::<Option<_>>()?;
     Some(std::borrow::Cow::Owned(def))
 }
 
@@ -1001,8 +1002,9 @@ pub(crate) fn has_seeded(n: &Node) -> bool {
 }
 
 /// `n` with the paths in it that have a random Transform effect baked ([`seeds_baked`]). `None`
-/// when something else has one.
-fn bake_seeded(n: &Node) -> Option<Node> {
+/// when something else has one. The swatches and patterns that live-effect plug-ins painting their
+/// pieces name are looked up in `d`.
+fn bake_seeded(d: &Document, n: &Node) -> Option<Node> {
     if !has_seeded(n) {
         return Some(n.clone());
     }
@@ -1010,17 +1012,17 @@ fn bake_seeded(n: &Node) -> Option<Node> {
         if !matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
             return None;
         }
-        vectorcraft_render::effects::bake_appearance(n)?
+        vectorcraft_render::effects::bake_appearance(Some(d), n)?
     } else {
         n.clone()
     };
     if !matches!(n.kind, NodeKind::Compound { .. }) {
         for c in n.children_mut().into_iter().flatten() {
-            *c = Arc::new(bake_seeded(c)?);
+            *c = Arc::new(bake_seeded(d, c)?);
         }
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-        m.art = Arc::new(bake_seeded(&m.art)?);
+        m.art = Arc::new(bake_seeded(d, &m.art)?);
     }
     Some(n)
 }
@@ -1041,7 +1043,7 @@ fn has_unbakeable_effects(n: &Node) -> bool {
 /// paths baked ([`baked`], [`outline_brushed`]) and its live shapes turned into plain paths (a
 /// stretch would rebuild their corners round), in its opacity masks too.
 fn prepared(d: &mut Document, brushes: &[vectorcraft_brush::Brush], n: &Node) -> Node {
-    let mut t = baked(n);
+    let mut t = baked(d, n);
     outline_brushed(d, brushes, &mut t);
     drop_live(&mut t);
     prepare_masks(d, brushes, &mut t);
@@ -1082,14 +1084,15 @@ fn scales_evenly(a: Affine) -> bool {
 }
 
 /// `n` with the strokes and geometry effects of each path in it baked into filled art
-/// ([`bake_appearance`](vectorcraft_render::effects::bake_appearance)).
-fn baked(n: &Node) -> Node {
-    if let Some(b) = vectorcraft_render::effects::bake_appearance(n) {
+/// ([`bake_appearance`](vectorcraft_render::effects::bake_appearance)), with the swatches and
+/// patterns that live-effect plug-ins painting their pieces name looked up in `d`.
+fn baked(d: &Document, n: &Node) -> Node {
+    if let Some(b) = vectorcraft_render::effects::bake_appearance(Some(d), n) {
         return b;
     }
     let mut n = n.clone();
     for c in n.children_mut().into_iter().flatten() {
-        *c = Arc::new(baked(c));
+        *c = Arc::new(baked(d, c));
     }
     n
 }

@@ -434,7 +434,7 @@ mod tests {
         let expanded = expand_revolve_art(&n).unwrap();
         let count = |n: &Node| n.children().unwrap()[0].children().unwrap().len();
         assert!(count(&expanded) < count(&live) * 3 / 4, "hidden back surfaces are removed");
-        assert_eq!(crate::bake_appearance(&n), Some(live.clone()), "other baking retains the full surface");
+        assert_eq!(crate::bake_appearance(None, &n), Some(live.clone()), "other baking retains the full surface");
         n.appearance.effects[0].params["expandVisibleOnly"] = json!(false);
         assert_eq!(revolve_art(&n), Some(live.clone()), "the live view ignores the expansion setting");
         assert_eq!(expand_revolve_art(&n), Some(live));

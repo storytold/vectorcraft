@@ -409,6 +409,119 @@ fn a_painted_group_effect_links_to_the_document_s_swatches() {
     assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the group's piece, green");
 }
 
+/// The output of a painted effect that returns one green square linked to swatch `Leaf`.
+fn leaf_square() -> String {
+    let mut leaf = solid("#00ff00");
+    leaf["swatch"] = json!("Leaf");
+    json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}]}).to_string()
+}
+
+/// A Pathfinder operation and baked appearance take a painted effect's pieces, swatch links
+/// included, as the canvas draws them: a group with a painted effect inside a group with a live
+/// Pathfinder effect draws the green piece, and baking a path's appearance gives the piece linked
+/// to the swatch.
+#[test]
+fn pathfinder_and_baked_appearance_take_painted_pieces_with_swatch_links() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.leafpaint", true), &leaf_square()));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let inner = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [inner.0], "effect": "plugin.test.engine.leafpaint"}));
+    let outer = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [outer.0], "effect": "pathfinder.add"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(15, 15)), (GREEN, WHITE), "the Pathfinder operation takes the green piece");
+
+    let id = rect(&mut s, 120.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.leafpaint"}));
+    let st = s.doc().unwrap();
+    let baked = vectorcraft_render::effects::bake_appearance(Some(&st.doc), st.doc.node(id).unwrap()).unwrap();
+    let mut fills = vec![];
+    baked.walk(&mut |n| {
+        if let Some(p) = n.path_data() {
+            fills.push((p.bounds(), n.appearance.fill().map(|f| f.paint.clone())));
+        }
+    });
+    let mut leaf = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    if let Paint::Solid { swatch, .. } = &mut leaf {
+        *swatch = Some("Leaf".into());
+    }
+    assert_eq!(fills, [(square_at(40.0).bounds(), Some(leaf))]);
+}
+
+/// A path with a painted effect takes part in a Pathfinder operation as its pieces, each with its
+/// own paint and the path's opacity: Divide on a group holding it makes one face per piece,
+/// painted as the piece is.
+#[test]
+fn a_path_with_a_painted_effect_takes_part_in_pathfinder_as_its_pieces() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#00ff00")]}, {"path": square_at(80.0), "fills": [solid("#0000ff")]}]})
+        .to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twopaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twopaint"}));
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "effect.apply", json!({"ids": [g.0], "effect": "pathfinder.divide"}));
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(90, 50), img.pixel(15, 15)), (GREEN, BLUE, WHITE), "one face per piece");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50}));
+    let st = s.doc().unwrap();
+    let hook = |c: &vectorcraft_doc::Node| vectorcraft_render::effects::outline_object(Some(&st.doc), c);
+    let faces = vectorcraft_render::effects::pathfinder_children(Some(&st.doc), st.doc.node(g).unwrap(), Some(&hook)).unwrap();
+    let faces: Vec<_> = faces.iter().map(|f| (f.appearance.fill().map(|f| f.paint.clone()), f.opacity)).collect();
+    let fill = |hex: &str| Some(Paint::solid(Color::from_hex(hex).unwrap()));
+    assert_eq!(faces, [(fill("#0000ff"), 0.5), (fill("#00ff00"), 0.5)]);
+}
+
+/// Art a renderer keeps for an object with a painted effect is made again when a swatch its pieces
+/// name leaves the document (the object is then drawn as if the effect weren't there) and when
+/// Undo brings the swatch back.
+#[test]
+fn kept_art_follows_the_swatches_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.keptpaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.keptpaint"}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| {
+        let img = r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+        (img.pixel(50, 50), img.pixel(15, 15))
+    };
+    assert_eq!(draw(&s), (GREEN, WHITE), "the piece, green");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    assert_eq!(draw(&s), (WHITE, RED), "without the swatch, the object as it is");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(draw(&s), (GREEN, WHITE), "the swatch back, the piece again");
+}
+
+/// Art a renderer keeps for an object whose plug-in starts to paint its pieces when it is replaced
+/// follows the swatches those pieces name from then on.
+#[test]
+fn kept_art_follows_the_swatches_once_a_replaced_plugin_paints() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterpaint", false), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.laterpaint"}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| {
+        let img = r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+        (img.pixel(50, 50), img.pixel(15, 15))
+    };
+    assert_eq!(draw(&s), (RED, WHITE), "the square in the object's paint");
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.laterpaint", true), &leaf_square()));
+    assert_eq!(draw(&s), (GREEN, WHITE), "the piece, green");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    assert_eq!(draw(&s), (WHITE, RED), "without the swatch, the object as it is");
+}
+
 /// Every painted piece counts against the effects' budget, however small its path: two painted
 /// effects in a stack that each return 350 tiny triangles make no more than 100,000 objects, not
 /// 350 × 350 of them.

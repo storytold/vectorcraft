@@ -147,6 +147,14 @@ pub fn has_plugin_effect(n: &Node) -> bool {
     n.appearance.effects.iter().any(plugin) || n.appearance.items.iter().any(|i| i.effects().iter().any(plugin))
 }
 
+/// Does `n` have a visible live-effect plug-in effect, its own or a fill's or stroke's, whose
+/// plug-in paints the pieces it returns? What such an effect draws also depends on the document's
+/// swatches and patterns, which its pieces may name.
+pub fn has_painted_plugin_effect(n: &Node) -> bool {
+    let painted = |e: &Effect| e.visible && vectorcraft_plugins::effect::plugin_id(&e.id).is_some_and(vectorcraft_plugins::effect::paints_output);
+    n.appearance.effects.iter().any(painted) || n.appearance.items.iter().any(|i| i.effects().iter().any(painted))
+}
+
 /// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
 pub fn plugin_revision() -> u64 {
     vectorcraft_plugins::registry::revision()

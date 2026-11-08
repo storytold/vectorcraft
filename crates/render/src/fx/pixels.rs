@@ -470,15 +470,19 @@ impl Renderer {
                 (key, Arc::as_ptr(&blob.bytes) as usize, blob.proxy.as_ref().map(|p| Arc::as_ptr(p) as usize)).hash(h);
             }
         });
-        let found = (patterns, symbols, images, Arc::as_ptr(&cms) as usize);
+        let names = hash(&mut |h| {
+            doc.swatches_iter().for_each(|s| s.name.hash(h));
+            doc.patterns.iter().for_each(|p| p.name.hash(h));
+        });
+        let found = (patterns, symbols, images, names, Arc::as_ptr(&cms) as usize);
         let d = match &self.doc_inputs {
-            Some((_, d)) if (d.patterns, d.symbols, d.images, d.cms) == found => d.clone(),
+            Some((_, d)) if (d.patterns, d.symbols, d.images, d.names, d.cms) == found => d.clone(),
             _ => {
                 let doc_art = || doc.patterns.iter().flat_map(|p| &p.art).chain(doc.symbols.iter().map(|s| &s.art));
                 let art = doc_art().map(Arc::downgrade).collect();
                 let pixels = doc.images.values().flat_map(|b| std::iter::once(&b.bytes).chain(&b.proxy)).map(Arc::downgrade).collect();
                 let plugins = doc_art().any(|a| crate::holds_plugin_effect(a));
-                Arc::new(DocInputs { patterns, symbols, images, cms: found.3, plugins, _held: (art, pixels, Arc::downgrade(&cms)) })
+                Arc::new(DocInputs { patterns, symbols, images, names, cms: found.4, plugins, _held: (art, pixels, Arc::downgrade(&cms)) })
             }
         };
         self.doc_inputs = Some((at, d.clone()));

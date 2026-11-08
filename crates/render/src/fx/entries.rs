@@ -314,17 +314,21 @@ impl Inputs {
 
 /// What raster contents read from the document by name or key, and the color settings, as a frame
 /// finds them ([`Renderer::doc_inputs`]): hashes of the patterns' tilings
-/// ([`crate::pattern::hash_tiling`]), of the symbols' names and art and of the images' keys and
-/// pixels, the address of the color settings, and whether the patterns' and symbols' art has a
-/// plug-in effect. Art, pixels and previews are hashed by the addresses of their shared values,
-/// and names, keys, tiles, tile types and overlaps are hashed by value. The live cache keeps these
-/// inputs with each evaluated live object, with each mesh's quads and with what each walk of a
-/// live object or of effect art found when it found no placed file (`crate::live`), and
-/// [`Renderer::fx_art`] keeps them with art that can be made from evaluated live objects.
+/// ([`crate::pattern::hash_tiling`]), of the symbols' names and art, of the images' keys and
+/// pixels and of the swatches' and patterns' names, the address of the color settings, and whether
+/// the patterns' and symbols' art has a plug-in effect. Art, pixels and previews are hashed by the
+/// addresses of their shared values, and names, keys, tiles, tile types and overlaps are hashed by
+/// value. The live cache keeps these inputs with each evaluated live object, with each mesh's quads
+/// and with what each walk of a live object or of effect art found when it found no placed file
+/// (`crate::live`), and [`Renderer::fx_art`] keeps them with art that can be made from evaluated
+/// live objects.
 pub(crate) struct DocInputs {
     pub(super) patterns: u64,
     pub(super) symbols: u64,
     pub(super) images: u64,
+    /// The swatches' and patterns' names, which the pieces of live-effect plug-ins that paint them
+    /// may name (`crate::live`).
+    pub(crate) names: u64,
     pub(crate) cms: usize,
     /// Whether an object in a pattern's or a symbol's art, or in an opacity mask there, has a
     /// visible plug-in effect.

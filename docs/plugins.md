@@ -421,7 +421,9 @@ is a piece drawn by itself, in the order returned, with paints of its own:
 - An effect on a fill (`_context.item` `{"fill": i}`) returns only `fills`, which replace that fill on each piece; an
   effect on a stroke returns only `strokes`. The object's other fills and strokes stay where they are.
 - The effects after it in the stack apply to the pieces together, the reference box being the bounds of all of them.
-  Bounds, hit tests and raster effects use the pieces as they are drawn. Each piece counts against the budget of the
+  Bounds, hit tests, raster effects, Pathfinder effects, compound shapes and Envelope Options › Distort Appearance use
+  the pieces as they are drawn. For an effect on a fill or stroke, Pathfinder effects and compound shapes use the
+  object's path, as they do for every other effect on a fill or stroke. Each piece counts against the budget of the
   object's geometry effects as well as its anchors, so all the painted effects in a stack make at most 100,000 pieces
   together; a run whose pieces would pass the budget draws its input as it was.
 - The result is checked whole before any of it is drawn: the limits of a filter's output (100,000 objects, 4,000,000
