@@ -393,8 +393,17 @@ fn expand_gradient_fills(s: &mut Session, to: GradientTo) -> Result<()> {
 /// Path `l` with each gradient fill turned into art, in appearance order: the other items stay
 /// on plain copies of the path. The path's geometry effects ([`reshaped`]) and each fill's own
 /// ([`fill_shape`]) shape the outline the art fills first, as on the canvas. `None` when no
-/// gradient fill can be expanded.
+/// gradient fill can be expanded. A path that live-effect plug-ins paint is expanded piece by piece
+/// ([`expand_pieces`]).
 fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
+    if vectorcraft_render::effects::has_painted_effects(l) {
+        return expand_pieces(d, l, usize::MAX, |d, piece, _| expand_piece_fills(d, piece, to));
+    }
+    expand_piece_fills(d, l, to)
+}
+
+/// [`expand_fills`] of a path with no live-effect plug-in that paints what it returns.
+fn expand_piece_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !l.appearance.items.iter().any(|i| gradient_fill(i).is_some()) {
         return None;
     }
@@ -466,10 +475,50 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
     Some(art)
 }
 
+/// Path `l`, which live-effect plug-ins paint, as the art the canvas draws
+/// ([`reshape`](vectorcraft_render::effects::reshape)) with ids of its own, each piece of the art
+/// replaced by what `expand` makes of it (`expand` gets the piece and how many objects it may become;
+/// `None` keeps the piece with its own paints). `None` when the art would hold more than `budget`
+/// objects or no piece expands.
+fn expand_pieces(d: &mut Document, l: &Node, budget: usize, mut expand: impl FnMut(&mut Document, &Node, usize) -> Option<Node>) -> Option<Node> {
+    let art = vectorcraft_render::effects::reshape(Some(d), l, None)?;
+    let mut art = d.reid(&art);
+    art.locked = l.locked;
+    let mut left = budget.checked_sub(art.count_with_masks())?;
+    let mut expanded = false;
+    expand_piece_leaves(d, &mut art, &mut left, &mut expanded, &mut expand);
+    expanded.then_some(art)
+}
+
+/// Replace each path and compound path under `n` (`n` included) by what `expand` makes of it, in
+/// paint order. `left` is how many more objects the art may hold, and `expanded` is set when a path
+/// is replaced.
+fn expand_piece_leaves(
+    d: &mut Document,
+    n: &mut Node,
+    left: &mut usize,
+    expanded: &mut bool,
+    expand: &mut impl FnMut(&mut Document, &Node, usize) -> Option<Node>,
+) {
+    if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+        let room = *left + n.count_with_masks();
+        if let Some(new) = expand(d, n, room) {
+            *left = room.saturating_sub(new.count_with_masks());
+            *n = new;
+            *expanded = true;
+        }
+        return;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        expand_piece_leaves(d, Arc::make_mut(c), left, expanded, expand);
+    }
+}
+
 /// Path `l` as the canvas paints its fills and strokes: its visible geometry effects applied to its
 /// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
 /// visible geometry effect. The swatches and patterns that live-effect plug-ins painting their
-/// pieces name are looked up in `doc`.
+/// pieces name are looked up in `doc`. This merges the pieces of such a plug-in into one path, so a
+/// path that one paints goes through [`expand_pieces`] instead.
 fn reshaped(doc: &Document, l: &Node) -> Option<Node> {
     use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
@@ -771,8 +820,17 @@ fn expand_patterns(d: &mut Document, l: &Node) -> Option<Node> {
 }
 
 /// [`expand_patterns`] for only the pattern fills `which` picks: the others stay like the other
-/// items, as does a pattern fill whose tiles would take the tiles of `l` past `budget` objects.
+/// items, as does a pattern fill whose tiles would take the tiles of `l` past `budget` objects. A
+/// path that live-effect plug-ins paint is expanded piece by piece ([`expand_pieces`]).
 fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool, budget: usize) -> Option<Node> {
+    if vectorcraft_render::effects::has_painted_effects(l) {
+        return expand_pieces(d, l, budget, |d, piece, room| expand_piece_patterns(d, piece, &which, room));
+    }
+    expand_piece_patterns(d, l, which, budget)
+}
+
+/// [`expand_patterns_where`] of a path with no live-effect plug-in that paints what it returns.
+fn expand_piece_patterns(d: &mut Document, l: &Node, which: impl Fn(&Document, &AppearanceItem) -> bool, budget: usize) -> Option<Node> {
     if !matches!(l.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
         || !l.appearance.items.iter().any(|i| pattern_fill(d, i).is_some() && which(d, i))
     {

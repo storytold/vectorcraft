@@ -437,7 +437,8 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
 - The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
   export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
-  ordinary path or compound path with its fills and strokes, as one undo step.
+  ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern
+  fills expands the fills of each piece, and leaves a piece with other paints as it is drawn.
 
 An **exporter** returns `{"dataBase64": "…", "warnings"?: ["…"]}`: the file, in base64, which the host writes as it
 is, and what the export left out or changed, for the user (at most 100 warnings of at most 500 characters each, shown

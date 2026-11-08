@@ -869,8 +869,9 @@ fn piece_cost(path: &PathData) -> Budget {
 /// Live-effect plug-in `plugin` (one that paints what it returns) with `params`, a later effect of
 /// `item`, run on `leaf`, a path of [`transform_piece`] painted by copies of `item`, with reference
 /// box `bounds`: `leaf` becomes a group of one path for each piece returned, in order. A piece that
-/// gives fills (on a fill) or strokes (on a stroke) is painted by copies of `item` with those
-/// paints ([`vectorcraft_plugins::painted::items`]); one that gives none keeps the leaf's. Returns
+/// gives fills (on a fill) or strokes (on a stroke) is painted by copies of `item`, the leaf's first
+/// fill or stroke, with those paints ([`vectorcraft_plugins::painted::items`]), under the leaf's
+/// other fills and strokes; one that gives none keeps the leaf's. Returns
 /// what the paths cost ([`piece_cost`]); `None` (the leaf stays as it is) when the plug-in fails,
 /// the pieces are refused (a swatch or pattern not in `doc`, or any without one), or they would pass
 /// `budget`.
@@ -896,7 +897,13 @@ fn paint_piece(
             AppearanceItem::Fill(_) => p.fills.is_some(),
             AppearanceItem::Stroke(_) => p.strokes.is_some(),
         };
-        let items = if gives { vectorcraft_plugins::painted::items(item, p) } else { leaf.appearance.items.clone() };
+        let items = if gives {
+            let mut items = vectorcraft_plugins::painted::items(item, p);
+            items.extend_from_slice(leaf.appearance.items.get(1..).unwrap_or_default());
+            items
+        } else {
+            leaf.appearance.items.clone()
+        };
         if items.is_empty() {
             continue;
         }

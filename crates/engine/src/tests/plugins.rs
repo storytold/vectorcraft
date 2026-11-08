@@ -482,20 +482,96 @@ fn a_retained_renderer_shows_a_piece_once_its_swatch_exists() {
     assert_eq!(at_piece(&mut r, &s), GREEN, "the piece is drawn with its swatch");
 }
 
-/// Object › Expand of a gradient fill takes the geometry of a piece linked to the document's swatch.
+/// Object › Expand of a gradient fill works piece by piece, for a painted effect on the object and
+/// on the fill: a piece that keeps the gradient has it expanded, and a piece with a paint of its own,
+/// here linked to the document's swatch, keeps that paint on its own path.
 #[test]
-fn expanding_a_gradient_fill_takes_a_swatch_linked_piece() {
+fn expanding_a_gradient_fill_keeps_each_piece_s_own_paint() {
+    for on_fill in [false, true] {
+        let mut s = session();
+        let id = rect(&mut s, 10.0, "#ff0000");
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear"}}));
+        run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+        let mut leaf = solid("#00ff00");
+        leaf["swatch"] = json!("Leaf");
+        let out = json!({"objects": [{"path": square_at(40.0), "fills": [leaf]}, {"path": square_at(100.0)}]}).to_string();
+        install_wat(&mut s, &tpl::returning(&painting("test.engine.expandref", true), &out));
+        let item = if on_fill { json!(node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap()) } else { Value::Null };
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandref", "item": item}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "object.expand", json!({"object": false, "fill": true, "stroke": false}));
+        let img = drawn(&s);
+        assert_eq!((img.pixel(15, 15), img.pixel(50, 50)), (WHITE, GREEN), "on_fill {on_fill}: the input is gone and the piece keeps its paint");
+        assert!(![WHITE, GREEN].contains(&img.pixel(110, 50)), "on_fill {on_fill}: the other piece shows the gradient");
+        let mut own = Paint::solid(Color::from_hex("#00ff00").unwrap());
+        if let Paint::Solid { swatch, .. } = &mut own {
+            *swatch = Some("Leaf".into());
+        }
+        let mut kept = vec![];
+        let mut plugins = 0;
+        s.doc().unwrap().doc.walk(|n| {
+            plugins += n
+                .appearance
+                .effects
+                .iter()
+                .chain(n.appearance.items.iter().flat_map(|i| i.effects()))
+                .filter(|e| e.id.starts_with("plugin."))
+                .count();
+            if n.path_data().is_some_and(|p| p.bounds() == square_at(40.0).bounds()) {
+                kept.push(n.appearance.fill().map(|f| f.paint.clone()));
+            }
+        });
+        assert_eq!(kept, [Some(own)], "on_fill {on_fill}");
+        assert_eq!(plugins, 0, "on_fill {on_fill}: no live effect is left");
+    }
+}
+
+/// Object › Expand of a pattern fill works piece by piece: a piece that keeps the pattern has its
+/// tiles expanded, and a piece with a paint of its own keeps that paint.
+#[test]
+fn expanding_a_pattern_fill_keeps_each_piece_s_own_paint() {
     let mut s = session();
     let id = rect(&mut s, 10.0, "#ff0000");
-    run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear"}}));
-    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
-    install_wat(&mut s, &tpl::returning(&painting("test.engine.expandref", true), &leaf_square()));
-    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandref"}));
+    let tile = rect(&mut s, 300.0, "#00ff00");
+    run(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "Tiles", "edit": false}));
+    run(&mut s, "paint.setFill", json!({"ids": [id.0], "swatch": "Tiles"}));
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}, {"path": square_at(100.0)}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.expandtiles", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.expandtiles"}));
     run(&mut s, "select.set", json!({"ids": [id.0]}));
     run(&mut s, "object.expand", json!({"object": false, "fill": true, "stroke": false}));
     let img = drawn(&s);
-    assert_eq!(img.pixel(15, 15), WHITE, "the input path is gone");
-    assert_ne!(img.pixel(50, 50), WHITE, "the piece's geometry is filled");
+    assert_eq!((img.pixel(15, 15), img.pixel(50, 50)), (WHITE, BLUE), "the input is gone and the piece keeps its paint");
+    assert!(near(img.pixel(110, 50), GREEN), "the other piece shows the tiles");
+    let mut patterns = 0;
+    s.doc().unwrap().doc.walk(|n| patterns += n.appearance.items.iter().filter(|i| matches!(i.paint(), Paint::Pattern { .. })).count());
+    assert_eq!(patterns, 0, "the tiles are objects");
+}
+
+/// Two painted effects on one fill, the first returning a piece with two fills: the second replaces
+/// the first of them and the other fill stays over it.
+#[test]
+fn a_second_painted_effect_on_a_fill_keeps_the_piece_s_other_fills() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let two = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#ff0000"), solid("#00ff00")]}]}).to_string();
+    let one = json!({"objects": [{"path": square_at(40.0), "fills": [solid("#0000ff")]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.twofills", true), &two));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.onefill", true), &one));
+    let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.twofills", "item": fill}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.onefill", "item": fill}));
+    assert_eq!(drawn(&s).pixel(50, 50), GREEN, "the other fill paints over the replaced one");
+    let st = s.doc().unwrap();
+    let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+    let mut paints = vec![];
+    art.walk(&mut |n| {
+        if n.path_data().is_some() {
+            paints.push(n.appearance.items.iter().filter(|i| i.is_fill()).map(|i| i.paint().clone()).collect::<Vec<_>>());
+        }
+    });
+    let fill = |hex: &str| Paint::solid(Color::from_hex(hex).unwrap());
+    assert!(paints.contains(&vec![fill("#0000ff"), fill("#00ff00")]), "{paints:?}");
 }
 
 /// The geometry of a painted result that names a swatch counts only when the document has that
