@@ -1189,13 +1189,11 @@ mod tests {
         }
     }
 
-    /// The blending space is chosen from every page, also when the first pages drawn are only
-    /// some of them: here the first page has no transparency, and the second is blended in CMYK.
-    #[test]
-    fn the_blending_space_is_chosen_from_every_page() {
-        use vectorcraft_doc::ColorMode;
+    /// Two pages in a document of `mode`, a grey on each; the second has a green over its grey,
+    /// blended Screen when `screened`, else Normal. Their areas are returned too.
+    fn two_pages(mode: vectorcraft_doc::ColorMode, screened: bool) -> (Document, [Rect; 2]) {
         let (a, b) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(200.0, 0.0, 300.0, 100.0));
-        let mut page = Document::new_with_mode(300.0, 100.0, ColorMode::Cmyk);
+        let mut page = Document::new_with_mode(300.0, 100.0, mode);
         let layer = page.layers[0].id;
         filled(&mut page, layer, a, 0.6);
         filled(&mut page, layer, b, 0.6);
@@ -1205,8 +1203,20 @@ mod tests {
             vectorcraft_geom::shapes::rectangle(Rect::new(220.0, 20.0, 280.0, 80.0)),
             vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0),
         );
-        n.blend = vectorcraft_color::BlendMode::Screen;
+        if screened {
+            n.blend = vectorcraft_color::BlendMode::Screen;
+        }
         page.insert(Some(layer), usize::MAX, n).unwrap();
+        (page, [a, b])
+    }
+
+    /// The blending space is chosen from every page, also when the first pages drawn are only
+    /// some of them: here the first page has no transparency, and the second is blended in CMYK.
+    /// The layers then match the pages.
+    #[test]
+    fn the_blending_space_is_chosen_from_every_page() {
+        use vectorcraft_doc::ColorMode;
+        let (page, [a, b]) = two_pages(ColorMode::Cmyk, true);
         let mut layers = page.clone();
         layers.color_mode = ColorMode::Rgb;
         let frame = frame_of(&page, &[a, b]);
@@ -1215,5 +1225,51 @@ mod tests {
         assert_eq!(view.in_cmyk, Some(true));
         // Both pages were drawn, and kept.
         assert!(view.drawn.last().is_some_and(|d| d.pages.iter().all(Option::is_some)));
+        assert!(view.differences(&layers, a, false).iter().all(|d| d.any < 0.001));
+        assert_eq!(compare(&frame, &mut view, &layers, false), Ok(vec![]));
+    }
+
+    /// Only an RGB document with transparency, weighed against a CMYK page, is drawn both ways, and
+    /// only until the way is chosen: later documents are drawn once, in that way. An RGB document
+    /// without transparency, a CMYK document, and an RGB page are drawn once, as they are.
+    #[test]
+    fn only_an_rgb_document_with_transparency_on_a_cmyk_page_is_drawn_both_ways() {
+        use vectorcraft_doc::ColorMode;
+        // The draws of weighing `layers` (as RGB or not) on `page`, then of a second document, and
+        // the way chosen.
+        let weigh = |page: &Document, areas: [Rect; 2], layers: &Document, rgb: bool| {
+            let mut layers = layers.clone();
+            if rgb {
+                layers.color_mode = ColorMode::Rgb;
+            }
+            let frame = frame_of(page, &areas);
+            let mut view = PageView::new(&frame);
+            view.layered(&layers, &[0, 1]);
+            let first = view.draws;
+            // The same document again draws nothing; another one is drawn once.
+            view.layered(&layers, &[0, 1]);
+            assert_eq!(view.draws, first);
+            let mut other = layers.clone();
+            let layer = other.layers[0].id;
+            filled(&mut other, layer, Rect::new(10.0, 10.0, 20.0, 20.0), 1.0);
+            view.layered(&other, &[0, 1]);
+            (first, view.draws - first, view.in_cmyk)
+        };
+        let (cmyk_page, areas) = two_pages(ColorMode::Cmyk, true);
+        let (both, then, chosen) = weigh(&cmyk_page, areas, &cmyk_page, true);
+        assert_eq!(chosen, Some(true));
+        assert!(then > 0);
+        assert_eq!(both, 2 * then, "drawn both ways once, then one way");
+        let (plain_page, _) = two_pages(ColorMode::Cmyk, false);
+        let (rgb_page, _) = two_pages(ColorMode::Rgb, true);
+        for (what, page, layers, rgb) in [
+            ("an RGB document without transparency", &plain_page, &plain_page, true),
+            ("a CMYK document", &cmyk_page, &cmyk_page, false),
+            ("an RGB page", &rgb_page, &rgb_page, false),
+        ] {
+            let (first, second, chosen) = weigh(page, areas, layers, rgb);
+            assert_eq!(chosen, None, "{what}");
+            assert_eq!((first, second), (then, then), "{what} is drawn once");
+        }
     }
 }
