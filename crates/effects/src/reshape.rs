@@ -714,8 +714,12 @@ fn reshape_leaves_apart(art: &mut Node, fx: &[&Effect], budget: Budget, apart: b
                 return;
             };
             used = used.minus(before).plus(Budget::of(&out));
-            if follows && !boxes && leaf.appearance.has_placed_gradient() {
-                crate::Carry::of(&e.id, &params, bounds, None, None, seed).apply(&mut leaf.appearance);
+            if follows && !boxes {
+                // A gradient fitted to the path fits the path's own bounds.
+                let carry = crate::Carry::of(&e.id, &params, bounds, path.bounds(), None, seed);
+                if carry.moves(&leaf.appearance) {
+                    carry.apply(&mut leaf.appearance);
+                }
             }
             set_geometry(leaf, out, rule);
         });
@@ -1048,7 +1052,7 @@ fn is_member_group(n: &Node) -> bool {
 }
 
 /// A group below the art that [`is_member_group`] takes and whose own fills or strokes hold a
-/// placed gradient: the child indices that lead to it from the art, its geometric bounds, and
+/// gradient: the child indices that lead to it from the art, its geometric bounds, and
 /// whether a path below it kept its shape.
 type GroupMark = (Vec<usize>, Option<Rect>, bool);
 
@@ -1065,7 +1069,7 @@ fn group_marks(n: &Node, at: &mut Vec<usize>, kept: &HashSet<NodeId>, out: &mut 
             for (i, c) in children.iter().enumerate() {
                 at.push(i);
                 let (b, h) = group_marks(c, at, kept, out);
-                if is_member_group(c) && c.appearance.has_placed_gradient() {
+                if is_member_group(c) && (c.appearance.has_placed_gradient() || c.appearance.has_unplaced_gradient()) {
                     out.push((at.clone(), b, h));
                 }
                 at.pop();
@@ -1218,6 +1222,10 @@ fn copy_placed(n: &mut Node, m: Affine, copies: usize, room: &mut usize) {
         let src = (**c).clone();
         let placed = |xf: Affine| {
             let mut one = src.clone();
+            // Gradients fitted to it are fixed to their fit first when a refit would not match.
+            if crate::geometry::fixes_fit(xf) {
+                one.pin_gradients();
+            }
             match &mut one.kind {
                 NodeKind::Image(im) => im.xf = xf * im.xf,
                 NodeKind::SymbolInstance { xf: at, .. } => *at = xf * *at,

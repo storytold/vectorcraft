@@ -31,6 +31,7 @@ pub use ids::{LAYER_COLORS, LayerColor, NodeId};
 pub use kind::{ImageObject, MAX_BUFFERED_VALUES, NodeKind, with_buffered_value_budget};
 pub use live_shape::{LiveShape, Scaling};
 pub use opacity::{Knockout, OpacityMask, whiten};
+pub use ops::keeps_gradient_fit;
 use wire::NodeWire;
 pub use wire::{MAX_READ_NODES, with_node_budget};
 

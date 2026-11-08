@@ -174,21 +174,34 @@ pub fn apply_geometry_bez_carrying(effects: &[Effect], path: &BezPath, bounds: R
     (out.to_bezpath(), carry)
 }
 
-/// How placed gradients follow geometry effects. The Transform effect without copies maps them as
-/// it maps the object (with copies, `crate::reshape` gives each copy its own). Free Distort moves
-/// and scales them from the object's bounds before the effect to its bounds after it. For the
-/// other geometry effects it is empty. It does not change gradients fitted to the object.
+/// How gradients follow geometry effects. The Transform effect without copies maps placed
+/// gradients as it maps the object (with copies, `crate::reshape` gives each copy its own). Free
+/// Distort moves and scales them from the object's bounds before the effect to its bounds after
+/// it. For the other geometry effects it is empty. A gradient fitted to the object fits the
+/// geometry each effect makes, until a Transform effect turns, reflects or scales it unevenly
+/// (a map after which a refit would not match the mapped gradient): it is fixed to its fit on the
+/// geometry that effect takes, and then follows that effect and the ones after it as a placed
+/// gradient does.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Carry(Vec<CarryStep>);
 
+/// Does `m` fix a gradient fitted to the object to its fit before mapping it? It does when a refit
+/// would not reproduce the map (a turn, a reflection or an uneven scale) and `m` keeps area: a map
+/// that flattens the geometry to a line (a scale of 0) leaves the gradient fitted, since mapping it
+/// would flatten it to one color.
+pub(crate) fn fixes_fit(m: vectorcraft_geom::Affine) -> bool {
+    let [a, b, c, d, _, _] = m.as_coeffs();
+    let norm = a * a + b * b + c * c + d * d;
+    m.is_finite() && m.determinant().abs() > 1e-12 * norm && !vectorcraft_doc::node::keeps_gradient_fit(m)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CarryStep {
-    Affine(vectorcraft_geom::Affine),
+    /// Map `m`; `from` is the geometric bounds of the geometry it takes, which a fitted gradient
+    /// fits before `m` moves it (none: fitted gradients stay fitted).
+    Affine { m: vectorcraft_geom::Affine, from: Option<Rect> },
     /// From box `from` to box `to` (strokes: their stroke-inflated boxes).
-    Boxes {
-        from: Rect,
-        to: Rect,
-    },
+    Boxes { from: Rect, to: Rect },
 }
 
 impl Carry {
@@ -220,7 +233,7 @@ impl Carry {
             return Carry::default();
         }
         let step = match id {
-            "distort.transform" => Some(CarryStep::Affine(distort::transform_map(b, p, seed).0)),
+            "distort.transform" => Some(CarryStep::Affine { m: distort::transform_map(b, p, seed).0, from }),
             _ => match (from, to) {
                 (Some(from), Some(to)) if from != to && [to.x0, to.y0, to.x1, to.y1].iter().all(|v| v.is_finite()) => {
                     Some(CarryStep::Boxes { from, to })
@@ -239,17 +252,32 @@ impl Carry {
     /// Does it move any of the gradients of `ap`? Callers check first, so an appearance shared
     /// with other objects is not copied for nothing.
     pub fn moves(&self, ap: &Appearance) -> bool {
-        !self.0.is_empty() && ap.has_placed_gradient()
+        !self.0.is_empty() && (ap.has_placed_gradient() || (self.pin().is_some() && ap.has_unplaced_gradient()))
     }
 
-    /// Move the placed gradients of `ap` along, through each step in turn.
+    /// The first step that fixes gradients fitted to the object: a map a refit would not
+    /// reproduce, on geometry whose bounds are known.
+    fn pin(&self) -> Option<usize> {
+        self.0.iter().position(|s| matches!(s, CarryStep::Affine { m, from: Some(_) } if fixes_fit(*m)))
+    }
+
+    /// Move the gradients of `ap` along. Placed gradients take every step in turn; fitted ones
+    /// are fixed to their fit at the first step [`Self::pin`] finds and take it and the steps
+    /// after it.
     pub fn apply(&self, ap: &mut Appearance) {
         if !self.moves(ap) {
             return;
         }
-        for s in &self.0 {
+        // The steps move placed gradients only; fitted ones become placed at the pin.
+        let pin = self.pin();
+        for (k, s) in self.0.iter().enumerate() {
+            if Some(k) == pin
+                && let CarryStep::Affine { from: Some(b), .. } = *s
+            {
+                ap.pin_gradients(b);
+            }
             match *s {
-                CarryStep::Affine(m) => ap.transform_gradients(m),
+                CarryStep::Affine { m, .. } => ap.transform_gradients(m),
                 CarryStep::Boxes { from, to } => crate::reshape::follow_boxes(ap, from, to),
             }
         }

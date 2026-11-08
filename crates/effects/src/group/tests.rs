@@ -450,6 +450,70 @@ fn a_groups_transform_moves_the_gradients_placed_on_an_images_own_fills() {
     }
 }
 
+/// A group's Transform effect that turns its art turns the gradients fitted to its paths, to the
+/// group's own fill, to a nested group's own fill and to an image's and a symbol instance's own
+/// fills: each is fixed to its fit on its own object first. A move leaves the members' gradients
+/// fitted.
+#[test]
+fn a_groups_transform_turns_the_gradients_fitted_to_its_members_and_its_own_fill() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::ImageObject;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let square = |id: u64, x: f64| {
+        Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::basic(fitted.clone(), Paint::None, 0.0)))
+    };
+    let mut image = Node::new(
+        NodeId(4),
+        NodeKind::Image(Box::new(ImageObject {
+            key: "k".into(),
+            width: 10,
+            height: 10,
+            xf: vectorcraft_geom::Affine::translate((30.0, 0.0)),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    image.appearance = Appearance::basic(fitted.clone(), Paint::None, 0.0).into();
+    // A symbol instance whose symbol is not in a document is measured as the 20 pt square about
+    // its origin: here 22.5..27.5 across and 2.5..7.5 down.
+    let at = vectorcraft_geom::Affine::translate((25.0, 5.0)) * vectorcraft_geom::Affine::scale(0.25);
+    let mut instance = Node::new(NodeId(6), NodeKind::SymbolInstance { symbol: "s".into(), xf: at });
+    instance.appearance = Appearance::basic(fitted.clone(), Paint::None, 0.0).into();
+    // Ends of each gradient by object id; none for a gradient still fitted.
+    let ends = |params: serde_json::Value| {
+        let mut inner = Node::group(NodeId(5), vec![square(2, 10.0)]);
+        inner.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(fitted.clone())));
+        let mut g = Node::group(NodeId(10), vec![square(1, 0.0), Arc::new(inner), Arc::new(image.clone()), Arc::new(instance.clone())]);
+        g.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(fitted.clone())));
+        g.appearance.effects.push(Effect { id: "distort.transform".into(), params, visible: true });
+        let art = evaluate_container(None, &g).unwrap();
+        let mut out = std::collections::BTreeMap::new();
+        art.walk(&mut |c: &Node| {
+            if let Paint::Gradient(p) = c.appearance.fill_paint() {
+                out.insert(c.id.0, p.geom.map(|g| (g.start, g.end)));
+            }
+        });
+        out
+    };
+    let near = |a: Point, b: Point| a.distance(b) < 1e-6;
+    // A quarter turn about the group's center (20, 5): (x, 5) goes to (20, 5 + 20 - x), so a ramp
+    // from (x0, 5) to (x1, 5) runs from (20, 25 - x0) up to (20, 25 - x1).
+    let turned = ends(serde_json::json!({"rotate": 90}));
+    let want = [(1, 0.0, 10.0), (2, 10.0, 20.0), (5, 10.0, 20.0), (4, 30.0, 40.0), (6, 22.5, 27.5), (10, 0.0, 40.0)];
+    for (id, x0, x1) in want {
+        let got = turned.get(&id).copied().flatten();
+        let ok = got.is_some_and(|(s, e)| near(s, Point::new(20.0, 25.0 - x0)) && near(e, Point::new(20.0, 25.0 - x1)));
+        assert!(ok, "object {id}: {got:?} in {turned:?}");
+    }
+    // The group's own fill is fixed to its fit on the art it paints, which the move took to 30..70.
+    let moved = ends(serde_json::json!({"moveH": 30}));
+    let group = moved.get(&10).copied().flatten();
+    assert!(group.is_some_and(|(s, e)| near(s, Point::new(30.0, 5.0)) && near(e, Point::new(70.0, 5.0))), "{moved:?}");
+    assert!(moved.len() == 6 && [1, 2, 4, 5, 6].iter().all(|id| moved[id].is_none()), "{moved:?}");
+}
+
 #[test]
 fn a_transform_on_a_group_paints_each_copy_with_its_own_gradient() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};

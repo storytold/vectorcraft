@@ -768,7 +768,7 @@ impl Node {
 }
 
 /// Is `a` a move plus a positive uniform scale (after which a refit gradient still matches)?
-fn keeps_gradient_fit(a: Affine) -> bool {
+pub fn keeps_gradient_fit(a: Affine) -> bool {
     let [m0, m1, m2, m3, _, _] = a.as_coeffs();
     let eps = 1e-12 * m0.abs().max(1.0);
     m0 > 0.0 && m1.abs() <= eps && m2.abs() <= eps && (m0 - m3).abs() <= eps
