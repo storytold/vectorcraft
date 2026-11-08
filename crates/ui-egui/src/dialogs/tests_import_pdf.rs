@@ -197,3 +197,46 @@ fn placing_a_saved_ai_still_asks_for_the_page() {
     assert!(import_pdf::offer(&mut app, "two.ai", &bytes, None, Some(&json!({}))));
     assert_eq!(app.ui.dialog.as_ref().unwrap().str("mode"), "place");
 }
+
+/// Two pages, 100 and 200 pt wide; with `editing_data` the first page has the keys of an editor's
+/// copy of the art.
+fn two_pages(editing_data: bool, password: Option<&str>) -> Vec<u8> {
+    let mut first = PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f");
+    if editing_data {
+        first.entries = "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into();
+    }
+    pdf(&[first, PdfPage::new(200.0, 100.0, "1 0 0 rg 0 0 30 30 re f")], password)
+}
+
+/// #6135: the editing data of a `.ai` or `.ait` holds every artboard, so opening one asks nothing
+/// and opens them all.
+#[test]
+fn opening_an_ai_with_editing_data_opens_every_artboard_without_asking() {
+    let mut app = app();
+    let bytes = two_pages(true, None);
+    io::open_bytes(&mut app, "two.ai", &bytes, Some("/tmp/two.ai".into())).unwrap();
+    assert!(app.ui.dialog.is_none(), "no Import PDF dialog");
+    assert_eq!(app.session.documents().len(), 2);
+    assert_eq!(artboard_widths(&app), [100.0, 200.0]);
+    assert!(!import_pdf::offer(&mut app, "two.ait", &bytes, None, None), "a template too");
+    assert!(app.ui.dialog.is_none());
+}
+
+/// #6135: the dialog stays for what still has something to ask: a PDF, even one with editing data
+/// keys, a `.ai` that is only a PDF, a password, and Place.
+#[test]
+fn the_import_dialog_stays_where_there_is_something_to_ask() {
+    for (name, bytes) in [("two.pdf", two_pages(true, None)), ("two.ai", two_pages(false, None))] {
+        let mut app = app();
+        assert!(import_pdf::offer(&mut app, name, &bytes, None, None), "{name}");
+        assert_eq!((app.ui.dialog.as_ref().unwrap().str("mode"), field(&app, "pageCount")), ("open".into(), json!(2)), "{name}");
+    }
+
+    let mut app = app();
+    assert!(import_pdf::offer(&mut app, "locked.ai", &two_pages(true, Some("pw")), None, None));
+    assert_eq!(field(&app, "__locked"), true);
+
+    let mut app = self::app();
+    assert!(import_pdf::offer(&mut app, "two.ai", &two_pages(true, None), None, Some(&json!({}))));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("mode"), "place");
+}
