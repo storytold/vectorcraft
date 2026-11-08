@@ -1,6 +1,7 @@
 //! Line breaking and glyph placement for point, area and on-path type.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, ParamCurve, PathEl, Point, Rect, Shape, Vec2};
 use unicode_bidi::{BidiInfo, Level};
@@ -13,13 +14,13 @@ use vectorcraft_geom::{ArcPath, PathData};
 
 use crate::GlyphBend;
 use crate::composer::{Breakpoint, Params, compose};
-use crate::fontdb::FontDb;
-use crate::hyphen::hyphen_points_with;
+use crate::fontdb::{FontDb, FontFace};
+use crate::hyphen::points_for;
 use crate::justify::{Flex, LineFit, apply_desired, fit_line, is_word_space};
 use crate::kashida;
 use crate::shape::{
-    Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, shape_range, soft_line_start,
-    style_metrics,
+    Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
+    soft_line_start, style_metrics,
 };
 use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
@@ -36,8 +37,14 @@ pub(crate) use bidi::{is_rtl, para_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
+#[cfg(test)]
+pub(crate) use driver::layout_faces_per_call;
 pub use driver::{decorations, fit_first_line, layout, layout_with, scaled};
 use vertical::{TcyStyle, stands_upright, tate_chu_yoko, upright_cell, upright_centre, upright_extent, whole_character_widths};
+
+#[cfg(test)]
+pub(crate) use driver::envelope_ink_inputs;
+pub use driver::{envelope_ink, register_envelope_ink};
 
 const EPS: f64 = 1e-6;
 
@@ -50,8 +57,9 @@ fn continues_cluster(prev: Option<&SGlyph>, g: Option<&SGlyph>) -> bool {
 /// The caret stops inside glyph `g` when it alone stands for several characters (grapheme clusters)
 /// of `text`, a ligature ([`PositionedGlyph::carets`]); `rtl` when its logical leading edge is its
 /// right edge; `upright` when it stands upright in vertical type, its carets then down its cell
-/// ([`upright_extent`]). Empty for a glyph of one character.
-fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: bool) -> Vec<(usize, f64)> {
+/// ([`upright_extent`]) as a share of `upright`, the length in font units its own width runs down.
+/// Empty for a glyph of one character.
+fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: Option<f64>) -> Vec<(usize, f64)> {
     use unicode_segmentation::UnicodeSegmentation;
     let Some(s) = text.get(g.byte..g.byte + g.len).filter(|_| g.len > 1) else { return Vec::new() };
     let starts: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| g.byte + i).collect();
@@ -59,12 +67,13 @@ fn ligature_carets(text: &str, g: &SGlyph, rtl: bool, upright: bool) -> Vec<(usi
         return Vec::new();
     }
     let parts = starts.len() + 1;
-    let from_font = if upright {
+    let from_font = if let Some(length) = upright {
         let (cell, top) = upright_extent(g);
         g.face
             .vertical_ligature_carets(g.gid, starts.len(), top, cell)
-            .filter(|c| c.len() == starts.len() && cell > 0.0)
-            .map(|c| c.into_iter().map(|d| d / cell).collect::<Vec<f64>>())
+            .filter(|c| c.len() == starts.len() && length > 0.0)
+            .map(|c| c.into_iter().map(|d| d / length).collect::<Vec<f64>>())
+            .filter(|c| c.iter().all(|f| *f > 0.0 && *f < 1.0))
     } else {
         let advance = g.face.advance(g.gid);
         g.face
@@ -108,6 +117,8 @@ struct Ctx<'a> {
     runs: Vec<(Range<usize>, &'a CharStyle)>,
     /// The inline graphic of each run that is one (parallel to `runs`).
     inlines: Vec<Option<&'a InlineArt>>,
+    /// The face of each run (parallel to `runs`), looked up once ([`run_face`]).
+    faces: Vec<std::cell::OnceCell<Option<Arc<FontFace>>>>,
     default: CharStyle,
     opts: &'a LayoutOptions,
     /// Vertical type: lines are laid out as horizontal lines in line space, upright glyphs turned
@@ -126,13 +137,26 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn style_at(&self, b: usize) -> &CharStyle {
+    /// The index of the run whose style [`Self::style_at`] gives for byte `b`; `None` without runs.
+    fn run_at(&self, b: usize) -> Option<usize> {
         // The runs follow one another: the first that ends after `b` is the only one that can hold it.
         let find = |b: usize| {
             let i = self.runs.partition_point(|(r, _)| r.end <= b);
-            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|(_, s)| *s)
+            self.runs.get(i).filter(|(r, _)| r.start <= b).map(|_| i)
         };
-        find(b).or_else(|| b.checked_sub(1).and_then(find)).or_else(|| self.runs.first().map(|(_, s)| *s)).unwrap_or(&self.default)
+        find(b).or_else(|| b.checked_sub(1).and_then(find)).or_else(|| (!self.runs.is_empty()).then_some(0))
+    }
+
+    fn style_at(&self, b: usize) -> &CharStyle {
+        self.run_at(b).and_then(|i| self.runs.get(i)).map_or(&self.default, |(_, s)| *s)
+    }
+
+    /// The face of [`Self::style_at`] `b` ([`FontDb::style_face`]).
+    fn face_at(&self, b: usize) -> Option<Arc<FontFace>> {
+        match self.run_at(b).and_then(|i| self.runs.get(i).map(|(_, s)| (i, *s))) {
+            Some((i, st)) => run_face(self.db, &self.faces, i, st),
+            None => self.db.style_face(&self.default),
+        }
     }
 
     /// The stretches of paragraph `r` whose characters have a Character Direction, as byte ranges
@@ -158,7 +182,7 @@ impl Ctx<'_> {
     fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_range(self.db, self.text, r, &self.runs, &self.inlines, &self.opts.features, levels, &mut v);
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -310,9 +334,31 @@ impl Ctx<'_> {
             Affine::IDENTITY
         };
         let mut m = pre * local;
+        // Vertical type on a path: an upright glyph's cell in font units, as (its length with the
+        // Proportional Metrics change to it, the height of its top above the baseline).
+        let path_cell = (self.vertical && self.on_path && g.inline.is_none() && g.tcy.is_none() && takes_cell(g) && stands_upright(g) && g.sy != 0.0)
+            .then(|| {
+                let (cell, top) = upright_extent(g);
+                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / g.sy;
+                (cell + proportional, top)
+            });
         if self.vertical && self.on_path {
             // Vertical path type keeps the baseline path and turns each glyph across it.
             m = Affine::rotate_about(std::f64::consts::FRAC_PI_2, origin) * m;
+            if let Some((cell, top)) = path_cell {
+                // An upright glyph whose top then faces the path's end turns half a turn about the
+                // center of its cell (without its Character Rotation), so that its top faces the
+                // path's start and the characters of an upright ligature read along the path in
+                // order. The effects that keep the glyph's up direction fixed already turn it so on
+                // a path that runs to the left.
+                let turned = m * unturned;
+                let tangent = Vec2::new(angle.cos(), angle.sin());
+                let along = |y: f64| (turned * Point::new(0.0, y) - origin).dot(tangent);
+                if along(-top) > along(cell - top) {
+                    let centre = turned * Point::new(g.face.advance(g.gid) * 0.5, cell * 0.5 - top);
+                    m = Affine::translate(centre.to_vec2() * 2.0) * Affine::scale(-1.0) * m;
+                }
+            }
         } else if let (true, Some(t)) = (self.vertical, g.tcy) {
             // Tate-chu-yoko: the block set across the column, centred on its em of it, then moved up
             // by its Up/Down and right by its Left/Right (line x runs down the column and line y
@@ -327,10 +373,14 @@ impl Ctx<'_> {
         } else if self.vertical && stands_upright(g) {
             let next = self.out.glyphs.len();
             let after_base = self.out.glyphs.last().is_some_and(|p| p.byte == g.byte && p.line == line && p.len > 0);
+            // Baseline shift moves it across the column at any Character Rotation: the shift is
+            // taken off before the turn and put back after it.
+            let shift = pre * Point::new(0.0, -g.bshift) - pre * Point::ZERO;
+            let (shift, unshift) = (Affine::translate(shift), Affine::translate(-shift));
             if let Some((_, _, turn, after)) = cluster.filter(|c| c.0 == g.byte && c.1 == next && after_base && g.len > 0) {
                 // A later glyph of an upright glyph's cluster: set after it as the shaper placed
                 // it, and turned with it.
-                m = turn * Affine::translate((after - origin.x, 0.0)) * m;
+                m = shift * turn * Affine::translate((after - origin.x, 0.0)) * unshift * m;
                 self.upright_cluster = Some((g.byte, next + 1, turn, after));
             } else {
                 // Turned about the centre of its cell, which the column's centre line runs through:
@@ -342,7 +392,7 @@ impl Ctx<'_> {
                 // turning point instead would move it across the column too).
                 let turn = Affine::translate((-g.lead, 0.0))
                     * Affine::rotate_about(-std::f64::consts::FRAC_PI_2, Point::new(origin.x + cell * 0.5, origin.y - upright_centre(g, cell, em)));
-                m = turn * m;
+                m = shift * turn * unshift * m;
                 // Its own advance across, from where the cell centres it: where the shaper set the
                 // next glyph of its cluster.
                 let across = g.face.advance(g.gid) * g.sx;
@@ -382,20 +432,17 @@ impl Ctx<'_> {
         } else {
             0.0
         };
-        // On a path, an upright glyph turns about its pen: its cell runs along the path between
-        // where the glyph's transform sets the cell's foot and its top, moved by the shaper's
-        // placement and a baseline shift, and slanted by the path's effect.
-        let (width, width_start) = match (upright && self.on_path, g.sy) {
-            (true, sy) if sy != 0.0 => {
-                // In font units, with the Proportional Metrics change to its length.
-                let (cell, top) = upright_extent(g);
-                let proportional = g.vpal.filter(|_| g.face.vertical_glyph(g.gid).is_some()).map_or(0.0, |a| a.advance) / sy;
+        // On a path, an upright glyph's cell runs along the path from where the glyph's transform
+        // sets the cell's top to its foot, moved by the shaper's placement and a baseline shift, and
+        // slanted by the path's effect.
+        let (width, width_start) = match path_cell {
+            Some((cell, top)) => {
                 let tangent = Vec2::new(angle.cos(), angle.sin());
                 let along = |y: f64| (m * Point::new(0.0, y) - origin).dot(tangent);
-                let (start, end) = (along(cell + proportional - top), along(-top));
+                let (start, end) = (along(-top), along(cell - top));
                 if start.is_finite() && end > start { (end - start, start) } else { (width, width_start) }
             }
-            _ => (width, width_start),
+            None => (width, width_start),
         };
         if let Some(art) = g.inline.as_ref().and_then(|ib| ib.art) {
             self.out.inlines.push(InlineGlyph { run: g.run, byte: g.byte, glyph: self.out.glyphs.len(), xf: m, bounds: m.transform_rect_bbox(art) });
@@ -420,7 +467,14 @@ impl Ctx<'_> {
             bend: None,
             unturned,
             pivot,
-            carets: if g.inline.is_some() { Vec::new() } else { ligature_carets(self.text, g, g.level.is_rtl() && !self.vertical, upright) },
+            // On a path its carets divide the cell its width runs along, with the Proportional
+            // Metrics change to it.
+            carets: if g.inline.is_some() {
+                Vec::new()
+            } else {
+                let length = upright.then(|| path_cell.map_or_else(|| upright_extent(g).0, |(cell, _)| cell));
+                ligature_carets(self.text, g, g.level.is_rtl() && !self.vertical, length)
+            },
             width,
             width_start,
         });

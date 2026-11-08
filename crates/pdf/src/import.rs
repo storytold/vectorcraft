@@ -38,9 +38,11 @@ mod state;
 
 #[cfg(test)]
 pub(crate) use cid::{CidText, font_chars, identify_glyph, unify_radical};
+#[cfg(any(test, feature = "read-count"))]
+pub use entry::imports_of;
 pub use entry::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_with_report, is_glyph_outlines, is_outlines_note,
+    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
 #[cfg(test)]
 pub(crate) use entry::{TEST_MAX_OBJECTS, import_with_reader_options, read};

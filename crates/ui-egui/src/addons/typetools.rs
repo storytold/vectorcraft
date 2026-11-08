@@ -34,9 +34,18 @@ const SEEDS: u64 = 1_000_000;
 const LABEL_W: f32 = 90.0;
 const FIELD_W: f32 = 90.0;
 
+/// Release Type on a Path's command. Its menu item opens the generic command dialog
+/// (`ui.paramDialog`) on these options, with a Preview (`dialogs::command`).
+pub const RELEASE: &str = "addon.type.releasePath";
+/// Release Type on a Path › Keep: what the command's `mode` takes, by name.
+pub const RELEASE_MODES: &[(&str, &str)] = &[("Text and Path", "both"), ("Path Only", "path"), ("Text Only", "text")];
+
 /// Object › Plug-ins › Type Tools.
 pub fn menu() -> Vec<Item> {
-    vec![Item::Cmd("Text Tweaker…", COMMAND, Value::Null)]
+    vec![
+        Item::Cmd("Text Tweaker…", COMMAND, Value::Null),
+        Item::Cmd("Release Type on a Path…", RELEASE, json!({"mode": "both", "keepOriginal": false})),
+    ]
 }
 
 /// The attribute row of param `key` (the first, Font Size, for an unknown one).

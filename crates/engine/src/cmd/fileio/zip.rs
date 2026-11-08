@@ -23,6 +23,13 @@ pub const DEFLATE_CHUNK: usize = 1 << 20;
 /// The archive of `files` (`(name, bytes)`; `/` separates folders in a name), stored without
 /// compression. Fails past the limits of a ZIP without its 64-bit extension (65534 files, 4 GB; 65535 is the ZIP64 marker).
 pub fn store<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)]) -> Result<Vec<u8>, String> {
+    store_aligned(files, 1)
+}
+
+/// [`store`], with each file's data starting at a multiple of `align` bytes from the start of the
+/// archive (USDZ asks for 64): a padding block in the local header's extra field (header id
+/// 0x1986) moves it there.
+pub fn store_aligned<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)], align: usize) -> Result<Vec<u8>, String> {
     let too_big = || "too much to zip: at most 65534 files and 4 GB".to_string();
     let count = u16::try_from(files.len()).ok().filter(|&c| c != u16::MAX).ok_or_else(too_big)?;
     let mut out = Vec::with_capacity(files.iter().map(|(n, b)| 76 + 2 * n.as_ref().len() + b.as_ref().len()).sum::<usize>() + 22);
@@ -47,8 +54,21 @@ pub fn store<N: AsRef<str>, B: AsRef<[u8]>>(files: &[(N, B)]) -> Result<Vec<u8>,
         out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
         out.extend_from_slice(&VERSION.to_le_bytes());
         out.extend_from_slice(&shared);
-        out.extend_from_slice(&0u16.to_le_bytes()); // extra field length
+        // The data would start after the header (30 bytes) and the name; a padding block of at
+        // least its own 4-byte header moves it to the boundary.
+        let start = out.len() + 2 + name.len();
+        let mut pad = if align > 1 { (align - start % align) % align } else { 0 };
+        if pad > 0 && pad < 4 {
+            pad += align;
+        }
+        let pad_len = u16::try_from(pad).map_err(|_| format!("cannot align zip entries to {align} bytes"))?;
+        out.extend_from_slice(&pad_len.to_le_bytes()); // extra field length
         out.extend_from_slice(name);
+        if pad > 0 {
+            out.extend_from_slice(&0x1986u16.to_le_bytes());
+            out.extend_from_slice(&(pad_len - 4).to_le_bytes());
+            out.resize(out.len() + pad - 4, 0);
+        }
         out.extend_from_slice(bytes);
         // Central directory record.
         central.extend_from_slice(&0x0201_4b50u32.to_le_bytes());

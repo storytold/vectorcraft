@@ -343,7 +343,10 @@ pub(crate) fn show_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // As wide as the field and as tall as the buttons, as in `dialogs::show`: a right-to-left
+        // layout would take all the height left in the window and center the buttons in it.
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }
@@ -445,7 +448,8 @@ pub(crate) fn show_manage(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
         });
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }
@@ -519,12 +523,17 @@ pub fn sync(ui: &UiState) {
     }
 }
 
-/// Window › Toolbars: Advanced and Double Column, the toolbars made with New Toolbar (each checked
-/// while it shows), New Toolbar… and Manage Toolbars….
+/// Window › Toolbars: Advanced, Double Column and Keep Tools Beside the Canvas, the toolbars made
+/// with New Toolbar (each checked while it shows), New Toolbar… and Manage Toolbars….
 pub fn menu_items() -> Vec<crate::menus::Item> {
     use crate::menus::Item;
     let c = |label: &'static str, id: &'static str| Item::Cmd(label, id, Value::Null);
-    let mut v = vec![c("Advanced", "window.toolbarAdvanced"), c("Double Column", "window.toolbarColumns"), Item::Sep];
+    let mut v = vec![
+        c("Advanced", "window.toolbarAdvanced"),
+        c("Double Column", "window.toolbarColumns"),
+        c("Keep Tools Beside the Canvas", "window.toolsBesideCanvas"),
+        Item::Sep,
+    ];
     let names = names_store().read().map(|v| v.clone()).unwrap_or_default();
     if !names.is_empty() {
         v.extend(names.into_iter().map(|n| Item::Cmd(n, "window.toolbar.custom", json!({ "name": n }))));

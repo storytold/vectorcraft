@@ -164,6 +164,9 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    // „…“ at either level: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/bg.xml,
+    // `delimiters`). Shaped as `bg`, fonts draw their Bulgarian forms (`locl` for `BGR`, #5945).
+    ("Bulgarian", "bg", Quotes { double: ['„', '“'], single: ['„', '“'] }),
     // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
     // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
     // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
@@ -185,14 +188,12 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Kannada", "kn", Quotes::ENGLISH),
     ("Malayalam", "ml", Quotes::ENGLISH),
     ("Odia", "or", Quotes::ENGLISH),
-    ("Urdu", "ur", Quotes::ENGLISH),
-    // “…” outside, ‘…’ inside: CLDR gives these no delimiters of their own (`↑↑↑`, inherited), so
-    // they take root's (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml,
-    // `delimiters`): sa.xml, ne.xml, as.xml, kok.xml and sd.xml (Arabic script; sd_Deva.xml for
-    // Devanagari inherits too) in https://github.com/unicode-org/cldr/blob/main/common/main/.
-    ("Sanskrit", "sa", Quotes::ENGLISH),
-    ("Nepali", "ne", Quotes::ENGLISH),
     ("Assamese", "as", Quotes::ENGLISH),
+    ("Sanskrit", "sa", Quotes::ENGLISH),
+    ("Urdu", "ur", Quotes::ENGLISH),
+    // “…” outside, ‘…’ inside: CLDR gives Nepali, Konkani and Sindhi no delimiters of their own
+    // (`↑↑↑`, inherited), so they take root's delimiters (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml).
+    ("Nepali", "ne", Quotes::ENGLISH),
     ("Konkani", "kok", Quotes::ENGLISH),
     ("Sindhi", "sd", Quotes::ENGLISH),
 ];
@@ -383,6 +384,11 @@ mod tests {
     fn char_languages_are_stored_by_tag() {
         assert_eq!(char_language("Turkish"), Ok(Some("tr")));
         assert_eq!(char_language("MR"), Ok(Some("mr")));
+        assert_eq!(char_language("Assamese"), Ok(Some("as")));
+        assert_eq!(char_language("Sanskrit"), Ok(Some("sa")));
+        assert_eq!(char_language("Nepali"), Ok(Some("ne")));
+        assert_eq!(char_language("Konkani"), Ok(Some("kok")));
+        assert_eq!(char_language("Sindhi"), Ok(Some("sd")));
         assert_eq!(char_language("english: usa"), Ok(None));
         assert_eq!(char_language("en-US"), Ok(None));
         assert!(char_language("Klingon").is_err() && char_language("").is_err());
@@ -394,6 +400,10 @@ mod tests {
         assert_eq!(char_language("Serbian: Cyrillic"), Ok(Some("sr-Cyrl")));
         assert_eq!(char_language("sr-latn"), Ok(Some("sr-Latn")));
         assert_eq!(char_language("Croatian"), Ok(Some("hr")));
+        // Bulgarian (#5945), by name or tag.
+        assert_eq!(char_language("Bulgarian"), Ok(Some("bg")));
+        assert_eq!(char_language("BG"), Ok(Some("bg")));
+        assert_eq!(char_language_name(Some("bg")), Some("Bulgarian"));
         assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
         // Sanskrit, Nepali, Assamese, Konkani (a three-letter tag) and Sindhi, by name or tag.
         for (name, tag) in [("Sanskrit", "sa"), ("Nepali", "ne"), ("Assamese", "as"), ("Konkani", "kok"), ("Sindhi", "sd")] {
@@ -423,11 +433,14 @@ mod tests {
         }
         let mut prev = None;
         assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
-        // Sanskrit, Nepali, Assamese, Konkani and Sindhi take CLDR root's quotes.
+        // The five added Indian languages inherit CLDR root's English quote defaults.
         for name in ["Sanskrit", "Nepali", "Assamese", "Konkani", "Sindhi"] {
             let mut prev = None;
             assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "“a ‘b’ c”", "{name}");
         }
+        // Bulgarian: „…“ at either level, as CLDR has it.
+        let mut prev = None;
+        assert_eq!(language_quotes("bulgarian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a „b“ c“");
         // Converting in pieces keeps the context.
         let mut prev = None;
         let a = Quotes::ENGLISH.apply("\"", &mut prev);

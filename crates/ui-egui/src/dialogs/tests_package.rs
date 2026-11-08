@@ -285,21 +285,82 @@ fn fonts_left_out_of_the_package_are_named() {
     assert!(app.ui.status.contains(gone), "{}", app.ui.status);
 }
 
-/// The note on linked files left out of a package uses the form the language's plural rule picks
-/// for the count.
+/// A package made while the interface is in another language keeps its status line in English,
+/// note included, so the status bar can show it in the language of the moment. The dialog shown
+/// at once is in the interface language.
+#[test]
+fn a_package_status_is_stored_in_english() {
+    let dir = Folder::new("english");
+    let mut app = saved(&dir);
+    app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "No Such Font Family"})).unwrap();
+    app.run("ui.packageDialog", json!({})).unwrap();
+    let out = dir.path("out");
+    std::fs::create_dir_all(&out).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("folder".into(), json!(out));
+    crate::i18n::set_current(crate::i18n::Lang::from_code("cs").unwrap());
+    let r = confirm(&mut app);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    r.unwrap();
+    let status = &app.ui.status;
+    assert!(status.starts_with("Packaged "), "{status}");
+    assert!(status.contains(&format!(" (fonts not copied: No Such Font Family Regular) in {out}")), "{status}");
+    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    assert!(detail.contains("(nezkopírovaná písma: No Such Font Family Regular)"), "{detail}");
+    assert!(detail.ends_with("Zobrazit složku balíčku?"), "{detail}");
+}
+
+/// The dialog's note on linked files left out of a package uses the form the language's plural
+/// rule picks for the count. The status bar's note stays English.
 #[test]
 fn the_missing_links_note_uses_each_count_form() {
     let note = |code: &str, missing: usize| {
         crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
-        let note = package::package_status_note(missing, "");
+        let notes = (package::package_dialog_note(missing, ""), package::package_status_note(missing, ""));
         crate::i18n::set_current(crate::i18n::Lang::EN);
-        note
+        notes
     };
-    assert_eq!(note("en", 1), "(1 linked file not found)");
-    assert_eq!(note("en", 2), "(2 linked files not found)");
-    assert_eq!(note("cs", 1), "(Nenalezen 1 propojený soubor)");
-    assert_eq!(note("cs", 2), "(Nenalezeny 2 propojené soubory)");
-    assert_eq!(note("cs", 5), "(Nenalezeno 5 propojených souborů)");
+    assert_eq!(note("en", 1).0, "(1 linked file not found)");
+    assert_eq!(note("en", 2).0, "(2 linked files not found)");
+    assert_eq!(note("cs", 1).0, "(Nenalezen 1 propojený soubor)");
+    assert_eq!(note("cs", 2).0, "(Nenalezeny 2 propojené soubory)");
+    assert_eq!(note("cs", 5).0, "(Nenalezeno 5 propojených souborů)");
+    assert_eq!(note("cs", 1).1, "(1 linked file not found)");
+    assert_eq!(note("cs", 5).1, "(5 linked files not found)");
+}
+
+/// A long list of fonts left out is cut short in the desktop's status line, so the status bar can
+/// still translate the line. The dialog names every font.
+#[test]
+fn a_long_list_of_fonts_left_out_is_cut_short_in_the_status() {
+    use crate::i18n::{Lang, message};
+    let fonts = (0..200).map(|i| format!("Family {i} Regular")).collect::<Vec<_>>().join(", ");
+    assert_eq!(package::status_fonts("Mono, Sans"), "Mono, Sans");
+    let note = package::package_status_note(0, &package::status_fonts(&fonts));
+    assert!(note.starts_with("(fonts not copied: Family 0 Regular, ") && note.ends_with(", …)"), "{note}");
+    let shown = message(Lang::from_code("de").unwrap(), &package::package_status(3, Some("/out/card Folder"), &note));
+    assert!(shown.starts_with("3 Dateien in /out/card Folder verpackt (nicht kopierte Schriften: Family 0 Regular, "), "{shown}");
+    assert!(package::package_dialog_note(0, &fonts).contains("Family 199 Regular"));
+}
+
+/// A package written in the background while another dialog is open shows no dialog, so its
+/// status line names every font left out, however long the list.
+#[test]
+fn a_background_package_behind_another_dialog_names_every_font_in_the_status() {
+    let dir = Folder::new("fonts-behind");
+    let gate = Gate::default();
+    let (mut app, _files) = saved_with_worker(&dir, &gate);
+    for i in 0..30 {
+        app.run("text.create", json!({"x": 10, "y": 40 + i, "text": "Gone", "font": format!("No Such Font Family {i}")})).unwrap();
+    }
+    package_dialog(&mut app, &dir.path("out"));
+    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    app.run("ui.packageDialog", json!({})).unwrap();
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("package"), "the other dialog stays");
+    let status = &app.ui.status;
+    assert!(status.contains("No Such Font Family 0 Regular") && status.contains("No Such Font Family 29 Regular"), "{status}");
+    assert!(!status.contains('…'), "{status}");
 }
 
 /// A package status written in English, for one file or several, with or without a folder and a
@@ -330,16 +391,26 @@ fn an_english_package_status_is_translated_after_a_language_switch() {
             // The folder stays whole in the translated line, and the note's font is still named.
             assert!(folder.is_none_or(|f| shown.contains(f)), "{}: {shown}", lang.code());
             assert_eq!(note.contains("Mono"), shown.contains("Mono"), "{}: {shown}", lang.code());
+            // The notes are translated too.
+            assert!(!shown.contains("linked file") && !shown.contains("not copied"), "{}: {shown}", lang.code());
         }
     }
     let de = Lang::from_code("de").unwrap();
     assert_eq!(
         message(de, &package::package_status(1, Some("/out/card (draft)"), "(fonts not copied: Mono)")),
-        "1 Datei in /out/card (draft) verpackt (fonts not copied: Mono)"
+        "1 Datei in /out/card (draft) verpackt (nicht kopierte Schriften: Mono)"
     );
     assert_eq!(
         message(de, &package::package_status(3, Some("/out/card (draft)"), "(1 linked file not found) (fonts not copied: Mono)")),
-        "3 Dateien in /out/card (draft) verpackt (1 linked file not found) (fonts not copied: Mono)"
+        "3 Dateien in /out/card (draft) verpackt (1 verknüpfte Datei nicht gefunden) (nicht kopierte Schriften: Mono)"
+    );
+    assert_eq!(
+        message(de, &package::package_status(3, None, "(1 linked file not found) (fonts not copied: Mono)")),
+        "3 Dateien verpackt (1 verknüpfte Datei nicht gefunden) (nicht kopierte Schriften: Mono)"
+    );
+    assert_eq!(
+        message(de, &package::package_status(3, None, "(2 linked files not found)")),
+        "3 Dateien verpackt (2 verknüpfte Dateien nicht gefunden)"
     );
     let cs = Lang::from_code("cs").unwrap();
     assert_eq!(message(cs, "Packaged 1 file in /out"), "Zabalen 1 soubor do /out");

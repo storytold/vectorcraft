@@ -16,6 +16,7 @@
 
 use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
+use vectorcraft_color::cms;
 use vectorcraft_color::{Color, GradientKind, Paint};
 
 use super::{active_paint, color_json, live_run, pstate, set_pstate};
@@ -102,7 +103,19 @@ impl Mode {
     }
 }
 
-/// Displayed component values of `c` in `mode` (RGB 0–255, HSB °/%/%, CMYK %, K %, Lab L*a*b*).
+/// The color's numeric components in the active working RGB space.
+pub(crate) fn working_rgb(c: &Color) -> [f32; 3] {
+    let cms = cms::active();
+    cms.convert(c, cms::Model::Rgb, cms.settings().intent).to_rgb_uncalibrated()
+}
+
+/// HSB of the working RGB components, with hue in degrees.
+pub(crate) fn working_hsb(c: &Color) -> [f32; 3] {
+    let hsb = egui::ecolor::Hsva::from_rgb(working_rgb(c));
+    [hsb.h * 360.0, hsb.s, hsb.v]
+}
+
+/// Numeric component values of `c` in `mode` (working RGB 0 to 255, HSB °/%/%, CMYK %, K %, Lab L*a*b*).
 pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
     match mode {
         Mode::Grayscale => {
@@ -115,9 +128,9 @@ pub fn components(mode: Mode, c: &Color) -> Vec<f32> {
             };
             vec![k * 100.0]
         }
-        Mode::Rgb | Mode::WebSafe => c.to_rgb().iter().map(|v| (v * 255.0).clamp(0.0, 255.0)).collect(),
+        Mode::Rgb | Mode::WebSafe => working_rgb(c).iter().map(|v| (v * 255.0).clamp(0.0, 255.0)).collect(),
         Mode::Hsb => {
-            let [h, s, b] = c.to_hsb();
+            let [h, s, b] = working_hsb(c);
             vec![h, s * 100.0, b * 100.0]
         }
         Mode::Cmyk => c.to_cmyk().iter().map(|v| v * 100.0).collect(),
@@ -146,15 +159,16 @@ pub fn from_components(mode: Mode, v: &[f32]) -> Color {
     }
 }
 
-/// The nearest web-safe colour (each channel a multiple of 0x33).
+/// The nearest web-safe color (each working RGB channel a multiple of 0x33).
 pub fn web_safe(c: &Color) -> Color {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 5.0).round() / 5.0;
-    let [r, g, b] = c.to_rgb();
+    let [r, g, b] = working_rgb(c);
     Color::rgb(q(r), q(g), q(b))
 }
 
+/// Whether the working RGB hex value uses only web-safe channel levels.
 pub fn is_web_safe(c: &Color) -> bool {
-    web_safe(c).to_hex() == c.to_hex()
+    hex_digits(&web_safe(c)) == hex_digits(c)
 }
 
 /// Track colour of slider `i` at position `t` (0..1) with the other components fixed (dynamic
@@ -190,9 +204,10 @@ pub fn spectrum_at(mode: Mode, x: f32, y: f32) -> Color {
     }
 }
 
-/// The hex field text of a colour (`E67828`).
+/// The hex field text of a color's working RGB components (`E67828`).
 pub fn hex_digits(c: &Color) -> String {
-    c.to_hex().trim_start_matches('#').to_uppercase()
+    let [r, g, b] = working_rgb(c).map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    format!("{r:02X}{g:02X}{b:02X}")
 }
 
 /// Parse a hex field (`E67828`, `#e67828`, `fff`).
@@ -220,7 +235,7 @@ pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Col
         widgets::swatch_tile(ui, r, &Paint::solid(*fix), false, resp.hovered());
         resp.on_hover_text(crate::i18n::fmt(
             tl!("{warning}: click to correct to the closest color ({hex})"),
-            &[("warning", tl!(warning)), ("hex", &fix.to_hex())],
+            &[("warning", tl!(warning)), ("hex", &format!("#{}", hex_digits(fix).to_ascii_lowercase()))],
         ))
         .clicked()
     })
@@ -575,6 +590,7 @@ fn spectrum(ui: &mut Ui, mode: Mode, size: egui::Vec2) -> Option<SpectrumHit> {
     Some(SpectrumHit::Pick(spectrum_at(mode, (p.x - r.left()) / r.width(), (p.y - r.top()) / r.height()), phase))
 }
 
+/// Draw numeric paint controls, retaining live components while the color and settings match.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let tgt = target(app, ui);
@@ -597,9 +613,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         return;
     }
-    // Keep the displayed components while the colour is unchanged (hue survives S = 0 etc.).
-    let key = color.map(|c| (c.to_hex(), mode as u8));
-    let comps: Vec<f32> = match (color, pstate::<Option<((String, u8), Vec<f32>)>>(ui.ctx(), "color-comps")) {
+    // Keep the components while the native color and settings are unchanged (hue survives S = 0).
+    let settings = cms::active_settings();
+    let key = color.map(|c| (c, mode as u8, settings.clone()));
+    let comps: Vec<f32> = match (color, pstate::<Option<((Color, u8, cms::ColorSettings), Vec<f32>)>>(ui.ctx(), "color-comps")) {
         (Some(_), Some((k, v))) if Some(&k) == key.as_ref() => v,
         (Some(c), _) => components(mode, &c),
         (None, _) => vec![0.0; mode.labels().len()],
@@ -737,7 +754,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         apply_tint(app, &tgt, tint, t, phase);
     }
     if let Some((c, phase, comps2)) = new {
-        let key = (c.to_hex(), mode as u8);
+        let key = (c, mode as u8, settings);
         set_pstate(ui.ctx(), "color-comps", Some((key, comps2)));
         choose(app, &tgt, c, phase, false);
     }
@@ -779,7 +796,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Copy Color Value (Hex)"), color.is_some(), false)
         && let Some(c) = color
     {
-        ui.ctx().copy_text(c.to_hex());
+        ui.ctx().copy_text(format!("#{}", hex_digits(&c).to_ascii_lowercase()));
     }
 }
 

@@ -3,7 +3,7 @@ use super::handlers::{
     Args, absolute_path, add_text, answer_dialog, apply_paint, draw_path, draw_shape, exec, image_result, max_side, need_ui, req_str, screenshot,
     select_ids, transform,
 };
-use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, format, json, save_reads_option, writable_format};
+use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, json, writable_format};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
@@ -125,6 +125,12 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
                 }
+                if e.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                    return Err(format!("event {i}: `backquote` must be a boolean"));
+                }
+            }
+            if a.get("backquote").is_some_and(|v| !v.is_boolean()) {
+                return Err("`backquote` must be a boolean".into());
             }
             if let Some(t) = a.get("tool").and_then(Value::as_str) {
                 b.call("ui.tool.select", json!({"tool": t}))?;
@@ -199,14 +205,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             if b.has_ui() {
                 p["wait"] = json!(true);
             }
-            let mut r = b.call("app.save", p)?;
-            let notes = save_file_warnings(a, r.get("format").and_then(Value::as_str));
-            if let Some(o) = r.as_object_mut().filter(|_| !notes.is_empty()) {
-                let mut all = o.get("warnings").and_then(Value::as_array).cloned().unwrap_or_default();
-                all.extend(notes.into_iter().map(Value::from));
-                o.insert("warnings".into(), Value::Array(all));
-            }
-            j(r)
+            j(b.call("app.save", p)?)
         }
         "export" => {
             // One params object for every backend; the named arguments win over `options` (a named
@@ -282,21 +281,6 @@ fn named_export_params(a: &Args) -> &'static [&'static str] {
     } else {
         &["path", "format", "artboard", "range", "outlineText"]
     }
-}
-
-/// What `save_file` with arguments `a` adds to the save's `warnings`, for a file written in format
-/// `written` (none when nothing was written yet): each key in `options` that the format doesn't
-/// read. The save itself warns about `compress`, `version`, `preview` and `precision` given at the
-/// top level.
-fn save_file_warnings(a: &Args, written: Option<&str>) -> Vec<String> {
-    let Some(f) = written.and_then(format) else { return vec![] };
-    let nested = a.get("options").and_then(Value::as_object);
-    nested
-        .into_iter()
-        .flatten()
-        .filter(|(key, v)| !v.is_null() && !save_reads_option(f, key))
-        .map(|(key, _)| format!("`options.{key}` was not used: {} files don't read it", f.label))
-        .collect()
 }
 
 /// Run one tool. Failures (unknown tool, bad arguments, command errors) come back as an

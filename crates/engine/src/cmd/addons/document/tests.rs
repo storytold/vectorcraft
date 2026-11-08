@@ -1,5 +1,5 @@
 //! Document Tools' commands: the timestamped copy's name and place with the document left as it
-//! was, symbols made of layers, and bad params refused.
+//! was, symbols made of layers, a folder of images traced, and bad params refused.
 
 use std::path::{Path, PathBuf};
 
@@ -274,5 +274,108 @@ fn export_all_open_documents_keeps_every_page_and_artboard() {
     let view = svg.split("viewBox=\"").nth(1).and_then(|v| v.split('"').next()).unwrap();
     let w: f64 = view.split_whitespace().nth(2).unwrap().parse().unwrap();
     assert!(w > 19.0 && w < 30.0, "the SVG shows the art (the square on the second artboard), not the first artboard: viewBox {view}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A 24×24 white PNG with a dark (or red) square in it.
+#[cfg(not(target_arch = "wasm32"))]
+fn png(path: &Path, dark: bool) {
+    let mut img = image::RgbaImage::from_pixel(24, 24, image::Rgba([255, 255, 255, 255]));
+    for y in 6..18 {
+        for x in 6..18 {
+            img.put_pixel(x, y, if dark { image::Rgba([0, 0, 0, 255]) } else { image::Rgba([200, 30, 30, 255]) });
+        }
+    }
+    img.save(path).unwrap();
+}
+
+/// #4921: each image of the folder is traced and saved under its own name; a file that isn't an
+/// image is left alone, one that can't be read is reported, and every document the batch opened
+/// is closed again, the active one staying active.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_traces_and_saves_each_image() {
+    const C: &str = "addon.document.batchTraceFolder";
+    let dir = folder("batch-trace");
+    let (src, out) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&src).unwrap();
+    png(&src.join("logo.png"), true);
+    png(&src.join("mark.png"), false);
+    std::fs::write(src.join("notes.txt"), "not an image").unwrap();
+    std::fs::write(src.join("broken.png"), b"not a png").unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let docs = s.documents().len();
+    let r = s.execute(C, &json!({"folder": src, "destinationFolder": out, "format": "svg", "expand": true})).unwrap();
+    assert_eq!(r["traced"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["failed"].as_array().unwrap().len(), 1, "{r}");
+    assert!(r["failed"][0]["path"].as_str().unwrap().ends_with("broken.png"));
+    let mut names: Vec<String> = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["logo.svg", "mark.svg"]);
+    let svg = std::fs::read_to_string(out.join("logo.svg")).unwrap();
+    assert!(svg.contains("<path") && !svg.contains("<image"), "traced and expanded, not the image");
+    assert_eq!(s.documents().len(), docs, "the opened images are closed");
+    assert_eq!(s.active_index(), Some(0));
+    // Again: the taken names are numbered, nothing is replaced.
+    s.execute(C, &json!({"folder": src, "destinationFolder": out, "format": "svg"})).unwrap();
+    assert!(out.join("logo-2.svg").exists() && out.join("mark-2.svg").exists());
+    // Refused: no folders, an unknown preset or format, a folder without images.
+    for bad in [
+        json!({"destinationFolder": out}),
+        json!({"folder": src}),
+        json!({"folder": src, "destinationFolder": out, "preset": "No Such Preset"}),
+        json!({"folder": src, "destinationFolder": out, "format": "docx"}),
+        json!({"folder": out.join("empty"), "destinationFolder": out}),
+    ] {
+        assert!(s.execute(C, &bad).is_err(), "{bad}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Batch Trace Folder rejects optional values with the wrong type before opening images.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_rejects_wrong_typed_options() {
+    const C: &str = "addon.document.batchTraceFolder";
+    let dir = folder("batch-trace-bad-options");
+    let src = dir.join("in");
+    let out = dir.join("out");
+    std::fs::create_dir_all(&src).unwrap();
+    let mut s = Session::new();
+    for (key, value) in [
+        ("format", json!(42)),
+        ("format", Value::Null),
+        ("preset", json!(false)),
+        ("preset", Value::Null),
+        ("expand", json!("true")),
+        ("expand", Value::Null),
+        ("includeSubdirs", json!(1)),
+        ("includeSubdirs", Value::Null),
+    ] {
+        let mut params = json!({"folder": src, "destinationFolder": out});
+        params[key] = value;
+        let error = s.execute(C, &params).unwrap_err();
+        assert!(error.to_string().contains(&format!("`{key}`")), "{key}: {error}");
+        assert!(!out.exists(), "invalid options must not create a destination folder");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A folder too big to list in full is refused rather than traced in part.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn batch_trace_folder_refuses_a_folder_it_cannot_list_in_full() {
+    let dir = folder("batch-trace-big");
+    let src = dir.join("in");
+    std::fs::create_dir_all(&src).unwrap();
+    for i in 0..=super::batch_trace::MAX_FILES * 2 {
+        std::fs::write(src.join(format!("note-{i}.txt")), "").unwrap();
+    }
+    png(&src.join("logo.png"), true);
+    let mut s = Session::new();
+    let e = s.execute("addon.document.batchTraceFolder", &json!({"folder": src, "destinationFolder": dir.join("out")})).unwrap_err();
+    assert!(e.to_string().contains("more than"), "{e}");
+    assert!(!dir.join("out").exists(), "nothing traced");
     let _ = std::fs::remove_dir_all(&dir);
 }

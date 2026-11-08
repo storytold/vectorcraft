@@ -21,6 +21,9 @@ use crate::{VectorcraftApp, widgets};
 pub struct Workspace {
     pub name: String,
     pub control_bar: bool,
+    /// The Control bar is docked to the bottom of the window (built-in workspaces, and workspaces
+    /// saved without this field: the top).
+    pub control_bar_bottom: bool,
     pub rulers: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
@@ -54,6 +57,9 @@ pub struct Workspace {
     pub docking_collapsed: std::collections::BTreeSet<String>,
     /// Where the Tools panel floats (built-in workspaces: docked).
     pub toolbar_pos: Option<[f32; 2]>,
+    /// The docked Tools panel sits beside the canvas, inside any left-side panels (built-in
+    /// workspaces and workspaces saved without it: at the window's left edge).
+    pub tools_beside_canvas: bool,
     /// Main dock column width in screen points while `docking` is none (#1753).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_width: Option<f32>,
@@ -175,6 +181,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
     Workspace {
         name: name.into(),
         control_bar: ui.control_bar,
+        control_bar_bottom: ui.control_bar_bottom,
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
         toolbar_double: ui.toolbar_double,
@@ -193,6 +200,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         docking_icons: Default::default(),
         docking_collapsed: Default::default(),
         toolbar_pos: ui.toolbar_pos,
+        tools_beside_canvas: ui.tools_beside_canvas,
         dock_width: ui.dock_width,
         toolbars: ui.custom_toolbars.clone(),
     }
@@ -201,6 +209,7 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
 /// Apply a workspace's layout flags (brightness, prefs, shortcuts etc. untouched).
 pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.control_bar = w.control_bar;
+    ui.control_bar_bottom = w.control_bar_bottom;
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
     ui.toolbar_double = w.toolbar_double;
@@ -218,6 +227,7 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.docking_hidden = w.docking_hidden.clone();
     ui.docking_hidden_groups = w.docking_hidden_groups.clone();
     ui.toolbar_pos = w.toolbar_pos;
+    ui.tools_beside_canvas = w.tools_beside_canvas;
     ui.dock_width = w.dock_width;
     crate::state::sanitize_toolbar_pos(&mut ui.toolbar_pos);
     ui.custom_toolbars = w.toolbars.clone();
@@ -514,7 +524,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new(tl!("Saves the current bars, toolbar and panel layout.")).color(t.text_dim).size(11.0));
         }
         ui.add_space(16.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        // As wide as the fields and as tall as the buttons, as in `dialogs::show`: a right-to-left
+        // layout would take all the height left in the window and center the buttons in it.
+        let row = egui::vec2(ui.min_rect().width(), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::primary_button(ui, tl!("OK")).clicked() {
                 ok = true;
             }
@@ -765,5 +778,24 @@ mod tests {
         assert_eq!(ui.dock_width, Some(260.0));
         let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
         assert_eq!(back.custom_workspaces[1].dock_width, Some(260.0));
+    }
+
+    /// A workspace keeps the edge the Control bar is docked to, and one saved without it docks the
+    /// bar at the top.
+    #[test]
+    fn saved_workspaces_restore_the_control_bar_edge() {
+        let mut ui = UiState { control_bar: true, control_bar_bottom: true, ..Default::default() };
+        save_as(&mut ui, "Bottom").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(!ui.control_bar_bottom, "Essentials docks the bar at the top");
+        switch(&mut ui, "Bottom").unwrap();
+        assert!(ui.control_bar_bottom, "the saved workspace docks it at the bottom");
+        let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
+        assert!(back.control_bar_bottom && back.custom_workspaces[0].control_bar_bottom, "both survive the preferences' JSON");
+        let mut old = serde_json::to_value(&back.custom_workspaces[0]).unwrap();
+        assert!(old.as_object_mut().unwrap().remove("controlBarBottom").is_some());
+        let old: Workspace = serde_json::from_value(old).unwrap();
+        apply(&mut ui, &old);
+        assert!(ui.control_bar && !ui.control_bar_bottom, "an older workspace docks the bar at the top");
     }
 }

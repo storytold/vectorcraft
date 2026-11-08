@@ -97,7 +97,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transform Each…",
             ["Object", "Transform"],
             Some("Cmd+Alt+Shift+D"),
-            "{scaleH?: % (100), scaleV?: % (100), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about its own reference point → {ids}",
+            "{scaleH?: % (100), scaleV?: % (100), relative?: bool (true: scaleH and scaleV are percentages of each object's size, as the dialog's Relative; false: Absolute, scaleH and scaleV are the width and height in pt each object becomes, measured on its own bounds, and a side left out keeps its size), moveH?: pt, moveV?: pt (down = +), rotate?: deg (counter-clockwise), reflectX?: bool (flip left-right, as Reflect X in the Transform Each dialog), reflectY?: bool (flip top-bottom, as Reflect Y), random?: bool, seed?: n, reference?: 0..8 (9-point grid, 4 = centre), copy?: bool, strokes?: bool (Scale Strokes & Effects), corners?: bool (Scale Corners; both default to the preferences), objects?: bool (Transform Objects, default true; false: the art stays and, with patterns, only its pattern tiles transform), patterns?: bool (Transform Patterns; default: prefs transformPatternTiles)} transform every selected object about the reference point of its own box, along its own axes → {ids}",
             has_selection,
             transform_each
         ),
@@ -106,7 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Bounding Box",
             ["Object", "Transform"],
             None,
-            "{} square the bounding box of the selected objects to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset}",
+            "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
         ),
@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\", antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline)} replace the selection with an embedded image (PNG; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -223,21 +223,63 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 
 // ---------- Reset Bounding Box ----------
 
+/// Squares each selected object and every object inside it: the children of groups, compound paths,
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let turned: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.bbox_angle != 0.0)).collect();
-    if !turned.is_empty() {
+    let mut changed = 0;
+    let squared: Vec<(NodeId, Node)> = ids
+        .into_iter()
+        .filter_map(|id| {
+            let (n, count) = squared(d.node(id)?);
+            changed += count;
+            Some((id, n?))
+        })
+        .collect();
+    if !squared.is_empty() {
         s.edit("Reset Bounding Box", |d, _| {
-            for id in &turned {
-                if let Some(n) = d.node_mut(*id) {
-                    n.bbox_angle = 0.0;
+            for (id, n) in squared {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
                 }
             }
             Ok(())
         })?;
     }
-    Ok(json!({ "changed": turned.len() }))
+    Ok(json!({ "changed": changed }))
+}
+
+/// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
+/// it stands at an angle, and the number of objects squared. The subtree takes in children and the
+/// art of linked opacity masks (an unlinked mask's art turns on its own); layers have no box. Only
+/// the nodes on the way to a turned object are copied.
+fn squared(n: &Node) -> (Option<Node>, usize) {
+    let mut out = (!n.is_layer() && n.bbox_angle != 0.0).then(|| {
+        let mut c = n.clone();
+        c.bbox_angle = 0.0;
+        c
+    });
+    let mut count = usize::from(out.is_some());
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        let (child, k) = squared(c);
+        count += k;
+        if let Some(child) = child
+            && let Some(slot) = out.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+        {
+            *slot = Arc::new(child);
+        }
+    }
+    if let Some(m) = n.extras().mask.as_ref().filter(|m| m.linked) {
+        let (art, k) = squared(&m.art);
+        count += k;
+        if let Some(art) = art
+            && let Some(m) = out.get_or_insert_with(|| n.clone()).extras_if_any().and_then(|e| e.mask.as_mut())
+        {
+            m.art = Arc::new(art);
+        }
+    }
+    (out, count)
 }
 
 // ---------- Lock / Hide ----------
@@ -347,7 +389,7 @@ fn other_layers(s: &mut Session, lock: bool) -> Result<Value> {
 }
 
 /// Returns the objects [`super::select::walk_selectable`] visits that are not among the selected objects `roots` and
-/// hold none of them. A selected layer's objects count as selected. The walk goes into a plain group, but not a Shaper
+/// hold none of them. A selected layer and its objects count as selected. The walk goes into a plain group, but not a Shaper
 /// group, that holds a selected object. With `lock`, it also goes into a clip group or compound path that holds one,
 /// and includes guide paths while `guides_locked`. Without `lock`, guide paths and the objects that hold one are left
 /// out while `guides_locked`; a clip group, Shaper group, compound path and every other object that holds a selected
@@ -360,13 +402,31 @@ fn unselected(
     guides_locked: bool,
     lock: bool,
 ) -> Vec<NodeId> {
+    /// Pushes the visible guide paths in `n`, `n` included, locked ones too.
+    fn shown_guides(n: &vectorcraft_doc::Node, out: &mut Vec<NodeId>) {
+        if !n.visible {
+            return;
+        }
+        if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
+            out.push(n.id);
+        }
+        for c in n.children().into_iter().flatten() {
+            shown_guides(c, out);
+        }
+    }
     let mut roots: HashSet<NodeId> = roots.iter().copied().collect();
-    roots.extend(selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer()).flat_map(|l| l.layer_art(true)));
+    let layers = || selection.iter().filter_map(|id| d.node(*id)).filter(|n| n.is_layer());
+    roots.extend(layers().map(|l| l.id));
+    roots.extend(layers().flat_map(|l| l.layer_art(true)));
     let mut kept: Vec<NodeId> = roots.iter().copied().collect();
     if guides_locked && !lock {
         super::select::walk_selectable(d, iso, |n| {
             if matches!(n.kind, NodeKind::Path { guide: true, .. }) {
                 kept.push(n.id);
+            }
+            // The walk skips locked objects, so the guide paths in them are looked for here.
+            for c in n.children().into_iter().flatten().filter(|c| c.locked) {
+                shown_guides(c, &mut kept);
             }
             true
         });
@@ -436,6 +496,30 @@ fn about(o: Point, a: Affine) -> Affine {
     Affine::translate(o.to_vec2()) * a * Affine::translate(-o.to_vec2())
 }
 
+/// The largest width or height (pt) an Absolute Transform Each takes, so coordinates stay finite.
+const MAX_ABSOLUTE: f64 = 1.0e7;
+
+/// The box a symbol instance or any other object has of its own, rotated with it, as the Transform
+/// panel and the Control bar show it: Absolute Transform Each measures its targets on this, with
+/// `symbols` shared so many instances of one symbol measure its art once.
+fn own_box(doc: &vectorcraft_doc::Document, id: NodeId, symbols: &vectorcraft_doc::SymbolBoxes) -> Option<Rect> {
+    doc.oriented_bounds_with(&[id], false, symbols).map(|b| b.rect)
+}
+
+/// Whether Absolute scaling by `target` leaves a side of `current` as it is, to within a millionth
+/// of the size: a square turned 45° measures 100.00000000000001 in its own box, and the size it
+/// shows must not scale it.
+fn keeps_size(target: f64, current: f64) -> bool {
+    (scale_factor(target, current) - 1.0).abs() <= 1.0e-9
+}
+
+/// The factor that takes `current` to `target` (Absolute Transform Each). A side of 0 (a line)
+/// keeps its factor 1, since no factor gives it another size, and the factor is bounded as the
+/// moves are, so a hairline side can't throw coordinates past what a document can hold.
+fn scale_factor(target: f64, current: f64) -> f64 {
+    if current.abs() > 1.0e-9 { (target / current).clamp(-1.0e7, 1.0e7) } else { 1.0 }
+}
+
 fn transform_each(s: &mut Session, p: &Value) -> Result<Value> {
     transform_each_as(s, p, "Transform Each")
 }
@@ -452,9 +536,17 @@ pub(crate) fn transform_each_again(s: &mut Session, p: &Value) -> Result<Value> 
 fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let roots = selected_roots(s)?;
     check_numbers(p, &["scaleH", "scaleV", "moveH", "moveV", "rotate"], "object.transformEach")?;
+    // Relative (the default) scales each object by a percentage of its own size; Absolute
+    // (`relative: false`, the dialog's Absolute) takes each object to the width and height given,
+    // a side left out staying as it is.
+    let relative = switch_or(p, "relative", true, "object.transformEach")?;
     // Bounded so coordinates stay finite (and the document stays serializable).
-    let sh = f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0);
-    let sv = f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0);
+    let given = |key: &str| p.get(key).filter(|v| !v.is_null()).and_then(Value::as_f64).map(|v| v.clamp(-MAX_ABSOLUTE, MAX_ABSOLUTE));
+    let (sh, sv) = if relative {
+        (Some(f64_or(p, "scaleH", 100.0).clamp(-100_000.0, 100_000.0)), Some(f64_or(p, "scaleV", 100.0).clamp(-100_000.0, 100_000.0)))
+    } else {
+        (given("scaleH"), given("scaleV"))
+    };
     let mh = f64_or(p, "moveH", 0.0).clamp(-1.0e7, 1.0e7);
     let mv = f64_or(p, "moveV", 0.0).clamp(-1.0e7, 1.0e7);
     let rot = f64_or(p, "rotate", 0.0);
@@ -465,16 +557,26 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
     let copy = switch_or(p, "copy", false, "object.transformEach")?;
     check_switches(p, &["strokes", "corners", "objects", "patterns"], "object.transformEach")?;
     let objects = super::object::transforms_objects(p);
-    if sh == 0.0 || sv == 0.0 {
+    if sh == Some(0.0) || sv == Some(0.0) {
         return Err(bad("object.transformEach", "scale must be non-zero"));
     }
     let mut rng = Rng(whole_or(p, "seed", 0x9E37_79B9_7F4A_7C15, "object.transformEach")?.max(1));
-    let mut sc = if sh != 100.0 || sv != 100.0 { super::object::scaling(s, p) } else { Default::default() };
+    let mut sc = if !relative || sh != Some(100.0) || sv != Some(100.0) { super::object::scaling(s, p) } else { Default::default() };
     sc.patterns = super::object::transform_patterns(s, p, &roots)?;
-    // With no object to transform, or without a copy when both scales are 100% and there is no
-    // move, rotation or reflection (with or without Random), the document and its undo history
-    // stay as they are.
-    if roots.is_empty() || (!copy && sh == 100.0 && sv == 100.0 && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
+    // With no object to transform, or without a copy when nothing would change (both scales 100%
+    // or, with Absolute, the size each object already has, and no move, rotation or reflection,
+    // with or without Random), the document and its undo history stay as they are.
+    let scales_change = if relative {
+        sh != Some(100.0) || sv != Some(100.0)
+    } else {
+        let doc = &s.doc()?.doc;
+        let symbols = doc.symbol_boxes();
+        roots.iter().any(|id| {
+            own_box(doc, *id, &symbols)
+                .is_some_and(|b| sh.is_some_and(|v| !keeps_size(v, b.width())) || sv.is_some_and(|v| !keeps_size(v, b.height())))
+        })
+    };
+    if roots.is_empty() || (!copy && !scales_change && mh == 0.0 && mv == 0.0 && rot == 0.0 && !rx && !ry) {
         return Ok(ids_json(&roots));
     }
     let ids = s.edit(label, |d, sel| {
@@ -482,24 +584,44 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
         // Measure each object's geometric bounds first, with symbol instances measured by their art.
         let symbols = d.symbol_boxes();
         let boxes: Vec<Option<Rect>> = targets.iter().map(|id| d.node(*id).and_then(|n| n.geometric_bounds_with(&symbols))).collect();
-        for (id, b) in targets.iter().zip(boxes) {
+        let own: Vec<Option<Rect>> = targets.iter().map(|id| own_box(d, *id, &symbols)).collect();
+        for ((id, b), own) in targets.iter().zip(boxes).zip(own) {
             let Some(b) = b else { continue };
-            let (mut k_sh, mut k_sv, mut k_mh, mut k_mv, mut k_rot) = (sh, sv, mh, mv, rot);
+            let own = own.unwrap_or(b);
+            // Relative scales by a percentage of the object's size; Absolute takes it to the size
+            // given, measured on the object's own box, rotated with it, as the dialog shows it (so
+            // objects of different sizes come out alike, and a rotated shape keeps its size).
+            let (own_w, own_h) = (own.width(), own.height());
+            let (mut k_sh, mut k_sv) = (
+                sh.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_w) }),
+                sv.map(|v| if relative { v / 100.0 } else { scale_factor(v, own_h) }),
+            );
+            let (mut k_mh, mut k_mv, mut k_rot) = (mh, mv, rot);
             if random {
-                k_sh = 100.0 + (sh - 100.0) * rng.next();
-                k_sv = 100.0 + (sv - 100.0) * rng.next();
-                k_mh = mh * (rng.next() * 2.0 - 1.0);
-                k_mv = mv * (rng.next() * 2.0 - 1.0);
-                k_rot = rot * (rng.next() * 2.0 - 1.0);
+                // Five draws whatever the scales are, so a seed gives the moves and the rotation
+                // the same values whether a side is scaled or not.
+                let [r_sh, r_sv, r_mh, r_mv, r_rot] = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+                k_sh = k_sh.map(|v| 1.0 + (v - 1.0) * r_sh);
+                k_sv = k_sv.map(|v| 1.0 + (v - 1.0) * r_sv);
+                k_mh = mh * (r_mh * 2.0 - 1.0);
+                k_mv = mv * (r_mv * 2.0 - 1.0);
+                k_rot = rot * (r_rot * 2.0 - 1.0);
             }
-            let o = vectorcraft_geom::reference_point(b, refi);
+            // The object's own box, turned with it, as the Transform panel and the dialog show it:
+            // the scales act along its axes, about that box's reference point, so a turned square
+            // keeps its shape and the size the dialog shows is the one it takes.
+            let frame = vectorcraft_doc::OrientedBox { angle: d.bbox_angle(&[*id]), rect: own };
+            let o = frame.reference_point(refi);
             // Reflect X / Reflect Y match Object › Transform › Transform Each and Effect › Distort › Transform:
             // Reflect X flips left-right (negate x), Reflect Y flips top-bottom (negate y).
             let refl = Affine::scale_non_uniform(if rx { -1.0 } else { 1.0 }, if ry { -1.0 } else { 1.0 });
-            let m = Affine::translate((k_mh, k_mv))
-                * about(o, Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh / 100.0, k_sv / 100.0));
+            let scale = Affine::rotate(-k_rot.to_radians()) * refl * Affine::scale_non_uniform(k_sh.unwrap_or(1.0), k_sv.unwrap_or(1.0));
+            let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
+            }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
             }
         }
         Ok(targets)
@@ -1197,7 +1319,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
-    let locked_and_hidden = s.prefs.move_locked_with_artboard;
+    let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
@@ -1214,7 +1336,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
     // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
-    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    // artboard, moves only with `locked_and_hidden`.
     fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
         for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
             if c.is_layer() { objects(c, all, out) } else { out.push(c) }
@@ -1244,6 +1366,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

@@ -38,6 +38,39 @@ fn unfilled_interior_misses() {
     assert!(hit_test(&d, Point::new(50.5, 25.0), HitOptions::default()).is_some());
 }
 
+#[test]
+fn long_plain_stroke_hits_its_middle_and_curved_end() {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&(0..=4097).map(|i| Point::new(i as f64 * 10.0, 0.0)).collect::<Vec<_>>(), false);
+    sp.anchors[4096].h_out = Point::new(40960.0, 100.0);
+    sp.anchors[4097].h_in = Point::new(40970.0, 100.0);
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(40970.0, 100.0)));
+    sp.anchors.push(vectorcraft_geom::Anchor::corner(Point::new(0.0, 100.0)));
+    let path = vectorcraft_geom::PathData::single(sp);
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(Some(l), 0, Node::path(id, path, look)).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for point in [Point::new(20485.0, 0.0), Point::new(40965.0, 75.0)] {
+        assert_eq!(hit_test(&d, point, HitOptions::default()).map(|h| h.kind), Some(HitKind::Stroke));
+        assert_eq!(hit_test(&d, point, outline).map(|h| h.kind), Some(HitKind::Outline));
+    }
+    assert!(hit_test(&d, Point::new(20485.0, 50.0), HitOptions::default()).is_none());
+}
+
+#[test]
+fn coincident_anchors_remain_hittable_as_an_outline() {
+    let mut d = Document::new(200.0, 200.0);
+    let id = d.alloc_id();
+    let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(50.0, 50.0); 2], false));
+    let look = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.insert(d.layers.first().map(|l| l.id), 0, Node::path(id, path, look)).unwrap();
+    let at = Point::new(50.0, 50.0);
+    assert_eq!(hit_test(&d, at, HitOptions::default()).map(|h| h.kind), Some(HitKind::Outline));
+    assert_eq!(hit_test(&d, at, HitOptions { outline: true, ..Default::default() }).map(|h| h.kind), Some(HitKind::Outline));
+}
+
 /// #1103: a marquee drawn over a background picks what is on it, not the background, whose
 /// outline it doesn't touch.
 #[test]
@@ -1339,4 +1372,129 @@ fn cull_box_holds_the_reach_of_paths_and_compound_paths() {
     let (cull, reach) = (cull_reach(&path, &symbols).unwrap(), path.reach_bounds_with(&symbols).unwrap());
     assert!(holds(cull, reach), "{cull:?} does not hold {reach:?}");
     assert_eq!(checked, 201);
+}
+
+/// In a dynamic symbol's art, a layer with a clipping mask clips its objects as a clip group does:
+/// Direct Selection picks an object only where the mask shows it, and outlines it there.
+#[test]
+fn an_object_a_clipping_layer_in_symbol_art_hides_is_not_picked_there() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
+    if let NodeKind::Layer { children, .. } = &mut layer.kind {
+        *children = vec![Arc::new(mask), Arc::new(art)];
+    }
+    layer.set_clips(true);
+    let root = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Clipped".into(), art: Arc::new(root) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let n = d.node(inst).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), Some(vec![0, 1]), "where the mask shows the art");
+    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 50.0), opt), None, "where the mask hides it");
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[0, 1]).unwrap());
+    assert!((b.x1 - 100.0).abs() < 1e-6, "the outline is cut to the mask: {b:?}");
+    // Its outline inside the group around the layer is cut too.
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[0]).unwrap());
+    assert!((b.x1 - 100.0).abs() < 1e-6, "the layer's outline is cut to the mask: {b:?}");
+}
+
+/// In a dynamic symbol's art that placing through its 9-slice guides could make more than
+/// [`crate::MAX_SYMBOL_NODES`] objects of, Direct Selection picks and outlines nothing, as the
+/// canvas draws nothing of it. At the art's natural size the same art is picked.
+#[test]
+fn symbol_art_past_the_object_limit_picks_nothing() {
+    use vectorcraft_color::{Gradient, GradientPaint};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+    let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; 1_800]));
+    let mut mask = crate::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; 1_800]), true);
+    mask.linked = false;
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    // Drawn in six cells, each with its own copy of the mask's 3,240,000 squares.
+    let mut big = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    big.extras_mut().mask = Some(Box::new(mask));
+    let plain = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 50.0, 100.0, 100.0)), Appearance::default_art());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(plain), Arc::new(big)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Big".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Big", Some(crate::SymbolNineSlice::default()));
+    let scaled = d.alloc_id();
+    let natural = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    d.insert(Some(l), 0, Node::new(scaled, NodeKind::SymbolInstance { symbol: "Big".into(), xf })).unwrap();
+    d.insert(Some(l), 0, Node::new(natural, NodeKind::SymbolInstance { symbol: "Big".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    assert!(d.place_symbol_art("Big", &d.symbols[0].art, xf).is_none(), "the art is past the limit");
+    let opt = HitOptions::default();
+    let n = d.node(scaled).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(100.0, 110.0), opt), None, "the plain square");
+    assert_eq!(symbol_part_at(&d, n, Point::new(100.0, 40.0), opt), None, "the masked path");
+    assert!(symbol_part_outline(&d, n, &[0]).is_none());
+    assert!(symbol_part_outline(&d, n, &[1]).is_none());
+    let n = d.node(natural).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 75.0), opt), Some(vec![0]));
+    assert!(symbol_part_outline(&d, n, &[0]).is_some());
+}
+
+/// A clip group that lies in one 9-slice cell is moved by that cell as one piece, everything in it
+/// included, so an object in it is picked and outlined there even when placing that object through
+/// the guides on its own would pass [`crate::MAX_SYMBOL_NODES`] objects.
+#[test]
+fn objects_of_a_clip_group_in_one_cell_are_placed_with_it() {
+    use vectorcraft_color::{Gradient, GradientPaint};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    let leaf = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art()));
+    let inner = Arc::new(Node::group(d.alloc_id(), vec![leaf; 1_800]));
+    let mut mask = crate::OpacityMask::new(Node::group(d.alloc_id(), vec![inner; 1_800]), true);
+    mask.linked = false;
+    let gradient = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    let mut big = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(gradient, Paint::None, 0.0));
+    big.extras_mut().mask = Some(Box::new(mask));
+    let clip = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art());
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(big.clone())]);
+    group.set_clips(true);
+    let frame = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(group)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Corner".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Corner", Some(crate::SymbolNineSlice::default()));
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Corner".into(), xf })).unwrap();
+    let m = d.symbol_slice_map("Corner", xf).unwrap();
+    assert!(m.most_placed(&big, &d) > crate::MAX_SYMBOL_NODES, "the object alone is past the limit");
+    assert!(d.place_symbol_art("Corner", &d.symbols[0].art, xf).is_some(), "the art is drawn");
+    let n = d.node(inst).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(10.0, 10.0), HitOptions::default()), Some(vec![1, 1]));
+    let b = vectorcraft_geom::kurbo::Shape::bounding_box(&symbol_part_outline(&d, n, &[1, 1]).unwrap());
+    assert!((b.x1 - 20.0).abs() < 1e-6 && (b.y1 - 20.0).abs() < 1e-6, "cut to the clip in its corner: {b:?}");
+}
+
+/// In a dynamic symbol's art, Direct Selection does not pick a Shaper group's original shapes,
+/// which the canvas does not draw: a click over an original shape whose face the group erased
+/// picks nothing, and a click over the face it shows picks the face.
+#[test]
+fn a_shaper_groups_original_shapes_in_symbol_art_are_not_picked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 100.0, 100.0));
+    let a = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+    let b = Node::path(d.alloc_id(), square(50.0), Appearance::default_art());
+    let mut sources = Node::group(d.alloc_id(), vec![Arc::new(a), Arc::new(b)]);
+    sources.name = Some(crate::shaper::SOURCES.into());
+    sources.opacity = 0.0;
+    let mut face = Node::path(d.alloc_id(), square(0.0), Appearance::default_art());
+    face.name = Some(format!("{}0", crate::shaper::FILL_PREFIX));
+    let mut group = Node::group(d.alloc_id(), vec![Arc::new(sources), Arc::new(face)]);
+    group.extras_mut().shaper = Some(Box::default());
+    let root = Node::group(d.alloc_id(), vec![Arc::new(group)]);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Shaped".into(), art: Arc::new(root) });
+    let inst = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Shaped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
+    let n = d.node(inst).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(symbol_part_at(&d, n, Point::new(130.0, 50.0), opt), None, "over the erased original shape");
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), Some(vec![0, 1]), "over the shown face");
 }

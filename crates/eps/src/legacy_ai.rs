@@ -65,13 +65,13 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{
-    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, LineCap, LineJoin, Node,
-    NodeKind, ParaDirection, ParaStyle, PathEffect, StrokeLayer, TextKind, TextObject,
+    AppearanceItem, AreaOptions, CharPosition, CharStyle, Document, FillLayer, ImageBlob, Justify, LAYER_COLORS, LayerColor, Node, NodeKind,
+    ParaDirection, ParaStyle, PathAlign, PathEffect, StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, AnchorKind, BezPath, FillRule, PathData, Point, Rect, Shape, SubPath, Vec2};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Rect, Shape, SubPath, Vec2};
 
-use crate::{latin, ps};
+use crate::{ai_ops, latin, ps};
 
 mod encoding;
 mod prolog;
@@ -96,7 +96,7 @@ const HEX_LINE: usize = 60;
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
 pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, small caps, superscript and subscript, OpenType features, Variable Font settings, area type options, type on a path effects, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
 pub const HIDDEN_SHOWN: &str = "hidden objects are written visible (legacy .ai files can hide only layers)";
@@ -148,6 +148,27 @@ pub enum HiddenObjects {
 pub struct LegacyAiOutput {
     pub bytes: Vec<u8>,
     pub warnings: Vec<String>,
+}
+
+/// Whether image node `n` of `doc` is written as a 1-bit image mask in its colorize color
+/// (ImageMask 1, §8.1) that draws as the document does: it is colorized with a solid color, its
+/// pixels take the color and are all black or white (or clear), it has no opacity mask turned on,
+/// and it has no more pixels than the writer writes. Such an image keeps its clear pixels in the file.
+pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
+    let NodeKind::Image(im) = &n.kind else { return false };
+    // The size from the file's header, before any pixels are decoded.
+    let fits = |bytes: &[u8]| {
+        image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()
+            .and_then(|r| r.into_dimensions().ok())
+            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
+    };
+    matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
+        && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+        && doc
+            .image_blob(im)
+            .is_some_and(|b| b.takes_colorize() && fits(&b.bytes) && b.coverage().is_some_and(|(_, _, c)| c.iter().all(|&v| v == 0 || v == 255)))
 }
 
 /// Write `doc`'s first artboard and every layer (all its art, on the artboard or not) as a

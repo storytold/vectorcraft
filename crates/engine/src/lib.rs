@@ -70,6 +70,9 @@ pub struct Session {
     /// cursor asked for again over an unchanged document and selection measures nothing again.
     pub(crate) preview_memo: vectorcraft_tools::select::PreviewMemo,
     depth: u32,
+    /// Set while saved steps play ([`Session::replay`]): [`Session::execute`] then takes keys the
+    /// command's params description doesn't name instead of refusing them.
+    replaying: bool,
     /// Set when the active tool panicked (see [`guard`]); reported by the next tool event.
     tool_panic: Option<EngineError>,
     /// How many times switching or closing documents, or replacing the active one, has started the
@@ -157,6 +160,14 @@ pub struct Session {
     /// groups: for each step, the documents ([`DocState::uid`]) whose undo groups it belongs to, and
     /// the index of the document it left active when it changed the active document.
     pub(crate) batch_steps: Option<Vec<(Vec<u64>, Option<usize>)>>,
+    /// After `command.batch` kept a color-mode step's new-art colors, until the top-level command
+    /// has inherited the selection's appearance: the documents ([`DocState::uid`]) whose newest
+    /// history step takes the colors the batch finally left.
+    pub(crate) batch_paint_docs: Vec<u64>,
+    /// While a command that changes nothing in the document runs (a query, or one of
+    /// [`command_sets::JOURNALED_READS`]): it reads the instance of an object selected in a symbol
+    /// instance's art.
+    pub(crate) reading: bool,
     /// While [`Session::place_read`] runs `file.place`: the file read for it, which the command
     /// places instead of reading the file; `None` otherwise.
     pub(crate) place_hand_off: Option<cmd::place::PlaceRead>,

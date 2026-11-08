@@ -70,7 +70,7 @@ mod renderer;
 
 #[cfg(test)]
 pub(crate) use bounds::visual_bounds;
-pub(crate) use bounds::{cull_bounds, drawn_outline, painted_reach};
+pub(crate) use bounds::{cull_bounds, drawn_outline, drawn_outlines, painted_reach, path_cull_bounds};
 #[cfg(test)]
 pub(crate) use entries::Drawn;
 pub(crate) use entries::{DocInputs, FxGeom, Reads, ShadowEntry};

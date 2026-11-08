@@ -4,8 +4,9 @@
 //! `object.expand` as one undo step.
 //!
 //! Fields: `object`, `fill`, `stroke`, `gradient` (`objects` | `mesh`), `steps` (1..1000), and
-//! `__object`, `__fill`, `__stroke` (that option has something to expand: `object.expand.info`) and
-//! `__gradient` (Fill has a gradient fill to expand).
+//! `__object`, `__fill`, `__stroke` (that option has something to expand: `object.expand.info`),
+//! `__gradient` (Fill has a gradient fill to expand), and `__fill_symbol`, `__stroke_symbol`,
+//! `__gradient_symbol` (only the art of symbol instances holds it, so the option needs Object on).
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::expand::{DEFAULT_STEPS, MAX_STEPS};
@@ -43,6 +44,9 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         fields[format!("__{key}")] = info[key].clone();
     }
     fields["__gradient"] = info["gradient"].clone();
+    for key in ["fill", "stroke", "gradient"] {
+        fields[format!("__{key}_symbol")] = json!(info["symbolArt"][key] == json!(true));
+    }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(Value::Null)
 }
@@ -56,7 +60,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         let on = d.bool(key);
         ui.horizontal(|ui| {
             ui.add_space(12.0);
-            if widgets::check(ui, label, on, d.bool(&format!("__{key}"))) {
+            if widgets::check(ui, label, on, option_enabled(d, key)) {
                 set(d, key, json!(!on));
             }
         });
@@ -86,9 +90,15 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
+/// Has option `key` something to expand? What only the art of symbol instances holds needs Object
+/// on.
+fn option_enabled(d: &Dialog, key: &str) -> bool {
+    d.bool(&format!("__{key}")) && (key == "object" || d.bool("object") || !d.bool(&format!("__{key}_symbol")))
+}
+
 /// Does Expand Gradient To apply? Only gradient fills that Fill expands care.
 fn gradient_to_enabled(d: &Dialog) -> bool {
-    d.bool("__gradient") && d.bool("fill")
+    option_enabled(d, "gradient") && option_enabled(d, "fill") && d.bool("fill")
 }
 
 /// `object.expand` parameters from the fields.
@@ -162,6 +172,24 @@ mod tests {
         app.run("paint.setFill", json!({"gradient": {"kind": "linear"}})).unwrap();
         app.run("ui.expandDialog", json!({})).unwrap();
         assert!(gradient_to_enabled(app.ui.dialog.as_ref().unwrap()));
+    }
+
+    /// Stroke for the stroke in a symbol instance's art is enabled only while Object is on, since
+    /// Object expands the instance.
+    #[test]
+    fn stroke_for_a_symbol_instances_art_needs_object() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 100, "height": 60})).unwrap();
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("symbol.new", json!({"name": "Frame"})).unwrap();
+        app.run("ui.expandDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert!(option_enabled(d, "object") && option_enabled(d, "stroke"));
+        d.fields.insert("object".into(), json!(false));
+        assert!(!option_enabled(d, "stroke"), "Stroke can't reach the art with Object off");
+        frame(&mut app);
     }
 
     #[test]

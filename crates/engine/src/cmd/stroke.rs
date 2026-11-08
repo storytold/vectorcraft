@@ -25,6 +25,24 @@ pub fn specs() -> Vec<CommandSpec> {
             stroke_set
         ),
         cmd!(
+            "stroke.weightUp",
+            "Stroke Weight Up",
+            [],
+            Some("Cmd+Alt+."),
+            "{ids?|id?} raise each selected stroke's weight by one step of Units › Stroke (a quarter unit below one unit, then whole units; up to 1000 pt), each from its own weight: the selected objects' active or top stroke, type's stroked characters; objects without a stroke are left alone. With nothing selected (and no ids), the weight of the next object drawn → {objects}",
+            has_doc,
+            |s, p| stroke_step(s, p, true)
+        ),
+        cmd!(
+            "stroke.weightDown",
+            "Stroke Weight Down",
+            [],
+            Some("Cmd+Alt+,"),
+            "{ids?|id?} lower each selected stroke's weight by one step, as stroke.weightUp raises it, down to a quarter unit (a thinner weight is kept) → {objects}",
+            has_doc,
+            |s, p| stroke_step(s, p, false)
+        ),
+        cmd!(
             "stroke.setAdvanced",
             "Stroke Options",
             [],
@@ -248,6 +266,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             set(st);
         }
+        super::object::snap_if_aligned(n);
         Ok(())
     })?;
     // Commit the new-art template only after the complete request is validated
@@ -261,6 +280,62 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
 }
 
+/// `w` (pt) one step up or down in `unit` (Units › Stroke): a quarter unit up to one unit,
+/// whole units above it, from 0.25 unit to 1000 pt. A weight between steps goes to the next step
+/// in that direction (0.6 pt up is 0.75 pt); a weight below a quarter unit doesn't go down.
+pub(crate) fn step_weight(w: f64, unit: Unit, up: bool) -> f64 {
+    const EPS: f64 = 1e-9;
+    let k = Some(unit.to_pt(1.0)).filter(|k| k.is_finite() && *k > 0.0).unwrap_or(1.0);
+    let w = if w.is_finite() { w.max(0.0) } else { 0.0 };
+    let v = w / k;
+    let next = if up {
+        if v < 1.0 - EPS { ((v * 4.0 + EPS).floor() + 1.0) / 4.0 } else { (v + EPS).floor() + 1.0 }
+    } else if v <= 1.0 + EPS {
+        (((v * 4.0 - EPS).ceil() - 1.0) / 4.0).max(0.25)
+    } else {
+        (v - EPS).ceil() - 1.0
+    };
+    let r = (next * k).min(1000.0);
+    // Never a step the wrong way: past 1000 pt up stays, below a quarter unit down stays.
+    if up { r.max(w) } else { r.min(w) }
+}
+
+/// `stroke.weightUp` / `stroke.weightDown`: each target stroke stepped from its own weight.
+fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
+    let c = if up { "stroke.weightUp" } else { "stroke.weightDown" };
+    let unit = s.stroke_unit();
+    let item = item_target(s, p, c)?.of_kind(s, false);
+    let ids = item.targets(s, p)?;
+    if no_targets(&ids, p) {
+        let w = step_weight(s.paint.stroke_width, unit, up);
+        s.paint.stroke_width = w;
+        if let Some(st) = s.new_art_stroke_mut() {
+            st.width = w;
+        }
+        return Ok(json!({"objects": 0}));
+    }
+    let label = if up { "Stroke Weight Up" } else { "Stroke Weight Down" };
+    edit_items(s, &ids, item, c, label, false, |n, index| {
+        if index.is_none()
+            && let NodeKind::Text(t) = &mut n.kind
+        {
+            // Character strokes are drawn in text space, scaled by the type's transform.
+            let k = Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0);
+            for r in t.runs.iter_mut().filter(|r| !matches!(r.style.stroke, Paint::None)) {
+                let change = StrokeChange { weight: Some(step_weight(r.style.stroke_width * k, unit, up)), ..StrokeChange::default() };
+                change.apply_char_scaled(&mut r.style, k);
+            }
+            return Ok(());
+        }
+        if let Some(st) = n.appearance.stroke_at_mut(index) {
+            st.width = step_weight(st.width, unit, up);
+        }
+        super::object::snap_if_aligned(n);
+        Ok(())
+    })?;
+    Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+}
+
 impl Session {
     /// Units > Stroke (Preferences): the unit stroke weights and dash lengths show in.
     pub fn stroke_unit(&self) -> Unit {
@@ -270,10 +345,15 @@ impl Session {
     /// The stroke the Stroke panel, the Control bar and the Properties panel show, picked as the
     /// Stroke proxy picks its paint: the Appearance panel's active item when it is a stroke, else
     /// the first selected object's (a group's first painted object's) top stroke, type's first
-    /// run's character stroke; with nothing selected, the next object drawn's
-    /// ([`Session::new_art_stroke`]). None without a document or the selection's stroke.
+    /// run's character stroke; with an object of a dynamic symbol instance selected
+    /// ([`DocState::selected_symbol_part`]), that object's as the instance draws it; with nothing
+    /// selected, the next object drawn's ([`Session::new_art_stroke`]). None without a document or
+    /// the selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
+        if let Some(part) = st.selected_symbol_part() {
+            return node_stroke(&part);
+        }
         let Some(first) = st.selection.objects.first() else { return Some(self.new_art_stroke()) };
         let first = st.doc.node(*first)?;
         if let Some(i) = first.appearance.item_of_kind(self.appearance_item(), false) {
@@ -287,13 +367,19 @@ impl Session {
 
 impl DocState {
     /// Which Stroke panel values the selected objects' strokes (type: every run's) don't share,
-    /// and whether Align Stroke applies to them (no open path among them). One walk of the
-    /// selection, so callers that ask every frame cache it by revision.
+    /// and whether Align Stroke applies to them (no open path among them). With an object of a
+    /// dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that object alone is
+    /// read. One walk of the selection, so callers that ask every frame cache it by revision.
     pub fn stroke_mixed(&self) -> StrokeMixed {
+        let part = self.selected_symbol_part();
         let mut nodes = vec![];
-        for id in &self.selection.objects {
-            if let Some(n) = self.doc.node(*id) {
-                painted(n, true, &mut nodes);
+        if let Some(part) = &part {
+            painted(part, true, &mut nodes);
+        } else {
+            for id in &self.selection.objects {
+                if let Some(n) = self.doc.node(*id) {
+                    painted(n, true, &mut nodes);
+                }
             }
         }
         let mut strokes = vec![];
@@ -513,4 +599,24 @@ fn profile_list(s: &mut Session, _: &Value) -> Result<Value> {
         .collect();
     let current = s.shown_stroke().map(|st| s.profile_entry(st.profile.as_ref()).map_or("custom", |e| e.id).to_string());
     Ok(json!({ "profiles": profiles, "current": current }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn weight_steps_follow_units_and_stop_at_their_bounds() {
+        assert_eq!(step_weight(0.6, Unit::Points, true), 0.75);
+        assert_eq!(step_weight(0.6, Unit::Points, false), 0.5);
+        assert_eq!(step_weight(2.5, Unit::Points, true), 3.0);
+        assert_eq!(step_weight(2.5, Unit::Points, false), 2.0);
+        assert_eq!(step_weight(0.1, Unit::Points, false), 0.1, "below a quarter point a step down keeps it");
+        assert_eq!(step_weight(1000.0, Unit::Points, true), 1000.0);
+        assert_eq!(step_weight(2000.0, Unit::Points, true), 2000.0, "a step up never lowers a weight");
+        assert_eq!(step_weight(f64::NAN, Unit::Points, true), 0.25);
+        let mm = Unit::Millimeters.to_pt(1.0);
+        assert!((step_weight(mm, Unit::Millimeters, true) - 2.0 * mm).abs() < 1e-9);
+        assert!((step_weight(mm, Unit::Millimeters, false) - 0.75 * mm).abs() < 1e-9);
+    }
 }
