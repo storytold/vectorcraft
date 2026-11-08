@@ -669,6 +669,9 @@ impl SymbolOptions {
 #[derive(Debug, Default)]
 pub(crate) struct Imported {
     relink: Relink,
+    /// Whether relinking can change a pasted copy: a resource has another name or color in the
+    /// document, or the objects link a graphic style.
+    relinks: bool,
     /// Resources added to the document (renamed ones included).
     pub added: usize,
     /// Swatch conflicts resolved by merging.
@@ -690,7 +693,9 @@ impl Imported {
     }
     /// Point a pasted copy at the document's resources.
     pub(crate) fn apply(&self, n: &mut Node) {
-        self.relink.node(n);
+        if self.relinks {
+            self.relink.node(n);
+        }
     }
 }
 
@@ -822,6 +827,7 @@ impl Clipboard {
             }
             vectorcraft_brush::store(d, &lib);
         }
+        out.relinks = !(out.relink.renames.is_empty() && out.relink.styles.is_empty() && out.relink.colors.is_empty() && used.styles.is_empty());
         out
     }
 

@@ -268,9 +268,24 @@ fn artboard_commands_record_the_selected_artboards_for_a_replay_and_not_for_an_a
     for (id, params, recorded, action) in [
         ("artboard.switchOrientation", json!({}), json!({"selectedArtboards": [1], "scaleArt": false}), json!({"scaleArt": false})),
         ("artboard.rename", json!({"name": "Back"}), json!({"name": "Back", "selectedArtboards": [1]}), json!({"name": "Back"})),
-        ("artboard.duplicate", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
-        ("artboard.cut", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
-        ("artboard.copy", json!({}), json!({"selectedArtboards": [1], "art": true}), json!({"art": true})),
+        (
+            "artboard.duplicate",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.cut",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
+        (
+            "artboard.copy",
+            json!({}),
+            json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}),
+            json!({"art": true, "lockedAndHidden": false}),
+        ),
     ] {
         let mut s = Session::new();
         let start = second_artboard_selected(&mut s);
@@ -303,14 +318,14 @@ fn artboard_commands_keep_a_named_artboard_and_note_a_batch_steps_artboards() {
     s.execute("artboard.switchOrientation", &json!({"index": 0})).unwrap();
     assert_eq!(s.journal.last().unwrap().1, json!({"index": 0, "scaleArt": false}));
     s.execute("artboard.duplicate", &json!({"indices": [0]})).unwrap();
-    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true}));
+    assert_eq!(s.journal.last().unwrap().1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
     let steps = json!([{"command": "artboard.switchOrientation", "params": {}}]);
     s.execute("command.batch", &json!({ "commands": steps })).unwrap();
     assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "scaleArt": false}));
     assert_eq!(documents(&replayed(&s)), documents(&s));
     let action = s.journal_for_action(start);
     assert_eq!(action[0].1, json!({"index": 0, "scaleArt": false}));
-    assert_eq!(action[1].1, json!({"indices": [0], "art": true}));
+    assert_eq!(action[1].1, json!({"indices": [0], "art": true, "lockedAndHidden": false}));
     assert_eq!(action[2].1["commands"][0]["params"], json!({"scaleArt": false}));
 }
 
@@ -348,7 +363,7 @@ fn edit_copy_and_cut_with_the_artboard_tool_replay_on_its_artboards() {
             let r = replayed(&s);
             assert_ne!(r.tool_id(), "artboard");
             assert_eq!(documents(&r), documents(&s), "{id} after {select}");
-            assert_eq!(entry, (id.to_string(), json!({"selectedArtboards": [1], "art": true})), "{id} after {select}");
+            assert_eq!(entry, (id.to_string(), json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false})), "{id} after {select}");
         }
     }
 }
@@ -362,7 +377,7 @@ fn edit_copy_after_a_paste_with_the_artboard_tool_replays_on_the_pasted_artboard
     s.execute("edit.copy", &json!({})).unwrap();
     s.execute("edit.paste", &json!({})).unwrap();
     s.execute("edit.copy", &json!({})).unwrap();
-    assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [3], "art": true}));
+    assert_eq!(s.journal.last().unwrap().1, json!({"selectedArtboards": [3], "art": true, "lockedAndHidden": false}));
     s.execute("edit.paste", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc.artboards.len(), 5);
     assert_eq!(documents(&replayed(&s)), documents(&s));
@@ -390,7 +405,7 @@ fn edit_copy_and_cut_with_the_artboard_tool_record_nothing_for_an_action() {
         let start = second_artboard_selected(&mut s);
         let steps = json!([{"command": id, "params": {}}, {"command": "edit.paste", "params": {}}]);
         s.execute("command.batch", &json!({ "commands": steps })).unwrap();
-        assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "art": true}), "{id}");
+        assert_eq!(s.journal.last().unwrap().1["commands"][0]["params"], json!({"selectedArtboards": [1], "art": true, "lockedAndHidden": false}), "{id}");
         assert_eq!(documents(&replayed(&s)), documents(&s), "{id}");
         assert_eq!(s.journal_for_action(start)[0].1["commands"][0]["params"], json!({}), "{id}");
     }

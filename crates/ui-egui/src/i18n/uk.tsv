@@ -5392,6 +5392,19 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Playback Options…	Параметри відтворення…
+	Insert Stop…	Вставити зупинку…
+	Insert Stop	Вставити зупинку
+	Record Stop	Записати зупинку
+	Allow Continue	Дозволити продовження
+	Continue	Продовжити
+	Continue Action	Продовжити дію
+	Delete Action Step	Видалити крок дії
+	Press Play Current Selection in the Actions panel to go on.	Щоб продовжити, натисніть «Відтворити поточне виділення» на панелі «Дії».
+	Stop: {message}	Зупинка: {message}
+@msg	no action is waiting at a stop	жодна дія не очікує на зупинці
+@msg	message must be text	message має бути текстом
+@msg	allowContinue must be true or false	allowContinue має бути true або false
+@msg	Batch cannot play an action with a stop	Пакет не може відтворити дію із зупинкою
 	Playback Options	Параметри відтворення
 	Accelerated	Прискорено
 	Step by Step	Покроково

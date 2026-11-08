@@ -22,6 +22,7 @@ mod known_bugs;
 mod lossy_overwrite;
 mod model_based;
 mod param_keys;
+mod paste_many;
 mod pen_click_after_smooth;
 mod pen_endpoint_picking;
 mod ruler_origin;

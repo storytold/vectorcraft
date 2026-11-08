@@ -81,8 +81,8 @@ impl<'a> Reader<'a> {
     /// `AdobeURL` tag sets the object's URL, and every other tag is added to the object's data in
     /// order, up to [`MAX_TAGS`]. A tag with no object before it, with an empty identifier, or with
     /// an identifier or string longer than [`MAX_TAG_TEXT`] bytes is ignored, and so are tags in a
-    /// pattern's or brush's art, which is not an object of the document. A clipping path's tags are
-    /// its own, not those of the copy that paints its fill.
+    /// pattern's or brush's art, which is not an object of the document. A compound clipping path's tags are its own,
+    /// not those of the compound path that paints its fill apart from it.
     fn object_tag(&mut self, vals: &[V], hidden: bool) {
         let [.., V::Name(id), V::Str(value)] = vals else {
             self.note_unknown("XT", hidden);

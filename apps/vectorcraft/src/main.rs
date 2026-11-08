@@ -111,6 +111,8 @@ struct App {
     pending_maximize: bool,
     /// Frames left to retry [`window::apply_pending_maximize`].
     maximize_tries: u8,
+    /// The time and UI zoom of the last monitor list ([`window::monitors_due`]).
+    monitors_listed: Option<(f64, f32)>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -505,6 +507,7 @@ fn main() -> std::process::ExitCode {
                     winit_window,
                     pending_maximize,
                     maximize_tries: 8,
+                    monitors_listed: None,
                 }))
             }),
         )

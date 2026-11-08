@@ -5477,6 +5477,19 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Playback Options…	再生オプション…
+	Insert Stop…	停止を挿入…
+	Insert Stop	停止を挿入
+	Record Stop	停止を記録
+	Allow Continue	続行を許可
+	Continue	続行
+	Continue Action	アクションを続行
+	Delete Action Step	アクションステップを削除
+	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
+	Stop: {message}	停止: {message}
+@msg	no action is waiting at a stop	停止で待機中のアクションはありません
+@msg	message must be text	message にはテキストを指定してください
+@msg	allowContinue must be true or false	allowContinue には true または false を指定してください
+@msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
 	Playback Options	再生オプション
 	Accelerated	高速
 	Step by Step	ステップ実行

@@ -5747,6 +5747,19 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Insert Stop…	Εισαγωγή διακοπής…
+	Insert Stop	Εισαγωγή διακοπής
+	Record Stop	Καταγραφή διακοπής
+	Allow Continue	Να επιτρέπεται η συνέχεια
+	Continue	Συνέχεια
+	Continue Action	Συνέχεια ενέργειας
+	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
+	Stop: {message}	Διακοπή: {message}
+@msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
+@msg	message must be text	Το message πρέπει να είναι κείμενο
+@msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
+@msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
 	Playback Options	Επιλογές αναπαραγωγής
 	Accelerated	Επιταχυμένα
 	Step by Step	Βήμα προς βήμα

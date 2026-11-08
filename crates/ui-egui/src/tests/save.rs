@@ -244,6 +244,22 @@ fn a_document_reopens_at_its_saved_view() {
 }
 
 #[test]
+fn a_saved_ai_file_reopens_on_the_artboard_active_when_saved() {
+    let d = dir("ai-artboard");
+    let path = d.join("a.ai").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    app.sync_views();
+    app.view_mut().unwrap().artboard = 1;
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("file.close", json!({})).unwrap();
+    let r = io::open_path(&mut app, &path).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(app.view().map(|v| v.artboard), Some(1), "{r}");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
 fn replacing_a_file_that_opening_left_things_out_of_asks_first() {
     let d = dir("lossy");
     let path = d.join("a.vectorcraft").to_string_lossy().to_string();

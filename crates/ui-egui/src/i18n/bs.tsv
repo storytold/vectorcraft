@@ -5703,6 +5703,19 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Playback Options…	Opcije reprodukcije…
+	Insert Stop…	Umetni zaustavljanje…
+	Insert Stop	Umetni zaustavljanje
+	Record Stop	Snimi zaustavljanje
+	Allow Continue	Dozvoli nastavak
+	Continue	Nastavi
+	Continue Action	Nastavi akciju
+	Delete Action Step	Izbriši korak akcije
+	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
+	Stop: {message}	Zaustavljanje: {message}
+@msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
+@msg	message must be text	message mora biti tekst
+@msg	allowContinue must be true or false	allowContinue mora biti true ili false
+@msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
 	Playback Options	Opcije reprodukcije
 	Accelerated	Ubrzano
 	Step by Step	Korak po korak
