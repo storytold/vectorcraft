@@ -227,7 +227,8 @@ pub(super) const IMPORT_SPEC: DialogSpec = DialogSpec {
 };
 
 /// Open With with importer `plugin`, which has parameters: its fields at their defaults, and
-/// `open`, Open With's own parameters (`path`, `importer`), kept for Open.
+/// `open`, Open With's own parameters (`path`, `importer`, and `picked` for a file from the
+/// picker, which is read off the UI thread), kept for Open.
 pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
     let mut fields = fields_for(plugin.manifest());
     fields.insert("__open".into(), open);
@@ -239,5 +240,6 @@ fn import_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     let mut p = d.fields.get("__open").cloned().filter(Value::is_object).ok_or("no file to open")?;
     p["params"] = form::params(d);
     app.ui.dialog = None;
-    crate::io::open_with(app, &p)
+    let picked = p["picked"] == true;
+    crate::io::open_with_on(app, &p, picked && crate::opening::available())
 }

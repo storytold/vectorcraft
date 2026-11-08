@@ -113,6 +113,17 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0));
     assert_eq!(app.ui.recent_files, std::slice::from_ref(&file));
 
+    // Only a file from the picker goes off the UI thread after the dialog: a caller naming `path`
+    // gets the document.
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], false);
+    app.ui.dialog = None;
+    let picked = file.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.params"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], true);
+    app.ui.dialog = None;
+
     let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file, "params": {"density": 7}})).unwrap();
     assert_eq!(r["format"], "plugin.test.ui.params");
     assert!(app.ui.dialog.is_none());

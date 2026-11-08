@@ -264,8 +264,21 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
 /// failure is reported as File › Open reports it. An importer with parameters, given no `params`,
 /// asks for them first in dialog `pluginImport`, at their defaults. The web's file picker can't
 /// carry the importer: there File › Open's picker opens, and the file opens as File › Open opens
-/// it.
+/// it. A file the user picked is read off the UI thread where that is available
+/// ([`crate::opening`]), and the result is then `{background: true, status}`; with `path` the file
+/// opens before the reply, as automation needs.
 pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    open_with_on(app, p, picks_a_file(p) && crate::opening::available())
+}
+
+/// Do File › Open With's parameters leave the file to the picker?
+fn picks_a_file(p: &Value) -> bool {
+    p.get("path").and_then(Value::as_str).is_none_or(str::is_empty)
+}
+
+/// [`open_with`]; with `background`, the importer runs off the UI thread
+/// ([`crate::opening::start_with`]), its progress window offering Cancel.
+pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool) -> Result<Value, String> {
     let importer = p.get("importer").and_then(Value::as_str).ok_or("missing `importer` (see document.formats)")?;
     let plugin = vectorcraft_plugins::import::named(importer).map_err(|e| e.to_string())?;
     let path = match p.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()) {
@@ -285,14 +298,21 @@ pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let given = p.get("params").filter(|v| !v.is_null());
     let opened = vectorcraft_engine::file_access::check_read(&path).and_then(|()| check_import_size(&path, true)).and_then(|()| {
         if given.is_none() && !plugin.manifest().params.is_empty() {
-            dialogs::plugin::open_import(app, &plugin, json!({ "path": path, "importer": importer }));
+            dialogs::plugin::open_import(app, &plugin, json!({ "path": path, "importer": importer, "picked": picks_a_file(p) }));
             return Ok(Value::Null);
         }
         let mut o = json!({ "importer": importer });
         if let Some(params) = given {
             o["params"] = params.clone();
         }
-        let bytes = read(app, &path)?;
+        let mut bytes = read(app, &path)?;
+        if background {
+            match crate::opening::start_with(app, &path, bytes, o.clone()) {
+                Ok(r) => return Ok(r),
+                // No thread: at once.
+                Err(back) => bytes = back,
+            }
+        }
         let r = open_document(app, &path, &bytes, Some(path.clone()), &o)?;
         note_recent(app, &path);
         Ok(r)

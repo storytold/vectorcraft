@@ -6099,8 +6099,10 @@ as `svg`. The importer is given at most 128 MiB of the file; its objects become 
 their bounds, Save then asks for a name, and `warnings` holds the importer's warnings. `plugin.run` of an importer is
 an error that names `document.open`. In the app, File › Open With lists the installed importers, and
 `file.openWith {importer, path?, params?}` opens `path`, or a file picked among the importer's extensions, with one (on
-the web it opens File › Open's picker) and adds it to Open Recent; an importer with parameters, given no `params`,
-first asks for them in the `pluginImport` dialog. `params` holds the importer's parameters (their defaults when
+the web it opens File › Open's picker) and adds it to Open Recent. With `path` the reply is `document.open`'s result;
+on the desktop a picked file is read off the UI thread and the reply is `{background: true, status}`, and
+`file.cancelOpen` stops the importer. An importer with parameters, given no `params`, first asks for them in the
+`pluginImport` dialog. `params` holds the importer's parameters (their defaults when
 omitted). A failing plug-in returns an error and leaves the document as it was (an export writes
 no file, and an import opens no document). A filter whose manifest asks for a heavy budget (minutes rather than a minute, `budget: "heavy"` in its
 `plugin.inspect {path | dataBase64}` entry) installs only with `allowHeavy: true`: ask the user first. `plugin.run`

@@ -65,7 +65,9 @@ extensions that a built-in format reads, and those File › Open installs, impor
 `.kys`, `.jsx`, presets, libraries and swatch or graphic style libraries such as `.ase`). File › Open does not give
 those files to the importer, and Open With does. **File › Open With** lists the
 installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
-extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. An importer
+extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. On the
+desktop the importer runs off the UI thread, and a run that takes a while shows a progress window with Cancel, which
+stops it. An importer
 with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open
 button opens the file; File › Open runs an importer with its parameters' defaults. **File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the

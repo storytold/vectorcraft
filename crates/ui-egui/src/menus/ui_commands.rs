@@ -34,7 +34,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.openWith",
         "Open With",
         "",
-        "{importer: \"plugin.<id>\" (an importer plug-in's format id, see document.formats), path?} File › Open With: open the file with that importer (document.open's importer), also a file whose extension a built-in format reads; without a path pick one of the files with the extensions it lists (the web opens File › Open's picker, and the file opens as File › Open opens it) → document.open's result | null while the picker is open",
+        "{importer: \"plugin.<id>\" (an importer plug-in's format id, see document.formats), path?} File › Open With: open the file with that importer (document.open's importer), also a file whose extension a built-in format reads; without a path pick one of the files with the extensions it lists (the web opens File › Open's picker, and the file opens as File › Open opens it) → with a path, document.open's result; a picked file is read off the UI thread on the desktop, {background: true, status}, and opens once the importer returns (file.cancelOpen stops it) | null while the picker is open",
     ),
     (
         "file.save",
