@@ -76,8 +76,7 @@ impl Mirror {
     fn new(overrides: Overrides) -> Mirror {
         let snapshot = snapshot();
         let keymap = crate::keymap::keymap_in(&snapshot, &overrides);
-        let text = keymap
-            .overrides()
+        let text = overrides
             .iter()
             .map(|(k, _)| {
                 let key = entry_of_stored(k);
@@ -360,17 +359,18 @@ pub struct Entry {
     pub is_tool: bool,
 }
 
-/// The editor's entries and the Effect menu's effect items while the installed plug-ins are those
-/// of one [`menus::plugin_revision`].
+/// The editor's entries, the Effect menu's effect items and Object › Plug-ins' filter items while
+/// the installed plug-ins are those of one [`menus::plugin_revision`].
 pub(crate) struct Snapshot {
     /// The plug-in revision read before the menus were walked.
     pub revision: u64,
     pub effects: Arc<[EffectItem]>,
+    pub filters: Arc<[FilterItem]>,
     pub entries: Arc<[Entry]>,
 }
 
 /// The entries for the plug-ins installed now: rebuilt when a plug-in is installed or removed, so
-/// a live-effect plug-in installed later has its row, and one removed has none.
+/// a live-effect or filter plug-in installed later has its row, and one removed has none.
 pub(crate) fn snapshot() -> Arc<Snapshot> {
     static LAST: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
     let revision = menus::plugin_revision();
@@ -380,14 +380,16 @@ pub(crate) fn snapshot() -> Arc<Snapshot> {
     }
     // Built without the lock held: the Effect menu is walked anew.
     let effects: Arc<[EffectItem]> = build_effect_items().into();
+    let filters: Arc<[FilterItem]> = build_filter_items().into();
     let (head, tail) = fixed_entries();
     let entries: Arc<[Entry]> = head
         .iter()
         .cloned()
         .chain(effects.iter().map(|e| Entry { key: format!("effect:{}", e.effect), label: e.label.clone(), group: e.group.clone(), is_tool: false }))
+        .chain(filters.iter().map(|f| Entry { key: format!("plugin:{}", f.id), label: f.label.clone(), group: f.group.clone(), is_tool: false }))
         .chain(tail.iter().cloned())
         .collect();
-    let s = Arc::new(Snapshot { revision, effects, entries });
+    let s = Arc::new(Snapshot { revision, effects, filters, entries });
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     // A newer snapshot another thread stored meanwhile stays.
     if last.as_ref().is_none_or(|l| l.revision <= revision) {
@@ -402,7 +404,7 @@ pub fn entries() -> Arc<[Entry]> {
 }
 
 /// The entries no plug-in changes: (tools, commands and panels; UI commands). The Effect menu's
-/// items go between them.
+/// items and Object › Plug-ins' filters go between them.
 fn fixed_entries() -> &'static (Vec<Entry>, Vec<Entry>) {
     static E: OnceLock<(Vec<Entry>, Vec<Entry>)> = OnceLock::new();
     E.get_or_init(|| {
@@ -496,6 +498,74 @@ pub fn effect_shortcut(effect: &str) -> Option<&'static str> {
     effective(&format!("effect:{effect}"))
 }
 
+/// One filter plug-in's Object › Plug-ins item (`plugin.dialog {id}`) a shortcut can be given: the
+/// plug-in's id, its label (the plug-in's name, with an ellipsis when it opens a dialog) and its
+/// menu path.
+#[derive(Clone, Debug)]
+pub struct FilterItem {
+    pub id: String,
+    pub label: String,
+    pub group: String,
+}
+
+/// Object › Plug-ins' filter items, in menu order, each once, with the filter plug-ins installed
+/// now.
+pub fn filter_items() -> Arc<[FilterItem]> {
+    snapshot().filters.clone()
+}
+
+/// Walks the Object menu for [`filter_items`].
+fn build_filter_items() -> Vec<FilterItem> {
+    fn walk(items: &[menus::Item], path: &mut Vec<String>, seen: &mut HashSet<String>, out: &mut Vec<FilterItem>) {
+        for it in items {
+            match it {
+                menus::Item::Cmd(label, "plugin.dialog", p) => {
+                    if let Some(id) = p.get("id").and_then(serde_json::Value::as_str)
+                        && seen.insert(id.to_string())
+                    {
+                        out.push(FilterItem { id: id.to_string(), label: label.to_string(), group: path.join(" › ") });
+                    }
+                }
+                menus::Item::Sub(name, children) => {
+                    path.push(name.to_string());
+                    walk(children, path, seen, out);
+                    path.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    let mut seen = HashSet::new();
+    for (name, items) in menus::menu_tree() {
+        if name == "Object" {
+            walk(&items, &mut vec![name.to_string()], &mut seen, &mut out);
+        }
+    }
+    out
+}
+
+/// Effective shortcut of filter plug-in `id`'s Object › Plug-ins item (`plugin:<id>`).
+pub fn filter_shortcut(id: &str) -> Option<&'static str> {
+    effective(&format!("plugin:{id}"))
+}
+
+/// Entry `e`'s label in the UI language. A plug-in's own name is not translated.
+pub(crate) fn shown_label(e: &Entry) -> &str {
+    let plugin = e.key.starts_with("plugin:") || e.key.strip_prefix("effect:").and_then(vectorcraft_plugins::effect::plugin_id).is_some();
+    if plugin { &e.label } else { tl!(&e.label) }
+}
+
+/// A menu path in the UI language, one segment at a time.
+pub(crate) fn shown_group(group: &str) -> String {
+    group.split(" › ").map(|s| tl!(s)).collect::<Vec<_>>().join(" › ")
+}
+
+/// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu.
+pub(crate) fn shown_name(e: &Entry) -> String {
+    if e.is_tool || e.group.is_empty() { shown_label(e).to_string() } else { format!("{} › {}", shown_group(&e.group), shown_label(e)) }
+}
+
 /// The group of a command no menu holds: the first part of its id, capitalised (`edit.x` → "Edit").
 fn id_group(id: &str) -> String {
     let mut c = id.split('.').next().unwrap_or_default().chars();
@@ -519,8 +589,9 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// Commands whose params are all optional that do nothing, or fail, when a key press runs them
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
-/// and the library, data set and text style loaders a file, which their panel menu items ask for.
-const NEEDS_A_PARAM: [&str; 19] = [
+/// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
+/// for.
+const NEEDS_A_PARAM: [&str; 20] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -540,6 +611,7 @@ const NEEDS_A_PARAM: [&str; 19] = [
     "charStyle.load",
     "paraStyle.load",
     "textStyle.loadAll",
+    "svgFilter.import",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
@@ -603,6 +675,17 @@ fn needs_a_value(key: &str) -> bool {
             .collect()
     })
     .contains(key)
+}
+
+/// Does a menu bar item run the command with no params, so that it does what its label says and opens
+/// no dialog? A command no menu bar item runs (the Crop Image item runs `ui.cropImage`), a menu item
+/// that gives it params, a [`NEEDS_A_PARAM`] command and a field a call must give each rule it out.
+pub(crate) fn runs_with_no_values(c: &vectorcraft_engine::CommandSpec) -> bool {
+    menu_bar_items().contains_key(c.id)
+        && menu_target(c.id).is_none()
+        && !NEEDS_A_PARAM.contains(&c.id)
+        && !crate::dialogs::variables::opens(c.id)
+        && !names_a_required_field(c.params)
 }
 
 /// Does a params doc name a field a call must give? Its fields are the top-level parts of its
@@ -680,8 +763,30 @@ pub fn conflicts_in(km: &Keymap) -> Vec<(String, Vec<String>)> {
 pub fn assign(overrides: &mut Overrides, key: &str, chord: Option<&str>, force: bool) -> Result<Vec<String>, String> {
     let mut km = keymap_with(overrides);
     let removed = assign_in(&mut km, key, chord, force)?;
-    *overrides = km.overrides().clone();
+    *overrides = saved_overrides(km.overrides(), overrides);
     Ok(removed)
+}
+
+/// The overrides to save from a working keymap's `current` overrides. An entry for Cut, Copy or
+/// Paste that `source`, the set before the change, did not hold is left out when it is the entry
+/// [`crate::keymap::keymap_with`] makes from the other entries of `source` or of `current`.
+pub(crate) fn saved_overrides(current: &Overrides, source: &Overrides) -> Overrides {
+    let mut saved = current.clone();
+    for (key, _, _) in crate::keymap::EDIT_FUNCTION_KEYS {
+        let Some(now) = current.get(key) else { continue };
+        if source.get(key).is_some() {
+            continue;
+        }
+        let made = |from: &Overrides| {
+            let mut rest = from.clone();
+            rest.remove(key);
+            crate::keymap::edit_alias_overrides(&rest, crate::keymap::platform()).get(key).is_some_and(|t| t == now)
+        };
+        if made(current) || made(source) {
+            saved.remove(key);
+        }
+    }
+    saved
 }
 
 /// [`assign`] on a keymap.
@@ -783,7 +888,7 @@ pub fn export_text(set: &str, overrides: &Overrides) -> String {
     for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
         out += &format!("\n{}\n", tl!(heading));
         for e in snapshot.entries.iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)) {
-            let name = if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) };
+            let name = shown_name(e);
             let sc = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
             out += &format!("{name}\t{sc}\n");
         }
@@ -859,7 +964,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
             };
             let snapshot = snapshot();
             let km = crate::keymap::keymap_in(&snapshot, &app.ui.shortcut_overrides);
-            let ov = km.overrides();
+            let ov = &crate::keymap::effect_keys_in(&app.ui.shortcut_overrides, &snapshot.effects);
             Ok(Value::Array(
                 snapshot
                     .entries
@@ -1020,7 +1125,7 @@ impl DialogView {
         let texts = snapshot.entries.iter().map(|e| dialog_shortcuts_with(&keymap, &e.key, backtick.as_deref())).collect();
         let conflicts = conflicts_in(&keymap).len();
         DialogView {
-            source: stored::to_value(keymap.overrides()),
+            source: stored::to_value(&crate::keymap::effect_keys_in(&overrides, &snapshot.effects)),
             backtick,
             revision: snapshot.revision,
             entries: snapshot.entries.clone(),
@@ -1059,6 +1164,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut ok = false;
     let mut cancel = false;
     drop_hidden(&mut d, km.overrides());
+    let saved = dialog_overrides(&d);
     let recording = d.str("__recording");
     // Record a chord (before widgets see the keys). Modifiers held down are part of the next key's
     // chord, not a chord of their own.
@@ -1153,19 +1259,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
                     let matches = e.label.to_lowercase().contains(&q)
-                        || tl!(&e.label).to_lowercase().contains(&q)
+                        || shown_label(e).to_lowercase().contains(&q)
                         || e.group.to_lowercase().contains(&q)
-                        || tl!(&e.group).to_lowercase().contains(&q)
+                        || shown_group(&e.group).to_lowercase().contains(&q)
                         || sc.as_deref().is_some_and(|s| s.to_lowercase().contains(&q));
                     if !q.is_empty() && !matches {
                         continue;
                     }
                     let row = ui.horizontal(|ui| {
-                        let name = if e.is_tool || e.group.is_empty() {
-                            tl!(&e.label).to_string()
-                        } else {
-                            format!("{} › {}", tl!(&e.group), tl!(&e.label))
-                        };
+                        let name = shown_name(e);
                         let r = ui
                             .allocate_ui_with_layout(egui::vec2(360.0, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                                 ui.set_min_width(360.0);
@@ -1176,7 +1278,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                             d.fields.insert("__selected".into(), json!(e.key));
                         }
                         let label = if rec == e.key { tl!("Press keys…").to_string() } else { sc.unwrap_or_else(|| "—".into()) };
-                        let changed = crate::keymap::has_override(km.overrides(), &e.key);
+                        let changed = crate::keymap::has_override(&saved, &e.key);
                         let txt = egui::RichText::new(label).color(if changed { t.accent } else { t.text });
                         let b = ui
                             .add_sized([150.0, 20.0], egui::Button::new(txt).selected(rec == e.key))
@@ -1248,7 +1350,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     if let Cow::Owned(km) = &km {
-        d.fields.insert("overrides".into(), stored::to_value(km.overrides()));
+        d.fields.insert("overrides".into(), stored::to_value(&saved_overrides(km.overrides(), &saved)));
     }
     let import = d.fields.remove("__import").is_some();
     let export = d.fields.remove("__export").is_some();
@@ -1779,6 +1881,126 @@ mod tests {
             assert!(shown.contains(plain) && shown.contains(&shifted), "{key}: {shown}");
         }
         assert_eq!(view.conflicts, 0);
+    }
+
+    #[test]
+    fn edit_dialog_rows_show_primary_and_function_keys() {
+        for p in [craft_keymap::Platform::Windows, craft_keymap::Platform::Linux, craft_keymap::Platform::Mac] {
+            let km = crate::keymap::keymap_for(p, &snapshot());
+            for (key, primary, alternate) in [("edit.cut", "Cmd+X", "F2"), ("edit.copy", "Cmd+C", "F3"), ("edit.paste", "Cmd+V", "F4")] {
+                let shown = dialog_shortcuts_with(&km, key, None).unwrap();
+                let primary = menus::pretty_shortcut(primary);
+                assert!(shown.contains(&primary), "{p:?} {key}: {shown}");
+                assert_eq!(shown.contains(alternate), !p.is_mac(), "{p:?} {key}: {shown}");
+            }
+        }
+        for (key, primary) in [("edit.cut", "Cmd+X"), ("edit.copy", "Cmd+C"), ("edit.paste", "Cmd+V")] {
+            let shown = menus::item_shortcut(key, &Value::Null).map(menus::pretty_shortcut);
+            assert_eq!(shown, Some(menus::pretty_shortcut(primary)), "{key} menu shortcut");
+        }
+    }
+
+    #[test]
+    fn saved_function_key_assignment_does_not_change_cut_in_the_editor() {
+        if crate::keymap::platform().is_mac() {
+            return;
+        }
+        let mut saved = Overrides::new();
+        crate::keymap::set_override(&mut saved, "tool:pen", "F2");
+        let mirror = Mirror::new(saved.clone());
+        assert!(!mirror.text.contains_key("edit.cut"));
+        assert!(conflicts_in(&mirror.keymap).is_empty());
+
+        let view = DialogView::new(saved.clone());
+        assert_eq!(view.source, stored::to_value(&saved));
+        assert_eq!(view.conflicts, 0);
+        assert_eq!(dialog_shortcuts_with(&view.keymap, "edit.cut", None), Some(menus::pretty_shortcut("Cmd+X")));
+
+        let mut other = saved.clone();
+        assign(&mut other, "edit.preferences", Some("Cmd+Alt+Shift+F12"), false).unwrap();
+        assert!(!crate::keymap::has_override(&other, "edit.cut"));
+        let (set, imported) = import_json(&export_json("Mine", &other)).unwrap();
+        assert_eq!(set, "Mine");
+        assert_eq!(imported, other);
+        assert!(!crate::keymap::has_override(&imported, "edit.cut"));
+
+        let mut km = view.keymap.clone();
+        assign_in(&mut km, "edit.preferences", Some("Cmd+Alt+Shift+F12"), false).unwrap();
+        assert_eq!(saved_overrides(km.overrides(), &saved), other);
+    }
+
+    #[test]
+    fn reset_stolen_edit_function_keys_restores_their_defaults() {
+        if crate::keymap::platform().is_mac() {
+            return;
+        }
+        for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
+            let mut saved = Overrides::new();
+            assert_eq!(assign(&mut saved, "tool:pen", Some(alias), true).unwrap(), vec![edit]);
+            assert!(!crate::keymap::has_override(&saved, edit), "{alias} saved edit override");
+            reset_one(&mut saved, "tool:pen");
+            assert_eq!(crate::keymap::lookup(&keymap_with(&saved), &crate::keymap::vc_chord(alias).unwrap()), Some(command_of(edit)));
+
+            let mut d = Dialog::new("shortcuts", json!({"overrides": {}}));
+            let source = dialog_overrides(&d);
+            let mut km = keymap_with(&source);
+            record(&mut d, &mut km, "tool:pen", alias);
+            d.fields.insert("overrides".into(), stored::to_value(&saved_overrides(km.overrides(), &source)));
+            let mut dialog_saved = dialog_overrides(&d);
+            assert!(!crate::keymap::has_override(&dialog_saved, edit), "{alias} dialog edit override");
+            reset_one(&mut dialog_saved, "tool:pen");
+            assert_eq!(crate::keymap::lookup(&keymap_with(&dialog_saved), &crate::keymap::vc_chord(alias).unwrap()), Some(command_of(edit)));
+
+            let mut changed = Overrides::new();
+            crate::keymap::set_override(&mut changed, edit, "Ctrl+Alt+Shift+F12");
+            assign(&mut changed, "tool:pen", Some(alias), true).unwrap();
+            assert_eq!(crate::keymap::override_text(&changed, edit).as_deref(), Some("Ctrl+Alt+Shift+F12"));
+        }
+    }
+
+    #[test]
+    fn reassigning_a_saved_function_key_gives_it_back_to_its_edit_command() {
+        if crate::keymap::platform().is_mac() {
+            return;
+        }
+        for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
+            let mut saved = Overrides::new();
+            crate::keymap::set_override(&mut saved, "edit.preferences", alias);
+            assign(&mut saved, "edit.preferences", Some("Cmd+Alt+Shift+F12"), false).unwrap();
+            assert!(!crate::keymap::has_override(&saved, edit), "{alias} saved edit override");
+            assert_eq!(crate::keymap::lookup(&keymap_with(&saved), &crate::keymap::vc_chord(alias).unwrap()), Some(command_of(edit)));
+
+            let mut source = Overrides::new();
+            crate::keymap::set_override(&mut source, "edit.preferences", alias);
+            let mut d = Dialog::new("shortcuts", json!({"overrides": stored::to_value(&source)}));
+            let mut km = keymap_with(&source);
+            record(&mut d, &mut km, "edit.preferences", "Cmd+Alt+Shift+F12");
+            let dialog_saved = saved_overrides(km.overrides(), &source);
+            assert!(!crate::keymap::has_override(&dialog_saved, edit), "{alias} dialog edit override");
+            assert_eq!(crate::keymap::lookup(&keymap_with(&dialog_saved), &crate::keymap::vc_chord(alias).unwrap()), Some(command_of(edit)));
+        }
+    }
+
+    #[test]
+    fn assigning_an_edit_function_key_elsewhere_reports_the_conflict() {
+        if crate::keymap::platform().is_mac() {
+            return;
+        }
+        for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
+            let label = entry(edit).map(|e| e.label.clone()).unwrap();
+            assert_eq!(conflicts_with(&Overrides::new(), alias, "tool:pen"), vec![edit.to_string()], "{alias}");
+            let mut ov = Overrides::new();
+            let err = assign(&mut ov, "tool:pen", Some(alias), false).unwrap_err();
+            assert!(err.ends_with(&format!("is already used by {label}")), "{alias}: {err}");
+            assert!(!crate::keymap::has_override(&ov, "tool:pen"), "{alias}: a refused assignment saves nothing");
+
+            let mut d = Dialog::new("shortcuts", json!({"overrides": {}}));
+            let mut km = keymap_with(&Overrides::new());
+            record(&mut d, &mut km, "tool:pen", alias);
+            assert_eq!(d.str("__conflict"), edit, "{alias}");
+            assert!(d.str("__message").contains(&label), "{alias}: {}", d.str("__message"));
+            assert_eq!(crate::keymap::lookup(&km, &crate::keymap::vc_chord(alias).unwrap()), Some(command_of("tool:pen")), "{alias}");
+        }
     }
 
     #[test]

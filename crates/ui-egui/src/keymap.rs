@@ -3,9 +3,11 @@
 //! user's overrides.
 //!
 //! Entry keys are VectorCraft's everywhere outside this module: a command id, `tool:<id>`, or
-//! `panel:<id>` for the Window menu item showing a panel (`window.panel {panel}`). Chord texts
-//! outside it are VectorCraft's too (`Cmd+Shift+]`, `Comma`, `Period`, `~` for the backtick key,
-//! `=` for Plus with modifiers). Inside an [`Overrides`] keys and texts are the crate's.
+//! `panel:<id>` for the Window menu item showing a panel (`window.panel {panel}`), `effect:<id>`
+//! for an Effect menu item, or `plugin:<id>` for a filter plug-in's Object › Plug-ins item
+//! (`plugin.dialog {id}`). Chord texts outside it are VectorCraft's too (`Cmd+Shift+]`, `Comma`,
+//! `Period`, `~` for the backtick key, `=` for Plus with modifiers). Inside an [`Overrides`] keys
+//! and texts are the crate's.
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -55,13 +57,17 @@ fn command_in(key: &str, effects: &[EffectItem]) -> CommandRef {
         let command = effects.iter().find(|e| e.effect == effect).map_or("effect.dialog", |e| e.command);
         return CommandRef::with_params(command, json!({ "effect": effect }));
     }
+    // A filter plug-in's Object › Plug-ins item, installed or not: what its item runs.
+    if let Some(id) = key.strip_prefix("plugin:") {
+        return CommandRef::with_params("plugin.dialog", json!({ "id": id }));
+    }
     CommandRef::new(key)
 }
 
 /// `overrides` with each Effect menu item's shortcut under the command its item runs while the
 /// menu holds `effects`: a shortcut saved while a plug-in effect was missing, or while it had
 /// options it no longer has, stays that effect's.
-fn effect_keys_in(overrides: &Overrides, effects: &[EffectItem]) -> Overrides {
+pub(crate) fn effect_keys_in(overrides: &Overrides, effects: &[EffectItem]) -> Overrides {
     let mut out = overrides.clone();
     for (k, texts) in overrides.iter() {
         let entry = entry_of_stored(k);
@@ -77,12 +83,16 @@ fn effect_keys_in(overrides: &Overrides, effects: &[EffectItem]) -> Overrides {
     out
 }
 
-/// The entry key of a command: `panel:<id>` for `window.panel {panel}`.
+/// The entry key of a command: `panel:<id>` for `window.panel {panel}`, `effect:<id>` for an
+/// Effect menu item and `plugin:<id>` for `plugin.dialog {id}`.
 pub fn entry_key(command: &CommandRef) -> String {
     match (command.id.as_str(), command.params.get("panel").and_then(Value::as_str)) {
         ("window.panel", Some(panel)) => format!("panel:{panel}"),
         ("effect.dialog" | "effect.apply", _) if command.params.get("effect").and_then(Value::as_str).is_some() => {
             format!("effect:{}", command.params.get("effect").and_then(Value::as_str).unwrap_or_default())
+        }
+        ("plugin.dialog", _) if command.params.get("id").and_then(Value::as_str).is_some() => {
+            format!("plugin:{}", command.params.get("id").and_then(Value::as_str).unwrap_or_default())
         }
         _ => command.key(),
     }
@@ -90,7 +100,7 @@ pub fn entry_key(command: &CommandRef) -> String {
 
 /// The [`Overrides`] key of an entry key.
 pub fn stored_key(key: &str) -> String {
-    if key.starts_with("panel:") || key.starts_with("effect:") { command_of(key).key() } else { key.to_string() }
+    if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") { command_of(key).key() } else { key.to_string() }
 }
 
 /// An Effect menu item's [`Overrides`] key under the command its item does not run now
@@ -118,7 +128,7 @@ pub(crate) fn remove_override(overrides: &mut Overrides, key: &str) {
 /// The entry key of an [`Overrides`] key.
 pub fn entry_of_stored(key: &str) -> String {
     CommandRef::parse_key(key)
-        .filter(|c| matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply"))
+        .filter(|c| matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply" | "plugin.dialog"))
         .map_or_else(|| key.to_string(), |c| entry_key(&c))
 }
 
@@ -182,7 +192,7 @@ fn vc_binding(text: &str) -> Option<Binding> {
 
 /// Every listed entry as the crate sees it, in dispatch priority: commands (engine, then UI),
 /// panels, tools. Each tool is its own group: tools never cycle.
-fn catalogue(snapshot: &Snapshot) -> Vec<Bindable> {
+fn catalogue(snapshot: &Snapshot, p: Platform) -> Vec<Bindable> {
     let rank = |e: &Entry| {
         if e.is_tool {
             2
@@ -209,7 +219,7 @@ fn catalogue(snapshot: &Snapshot) -> Vec<Bindable> {
             if let Some(d) = shortcut_editor::default_of(&e.key).and_then(vc_binding) {
                 b = b.with_default(d);
             }
-            for alias in default_aliases(&e.key) {
+            for alias in default_aliases(&e.key, p) {
                 if let Some(d) = vc_binding(alias) {
                     b = b.with_default(d);
                 }
@@ -220,13 +230,21 @@ fn catalogue(snapshot: &Snapshot) -> Vec<Bindable> {
 }
 
 /// Additional defaults for commands whose primary shortcut remains in their command spec.
-fn default_aliases(key: &str) -> &'static [&'static str] {
+fn default_aliases(key: &str, p: Platform) -> &'static [&'static str] {
     match key {
+        "edit.cut" if !p.is_mac() => &["F2"],
+        "edit.copy" if !p.is_mac() => &["F3"],
+        "edit.paste" if !p.is_mac() => &["F4"],
         "paint.lastColor" => &["Shift+,"],
         "paint.lastGradient" => &["Shift+."],
         _ => &[],
     }
 }
+
+/// Cut, Copy and Paste with their primary shortcut and the function key [`default_aliases`] adds
+/// outside macOS.
+pub(crate) const EDIT_FUNCTION_KEYS: [(&str, &str, &str); 3] =
+    [("edit.cut", "Cmd+X", "F2"), ("edit.copy", "Cmd+C", "F3"), ("edit.paste", "Cmd+V", "F4")];
 
 /// On the web, the browser's operating system once egui reports it ([`note_os`]).
 static WEB_PLATFORM: RwLock<Option<Platform>> = RwLock::new(None);
@@ -282,8 +300,8 @@ pub(crate) fn template_for(snapshot: &Snapshot) -> Arc<Keymap> {
 
 /// The default keymap of `p` with the entries of `snapshot`. The chords the operating system
 /// takes can't be assigned.
-fn keymap_for(p: Platform, snapshot: &Snapshot) -> Keymap {
-    Keymap::new(catalogue(snapshot), Scopes::new(), p).with_reserved(craft_keymap::reserved::system(p))
+pub(crate) fn keymap_for(p: Platform, snapshot: &Snapshot) -> Keymap {
+    Keymap::new(catalogue(snapshot, p), Scopes::new(), p).with_reserved(craft_keymap::reserved::system(p))
 }
 
 /// The keymap with `overrides` applied.
@@ -294,7 +312,34 @@ pub fn keymap_with(overrides: &Overrides) -> Keymap {
 /// The keymap of `snapshot`'s entries with `overrides` applied, each Effect menu item's shortcut
 /// under the command its item runs now.
 pub(crate) fn keymap_in(snapshot: &Snapshot, overrides: &Overrides) -> Keymap {
-    template_for(snapshot).as_ref().clone().with_overrides(effect_keys_in(overrides, &snapshot.effects))
+    let defaults = template_for(snapshot);
+    let moved = effect_keys_in(overrides, &snapshot.effects);
+    let resolved = edit_alias_overrides(&moved, defaults.platform());
+    defaults.as_ref().clone().with_overrides(resolved)
+}
+
+/// When a saved override assigns F2, F3 or F4 elsewhere without changing its edit command,
+/// keep only that edit command's primary shortcut so the saved assignment runs.
+pub(crate) fn edit_alias_overrides(overrides: &Overrides, p: Platform) -> Overrides {
+    let mut resolved = overrides.clone();
+    if p.is_mac() {
+        return resolved;
+    }
+    for (key, primary, alias) in EDIT_FUNCTION_KEYS {
+        if overrides.get(key).is_some() {
+            continue;
+        }
+        let Some(binding) = vc_binding(alias) else { continue };
+        let assigned_elsewhere = overrides.iter().any(|(other, texts)| {
+            other != key
+                && shortcut_editor::entry(&entry_of_stored(other)).is_some()
+                && texts.iter().any(|text| Binding::parse(text).is_ok_and(|b| b == binding))
+        });
+        if assigned_elsewhere {
+            let _ = resolved.insert(key, vec![vc_to_crate(primary)]);
+        }
+    }
+    resolved
 }
 
 /// The command a chord runs, the first for tools sharing it.
@@ -499,7 +544,7 @@ mod tests {
             .filter_map(|e| shortcut_editor::default_of(&e.key).map(|d| (e.key.as_str(), d)))
             .filter(|(key, d)| {
                 let mut expected: Vec<Binding> = vc_binding(d).into_iter().collect();
-                expected.extend(default_aliases(key).iter().filter_map(|alias| vc_binding(alias)));
+                expected.extend(default_aliases(key, platform()).iter().filter_map(|alias| vc_binding(alias)));
                 expected != template.default_bindings(&command_in(key, &snapshot.effects))
             })
             .collect();
@@ -524,6 +569,50 @@ mod tests {
             assert_eq!(keymap_with(&overrides).bindings(&command), defaults);
         }
         assert!(template().conflicts().is_empty());
+    }
+
+    #[test]
+    fn edit_function_keys_follow_platform_and_reset_restores_both_bindings() {
+        for p in [Platform::Windows, Platform::Linux, Platform::Mac] {
+            let km = keymap_for(p, &shortcut_editor::snapshot());
+            for (key, primary, alternate) in [("edit.cut", "Cmd+X", "F2"), ("edit.copy", "Cmd+C", "F3"), ("edit.paste", "Cmd+V", "F4")] {
+                let command = command_of(key);
+                let mut expected = vec![vc_binding(primary).unwrap()];
+                if !p.is_mac() {
+                    expected.push(vc_binding(alternate).unwrap());
+                }
+                assert_eq!(km.default_bindings(&command), expected, "{p:?} {key}");
+                assert_eq!(lookup(&km, &vc_chord(primary).unwrap()), Some(command.clone()), "{p:?} {primary}");
+                assert_eq!(lookup(&km, &vc_chord(alternate).unwrap()), (!p.is_mac()).then_some(command.clone()), "{p:?} {alternate}");
+                assert_eq!(effective_with(&km, key).as_deref(), Some(primary));
+                let mut changed = km.clone();
+                shortcut_editor::assign_in(&mut changed, key, Some("Ctrl+Alt+Shift+F12"), true).unwrap();
+                assert_eq!(changed.bindings(&command), vec![vc_binding("Ctrl+Alt+Shift+F12").unwrap()]);
+                changed.reset(&command);
+                assert_eq!(changed.bindings(&command), expected, "{p:?} {key} reset");
+                let mut overrides = Overrides::new();
+                set_override(&mut overrides, key, "Ctrl+Alt+Shift+F12");
+                shortcut_editor::reset_one(&mut overrides, key);
+                assert_eq!(km.clone().with_overrides(overrides).bindings(&command), expected, "{p:?} {key} use default");
+            }
+            assert!(km.conflicts().is_empty(), "{p:?}");
+            assert!(km.problems().is_empty(), "{p:?}");
+
+            for (alias, edit, primary) in [("F2", "edit.cut", "Cmd+X"), ("F3", "edit.copy", "Cmd+C"), ("F4", "edit.paste", "Cmd+V")] {
+                let mut saved = Overrides::new();
+                set_override(&mut saved, "tool:pen", alias);
+                let assigned = keymap_for(p, &shortcut_editor::snapshot()).with_overrides(edit_alias_overrides(&saved, p));
+                assert_eq!(lookup(&assigned, &vc_chord(alias).unwrap()), Some(command_of("tool:pen")), "{p:?} saved {alias} assignment");
+                assert_eq!(lookup(&assigned, &vc_chord(primary).unwrap()), Some(command_of(edit)), "{p:?} primary {edit} binding");
+                shortcut_editor::reset_one(&mut saved, "tool:pen");
+                let reset = keymap_for(p, &shortcut_editor::snapshot()).with_overrides(edit_alias_overrides(&saved, p));
+                assert_eq!(lookup(&reset, &vc_chord(alias).unwrap()), (!p.is_mac()).then_some(command_of(edit)), "{p:?} reset saved {alias}");
+            }
+            let mut unknown = Overrides::new();
+            set_override(&mut unknown, "missing.command", "F2");
+            let km = keymap_for(p, &shortcut_editor::snapshot()).with_overrides(edit_alias_overrides(&unknown, p));
+            assert_eq!(lookup(&km, &vc_chord("F2").unwrap()), (!p.is_mac()).then_some(command_of("edit.cut")), "{p:?} unknown saved entry");
+        }
     }
 
     /// The chords the operating system takes are refused, and no default uses one.

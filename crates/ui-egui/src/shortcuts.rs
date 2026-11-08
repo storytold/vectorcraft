@@ -121,6 +121,12 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
             v.push((sc, e.command, json!({ "effect": e.effect })));
         }
     }
+    // Object › Plug-ins' filter items with shortcuts, for the same reason.
+    for f in crate::shortcut_editor::filter_items().iter() {
+        if let Some(sc) = crate::shortcut_editor::filter_shortcut(&f.id).and_then(parse) {
+            v.push((sc, "plugin.dialog", json!({ "id": f.id })));
+        }
+    }
     // Most specific (most modifiers) first: `paste_command` takes the first V chord the held keys
     // match logically, so Cmd+Shift+V isn't taken by Cmd+V.
     v.sort_by_key(|(sc, ..)| {

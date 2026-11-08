@@ -29,6 +29,53 @@ fn named_panel_default_chords_toggle_their_panels() {
 }
 
 #[test]
+fn edit_function_keys_dispatch_outside_text_editing_only() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let shape = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [shape]})).unwrap();
+    crate::shortcut_editor::sync(&app.ui);
+    frame(&mut app, press(Key::F3, Modifiers::NONE));
+    assert_eq!(app.session.clipboard.nodes.len(), 1, "F3 copies the selection");
+    frame(&mut app, press(Key::F2, Modifiers::NONE));
+    assert!(app.session.active().unwrap().selection.objects.is_empty(), "F2 cuts the selection");
+    frame(&mut app, press(Key::F4, Modifiers::NONE));
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "F4 pastes the copied object");
+
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Hi"})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(app.session.tool_wants_text());
+    for key in [Key::F2, Key::F3, Key::F4] {
+        frame(&mut app, press(key, Modifiers::NONE));
+        assert_eq!(text_and_layers(&mut app, id).0, "Hi", "{key:?} leaves edited text alone");
+        assert!(app.session.tool_wants_text(), "{key:?} keeps editing");
+    }
+
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let mut field = String::from("Field text");
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let response = ui.text_edit_singleline(&mut field);
+        ui.ctx().memory_mut(|m| m.request_focus(response.id));
+    });
+    out.textures_delta.clear();
+    for key in [Key::F2, Key::F3, Key::F4] {
+        let mut out = ctx.run_ui(egui::RawInput { events: press(key, Modifiers::NONE), ..Default::default() }, |ui| {
+            handle(&mut app, ui.ctx());
+            ui.text_edit_singleline(&mut field);
+        });
+        out.textures_delta.clear();
+        assert_eq!(field, "Field text", "{key:?} leaves focused text alone");
+        assert_eq!(app.session.active().unwrap().selection.objects.len(), 1, "{key:?} leaves the canvas selection alone");
+    }
+}
+
+#[test]
 fn other_panel_shortcuts_keep_plain_panel_params() {
     for panel in ["character", "swatches"] {
         let hit = CommandRef { id: "window.panel".into(), params: json!({"panel": panel}) };
@@ -2469,6 +2516,175 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     assert_eq!(d.fields.get("__effect").and_then(serde_json::Value::as_str), Some(effect), "{:?}", d.kind);
     vectorcraft_plugins::registry::remove(plugin);
     crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// Each filter plug-in's Object › Plug-ins item has a row of its own (`plugin:<id>`), with no
+/// default shortcut, even when two filters share a name: a key given to one shows in its menu item
+/// and opens that filter's dialog, and the other stays unbound. While the plug-in is removed it
+/// has no row and no key is bound to it; the saved shortcut is the filter's again when it comes
+/// back, now running it at once since it has no parameters.
+#[test]
+fn each_filter_plugin_takes_a_shortcut_of_its_own() {
+    use serde_json::Value;
+    use vectorcraft_plugins::wat as tpl;
+    let (one, two) = ("test.UI.key_filter-one", "test.UI.key_filter-two");
+    let (key_one, key_two) = (format!("plugin:{one}"), format!("plugin:{two}"));
+    let install = |id: &str, name: &str, params: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","version":"1","kind":"filter","params":{params}}}"#);
+        vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+    };
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let shown = |app: &mut VectorcraftApp| {
+        let list = crate::shortcut_editor::run_command(app, "shortcuts.list", &json!({ "query": "test.ui.key_filter-" })).unwrap().unwrap();
+        list.as_array().unwrap().iter().map(|e| (e["id"].as_str().unwrap_or_default().to_string(), e["shortcut"].clone())).collect::<Vec<_>>()
+    };
+    let chord = "Cmd+Alt+Shift+F7";
+    let f7 = || press(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    crate::shortcut_editor::sync(&app.ui);
+    install(one, "Same Name", "{}");
+    install(two, "Same Name", r#"{"wiggle":{"type":"bool"}}"#);
+    let rows: Vec<_> = [&key_one, &key_two].iter().map(|k| crate::shortcut_editor::entry(k).map(|e| (e.label, e.group, e.is_tool))).collect();
+    let group = "Object › Plug-ins".to_string();
+    assert_eq!(rows, [Some(("Same Name".into(), group.clone(), false)), Some(("Same Name…".into(), group.clone(), false))]);
+    for key in [&key_one, &key_two] {
+        assert_eq!(crate::shortcut_editor::default_of(key), None, "no default shortcut");
+        let command = crate::keymap::command_of(key);
+        assert_eq!(command.id, "plugin.dialog");
+        assert_eq!(crate::keymap::entry_key(&command), *key, "the id is kept whole");
+        assert_eq!(crate::keymap::entry_of_stored(&crate::keymap::stored_key(key)), *key);
+    }
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), Value::Null)]);
+    let set = crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key_two, "shortcut": chord})).unwrap().unwrap();
+    assert_eq!(set["shortcut"], chord);
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": two })), Some(chord));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": one })), None);
+    let text = crate::shortcut_editor::export_text("Custom", &app.ui.shortcut_overrides);
+    let lines: Vec<&str> = text.lines().filter(|l| l.starts_with("Object › Plug-ins › Same Name")).collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    assert_eq!(lines[0], "Object › Plug-ins › Same Name\t");
+    assert!(lines[1].starts_with("Object › Plug-ins › Same Name…\t") && lines[1].ends_with("+Alt+Shift+F7"), "{}", lines[1]);
+    // A chord an Effect menu item holds is a conflict.
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "effect:distort.transform", "Cmd+Alt+Shift+F8");
+    let conflicts = crate::shortcut_editor::conflicts_with(&app.ui.shortcut_overrides, "Cmd+Alt+Shift+F8", &key_one);
+    assert_eq!(conflicts, vec!["effect:distort.transform".to_string()]);
+    crate::keymap::remove_override(&mut app.ui.shortcut_overrides, "effect:distort.transform");
+    frame(&mut app, f7());
+    let d = app.ui.dialog.take().expect("the filter's dialog opens");
+    assert_eq!((d.kind.as_str(), d.str("__plugin")), ("plugin", two.to_string()));
+    let bound = |app: &VectorcraftApp| {
+        crate::keymap::vc_chord(chord).and_then(|c| crate::keymap::lookup(&crate::keymap::keymap_with(&app.ui.shortcut_overrides), &c))
+    };
+    assert_eq!(bound(&app).map(|c| crate::keymap::entry_key(&c)), Some(key_two.clone()));
+    // Removed: no row, and no key is bound to the filter; the saved shortcut stays.
+    vectorcraft_plugins::registry::remove(two);
+    assert_eq!(bound(&app), None, "the key runs nothing");
+    assert!(crate::shortcut_editor::entry(&key_two).is_none());
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null)]);
+    assert!(crate::shortcuts::all_shortcuts().iter().all(|(_, _, p)| p["id"] != two), "no key is bound to the removed filter");
+    assert!(crate::keymap::has_override(&app.ui.shortcut_overrides, &key_two));
+    // Back under another name and without parameters: the saved shortcut runs it at once.
+    install(two, "Renamed", "{}");
+    assert_eq!(crate::shortcut_editor::entry(&key_two).map(|e| e.label), Some("Renamed".into()));
+    assert_eq!(shown(&mut app), vec![(key_one.clone(), Value::Null), (key_two.clone(), json!(chord))]);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    frame(&mut app, f7());
+    assert!(app.ui.dialog.is_none(), "no dialog: {:?}", app.ui.dialog.as_ref().map(|d| &d.kind));
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "the filter ran as one undo step");
+    vectorcraft_plugins::registry::remove(one);
+    vectorcraft_plugins::registry::remove(two);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// A filter plug-in replaced under its id, or reinstalled from a folder by Reload Plug-ins, keeps
+/// its shortcut, which runs the plug-in as it is now. With no document open the key does nothing,
+/// as the dimmed menu item does.
+#[test]
+fn a_filter_plugin_keeps_its_shortcut_when_replaced_or_reloaded() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.UI.replaced_filter";
+    let key = format!("plugin:{id}");
+    let wasm = |name: &str, params: &str| {
+        let manifest = format!(r#"{{"id":"{id}","name":"{name}","version":"1","kind":"filter","params":{params}}}"#);
+        wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()
+    };
+    let with_params = r#"{"wiggle":{"type":"bool"}}"#;
+    let chord = "Cmd+Alt+Shift+F6";
+    let f6 = || press(Key::F6, cmd() | Modifiers::ALT | Modifiers::SHIFT);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    vectorcraft_plugins::registry::install_bytes(&wasm("Original", "{}")).unwrap();
+    crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": key, "shortcut": chord})).unwrap().unwrap();
+
+    vectorcraft_plugins::registry::install_bytes(&wasm("Replaced", with_params)).unwrap();
+    assert_eq!(crate::shortcut_editor::entry(&key).map(|e| e.label), Some("Replaced…".into()));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
+    frame(&mut app, f6());
+    assert_eq!(app.ui.dialog.take().expect("the replaced filter has parameters").str("__plugin"), id);
+
+    let folder = std::env::temp_dir().join(format!("vectorcraft-ui-filter-shortcut-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("filter.wasm"), wasm("Reloaded", with_params)).unwrap();
+    app.run("plugin.reload", json!({ "path": folder.display().to_string() })).unwrap();
+    std::fs::remove_dir_all(&folder).ok();
+    assert_eq!(crate::shortcut_editor::entry(&key).map(|e| e.label), Some("Reloaded…".into()));
+    assert_eq!(crate::menus::item_shortcut("plugin.dialog", &json!({ "id": id })), Some(chord));
+
+    let mut empty = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    empty.ui.shortcut_overrides = app.ui.shortcut_overrides.clone();
+    frame(&mut empty, f6());
+    assert!(empty.ui.dialog.is_none(), "no document: no dialog");
+    vectorcraft_plugins::registry::remove(id);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// The key of a heavy filter does what a click on its item does: one without parameters starts in
+/// the background, and one with parameters opens its dialog, which has no Preview.
+#[test]
+fn a_heavy_filter_plugin_runs_from_its_shortcut_as_from_its_menu_item() {
+    use vectorcraft_plugins::wat as tpl;
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let (at_once, asks) = ("test.UI.heavy_filter-at-once", "test.UI.heavy_filter-asks");
+    for (id, params, chord) in [(at_once, "{}", "Cmd+Alt+Shift+F7"), (asks, r#"{"wiggle":{"type":"bool"}}"#, "Cmd+Alt+Shift+F8")] {
+        let manifest = format!(r#"{{"id":"{id}","name":"Heavy {id}","version":"1","kind":"filter","budget":"heavy","params":{params}}}"#);
+        let wasm = wat::parse_str(tpl::spinning(&manifest, 1 << 40, r#"{"objects":[]}"#)).unwrap();
+        app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "allowHeavy": true})).unwrap();
+        crate::shortcut_editor::run_command(&mut app, "shortcuts.set", &json!({"id": format!("plugin:{id}"), "shortcut": chord})).unwrap().unwrap();
+    }
+
+    frame(&mut app, press(Key::F7, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+    assert_eq!(app.plugin_runs.running.len(), 1, "started in the background");
+    assert_eq!(app.ui.status, format!("Running “Heavy {at_once}”…"));
+
+    frame(&mut app, press(Key::F8, cmd() | Modifiers::ALT | Modifiers::SHIFT));
+    let d = app.ui.dialog.take().expect("the heavy filter with parameters opens its dialog");
+    assert_eq!(d.str("__plugin"), asks);
+    assert!(d.fields.get("preview").is_none(), "no Preview");
+
+    assert_eq!(app.run("plugin.cancelRuns", json!({})).unwrap()["cancelled"], 1);
+    vectorcraft_plugins::registry::remove(at_once);
+    vectorcraft_plugins::registry::remove(asks);
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+/// Keyboard Shortcuts translates a menu path one segment at a time and the label of a built-in
+/// item. A filter plug-in's name stays as the plug-in gives it, even when it reads like a command.
+#[test]
+fn a_filter_plugin_row_translates_its_path_and_not_its_name() {
+    let zh = crate::i18n::Lang::from_code("zh-hant").unwrap();
+    crate::i18n::set_current(zh);
+    let entry =
+        |key: &str| crate::shortcut_editor::Entry { key: key.into(), label: "Group".into(), group: "Object › Plug-ins".into(), is_tool: false };
+    let path = format!("{} › {}", crate::i18n::tr(zh, "Object"), crate::i18n::tr(zh, "Plug-ins"));
+    let (filter, command) = (crate::shortcut_editor::shown_name(&entry("plugin:a.b")), crate::shortcut_editor::shown_name(&entry("object.group")));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_ne!(path, "Object › Plug-ins");
+    assert_eq!(filter, format!("{path} › Group"));
+    assert_eq!(command, format!("{path} › {}", crate::i18n::tr(zh, "Group")));
 }
 
 /// #2898 review: Up and Down change the corner kind only while a corner widget is pressed. With

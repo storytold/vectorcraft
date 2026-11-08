@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::hit_test;
-use vectorcraft_doc::{NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{NodeId, NodeKind, Quotes, TextKind, TextObject, TextRun};
 use vectorcraft_geom::{BezPath, Point, Rect, Shape};
 use vectorcraft_text::{FontDb, TextLayout, edit};
 
@@ -160,7 +160,8 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    /// The tool that was active before type editing began, which Escape and Cmd+Enter return to.
+    /// Clicks that move editing to other text keep it.
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
@@ -327,11 +328,26 @@ impl TypeTool {
             return None;
         }
         // Use Typographer's Quotes (Document Setup): a typed straight quote becomes the document's
-        // opening or closing quote, by the character before it.
+        // opening or closing quote, by the character before it. A `”` typed alone (the macOS Serbian
+        // Cyrillic layout's only double quote) becomes the opening quote where one opens, and stays
+        // `”` where one closes.
         let setup = &cx.doc.setup;
-        if setup.typographers_quotes && matches!(s.as_str(), "\"" | "'") {
-            let mut prev = self.char_before(cx, self.caret.min(self.anchor));
-            return Some(setup.quotes.apply(&s, &mut prev));
+        if setup.typographers_quotes {
+            let mut chars = s.chars();
+            if let (Some(c), None) = (chars.next(), chars.next()) {
+                if matches!(c, '"' | '\'') {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    return Some(setup.quotes.apply(&s, &mut prev));
+                }
+                if cx.typed_from_keyboard
+                    && let Some(q) = Quotes::typed_as_straight(c)
+                {
+                    let mut prev = self.char_before(cx, self.caret.min(self.anchor));
+                    if setup.quotes.opens_after(prev) {
+                        return Some(setup.quotes.apply(&q.to_string(), &mut prev));
+                    }
+                }
+            }
         }
         Some(s)
     }
@@ -396,7 +412,7 @@ impl TypeTool {
         out
     }
 
-    /// Stop editing and go back to the tool used before double-clicking into type (or to the
+    /// Stop editing and go back to the tool that was active before type editing began (or to the
     /// Selection tool), and leave the type selected.
     fn end_editing(&mut self, cx: &ToolContext) -> Vec<Action> {
         let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
@@ -521,7 +537,11 @@ impl TypeTool {
     /// from the start of the caret's paragraph up to it start a list ([`TextObject::typed_list_at`]),
     /// the typing session ends as one undo step with those characters, and `text.startList`
     /// removes them and makes the paragraph a list as the next one, so one Undo puts them back.
+    /// With Type › Start Lists From Typed Markers off, the characters stay as typed.
     fn start_typed_list(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if !cx.typed_lists {
+            return vec![];
+        }
         let (Some(id), Some(ty)) = (self.editing, &self.typing) else { return vec![] };
         let Some(mut t) = Self::text(cx, id).cloned() else { return vec![] };
         // The document does not have the space yet (its preview is applied after this input).

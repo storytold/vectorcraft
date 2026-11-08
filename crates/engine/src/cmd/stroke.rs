@@ -266,6 +266,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             set(st);
         }
+        super::object::snap_if_aligned(n);
         Ok(())
     })?;
     // Commit the new-art template only after the complete request is validated
@@ -329,6 +330,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
         if let Some(st) = n.appearance.stroke_at_mut(index) {
             st.width = step_weight(st.width, unit, up);
         }
+        super::object::snap_if_aligned(n);
         Ok(())
     })?;
     Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
@@ -343,10 +345,15 @@ impl Session {
     /// The stroke the Stroke panel, the Control bar and the Properties panel show, picked as the
     /// Stroke proxy picks its paint: the Appearance panel's active item when it is a stroke, else
     /// the first selected object's (a group's first painted object's) top stroke, type's first
-    /// run's character stroke; with nothing selected, the next object drawn's
-    /// ([`Session::new_art_stroke`]). None without a document or the selection's stroke.
+    /// run's character stroke; with an object of a dynamic symbol instance selected
+    /// ([`DocState::selected_symbol_part`]), that object's as the instance draws it; with nothing
+    /// selected, the next object drawn's ([`Session::new_art_stroke`]). None without a document or
+    /// the selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
+        if let Some(part) = st.selected_symbol_part() {
+            return node_stroke(&part);
+        }
         let Some(first) = st.selection.objects.first() else { return Some(self.new_art_stroke()) };
         let first = st.doc.node(*first)?;
         if let Some(i) = first.appearance.item_of_kind(self.appearance_item(), false) {
@@ -360,13 +367,19 @@ impl Session {
 
 impl DocState {
     /// Which Stroke panel values the selected objects' strokes (type: every run's) don't share,
-    /// and whether Align Stroke applies to them (no open path among them). One walk of the
-    /// selection, so callers that ask every frame cache it by revision.
+    /// and whether Align Stroke applies to them (no open path among them). With an object of a
+    /// dynamic symbol instance selected ([`DocState::selected_symbol_part`]), that object alone is
+    /// read. One walk of the selection, so callers that ask every frame cache it by revision.
     pub fn stroke_mixed(&self) -> StrokeMixed {
+        let part = self.selected_symbol_part();
         let mut nodes = vec![];
-        for id in &self.selection.objects {
-            if let Some(n) = self.doc.node(*id) {
-                painted(n, true, &mut nodes);
+        if let Some(part) = &part {
+            painted(part, true, &mut nodes);
+        } else {
+            for id in &self.selection.objects {
+                if let Some(n) = self.doc.node(*id) {
+                    painted(n, true, &mut nodes);
+                }
             }
         }
         let mut strokes = vec![];

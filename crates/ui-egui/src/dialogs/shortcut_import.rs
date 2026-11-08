@@ -363,10 +363,12 @@ fn single_key(chord: &str) -> bool {
 }
 
 /// What a name can stand for: Keyboard Shortcuts' entries, by their English labels and the labels in
-/// the interface language.
+/// the interface language. A filter plug-in's row is left out: a row of the file reaches it only
+/// when the user picks it as the target.
 pub fn candidates() -> Vec<Candidate> {
     shortcut_editor::entries()
         .iter()
+        .filter(|e| !e.key.starts_with("plugin:"))
         .map(|e| {
             let shown = tl!(&e.label);
             let labels = if shown == e.label { vec![e.label.clone()] } else { vec![e.label.clone(), shown.to_string()] };
@@ -395,7 +397,7 @@ fn known(key: &str) -> bool {
 
 /// How Keyboard Shortcuts names entry `e`: a tool by its label, the others after their menu.
 fn shown(e: &Entry) -> String {
-    if e.is_tool || e.group.is_empty() { tl!(&e.label).to_string() } else { format!("{} › {}", tl!(&e.group), tl!(&e.label)) }
+    shortcut_editor::shown_name(e)
 }
 
 /// What a row's target shows.
@@ -515,7 +517,7 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         shortcut_editor::open(app);
     }
     if let Some(k) = app.ui.dialog.as_mut() {
-        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(km.overrides()));
+        k.fields.insert("overrides".into(), crate::keymap::stored::to_value(&shortcut_editor::saved_overrides(km.overrides(), &ov)));
         k.fields.insert("set".into(), json!(set));
         k.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
     }

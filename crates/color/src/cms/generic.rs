@@ -1,19 +1,26 @@
 //! "VectorCraft Generic CMYK (SWOP-like)": our own parametric press model.
 //!
 //! We can't redistribute Adobe's or ECI's characterisation profiles, so the built-in CMYK space is
-//! a small physical model instead of an ICC LUT. It is *ours* and only SWOP-*like*: the numbers
-//! are rounded, typical values for coated web offset, not a measured dataset.
+//! a small physical model instead of an ICC LUT. It is *ours* and only SWOP-*like*. Two of its
+//! figures are published values for SWOP printing: the tone value increase of each ink at 40% and
+//! 50% from CGATS TR 001 (<https://registry.color.org/cmyk-registry/cgats_tr_001>), and the 300%
+//! total ink limit (<https://en.wikipedia.org/wiki/Specifications_for_Web_Offset_Publications>).
+//! The paper, solid and overprint colors and the black-generation curve are VectorCraft's own values.
 //!
-//! * **Forward (CMYK → XYZ):** each ink's nominal dot area is widened by a parabolic dot-gain
-//!   curve (`a + 4·g·a·(1−a)`, i.e. `g` gain at 50%); the effective areas mix the eight CMY
-//!   Neugebauer primaries with Demichel weights; black is mixed in the same way against
-//!   "primary + K" colours whose optical densities add but saturate towards a maximum density
-//!   (normalised so K on paper is exact), so rich blacks don't multiply to an unrealistic depth.
+//! * **Forward (CMYK → XYZ):** each ink's nominal dot area `a` is widened by a tone curve
+//!   `a + 4·g·a·(1−a)·(1 + s·(2a−1))` that passes through the TR 001 tone value increase at 50%
+//!   (`g`) and 40% (which sets `s`). The effective areas mix the 16 Neugebauer primaries (paper and
+//!   every solid and overprint of C, M, Y and K, media-relative) with Demichel weights, linearly in
+//!   XYZ, so a single ink's colorimetric tone value increase (Murray–Davies) is the TR 001 value.
 //! * **Inverse (Lab → CMYK):** damped, bounded Gauss–Newton on the forward model solves CMY for a
-//!   fixed K. Black generation is GCR: solve CMY with K = 0, take the grey component
-//!   `min(C, M, Y)`, map it through the black-generation curve to K, re-solve CMY. Under-colour
+//!   fixed K. Black generation is GCR: solve CMY with K = 0, take the gray component
+//!   `min(C, M, Y)`, add [`BlackGeneration::shortfall`] for each L* point by which that solve stays
+//!   lighter than the target, map the sum through the black curve to K, re-solve CMY. Under-color
 //!   removal enforces the total area coverage (TAC) limit by adding K and re-solving, then scaling
-//!   CMY as a last resort.
+//!   CMY as a last resort. The black point, which source black separates to and which displays as
+//!   black with black-point compensation, is [`BlackGeneration::black_point_k`] black with neutral
+//!   CMY filling the TAC. With compensation, a build darker than it in every XYZ channel also
+//!   displays as black (see [`GenericCmyk::display_xyz`]).
 //! * **Rendering intents:** colorimetric intents map the source white to paper (relative) or not
 //!   (absolute) and clip; perceptual applies black-point compensation plus soft chroma compression
 //!   against a gamut boundary descriptor (segment maxima of the forward model); saturation keeps
@@ -24,50 +31,82 @@ use std::sync::OnceLock;
 use super::Intent;
 use super::lab::{D50, Lab, delta_e2000, lab_to_xyz, srgb_to_lab, xyz_to_lab, xyz_to_srgb};
 
-/// Black generation strength.
+/// Black generation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlackGeneration {
-    /// Grey component below which no black is generated.
-    pub start: f32,
-    /// Maximum black.
-    pub max_k: f32,
-    /// Curve exponent (>1 = lighter black in the midtones).
-    pub gamma: f32,
+    /// The black curve as `(x, K)` knots with rising `x`, read by linear interpolation. `x` is the
+    /// gray component of the solve without black plus [`Self::shortfall`] per L* point by which
+    /// that solve stays lighter than the target.
+    pub curve: [(f32, f32); 13],
+    /// Added to the gray component for each L* point the black-free solve stays too light.
+    pub shortfall: f32,
+    /// Black of the black point, whose CMY is neutral and fills the TAC.
+    pub black_point_k: f32,
 }
 
 /// Parameters of the parametric press model.
 #[derive(Clone, Debug)]
 pub struct GenericCmykParams {
     pub name: &'static str,
+    /// Paper color (absolute Lab, D50).
     pub paper: Lab,
-    /// Solid overprints, Demichel order: C, M, CM, Y, CY, MY, CMY.
-    pub solids: [Lab; 7],
-    pub black: Lab,
-    /// Dot gain at 50% per ink (C, M, Y, K).
-    pub dot_gain: [f32; 4],
+    /// Media-relative Lab of the solids and overprints, Demichel order (index `c | m<<1 | y<<2 |
+    /// k<<3`, paper left out): C, M, CM, Y, CY, MY, CMY, then K, CK, MK, CMK, YK, CYK, MYK, CMYK.
+    pub primaries: [Lab; 15],
+    /// Tone value increase at 50% per ink (C, M, Y, K).
+    pub tvi50: [f32; 4],
+    /// Tone value increase at 40% per ink (C, M, Y, K).
+    pub tvi40: [f32; 4],
     /// Total area coverage limit (sum of inks, 1.0 = 100%).
     pub tac: f32,
     pub bg: BlackGeneration,
 }
 
-/// Rounded, typical SWOP-like values (not measured data).
+/// The built-in SWOP-like press: TR 001 tone value increase, a 300% ink limit, and VectorCraft's
+/// own paper, primaries and black curve.
 pub fn swop_like() -> GenericCmykParams {
     GenericCmykParams {
         name: super::GENERIC_CMYK,
         paper: Lab::new(93.0, -0.5, 2.5),
-        solids: [
-            Lab::new(55.0, -37.0, -50.0), // C
-            Lab::new(48.0, 74.0, -3.0),   // M
-            Lab::new(24.0, 22.0, -46.0),  // CM (blue)
-            Lab::new(89.0, -5.0, 93.0),   // Y
-            Lab::new(50.0, -65.0, 27.0),  // CY (green)
-            Lab::new(47.0, 68.0, 48.0),   // MY (red)
-            Lab::new(24.0, 1.0, 0.0),     // CMY
+        primaries: [
+            Lab::new(65.7, -42.6, -47.2), // C
+            Lab::new(55.5, 76.2, -9.4),   // M
+            Lab::new(31.1, 20.3, -49.7),  // CM (blue)
+            Lab::new(96.2, -7.0, 90.1),   // Y
+            Lab::new(61.0, -68.4, 30.1),  // CY (green)
+            Lab::new(55.0, 69.8, 45.0),   // MY (red)
+            Lab::new(28.3, 0.7, -0.5),    // CMY
+            Lab::new(21.5, 0.8, -0.9),    // K
+            Lab::new(15.9, -8.4, -10.0),  // CK
+            Lab::new(14.7, 15.4, -1.0),   // MK
+            Lab::new(11.2, 8.9, -6.6),    // CMK
+            Lab::new(20.2, -2.4, 12.0),   // YK
+            Lab::new(15.7, -14.6, 4.6),   // CYK
+            Lab::new(14.5, 11.2, 5.7),    // MYK
+            Lab::new(11.0, -0.7, 0.1),    // CMYK
         ],
-        black: Lab::new(19.0, 0.5, 0.5),
-        dot_gain: [0.20, 0.20, 0.20, 0.22],
+        tvi50: [0.200, 0.176, 0.168, 0.216],
+        tvi40: [0.200, 0.173, 0.167, 0.219],
         tac: 3.0,
-        bg: BlackGeneration { start: 0.1, max_k: 0.95, gamma: 1.25 },
+        bg: BlackGeneration {
+            curve: [
+                (0.0, 0.0),
+                (0.25, 0.0),
+                (0.35, 0.006),
+                (0.45, 0.059),
+                (0.55, 0.139),
+                (0.65, 0.23),
+                (0.75, 0.322),
+                (0.85, 0.41),
+                (0.95, 0.511),
+                (1.05, 0.6),
+                (1.2, 0.733),
+                (1.35, 0.858),
+                (1.5, 1.0),
+            ],
+            shortfall: 0.03,
+            black_point_k: 0.9,
+        },
     }
 }
 
@@ -83,11 +122,12 @@ const GBD_H: usize = 72; // 5° bins
 
 pub struct GenericCmyk {
     pub params: GenericCmykParams,
-    /// XYZ of the 8 CMY primaries (index = c | m<<1 | y<<2), without and with K.
-    prim: [[f32; 3]; 8],
-    prim_k: [[f32; 3]; 8],
+    /// Media-relative XYZ of the 16 primaries (index = c | m<<1 | y<<2 | k<<3; 0 is paper).
+    prim: [[f32; 3]; 16],
+    /// Shape `s` of each ink's tone curve, from its 40% and 50% tone value increase.
+    skew: [f32; 4],
     paper_xyz: [f32; 3],
-    /// Media-relative XYZ of the darkest printable black (for black-point compensation).
+    /// Media-relative XYZ of the black point (for black-point compensation).
     black_rel: [f32; 3],
     gbd: OnceLock<Gbd>,
 }
@@ -95,37 +135,17 @@ pub struct GenericCmyk {
 impl GenericCmyk {
     pub fn new(params: GenericCmykParams) -> Self {
         let paper_xyz = lab_to_xyz(params.paper);
-        let mut prim = [[0.0f32; 3]; 8];
-        prim[0] = paper_xyz;
-        for (p, lab) in prim[1..].iter_mut().zip(params.solids.iter()) {
-            *p = lab_to_xyz(*lab);
+        let mut prim = [D50; 16];
+        for (p, lab) in prim[1..].iter_mut().zip(params.primaries.iter()) {
+            *p = lab_to_xyz(*lab).map(|v| v.max(1e-6));
         }
-        let k_xyz = lab_to_xyz(params.black);
-        // Black over other inks: optical densities add, but saturate towards a maximum density
-        // (ink trapping / surface reflection), normalised so that K on paper is exact.
-        const D_MAX: f32 = 2.0;
-        let sat = |d: f32| D_MAX * (1.0 - (-d / D_MAX).exp());
-        let mut prim_k = [[0.0f32; 3]; 8];
-        for i in 0..8 {
-            for ch in 0..3 {
-                let di = -(prim[i][ch] / paper_xyz[ch]).max(1e-6).log10();
-                let dk = -(k_xyz[ch] / paper_xyz[ch]).max(1e-6).log10();
-                let d = sat(di + dk) * dk / sat(dk).max(1e-6);
-                prim_k[i][ch] = paper_xyz[ch] * 10f32.powf(-d.max(di));
-            }
-        }
-        let mut g = Self { params, prim, prim_k, paper_xyz, black_rel: [0.0; 3], gbd: OnceLock::new() };
-        // Darkest black within TAC: search a few rich blacks.
-        let mut best = [1.0f32; 3];
-        for k in [0.8f32, 0.9, 1.0] {
-            let rest = (g.params.tac - k).max(0.0) / 3.0;
-            let cmy = rest.min(1.0);
-            let x = g.to_xyz_rel([cmy, cmy, cmy, k]);
-            if x[1] < best[1] {
-                best = x;
-            }
-        }
-        g.black_rel = best;
+        // The curve's increase at 40% is 0.96·g·(1 − 0.2·s), so `s` follows from the 40% value.
+        let skew = [0, 1, 2, 3].map(|i| {
+            let g = params.tvi50[i];
+            if g > 1e-6 { (1.0 - params.tvi40[i] / (0.96 * g)) / 0.2 } else { 0.0 }
+        });
+        let mut g = Self { params, prim, skew, paper_xyz, black_rel: [0.0; 3], gbd: OnceLock::new() };
+        g.black_rel = g.to_xyz_rel(g.black_point_build());
         g
     }
 
@@ -133,35 +153,81 @@ impl GenericCmyk {
         self.params.name
     }
 
-    fn gain(a: f32, g: f32) -> f32 {
-        let a = a.clamp(0.0, 1.0);
-        (a + 4.0 * g * a * (1.0 - a)).clamp(0.0, 1.0)
+    /// The black point: [`BlackGeneration::black_point_k`] black, with C, M and Y
+    /// chosen so that they fill the TAC and the color is neutral (a* = b* = 0).
+    pub fn black_point_build(&self) -> [f32; 4] {
+        let k = self.params.bg.black_point_k.clamp(0.0, 1.0);
+        let rest = (self.params.tac - k).clamp(0.0, 3.0);
+        let build = |c: f32, m: f32| [c, m, (rest - c - m).clamp(0.0, 1.0), k];
+        let ab = |c: f32, m: f32| {
+            let l = self.to_lab_rel(build(c, m));
+            [l.a, l.b]
+        };
+        let lo = (rest - 2.0).max(0.0);
+        let hi = rest.min(1.0);
+        let (mut c, mut m) = ((rest / 3.0).clamp(lo, hi), (rest / 3.0).clamp(lo, hi));
+        for _ in 0..30 {
+            let r = ab(c, m);
+            if r[0].abs() + r[1].abs() < 1e-4 {
+                break;
+            }
+            let h = 1e-3;
+            let rc = ab(c - h, m);
+            let rm = ab(c, m - h);
+            let j = [[(r[0] - rc[0]) / h, (r[0] - rm[0]) / h], [(r[1] - rc[1]) / h, (r[1] - rm[1]) / h]];
+            let det = j[0][0] * j[1][1] - j[0][1] * j[1][0];
+            if det.abs() < 1e-9 {
+                break;
+            }
+            let dc = (-r[0] * j[1][1] + r[1] * j[0][1]) / det;
+            let dm = (-r[1] * j[0][0] + r[0] * j[1][0]) / det;
+            c = (c + dc.clamp(-0.1, 0.1)).clamp(lo, hi);
+            m = (m + dm.clamp(-0.1, 0.1)).clamp(lo, hi);
+            // Yellow takes the rest, so keep it within 0..1 as well.
+            let y = rest - c - m;
+            if y > 1.0 {
+                c += (y - 1.0) / 2.0;
+                m += (y - 1.0) / 2.0;
+            } else if y < 0.0 {
+                c += y / 2.0;
+                m += y / 2.0;
+            }
+            c = c.clamp(lo, hi);
+            m = m.clamp(lo, hi);
+        }
+        build(c.clamp(lo, hi), m.clamp(lo, hi))
+    }
+
+    /// Effective dot area of ink `i` at nominal area `a`: the TR 001-style tone curve.
+    fn gain(&self, i: usize, a: f32) -> f32 {
+        let a = if a.is_finite() { a.clamp(0.0, 1.0) } else { 0.0 };
+        let g = self.params.tvi50[i];
+        (a + 4.0 * g * a * (1.0 - a) * (1.0 + self.skew[i] * (2.0 * a - 1.0))).clamp(0.0, 1.0)
     }
 
     /// CMYK (0..1) → absolute XYZ (D50).
     pub fn to_xyz(&self, cmyk: [f32; 4]) -> [f32; 3] {
-        let dg = self.params.dot_gain;
-        let c = Self::gain(cmyk[0], dg[0]);
-        let m = Self::gain(cmyk[1], dg[1]);
-        let y = Self::gain(cmyk[2], dg[2]);
-        let k = Self::gain(cmyk[3], dg[3]);
-        let mut out = [0.0f32; 3];
-        for i in 0..8 {
-            let w = (if i & 1 != 0 { c } else { 1.0 - c }) * (if i & 2 != 0 { m } else { 1.0 - m }) * (if i & 4 != 0 { y } else { 1.0 - y });
-            if w == 0.0 {
-                continue;
-            }
-            for (ch, o) in out.iter_mut().enumerate() {
-                *o += w * ((1.0 - k) * self.prim[i][ch] + k * self.prim_k[i][ch]);
-            }
-        }
-        out
+        let x = self.to_xyz_rel(cmyk);
+        [x[0] * self.paper_xyz[0] / D50[0], x[1] * self.paper_xyz[1] / D50[1], x[2] * self.paper_xyz[2] / D50[2]]
     }
 
     /// Media-relative XYZ (paper = D50 white).
     pub fn to_xyz_rel(&self, cmyk: [f32; 4]) -> [f32; 3] {
-        let x = self.to_xyz(cmyk);
-        [x[0] * D50[0] / self.paper_xyz[0], x[1] * D50[1] / self.paper_xyz[1], x[2] * D50[2] / self.paper_xyz[2]]
+        let e = [0, 1, 2, 3].map(|i| self.gain(i, cmyk[i]));
+        let mut out = [0.0f32; 3];
+        for (i, p) in self.prim.iter().enumerate() {
+            let mut w = 1.0;
+            for (bit, a) in e.iter().enumerate() {
+                w *= if i & (1 << bit) != 0 { *a } else { 1.0 - a };
+            }
+            if w == 0.0 {
+                continue;
+            }
+            for (o, v) in out.iter_mut().zip(p) {
+                *o += w * v;
+            }
+        }
+        out
     }
 
     pub fn to_lab_rel(&self, cmyk: [f32; 4]) -> Lab {
@@ -174,7 +240,9 @@ impl GenericCmyk {
     /// Display XYZ: media-relative (paper shows as white) or absolute (simulate paper colour).
     /// With `bpc` (media-relative only) the press black displays as black, undoing the
     /// compensation [`Self::gamut_map`] applies on the way in, so sRGB black separated to the
-    /// darkest rich black shows as black again.
+    /// black point shows as black again. Each XYZ channel is clamped at 0 on its own, so a build
+    /// darker than the black point in every channel shows as black, and one darker in only some
+    /// channels shows as a colored near-black.
     pub fn display_xyz(&self, cmyk: [f32; 4], absolute: bool, bpc: bool) -> [f32; 3] {
         if absolute {
             return self.to_xyz(cmyk);
@@ -192,7 +260,7 @@ impl GenericCmyk {
         xyz_to_srgb(self.display_xyz(cmyk, absolute, bpc))
     }
 
-    /// Lab of the darkest printable black (media-relative).
+    /// Lab of the black point (media-relative), see [`Self::black_point_build`].
     pub fn black_point(&self) -> Lab {
         xyz_to_lab(self.black_rel)
     }
@@ -283,12 +351,21 @@ impl GenericCmyk {
         rgb.map(|v| ((1.0 - v - k) / d).clamp(0.0, 1.0))
     }
 
-    fn black_for_grey(&self, grey: f32) -> f32 {
-        let bg = self.params.bg;
-        if grey <= bg.start {
-            return 0.0;
+    /// Black for `x` on the black curve (see [`BlackGeneration::curve`]).
+    fn black_for(&self, x: f32) -> f32 {
+        let curve = &self.params.bg.curve;
+        let mut prev = curve[0];
+        if x <= prev.0 {
+            return prev.1.clamp(0.0, 1.0);
         }
-        (((grey - bg.start) / (1.0 - bg.start)).clamp(0.0, 1.0).powf(bg.gamma) * bg.max_k).clamp(0.0, 1.0)
+        for &(kx, kk) in &curve[1..] {
+            if x <= kx {
+                let t = if kx > prev.0 { (x - prev.0) / (kx - prev.0) } else { 1.0 };
+                return (prev.1 + (kk - prev.1) * t).clamp(0.0, 1.0);
+            }
+            prev = (kx, kk);
+        }
+        prev.1.clamp(0.0, 1.0)
     }
 
     /// Separate a media-relative Lab (already gamut-mapped) into CMYK with GCR/UCR and the TAC limit.
@@ -297,13 +374,10 @@ impl GenericCmyk {
             return [0.0; 4];
         }
         let cmy0 = self.solve_cmy(target, 0.0, Self::initial_cmy(target, 0.0));
-        let grey = cmy0[0].min(cmy0[1]).min(cmy0[2]);
-        let mut k = self.black_for_grey(grey);
-        // If CMY alone can't get dark enough, black must carry the rest.
+        let gray = cmy0[0].min(cmy0[1]).min(cmy0[2]);
+        // When CMY alone can't get dark enough, black carries the rest.
         let l0 = self.to_lab_rel([cmy0[0], cmy0[1], cmy0[2], 0.0]).l;
-        if l0 > target.l + 1.0 {
-            k = k.max(((l0 - target.l) / l0.max(1.0)).clamp(0.0, 1.0));
-        }
+        let mut k = self.black_for(gray + self.params.bg.shortfall * (l0 - target.l).max(0.0));
         let mut cmy = if k > 0.0 { self.solve_cmy(target, k, Self::initial_cmy(target, k)) } else { cmy0 };
         // UCR: trade CMY for K until within the TAC limit.
         for _ in 0..6 {
