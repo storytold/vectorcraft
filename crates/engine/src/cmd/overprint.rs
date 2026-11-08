@@ -229,7 +229,7 @@ pub(crate) fn overprint_black(s: &mut Session, p: &Value) -> Result<Value> {
         rich: bool_or(p, "includeCmyBlacks", false),
         spot: bool_or(p, "includeSpotBlacks", false),
     };
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", "edit.colors.overprintBlack")? {
         Some(v) => v,
         None => selected_roots(s)?,
     };

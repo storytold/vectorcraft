@@ -1230,9 +1230,19 @@ fn the_zoom_hint_follows_animated_zoom() {
 fn title_test_app(custom_titlebar: bool) -> crate::VectorcraftApp {
     let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
     app.custom_titlebar = custom_titlebar;
+    app.desktop_frame = !custom_titlebar;
     // The preference that makes the shell launch without its own title bar.
     app.run("prefs.set", json!({"key": "systemTitleBar", "value": !custom_titlebar})).unwrap();
     app
+}
+
+/// How many brand marks one frame of the app bar paints.
+fn brand_marks(app: &mut crate::VectorcraftApp) -> usize {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::app_bar(app, ui));
+    out.textures_delta.clear();
+    out.shapes.iter().filter(|c| matches!(&c.shape, egui::Shape::Mesh(m) if m.texture_id == crate::brand::texture_id(&ctx))).count()
 }
 
 #[test]
@@ -1240,6 +1250,31 @@ fn without_the_preference_the_mark_stays() {
     // The default (e.g. the web build): no custom bar, no preference.
     let app = crate::VectorcraftApp::new(Session::new(), Default::default());
     assert!(!super::system_title_bar(&app));
+    // An embedder without a window of its own keeps the mark with the preference on too.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
+}
+
+#[test]
+fn a_desktop_frame_hides_the_mark_whatever_the_preference_says() {
+    // Linux on a desktop that draws the frame (KDE, X11): the window has the desktop's title bar
+    // with System Title Bar off.
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.desktop_frame = true;
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    let hidden = !cfg!(target_os = "macos");
+    assert_eq!(super::system_title_bar(&app), hidden);
+    assert_eq!(brand_marks(&mut app), if hidden { 0 } else { 1 });
+    // The preference applies at the next start: changing it now leaves the window's frame, and the mark, as they are.
+    let mut app = title_test_app(false);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": false})).unwrap();
+    assert_eq!(super::system_title_bar(&app), hidden);
+    let mut app = title_test_app(true);
+    app.run("prefs.set", json!({"key": "systemTitleBar", "value": true})).unwrap();
+    assert!(!super::system_title_bar(&app));
+    assert_eq!(brand_marks(&mut app), 1);
 }
 
 #[test]
@@ -1801,6 +1836,139 @@ fn full_screen_modes_fill_the_screen_and_normal_mode_restores_the_window() {
     assert!(sent(&mut app, true).is_empty(), "still full screen, as the user had it");
 }
 
+/// The window the Control bar docking tests draw the bar in.
+const DOCK_SCREEN: egui::Rect = egui::Rect { min: egui::Pos2::ZERO, max: egui::pos2(1200.0, 300.0) };
+
+/// One headless frame of the Control bar alone; returns its accessibility nodes.
+fn control_bar_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(DOCK_SCREEN), ..Default::default() }, |ui| super::control_bar(app, ui));
+    out.textures_delta.clear();
+    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
+}
+
+/// The center of the bounds of the node whose label, without a check mark, is `name`.
+fn node_center(nodes: &[egui::accesskit::Node], name: &str) -> Option<egui::Pos2> {
+    let n = nodes.iter().find(|n| n.label().is_some_and(|l| l.trim_start_matches('✓').trim() == name))?;
+    let b = n.bounds()?;
+    Some(egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+}
+
+/// A primary-button press or release at `pos`.
+fn press_at(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+/// The Control bar's panel menu has Dock to Top and Dock to Bottom, the edge in use checked, and
+/// each docks the bar to that edge of the window.
+#[test]
+fn the_control_bar_panel_menu_docks_it_to_the_top_or_the_bottom() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let pick = |app: &mut crate::VectorcraftApp, item: &str| {
+        control_bar_frame(app, &ctx, vec![]);
+        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar has a panel menu"));
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(menu), press_at(menu, true)]);
+        control_bar_frame(app, &ctx, vec![press_at(menu, false)]);
+        let nodes = control_bar_frame(app, &ctx, vec![]);
+        let checked: Vec<String> = nodes.iter().filter_map(|n| n.label()).filter(|l| l.starts_with('✓')).map(str::to_string).collect();
+        let at = node_center(&nodes, item).unwrap_or_else(|| panic!("the menu lists {item}"));
+        // Below the button at the top, and above it at the bottom: the menu opens inside the window.
+        assert!(DOCK_SCREEN.contains(at) && (at.y < menu.y) == app.ui.control_bar_bottom, "{item} at {at:?}, the button at {menu:?}");
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        control_bar_frame(app, &ctx, vec![press_at(at, false)]);
+        control_bar_frame(app, &ctx, vec![]);
+        let menu = node_center(&control_bar_frame(app, &ctx, vec![]), "Panel menu").unwrap_or_else(|| panic!("the bar still shows"));
+        (checked, menu.y)
+    };
+    let (checked, y) = pick(&mut app, "Dock to Bottom");
+    assert_eq!(checked, ["✓ Dock to Top"], "the bar starts docked at the top");
+    assert!(app.ui.control_bar_bottom, "Dock to Bottom docks it at the bottom");
+    assert!(y > DOCK_SCREEN.bottom() - 34.0, "the bar is drawn along the bottom of the window: {y}");
+    let (checked, y) = pick(&mut app, "Dock to Top");
+    assert_eq!(checked, ["✓ Dock to Bottom"]);
+    assert!(!app.ui.control_bar_bottom && y < 34.0, "Dock to Top docks it at the top again: {y}");
+}
+
+/// Dragging the Control bar's gripper docks the bar at the edge of the window the pointer is
+/// released nearer; a drag released nearer the edge it is at leaves it there.
+#[test]
+fn dragging_the_control_bar_gripper_docks_it_at_the_nearer_edge() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // The gripper is the bar's first item, inside its 10-point margin, centered in the 34-point bar.
+    let grip = |bottom: bool| egui::pos2(13.0, if bottom { DOCK_SCREEN.bottom() - 17.0 } else { 17.0 });
+    let drag = |app: &mut crate::VectorcraftApp, from: egui::Pos2, to: egui::Pos2| {
+        control_bar_frame(app, &ctx, vec![]);
+        control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from), press_at(from, true)]);
+        for k in 1..=4 {
+            control_bar_frame(app, &ctx, vec![egui::Event::PointerMoved(from.lerp(to, k as f32 / 4.0))]);
+        }
+        control_bar_frame(app, &ctx, vec![press_at(to, false)]);
+    };
+    drag(&mut app, grip(false), egui::pos2(400.0, 200.0));
+    assert!(app.ui.control_bar_bottom, "released nearer the bottom: docked at the bottom");
+    drag(&mut app, grip(true), egui::pos2(400.0, 160.0));
+    assert!(app.ui.control_bar_bottom, "released nearer the bottom again: still at the bottom");
+    drag(&mut app, grip(true), egui::pos2(400.0, 120.0));
+    assert!(!app.ui.control_bar_bottom, "released nearer the top: docked at the top");
+    drag(&mut app, grip(false), egui::pos2(400.0, 140.0));
+    assert!(!app.ui.control_bar_bottom, "released nearer the top again: still at the top");
+}
+
+/// `window.control.dock {edge}` docks the Control bar to the top or the bottom of the window, and
+/// the panel menu checks the edge in use; another edge, or none, is an error and changes nothing.
+#[test]
+fn the_control_bar_dock_command_takes_top_or_bottom() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    assert_eq!(app.run("window.control.dock", json!({"edge": "bottom"})).unwrap(), json!({"edge": "bottom"}));
+    assert!(app.ui.control_bar_bottom);
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "bottom"})), Some(true));
+    assert_eq!(crate::menus::checked(&app, "window.control.dock", &json!({"edge": "top"})), Some(false));
+    for p in [json!({"edge": "left"}), json!({"edge": "Bottom"}), json!({"edge": 1}), json!({})] {
+        let err = app.run("window.control.dock", p.clone()).unwrap_err();
+        assert_eq!(err, "`edge` must be one of top, bottom", "{p}");
+        assert!(app.ui.control_bar_bottom, "{p} leaves the bar at the bottom");
+    }
+    assert_eq!(app.run("window.control.dock", json!({"edge": "top"})).unwrap(), json!({"edge": "top"}));
+    assert!(!app.ui.control_bar_bottom);
+}
+
+/// Menus stop above a Control bar docked at the bottom when the status bar is hidden, above the
+/// status and hint bars when they show, and at the bottom of the window when the bar is docked at
+/// the top or a screen mode hides it.
+#[test]
+fn menus_stop_above_a_control_bar_docked_at_the_bottom() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let ctx = egui::Context::default();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+    let floor = |app: &mut crate::VectorcraftApp, status: bool, bottom: bool, screen_mode: u8| {
+        (app.ui.status_bar, app.ui.control_bar, app.ui.control_bar_bottom, app.ui.screen_mode) = (status, true, bottom, screen_mode);
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        }
+        crate::widgets::menu_floor(&ctx)
+    };
+    let bar_top = screen.bottom() - 34.0;
+    let f = floor(&mut app, false, true, 0);
+    assert!((f - bar_top).abs() < 1.0, "status bar hidden: menus stop at the Control bar's top, {f}");
+    let f = floor(&mut app, false, true, 2);
+    assert_eq!(f, screen.bottom(), "screen mode 2 hides the Control bar: menus stop at the window's bottom");
+    let f = floor(&mut app, false, true, 0);
+    assert!((f - bar_top).abs() < 1.0, "shown again: {f}");
+    let f = floor(&mut app, false, false, 0);
+    assert_eq!(f, screen.bottom(), "docked at the top: menus stop at the window's bottom");
+    let f = floor(&mut app, true, true, 0);
+    assert!(f < bar_top - 1.0, "the status and hint bars show above the Control bar: menus stop above them, {f}");
+}
+
 /// Two or more selected objects show all six Distribute Objects buttons in the Control bar;
 /// a single object keeps the bar as it was. A click distributes as the Align panel's button does.
 #[test]
@@ -1955,6 +2123,7 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         ctx.enable_accesskit();
         crate::theme::install_fonts(&ctx);
         let mut seen = false;
+        let mut menu_seen = false;
         // The Align group, then for two objects the Distribute group (#5372): each by its controls.
         let mut groups: Vec<(&str, Vec<&str>)> = vec![(
             "Align",
@@ -2002,16 +2171,22 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
             let fields = ["X:", "Y:", "W:", "H:"].map(right);
             assert!(fields.iter().all(Option::is_some) || fields.iter().all(Option::is_none), "{count} objects, {width}: {fields:?}");
             assert!(nodes.iter().any(|(_, n)| n.label() == Some("Transform")), "{count} objects, {width}: the Transform link shows");
-            // The bar's content ends at its 10-point inner margin.
+            // The panel menu button takes the bar's right end, and the bar's content ends before it
+            // (without the button, at the bar's 10-point inner margin). Once a bar shows the button,
+            // a wider one keeps it: the fields and groups trim to the room left of it.
+            let menu = nodes.iter().find(|(_, n)| n.label() == Some("Panel menu")).and_then(|(_, n)| n.bounds());
+            assert!(!menu_seen || menu.is_some(), "{count} objects, {width}: the panel menu button left out after a narrower bar showed it");
+            menu_seen |= menu.is_some();
+            let edge = menu.map_or(f64::from(width) - 10.0, |m| m.x0);
             if let Some(h) = fields[3] {
-                assert!(h <= f64::from(width) - 10.0, "{count} objects, {width}: H ends at {h}");
+                assert!(h <= edge, "{count} objects, {width}: H ends at {h}, the content's room at {edge}");
             }
             assert!(!seen || fields[3].is_some(), "{count} objects, {width}: left out after a narrower bar showed them");
             seen |= fields[3].is_some();
             // The Align and Distribute buttons show whole inside the margin, with the Transform
             // link after them, or are left out; once shown, a wider bar keeps them.
             let end = |name: &str| nodes.iter().find(|(_, n)| n.label() == Some(name)).and_then(|(_, n)| n.bounds()).map(|b| b.x1);
-            let inside = |x: f64| x <= f64::from(width) - 10.0;
+            let inside = |x: f64| x <= edge;
             for ((group, names), was) in groups.iter().zip(groups_seen.iter_mut()) {
                 let ends: Vec<Option<f64>> = names.iter().map(|n| end(n)).collect();
                 let shown = ends.iter().all(Option::is_some);
@@ -2026,6 +2201,7 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
             }
         }
         assert!(seen, "{count} objects: a wide bar has room for the fields");
+        assert!(menu_seen, "{count} objects: a wide bar has room for the panel menu button");
         assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
 }

@@ -27,7 +27,7 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
     app.ime_discard = true;
     if app.session.tool_composing() {
         // Errors are already reported by the engine's interaction.
-        let _ = app.session.tool_text(&m, app.view_info());
+        let _ = app.session.tool_typed_text(&m, app.view_info());
     }
 }
 
@@ -52,7 +52,7 @@ enum Seq {
     InterruptNavigation,
     InterruptCommand,
     ResetCompleted(egui::ImeResetId),
-    /// Enter, which types a line break.
+    /// Enter, which types a line break. Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing.
     Enter(Mods),
     /// An editing key with modifiers, an arrow, Home, End, Tab or a clipboard event.
     Edit(TextInput),
@@ -74,7 +74,8 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // characters in one frame interleaves correctly. Taken as two passes (all text, then the keys)
     // the deletes land after the inserts and the diacritics are lost. Enter, the other editing keys
     // and the clipboard events join them: ← or a paste lands between the texts around it, and each
-    // Enter types its own line break. Each handled event is removed from the input.
+    // Enter types its own line break (or, as Cmd+Enter, ends editing there). Each handled event is
+    // removed from the input.
     let seq = type_sequence(ctx);
     let viewport = ctx.viewport_id();
     let mut old_composition_retired = false;
@@ -177,7 +178,7 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
                     let tk = if key == Key::Backspace { ToolKey::Backspace } else { ToolKey::Delete };
                     seq.push(Seq::Erase(tk, Mods { shift: m.shift, ..Mods::default() }));
                 }
-                // A command bound to the chord (Cmd+Enter) runs instead of the line break, in the
+                // A command bound to the chord (Cmd+Enter) runs instead of ending editing, in the
                 // shortcuts after this.
                 egui::Event::Key { key: Key::Enter, pressed, modifiers: m, .. } if !chord_runs_a_command(Key::Enter, m, true) => {
                     if pressed {
@@ -259,7 +260,7 @@ fn apply_type_event(
         Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => {
             let target_before = crate::ime::target(&mut app.session, view);
             let before = crate::ime::stamp(&mut app.session, view);
-            let r = app.session.tool_text(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 crate::ime::note_application_edit(app, ctx, view, target_before, before);
             }
@@ -282,7 +283,7 @@ fn apply_type_event(
             let composing = app.session.tool_composing();
             let verbatim = app.session.tool_ime_session_matches(view)
                 && match app.ime_marked.as_deref() {
-                    Some(m) => app.session.tool_text_is_verbatim(m, view),
+                    Some(m) => app.session.tool_typed_text_is_verbatim(m, view),
                     None => true,
                 };
             keep_marked_text(app);
@@ -305,8 +306,8 @@ fn apply_type_event(
             let before = crate::ime::stamp(&mut app.session, view);
             // A document edit since the composition means this commit starts a fresh typing
             // session: that reset is application-side, so it cannot earn `InputMethod`.
-            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_text_is_verbatim(&t, view);
-            let r = app.session.tool_text(&t, view);
+            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_typed_text_is_verbatim(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 if verbatim {
                     crate::ime::note_ime_apply(app, ctx, view, target_before, before);

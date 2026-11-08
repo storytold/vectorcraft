@@ -84,11 +84,14 @@ impl Writer<'_> {
         let inline = t.runs.iter().any(|r| r.inline.is_some());
         // Ruby is written as outlines with its base text: a reader's <text> can't place it. So are
         // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
-        // and a glyph chosen for a character, which a reader's <text> draws with the default glyph.
-        let unwritable =
-            t.runs.iter().any(|r| {
-                r.style.small_caps.is_some() || r.style.position != vectorcraft_doc::CharPosition::Normal || r.style.glyph_alternate.is_some()
-            }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
+        // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
+        // is type in one of the document's composite fonts, which a reader can't find by its name.
+        let unwritable = t.runs.iter().any(|r| {
+            r.style.small_caps.is_some()
+                || r.style.position != vectorcraft_doc::CharPosition::Normal
+                || r.style.glyph_alternate.is_some()
+                || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
+        }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
         let outlined =
             self.opts.outline_text || t.vertical || !t.ruby.is_empty() || (inline && matches!(t.kind, TextKind::OnPath { .. })) || unwritable;
         let chars = |w: &mut Self, n: &Node| if outlined { w.text_outlines(n, t) } else { w.text(n, t) };
@@ -233,6 +236,12 @@ impl Writer<'_> {
             // keep their look as outlines.
             if end.is_some() || t.path_align != vectorcraft_doc::PathAlign::Baseline || t.path_spacing != 0.0 {
                 self.warn("type on a path with an end bracket, Align to Path or Spacing is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
+            // A reader turns each `<textPath>` glyph with the path, as Rainbow does: Skew, 3D
+            // Ribbon, Stair Step and Gravity keep their look as outlines.
+            if t.path_effect != vectorcraft_doc::PathEffect::Rainbow {
+                self.warn("type on a path with an effect other than Rainbow is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
             // It cannot hang glyphs outside the start bracket either.

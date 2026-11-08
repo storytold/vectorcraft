@@ -100,7 +100,7 @@ the two can still win that race.
 | `ui.key` / `ui.text` | `{key, shift?, alt?, cmd?}` / `{text}` | synthetic keyboard input |
 | `ui.move` | `{x, y}` | screen-point pointer move |
 | `ui.click` / `ui.drag` | `{x, y, button?, count?, shift?, alt?, ctrl?, cmd?}` / `{x, y, toX, toY, steps?, count?, button?, shift?, alt?, ctrl?, cmd?}` | egui pointer input; see synthetic input budgets above |
-| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls and Cmd- or Alt-wheel (Option on the Mac) zooms about the pointer; with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it |
+| `ui.wheel` | `{x, y, dy?, dx?, unit?: "line"\|"point", shift?, alt?, cmd?}` | a mouse wheel turn over screen point (x, y): `dy` notches up (+) or down, `dx` sideways. Over the canvas the wheel scrolls, Cmd-wheel (Ctrl on Windows and Linux) scrolls sideways and Alt-wheel (Option on the Mac) zooms about the pointer (with the `ctrlWheelScrollsSideways` preference off, Cmd-wheel zooms too); with the `zoomWithMouseWheel` preference the wheel and Alt-wheel zoom about the pointer, Shift-wheel scrolls up and down and Cmd-wheel (Ctrl on Windows and Linux) sideways. Over a focused numeric field (click it first) each notch steps its value as Up/Down do (Shift: ten, Cmd/Ctrl: a tenth) and the panel stays put; over anything else in a panel the wheel scrolls it. Over the canvas, the wheel preferences in `docs/mcp.md` change what these keys do |
 | `ui.set` | `{brightness?, panel?, rulers?, outline?, grid?, smartGuides?, boundingBox?, controlBar?, imageTracePreview?}` | `outline`: View › Outline for the active document only (each document has its own, a document opens in Preview, and `ui.inspect` shows it as `view.outline`; an error without a document). `imageTracePreview`: the Image Trace panel's Preview (`ui.inspect` shows it as `ui.image_trace_preview`) |
 | `ui.dialog.set` / `.confirm` / `.cancel` | `{field, value}` or `{fields: [{field, value}…]}` | fill and submit the open dialog. `ui.dialog.set` takes the fields the dialog has (`ui.inspect`), `__` fields, `discard` on a dialog with a discard button, `preview` on one with a live preview, the fields that the dialog reads but adds only when a control changes (such as `searchFolder`, or `copy` in the Transform dialogs), and the fields it passes to the command it runs: every parameter of the `command` dialog's command (`ui.paramDialog`), and the `textureImage` that Load Texture… sets in the Glass and Texturizer effects; any other field is an error that lists the dialog's fields, and the dialog stays as it was `fields` sets the list (at most 256 items) in order (a missing `value` is `null`) and checks every item first: when one is refused, the call is an error and no field changes |
 | `ui.screenshot` | `{path?, data?}` | capture the window (PNG), written to `path`; `data: true` sends it back as `pngBase64` too. The inline PNG is capped at 64 MiB: with a `path` the file is still written and `pngBase64` is omitted when the image is larger, while a path-less `data: true` request fails if either the raw RGBA image or the encoded PNG exceeds the cap. Needs a presented frame: with the screen locked or the window minimized/covered it fails after ~8 s with an explanatory error |
@@ -126,7 +126,7 @@ the two can still win that race.
 | `engine.execute` `file.exportSelection` | `{multiple?}` | File › Export Selection…: collects the selected objects as one asset (`assets.add`; one per object with `multiple: true`) and opens `exportForScreens` on its Assets tab with just them checked → `{assets}`. `document.exportSelection` still exports the selection in one go, without the dialog |
 | CSS Properties panel | `window.panel {panel: "cssProperties"}`; `engine.execute` `css.copy` / `css.exportFile` | the panel shows `css.selection` of the selection (after Generate CSS, while nothing is selected, `css.generate`); its menu holds the options the commands take (`units`, `position`, `dimensions`, `unnamed`, `rasterize`). `css.copy {scope?, …options}` copies the CSS to the clipboard → `{css, rules}`; `css.exportFile {path?, scope?, …options}` writes `css.export` to `path` (else a picked file; the web downloads it) with the pictures of rasterized art next to it → `{path, rules, images, warnings}`, and the status bar shows the first of `warnings` as Export As shows an export's notes |
 
-| `ui.dialog.*` on `importPdf` | `{field: "page" \| "allPages" \| "range" \| "cropTo" \| "password", value}` | opening (`app.open`, `file.open`) a PDF or `.ai` with several pages or a password, or placing one (`file.place` without `page`), opens the Import PDF dialog (`mode`: `open` or `place`; `pageCount`). While `__locked` is true, set `password` and `ui.dialog.confirm` to unlock it (a one-page file then opens or is placed). Then set `allPages: false` and `range` ("2-3, 5") to open some pages, or `page` to place one, and `cropTo` (`bounding`, `art`, `crop`, `trim`, `bleed`, `media`); `ui.dialog.confirm` opens or places them (placing keeps the other `file.place` params, such as `link`, `template` and `at`, in `__place`). `document.open {pages, cropTo, password}` and `file.place {page, crop, password}` do the same without the dialog |
+| `ui.dialog.*` on `importPdf` | `{field: "page" \| "allPages" \| "range" \| "cropTo" \| "password", value}` | opening (`app.open`, `file.open`) a PDF, `.ai` or `.ait` with a password, or one with several pages unless it is a `.ai` or `.ait` with its editing data or carries its VectorCraft document (those open whole), or placing (`file.place` without `page`) any of them with several pages or a password, opens the Import PDF dialog (`mode`: `open` or `place`; `pageCount`). While `__locked` is true, set `password` and `ui.dialog.confirm` to unlock it (a one-page file then opens or is placed). Then set `allPages: false` and `range` ("2-3, 5") to open some pages, or `page` to place one, and `cropTo` (`bounding`, `art`, `crop`, `trim`, `bleed`, `media`); `ui.dialog.confirm` opens or places them (placing keeps the other `file.place` params, such as `link`, `template` and `at`, in `__place`). `document.open {pages, cropTo, password}` and `file.place {page, crop, password}` do the same without the dialog |
 
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
 (fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`lab`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
@@ -328,7 +328,15 @@ not commands, so drive them with `ui.click` if needed. Close runs `app.quit` (th
 modified documents), and empty bar space and the 5 pt window edges move and resize the window. Preferences › User
 Interface › System Title Bar (`systemTitleBar`, read when the app starts) gives the window its OS decorations back
 instead: the OS title then shows the active document (`*name — VectorCraft` with unsaved changes) and the app bar
-drops its brand mark. On macOS the window buttons are centred on the app bar; the web build is unchanged.
+drops its brand mark. On Linux the app bar also drops its brand mark whenever the desktop draws the window's frame, with
+System Title Bar on or off. On macOS the window buttons are centred on the app bar; the web build is unchanged.
+
+On Linux and the BSDs, Preferences › User Interface › VectorCraft Title Bar on Every Desktop (`appTitleBar`, read
+when the app starts, off by default) turns off the desktop's frame and uses the app bar as the title bar in the
+sessions where the desktop would draw the frame: X11 sessions, Wayland compositors that draw server-side decorations
+such as KDE Plasma, and a window opened through XWayland. System Title Bar and `VECTORCRAFT_TITLEBAR` (`app`, or
+`system` or `desktop`) take precedence over it. The checkbox is dimmed while either applies, and a note under it names
+each one that applies.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
@@ -428,7 +436,9 @@ below). Dragging a tab, a group's drag bar or an icon out of the dock and droppi
 floats it; dropping it on a group's tabs, on a group's upper or lower edge or beside a column docks it there. On
 the desktop each floating window is an OS window of its own; on the web and on Wayland it floats inside the app
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
-`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge.
+`window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
+`window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
@@ -666,9 +676,11 @@ with.
 
 DXF Options: Export As… with the DXF format (`file.exportAs {format: "dxf"}`, then the save dialog), or
 `ui.dxfOptionsDialog {path?, …document.exportDxf options}` for agents, opens the `dxfOptions` dialog. Its fields are
-`document.export` params: `version`, `unit` (a unit name such as `Millimeters`), `scale`, `scaleLineweights`, `colors`
-(`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `preserve` (`appearance`, `editability`), `selectedOnly`,
-`alterPaths`, `outlineText`, plus `path` and the artboard choice. `ui.dialog.confirm` checks them (a bad value, or
+`document.export` params: `dxfPreset` (`custom`, `cnc`), `version`, `unit` (a unit name such as `Millimeters`), `scale`,
+`scaleLineweights`, `colors` (`8`, `16`, `256`, `true`), `rasterFormat` (`png`, `jpeg`), `preserve` (`appearance`,
+`editability`), `selectedOnly`, `alterPaths`, `outlineText`, plus `path` and the artboard choice. Setting `dxfPreset` to
+`cnc` sets the fields it sets (see `document.exportDxf`), and `dxfPreset` reads `custom` again once one of them is
+changed; setting it to `custom` puts back the defaults. `ui.dialog.confirm` checks them (a bad value, or
 Export Selected Art Only with nothing selected, keeps the dialog open), remembers them for the next DXF Options and
 writes the file (asking for a path when there is none). Export As also lists DWG, greyed out: setting its `format` to
 `dwg` shows, and on confirm answers, the hint to export DXF instead.
@@ -685,7 +697,16 @@ art too large at that scale) keeps the dialog open.
 Placement Options: the Links panel's flyout (or `ui.placementOptionsDialog {ids?}` for agents) opens the
 `placementOptions` dialog for the selected images (fields `ids`, `preserve`: `transforms`/`bounds`/`fileDimensions`/
 `fit`/`fill`, `align`: `topLeft` … `bottomRight`, `clip`). `ui.dialog.confirm` runs `links.placementOptions` with them as
-one undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
+one undo step.
+
+Relink: the Links panel's Relink… button and flyout item (or `ui.relinkDialog {ids?}` for agents) open the `relink`
+dialog for the selected images and placed documents (fields `ids`, `links`: `[{name, ids}]`, one row per linked file,
+`scope`: `each`/`selected`/`all`/`missingInFolder`, default `selected`, `path` and `paths`). With nothing selected and
+no `ids`, it fails with "select the images to relink, or pass ids". `ui.dialog.set {field: "path", value}` then `ui.dialog.confirm` runs
+`links.relink {ids, path, scope}` as one undo step; without `path` a file is picked. With `scope: "each"`, each confirm
+takes `path` (or picks a file) for the next row of `links`, adds it to `paths` and keeps the dialog open, returning
+`{next}` (the next row's name); the last row's confirm runs `links.relink {scope: "each", paths}` for every row as one
+undo step. The Links panel (`window.panel {panel: "links"}`) shows `links.list` and the first selected image's
 `links.info`; `links.editOriginal` and `links.reveal` (Edit › Edit Original, Show in Folder) hand the linked file to
 the system and return `{path}`. Edit Original opens only a regular file whose extension is a format `document.open`
 reads, and answers a control request with an error unless the file is a placed document (which opens in a tab).

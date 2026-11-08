@@ -106,7 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Bounding Box",
             ["Object", "Transform"],
             None,
-            "{} square the bounding box of the selected objects to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset}",
+            "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
         ),
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with prefs moveLockedWithArtboard), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
             has_doc,
             rearrange_artboards
         ),
@@ -223,21 +223,63 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 
 // ---------- Reset Bounding Box ----------
 
+/// Squares each selected object and every object inside it: the children of groups, compound paths,
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let turned: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.bbox_angle != 0.0)).collect();
-    if !turned.is_empty() {
+    let mut changed = 0;
+    let squared: Vec<(NodeId, Node)> = ids
+        .into_iter()
+        .filter_map(|id| {
+            let (n, count) = squared(d.node(id)?);
+            changed += count;
+            Some((id, n?))
+        })
+        .collect();
+    if !squared.is_empty() {
         s.edit("Reset Bounding Box", |d, _| {
-            for id in &turned {
-                if let Some(n) = d.node_mut(*id) {
-                    n.bbox_angle = 0.0;
+            for (id, n) in squared {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
                 }
             }
             Ok(())
         })?;
     }
-    Ok(json!({ "changed": turned.len() }))
+    Ok(json!({ "changed": changed }))
+}
+
+/// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
+/// it stands at an angle, and the number of objects squared. The subtree takes in children and the
+/// art of linked opacity masks (an unlinked mask's art turns on its own); layers have no box. Only
+/// the nodes on the way to a turned object are copied.
+fn squared(n: &Node) -> (Option<Node>, usize) {
+    let mut out = (!n.is_layer() && n.bbox_angle != 0.0).then(|| {
+        let mut c = n.clone();
+        c.bbox_angle = 0.0;
+        c
+    });
+    let mut count = usize::from(out.is_some());
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        let (child, k) = squared(c);
+        count += k;
+        if let Some(child) = child
+            && let Some(slot) = out.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+        {
+            *slot = Arc::new(child);
+        }
+    }
+    if let Some(m) = n.extras().mask.as_ref().filter(|m| m.linked) {
+        let (art, k) = squared(&m.art);
+        count += k;
+        if let Some(art) = art
+            && let Some(m) = out.get_or_insert_with(|| n.clone()).extras_if_any().and_then(|e| e.mask.as_mut())
+        {
+            m.art = Arc::new(art);
+        }
+    }
+    (out, count)
 }
 
 // ---------- Lock / Hide ----------
@@ -577,6 +619,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
             let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
+            }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
             }
         }
         Ok(targets)
@@ -1274,7 +1319,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
-    let locked_and_hidden = s.prefs.move_locked_with_artboard;
+    let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
     let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
@@ -1291,7 +1336,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
     // `Document::art_on_artboard` measures them; locked and hidden art, and art on a locked
-    // artboard, moves only when prefs moveLockedWithArtboard is on.
+    // artboard, moves only with `locked_and_hidden`.
     fn objects<'a>(n: &'a Node, all: bool, out: &mut Vec<&'a Node>) {
         for c in n.children().into_iter().flatten().filter(|c| c.rides_with_artboard(all)) {
             if c.is_layer() { objects(c, all, out) } else { out.push(c) }
@@ -1321,6 +1366,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

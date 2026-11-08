@@ -24,7 +24,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
     // can't be used.
     // Private data kept apart from the program: the program's own header gives the author and
     // custom colors the private data's header may lack.
-    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps) } else { ai::read(d, true) };
+    let read = |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps, true) } else { ai::read_over_page(d, true) };
     let (tree, result) = match data.as_deref() {
         Ok(d) => match read(d) {
             Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
@@ -160,14 +160,9 @@ pub fn layered_ai_from(
         (visible, all, false)
     };
     let built = structure
-        .unwrap_or_else(|| ai::read(&data, false).map(Box::new))
+        .unwrap_or_else(|| ai::read_over_page(&data, false).map(Box::new))
         .and_then(|structure| build_from(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit));
     match built {
-        // An image too large for the editing data's reader would be missing from the layers, while
-        // the PDF part has it: the file comes in as its PDF part instead (#1479).
-        Ok((_, notes)) if notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => {
-            from_pdf_part(visible, warnings, "an image is too large to read from them")
-        }
         Ok((mut done, notes)) => {
             done.setup.bleed = visible.setup.bleed;
             let mut all = warnings;
@@ -193,14 +188,13 @@ pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64) -> Resul
     if !has_layers(&data) {
         return Err(AiLayers { data: Ok(data), structure: None });
     }
-    let structure = match ai::read(&data, false) {
+    // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
+    let structure = match ai::read_over_page(&data, false) {
         Ok(structure) => structure,
         Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)) }),
     };
     match build_without_page(structure, &data, pages, unit) {
-        // An image too large for the editing data's reader is missing from the layers: the PDF
-        // part has it (as in `layered_ai`).
-        Ok(Ok((doc, notes))) if !notes.iter().any(|n| n == ai::IMAGE_TOO_LARGE) => Ok((doc, notes)),
+        Ok(Ok((doc, notes))) => Ok((doc, notes)),
         Ok(_) => Err(AiLayers { data: Ok(data), structure: None }),
         Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)) }),
     }
@@ -221,6 +215,15 @@ impl AiLayers {
     pub fn decode(private: &[u8]) -> Self {
         Self { data: ai::decode_private(private), structure: None }
     }
+}
+
+/// The id of the artboard of `doc` that the editing copy `private` (as [`layered_ai`] takes it)
+/// names as its active one (`CropAreaActive`, an index into its `ArtboardArray`), for `doc`
+/// restored from the document a `.ai` file carries beside that copy: `None` when the copy names
+/// the first artboard, names none, can't be decoded, or names an artboard `doc` doesn't have.
+pub fn ai_opened_artboard(private: &[u8], doc: &Document) -> Option<u32> {
+    let data = ai::decode_private(private).ok()?;
+    active_page(ai::active_artboard(&data), doc)
 }
 
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data

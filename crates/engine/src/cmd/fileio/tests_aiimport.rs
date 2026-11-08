@@ -148,6 +148,53 @@ fn an_ai_file_opens_with_its_active_artboard() {
     assert_eq!(d.opened_artboard, Some(d.artboards[1].id), "{r}");
 }
 
+/// A `.ai` or `.ait` file VectorCraft wrote reopens, restored from the document it carries, on the
+/// artboard its editing copy names as active; without the copy, on the first artboard.
+#[test]
+fn a_restored_ai_file_opens_on_the_artboard_active_when_saved() {
+    let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+    let first = doc.artboards[0].clone();
+    for (i, id) in [(1.0, 7), (2.0, 9)] {
+        let x0 = i * 150.0;
+        doc.artboards.push(vectorcraft_doc::Artboard { id, rect: vectorcraft_geom::Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..first.clone() });
+    }
+    let mut s = Session::new();
+    // The view's artboard, one the document doesn't have, none, and the first.
+    for (active, opened, reopened) in
+        [(Some(7), None, Some(7)), (Some(99), Some(9), Some(9)), (None, Some(9), Some(9)), (Some(first.id), Some(9), None)]
+    {
+        for (cmd, format) in [("document.save", "ai"), ("file.saveAsTemplate", "ait")] {
+            let mut d = doc.clone();
+            d.opened_artboard = opened;
+            s.add_document(d, None);
+            s.doc_mut().unwrap().active_artboard = active;
+            let saved = s.execute(cmd, &json!({"format": format})).unwrap();
+            let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+            let r = open(&mut s, &format!("again.{format}"), &bytes, json!({})).unwrap();
+            assert_eq!(r["restored"], json!(true), "{r}");
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.artboards.iter().map(|a| a.id).collect::<Vec<_>>(), [first.id, 7, 9]);
+            assert_eq!(d.opened_artboard, reopened, "{format} {active:?} {opened:?}");
+        }
+    }
+    // A file saved without its PDF part still has the editing copy.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"pdfCompatible": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, Some(7), "{r}");
+    // Without the editing copy, the file reopens on the first artboard.
+    s.add_document(doc.clone(), None);
+    s.doc_mut().unwrap().active_artboard = Some(7);
+    let saved = s.execute("document.save", &json!({"format": "ai", "options": {"editingData": false}})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let r = open(&mut s, "again.ai", &bytes, json!({})).unwrap();
+    assert_eq!(r["restored"], json!(true), "{r}");
+    assert_eq!(s.doc().unwrap().doc.opened_artboard, None, "{r}");
+}
+
 /// A `.ai` save names the view's active artboard in its editing copy, else the one the document
 /// opened on, else the first; the file read from that copy opens on it.
 #[test]
@@ -673,7 +720,7 @@ fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
     assert!(paths > 0, "the outlines are there: {r}");
 }
 
-/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// An image whose data is cut short in the editing data of a file whose PDF part can't be read is
 /// left out, and both notes say so.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
@@ -682,7 +729,7 @@ fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
     let mut s = Session::new();
     let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
     let r = open(&mut s, name, &file, json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image whose data is cut short was left out"]), "{r}");
 }
 
 /// A copied file whose PDF part can't be read pastes the objects of its editing data when asked

@@ -19,6 +19,7 @@ pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub use id_index::tree_walks;
 pub mod inks;
 mod inline;
 pub mod intertwine;
@@ -108,7 +109,7 @@ pub use placed_document::{PageBox, PlacedDocument};
 pub use profiles::ColorProfiles;
 pub use puppet::{PuppetPin, PuppetPins};
 pub use rastersettings::{RasterColorModel, RasterEffectsSettings};
-pub use selection::{AnchorRef, SegmentRef, Selection};
+pub use selection::{AnchorRef, SegmentRef, Selection, SymbolPart};
 pub use setup::{Background, DocSetup, ExportText, GridSize, Quotes};
 pub use slices::{CellAlign, CellVAlign, Slice, SliceArea, SliceKind, SliceOptions, SliceSource};
 pub use style_libs::StyleLibrary;
@@ -120,6 +121,7 @@ pub use text::{
     RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign,
     WrapShape,
 };
+pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -140,7 +142,7 @@ mod limits;
 mod records;
 mod units;
 
-pub use artboard::{Artboard, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
+pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
@@ -149,7 +151,7 @@ pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]
 use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
-pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, Symbol, SymbolEdit};
+pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use units::{ColorMode, Unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -194,6 +196,9 @@ pub struct Document {
     /// Paragraph styles (besides the built-in [Normal Paragraph Style]).
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub para_styles: Shared<Vec<TextStyleDef>>,
+    /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
+    pub composite_fonts: Shared<Vec<CompositeFont>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,
@@ -309,6 +314,10 @@ pub struct Document {
     /// given) SVG export links with `<script>` elements, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub svg_scripts: Vec<String>,
+    /// Effect › SVG Filters: the SVG filters the document holds (at most [`SvgFilter::MAX`]), in
+    /// the order the submenu lists them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub svg_filters: Vec<SvgFilter>,
     /// Puppet Warp pins on the selected artwork while the tool edits it ([`PuppetPins`]): editing
     /// state, never saved.
     #[serde(skip)]

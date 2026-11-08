@@ -25,6 +25,8 @@ impl Session {
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
             vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
         });
+        // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
+        vectorcraft_text::register_envelope_ink();
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
@@ -40,10 +42,13 @@ impl Session {
             journal: Journal::default(),
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
+            replaying: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -78,6 +83,8 @@ impl Session {
             batch_stash: None,
             batch_steps: None,
             batch_paint_docs: Vec::new(),
+            composite_names: Vec::new(),
+            reading: false,
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -106,6 +113,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 
@@ -169,10 +177,16 @@ impl Session {
 
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
-            if self.active != Some(index) {
+            let switched = self.active != Some(index);
+            if switched {
                 self.reset_tool_for_doc_switch();
             }
             self.active = Some(index);
+            // Type is drawn in the composite fonts of the document now in front, and measured again
+            // when they differ from those of the document before.
+            if switched && cmd::compositefonts::sync(self) {
+                self.refresh_document_text_bounds(index);
+            }
             true
         } else {
             false
@@ -189,7 +203,7 @@ impl Session {
         format!("Untitled-{}", self.untitled_counter)
     }
 
-    /// Text layout bounds are a cache (not saved): compute them for a document just read, or
+    /// Text layout bounds are a cache (not saved): compute them after its fonts are registered, or
     /// selection boxes and hit testing would use the rough estimate until each text is edited, and
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
@@ -204,6 +218,14 @@ impl Session {
         }
     }
 
+    /// [`Session::refresh_text_bounds`] for open document `index`, as a change that is not an
+    /// edit: a saved document stays saved, and its undo history keeps its documents as they are.
+    fn refresh_document_text_bounds(&mut self, index: usize) {
+        if let Some(st) = self.docs.get_mut(index) {
+            st.change_unsaved(|doc| Self::refresh_text_bounds(Arc::make_mut(doc)));
+        }
+    }
+
     /// Add a document and make it active. Between `edit.undoGroup.begin` and `edit.undoGroup.end`,
     /// an undo group with the begun group's name opens in it: here outside a command, and after the
     /// command that adds it otherwise ([`Session::execute`]).
@@ -211,7 +233,7 @@ impl Session {
         // Every edit is checked against the document before it, so the first one is within the cap
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
         // Guides from files saved before guides had layers go on a layer.
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
@@ -222,6 +244,8 @@ impl Session {
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
+        cmd::compositefonts::sync(self);
+        self.refresh_document_text_bounds(i);
         if self.depth == 0
             && let Some(label) = self.explicit_undo_group.clone()
         {
@@ -237,7 +261,7 @@ impl Session {
             return false;
         }
         doc.limit_depth();
-        Self::refresh_text_bounds(&mut doc);
+        cmd::compositefonts::filter_loaded(&mut doc);
         doc.adopt_guides();
         cmd::dimension::conform(&mut doc);
         if self.active == Some(index) {
@@ -273,6 +297,12 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
+        // Type in the composite fonts of a document in the back is measured again when it comes to
+        // the front.
+        if self.active == Some(index) {
+            cmd::compositefonts::sync(self);
+        }
+        self.refresh_document_text_bounds(index);
         true
     }
 
@@ -289,6 +319,7 @@ impl Session {
             stash.push(old);
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        cmd::compositefonts::sync(self);
         true
     }
 
@@ -334,7 +365,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

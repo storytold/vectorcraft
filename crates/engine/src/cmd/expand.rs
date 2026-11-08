@@ -4,7 +4,8 @@
 //! as Break Link to Symbol places it. A linear or radial gradient fill becomes a
 //! gradient mesh, or solid strips / concentric ellipses, inside a clip group shaped like the object; a freeform
 //! gradient becomes a mesh shaped like the object. A pattern fill becomes the tiles it paints inside a clip
-//! group shaped like the object. Create Gradient Mesh shares the sampling.
+//! group shaped like the object. Create Gradient Mesh shares the sampling. A dimension whose art
+//! Expand changes becomes a plain group of that art.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use vectorcraft_doc::pattern::{PatternDef, place_art};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, PathData, Point, Rect, SubPath, Vec2, shapes};
 
+use super::dimension::EndedLink;
 use super::edit::selected_roots;
 use super::menucmds::{run_raw, squash};
 use super::object::as_clipping_path;
@@ -41,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand…",
             ["Object"],
             None,
-            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step → {ids}",
+            "{object?: true (symbol instances without effects (their fills' and strokes' included) and not in perspective → their art, as Break Link to Symbol places it (the instances that art holds stay instances), type → outlines, live shapes → paths, effects baked, blends → groups of their steps, repeats → groups of their instances, Intertwine groups → groups of their objects and of the parts drawn over the others (clip groups), envelopes → their distorted content, placed documents → editable copies of their art, as placing the file without link gives, its symbols, patterns, swatches and images joining the document), fill?: true (gradient fills → `gradient` art, pattern fills → their tiles in a clip group shaped like the object), stroke?: true (strokes → filled outlines, the stroked paths that baking effects leaves included), gradient?: \"objects\" (default: `steps` solid strips, concentric ellipses for radial gradients) | \"mesh\" (a gradient mesh); both in a clip group shaped like the object (freeform gradients always become a mesh shaped like it), steps?: 1..1000 (255)} one undo step; a dimension whose art an option changes, or one selected with the art it measures when that art is replaced, becomes a plain group of its art → {ids}",
             has_selection,
             expand
         ),
@@ -239,8 +241,12 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     let stroke = bool_or(p, "stroke", true);
     let to = GradientTo::parse(p)?;
     let from = s.doc()?.history.undo.len();
-    let rev0 = s.doc()?.revision;
     let mut e = Expandable::of(&s.doc()?.doc, &selected_roots(s)?);
+    // Before anything expands: outlining the art a dimension measures would remove the dimension.
+    let before = s.doc()?.doc.clone();
+    let mut ended = vec![];
+    end_dimension_links(s, &mut ended)?;
+    let rev0 = s.doc()?.revision;
     // Placed documents first: their art (type, strokes, gradients) expands below.
     if object && e.placed {
         let roots = selected_roots(s)?;
@@ -286,6 +292,8 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
         let roots = selected_roots(s)?;
         s.edit("Expand", |d, _| super::patterncmds::expand_repeats(d, &roots).map(|_| ()))?;
     }
+    // The dimensions in the art those steps made.
+    end_dimension_links(s, &mut ended)?;
     if object && e.effects {
         // Effects that Expand Appearance can't expand are left as they are. When it refuses to
         // leave a process color on a grayscale image with transparency, Expand fails as a whole.
@@ -331,8 +339,26 @@ fn expand_steps(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.revision == rev0 {
         return Err(EngineError::Other("Expand: nothing to expand".into()));
     }
+    if !ended.is_empty() {
+        // A dimension whose source Expand replaced stays plain: its link no longer fits that art.
+        let after = s.doc()?.doc.clone();
+        ended.retain(|e| e.source_kept(&before, &after));
+        s.edit("Expand", |d, _| {
+            super::dimension::restore_unchanged(d, std::mem::take(&mut ended));
+            Ok(())
+        })?;
+    }
     squash(s, from, "Expand");
     Ok(json!({ "ids": s.doc()?.selection.objects.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Ends the live link of each dimension under or holding the selection, adding it to `ended`.
+fn end_dimension_links(s: &mut Session, ended: &mut Vec<EndedLink>) -> Result<()> {
+    let roots = selected_roots(s)?;
+    if !super::dimension::reached(&s.doc()?.doc, &roots).is_empty() {
+        ended.extend(s.edit("Expand", |d, _| Ok(super::dimension::end_links(d, &roots)))?);
+    }
+    Ok(())
 }
 
 fn drop_live(n: &mut Node) {
@@ -381,8 +407,9 @@ fn expand_fills(d: &mut Document, l: &Node, to: GradientTo) -> Option<Node> {
     let mut expanded = false;
     for item in &l.appearance.items {
         // Items that paint nothing go; a gradient that can't be expanded stays.
-        let art = gradient_fill(item).and_then(|(f, g)| {
-            let (fl, path, bounds) = fill_shape(l, item, &path, bounds)?;
+        let art = gradient_fill(item).and_then(|_| {
+            let (fl, path, bounds, moved) = fill_shape(l, item, &path, bounds)?;
+            let (f, g) = gradient_fill(&moved)?;
             gradient_art(d, &fl, &path, bounds, f, g, to)
         });
         let Some(art) = art else {
@@ -444,29 +471,39 @@ fn gradient_art(d: &mut Document, l: &Node, path: &PathData, bounds: Rect, f: &F
 /// path (a plain path then), and every geometry effect of its own removed. `None` when it has no
 /// visible geometry effect.
 fn reshaped(l: &Node) -> Option<Node> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry, is_geometry};
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry, is_geometry};
     if !has_geometry(&l.appearance.effects) {
         return None;
     }
     let (path, _) = node_path(l)?;
-    let g = apply_geometry_with(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
+    let (g, carry) = apply_geometry_carrying(&l.appearance.effects, &path, path.bounds()?, &GeomContext::of(l));
     let mut m = with_path(l, g);
+    // Its gradients move with the outline, as the canvas paints them.
+    if carry.moves(&m.appearance) {
+        carry.apply(&mut m.appearance);
+    }
     m.appearance.effects.retain(|e| !is_geometry(&e.id));
     Some(m)
 }
 
 /// Path `l` (outline `path`, box `bounds`) as its fill `item` paints it on the canvas, with its
-/// outline and box: when the fill has visible geometry effects, `l` with the outline they make of
-/// `path` as a plain path, and that outline's box.
-fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect)> {
-    use vectorcraft_render::effects::{GeomContext, apply_geometry_with, has_geometry};
+/// outline, box and fill: when the fill has visible geometry effects, `l` with the outline they
+/// make of `path` as a plain path, that outline's box, and the fill with its gradient moved along
+/// with the outline.
+fn fill_shape(l: &Node, item: &AppearanceItem, path: &PathData, bounds: Rect) -> Option<(Node, PathData, Rect, AppearanceItem)> {
+    use vectorcraft_render::effects::{GeomContext, apply_geometry_carrying, has_geometry};
     if !has_geometry(item.effects()) {
-        return Some((l.clone(), path.clone(), bounds));
+        return Some((l.clone(), path.clone(), bounds, item.clone()));
     }
     // In the fill's context, as drawing runs them: a plug-in effect is told which fill it is on.
-    let outline = apply_geometry_with(item.effects(), path, bounds, &GeomContext::of(l).item(item));
+    let (outline, carry) = apply_geometry_carrying(item.effects(), path, bounds, &GeomContext::of(l).item(item));
     let b = outline.bounds()?;
-    Some((with_path(l, outline.clone()), outline, b))
+    let mut one = Appearance { items: vec![item.clone()], ..Default::default() };
+    if carry.moves(&one) {
+        carry.apply(&mut one);
+    }
+    let moved = one.items.pop().unwrap_or_else(|| item.clone());
+    Some((with_path(l, outline.clone()), outline, b, moved))
 }
 
 /// Path or compound path `l` with `path` as its path, a plain path.
@@ -783,7 +820,7 @@ fn expand_patterns_where(d: &mut Document, l: &Node, which: impl Fn(&Document, &
         later -= usize::from(fill.is_some());
         let room = if later > 0 { left.saturating_sub(l.count() + 1) } else { left };
         let tiles = fill.filter(|_| !full).and_then(|(f, def, xf)| {
-            let (fl, _, bounds) = fill_shape(l, item, &path, bounds)?;
+            let (fl, _, bounds, _) = fill_shape(l, item, &path, bounds)?;
             let Some(t) = pattern_tiles(d, &def, xf, bounds, room) else {
                 full = true;
                 return None;

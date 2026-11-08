@@ -59,8 +59,12 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
+        "window.control.dock" => {
+            p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
+        }
         "window.toolbar" => app.ui.toolbar,
         "window.toolbarAdvanced" => app.ui.toolbar_advanced,
+        "window.toolsBesideCanvas" => app.ui.tools_beside_canvas,
         "window.toolbarColumns" => match p.get("toolbar").and_then(Value::as_str) {
             None => app.ui.toolbar_double,
             Some(name) => crate::custom_toolbars::find(&app.ui, name).is_some_and(|b| b.double),
@@ -131,12 +135,19 @@ fn swapped_out(app: &VectorcraftApp, id: &str) -> bool {
     enabled(app, "object.envelope.release") != reset
 }
 
+/// Menu items shown only with Preferences › Type › Show East Asian Options on: Type › Composite
+/// Fonts….
+fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
+    id == crate::dialogs::composite_fonts::COMMAND && !app.session.prefs.show_east_asian_options
+}
+
 /// How the menus show item `id` (params `p`) now: (enabled, checked: `Some` for an item that is on
-/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]) or an item
-/// another stands in for ([`swapped_out`]).
+/// or off), or `None` while they leave it out: an empty slot ([`hidden_when_disabled`]), an item
+/// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
+/// ([`east_asian_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
     let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
-    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) {
+    if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
         return None;
     }
     Some((en, checked(app, id, p)))
@@ -157,13 +168,13 @@ pub fn shortcut_of(id: &str) -> Option<&'static str> {
 /// Commands that would act on the text being typed, held back while an IME composes in the Type
 /// tool (its marked text isn't committed yet): Undo/Redo — the native menu takes ⌘Z ahead of the
 /// IME —, the clipboard and the selection.
-/// Clear History also waits: it ends the typing session as Undo does.
+/// Clear History and New Document from State also wait: they end the typing session as Undo does.
 pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
     app.session.tool_composing()
         && (matches!(
             id,
             "edit.undo" | "edit.redo" | "edit.cut" | "edit.copy" | "edit.clear" | "edit.duplicate" | "select.all" | "select.none" | "select.inverse"
-        ) || id == "edit.clearHistory"
+        ) || matches!(id, "edit.clearHistory" | "edit.newDocumentFromState")
             || id.starts_with("edit.paste"))
 }
 
@@ -171,7 +182,7 @@ pub(crate) fn waits_for_ime(app: &VectorcraftApp, id: &str) -> bool {
 /// targeted layer, group or object, else the selection). Without `ids` (or with an empty list) and
 /// without a subject they are off, as the panel's buttons are: in menus, in the command palette and
 /// on their keys.
-pub(super) const SUBJECT_COMMANDS: [&str; 2] = ["appearance.addFill", "appearance.addStroke"];
+pub(super) const SUBJECT_COMMANDS: [&str; 3] = ["appearance.addFill", "appearance.addStroke", "svgFilter.apply"];
 
 /// Is there an Appearance panel subject: a targeted layer, group or object, or a selected one?
 pub(super) fn has_subject(app: &VectorcraftApp) -> bool {
@@ -242,7 +253,12 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             let min = crate::panels::pathfinder::minimum_operands(op);
             crate::panels::pathfinder::operands(app) >= min
         }),
-        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" => app.session.active().is_some(),
+        "file.export.pdf" | "ui.savePdfDialog" | "ui.fileInfoDialog" | "ui.rasterEffectsSettingsDialog" | "ui.svgFilterDialog" => {
+            app.session.active().is_some()
+        }
+        "ui.importSvgFilter" => {
+            app.session.active().is_some() && crate::picks::can(app, &crate::picks::PickRequest::Open(crate::dialogs::svg_filter::pick()))
+        }
         "ui.missingFontsDialog" => !cfg!(target_arch = "wasm32") && app.session.active().is_some(),
         "ui.findFontsInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.swatchOptions" | "ui.newSwatch" | "ui.newColorGroup" => app.session.active().is_some(),
@@ -278,6 +294,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
+        "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),

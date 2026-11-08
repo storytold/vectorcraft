@@ -208,8 +208,14 @@ fn wheel_view(
     let turn_id = egui::Id::unique("canvas-wheel-turn");
     let turn_before: WheelTurn = ui.data(|d| d.get_temp(turn_id)).unwrap_or_default();
     let mut turn = turn_before;
-    let (pointer, m, space, (factor, scroll)) =
-        ui.input(|i| (i.pointer.clone(), i.modifiers, i.key_down(egui::Key::Space), wheel(i, wheel_zooms, animate, line, rect.height(), &mut turn)));
+    let (pointer, m, space, (factor, scroll)) = ui.input(|i| {
+        (
+            i.pointer.clone(),
+            i.modifiers,
+            i.key_down(egui::Key::Space),
+            wheel(i, &app.session.prefs, wheel_zooms, animate, line, rect.height(), &mut turn),
+        )
+    });
     if turn != turn_before {
         ui.data_mut(|d| d.insert_temp(turn_id, turn));
     }
@@ -292,6 +298,11 @@ fn begin_drag(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, p: Pos2) {
         crate::document_drag::begin(app, ui.ctx(), ev.pos);
         Drag::Tool
     };
+    // A drag of the Zoom, Hand or Rotate View tool uses the tool of a held shortcut; held Space's
+    // view tools are not that tool.
+    if !space && matches!(d, Drag::ZoomBox { .. } | Drag::ZoomScrub { .. } | Drag::Pan { .. } | Drag::RotateView { .. }) {
+        crate::shortcuts::note_tool_use(app);
+    }
     // Panning, zooming or turning the view takes the pointer from the tool's hover.
     if !tool_holds(d) {
         app.session.tool_hover_ended(view);

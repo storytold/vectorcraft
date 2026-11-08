@@ -16,8 +16,8 @@
 //! The bounding box stands at the selection's own angle after a rotation, so its handles scale
 //! along the objects' axes. A handle drag resizes area type's frame (the type area) instead of
 //! scaling its type: the text reflows at its size.
-//! E pressed during a marquee drag makes the marquee take only the objects entirely inside it, and
-//! E pressed again makes it take the objects it touches.
+//! Marquee Selection defaults to touched objects, with fully enclosed and screen drag-direction
+//! alternatives. E reverses the rule for the current drag. The overlay reports the effective rule.
 //! Escape during a drag (a move or an Alt-drag copy, a scale, a rotation, a marquee, a widget or
 //! bracket drag) cancels it: the art returns to its state at the press.
 //! Selected area type and type on a path show an in port and an out port. A click on the out port
@@ -54,6 +54,29 @@ use crate::rulerguide::GuideEdit;
 use crate::shaperwidget;
 use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
+
+/// Direction is read on screen, even in a turned view. Within three pixels of the press's
+/// horizontal position, retain the previous rule so hand jitter does not flip it.
+fn marquee_direction(cx: &ToolContext, start: Point, cur: Point, previous: bool) -> bool {
+    let dx = cx.screen.and_then(|f| Some(f.to_screen(cur)?.0 - f.to_screen(start)?.0)).unwrap_or((cur.x - start.x) * cx.zoom);
+    if dx > 3.0 {
+        true
+    } else if dx < -3.0 {
+        false
+    } else {
+        previous
+    }
+}
+
+/// The same effective rule drives artwork, ruler guides and the visible feedback.
+fn marquee_enclosed(cx: &ToolContext, inverted: bool, directional_inside: bool) -> bool {
+    let inside = match cx.marquee_mode {
+        crate::MarqueeMode::Touching => false,
+        crate::MarqueeMode::Enclosed => true,
+        crate::MarqueeMode::Directional => directional_inside,
+    };
+    inside != inverted
+}
 
 #[derive(Clone, Debug, Default)]
 enum State {
@@ -97,9 +120,10 @@ enum State {
         cur: Point,
         /// Shift: the objects inside leave the selection if selected, else join it.
         toggle: bool,
-        /// E pressed an odd number of times during the drag: the marquee takes only the objects
-        /// that lie entirely inside it.
+        /// E pressed an odd number of times during the drag: reverse the chosen rule.
         enclosed: bool,
+        /// Last horizontal direction outside the 3 screen-pixel dead zone at the press.
+        directional_inside: bool,
     },
     /// Dragging a Live Corners widget.
     Corner(CornerDrag),
@@ -231,9 +255,13 @@ impl MoveSnap {
     }
 
     /// The move (`copy`: the copy) by `d` of the selection grabbed at `start`, snapped, and its
-    /// guides.
+    /// guides. With Smart Guides › Snap to Last Location, a move within Snapping Tolerance of where
+    /// it began goes back there before anything else snaps ([`Targets::snap_back`]).
     pub(crate) fn snap(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
@@ -291,7 +319,8 @@ impl MoveSnap {
     /// whole pixel on either axis (the one axis of a level or upright line). The bounds line up
     /// with the other art ([`Targets::snap_rects_along`]) and the grabbed point lands where the line
     /// passes an anchor or crosses a ruler guide ([`Targets::snap_point_along`]). A move of zero
-    /// length does not snap.
+    /// length does not snap, and Snap to Last Location goes back to where the move began first, as
+    /// in [`Self::snap`].
     pub(crate) fn snap_along(&self, cx: &ToolContext, start: Point, mut d: Vec2, copy: bool) -> (Vec2, Vec<Overlay>) {
         let len = d.hypot();
         if !len.is_finite() || len <= 1e-9 {
@@ -309,6 +338,9 @@ impl MoveSnap {
                 .unwrap_or(0.0)
         };
         let (targets, points) = if copy { (&self.copy_targets, &self.copy_points) } else { (&self.targets, &self.points) };
+        if let Some(ov) = targets.as_ref().and_then(|t| t.snap_back(self.bounds, d, cx.snap_tol())) {
+            return (Vec2::ZERO, ov);
+        }
         let mut guides = vec![];
         if cx.snap_to_grid
             && let Some(b) = self.bounds
@@ -944,8 +976,9 @@ impl Tool for SelectionTool {
                 }
                 vec![Action::Preview("object.transform".into(), params)]
             }
-            (PointerKind::Drag, State::Marquee { start, toggle, enclosed, .. }) => {
-                self.state = State::Marquee { start, cur: p, toggle, enclosed };
+            (PointerKind::Drag, State::Marquee { start, toggle, enclosed, directional_inside, .. }) => {
+                self.state =
+                    State::Marquee { start, cur: p, toggle, enclosed, directional_inside: marquee_direction(cx, start, p, directional_inside) };
                 vec![]
             }
             (PointerKind::Drag, State::Corner(mut c)) => {
@@ -1011,13 +1044,14 @@ impl Tool for SelectionTool {
                 out.push(Action::Commit);
                 out
             }
-            (PointerKind::Up, State::Marquee { start, toggle, enclosed, .. }) => {
+            (PointerKind::Up, State::Marquee { start, toggle, enclosed, directional_inside, .. }) => {
                 self.state = State::Idle;
                 let r = Rect::from_points(start, p);
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
                 let touched = marquee(cx.doc, r, cx.isolation, false);
+                let enclosed = marquee_enclosed(cx, enclosed, marquee_direction(cx, start, p, directional_inside));
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
                 std::iter::once(art).chain(crate::rulerguide::marquee_select(cx, r, enclosed)).collect()
@@ -1038,7 +1072,11 @@ impl Tool for SelectionTool {
             }
         }
         match &self.state {
-            State::Marquee { start, cur, .. } => o.push(Overlay::Marquee(Rect::from_points(*start, *cur))),
+            State::Marquee { start, cur, enclosed, directional_inside, .. } => o.push(Overlay::SelectionMarquee {
+                rect: Rect::from_points(*start, *cur),
+                enclosed: marquee_enclosed(cx, *enclosed, *directional_inside),
+                pointer: *cur,
+            }),
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
             State::RotateAll(d) => o.extend(d.overlays(cx)),
@@ -1536,7 +1574,7 @@ impl SelectionTool {
         self.state = if !m.shift && selected_hidden_at(cx.doc, p, cx.selection_hit_options(), &cx.selection.objects).is_some() {
             State::Moving { start: grab, press: p, hold: grab, began: false, deselect: None, key: None, exclude: None }
         } else {
-            State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false }
+            State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false, directional_inside: false }
         };
     }
 

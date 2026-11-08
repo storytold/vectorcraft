@@ -22,6 +22,7 @@ fn extras_are_written_flat_in_order() {
         e.compound_shape = true;
         e.shape_mode = crate::ShapeMode::Exclude;
         e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
+        e.pixel_aligned = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -67,9 +68,11 @@ fn extras_are_written_flat_in_order() {
         "compound_shape",
         "shape_mode",
         "envelope_edit_margin",
+        "pixel_aligned",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
+    assert_eq!(v["pixel_aligned"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
