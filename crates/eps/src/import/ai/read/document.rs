@@ -1129,6 +1129,9 @@ impl<'a> Reader<'a> {
                 for symbol in &mut doc.symbols {
                     link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
                 }
+                for pattern in &mut doc.patterns {
+                    link_styles(&mut pattern.art, &links, &styles, 0);
+                }
             }
             doc.graphic_styles = styles.into();
         }

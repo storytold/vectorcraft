@@ -3919,6 +3919,19 @@ proptest! {
         survive("mutated .ai Art brushed path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// [`styled_definitions_text`] (objects with an art style in a pattern's art and in a brush's
+    /// art), damaged or hostile.
+    #[test]
+    fn ai_styled_definitions_never_panic(cut in 0usize..2_400, edits in prop::collection::vec((0usize..2_400, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'X', 'W', 'E'])), 0..12)) {
+        let text = mutate_text(&styled_definitions_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai styled definitions", || {
+            let d = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0;
+            let _ = vectorcraft_brush::library(&d);
+            Some(d)
+        })?;
+    }
+
     /// Brush objects of every kind with any parameters, the brush manager's order with any names,
     /// and brush art sections nested or cut short, their art alone or in a group after a frame of
     /// any corners, painted or not, open or closed, the group ended or not: read with the layers,
@@ -4204,6 +4217,44 @@ fn the_art_brushed_fuzz_data_opens_live() {
     let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
     let n = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
     assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("R"), "{warnings:?} {n:?}");
+}
+
+/// Editing data with an art style (a blue fill and a drop shadow), a pattern, a pattern in the
+/// version 7 form (its tile string) and a Scatter brush's art each holding a square with its drawn
+/// look and that style, and a path filled with the first pattern.
+fn styled_definitions_text() -> String {
+    use vectorcraft_testkit::ai;
+    let style = "%AI9_BeginArtStyles\n/KnownStyle :\n(S) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+                 /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+                 /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n1 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n\
+                 0 /Int (csrc) ,\n/FillStyle : 0 O\n0 0 0 1 0 0 0 Xa\n0 1 Xd\n/Def ;\n (sclr) ,\n3 /Real (horz) ,\n4 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n";
+    let square = "0 Ae\nu\n1 0 0 0 0 0 0 Xa\n0 0 m\n10 0 L\n10 10 L\n0 10 L\nf\nU\n%_0 0 m\n%_10 0 L\n%_10 10 L\n%_0 10 L\n%_f\n1 (S) XW\n";
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{square}E\n%AI3_EndPattern\n");
+    let tile = square.replace('\n', "\r");
+    let legacy = format!("%AI3_BeginPattern: (Q)\n(Q) 0 0 20 20 [\n%AI3_Tile\n(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n] E\n%AI3_EndPattern\n");
+    let art = format!("%AI8_BeginBrushPattern\n(D)\n0 A\n{square}%AI8_EndBrushPattern\n");
+    let object = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(B)\n(2 /D/ 5 1 0 0 / 0 0.5 1.5 1) -\n( 1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    let path = format!("(P) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", ai::rect(20.0, 20.0, 80.0, 80.0));
+    ai::editing_data(100.0, 100.0, &format!("{style}{pattern}{legacy}{art}{object}{}", ai::layer("L", &path)))
+}
+
+/// The data [`ai_styled_definitions_never_panic`] damages, as it is, opens with the patterns' and
+/// the brush's squares live.
+#[test]
+fn the_styled_definitions_fuzz_data_opens_live() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&styled_definitions_text())].concat();
+    // Trusted: the empty page it is read beside isn't compared with its art.
+    let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    let live = |n: &vectorcraft_doc::Node| matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }) && n.appearance.effects.len() == 1;
+    for name in ["P", "Q"] {
+        let tile = doc.pattern(name).map(|p| p.art.clone()).unwrap_or_else(|| panic!("{name}: {warnings:?}"));
+        assert!(tile.len() == 1 && live(&tile[0]), "{name}: {warnings:?} {tile:?}");
+    }
+    let lib = vectorcraft_brush::library(&doc);
+    let brush = lib.iter().find(|b| b.name == "B").unwrap_or_else(|| panic!("{warnings:?}"));
+    assert!(matches!(brush.art().as_slice(), [n] if live(n)), "{warnings:?} {brush:?}");
 }
 
 /// The ids of the objects of an Objects on Path group in the fuzz cases.
