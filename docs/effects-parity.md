@@ -187,7 +187,7 @@ VectorCraft choices; an original approximation, never compared with another appl
 
 The `three-d` crate (depends on `geom` and `pathops`, with no UI or GPU dependencies) builds, rotates, projects, shades and depth-sorts the surfaces;
 the effects crate turns them into art. What's left (materials and shadows, ray-traced rendering,
-angular cut caps, exact visibility, 3D Classic, Turntable, 3D export) is 25–45 h.
+angular cut caps, exact visibility, Revolve (Classic), Rotate (Classic), Map Art, Turntable, 3D export) is 25–45 h.
 
 ## Revision history
 

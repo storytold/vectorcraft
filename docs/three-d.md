@@ -200,8 +200,8 @@ out, perspective). No Adobe software, assets, presets or bevel shapes were used.
 - Curves are followed within 1/2000 of the shape's size (at least 0.05 pt), so a small curve takes a few points
   and a large one up to 32. Extrude & Bevel and Inflate take up to 2,048 outline points (a stroke's outline is
   counted on its own), Rotate (which only turns the outline) 65,536.
-- **3D (Classic)** (the track cube, surface types, blend steps, map art), Turntable and 3D export are separate,
-  unbuilt items.
+- **3D (Classic)**: Extrude & Bevel (Classic) is built, with its surface types and blend steps. Revolve (Classic),
+  Rotate (Classic), the track cube, map art, Turntable and 3D export are separate, unbuilt items.
 
 Release measurements and a repeatable CLI scene are in [3D lighting performance](3d-lighting-performance.md).
 
