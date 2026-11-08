@@ -820,12 +820,13 @@ impl<'a> Reader<'a> {
             let (paint, global, spot) = match e.cell {
                 Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
                 // A swatch named by its gradient or pattern takes the name that got in the document.
+                // A gradient swatch's own paint does not link to a swatch; art painted with the
+                // gradient links to it.
                 Cell::Gradient(g) => {
-                    let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                    let gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
                     if e.name == g {
                         e.name = self.global_names.get(Global::Gradient, &g).to_string();
                     }
-                    gp.swatch = Some(e.name.clone());
                     (Paint::Gradient(Box::new(gp)), false, false)
                 }
                 Cell::Pattern(p) => {
