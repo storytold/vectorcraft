@@ -5466,6 +5466,11 @@ axis	Y Axis	Y 軸
 	Keep data of its own with the document	在文件中保存自己的資料
 	Change how the objects its effect is applied to are drawn	變更套用其效果的物件的繪製方式
 	Write the document as a file in its own format	將文件寫成其自有格式的檔案
+	Show its progress, see Cancel and write log lines	顯示進度、偵測取消要求並寫入記錄行
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	權限 `progress` 需要增效模組 API 層級 {PROGRESS_API}：請設定 `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模組以與主機不同的類型匯入 `env.{name}`：主機的類型為 {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模組匯入了 `env.{name}`，增效模組只有在增效模組 API 層級 {PROGRESS_API}（`api` {PROGRESS_API}）且具有權限 `progress` 時才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模組匯入了主機未提供的 `{from}.{name}`：增效模組只能匯入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效模組 API 層級 2），不能使用 WASI、檔案或網路
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 為 {_1}；此主機支援的增效模組 API 層級為 1 到 {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` 必須是權限名稱的清單
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知權限 `{shown}`

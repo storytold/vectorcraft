@@ -5815,6 +5815,11 @@ axis	Y Axis	Y tengely
 	Keep data of its own with the document	Saját adatokat tárolhat a dokumentummal
 	Change how the objects its effect is applied to are drawn	Módosíthatja, hogyan rajzolódnak ki az objektumok, amelyekre az effektusa alkalmazva van
 	Write the document as a file in its own format	Saját formátumú fájlba írhatja a dokumentumot
+	Show its progress, see Cancel and write log lines	Megjelenítheti az előrehaladását, észlelheti a megszakítást és naplósorokat írhat
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	a `progress` engedélyhez {PROGRESS_API}. szintű bővítmény-API kell: adja meg az `api` {PROGRESS_API} értéket
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	a modul az `env.{name}` elemet a gazdaprogramétól eltérő típussal importálja: a gazdaprogram típusa {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	a modul importálja az `env.{name}` elemet, amelyet bővítmény csak {PROGRESS_API}. szintű bővítmény-API-val (`api` {PROGRESS_API}) és a `progress` engedéllyel használhat
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	a modul importálja a(z) `{from}.{name}` elemet, amelyet a gazdaprogram nem kínál: bővítmény csak az `env.vc_progress`, `env.vc_cancelled` és `env.vc_log` elemet importálhatja (2. szintű bővítmény-API), WASI-t, fájlokat és hálózatot nem
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`

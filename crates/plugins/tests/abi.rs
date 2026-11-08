@@ -6,7 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
-use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, heavy_terms, registry, wat as tpl};
+use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
 
 /// The example Desaturate plug-in, built from `crates/plugins/example`.
 const DESATURATE: &[u8] = include_bytes!("fixtures/desaturate.wasm");
@@ -306,6 +306,140 @@ fn folder_loading_skips_bad_files() {
     assert!(registry::load_folder(&dir.join("missing")).is_err());
     assert!(registry::load_file(&dir, Limits::default()).is_err(), "a directory is not a module");
     std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A filter of plug-in API level 2 that may use the host imports.
+const LEVEL2: &str =
+    r#"{"id":"test.level2","name":"Level 2","version":"1","kind":"filter","api":2,"permissions":["doc.read","doc.write","progress"]}"#;
+
+/// The error of loading `bytes`, as text.
+fn load_err(bytes: &[u8]) -> String {
+    Plugin::load(bytes, Limits::default()).expect_err("the module must be refused").to_string()
+}
+
+/// A module may import only the host's three functions, with the host's types, and only when its
+/// manifest gives `api` 2 and lists `progress`; the error names the import it refuses.
+#[test]
+fn host_imports_are_checked_when_a_module_is_loaded() {
+    let with = |manifest: &str, import: &str| build(&tpl::with_imports(manifest, import, "", INPUT));
+    let unknown = with(LEVEL2, r#"(import "env" "vc_clock" (func (result i64)))"#);
+    assert!(load_err(&unknown).contains("imports `env.vc_clock`, which the host doesn't offer"), "{}", load_err(&unknown));
+    let elsewhere = with(LEVEL2, r#"(import "vc" "vc_log" (func (param i32 i32 i32) (result i32)))"#);
+    assert!(load_err(&elsewhere).contains("imports `vc.vc_log`, which the host doesn't offer"), "{}", load_err(&elsewhere));
+    let wrong_type = with(LEVEL2, r#"(import "env" "vc_progress" (func (param i32 i32)))"#);
+    assert!(load_err(&wrong_type).contains("imports `env.vc_progress` with another type than the host's: it is (param i64 i64)"));
+    let memory = with(LEVEL2, r#"(import "env" "vc_cancelled" (global i32))"#);
+    assert!(load_err(&memory).contains("imports `env.vc_cancelled` with another type"), "{}", load_err(&memory));
+    let progress = r#"(import "env" "vc_progress" (func (param i64 i64)))"#;
+    let ungranted = r#"{"id":"test.ungranted","name":"U","kind":"filter","api":2,"permissions":["doc.read","doc.write"]}"#;
+    let says = "imports `env.vc_progress`, which a plug-in may use only at plug-in API level 2 (`api` 2) and with the permission `progress`";
+    for manifest in [ungranted, r#"{"id":"test.implied","name":"U","kind":"filter","api":2}"#, MANIFEST] {
+        let e = load_err(&with(manifest, progress));
+        assert!(e.contains(says), "{manifest}: {e}");
+    }
+    let p = Plugin::load(&with(LEVEL2, progress), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    // A level-2 plug-in that imports nothing runs as a level-1 one does.
+    let plain = Plugin::load(&build(&tpl::returning(LEVEL2, INPUT)), Limits::default()).unwrap();
+    assert_eq!(plain.run_reporting(INPUT.as_bytes(), b"{}", plain.limits()), (Ok(INPUT.as_bytes().to_vec()), Report::default()));
+}
+
+/// Progress is clamped and passed on to the caller's sink as a share; the run's last report is kept.
+#[test]
+fn progress_reports_are_clamped_and_reach_the_caller() {
+    use std::{cell::RefCell, rc::Rc};
+    let first = "(call $vc_progress (i64.const 50) (i64.const 10)) (call $vc_progress (i64.const -3) (i64.const 8)) (call $vc_progress (i64.const 3) (i64.const 8))";
+    let p = Plugin::load(&build(&tpl::reporting(LEVEL2, first, INPUT)), Limits::default()).unwrap();
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let seen = seen.clone();
+        Rc::new(move |d, t, w| seen.borrow_mut().push((d, t, w.to_string())))
+    };
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, Some(sink), || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert_eq!(out.unwrap(), INPUT.as_bytes());
+    assert_eq!(report.progress, Some((3, 8)));
+    let step = vectorcraft_plugins::host::PROGRESS_STEP.to_string();
+    assert_eq!(*seen.borrow(), [(10, 10, step.clone()), (0, 8, step.clone()), (3, 8, step)]);
+    // A live effect's progress stays its own: it is drawn as part of something else.
+    let effect = r#"{"id":"test.level2.effect","name":"E","kind":"effect","api":2,"permissions":["doc.read","effect.render","progress"]}"#;
+    let e = Plugin::load(&build(&tpl::reporting(effect, first, INPUT)), Limits::default()).unwrap();
+    let quiet = Rc::new(RefCell::new(0));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let quiet = quiet.clone();
+        Rc::new(move |_, _, _| *quiet.borrow_mut() += 1)
+    };
+    let (_, report) = vectorcraft_doc::cancel::scope(&token, Some(sink), || e.run_reporting(INPUT.as_bytes(), b"{}", e.limits()));
+    assert_eq!((report.progress, *quiet.borrow()), (Some((3, 8)), 0));
+}
+
+/// Cancel makes `vc_cancelled` return 1, and a plug-in that checks it stops at once; what it returns
+/// then is discarded, so the run is `Cancelled`; past the time budget the same holds. One that
+/// ignores it still ends at its instruction budget. Outside a cancelled scope it returns 0.
+#[test]
+fn cancel_reaches_a_cooperating_plugin_and_a_budget_ends_one_that_ignores_it() {
+    let p =
+        Plugin::load(&build(&tpl::cooperating(LEVEL2, 1 << 40, r#"{"stopped":1}"#, INPUT)), Limits { fuel_base: u64::MAX / 4, ..Limits::default() })
+            .unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let (out, report) = vectorcraft_doc::cancel::scope(&token, None, || p.run_reporting(INPUT.as_bytes(), b"{}", p.limits()));
+    assert_eq!(out, Err(Error::Cancelled), "what it returned after the Cancel is discarded");
+    assert_eq!(report.progress, Some((0, 1 << 40)), "it saw the Cancel on its first step");
+    // Not cancelled: it runs all its steps.
+    let short = Plugin::load(&build(&tpl::cooperating(LEVEL2, 1000, r#"{"stopped":1}"#, INPUT)), Limits::default()).unwrap();
+    let (out, report) = short.run_reporting(INPUT.as_bytes(), b"{}", short.limits());
+    assert_eq!((out.unwrap(), report.progress), (INPUT.as_bytes().to_vec(), Some((999, 1000))));
+    // Past its time budget `vc_cancelled` returns 1 too, and what it returns then is discarded.
+    let late =
+        Plugin::load(&build(&tpl::cooperating(LEVEL2, 1000, r#"{"stopped":1}"#, INPUT)), Limits { wall_time_ms: 0, ..Limits::default() }).unwrap();
+    let (out, report) = late.run_reporting(INPUT.as_bytes(), b"{}", late.limits());
+    assert_eq!((out, report.progress), (Err(Error::Limit("time budget".into())), Some((0, 1000))));
+    // One that never checks ends at its budget, cancelled or not.
+    let ignoring = build(&tpl::reporting(LEVEL2, "(loop $l (br $l))", INPUT));
+    let p = Plugin::load(&ignoring, Limits { fuel_base: 1_000_000, ..Limits::default() }).unwrap();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
+    assert_eq!(r, Err(Error::Limit("instruction budget".into())));
+}
+
+/// A log line longer than the cap is cut; lines past the run's budget are dropped, with one line
+/// that says so; text outside memory, text that isn't UTF-8 and an unknown level are errors the
+/// plug-in sees, never a panic.
+#[test]
+fn log_lines_are_capped_and_bad_text_is_an_error_the_plugin_sees() {
+    use vectorcraft_plugins::host::{self, LOG_BAD_LEVEL, LOG_NOT_UTF8, LOG_OUTSIDE_MEMORY, MAX_LOG_LINE, MAX_LOG_LINES};
+    // `$text` at 0x2000 holds "hi", then 0xff, then 2000 bytes of "x".
+    let expect = |level: i32, ptr: &str, len: &str, want: i32| {
+        format!("(if (i32.ne (call $vc_log (i32.const {level}) {ptr} {len}) (i32.const {want})) (then unreachable))")
+    };
+    let first = [
+        expect(2, "(i32.const 0x2000)", "(i32.const 2)", 0),
+        expect(1, "(i32.const 0x2003)", "(i32.const 2000)", 0),
+        expect(2, "(i32.const -1)", "(i32.const 5)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.const 0x2000)", "(i32.const -1)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.mul (memory.size) (i32.const 65536))", "(i32.const 1)", LOG_OUTSIDE_MEMORY),
+        expect(2, "(i32.const 0x2000)", "(i32.const 3)", LOG_NOT_UTF8),
+        expect(9, "(i32.const 0x2000)", "(i32.const 2)", LOG_BAD_LEVEL),
+    ]
+    .concat();
+    let data = format!(r#"(data (i32.const 0x2000) "hi\ff{}")"#, "x".repeat(2000));
+    let imports = format!("{} {data}", tpl::HOST_IMPORTS);
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, &first, INPUT)), Limits::default()).unwrap();
+    let (out, report) = p.run_reporting(INPUT.as_bytes(), b"{}", p.limits());
+    assert_eq!(out.unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    assert_eq!(report.lines.len(), 2);
+    assert_eq!(report.lines[0], vectorcraft_plugins::LogLine { level: vectorcraft_plugins::LogLevel::Info, text: "hi".into() });
+    assert_eq!(report.lines[1].text, format!("{}…", "x".repeat(MAX_LOG_LINE - 2)), "cut at the cap, ellipsis included");
+    // Past the budget: dropped, with one line that says so.
+    let flood = format!(
+        "(local $i i32) (loop $l (drop (call $vc_log (i32.const 2) (i32.const 0x2000) (i32.const 2))) (local.set $i (i32.add (local.get $i) (i32.const 1))) (br_if $l (i32.lt_u (local.get $i) (i32.const {}))))",
+        MAX_LOG_LINES * 3
+    );
+    let p = Plugin::load(&build(&tpl::with_imports(LEVEL2, &imports, &flood, INPUT)), Limits::default()).unwrap();
+    let (out, report) = p.run_reporting(INPUT.as_bytes(), b"{}", p.limits());
+    assert!(out.is_ok() && report.truncated);
+    assert_eq!(report.lines.len(), MAX_LOG_LINES + 1);
+    assert_eq!(report.lines.iter().filter(|l| l.text == host::LOG_TRUNCATED).count(), 1);
 }
 
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped

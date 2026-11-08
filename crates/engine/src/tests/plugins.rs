@@ -840,6 +840,35 @@ fn a_filter_run_made_elsewhere_keeps_its_document_data() {
     assert_eq!(s.doc().unwrap().doc.plugin_data(id), Some(&json!({"pens": 2})), "undone with its objects");
 }
 
+/// A plug-in of API level 2 that uses the host imports lists `progress`, which the user grants like
+/// any permission; a filter run made elsewhere then reports its progress, as a share, to the
+/// progress the caller shows, and sees the caller's Cancel.
+#[test]
+fn a_level_2_filter_installs_with_progress_granted_and_reports_to_the_caller() {
+    use crate::cmd::fileio::progress::{self, Progress};
+    use crate::cmd::plugin::FilterRun;
+    let mut s = session();
+    let id = "test.engine.level2";
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write","progress"]}}"#);
+    let wasm = wat::parse_str(tpl::cooperating(&manifest, 1000, r#"{"objects":[]}"#, r#"{"objects":[]}"#)).unwrap();
+    let data = vectorcraft_format::base64_encode(&wasm);
+    let inspected = run(&mut s, "plugin.inspect", json!({"dataBase64": data}));
+    assert_eq!((&inspected["needsApproval"], &inspected["permissions"]), (&json!(true), &json!(["doc.read", "doc.write", "progress"])));
+    let e = s.execute("plugin.install", &json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap_err().to_string();
+    assert!(e.contains("asks for the permissions doc.read, doc.write, progress"), "{e}");
+    run(&mut s, "plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write", "progress"]}));
+    let shown = Progress::new();
+    let r = FilterRun::prepare(&s, &json!({"id": id})).unwrap();
+    assert!(progress::scope(&shown, || r.run()).is_ok());
+    assert_eq!((shown.counts(), shown.counts_share()), ((999, 1000), true));
+    // Cancelled, it stops on its first step, and what it returns then is discarded.
+    shown.cancel();
+    let cancelled = progress::scope(&shown, || r.run());
+    assert!(matches!(cancelled, Err(EngineError::Cancelled)), "{cancelled:?}");
+    assert_eq!(shown.counts(), (0, 1000));
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A filter run the caller cancels (MCP's `notifications/cancelled`, the app's Cancel) stops between
 /// two slices of its budget and changes nothing.
 #[test]

@@ -5443,6 +5443,11 @@ axis	Y Axis	Ось Y
 	Keep data of its own with the document	Хранить свои данные в документе
 	Change how the objects its effect is applied to are drawn	Изменять то, как рисуются объекты, к которым применён его эффект
 	Write the document as a file in its own format	Записывать документ в файл собственного формата
+	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	разрешению `progress` нужен уровень API модулей {PROGRESS_API}: укажите `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль импортирует `env.{name}` с другим типом, чем у хоста: у хоста тип {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль импортирует `env.{name}`, который модуль может использовать только на уровне API модулей {PROGRESS_API} (`api` {PROGRESS_API}) и с разрешением `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль импортирует `{from}.{name}`, который хост не предоставляет: модуль может импортировать только `env.vc_progress`, `env.vc_cancelled` и `env.vc_log` (уровень API модулей 2), без WASI, файлов и сети
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` равно {_1}; этот хост поддерживает уровни API модулей от 1 до {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` должен быть списком имён разрешений
 @msg	`grant` names an unknown permission `{shown}`	`grant` называет неизвестное разрешение `{shown}`

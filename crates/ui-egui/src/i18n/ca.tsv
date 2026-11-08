@@ -5852,6 +5852,11 @@ digits	Malayalam	Malaiàlam
 	Keep data of its own with the document	Desar dades pròpies amb el document
 	Change how the objects its effect is applied to are drawn	Canviar com es dibuixen els objectes als quals s’aplica el seu efecte
 	Write the document as a file in its own format	Escriure el document com un fitxer en un format propi
+	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permís `progress` necessita el nivell d’API de complements {PROGRESS_API}: indiqueu `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el mòdul importa `env.{name}` amb un tipus diferent del de l’amfitrió: el de l’amfitrió és {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el mòdul importa `env.{name}`, que un complement només pot fer servir al nivell d’API de complements {PROGRESS_API} (`api` {PROGRESS_API}) i amb el permís `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el mòdul importa `{from}.{name}`, que l’amfitrió no ofereix: un complement només pot importar `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivell d’API de complements 2), i cap WASI, fitxer ni xarxa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`

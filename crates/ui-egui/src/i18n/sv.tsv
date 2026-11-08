@@ -5855,6 +5855,11 @@ axis	Y Axis	Y-axel
 	Keep data of its own with the document	Spara egna data med dokumentet
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
 	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
+	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `progress` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera `env.vc_progress`, `env.vc_cancelled` och `env.vc_log` (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`
@@ -7768,7 +7773,6 @@ digits	Hindi	Hindi
 @msg	the library has no item `{other}`	biblioteket har inget objekt `{other}`
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
-@msg	the module imports `{_1}.{_2}`, but plug-ins get no host imports (no WASI, files or network)	modulen importerar `{_1}.{_2}`, men plugins får inga värdimporter (ingen WASI, inga filer eller nätverk)
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt

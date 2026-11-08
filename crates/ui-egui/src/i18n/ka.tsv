@@ -5755,6 +5755,11 @@ axis	Y Axis	Y ღერძი
 	Keep data of its own with the document	საკუთარი მონაცემების დოკუმენტთან ერთად შენახვა
 	Change how the objects its effect is applied to are drawn	იმის შეცვლა, თუ როგორ იხატება ობიექტები, რომლებზეც მისი ეფექტია გამოყენებული
 	Write the document as a file in its own format	დოკუმენტის ჩაწერა ფაილად საკუთარ ფორმატში
+	Show its progress, see Cancel and write log lines	პროგრესის ჩვენება, გაუქმების შემჩნევა და ჟურნალის სტრიქონების ჩაწერა
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	ნებართვას `progress` სჭირდება პლაგინის API-ის დონე {PROGRESS_API}: მიუთითეთ `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	მოდულს შემოაქვს `env.{name}` ჰოსტისგან განსხვავებული ტიპით: ჰოსტის ტიპია {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	მოდულს შემოაქვს `env.{name}`, რომლის გამოყენებაც პლაგინს მხოლოდ პლაგინის API-ის დონეზე {PROGRESS_API} (`api` {PROGRESS_API}) და ნებართვით `progress` შეუძლია
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	მოდულს შემოაქვს `{from}.{name}`, რომელსაც ჰოსტი არ გვთავაზობს: პლაგინს შეუძლია შემოიტანოს მხოლოდ `env.vc_progress`, `env.vc_cancelled` და `env.vc_log` (პლაგინის API-ის დონე 2) და არა WASI, ფაილები ან ქსელი
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` არის {_1}; ეს ჰოსტი პლაგინის API-ის დონეებს 1-დან {API_LEVEL}-მდე უჭერს მხარს
 @msg	`grant` must be a list of permission names	`grant` ნებართვების სახელების სია უნდა იყოს
 @msg	`grant` names an unknown permission `{shown}`	`grant` უცნობ ნებართვას ასახელებს: `{shown}`

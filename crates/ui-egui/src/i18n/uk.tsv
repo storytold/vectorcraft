@@ -5428,6 +5428,11 @@ axis	Y Axis	Вісь Y
 	Keep data of its own with the document	Зберігати власні дані в документі
 	Change how the objects its effect is applied to are drawn	Змінювати те, як малюються об’єкти, до яких застосовано його ефект
 	Write the document as a file in its own format	Записувати документ у файл власного формату
+	Show its progress, see Cancel and write log lines	Показувати свій поступ, помічати скасування і записувати рядки журналу
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	дозволу `progress` потрібен рівень API модулів {PROGRESS_API}: укажіть `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	модуль імпортує `env.{name}` з іншим типом, ніж у хоста: у хоста тип {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	модуль імпортує `env.{name}`, який модуль може використовувати лише на рівні API модулів {PROGRESS_API} (`api` {PROGRESS_API}) і з дозволом `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	модуль імпортує `{from}.{name}`, який хост не надає: модуль може імпортувати лише `env.vc_progress`, `env.vc_cancelled` і `env.vc_log` (рівень API модулів 2), без WASI, файлів і мережі
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`

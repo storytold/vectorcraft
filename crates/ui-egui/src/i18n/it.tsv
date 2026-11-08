@@ -5448,6 +5448,11 @@ axis	Y Axis	Asse Y
 	Keep data of its own with the document	Conservare dati propri con il documento
 	Change how the objects its effect is applied to are drawn	Cambiare il modo in cui vengono disegnati gli oggetti a cui è applicato il suo effetto
 	Write the document as a file in its own format	Scrivere il documento come file in un formato proprio
+	Show its progress, see Cancel and write log lines	Mostrare il proprio avanzamento, rilevare l’annullamento e scrivere righe di registro
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	l’autorizzazione `progress` richiede il livello API dei plug-in {PROGRESS_API}: indicare `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	il modulo importa `env.{name}` con un tipo diverso da quello dell’host: quello dell’host è {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	il modulo importa `env.{name}`, che un plug-in può usare solo al livello API dei plug-in {PROGRESS_API} (`api` {PROGRESS_API}) e con l’autorizzazione `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	il modulo importa `{from}.{name}`, che l’host non offre: un plug-in può importare solo `env.vc_progress`, `env.vc_cancelled` e `env.vc_log` (livello API dei plug-in 2), e nessun WASI, file o rete
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` è {_1}; questo host supporta i livelli API dei plug-in da 1 a {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` deve essere un elenco di nomi di autorizzazioni
 @msg	`grant` names an unknown permission `{shown}`	`grant` indica un’autorizzazione sconosciuta `{shown}`

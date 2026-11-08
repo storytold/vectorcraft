@@ -5224,6 +5224,11 @@
 	Keep data of its own with the document	अपना डेटा डॉक्यूमेंट के साथ रखना
 	Change how the objects its effect is applied to are drawn	जिन ऑब्जेक्ट्स पर उसका इफ़ेक्ट लगा है, उनके बनाए जाने का तरीका बदलना
 	Write the document as a file in its own format	डॉक्यूमेंट को अपने फ़ॉर्मेट की फ़ाइल के रूप में लिखना
+	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `progress` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `progress` के साथ उपयोग कर सकता है
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल `env.vc_progress`, `env.vc_cancelled` और `env.vc_log` (प्लग-इन API स्तर 2) आयात कर सकता है, और कोई WASI, फ़ाइल या नेटवर्क नहीं
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
@@ -7407,7 +7412,6 @@
 @msg	the library holds {MAX_GROUPS} groups already	लाइब्रेरी में पहले से ही {MAX_GROUPS} समूह हैं।
 @msg	the library holds {MAX_ITEMS} items of this kind already	लाइब्रेरी पहले से ही इस तरह के {MAX_ITEMS} आइटम रखता है
 @msg	the library item is damaged	लाइब्रेरी आइटम क्षतिग्रस्त है
-@msg	the module imports `{_1}.{_2}`, but plug-ins get no host imports (no WASI, files or network)	मॉड्यूल आयात `{_1}.{_2}`, लेकिन प्लग-इन को कोई होस्ट आयात नहीं मिलता है (कोई WASI, फ़ाइल या नेटवर्क नहीं)
 @msg	the module must export its linear memory as `memory`	मॉड्यूल को अपनी रैखिक मेमोरी `memory` के रूप में एक्सपोर्ट करनी चाहिए
 @msg	the name is empty	नाम खाली है
 @msg	the object already has an opacity mask	ऑब्जेक्ट पहले से ही एक अपारदर्शिता मास्क है

@@ -5832,6 +5832,11 @@ axis	Y Axis	osa Y
 	Keep data of its own with the document	Ukládat vlastní data s dokumentem
 	Change how the objects its effect is applied to are drawn	Měnit, jak se kreslí objekty, na které je použit jeho efekt
 	Write the document as a file in its own format	Zapsat dokument jako soubor ve vlastním formátu
+	Show its progress, see Cancel and write log lines	Zobrazit průběh, rozpoznat zrušení a zapisovat řádky protokolu
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	oprávnění `progress` vyžaduje úroveň API zásuvných modulů {PROGRESS_API}: uveďte `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul importuje `env.{name}` s jiným typem, než má hostitel: typ hostitele je {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul importuje `env.{name}`, který zásuvný modul smí používat jen na úrovni API zásuvných modulů {PROGRESS_API} (`api` {PROGRESS_API}) a s oprávněním `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul importuje `{from}.{name}`, který hostitel nenabízí: zásuvný modul smí importovat jen `env.vc_progress`, `env.vc_cancelled` a `env.vc_log` (úroveň API zásuvných modulů 2), a žádné WASI, soubory ani síť
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; tento hostitel podporuje úrovně API zásuvných modulů 1 až {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` musí být seznam názvů oprávnění
 @msg	`grant` names an unknown permission `{shown}`	`grant` uvádí neznámé oprávnění `{shown}`

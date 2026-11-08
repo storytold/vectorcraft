@@ -5773,6 +5773,11 @@ axis	Y Axis	Eje Y
 	Keep data of its own with the document	Guardar datos propios con el documento
 	Change how the objects its effect is applied to are drawn	Cambiar cómo se dibujan los objetos a los que se aplica su efecto
 	Write the document as a file in its own format	Escribir el documento como un archivo en su propio formato
+	Show its progress, see Cancel and write log lines	Mostrar su progreso, detectar la cancelación y escribir líneas de registro
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permiso `progress` necesita el nivel de API de plugins {PROGRESS_API}: indique `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el módulo importa `env.{name}` con un tipo distinto del del host: el del host es {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el módulo importa `env.{name}`, que un plugin solo puede usar en el nivel de API de plugins {PROGRESS_API} (`api` {PROGRESS_API}) y con el permiso `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el módulo importa `{from}.{name}`, que el host no ofrece: un plugin solo puede importar `env.vc_progress`, `env.vc_cancelled` y `env.vc_log` (nivel de API de plugins 2), y ningún WASI, archivo ni red
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`
