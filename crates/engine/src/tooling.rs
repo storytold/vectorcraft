@@ -511,8 +511,14 @@ impl Session {
     /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
     /// when the press began, and none of the press's changes to them are stored. A dropped Type
     /// press restores the prior selection. The freeform gradient point selected once the tool
-    /// took the press is selected again.
+    /// took the press is selected again. A press held while the tool computes an edit on another
+    /// thread has not reached the tool: it is removed from the held input with everything held
+    /// after it, and the tool is left as it is.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
+        if let Some(i) = self.held_press() {
+            self.held_input.truncate(i);
+            return Ok(());
+        }
         // Nothing to roll back without a document; the tool still drops the press and gets the release.
         let _ = self.cancel_interaction();
         let before = self.press_options.take();
@@ -552,6 +558,14 @@ impl Session {
             }
         }
         r.map(drop)
+    }
+
+    /// Where the press in progress is in the held input: the last held press, when no release is
+    /// held after it.
+    fn held_press(&self) -> Option<usize> {
+        let ends = |kind: PointerKind| matches!(kind, PointerKind::Down | PointerKind::Up);
+        let i = self.held_input.iter().rposition(|(_, input, _)| matches!(input, HeldInput::Pointer(ev) if ends(ev.kind)))?;
+        matches!(self.held_input.get(i), Some((_, HeldInput::Pointer(ev), _)) if ev.kind == PointerKind::Down).then_some(i)
     }
 
     /// The options of `t` that [`Self::store_tool_settings`] stores.

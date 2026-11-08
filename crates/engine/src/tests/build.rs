@@ -939,6 +939,78 @@ fn shape_builder_holds_gestures_made_during_a_merge() {
     }
 }
 
+/// A press held while a merge is computed on another thread, then dropped (a long touch, a
+/// canceled touch, a second finger), is never made: once the merge is applied, the tool is at
+/// rest and the document is the one the input before the press makes. A held click before the
+/// press is still made.
+#[test]
+fn shape_builder_drops_a_press_held_during_a_merge() {
+    type Gesture = fn(&mut Session, ViewInfo);
+    fn press(s: &mut Session, v: ViewInfo, x: f64, mods: Mods) {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 10.0).with_mods(mods), v).unwrap();
+    }
+    fn click(s: &mut Session, v: ViewInfo) {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+        }
+    }
+    let cases: [(&str, bool, Gesture); 5] = [
+        ("a press", false, |s, v| press(s, v, 75.0, Mods::default())),
+        ("a drag", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 95.0, 10.0), v).unwrap();
+        }),
+        ("a Cmd-press", false, |s, v| press(s, v, 305.0, Mods { cmd: true, ..Default::default() })),
+        ("a press and a key", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }),
+        ("a click, then a press", true, |s, v| {
+            click(s, v);
+            press(s, v, 135.0, Mods::default());
+        }),
+    ];
+    let v = ViewInfo::default();
+    let start = || {
+        let mut s = session();
+        square_row(&mut s);
+        click_row(&mut s, v);
+        s
+    };
+    // A tool left in the middle of a gesture keeps waiting: the polls stop after a few.
+    let settle = |s: &mut Session| {
+        for _ in 0..8 {
+            if !s.tool_waiting() {
+                return;
+            }
+            s.tool_poll(v, true).unwrap();
+        }
+    };
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    for (what, clicked, send) in cases {
+        // The input before the press, one after the other.
+        let mut one = start();
+        settle(&mut one);
+        if clicked {
+            click(&mut one, v);
+            settle(&mut one);
+        }
+        let mut s = start();
+        let from = s.input_count();
+        send(&mut s, v);
+        let to = s.input_count();
+        assert!(s.tool_editing() && !s.input_applied(from, to), "{what}: held");
+        s.drop_tool_press(v).unwrap();
+        settle(&mut s);
+        assert!(!s.tool_waiting() && !s.tool_editing() && s.input_applied(from, to), "{what}");
+        assert!(!s.tool_busy(), "{what}: the tool is at rest");
+        assert_eq!(s.tool_id(), "shapeBuilder", "{what}: no tool is lent");
+        assert!(undated(&s) == undated(&one), "{what}: the document the input before the press makes");
+        assert_eq!(labels(&s), labels(&one), "{what}");
+        assert_eq!(s.doc().unwrap().selection, one.doc().unwrap().selection, "{what}");
+    }
+}
+
 /// A new revision of the document made outside a command while a merge is computed on another
 /// thread keeps the merge when the selected art is as it was (the next poll applies it, as the
 /// command computes it), and drops it when the art changed.
