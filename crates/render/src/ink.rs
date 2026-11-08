@@ -563,17 +563,25 @@ mod tests {
     fn the_ink_table_matches_the_profile() {
         let cms = cms::active();
         let lut = InkLut::build(&cms);
-        let mut worst = 0.0f32;
+        let (mut worst, mut worst_dark) = (0.0f32, 0.0f32);
         // Between the grid points (where interpolation errs most) and on them.
         for i in 0..=20 {
             for j in 0..=20 {
                 let inks = [i as f32 / 20.0, j as f32 / 20.0, ((i * 7 + j * 3) % 21) as f32 / 20.0, ((i + j * 5) % 21) as f32 / 20.0];
                 let (a, b) = (lut.apply(inks), cms.cmyk_to_srgb(inks, false));
-                worst = worst.max((0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max));
+                let err = (0..3).map(|c| (a[c] - b[c]).abs()).fold(0.0, f32::max);
+                // Builds darker than the press's black point clip at 0 in one or more XYZ channels,
+                // so the grid interpolates across that clip in the darkest levels.
+                if b.iter().all(|v| *v < 0.05) {
+                    worst_dark = worst_dark.max(err);
+                } else {
+                    worst = worst.max(err);
+                }
             }
         }
         // Within two 8-bit levels: far below a visible difference.
         assert!(worst * 255.0 < 2.5, "worst error {} levels", worst * 255.0);
+        assert!(worst_dark * 255.0 < 5.0, "worst error near black {} levels", worst_dark * 255.0);
     }
 
     #[test]

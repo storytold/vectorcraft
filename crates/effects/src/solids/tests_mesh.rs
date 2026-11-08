@@ -54,9 +54,49 @@ fn the_meshes_of_one_object_share_one_triangle_budget() {
     let shapes = [Profile { path: profile(&n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(&n), opacity: 1.0 }];
     let Some(effect) = n.appearance.effects.first() else { panic!("no effect") };
     let mut total = 0;
-    assert!(meshes_for(effect, &shapes, &mut total).is_ok());
+    assert!(meshes_for(effect, &shapes, &mut total, MAX_MESH_TRIANGLES).is_ok());
     let mut total = MAX_MESH_TRIANGLES - first + 1;
-    assert!(meshes_for(effect, &shapes, &mut total).is_err_and(|e| e.contains("too complex")));
+    assert!(meshes_for(effect, &shapes, &mut total, MAX_MESH_TRIANGLES).is_err_and(|e| e.contains("too complex")));
+}
+
+#[test]
+fn revolve_stops_at_the_first_mesh_past_the_budget() {
+    // The fill revolves into a mesh; the stroke's profile, copied 1000 times, is too complex to
+    // revolve at all.
+    let mut n = square_node(1, 100.0);
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.get_mut(0) {
+        f.effects.push(fx(crate::REVOLVE, json!({})));
+    }
+    let fill_only = n.clone();
+    if let Some(AppearanceItem::Stroke(s)) = n.appearance.items.get_mut(1) {
+        s.effects.push(fx("distort.transform", json!({ "moveH": 1.0, "copies": 1000 })));
+        s.effects.push(fx(crate::REVOLVE, json!({})));
+    }
+    let fill = three_d_meshes(&fill_only).unwrap();
+    let triangles = fill[0].mesh.triangles.len();
+    assert!(triangles > 1);
+    let whole = three_d_meshes(&n);
+    assert!(whole.as_ref().is_err_and(|e| !e.contains("to export")), "the stroke's own error: {whole:?}");
+    // With room for less than the fill's mesh, the stroke's is never built.
+    let mut total = 0;
+    let capped = meshes_within(&n, &mut total, triangles - 1);
+    assert!(capped.as_ref().is_err_and(|e| e.contains("too complex to export")), "{capped:?}");
+    assert_eq!(total, triangles);
+}
+
+#[test]
+fn the_objects_of_one_asset_share_one_triangle_budget() {
+    let mut a = square_node(1, 0.0);
+    a.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let mut b = square_node(2, 300.0);
+    b.appearance.effects.push(fx(EXTRUDE, json!({})));
+    let triangles = |n: &Node| three_d_meshes(n).unwrap().iter().map(|m| m.mesh.triangles.len()).sum::<usize>();
+    let (ta, tb) = (triangles(&a), triangles(&b));
+    assert!(meshes_of_within([&a], ta).is_ok());
+    assert!(meshes_of_within([&b], tb).is_ok());
+    assert!(meshes_of_within([&a, &b], ta.max(tb)).is_err_and(|e| e.contains("too complex to export")));
+    assert_eq!(meshes_of_within([&a, &b], ta + tb).map(|m| m.len()), Ok(4));
+    assert_eq!(three_d_meshes_of([&a, &b]).map(|m| m.len()), Ok(4));
 }
 
 #[test]

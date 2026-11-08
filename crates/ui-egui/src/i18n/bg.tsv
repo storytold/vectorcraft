@@ -358,6 +358,13 @@ font-technology	Variable	Променливи
 	Apply Bullets	Прилагане на булети
 	Numbered List	Номериран списък
 	Apply Numbers	Прилагане на номериране
+	Bullets and Numbering…	Булети и номериране…
+	Numbers	Номера
+	Level:	Ниво:
+	Bullet Character:	Знак за булет:
+	Number Style:	Стил на номерата:
+	Left Indent:	Ляв отстъп:
+	First Line Indent:	Отстъп на първия ред:
 	Convert to Text	Конвертиране в текст
 	Filled Dot	Плътна точка
 	Dash	Тире
@@ -3379,6 +3386,15 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Тате-чу-йоко
 	Tate-chu-yoko Settings…	Настройки на Тате-чу-йоко…
 	Tate-chu-yoko Settings	Настройки на Тате-чу-йоко
+	Composite Fonts…	Съставни шрифтове…
+	Composite Fonts	Съставни шрифтове
+	Export Composite Fonts	Експортиране на съставни шрифтове
+	Import Composite Fonts	Импортиране на съставни шрифтове
+	Delete Font	Изтриване на шрифт
+	Kanji	Канджи
+	Kana	Кана
+	Numerals	Цифри
+	Scale at Center	Мащабиране от центъра
 	Up/Down:	Нагоре/надолу:
 	Left/Right:	Наляво/надясно:
 	Temperature	Температура
@@ -4585,6 +4601,7 @@ axis	Both	И двете
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	градиентът „{name}“ не е дефиниран във файла: заменен е с обикновен цвят
 @msg	an image VectorCraft can't read was left out	изображение, което VectorCraft не може да разчете, беше пропуснато
 @msg	an image whose data is cut short was left out	изображение с непълни данни беше пропуснато
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
@@ -4661,6 +4678,7 @@ axis	Both	И двете
 @msg	object ids are non-negative integers, not {v}	идентификаторите на обектите са неотрицателни цели числа, а не {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} трябва да бъде масив от идентификатори на обекти, които са неотрицателни цели числа
 @msg	invalid object id {value}: expected a non-negative integer	невалиден идентификатор на обект {value}: очаква се неотрицателно цяло число
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	елемент {index} на `{key}` е {value}, а не идентификатор на обект (неотрицателно цяло число)
 @msg	no such object id {value}	няма обект с идентификатор {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за четене: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	достъпът на автоматизацията до файловата система не е разрешен: липсва право за запис: {path}
@@ -5734,6 +5752,8 @@ axis	Y Axis	Y ос
 	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
 	ID: {id}	ID: {id}
 	Version: {version}	Версия: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Да се инсталира ли „{name}“ на мястото на приставката със същия ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Този файл не е приставката, инсталирана преди с този ID. Той получава настройките и кеша, пазени за този ID.
 	File SHA-256: {hash}	SHA-256 на файла: {hash}
 	Read the objects it is given	Четене на обектите, които получава
 	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
@@ -5741,6 +5761,9 @@ axis	Y Axis	Y ос
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
 	Write the document as a file in its own format	Записване на документа като файл в собствен формат
 	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
+	Keep settings of its own	Съхраняване на собствени настройки
+	Keep a cache of its own, which you can clear	Съхраняване на собствен кеш, който можете да изчистите
+	Clear Plug-in Cache	Изчистване на кеша на добавката
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор

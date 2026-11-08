@@ -360,6 +360,13 @@ font-technology	Variable	Variabla
 	Apply Bullets	Använd punkter
 	Numbered List	Numrerad lista
 	Apply Numbers	Använd numrering
+	Bullets and Numbering…	Punkter och numrering…
+	Numbers	Nummer
+	Level:	Nivå:
+	Bullet Character:	Punkttecken:
+	Number Style:	Nummerformat:
+	Left Indent:	Vänsterindrag:
+	First Line Indent:	Indrag för första raden:
 	Convert to Text	Konvertera till text
 	Filled Dot	Fylld punkt
 	Dash	Tankstreck
@@ -3389,6 +3396,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Inställningar för Tate-chu-yoko…
 	Tate-chu-yoko Settings	Inställningar för Tate-chu-yoko
+	Composite Fonts…	Sammansatta teckensnitt…
+	Composite Fonts	Sammansatta teckensnitt
+	Export Composite Fonts	Exportera sammansatta teckensnitt
+	Import Composite Fonts	Importera sammansatta teckensnitt
+	Delete Font	Ta bort teckensnitt
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Siffror
+	Scale at Center	Skala från mitten
 	Up/Down:	Upp/ned:
 	Left/Right:	Vänster/höger:
 	Temperature	Temperatur
@@ -4640,6 +4656,7 @@ axis	Both	Båda
 @msg	an image VectorCraft can't read was left out	en bild som VectorCraft inte kan läsa utelämnades
 @msg	graphs come in as plain art, without their data or settings	diagram läses in som vanlig grafik, utan sina data och inställningar
 @msg	an image whose data is cut short was left out	en bild med avkortade data utelämnades
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	en inbäddad bild på {_1} × {_2} pixlar förminskades till {_3} × {_4} pixlar för att behålla lagren
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	länkade bilder visar förhandsgranskningen med låg upplösning som sparats i filen tills deras filer hittas: länka om dem i panelen Länkar
 @msg	linked type areas past VectorCraft's limits were left out	länkade textområden utöver VectorCrafts gränser utelämnades
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text som byter skrivriktning inuti ett textobjekt öppnas i riktningen för sitt första tecken
@@ -4719,6 +4736,7 @@ axis	Both	Båda
 @msg	object ids are non-negative integers, not {v}	objekt-id:n är icke-negativa heltal, inte {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} måste vara en array med objekt-id:n som är icke-negativa heltal
 @msg	invalid object id {value}: expected a non-negative integer	ogiltigt objekt-id {value}: ett icke-negativt heltal förväntades
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	post {index} i `{key}` är {value}, inte ett objekt-id (ett icke-negativt heltal)
 @msg	no such object id {value}	det finns inget objekt med id {value}
 @msg	id {value} is a layer, not an object	id {value} är ett lager, inte ett objekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} är ett lager, inte ett objekt; flytta lager med layer.move
@@ -5889,6 +5907,9 @@ axis	Y Axis	Y-axel
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär dessa behörigheter?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället för det plugin som har samma id?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Den här filen är inte det plugin som tidigare installerades med detta id. Den får de inställningar och den cache som sparats för detta id.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	”{name}” är en annan modul än pluginet med id {_1} och skulle få de inställningar och den cache som sparats för det: installera det med `replace: true` när användaren har godkänt
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Läsa objekten den får
 	Change, add and delete objects in the document	Ändra, lägga till och ta bort objekt i dokumentet
@@ -5896,10 +5917,13 @@ axis	Y Axis	Y-axel
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på ritas
 	Write the document as a file in its own format	Skriva dokumentet som en fil i sitt eget format
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts och skriva loggrader
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `progress` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
+	Keep settings of its own	Spara egna inställningar
+	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
+	Clear Plug-in Cache	Töm pluginets cache
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	behörigheten `{permission}` kräver plugin-API-nivå {PROGRESS_API}: ange `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulen importerar `env.{name}` med en annan typ än värdens: värdens typ är {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera `env.vc_progress`, `env.vc_cancelled` och `env.vc_log` (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modulen importerar `env.{name}`, som ett plugin bara får använda på plugin-API-nivå {PROGRESS_API} (`api` {PROGRESS_API}) och med behörigheten `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modulen importerar `{from}.{name}`, som värden inte erbjuder: ett plugin får bara importera de `env.vc_*`-funktioner som docs/plugins.md listar (plugin-API-nivå 2), och ingen WASI, inga filer eller nätverk
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` är {_1}; den här värden stöder plugin-API-nivå 1 till {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` måste vara en lista med behörighetsnamn
 @msg	`grant` names an unknown permission `{shown}`	`grant` anger en okänd behörighet `{shown}`

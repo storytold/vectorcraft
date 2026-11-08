@@ -371,6 +371,13 @@ font-technology	Variable	Variables
 	Apply Bullets	Aplicar viñetas
 	Numbered List	Lista numerada
 	Apply Numbers	Aplicar numeración
+	Bullets and Numbering…	Viñetas y numeración…
+	Numbers	Números
+	Level:	Nivel:
+	Bullet Character:	Carácter de viñeta:
+	Number Style:	Estilo de número:
+	Left Indent:	Sangría izquierda:
+	First Line Indent:	Sangría de primera línea:
 	Convert to Text	Convertir en texto
 	Filled Dot	Punto relleno
 	Dash	Guion
@@ -3467,6 +3474,15 @@ digits	Malayalam	Malayálam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ajustes de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ajustes de Tate-chu-yoko
+	Composite Fonts…	Fuentes compuestas…
+	Composite Fonts	Fuentes compuestas
+	Export Composite Fonts	Exportar fuentes compuestas
+	Import Composite Fonts	Importar fuentes compuestas
+	Delete Font	Eliminar fuente
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Números
+	Scale at Center	Escalar desde el centro
 	Up/Down:	Arriba/abajo:
 	Left/Right:	Izquierda/derecha:
 	Temperature	Temperatura
@@ -4741,6 +4757,7 @@ axis	Both	Ambos
 @msg	an image VectorCraft can't read was left out	se omitió una imagen que VectorCraft no puede leer
 @msg	graphs come in as plain art, without their data or settings	los gráficos se importan como ilustración normal, sin sus datos ni sus ajustes
 @msg	an image whose data is cut short was left out	se omitió una imagen con datos incompletos
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imagen incrustada de {_1} × {_2} píxeles se redujo a {_3} × {_4} píxeles para conservar las capas
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el texto que cambia de dirección de escritura dentro de un objeto de texto se abre en la dirección de su primer carácter
@@ -4802,6 +4819,7 @@ axis	Both	Ambos
 @msg	object ids are non-negative integers, not {v}	los identificadores de objeto son enteros no negativos, no {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} debe ser una lista de identificadores de objeto que sean enteros no negativos
 @msg	invalid object id {value}: expected a non-negative integer	identificador de objeto no válido {value}: se esperaba un entero no negativo
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	la entrada {index} de `{key}` es {value}, no un identificador de objeto (un entero no negativo)
 @msg	no such object id {value}	no existe el objeto con el identificador {value}
 @msg	id {value} is a layer, not an object	el identificador {value} es una capa, no un objeto
 @msg	id {value} is a layer, not an object; move layers with layer.move	el identificador {value} es una capa, no un objeto; mueva las capas con layer.move
@@ -5807,6 +5825,9 @@ axis	Y Axis	Eje Y
 	Install “{name}”, which asks for these permissions?	¿Instalar “{name}”, que pide estos permisos?
 	ID: {id}	ID: {id}
 	Version: {version}	Versión: {version}
+	Install “{name}” in place of the plug-in with the same ID?	¿Instalar “{name}” en lugar del plugin con el mismo ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Este archivo no es el plugin instalado antes con este ID. Recibe la configuración y la caché guardadas para ese ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” es un módulo distinto del plugin con ID {_1} y recibiría la configuración y la caché guardadas para él: instálalo con `replace: true` cuando el usuario lo acepte
 	File SHA-256: {hash}	SHA-256 del archivo: {hash}
 	Read the objects it is given	Leer los objetos que recibe
 	Change, add and delete objects in the document	Cambiar, añadir y eliminar objetos del documento
@@ -5814,10 +5835,13 @@ axis	Y Axis	Eje Y
 	Change how the objects its effect is applied to are drawn	Cambiar cómo se dibujan los objetos a los que se aplica su efecto
 	Write the document as a file in its own format	Escribir el documento como un archivo en su propio formato
 	Show its progress, see Cancel and write log lines	Mostrar su progreso, detectar la cancelación y escribir líneas de registro
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permiso `progress` necesita el nivel de API de plugins {PROGRESS_API}: indique `api` {PROGRESS_API}
+	Keep settings of its own	Guardar una configuración propia
+	Keep a cache of its own, which you can clear	Guardar una caché propia, que usted puede vaciar
+	Clear Plug-in Cache	Vaciar caché del plugin
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permiso `{permission}` necesita el nivel de API de plugins {PROGRESS_API}: indique `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el módulo importa `env.{name}` con un tipo distinto del del host: el del host es {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el módulo importa `env.{name}`, que un plugin solo puede usar en el nivel de API de plugins {PROGRESS_API} (`api` {PROGRESS_API}) y con el permiso `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el módulo importa `{from}.{name}`, que el host no ofrece: un plugin solo puede importar `env.vc_progress`, `env.vc_cancelled` y `env.vc_log` (nivel de API de plugins 2), y ningún WASI, archivo ni red
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	el módulo importa `env.{name}`, que un plugin solo puede usar en el nivel de API de plugins {PROGRESS_API} (`api` {PROGRESS_API}) y con el permiso `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	el módulo importa `{from}.{name}`, que el host no ofrece: un plugin solo puede importar las funciones `env.vc_*` que enumera docs/plugins.md (nivel de API de plugins 2), y ningún WASI, archivo ni red
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`

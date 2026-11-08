@@ -276,8 +276,27 @@ pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
     l
 }
 
-/// One layout pass, without fitting.
+/// One layout pass, without fitting. Runs set in a composite font are laid out as the runs of one
+/// class each that [`FontDb::composite_split`] makes of them; the glyphs, ruby and inline
+/// graphics still name the runs of `t`.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let Some((split, from)) = db.composite_split(t) else { return layout_runs(db, t, opts, None) };
+    let mut l = layout_runs(db, &split, opts, Some(t));
+    let original = |run: &mut usize| *run = from.get(*run).copied().unwrap_or(*run);
+    l.glyphs.iter_mut().chain(l.ruby.iter_mut()).for_each(|g| original(&mut g.run));
+    l.inlines.iter_mut().for_each(|i| original(&mut i.run));
+    l
+}
+
+/// [`layout_once`] for text set in no composite font: `t` itself, or with `set`, the pieces a
+/// composite font splits `set` into (ruby readings take their style from `set`'s runs).
+fn layout_runs(db: &FontDb, t: &TextObject, opts: &LayoutOptions, set: Option<&TextObject>) -> TextLayout {
+    let mut set_runs = Vec::new();
+    let mut off = 0;
+    for r in set.map(|s| s.runs.as_slice()).unwrap_or_default() {
+        set_runs.push((off..off + r.text.len(), &r.style));
+        off += r.text.len();
+    }
     let text = t.plain_text();
     let mut runs = Vec::with_capacity(t.runs.len());
     let mut inlines = Vec::with_capacity(t.runs.len());
@@ -315,6 +334,7 @@ fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout 
         text: &text,
         faces,
         runs,
+        set_runs,
         inlines,
         default: CharStyle::default(),
         opts,

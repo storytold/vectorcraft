@@ -277,12 +277,11 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
     for id in ids {
         let Some(a) = d.asset(id) else { continue };
         let format = a.format_3d.as_deref().unwrap_or(DEFAULT_FORMAT_3D);
-        let mut parts = vec![];
-        for node in &a.nodes {
-            let n = d.node(*node).ok_or_else(|| bad(C, format!("no such object {0}", node.0)))?;
-            let what = &a.name;
-            parts.extend(vectorcraft_render::effects::three_d_meshes(n).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?);
-        }
+        let nodes =
+            a.nodes.iter().map(|node| d.node(*node).ok_or_else(|| bad(C, format!("no such object {0}", node.0)))).collect::<Result<Vec<_>>>()?;
+        // The asset's objects share one budget of triangles.
+        let what = &a.name;
+        let parts = vectorcraft_render::effects::three_d_meshes_of(nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;

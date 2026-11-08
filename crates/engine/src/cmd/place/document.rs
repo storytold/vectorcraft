@@ -133,7 +133,7 @@ pub(crate) fn document_art(
     // A document already being read further up, or past [`MAX_NESTED_READS`] of them, has its links
     // left as stored.
     if let Some(_reading) = Reading::enter(bytes) {
-        super::super::links::resolve(&mut l.doc, path, false, false);
+        super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
     let n = l.doc.artboards.len();
@@ -332,7 +332,7 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 /// `d` for output: linked images and placed documents that keep only their previews get their
 /// files back, else output as their previews, with a warning.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
-    let (d, mut warnings) = super::super::links::full_linked_images(d, None);
+    let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
         Cow::Borrowed(doc) => doc,
         Cow::Owned(doc) => doc,
