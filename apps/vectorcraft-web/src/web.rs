@@ -115,6 +115,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                 watch_canvas(&page, &loss, ctx);
                 if let Some(rs) = &cc.wgpu_render_state {
                     log::info!("vectorcraft-web: wgpu backend {:?}", rs.adapter.get_info().backend);
+                    vectorcraft_ui_egui::gpu_invert::setup(rs);
                     let (loss, ctx) = (loss.clone(), ctx.clone());
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
