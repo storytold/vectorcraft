@@ -1107,6 +1107,17 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
 /// ([`draws_look_outline`]): the look's coordinates are written to a few decimals.
 const OUTLINE_TOLERANCE: f64 = 0.25;
 
+/// How far, in points, a flattened outline in [`draws_look_outline`] may lie from its curves.
+const OUTLINE_FLATNESS: f64 = OUTLINE_TOLERANCE / 10.0;
+
+/// How far apart, in points, [`draws_look_outline`] checks points along each flattened segment.
+const OUTLINE_SPACING: f64 = OUTLINE_TOLERANCE / 2.0;
+
+/// How close, in points, each checked point must lie to the other flattened outline: every point
+/// between two checked ones is within half the spacing of one, and both outlines are within the
+/// flatness of their curves, so the curves are then within [`OUTLINE_TOLERANCE`] of each other.
+const OUTLINE_POINT_LIMIT: f64 = OUTLINE_TOLERANCE - 2.0 * OUTLINE_FLATNESS - OUTLINE_SPACING / 2.0;
+
 /// Most point-to-segment distances worked out for one object, over all its look's outlines.
 const MAX_OUTLINE_PAIRS: usize = 4_000_000;
 
@@ -1136,7 +1147,7 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
         let (mut start, mut last) = (None, None);
         let mut over = false;
         for p in paths {
-            vectorcraft_geom::flatten(p.to_bezpath(), OUTLINE_TOLERANCE / 10.0, |el| {
+            vectorcraft_geom::flatten(p.to_bezpath(), OUTLINE_FLATNESS, |el| {
                 let mut add = |a: kurbo::Point, b: kurbo::Point| {
                     if out.len() < max {
                         out.push(kurbo::Line::new(a, b));
@@ -1164,16 +1175,16 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
         }
         (!over && !out.is_empty()).then_some(out)
     }
-    /// Does every point of segments `a` lie within the tolerance of segments `b`? Each segment is
-    /// checked at both ends (the last point of an open outline starts no segment) and at points
-    /// at most the tolerance apart between them (two outlines can share their vertices and join
-    /// them differently). Each point's distance to each segment of `b` (a projection onto it) is
-    /// taken from `budget`: `false` once that runs out.
+    /// Does every point of segments `a` lie close enough to segments `b` ([`OUTLINE_POINT_LIMIT`])?
+    /// Each segment is checked at both ends (the last point of an open outline starts no segment)
+    /// and at points at most [`OUTLINE_SPACING`] apart between them (two outlines can share their
+    /// vertices and join them differently). Each point's distance to each segment of `b` (a
+    /// projection onto it) is taken from `budget`: `false` once that runs out.
     fn near(a: &[kurbo::Line], b: &[kurbo::Line], budget: &mut usize) -> bool {
         use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
-        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_TOLERANCE * OUTLINE_TOLERANCE);
+        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT);
         for s in a {
-            let steps = (s.arclen(1e-6) / OUTLINE_TOLERANCE).ceil();
+            let steps = (s.arclen(1e-6) / OUTLINE_SPACING).ceil();
             let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
             let Some(left) = budget.checked_sub(steps.saturating_add(1).saturating_mul(b.len())) else { return false };
             *budget = left;
@@ -1401,6 +1412,26 @@ mod tests {
         let started = std::time::Instant::now();
         assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
         assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    }
+
+    /// The outline check holds for every point of the outlines, not only the points it checks: a
+    /// 0.25 pt line whose look has only short pieces over its ends, 0.24 pt away, leaves the
+    /// line's middle about 0.27 pt from the look, so the drawn look stays. The line drawn 0.1 pt
+    /// away matches.
+    #[test]
+    fn the_outline_check_holds_between_the_points_it_checks() {
+        use kurbo::Point;
+        use vectorcraft_geom::{PathData, SubPath};
+        let appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+        let line = PathData::new(vec![SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.25, 0.0)], false)]);
+        let object = Node::path(NodeId(1), line, appearance.clone());
+        let look = |pieces: &[[Point; 2]]| {
+            let drawn = PathData::new(pieces.iter().map(|p| SubPath::polyline(p, false)).collect());
+            Node::group(NodeId(2), vec![Arc::new(Node::path(NodeId(3), drawn, Appearance::default()))])
+        };
+        let ends = [[Point::new(0.0, 0.24), Point::new(0.01, 0.24)], [Point::new(0.24, 0.24), Point::new(0.25, 0.24)]];
+        assert!(!draws_look_outline(&object, &appearance, &look(&ends)));
+        assert!(draws_look_outline(&object, &appearance, &look(&[[Point::new(0.0, 0.1), Point::new(0.25, 0.1)]])));
     }
 
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
