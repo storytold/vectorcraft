@@ -25,7 +25,8 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
-    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    /// Escape while editing is the tool's: it goes back to the tool that double-clicked into the
+    /// type, or to the Selection tool (#1686).
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }

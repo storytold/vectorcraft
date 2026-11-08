@@ -160,7 +160,7 @@ fn next_edit_session() -> u64 {
 pub struct TypeTool {
     vertical: bool,
     mode: Mode,
-    /// The tool to return to on Escape (e.g. when double-clicked from a selection tool).
+    /// The tool to return to on Escape or Cmd+Enter (e.g. when double-clicked from a selection tool).
     prev_tool: Option<String>,
     /// Text object being edited.
     editing: Option<NodeId>,
