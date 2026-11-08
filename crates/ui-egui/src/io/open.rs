@@ -175,6 +175,8 @@ fn permission_words(name: &str) -> String {
         Some(permissions::Permission::EffectRender) => tl!("Change how the objects its effect is applied to are drawn"),
         Some(permissions::Permission::ExportWrite) => tl!("Write the document as a file in its own format"),
         Some(permissions::Permission::Progress) => tl!("Show its progress, see Cancel and write log lines"),
+        Some(permissions::Permission::Settings) => tl!("Keep settings of its own"),
+        Some(permissions::Permission::Cache) => tl!("Keep a cache of its own, which you can clear"),
         None => return permissions::display_text(name, permissions::MAX_SHOWN_FIELD),
     };
     words.to_string()
@@ -183,15 +185,18 @@ fn permission_words(name: &str) -> String {
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
 /// with `name`) → `plugin.install`'s result. A plug-in that lists permissions the user hasn't
 /// granted it yet (`grant`) asks them first, showing its name, id, version, file hash and what each
-/// permission lets it do, and so does a filter that asks for a heavy budget the user hasn't allowed
-/// yet (`allowHeavy`); OK installs it if the module still has the hash the prompt showed, Cancel
-/// installs nothing → `{pending}` while it asks. Every
+/// permission lets it do, so does a filter that asks for a heavy budget the user hasn't allowed
+/// yet (`allowHeavy`), and so does a module that would take the place of another one with its id
+/// and get its settings and cache (`replace`); OK installs it if the module still has the hash the
+/// prompt showed, Cancel installs nothing → `{pending}` while it asks. Every
 /// text from the manifest is shown with its hidden characters escaped and its length capped
 /// ([`permissions::display_text`]).
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
     let heavy_allowed = module.get("allowHeavy").and_then(Value::as_bool) == Some(true);
     let granted = module.get("grant").is_some_and(|g| !g.is_null());
-    if !heavy_allowed || !granted {
+    // `replace: false` asks for no replacing, so only a module without `replace` asks.
+    let replace_given = module.get("replace").is_some_and(|r| !r.is_null());
+    if !heavy_allowed || !granted || !replace_given {
         let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
         let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
         // What OK installs: the same module, with what the user has agreed to so far, pinned to
@@ -232,6 +237,19 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
             let mut allowed = answered;
             allowed["allowHeavy"] = json!(true);
             dialogs::confirm::ask(app, &message, &detail, "ui.installPlugin", allowed);
+            return Ok(json!({ "pending": dialogs::confirm::KIND }));
+        }
+        if !replace_given && info["needsReplace"] == true {
+            let message = crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)]);
+            let lines = [
+                crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]),
+                crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]),
+                String::new(),
+                tl!("This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.").to_string(),
+            ];
+            let mut replaced = answered;
+            replaced["replace"] = json!(true);
+            dialogs::confirm::ask(app, &message, &lines.join("\n"), "ui.installPlugin", replaced);
             return Ok(json!({ "pending": dialogs::confirm::KIND }));
         }
     }

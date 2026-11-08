@@ -5701,6 +5701,9 @@ axis	Y Axis	Y 轴
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
 	Version: {version}	版本：{version}
+	Install “{name}” in place of the plug-in with the same ID?	要安装“{name}”来替换具有相同 ID 的插件吗？
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	此文件不是之前以此 ID 安装的插件。它将获得为该 ID 保存的设置和缓存。
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”与 ID 为 {_1} 的插件是不同的模块，并会获得为其保存的设置和缓存：请在用户同意后使用 `replace: true` 安装
 	File SHA-256: {hash}	文件 SHA-256：{hash}
 	Read the objects it is given	读取交给它的对象
 	Change, add and delete objects in the document	更改、添加和删除文档中的对象
@@ -5708,10 +5711,13 @@ axis	Y Axis	Y 轴
 	Change how the objects its effect is applied to are drawn	更改应用了其效果的对象的绘制方式
 	Write the document as a file in its own format	将文档写为其自有格式的文件
 	Show its progress, see Cancel and write log lines	显示进度、检测取消请求并写入日志行
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `progress` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
+	Keep settings of its own	保存自己的设置
+	Keep a cache of its own, which you can clear	保存自己的缓存，您可以清除它
+	Clear Plug-in Cache	清除增效工具缓存
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	权限 `{permission}` 需要增效工具 API 级别 {PROGRESS_API}：请设置 `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	模块以与宿主不同的类型导入 `env.{name}`：宿主的类型为 {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `progress` 时才能使用它
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 `env.vc_progress`、`env.vc_cancelled` 和 `env.vc_log`（增效工具 API 级别 2），不能使用 WASI、文件或网络
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	模块导入了 `env.{name}`，增效工具只有在增效工具 API 级别 {PROGRESS_API}（`api` {PROGRESS_API}）且具有权限 `{permission}` 时才能使用它
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	模块导入了宿主不提供的 `{from}.{name}`：增效工具只能导入 docs/plugins.md 列出的 `env.vc_*` 函数（增效工具 API 级别 2），不能使用 WASI、文件或网络
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` 为 {_1}；此主机支持的增效工具 API 级别为 1 到 {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` 必须是权限名称的列表
 @msg	`grant` names an unknown permission `{shown}`	`grant` 包含未知权限 `{shown}`
