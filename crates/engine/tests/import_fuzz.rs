@@ -3100,11 +3100,17 @@ fn the_vertical_fixture_reads_as_vertical_type() {
     l.doc.walk(|n| {
         if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
             let tcy: Vec<&str> = t.runs.iter().filter(|r| r.style.tate_chu_yoko).map(|r| r.text.as_str()).collect();
-            found.push((t.plain_text(), t.vertical, tcy.join("|")));
+            let roman: Vec<&str> = t.runs.iter().filter(|r| r.style.standard_vertical_roman).map(|r| r.text.as_str()).collect();
+            found.push((t.plain_text(), t.vertical, tcy.join("|"), roman.join("|")));
         }
     });
-    let want = [("Day 12\nnext", true, "12"), ("Vertical area type wraps", true, ""), ("On a path", true, "On a path")];
-    assert_eq!(found, want.map(|(a, b, c)| (a.to_string(), b, c.to_string())), "{:?}", l.warnings);
+    // Key 35 at 1 in the defaults: Standard Vertical Roman Alignment, except where a run has 3 or 2.
+    let want = [
+        ("Day 12\nnext", true, "12", "Day "),
+        ("Vertical area type wraps", true, "", "Vertical area type wraps"),
+        ("On a path", true, "On a path", ""),
+    ];
+    assert_eq!(found, want.map(|(a, b, c, d)| (a.to_string(), b, c.to_string(), d.to_string())), "{:?}", l.warnings);
 }
 
 /// The text objects of [`frames_document_text`]: story 0 in its two frames, story 1 in its one (a
