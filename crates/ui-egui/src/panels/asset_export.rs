@@ -7,6 +7,10 @@
 //! desktop with Background Export on, on the background thread); the web downloads them. The
 //! screen button opens Export for Screens on its Assets tab.
 //!
+//! Export 3D Object (the panel menu) collects the selected objects with a 3D effect as 3D assets,
+//! marked 3D on their tiles. While the panel's assets include 3D assets, a Format row picks their
+//! mesh format (USDA, USDZ, glTF or OBJ), and Export writes them as mesh files beside the pictures.
+//!
 //! Everything runs through the `assets.*` commands.
 
 use std::cell::RefCell;
@@ -17,7 +21,7 @@ use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{ExportAsset, Node, NodeId};
 use vectorcraft_engine::DocState;
-use vectorcraft_engine::cmd::fileio::{SCREEN_SETTINGS_KEYS, screen_export_preset_list};
+use vectorcraft_engine::cmd::fileio::{FORMATS_3D, SCREEN_SETTINGS_KEYS, format_3d_label, screen_export_preset_list};
 
 use super::{pstate, set_pstate};
 use crate::dialogs::{
@@ -131,6 +135,11 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             let th = Rect::from_min_size(egui::pos2(r.center().x - THUMB / 2.0, r.top() + 4.0), vec2(THUMB, THUMB));
             paint_thumb(ui, st, a, th);
             ui.painter().rect_stroke(th, 0.0, Stroke::new(if on { 2.0 } else { 1.0 }, if on { t.accent } else { t.border }), StrokeKind::Outside);
+            if a.format_3d.is_some() {
+                let badge = Rect::from_min_size(th.left_top() + vec2(2.0, 2.0), vec2(18.0, 12.0));
+                ui.painter().rect_filled(badge, 2.0, t.accent);
+                ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "3D", egui::FontId::proportional(9.0), Color32::WHITE);
+            }
             let name_rect = Rect::from_min_max(egui::pos2(r.left() + 2.0, th.bottom() + 3.0), egui::pos2(r.right() - 2.0, r.bottom() - 1.0));
             match &renaming {
                 Some((id, buf)) if *id == a.id => {
@@ -214,6 +223,12 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 }
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
+    // 3D assets are written as mesh files (`assets.export3D`), the others as pictures.
+    let Some(st) = app.session.active() else { return };
+    let format = |id: &u64| st.doc.asset(*id).and_then(|a| a.format_3d.clone());
+    let (three_d, ids): (Vec<u64>, Vec<u64>) = ids.into_iter().partition(|id| format(id).is_some());
+    // An OBJ is two files.
+    let mesh_files: usize = three_d.iter().map(|id| if format(id).as_deref() == Some("obj") { 2 } else { 1 }).sum();
     let mut p = json!({ "assets": ids });
     // Match the shared dialog's TIFF defaults, retaining saved choices and other formats.
     if let Some(st) = app.session.active()
@@ -251,7 +266,23 @@ fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
         p["folder"] = json!(folder);
         p["openLocation"] = json!(saved.get("openLocation").and_then(Value::as_bool).unwrap_or(true));
     }
-    if let Err(e) = io::export_files(app, "assets.export", p) {
+    let mut meshes = json!({ "assets": three_d });
+    if io::is_web(app) {
+        meshes["zip"] = json!(mesh_files > 1);
+    } else {
+        meshes["folder"] = p["folder"].clone();
+        meshes["openLocation"] = p["openLocation"].clone();
+    }
+    // The meshes are written at once, before the pictures start on the background thread. When
+    // they fail, the pictures are not exported and the status bar shows the error.
+    if !three_d.is_empty()
+        && let Err(e) = io::export_files(app, "assets.export3D", meshes)
+    {
+        return app.status(e);
+    }
+    if !ids.is_empty()
+        && let Err(e) = io::export_files(app, "assets.export", p)
+    {
         app.status(e);
     }
 }
@@ -262,6 +293,21 @@ enum Settings {
     Set(Value),
     /// Show a format's Format Settings (in Export for Screens).
     Format(String),
+}
+
+/// The Format of the 3D assets among `ids`: a row shown only when there are some, set to their
+/// format (blank when they differ). Returns those assets and the format picked for them.
+fn format_3d(ui: &mut Ui, st: &DocState, ids: &[u64]) -> Option<(Vec<u64>, &'static str)> {
+    let three_d: Vec<(u64, &str)> = ids.iter().filter_map(|id| Some((*id, st.doc.asset(*id)?.format_3d.as_deref()?))).collect();
+    let first = three_d.first()?.1;
+    let current = if three_d.iter().all(|(_, f)| *f == first) { format_3d_label(first) } else { "" };
+    let labels: Vec<&str> = FORMATS_3D.iter().map(|f| format_3d_label(f)).collect();
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, &format!("3D {}", tl!("Format:")));
+        picked = widgets::dropdown_names(ui, "asset-export-3d-format", current, &labels, 90.0).and_then(|i| FORMATS_3D.get(i).copied());
+    });
+    picked.map(|f| (three_d.into_iter().map(|(id, _)| id).collect(), f))
 }
 
 /// The document's shared export format rows. Returns the change asked for and how many files one asset makes.
@@ -316,6 +362,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(6.0);
     widgets::section_header(ui, tl!("Export Settings"));
     let (change, files_each) = settings(ui, st);
+    let all_ids: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
+    let format_change = format_3d(ui, st, &sel_or_all(&sel, &all_ids));
     let doc = st.uid;
     let mut save_name = pstate::<Option<String>>(&ctx, SAVING);
     let mut save_pick = None;
@@ -391,6 +439,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(pick) = save_pick {
         preset(app, &ctx, doc, pick);
+    }
+    if let Some((assets, format)) = format_change {
+        run(app, "assets.set3DFormat", json!({ "assets": assets, "format": format }));
     }
     if add {
         collect(app, &ctx, None, alt);
@@ -524,6 +575,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Add Selected Artwork as Multiple Assets"), has_art, false) {
         collect(app, &ctx, None, false);
+    }
+    if menu_item(ui, tl!("Export 3D Object"), has_art, false)
+        && let Some(r) = run(app, "assets.add3D", json!({}))
+    {
+        let ids: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+        set_pstate(&ctx, SELECTED, ids);
     }
     ui.separator();
     if menu_item(ui, tl!("Select All Assets"), !all.is_empty(), false) {

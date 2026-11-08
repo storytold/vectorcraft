@@ -44,9 +44,12 @@ mod obj;
 mod preview;
 mod shading;
 mod text;
+mod type42;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_composite;
 #[cfg(test)]
 mod tests_fontnames;
 #[cfg(test)]

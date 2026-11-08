@@ -57,7 +57,7 @@ mod context;
 mod cursor;
 mod input;
 
-pub use context::{GlyphSnap, PaintDefaults, ScreenFrame, ToolContext};
+pub use context::{GlyphSnap, MarqueeMode, PaintDefaults, ScreenFrame, ToolContext};
 pub use cursor::Cursor;
 pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 
@@ -66,6 +66,8 @@ pub use input::{Action, Mods, PenPose, PointerEvent, PointerKind, ToolKey};
 pub enum Overlay {
     /// Marquee / rubber band rectangle.
     Marquee(Rect),
+    /// Selection-tool marquee, with its effective rule and pointer position for feedback.
+    SelectionMarquee { rect: Rect, enclosed: bool, pointer: Point },
     /// A path preview (e.g. pen rubber band) in a colour (RGB).
     Path { path: BezPath, color: [u8; 3], width: f32, dashed: bool },
     /// A line segment (smart guide, handle line).
@@ -482,6 +484,7 @@ pub(crate) mod testutil {
             revision: (0, 0),
             selection: s,
             zoom: 1.0,
+            marquee_mode: MarqueeMode::Touching,
             isolation: None,
             paint: p,
             outline: false,
@@ -508,6 +511,7 @@ pub(crate) mod testutil {
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            typed_from_keyboard: false,
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
@@ -525,6 +529,7 @@ pub(crate) mod testutil {
             pen_rubber_band: true,
             curvature_rubber_band: true,
             placeholder_text: false,
+            typed_lists: true,
             smart_guide_color: guides::MAGENTA,
             alignment_guides: true,
             anchor_path_labels: true,
