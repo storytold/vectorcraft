@@ -131,6 +131,9 @@ impl Session {
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
+            // A failed or panicked command's documents are put back: type is drawn in their
+            // composite fonts again, not in those the command set.
+            cmd::compositefonts::sync(self);
         }
         let r = r?;
         if self.depth == 0 {

@@ -71,22 +71,37 @@ pub fn specs() -> Vec<CommandSpec> {
 /// other open documents (or an earlier active document) defined. Run after each command and when
 /// another document takes the front, so an undo, a revert, an opened or closed file or a document
 /// switch draws type in the active document's own composite fonts, and type naming one it does
-/// not define shows as missing. Whether a composite font was added, changed or removed.
-pub(crate) fn sync(s: &mut Session) -> bool {
+/// not define shows as missing. The lowercased names of the composite fonts added, changed or
+/// removed.
+pub(crate) fn sync(s: &mut Session) -> Vec<String> {
     let db = FontDb::global();
     let mut names = Vec::new();
-    let mut changed = false;
+    let mut changed = Vec::new();
     for f in s.active().map(|d| d.doc.composite_fonts.to_vec()).unwrap_or_default() {
-        changed |= db.set_composite_font(&f);
-        names.push(f.name.to_lowercase());
+        let name = f.name.to_lowercase();
+        if db.set_composite_font(&f) {
+            changed.push(name.clone());
+        }
+        names.push(name);
     }
     let others = s.docs.iter().flat_map(|d| d.doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
     let stale: Vec<String> = s.composite_names.iter().cloned().chain(others).filter(|n| !names.contains(n)).collect();
     for gone in stale {
-        changed |= db.remove_composite_font(&gone);
+        if db.remove_composite_font(&gone) {
+            changed.push(gone);
+        }
     }
+    s.composite_names_registered.extend(names.iter().chain(&changed).cloned());
     s.composite_names = names;
     changed
+}
+
+/// The lowercased names of the composite fonts the open documents define, the font database holds
+/// and the session has registered before: the names type may have been laid out in.
+pub(crate) fn names_in_use(s: &Session) -> std::collections::HashSet<String> {
+    let defined = s.docs.iter().flat_map(|d| d.doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
+    let held = FontDb::global().composite_font_names().into_iter().map(|n| n.to_lowercase());
+    defined.chain(held).chain(s.composite_names_registered.iter().cloned()).collect()
 }
 
 /// Leave out a file's unusable composite fonts before registering and measuring its type.

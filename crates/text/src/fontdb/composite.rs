@@ -31,6 +31,13 @@ impl FontDb {
         {
             let mut map = self.composites.write().unwrap_or_else(|e| e.into_inner());
             if map.get(&key).is_some_and(|f| **f == *font) {
+                // The same definition a guard lends: it stays when the guard drops.
+                let mut loans = self.composite_loans.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(loan) = loans.get_mut(&key)
+                    && map.get(&key).is_some_and(|have| Arc::ptr_eq(have, &loan.font))
+                {
+                    loan.adopted = true;
+                }
                 return false;
             }
             map.insert(key, Arc::new(font.clone()));
@@ -194,7 +201,7 @@ impl FontDb {
                 }
                 let font = Arc::new((*f).clone());
                 let previous = map.insert(key.clone(), font.clone());
-                loans.insert(key.clone(), CompositeLoan { font: font.clone(), previous, guards: 1 });
+                loans.insert(key.clone(), CompositeLoan { font: font.clone(), previous, guards: 1, adopted: false });
                 lent.push((key, font));
                 changed = true;
             }
@@ -300,6 +307,9 @@ pub(super) struct CompositeLoan {
     previous: Option<Arc<CompositeFont>>,
     /// How many guards lend it.
     guards: usize,
+    /// Whether [`FontDb::set_composite_font`] set the same definition while it was lent: the last
+    /// guard to drop then leaves it in place.
+    adopted: bool,
 }
 
 /// The composite fonts [`FontDb::lend_composite_fonts`] made available, given back when it drops.
@@ -327,9 +337,11 @@ impl Drop for LentCompositeFonts<'_> {
                     continue;
                 }
                 let previous = loan.previous.take();
+                let adopted = loan.adopted;
                 loans.remove(key);
-                // Given back unless a font of that name has been set or removed since.
-                if map.get(key).is_some_and(|have| Arc::ptr_eq(have, font)) {
+                // Given back unless a font of that name has been set (the same definition included)
+                // or removed since.
+                if !adopted && map.get(key).is_some_and(|have| Arc::ptr_eq(have, font)) {
                     match previous {
                         Some(p) => map.insert(key.clone(), p),
                         None => map.remove(key),
