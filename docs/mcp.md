@@ -3401,6 +3401,20 @@ They list such a command while the user has changed its shortcut (`overridden: t
 shortcut for that command runs what a click on the item runs: Object › Path › Clean Up…, Print Ink Fixes… and Edit ›
 Find and Replace… open their dialogs.
 
+`shortcuts.exportText {path?}` saves the current set's shortcut list as a UTF-8 text file, as Edit › Keyboard
+Shortcuts › Export Text… does with the dialog's set as edited so far. The file starts with a "Keyboard Shortcuts" line
+and a "Set:" line with the set's name, followed by a Tools section and a Menu Commands section. Each section lists the
+rows Edit › Keyboard Shortcuts lists, in its order and with names as it shows them: one line per row, with the name, a
+tab and the shortcuts as the dialog shows them on the current platform. A row with no shortcut ends after the tab.
+Without `path` a save dialog asks for the file. A `path` that is not a string, or a file that cannot be written,
+returns an error, and nothing is written. The layout is VectorCraft's own. The reference app's [Export keyboard
+shortcuts list as a text document](https://helpx.adobe.com/illustrator/desktop/get-started/preferences-and-settings/export-keyboard-shortcuts-list.html)
+page describes saving the list from the Keyboard Shortcuts dialog as a text file, and does not describe its layout.
+
+```json
+{"name":"run_command","arguments":{"command":"shortcuts.exportText","params":{"path":"/Users/me/Shortcuts.txt"}}}
+```
+
 The desktop app adds its active artboard, the one the Artboards panel highlights, to the `object.align`,
 `object.distribute`, `object.distributeSpacing` and `select.allOnArtboard` calls it runs without `artboard`, as it does
 for `edit.pasteInPlace`, `edit.pasteInFront` and `edit.pasteInBack`, and to each `command.batch`. A batch passes its
