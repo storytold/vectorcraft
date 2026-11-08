@@ -5797,6 +5797,74 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// `node` is the red square of [`styled_square`] read as itself with [`ART_STYLES`]' `Blue`: a blue
+/// fill and a drop shadow, not the look it draws.
+fn assert_blue_square(node: &Node) {
+    assert!(matches!(node.kind, NodeKind::Path { .. }), "the object, not its look: {node:#?}");
+    assert_eq!(fill(node).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = node.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
+}
+
+/// An object in a pattern's art with an art style the file defines comes in as itself, as in a
+/// symbol's art, whichever section comes first.
+#[test]
+fn an_object_in_a_patterns_art_with_a_style_this_reads_comes_in_as_itself() {
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    for body in [format!("{ART_STYLES}{pattern}{}", layer("")), format!("{pattern}{ART_STYLES}{}", layer(""))] {
+        let r = read_ok(&body);
+        let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?} {:?}", r.unread, r.warnings));
+        let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+        assert_blue_square(square);
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    }
+}
+
+/// The same in a pattern defined in the version 7 form: a layer's tile string holding the object.
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_style_this_reads_comes_in_as_itself() {
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{ART_STYLES}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?} {:?}", s.unread, s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_blue_square(square);
+}
+
+/// An object in a brush's art with an art style the file defines comes in as itself, and the brush
+/// that uses the art is kept.
+#[test]
+fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{section}{ART_STYLES}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(matches!(spray.kind, vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", spray.kind);
+    let art = spray.art();
+    let [square] = art.as_slice() else { panic!("{art:#?}") };
+    assert_blue_square(square);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
+/// art styles still style the layers' objects read after the definition.
+#[test]
+fn art_styles_inside_a_definition_leave_the_files_art_styles_alone() {
+    let nested = format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n", fill_style("Other", "0 0 0 0 1 0 0 Xa\n"));
+    let square = styled_square("Blue");
+    let definitions = [
+        symbols(&symbol("Tag", &format!("{nested}{square}"), 1)),
+        format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{nested}{square}E\n%AI3_EndPattern\n"),
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{nested}{square}%AI8_EndBrushPattern\n"),
+    ];
+    for definition in definitions {
+        let r = read_ok(&format!("{ART_STYLES}{definition}{}", layer(&square)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{definition}: {a:#?}") };
+        assert_blue_square(object);
+    }
+}
+
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
 fn fill_style(name: &str, xa: &str) -> String {
     fill_style_with(name, xa, "")
@@ -5962,6 +6030,31 @@ fn an_object_in_a_symbols_art_with_a_listed_style_is_linked() {
     let art = &read_ok(&body).doc.symbols[0].art;
     assert!(matches!(art.kind, NodeKind::Group { .. }), "{art:#?}");
     assert_eq!(art.extras().graphic_style, Some(1), "{art:#?}");
+}
+
+#[test]
+fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{defs}{pattern}{}", layer("")));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{defs}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    assert_eq!(style_names(&s.doc), [("Blue".to_string(), 1)]);
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?}", s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
 }
 
 #[test]
