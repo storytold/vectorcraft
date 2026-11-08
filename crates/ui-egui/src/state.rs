@@ -371,6 +371,9 @@ pub struct UiState {
     /// That popup's first text field is still to take the keyboard.
     #[serde(skip)]
     pub transient_focus: bool,
+    /// Type › Find Font…'s last Find In choice (`find_font::FIND_IN`), kept while the app runs.
+    #[serde(skip)]
+    pub find_font_in: String,
     pub control_bar: bool,
     /// The Control bar is docked to the bottom of the window instead of the top
     /// (`window.control.dock`).
@@ -975,6 +978,7 @@ impl Default for UiState {
             open_panel: None,
             transient_panel: None,
             transient_focus: false,
+            find_font_in: String::new(),
             control_bar: false,
             control_bar_bottom: false,
             toolbar: true,

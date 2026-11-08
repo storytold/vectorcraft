@@ -47,6 +47,8 @@ impl Session {
             edit_started_by: None,
             settling_tool_edit: false,
             held_ui: vec![],
+            selection_at_lend: None,
+            lent_selection: None,
             last_selection_tool: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
@@ -115,6 +117,7 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            keyboard_text: false,
         }
     }
 

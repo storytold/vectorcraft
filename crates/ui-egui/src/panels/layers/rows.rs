@@ -91,6 +91,9 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     if click.moves_anchor() {
         ui.data_mut(|d| d.insert_temp(key("anchor"), id));
     }
+    let mut rows = view.rows.clone();
+    widgets::apply_row_click(&mut rows, &click);
+    out.rows_after_click = Some(rows);
     let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
     out.actions.push(match click {
         widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),

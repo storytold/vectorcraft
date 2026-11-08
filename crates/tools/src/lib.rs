@@ -531,6 +531,7 @@ pub(crate) mod testutil {
             unit: Unit::Points,
             stroke_unit: Unit::Points,
             paste_plain_text: false,
+            typed_from_keyboard: false,
             slices_hidden: false,
             slices_locked: false,
             auto_add_delete: true,
