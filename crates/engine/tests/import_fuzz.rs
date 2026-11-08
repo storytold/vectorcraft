@@ -3260,6 +3260,23 @@ proptest! {
         survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// The active artboard that a restored `.ai` opens on, read from damaged or hostile editing data.
+    #[test]
+    fn ai_active_artboard_never_panics(cut in 0usize..600, edits in prop::collection::vec((0usize..600, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '/', ':', ';', ',', '%', '_'])), 0..12)) {
+        let board = |x: u32| format!("%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n", x + 100);
+        let text = format!(
+            "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_1 /Int (CropAreaActive) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
+            board(0),
+            board(150)
+        );
+        let private = mutate_text(&text, cut, &edits).into_bytes();
+        survive("hostile CropAreaActive", || {
+            let mut doc = Document::new(100.0, 100.0);
+            doc.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &doc);
+            Some(doc)
+        })?;
+    }
+
     /// A `.ai` whose PDF part can't be read (#4366), its private data damaged or hostile, under
     /// any key and filter: it opens from its editing data, or with the error of its PDF part.
     #[test]
