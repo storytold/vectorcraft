@@ -19,7 +19,7 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
-use vectorcraft_geom::kurbo::ParamCurveArclen;
+use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveDeriv};
 use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
 use crate::appearance::{Appearance, AppearanceItem, Dash, StrokeLayer, WidthProfile};
@@ -904,6 +904,7 @@ pub struct Spine {
     cum: Vec<f64>,
     anchors: Vec<f64>,
     closed: bool,
+    path: PathData,
 }
 
 impl Spine {
@@ -943,7 +944,7 @@ impl Spine {
         if pts.len() < 2 {
             return None;
         }
-        Some(Self { pts, cum, anchors, closed: sp.closed })
+        Some(Self { pts, cum, anchors, closed: sp.closed, path: path.clone() })
     }
     pub fn length(&self) -> f64 {
         *self.cum.last().unwrap_or(&0.0)
@@ -1002,20 +1003,31 @@ impl Spine {
     pub fn at(&self, f: f64) -> (Point, f64) {
         self.at_length(f.clamp(0.0, 1.0) * self.length())
     }
-    /// Point and tangent angle (radians) at arc length `s` (clamped to the spine).
+    /// Point and tangent angle (radians) at arc length `s` (clamped to the spine). The point and
+    /// tangent come from the original curve at that arc length, not from the flattened polyline: a
+    /// flattened chord's direction is piecewise constant, so steps oriented to a curved spine with
+    /// `Align to Path` jump between chords instead of following the curve smoothly.
     pub fn at_length(&self, s: f64) -> (Point, f64) {
-        let last = self.pts.len().saturating_sub(2);
         let s = if s.is_finite() { s.clamp(0.0, self.length()) } else { 0.0 };
-        let i = match self.cum.binary_search_by(|c| c.total_cmp(&s)) {
-            Ok(i) => i.min(last),
-            Err(i) => i.saturating_sub(1).min(last),
-        };
-        let (Some(p0), Some(p1), Some(c0), Some(c1)) = (self.pts.get(i), self.pts.get(i + 1), self.cum.get(i), self.cum.get(i + 1)) else {
-            return (self.pts.first().copied().unwrap_or_default(), 0.0);
-        };
-        let u = ((s - c0) / (c1 - c0).max(1e-12)).clamp(0.0, 1.0);
-        let d = *p1 - *p0;
-        (p0.lerp(*p1, u), d.y.atan2(d.x))
+        let Some(sp) = self.path.subpaths.first() else { return (self.pts.first().copied().unwrap_or_default(), 0.0) };
+        let n = sp.segment_count();
+        let mut start = 0.0;
+        for i in 0..n {
+            let c = sp.segment(i);
+            let len = c.arclen(1e-9);
+            if s <= start + len || i + 1 == n {
+                let t = c.inv_arclen((s - start).max(0.0), 1e-9).clamp(1e-9, 1.0 - 1e-9);
+                let e = c.eval(t);
+                let tv = c.deriv().eval(t);
+                return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
+            }
+            start += len;
+        }
+        let c = sp.segment(n - 1);
+        let t = c.inv_arclen(c.arclen(1e-9), 1e-9).clamp(1e-9, 1.0 - 1e-9);
+        let e = c.eval(t);
+        let tv = c.deriv().eval(t);
+        (Point::new(e.x, e.y), tv.y.atan2(tv.x))
     }
 }
 
@@ -1444,6 +1456,29 @@ mod tests {
         let mid = out[1].geometric_bounds().unwrap().center();
         assert!(mid.distance(Point::new(55.0, -95.0)) < 1e-6, "{mid:?}");
         assert_eq!(out[0].geometric_bounds().unwrap().center(), Point::new(5.0, 5.0), "keys stay put");
+    }
+
+    #[test]
+    fn orientations_follow_a_curved_spine_smoothly() {
+        // A curved spine: from (0, 0) with handles (+50, +50) / (-50, -50) to (100, 0) with handles
+        // (+50, -50) / (-50, +50) — the classic up-bow arc.
+        let spine = PathData::single(SubPath::new(
+            vec![Anchor::smooth(Point::new(0.0, 0.0), Point::new(50.0, 50.0)), Anchor::smooth(Point::new(100.0, 0.0), Point::new(50.0, -50.0))],
+            false,
+        ));
+        let sp = Spine::new(&spine).unwrap();
+        // Many steps along the bow: each step's tangent comes from the curve at its arc length,
+        // not from a flattened chord — so the orientations must sweep the true angle, smoothly.
+        let len = sp.length();
+        let mut prev: Option<f64> = None;
+        for i in 1..=200 {
+            let (pt, ang) = sp.at_length(len * i as f64 / 201.0);
+            if let Some(p) = prev {
+                let step = (ang - p).abs().min(2.0 * std::f64::consts::PI - (ang - p).abs());
+                assert!(step < 0.1, "tangent step {} is too big at {} ({}, {})", step, i, pt.x, pt.y);
+            }
+            prev = Some(ang);
+        }
     }
 
     #[test]
