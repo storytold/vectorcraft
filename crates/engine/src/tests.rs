@@ -166,6 +166,7 @@ mod strokeux;
 mod stylelib;
 mod stylepanel;
 mod styles;
+mod svgfilter;
 mod swatchcmds;
 mod swatches;
 mod swatchlib;

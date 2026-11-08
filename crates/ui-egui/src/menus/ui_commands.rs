@@ -1083,6 +1083,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} open JavaScript Files for the active document (dialog `javascriptFiles`, fields `file`: a path or URL and `selected`: a linked file; the SVG Interactivity panel's Link JavaScript Files button): its list shows svgInteractivity.info's files, Add runs svgInteractivity.addFile with file and Remove runs svgInteractivity.removeFile with selected",
     ),
     (
+        "ui.svgFilterDialog",
+        "Apply SVG Filter…",
+        "",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+    ),
+    (
+        "ui.importSvgFilter",
+        "Import SVG Filter…",
+        "",
+        "{} pick an SVG file and add its filters to the active document's SVG filters (svgFilter.import) → svgFilter.import's result",
+    ),
+    (
         "ui.spotColors",
         "Spot Colors…",
         "",
