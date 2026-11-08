@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
+use crate::permissions::{self, API_LEVEL, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -154,6 +155,12 @@ fn text_max() -> usize {
 fn list_max() -> usize {
     16
 }
+fn first_api() -> u32 {
+    1
+}
+fn is_first_api(api: &u32) -> bool {
+    *api == 1
+}
 
 /// One declared parameter: what it holds, and how dialogs show it. In the manifest both are keys of
 /// the same object: `{"type": "number", "min": 0, "max": 10, "default": 1, "unit": "mm"}`.
@@ -236,6 +243,13 @@ pub struct Manifest {
     pub description: String,
     #[serde(default)]
     pub author: String,
+    /// The plug-in API level it was built for, 1 to [`API_LEVEL`] (1 when left out).
+    #[serde(default = "first_api", skip_serializing_if = "is_first_api")]
+    pub api: u32,
+    /// The permissions it asks for ([`crate::permissions`]), which the user approves when it is
+    /// installed. Left out, it gets the ones its kind implies ([`Permission::implied`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
     /// Parameters in declaration (dialog) order; a JSON object `{"name": spec, …}` in the manifest.
     #[serde(default, deserialize_with = "ordered_params", serialize_with = "params_as_object")]
     pub params: Vec<(String, Param)>,
@@ -269,6 +283,8 @@ impl Manifest {
             kind: Kind::Filter,
             description: String::new(),
             author: String::new(),
+            api: 1,
+            permissions: None,
             params: Vec::new(),
             extensions: Vec::new(),
             budget: Budget::Light,
@@ -287,6 +303,15 @@ impl Manifest {
         }
         if self.version.len() > 32 || self.description.len() > 1024 || self.author.len() > 128 {
             return Err(Error::Manifest("`version`, `description` or `author` is too long".into()));
+        }
+        if !(1..=API_LEVEL).contains(&self.api) {
+            return Err(Error::Manifest(format!("`api` is {}; this host implements plug-in API levels 1 to {API_LEVEL}", self.api)));
+        }
+        if let Some(names) = &self.permissions
+            && permissions::validate(self.kind, names)?.contains(&Permission::Progress)
+            && self.api < PROGRESS_API
+        {
+            return Err(Error::Manifest(format!("permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -361,6 +386,19 @@ impl Manifest {
     /// Every parameter at its default value.
     pub fn defaults(&self) -> Map<String, Value> {
         self.params.iter().map(|(k, p)| (k.clone(), p.spec.default_value())).collect()
+    }
+
+    /// What the plug-in may do: the permissions it lists, else the ones its kind implies.
+    pub fn permissions(&self) -> Vec<Permission> {
+        match &self.permissions {
+            Some(names) => permissions::validate(self.kind, names).unwrap_or_default(),
+            None => Permission::implied(self.kind).to_vec(),
+        }
+    }
+
+    /// Does installing it need the user's approval: does it list permissions?
+    pub fn asks_permissions(&self) -> bool {
+        self.permissions.as_ref().is_some_and(|p| !p.is_empty())
     }
 
     /// Validates user `params` against the schema: missing keys take their defaults, numbers are
@@ -592,6 +630,47 @@ mod tests {
             r#"{"id":"a","name":"x","kind":"filter","budget":true}"#,
         ] {
             assert!(Manifest::parse(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    /// A manifest lists the permissions it asks for, checked against its kind; without the key it
+    /// gets the ones its kind implies, as plug-ins did before manifests listed them, and needs no
+    /// approval. `api` is 1 when left out, and a later level is refused.
+    #[test]
+    fn permissions_and_api_level() {
+        let listed = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.write","doc.read"]}"#).unwrap();
+        assert_eq!(listed.permissions(), [Permission::DocRead, Permission::DocWrite]);
+        assert!(listed.asks_permissions());
+        assert_eq!(serde_json::to_value(&listed).unwrap()["permissions"], json!(["doc.write", "doc.read"]));
+        assert!(serde_json::to_value(&listed).unwrap().get("api").is_none(), "level 1 isn't written back");
+        let plain = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter"}"#).unwrap();
+        assert_eq!((plain.api, plain.asks_permissions()), (1, false));
+        assert_eq!(plain.permissions(), [Permission::DocRead, Permission::DocWrite, Permission::State]);
+        assert!(serde_json::to_value(&plain).unwrap().get("permissions").is_none());
+        let effect = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect"}"#).unwrap();
+        assert_eq!(effect.permissions(), [Permission::DocRead, Permission::EffectRender]);
+        let exporter = Manifest::parse(br#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"]}"#).unwrap();
+        assert_eq!(exporter.permissions(), [Permission::DocRead, Permission::ExportWrite]);
+        assert!(!Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","permissions":[]}"#).unwrap().asks_permissions());
+        // Level 2 adds `progress`, which only a level-2 manifest may list.
+        let level2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["progress","doc.read"]}"#).unwrap();
+        assert_eq!((level2.api, level2.permissions()), (2, vec![Permission::DocRead, Permission::Progress]));
+        assert_eq!(serde_json::to_value(&level2).unwrap()["api"], json!(2));
+        let plain2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2}"#).unwrap();
+        assert!(!plain2.permissions().contains(&Permission::Progress), "never implied");
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["doc.read","net.fetch"]}"#, "unknown permission `net.fetch`"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["ui.panel"]}"#, "reserved"),
+            (r#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read"]}"#, "effect.render"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":"doc.read"}"#, "manifest"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
         }
     }
 

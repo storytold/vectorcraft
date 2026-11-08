@@ -170,7 +170,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     // A path out of range holds no text, as a path with no length holds none.
     let ap = if in_range(&path.to_bezpath()) { ArcPath::new(path) } else { ArcPath::default() };
     let m = Metrics::max(&sg).map(|m| (m.asc, m.desc)).unwrap_or_else(|| {
-        let s = style_metrics(cx.db, cx.style_at(0));
+        let s = style_metrics(cx.face_at(0).as_deref(), cx.style_at(0));
         (s.0, s.1)
     });
     if ap.is_empty() {

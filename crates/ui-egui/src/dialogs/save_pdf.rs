@@ -792,7 +792,7 @@ fn summary(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         Ok(v) => v,
         Err(e) => {
             heading(ui, tl!("Error"));
-            ui.label(egui::RichText::new(format!("⚠ {e}")).color(t.text));
+            ui.label(egui::RichText::new(warning_line(crate::i18n::current(), &e)).color(t.text));
             return;
         }
     };
@@ -829,8 +829,13 @@ pub(super) fn warning_rows(ui: &mut egui::Ui, warnings: &[Value]) {
         note(ui, tl!("None."));
     }
     for w in warnings {
-        ui.label(egui::RichText::new(format!("⚠ {}", w.as_str().unwrap_or_default())).color(t.text));
+        ui.label(egui::RichText::new(warning_line(crate::i18n::current(), w.as_str().unwrap_or_default())).color(t.text));
     }
+}
+
+/// One of the Summary's warnings or errors, in `lang` as far as its catalog has it.
+pub(super) fn warning_line(lang: crate::i18n::Lang, w: &str) -> String {
+    format!("⚠ {}", crate::i18n::message(lang, w))
 }
 
 #[cfg(test)]

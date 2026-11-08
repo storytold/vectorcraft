@@ -152,6 +152,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("zoomWithMouseWheel", "General", "Options", "Zoom with Mouse Wheel", bool),
     p!("scrubNumericFields", "General", "Options", "Scrub Numeric Fields by Dragging", bool),
     p!("trackpadRotateView", "General", "Options", "Trackpad Gesture to Rotate View", bool),
+    p!("holdToolKeys", "General", "Options", "Hold a Tool Shortcut to Use the Tool Temporarily", bool),
     // Selection & Anchor Display
     p!("selectionTolerance", "Selection & Anchor Display", "Selection", "Tolerance", num(1.0, 8.0, "px")),
     p!("objectSelectionByPathOnly", "Selection & Anchor Display", "Selection", "Object Selection by Path Only", bool),
@@ -247,6 +248,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("measurementLabels", "Smart Guides", "Display Options", "Measurement Labels", bool),
     p!("spacingGuides", "Smart Guides", "Display Options", "Spacing Guides", bool),
     p!("distanceGuides", "Smart Guides", "Display Options", "Invoke Distance Guides", bool),
+    p!("snapToLastLocation", "Smart Guides", "Display Options", "Snap to Last Location", bool),
     p!("snappingTolerance", "Smart Guides", "", "Snapping Tolerance", num(0.0, 40.0, "pt")),
     p!("snapTangent", "Smart Guides", "Geometric Guides", "Snap to Tangent", bool),
     p!("snapPerpendicular", "Smart Guides", "Geometric Guides", "Snap to Perpendicular", bool),
@@ -428,6 +430,9 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // The Align panel menu's Align to Glyph Bounds: Align and Distribute measure type by its glyphs' ink.
     p!("alignGlyphBoundsPoint", "Type", "Align to Glyph Bounds", "Point Text", bool),
     p!("alignGlyphBoundsArea", "Type", "Align to Glyph Bounds", "Area Text", bool),
+    // Artboard Options › Global: the canvas darkens the area outside the artboards while the Artboard tool is active.
+    p!("fadeRegionOutsideArtboard", "General", "Artboard Options", "Fade Region Outside Artboard", bool),
+    p!("artboardUpdateWhileDragging", "General", "Artboard Options", "Update While Dragging", bool),
 ];
 
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

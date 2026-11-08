@@ -70,6 +70,11 @@
 	3 Color Job…	Задача с 3 цвята…
 	30° Angles	Ъгли от 30°
 	3D and Materials	3D и материали
+	Plane	Равнина
+	Extrude	Избутване
+	Revolve	Завъртане около ос
+	Inflate	Издуване
+	Select objects, then pick an object type to give them a 3D effect.	Изберете обекти, след това изберете тип обект, за да им придадете 3D ефект.
 	3D Ribbon	3D лента
 	45° Angles	Ъгли от 45°
 	60° Angles	Ъгли от 60°
@@ -271,6 +276,8 @@ font-technology	Variable	Променливи
 	Show Cross Hairs	Показване на кръстосани линии
 	Show Video Safe Areas	Показване на безопасните видеозони
 	Video Ruler Pixel Aspect Ratio:	Пропорция на пиксела на видеолинийките:
+	Fade Region Outside Artboard	Затъмняване на областта извън работната област
+	Update While Dragging	Обновяване при плъзгане
 	Hide Video Rulers	Скриване на видеолинийките
 	Background Contents	Съдържание на фона
 	Background Contents:	Съдържание на фона:
@@ -1060,6 +1067,8 @@ font-technology	Variable	Променливи
 	Export for Screens Settings	Настройки за експортиране за екрани
 	Export for Screens…	Експортиране за екрани…
 	Export Keyboard Shortcuts…	Експортиране на клавишни комбинации…
+	Export Keyboard Shortcuts as Text…	Експортиране на клавишни комбинации като текст…
+	Export Text…	Експортиране на текст…
 	Export Option	Опция за експортиране
 	Export PDF	Експортиране в PDF
 	Export PDF Presets	Предварителни настройки за PDF
@@ -1327,6 +1336,8 @@ font-technology	Variable	Променливи
 	Grays	Сиви
 	Grays and Neutrals	Сиви и неутрални
 	Grayscale	Черно-бяло
+	High Color	Много цветове
+	Low Color	Малко цветове
 	Grayscale images	Черно-бели изображения
 	Greek & Cyrillic	Гръцки и кирилица
 	Green	Зелено
@@ -1399,6 +1410,7 @@ font-technology	Variable	Променливи
 	Step Backward	Стъпка назад
 	Step Forward	Стъпка напред
 	Clear History	Изчистване на историята
+	New Document from State	Нов документ от състоянието
 	Set History Limit…	Задаване на ограничение на историята…
 	History States	Състояния на историята
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1761,6 +1773,9 @@ font-technology	Variable	Променливи
 	Live Paint Selection Tool	Инструмент за селекция на динамично оцветяване
 	Live Shape Properties	Свойства на динамична фигура
 	Load Color Profile…	Зареждане на файлов цвят…
+	Load Character Styles…	Зареждане на стилове на знаци…
+	Load Paragraph Styles…	Зареждане на стилове на абзац…
+	Load All Styles…	Зареждане на всички стилове…
 	Remove Color Profile…	Премахване на цветови профил…
 	Load Image into Clipboard	Зареждане на изображение в клипборда
 	Load Metafile into Clipboard	Зареждане на метафайл в клипборда
@@ -2623,6 +2638,14 @@ digits	Malayalam	Малаялам
 	Relink	Свързване наново
 	Relink Linked Files to the Document	Свързване наново на свързаните файлове към документа
 	Relink to Folder…	Свързване наново към папка…
+	Each Link Separately	Всяка връзка поотделно
+	Selected Instances	Избраните екземпляри
+	All Instances	Всички екземпляри
+	Missing Links from This Folder	Липсващите връзки от тази папка
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} не е each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each и paths вървят заедно: paths изброява записи с ids и path вместо ids, path и folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	записът {i} в paths изисква path и ids (идентификатори на обекти, които няма друг запис)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder приема path: в папката на този файл се търсят другите липсващи връзки
 	Relink…	Свързване наново…
 	Find Linked Files	Търсене на свързани файлове
 	Find Linked Files in Folder…	Търсене на свързани файлове в папка…
@@ -2667,6 +2690,7 @@ digits	Malayalam	Малаялам
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Заменете го с друг файл или го игнорирайте: неговите изображения ще продължат да показват записания с документа преглед.
 	Replace Spine	Замяна на оста
 	Replace Symbol	Замяна на символ
+	Reset Transformation	Нулиране на трансформацията
 	Replace With Font	Замяна с шрифт
 	Replace With Font From	Замяна с шрифт от
 	System	Система
@@ -2683,6 +2707,8 @@ digits	Malayalam	Малаялам
 	Reset OpenType Features	Нулиране на OpenType характеристиките
 	Reset Panel	Нулиране на панела
 	Reset Preferences	Нулиране на настройките
+	Search Preferences	Търсене в настройките
+	No settings found	Няма намерени настройки
 	Reset Profiles	Нулиране на профилите
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
@@ -2737,6 +2763,7 @@ digits	Malayalam	Малаялам
 	Rotate Tool	Инструмент „Завъртане“
 	Rotate View Tool	Инструмент „Завъртане на изглед“
 	Trackpad Gesture to Rotate View	Завъртане на изгледа с жест на тракпада
+	Hold a Tool Shortcut to Use the Tool Temporarily	Задържане на клавиша на инструмент за временното му използване
 	Rotate…	Завъртане…
 	Rotation	Завъртане
 	Roughen…	Грапавост…
@@ -3162,6 +3189,7 @@ digits	Malayalam	Малаялам
 	Spaces	Интервали
 	Spacing Guides	Водачи за разстояние
 	Invoke Distance Guides	Извикване на водачи за отстояния
+	Snap to Last Location	Прилепване към последното местоположение
 	Spacing:	Разстояние:
 	Spanish	Испански
 	Specified Distance	Упоменато разстояние
@@ -3841,6 +3869,9 @@ axis	Both	И двете
 	Put back in the toolbar	Връщане в лентата с инструменти
 	Float Panel	Плаващ панел
 	Dock Panel	Закотвен панел
+	Dock to Top	Закотвяне горе
+	Dock to Bottom	Закотвяне долу
+	Dock Control Bar	Закотвяне на контролната лента
 	Drag to float the toolbar	Плъзнете, за да направите лентата с инструменти плаваща
 	Drag to the window's left edge to dock	Плъзнете до левия ръб на прозореца за закотвяне
 	Float Tool Group	Плаваща група инструменти
@@ -4163,13 +4194,13 @@ axis	Both	И двете
 @msg	no point {i} (the gradient has {_1})	няма точка {i} (градиентът има {_1})
 @msg	no preset editor	няма редактор на предварителни настройки
 @msg	no previous transform	няма предишно трансформиране
-@msg	no print preset named `{base}`	няма предварителна настройка за печат с име „{base}“
-@msg	no print preset named `{name}`	няма предварителна настройка за печат с име „{name}“
+@msg	no print preset named `{base}`	няма предварителна настройка за печат с име `{base}`
+@msg	no print preset named `{name}`	няма предварителна настройка за печат с име `{name}`
 @msg	no print service	няма услуга за печат
 @msg	no revert command	няма команда за връщане
-@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име „{name}“ (вградените настройки са само за четене: създайте нова от тях)
+@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име `{name}` (вградените настройки са само за четене: създайте нова от тях)
 @msg	no saved presets	няма запазени предварителни настройки
-@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име „{name}“ ({DEFAULT_PRESET} е защитена: създайте нова от нея)
+@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име `{name}` ({DEFAULT_PRESET} е защитена: създайте нова от нея)
 @msg	no saved profiles	няма запазени профили
 @msg	no saved selection recalled	няма възстановена запазена селекция
 @msg	no saved selections	няма запазени селекции
@@ -4207,13 +4238,13 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
-@msg	no swatch `{name}`	няма образец „{name}“
-@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци „{l}“ (вижте swatch.library.list)
+@msg	no swatch `{name}`	няма образец `{name}`
+@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
 @msg	no target object has an opacity mask: select one or give `id`	никой целеви обект няма маска за непрозрачност: изберете един или задайте `id`
 @msg	no threaded text selected	няма избран свързан текст
 @msg	no user library folder here	тук няма папка с потребителска библиотека
-@msg	no user workspace `{from}`	няма потребителско работно пространство „{from}“
+@msg	no user workspace `{from}`	няма потребителско работно пространство `{from}`
 @msg	node {_1} is not text	възелът {_1} не е текст
 @msg	not a DXF drawing	не е DXF чертеж
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
@@ -4239,6 +4270,7 @@ axis	Both	И двете
 @msg	nothing to save: the document has no visible art	няма нищо за запазване: документът няма видима графика
 @msg	nothing to undo	няма какво да се отмени
 @msg	no history to clear	няма история за изчистване
+@msg	no history state {v}	няма състояние в историята {v}
 @msg	nothing to warp	няма нищо за извиване
 @msg	nothing to wrap	няма нищо за обвиване
 @msg	object {0} cannot have children	обектът {0} не може да има дъщерни елементи
@@ -4475,6 +4507,7 @@ axis	Both	И двете
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} изображение не може да бъде декодирано: показва се като зачеркната рамка|{n} изображения не могат да бъдат декодирани: показват се като зачеркнати рамки
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	документът задава изтичане, което този PDF/X файл пропуска: включете „Използване на настройките за изтичане на документа“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
@@ -4600,6 +4633,7 @@ axis	Both	И двете
 	ICF Box	Касетка ICF
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` е референцията за стъпка {r}, която се разрешава само от `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` трябва да бъде масив от идентификатори на обекти, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` трябва да бъде масив от цветове, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` трябва да бъде масив от индекси на опорни точки, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: резултатът от стъпка {i} няма такава стойност (напишете $$ за литерален знак $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: няма стъпка {i} преди тази (стъпките се броят от 0; напишете $$ за литерален знак $)
@@ -4728,10 +4762,10 @@ effect	Soft	Меко
 @msg	anchor must name a registered panel	опорната точка трябва да указва регистриран панел
 @msg	before must name a panel	параметърът „преди“ трябва да указва панел
 @msg	docking action contains an unknown panel or an excessive split path	действието по закачане съдържа непознат панел или прекомерен път на разделяне
-@msg	group must be true or false	групата трябва да е истина или лъжа
+@msg	group must be true or false	group трябва да е true или false
 @msg	panel is not in a dock group	панелът не е в група на дока
 @msg	only a dock group above or below others collapses, not one beside another	свива се само група на дока над или под други, не и такава до друга
-@msg	icon must be true or false	icon трябва да е истина или лъжа
+@msg	icon must be true or false	icon трябва да е true или false
 @msg	icon only docks a panel in the icon column, with no anchor	icon закачва панел само в колоната с икони, без anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column закачва набор като колона на дока, без anchor или icon
 @msg	move requires a destination panel	преместването изисква целеви панел
@@ -5672,6 +5706,17 @@ axis	Y Axis	Y ос
 	The plug-in is computing…	Приставката изчислява…
 	Inspect Plug-in	Проверка на приставка
 	Cancel Plug-in Run	Отказ от изпълнението на приставката
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Да се инсталира ли „{name}“, който иска тези права?
+	ID: {id}	ID: {id}
+	Version: {version}	Версия: {version}
+	File SHA-256: {hash}	SHA-256 на файла: {hash}
+	Read the objects it is given	Четене на обектите, които получава
+	Change, add and delete objects in the document	Промяна, добавяне и изтриване на обекти в документа
+	Keep data of its own with the document	Съхраняване на собствени данни в документа
+	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
+	Write the document as a file in its own format	Записване на документа като файл в собствен формат
+	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор
@@ -5680,6 +5725,19 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Insert Stop…	Вмъкване на спиране…
+	Insert Stop	Вмъкване на спиране
+	Record Stop	Записване на спиране
+	Allow Continue	Разрешаване на продължаване
+	Continue	Продължаване
+	Continue Action	Продължаване на действието
+	Delete Action Step	Изтриване на стъпка от действието
+	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
+	Stop: {message}	Спиране: {message}
+@msg	no action is waiting at a stop	няма действие, което чака при спиране
+@msg	message must be text	message трябва да бъде текст
+@msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
+@msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
 	Playback Options	Опции за възпроизвеждане
 	Accelerated	Ускорено
 	Step by Step	Стъпка по стъпка
@@ -6084,6 +6142,7 @@ breakText	Glyphs	Глифи
 	Gap 5	Разстояние 5
 
 @msg	{_1}: they came in as the page's art	{_1}: те са внесени като изображението от страницата
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	изкривени текстови обекти, внесени като изображение, а не като редактируем текст: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	обектите, изобразени различно от собствената страница на файла, са внесени като изображението от страницата: {_1}
 
 @msg	You must choose a side pattern.	Трябва да изберете страничен шаблон.

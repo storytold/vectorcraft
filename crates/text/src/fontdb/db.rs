@@ -83,6 +83,18 @@ impl FontDb {
         let _ = on;
     }
 
+    /// Is the lazy system-font fallback on ([`Self::set_system_fallback`])?
+    pub(crate) fn system_fallback_on(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.sys.lock().unwrap_or_else(|e| e.into_inner()).enabled
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+
     /// Process-wide database: the bundled fonts, then the installed system fonts, cataloged the
     /// first time a lookup by family name needs them (or ahead of time by
     /// [`FontDb::scan_in_background`]).

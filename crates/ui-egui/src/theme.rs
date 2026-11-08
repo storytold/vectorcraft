@@ -1009,16 +1009,29 @@ pub(crate) fn craft_font_name(f: &vectorcraft_text::CraftFont) -> String {
 /// The Japanese, Georgian and Devanagari craft-fonts faces (when built with `CRAFT_FONTS_DIR`) as fallbacks at
 /// the end of every family, after the app's own fonts and before the installed fonts `ui_fonts`
 /// adds: BIZ UDPGothic first (bold first in the semibold family), then the Mincho faces, then Noto
-/// Sans Georgian.
+/// Sans Georgian. Each face sits on the baseline of the first face of the family it is in (see
+/// `ui_fonts::baseline_copies`).
 fn add_craft_fonts(fonts: &mut FontDefinitions) {
+    // The name of each face's copy in each family.
+    let mut copies: std::collections::HashMap<(FontFamily, String), String> = std::collections::HashMap::new();
     for f in vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.is_japanese() || f.is_georgian() || f.scripts.contains(&"Deva")) {
-        fonts.font_data.insert(craft_font_name(f), Arc::new(FontData::from_static(f.bytes)));
+        let name = craft_font_name(f);
+        for (copy, data, families) in crate::ui_fonts::baseline_copies(fonts, &name, &FontData::from_static(f.bytes)) {
+            for family in families {
+                copies.insert((family, name.clone()), copy.clone());
+            }
+            fonts.font_data.insert(copy, Arc::new(data));
+        }
     }
     for (family, stack) in fonts.families.iter_mut() {
         let bold = *family == FontFamily::Name(FONT_UI_SEMIBOLD.into());
-        stack.extend(vectorcraft_text::craft_fonts::japanese_ui_fonts(bold).into_iter().map(craft_font_name));
-        stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(craft_font_name));
-        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(craft_font_name));
+        let copy = |f: &vectorcraft_text::CraftFont| {
+            let name = craft_font_name(f);
+            copies.get(&(family.clone(), name.clone())).cloned().unwrap_or(name)
+        };
+        stack.extend(vectorcraft_text::craft_fonts::japanese_ui_fonts(bold).into_iter().map(copy));
+        stack.extend(vectorcraft_text::craft_fonts::georgian_ui_fonts().into_iter().map(copy));
+        stack.extend(vectorcraft_text::CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Deva")).map(copy));
     }
 }
 
