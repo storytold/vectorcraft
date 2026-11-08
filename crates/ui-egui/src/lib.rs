@@ -114,6 +114,7 @@ mod services;
 pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
@@ -314,6 +315,9 @@ pub struct VectorcraftApp {
     /// The context, viewport and frame `shortcuts::handle` already took in this host iteration.
     /// Interleaving root and auxiliary viewport passes cannot make an older frame look new again.
     pub(crate) shortcuts_frames: Vec<InputFrame>,
+    /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
+    /// when it is let go ([`shortcuts::HeldTool`]).
+    pub(crate) held_tool: Vec<shortcuts::HeldTool>,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

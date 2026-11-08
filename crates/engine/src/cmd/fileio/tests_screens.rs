@@ -526,6 +526,20 @@ fn include_bleed_grows_each_artboard() {
     assert_eq!(size(&files(&r)[0].1), (40, 30), "without it, the artboard alone");
 }
 
+/// Include Bleed puts the bleed on a PDF/X row's page, so the row doesn't warn that it leaves the bleed out.
+#[test]
+fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
+    let mut s = session(1);
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    let warned = |r: &Value| r["warnings"].as_array().unwrap().iter().any(|w| w == super::pdf::BLEED_LEFT_OUT);
+    let row = json!([{"format": "pdf", "standard": "pdfX4"}]);
+    assert!(warned(&export(&mut s, json!({"formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    // A selection is written on a page of its own bounds, which Include Bleed doesn't grow.
+    s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
+}
+
 #[test]
 fn png_8_rows_write_indexed_colour() {
     let mut s = session(1);
