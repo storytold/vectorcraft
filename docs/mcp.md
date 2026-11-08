@@ -6368,13 +6368,25 @@ runs it where it is called, so the call may take minutes; `notifications/cancell
 A plug-in whose manifest lists permissions (`permissions` in its `plugin.inspect` entry, with `needsApproval: true`)
 installs only with `grant: [permission]` listing every one of them: show the user the list and ask first, and pass
 the entry's `hash` as `hash` so that a module that changed since is refused. Without `grant`, `plugin.install` returns
-an error naming the permissions needed. The grant is kept with the module's hash; a module
-with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
+an error naming the permissions needed. The grant is kept with the module's hash; without a `Plug-ins` folder, a
+module with the same id that lists no new permission installs without `grant`. A grant kept in a `Plug-ins` folder
+covers only the module with that hash, so another module under the id needs `grant` again. `plugin.remove` forgets the
+grant. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
 A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
-under its id. A module that imports anything else, or imports these without `api` 2 and `progress`, is refused by
-`plugin.install` and `plugin.inspect` with an error naming the import.
+under its id. One that lists `settings` or `cache` keeps settings or a cache of its own in the `Plug-ins` folder
+(VectorCraft's own caps: 256 settings and 1 MiB, 512 MiB of cache): `plugin.list` and `plugin.info` give the cache's
+size as `cacheBytes`, `plugin.clearCache {id?}` empties the cache of one plug-in or of all of them and returns
+`{cleared: [id], bytesFreed}`, replacing a plug-in keeps both, and `plugin.remove` deletes both (also for an id that
+isn't installed but still has them). A module with other bytes than the plug-in installed with its id, or, with none
+installed, one whose id has settings or a cache in the
+`Plug-ins` folder (`needsReplace: true` in its `plugin.inspect` entry), installs only with `replace: true`: ask the
+user first, since it takes that plug-in's place and gets its settings and cache. Without it, `plugin.install` returns
+an error naming the plug-in. The same module installs again without `replace`, and `replace: false` refuses a module
+whose id is installed. A module that imports
+anything else, or imports one of these without `api` 2 and the import's permission, is refused by `plugin.install` and
+`plugin.inspect` with an error naming the import and the permission.
 `plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean, a `grant` that is not a list of
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty
@@ -6415,6 +6427,8 @@ Disable and Continue can't save the plug-in it turns off, this launch skips it a
 {"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/desaturate.wasm"}}}
 {"name":"run_command","arguments":{"command":"plugin.run","params":{"id":"org.vectorcraft.example.desaturate","params":{"amount":60}}}}
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"plugin.org.example.wobble","params":{"size":4}}}}
+{"name":"run_command","arguments":{"command":"plugin.install","params":{"path":"/plugins/tiles-2.wasm","replace":true}}}
+{"name":"run_command","arguments":{"command":"plugin.clearCache","params":{"id":"org.example.tiles"}}}
 ```
 
 ## Colour adjustments

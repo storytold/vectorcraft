@@ -5746,6 +5746,8 @@ axis	Y Axis	Sumbu Y
 	Install “{name}”, which asks for these permissions?	Instal “{name}”, yang meminta izin berikut?
 	ID: {id}	ID: {id}
 	Version: {version}	Versi: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Instal “{name}” sebagai pengganti plug-in dengan ID yang sama?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	File ini bukan plug-in yang sebelumnya diinstal dengan ID ini. File ini mendapatkan pengaturan dan cache yang disimpan untuk ID tersebut.
 	File SHA-256: {hash}	SHA-256 file: {hash}
 	Read the objects it is given	Membaca objek yang diberikan kepadanya
 	Change, add and delete objects in the document	Mengubah, menambah, dan menghapus objek dalam dokumen
@@ -5753,6 +5755,9 @@ axis	Y Axis	Sumbu Y
 	Change how the objects its effect is applied to are drawn	Mengubah cara objek yang diberi efeknya digambar
 	Write the document as a file in its own format	Menulis dokumen sebagai file dalam formatnya sendiri
 	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
+	Keep settings of its own	Menyimpan pengaturannya sendiri
+	Keep a cache of its own, which you can clear	Menyimpan cache-nya sendiri, yang dapat Anda kosongkan
+	Clear Plug-in Cache	Kosongkan cache plug-in
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
 	New Set	Set baru

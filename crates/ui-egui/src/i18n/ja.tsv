@@ -5544,6 +5544,9 @@ axis	Y Axis	Y 軸
 	Install “{name}”, which asks for these permissions?	これらの権限を求める「{name}」をインストールしますか？
 	ID: {id}	ID: {id}
 	Version: {version}	バージョン: {version}
+	Install “{name}” in place of the plug-in with the same ID?	同じ ID のプラグインの代わりに「{name}」をインストールしますか？
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	このファイルは、以前にこの ID でインストールされていたプラグインではありません。この ID 用に保持されている設定とキャッシュを引き継ぎます。
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	「{name}」は ID {_1} のプラグインとは別のモジュールで、そのプラグイン用に保持されている設定とキャッシュを引き継ぐことになります。ユーザーが同意したら `replace: true` を指定してインストールしてください
 	File SHA-256: {hash}	ファイルの SHA-256: {hash}
 	Read the objects it is given	渡されたオブジェクトの読み取り
 	Change, add and delete objects in the document	ドキュメント内のオブジェクトの変更、追加、削除
@@ -5551,10 +5554,13 @@ axis	Y Axis	Y 軸
 	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
 	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
 	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `progress` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
+	Keep settings of its own	独自の設定の保持
+	Keep a cache of its own, which you can clear	消去できる独自のキャッシュの保持
+	Clear Plug-in Cache	プラグインのキャッシュを消去
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `{permission}` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `progress` がある場合だけです
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは `env.vc_progress`、`env.vc_cancelled`、`env.vc_log` (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `{permission}` がある場合だけです
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは docs/plugins.md に記載された `env.vc_*` 関数 (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています

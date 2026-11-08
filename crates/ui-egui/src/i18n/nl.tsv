@@ -5792,6 +5792,8 @@ axis	Y Axis	Y-as
 	Install “{name}”, which asks for these permissions?	„{name}” installeren, dat om deze machtigingen vraagt?
 	ID: {id}	ID: {id}
 	Version: {version}	Versie: {version}
+	Install “{name}” in place of the plug-in with the same ID?	„{name}” installeren in plaats van de plug-in met dezelfde ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Dit bestand is niet de plug-in die eerder met deze ID was geïnstalleerd. Het krijgt de instellingen en cache die voor die ID bewaard zijn.
 	File SHA-256: {hash}	SHA-256 van het bestand: {hash}
 	Read the objects it is given	De objecten lezen die het krijgt
 	Change, add and delete objects in the document	Objecten in het document wijzigen, toevoegen en verwijderen
@@ -5799,6 +5801,9 @@ axis	Y Axis	Y-as
 	Change how the objects its effect is applied to are drawn	Wijzigen hoe de objecten waarop het effect is toegepast worden getekend
 	Write the document as a file in its own format	Het document als bestand in een eigen indeling schrijven
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
+	Keep settings of its own	Eigen instellingen bewaren
+	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
 	New Set	Nieuwe set
