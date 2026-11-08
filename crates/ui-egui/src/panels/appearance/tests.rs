@@ -1,4 +1,85 @@
+use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll, fx_menu_ends};
 use super::*;
+
+/// A selected rectangle, for the fill row's swatch picker and the Add Effect button.
+fn app_with_a_selected_rectangle() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    app
+}
+
+/// The swatch of a fill row at the top of the window, with the size of its click target.
+fn swatch_button_at_the_top() -> (impl FnMut(&mut VectorcraftApp, &mut Ui), egui::Vec2) {
+    let row = Rect::from_min_size(pos2(0.0, 8.0), vec2(400.0, 22.0));
+    (move |app: &mut VectorcraftApp, ui: &mut Ui| swatch_button(app, ui, row, &Paint::None, Painted::Item(0)), vec2(22.0, 22.0))
+}
+
+/// One tile of the swatch picker.
+const TILE: egui::Vec2 = vec2(15.5, 15.5);
+
+/// The picker has one tile per swatch: with enough of them it stops inside a short window and
+/// scrolls, its rows stay 12 tiles wide, and a click on the last tile paints with the last swatch.
+#[test]
+fn a_long_swatch_picker_scrolls_inside_a_short_window() {
+    const HEIGHT: f32 = 200.0;
+    let mut app = app_with_a_selected_rectangle();
+    for n in 0..150 {
+        app.run("swatch.new", json!({"name": format!("Long {n}"), "color": format!("#{:06x}", n + 1)})).unwrap();
+    }
+    let doc = &app.session.active().unwrap().doc;
+    let last_swatch = doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|group| &group.swatches)).last().unwrap().paint.clone();
+    let (draw, chip) = swatch_button_at_the_top();
+    let mut window = PopupWindow::new(&mut app, HEIGHT, draw);
+    window.click(&mut app, window.clickable(chip)[0].center());
+    let tiles = window.clickable(TILE);
+    assert!(tiles.len() > 150, "one tile per swatch: {}", tiles.len());
+    assert_eq!(tiles[11].top(), tiles[0].top(), "12 tiles in a row");
+    assert!(tiles[12].top() > tiles[0].top(), "the 13th tile starts the next row");
+    assert!(tiles[tiles.len() - 1].bottom() > HEIGHT, "the picker opens at the top of its list");
+    window.wheel_down(&mut app, tiles[0].center());
+    let tiles = window.clickable(TILE);
+    let last = tiles[tiles.len() - 1];
+    assert!(last.bottom() <= HEIGHT, "the last tile at {last:?} is inside the window");
+    window.click(&mut app, last.center());
+    let node = first_subject(&app).expect("the rectangle");
+    let (Paint::Solid { color, .. }, Paint::Solid { color: last_color, .. }) = (node.appearance.items[0].paint(), &last_swatch) else {
+        panic!("solid paints")
+    };
+    assert_eq!(color, last_color);
+}
+
+/// A picker with few swatches fits its tiles and the wheel does not move them.
+#[test]
+fn a_short_swatch_picker_does_not_scroll() {
+    let mut app = app_with_a_selected_rectangle();
+    let (draw, chip) = swatch_button_at_the_top();
+    let mut window = PopupWindow::new(&mut app, 900.0, draw);
+    window.click(&mut app, window.clickable(chip)[0].center());
+    let tiles = window.clickable(TILE);
+    assert!(tiles[tiles.len() - 1].bottom() <= 900.0, "every tile is inside the window");
+    window.wheel_down(&mut app, tiles[0].center());
+    assert_eq!(window.clickable(TILE), tiles, "a list that fits does not scroll");
+}
+
+/// The Add New Effect button: the third of the bottom bar's 24 pt buttons.
+fn fx_button(window: &PopupWindow) -> egui::Pos2 {
+    window.clickable(vec2(24.0, 24.0))[2].center()
+}
+
+fn draw_bottom_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let node = first_subject(app);
+    bottom(app, ui, node.as_ref(), Sel::None);
+}
+
+/// The Add New Effect popup has one row per effect group, plug-in groups included.
+#[test]
+fn the_add_effect_popup_scrolls_inside_a_short_window() {
+    let (first, last) = fx_menu_ends();
+    assert_last_row_scrolls_into_view(&mut app_with_a_selected_rectangle(), 150.0, draw_bottom_bar, fx_button, &first, &last);
+    assert_short_list_does_not_scroll(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &first, &last);
+}
 
 /// Duplicating rows highlights the copies, each right above its original, as the Layers panel
 /// does: the active row's copy becomes active, the anchor's copy the anchor.

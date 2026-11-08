@@ -84,13 +84,24 @@ impl VectorcraftApp {
         result
     }
 
+    /// [`Self::run`] for saved steps (an action's): keys their commands no longer read are taken,
+    /// as [`vectorcraft_engine::Session::replay`] takes them, so an action recorded by an older
+    /// version still plays.
+    pub fn replay(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        let outer = self.session.set_replaying(true);
+        let result = self.run(id, params);
+        self.session.set_replaying(outer);
+        result
+    }
+
     /// [`Self::run`] it, inside what asks for file dialogs.
     fn run_now(&mut self, id: &str, params: Value) -> Result<Value, String> {
         crate::state::sync_zoom_stops_display_print_size(self.session.prefs.display_print_size);
         self.run_count = self.run_count.wrapping_add(1);
         // In debug builds the app's own calls are held to the params descriptions too (#1442): a
-        // panel passing a key its command doesn't read shows up in the tests.
-        if cfg!(debug_assertions) {
+        // panel passing a key its command doesn't read shows up in the tests. Saved steps aren't
+        // checked ([`Self::replay`]).
+        if cfg!(debug_assertions) && !self.session.replaying() {
             menus::check_params(&self.session, id, &params)?;
         }
         // A `.ai` file a command writes (a save, an export, a timestamped copy, a batch's save) names

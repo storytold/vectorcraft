@@ -892,6 +892,8 @@ lighting	Light	Licht
 	Expand Layers Panel Rows	Rijen in het Lagen-paneel uitvouwen
 	Export CSS…	CSS exporteren…
 	Export Keyboard Shortcuts…	Sneltoetsen exporteren…
+	Export Keyboard Shortcuts as Text…	Sneltoetsen als tekst exporteren…
+	Export Text…	Tekst exporteren…
 	File Info Dialog	Dialoogvenster bestandsinfo
 	Go to Artboard	Ga naar tekengebied
 	Graphic Style Options…	Opties voor grafische stijl…
@@ -4574,6 +4576,7 @@ imageTrace	Outline	Contour
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} afbeelding kon niet worden gedecodeerd en wordt als doorgekruist vak weergegeven|{n} afbeeldingen konden niet worden gedecodeerd en worden als doorgekruiste vakken weergegeven
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gekoppelde afbeelding is gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versie|{n} gekoppelde afbeeldingen zijn gewijzigd op de schijf: Koppelingen bijwerken toont de nieuwe versies
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Bijgewerkt: {n} gekoppeld bestand gewijzigd op de schijf|Bijgewerkt: {n} gekoppelde bestanden gewijzigd op de schijf
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	het document stelt een afloop in die dit PDF/X-bestand weglaat: schakel 'Afloopinstellingen van document gebruiken' in
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} geëxporteerd met {n} opmerking: {first}|{what} geëxporteerd met {n} opmerkingen: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	er staat nu {n} lettertypebestand in {folder}|er staan nu {n} lettertypebestanden in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	er staat nu {n} lettertypebestand in {folder}; {failed} konden niet worden toegevoegd: {reason}|er staan nu {n} lettertypebestanden in {folder}; {failed} konden niet worden toegevoegd: {reason}
@@ -5741,6 +5744,19 @@ axis	Y Axis	Y-as
 	Action Options…	Actieopties…
 	Action Options	Actieopties
 	Playback Options…	Afspeelopties…
+	Insert Stop…	Stop invoegen…
+	Insert Stop	Stop invoegen
+	Record Stop	Stop opnemen
+	Allow Continue	Doorgaan toestaan
+	Continue	Doorgaan
+	Continue Action	Actie voortzetten
+	Delete Action Step	Actiestap verwijderen
+	Press Play Current Selection in the Actions panel to go on.	Druk in het paneel Acties op Huidige selectie afspelen om door te gaan.
+	Stop: {message}	Stop: {message}
+@msg	no action is waiting at a stop	geen actie wacht bij een stop
+@msg	message must be text	message moet tekst zijn
+@msg	allowContinue must be true or false	allowContinue moet true of false zijn
+@msg	Batch cannot play an action with a stop	Batch kan geen actie met een stop afspelen
 	Playback Options	Afspeelopties
 	Accelerated	Versneld
 	Step by Step	Stap voor stap
