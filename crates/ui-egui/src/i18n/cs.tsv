@@ -187,6 +187,11 @@
 	Ungroup	Oddělit
 	Lock	Zamknout
 	Selection	Výběr
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Obdélníkový výběr
+	Touching	Dotčené objekty
+	Fully Enclosed	Zcela uvnitř
+	Drag Direction	Směr tažení
 	All Artwork Above	Veškerou kresbu výše
 	Other Layers	Ostatní vrstvy
 	Unlock All	Odemknout vše
@@ -673,6 +678,7 @@
 	Toolbars	Panely nástrojů
 	Advanced	Rozšířené
 	Double Column	Dva sloupce
+	Keep Tools Beside the Canvas	Nástroje vedle plátna
 	Actions	Akce
 	Asset Export	Export prvků
 	Attributes	Atributy
@@ -5085,6 +5091,9 @@ imageTrace	Outline	Obrys
 @msg	the Pixar file's image data is damaged	obrazová data souboru Pixar jsou poškozená
 @msg	the JPEG 2000 file can't be read	soubor JPEG 2000 nelze přečíst
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	soubor JPEG 2000 obsahuje nepodporovaný barevný prostor nebo obsah JPX
+@msg	the HEIC or HEIF file can't be read	soubor HEIC nebo HEIF nelze přečíst
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	soubor HEIC nebo HEIF obsahuje druh obrázku, který nelze přečíst
+@msg	HEIC and HEIF images can't be opened in this build	obrázky HEIC a HEIF nelze v tomto sestavení otevřít
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	obraz PSD je příliš velký na přečtení ({_1} × {_2} obrazových bodů)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zazipovaná 32bitová obrazová data PSD s predikcí nelze přečíst
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}bitové soubory PSD v tomto barevném režimu nelze přečíst

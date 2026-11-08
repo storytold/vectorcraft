@@ -146,6 +146,11 @@
 	Ungroup	დაჯგუფების მოხსნა
 	Lock	ჩაკეტვა
 	Selection	მონიშნული
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	მართკუთხა მონიშვნა
+	Touching	შეხებული ობიექტები
+	Fully Enclosed	სრულად მოქცეული
+	Drag Direction	გადათრევის მიმართულება
 	All Artwork Above	ზემოთ მდებარე მთელი ნახატი
 	Other Layers	სხვა შრეები
 	Unlock All	ყველაფრის განბლოკვა
@@ -575,6 +580,7 @@
 	Toolbars	ხელსაწყოთა ზოლები
 	Advanced	დამატებითი
 	Double Column	ორი სვეტი
+	Keep Tools Beside the Canvas	ხელსაწყოები ტილოს გვერდით
 	Actions	მოქმედებები
 	Asset Export	რესურსების ექსპორტირება
 	Attributes	ატრიბუტები
@@ -4504,6 +4510,9 @@ font-technology	Variable	ცვლადი
 @msg	the Pixar file's image data is damaged	Pixar ფაილის გამოსახულების მონაცემები დაზიანებულია
 @msg	the JPEG 2000 file can't be read	JPEG 2000 ფაილის წაკითხვა შეუძლებელია
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 ფაილს აქვს მხარდაუჭერელი ფერთა სივრცე ან JPX შიგთავსი
+@msg	the HEIC or HEIF file can't be read	HEIC ან HEIF ფაილის წაკითხვა შეუძლებელია
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
+@msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 32-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება

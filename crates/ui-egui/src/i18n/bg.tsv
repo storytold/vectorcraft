@@ -2980,6 +2980,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Избрани образци
 	Selected Swatches Only	Само избрани образци
 	Selection	Селекция
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Избор с рамка
+	Touching	Докоснати обекти
+	Fully Enclosed	Изцяло вътре
+	Drag Direction	Посока на плъзгане
 	Selection & Anchor Display	Показване на селекция и опорни точки
 	Selection Only	Само селекция
 	Selection Tool	Инструмент „Селекция“
@@ -3115,6 +3120,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Симулиране на цветна хартия
 	Simulate Paper	Симулиране на хартия
 	Double Column	Две колони
+	Keep Tools Beside the Canvas	Инструментите до платното
 	Single Left Quotation Mark	Лява единична кавичка
 	Single Quotes:	Единични кавички:
 	Single Right Quotation Mark	Дясна единична кавичка

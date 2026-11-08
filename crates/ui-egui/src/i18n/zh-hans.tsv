@@ -2934,6 +2934,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Selected Swatches	所选色板
 	Selected Swatches Only	仅限选择的色板
 	Selection	所选对象
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	框选
+	Touching	接触对象
+	Fully Enclosed	完全包含
+	Drag Direction	拖动方向
 	Selection & Anchor Display	选择和锚点显示
 	Selection Only	仅所选内容
 	Selection Tool	选择工具
@@ -3068,6 +3073,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Simulate Colored Paper	模拟有色纸张
 	Simulate Paper	模拟纸张
 	Double Column	双列
+	Keep Tools Beside the Canvas	工具置于画布旁
 	Single Left Quotation Mark	左单引号
 	Single Quotes:	单引号：
 	Single Right Quotation Mark	右单引号
@@ -4598,6 +4604,9 @@ imageTrace	Outline	轮廓
 @msg	the Pixar file's image data is damaged	Pixar 文件的图像数据已损坏
 @msg	the JPEG 2000 file can't be read	无法读取 JPEG 2000 文件
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 文件包含不受支持的色彩空间或 JPX 内容
+@msg	the HEIC or HEIF file can't be read	无法读取 HEIC 或 HEIF 文件
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC 或 HEIF 文件包含无法读取的图像类型
+@msg	HEIC and HEIF images can't be opened in this build	此版本无法打开 HEIC 和 HEIF 图像
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 图像过大，无法读取 ({_1} × {_2} 像素)
 @msg	zipped 32-bit PSD image data with prediction can't be read	无法读取带预测的 ZIP 压缩 32 位 PSD 图像数据
 @msg	{depth}-bit PSD files in this colour mode can't be read	无法读取此颜色模式下的 {depth} 位 PSD 文件

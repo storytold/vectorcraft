@@ -184,6 +184,16 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Preference choices and the marquee's E hint share the same translated labels.
+#[test]
+fn marquee_selection_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Marquee Selection", "Touching", "Fully Enclosed", "Drag Direction"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]

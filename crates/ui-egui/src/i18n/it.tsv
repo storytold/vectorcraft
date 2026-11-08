@@ -3098,6 +3098,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Campioni selezionati
 	Selected Swatches Only	Solo campioni selezionati
 	Selection	Selezione
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Selezione rettangolare
+	Touching	Oggetti toccati
+	Fully Enclosed	Interamente inclusi
+	Drag Direction	Direzione di trascinamento
 	Selection & Anchor Display	Visualizzazione selezione e punti di ancoraggio
 	Selection Only	Solo selezione
 	Selection Tool	Strumento Selezione
@@ -3235,6 +3240,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Simula carta colorata
 	Simulate Paper	Simula carta
 	Double Column	Colonna doppia
+	Keep Tools Beside the Canvas	Strumenti accanto all'area di disegno
 	Single Left Quotation Mark	Virgoletta singola di apertura
 	Single Quotes:	Virgolette singole:
 	Single Right Quotation Mark	Virgoletta singola di chiusura
@@ -4847,6 +4853,9 @@ axis	Both	Entrambi
 @msg	the Pixar file's image data is damaged	i dati immagine del file Pixar sono danneggiati
 @msg	the JPEG 2000 file can't be read	impossibile leggere il file JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	il file JPEG 2000 contiene uno spazio colore o un contenuto JPX non supportato
+@msg	the HEIC or HEIF file can't be read	impossibile leggere il file HEIC o HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	il file HEIC o HEIF contiene un tipo di immagine che non può essere letto
+@msg	HEIC and HEIF images can't be opened in this build	le immagini HEIC e HEIF non possono essere aperte in questa build
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l'immagine PSD è troppo grande per essere letta ({_1} × {_2} pixel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	i dati immagine PSD a 32 bit compressi ZIP con previsione non possono essere letti
 @msg	{depth}-bit PSD files in this colour mode can't be read	i file PSD a {depth} bit in questo metodo colore non possono essere letti
