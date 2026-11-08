@@ -1550,7 +1550,8 @@ impl Interp {
         let saved = self.temp_roots.len();
         let mut out = Vec::with_capacity(n);
         for i in 0..n {
-            match self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list) {
+            // Each element read takes fuel, so a long array-like list stays within the run's limits.
+            match self.use_fuel().and_then(|()| self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list)) {
                 Ok(v) => {
                     self.temp_roots.push(v.clone());
                     out.push(v);

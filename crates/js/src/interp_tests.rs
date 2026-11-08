@@ -392,6 +392,13 @@ fn shrinking_an_array_takes_fuel_for_each_property() {
 }
 
 #[test]
+fn apply_takes_fuel_for_each_argument_it_reads() {
+    let mut realm = small(Limits { fuel: 1000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "(function () {}).apply(null, {length: 65536});"), LimitKind::Fuel);
+    assert_eq!(realm.run("(function () { return arguments.length; }).apply(null, {length: 100})"), Ok(JsValue::Number(100.0)));
+}
+
+#[test]
 fn declarations_check_the_heap_before_they_are_bound() {
     // Each script declares more than fits in the heap. The run ends with the heap limit before
     // the bindings are made, so the estimate never goes past the limit.
