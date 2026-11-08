@@ -10,8 +10,9 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::Rect;
 
+use super::select::on_artboard;
 use super::typecmd::refresh_bounds;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -38,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?} select the text objects using the font, and the instances of the symbols whose art uses it, that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, and the instances of the symbols whose art uses it, that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -713,6 +714,7 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let style = str_param(p, "style").map(str::to_string);
     let ids = scope(s, false, None)?;
     let d = &s.doc()?.doc;
+    let within = FontScope::read(d, p)?;
     // Only text the Selection tool can reach: not hidden or locked, in a hidden or locked group
     // or layer, or on a locked artboard.
     let editable = d.editable();
@@ -758,9 +760,63 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
         });
     }
     drop(editable);
+    let symbols = d.symbol_boxes();
+    hits.retain(|id| within.holds(d, &symbols, *id));
+    drop(symbols);
     let n = hits.len();
     s.select(|_, sel| sel.set(hits))?;
     Ok(json!({ "count": n }))
+}
+
+/// Where Select Text by Font looks: its `scope`.
+enum FontScope {
+    Document,
+    /// The artboards' rectangles.
+    Artboards(Vec<Rect>),
+    /// The layers and sublayers, with what they hold.
+    Layers(BTreeSet<NodeId>),
+}
+
+impl FontScope {
+    fn read(d: &Document, p: &Value) -> Result<Self> {
+        const C: &str = "select.font";
+        let expected = || bad(C, "`scope` must be \"document\", {artboards: [index, …]} or {layers: [id, …]}");
+        let scope = match p.get("scope") {
+            None | Some(Value::Null) => return Ok(Self::Document),
+            Some(Value::String(v)) if v == "document" => return Ok(Self::Document),
+            Some(Value::Object(m)) if m.len() == 1 => m,
+            Some(_) => return Err(expected()),
+        };
+        let list = |key: &str| -> Result<Option<&Vec<Value>>> {
+            match scope.get(key) {
+                None => Ok(None),
+                Some(Value::Array(a)) if !a.is_empty() => Ok(Some(a)),
+                Some(_) => Err(bad(C, format!("`scope.{key}` must be a non-empty array"))),
+            }
+        };
+        if let Some(a) = list("artboards")? {
+            let rect = |v: &Value| v.as_u64().and_then(|i| d.artboards.get(index(i))).map(|b| b.rect);
+            return a.iter().map(|v| rect(v).ok_or_else(|| bad(C, format!("no such artboard {v}")))).collect::<Result<_>>().map(Self::Artboards);
+        }
+        if let Some(a) = list("layers")? {
+            let layer = |v: &Value| v.as_u64().map(NodeId).filter(|id| d.node(*id).is_some_and(Node::is_layer));
+            return a
+                .iter()
+                .map(|v| layer(v).ok_or_else(|| bad(C, format!("{v} names no layer or sublayer"))))
+                .collect::<Result<_>>()
+                .map(Self::Layers);
+        }
+        Err(expected())
+    }
+
+    /// Is object `id` in the scope.
+    fn holds(&self, d: &Document, symbols: &vectorcraft_doc::SymbolBoxes, id: NodeId) -> bool {
+        match self {
+            Self::Document => true,
+            Self::Artboards(rects) => d.node(id).is_some_and(|n| rects.iter().any(|r| on_artboard(n, symbols, *r))),
+            Self::Layers(layers) => d.ancestry(id).is_some_and(|a| a.iter().any(|i| layers.contains(i))),
+        }
+    }
 }
 
 fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
@@ -909,6 +965,95 @@ mod tests {
         assert_eq!(s.doc().unwrap().selection.objects, [NodeId(ids[0]), NodeId(template)]);
         assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
         assert!(s.doc().unwrap().selection.objects.is_empty());
+    }
+
+    /// Select Text by Font with an artboard scope takes the text on the artboards, as All on
+    /// Active Artboard does: overlapping one, or centered on it, a straddling one included.
+    #[test]
+    fn select_font_in_artboards() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 600, "y": 0, "width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, x: i32| {
+            NodeId(s.execute("text.create", &json!({"x": x, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first = text(&mut s, 10);
+        let straddling = text(&mut s, 180);
+        let second = text(&mut s, 350);
+        let third = text(&mut s, 650);
+        let _off = text(&mut s, 1000);
+        let select = |s: &mut Session, scope: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": scope})).unwrap();
+            s.doc().unwrap().selection.objects.clone()
+        };
+        assert_eq!(select(&mut s, json!({"artboards": [0]})), [first, straddling]);
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second, third]);
+        assert_eq!(select(&mut s, json!("document")).len(), 5);
+        // The same objects All on Active Artboard takes.
+        s.execute("select.allOnArtboard", &json!({"artboard": 0})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.objects, [first, straddling]);
+        // Hidden text stays out.
+        s.execute("select.set", &json!({"ids": [third.0]})).unwrap();
+        s.execute("object.hide", &json!({})).unwrap();
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second]);
+        for bad in [json!({"artboards": [3]}), json!({"artboards": []}), json!({"artboards": ["x"]}), json!({"pages": [0]}), json!("all"), json!(7)] {
+            assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": bad})).is_err(), "{bad}");
+        }
+    }
+
+    /// Select Text by Font with a layer scope takes the text in the layers, their sublayers
+    /// included, and still leaves out hidden and locked text.
+    #[test]
+    fn select_font_in_layers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32| {
+            NodeId(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first_layer = s.doc().unwrap().doc.layers[0].id;
+        let a = text(&mut s, 20);
+        let second_layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let b = text(&mut s, 40);
+        let sub = s.execute("layer.newSublayer", &json!({"parent": second_layer})).unwrap()["id"].as_u64().unwrap();
+        s.execute("layer.setCurrent", &json!({"id": sub})).unwrap();
+        let in_sub = text(&mut s, 60);
+        let locked = text(&mut s, 80);
+        s.execute("select.set", &json!({"ids": [locked.0]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        let select = |s: &mut Session, layers: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": layers}})).unwrap();
+            let mut v = s.doc().unwrap().selection.objects.clone();
+            v.sort();
+            v
+        };
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.ancestry(in_sub).unwrap()[1], NodeId(sub), "the text is in the sublayer");
+        assert_eq!(select(&mut s, json!([first_layer.0])), [a]);
+        assert_eq!(select(&mut s, json!([second_layer])), [b, in_sub]);
+        assert_eq!(select(&mut s, json!([sub])), [in_sub]);
+        assert_eq!(select(&mut s, json!([first_layer.0, sub])), [a, in_sub]);
+        // Not a layer: an error, the selection as it was.
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [a.0]}})).is_err());
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [u64::MAX]}})).is_err());
+        assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    }
+
+    /// A symbol instance whose art uses the font is selected when the instance is in scope.
+    #[test]
+    fn select_font_scope_takes_symbol_instances_in_it() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [id]})).unwrap();
+        let instance = s.doc().unwrap().selection.objects[0];
+        let select = |s: &mut Session, i: u64| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": [i]}})).unwrap()["count"].clone()
+        };
+        assert_eq!(select(&mut s, 0), 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [instance]);
+        assert_eq!(select(&mut s, 1), 0);
     }
 
     /// Replace Font leaves hidden and locked text in its font, and text inside a hidden or locked

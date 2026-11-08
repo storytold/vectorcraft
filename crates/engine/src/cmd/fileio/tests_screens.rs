@@ -148,6 +148,19 @@ fn device_names_and_trailing_periods_follow_windows_naming_rules() {
     assert_eq!(r["name"], "nul-.zip");
 }
 
+/// A dot in an artboard's name stays a dot (`example.artboard.png`, #6143); a name of only dots, or
+/// ending in one, still can't name another folder or end in a period, a leading dot is a dash (no
+/// hidden `.draft.png`), and `/` and `:` are dashes.
+#[test]
+fn an_artboard_name_keeps_its_dots() {
+    let mut s = session(7);
+    for (index, name) in ["example.artboard", "v1.2.final", "..", "a/b:c", "trail.", ".draft", "..x.y"].iter().enumerate() {
+        s.execute("artboard.setProps", &json!({"index": index, "name": name})).unwrap();
+    }
+    let r = export(&mut s, json!({"formats": [{"format": "png"}]}));
+    assert_eq!(names(&r), ["example.artboard.png", "v1.2.final.png", "Artboard-3.png", "a-b-c.png", "trail.png", "-draft.png", "--x.y.png"]);
+}
+
 /// `first_file` names the file the export writes first, for the same params: the item's file name,
 /// a prefix and a suffix with characters Windows does not allow, a range, a Windows device name,
 /// every kind of folder, presets, size suffixes, a name pattern with its counter and date, an
