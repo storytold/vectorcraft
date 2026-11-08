@@ -1,4 +1,5 @@
 use super::*;
+use vectorcraft_color::Color;
 
 #[test]
 fn a_variable_width_stroke_keeps_its_profile() {
@@ -1392,4 +1393,53 @@ fn a_style_is_read_as_a_writer_checks_it() {
     for junk in ["(", ")", ";", "/KnownStyle :\n(Odd) /Name ,\n;;;;", "/KnownStyle :\n(Odd) /Name ,\n/Array : 1 /Real , ; (x) ,"] {
         let _ = read(junk, Some(&own));
     }
+}
+
+#[test]
+fn art_styles_read_registration_and_named_colors() {
+    let reg_0 = fill("1 1 1 1 ([Registration]) 1 Xs");
+    let reg_100 = fill("1 1 1 1 ([Registration]) 0 Xs");
+    let reg_name = fill("1 1 1 1 /All 1 Xs");
+    let named_spot = fill("0 0.5 1 0 (Shemen) 0 0 Xx");
+    let stroke_reg = basic(
+        "Stroke Style Filter",
+        "/StrokeStyle : 0 R\n1 1 1 1 ([Registration]) 1 XS\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n",
+    );
+    let data = format!(
+        "/KnownStyle :\n(Reg0) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(Reg100) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(RegName) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(Shemen) /Name ,\n/ActiveStyle :\n{}\n\
+         /KnownStyle :\n(StrokeReg) /Name ,\n/ActiveStyle :\n{}\n",
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_0])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_100])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[reg_name])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[named_spot])]),
+        compound("Chain Style Filter", &[compound("Stack Style Filter", &[stroke_reg])]),
+    );
+    let styles = art_styles(data.as_bytes());
+    let st0 = &styles["Reg0"];
+    assert!(st0.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st0.items.as_slice() else { panic!("{st0:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0)));
+
+    let st100 = &styles["Reg100"];
+    assert!(st100.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st100.items.as_slice() else { panic!("{st100:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some(vectorcraft_color::swatch::REGISTRATION), 1.0, Color::cmyk(1.0, 1.0, 1.0, 1.0)));
+
+    let st_name = &styles["RegName"];
+    assert!(st_name.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, .. })] = st_name.items.as_slice() else { panic!("{st_name:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0));
+
+    let st_spot = &styles["Shemen"];
+    assert!(st_spot.plain);
+    let [StyleItem::Fill(Paint::Solid { swatch, tint, color })] = st_spot.items.as_slice() else { panic!("{st_spot:?}") };
+    assert_eq!((swatch.as_deref(), *tint, *color), (Some("Shemen"), 1.0, Color::cmyk(0.0, 0.5, 1.0, 0.0)));
+
+    let st_stroke = &styles["StrokeReg"];
+    assert!(st_stroke.plain);
+    let [StyleItem::Stroke { paint: Paint::Solid { swatch, tint, .. }, .. }] = st_stroke.items.as_slice() else { panic!("{st_stroke:?}") };
+    assert_eq!((swatch.as_deref(), *tint), (Some(vectorcraft_color::swatch::REGISTRATION), 0.0));
 }

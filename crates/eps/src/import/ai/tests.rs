@@ -6070,6 +6070,30 @@ fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
 }
 
 #[test]
+fn ai_import_registration_style_does_not_carry_over_previous_color_6205() {
+    // Regression test for #6205:
+    // A background shape sets a spot colour ("Shemen").
+    // A following object has an art style with [Registration] at 0% tint.
+    // The object must resolve the Registration style ([Registration] 0% / #ffffff)
+    // rather than falling back to the prior spot color.
+    let defs = [fill_style("RegWhite", "1 1 1 1 ([Registration]) 1 Xs\n")];
+    let background = format!("0 0.67 0.73 0.26 (Shemen) 0 0 Xx\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let styled_obj = styled_square("RegWhite");
+    let content = format!("{background}{styled_obj}");
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["RegWhite"]), layer(&content)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    // First object is background in Shemen spot
+    let Paint::Solid { swatch: s0, .. } = fill(&a[0]) else { panic!("{:#?}", a[0]) };
+    assert_eq!(s0.as_deref(), Some("Shemen"));
+    // Second object is styled in RegWhite: [Registration] at 0% tint (#ffffff)
+    let Paint::Solid { swatch, tint, color } = fill(&a[1]) else { panic!("{:#?}", a[1]) };
+    assert_eq!(swatch.as_deref(), Some(vectorcraft_color::swatch::REGISTRATION));
+    assert_eq!(tint, 0.0);
+    assert_eq!(color, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0));
+}
+
+#[test]
 fn a_listed_style_keeps_its_transparency_and_links_objects_that_have_it() {
     let blend = "/BasicFilter :\n(Blend Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
                  /BlendStyle : 1 0.6 1 1 0 Xy\n0 J 0 j 1 w 10 M []0 d0 XR\n/Def ;\n (BlendStyle) ,\n; /Dict ;\n /Part ,\n";

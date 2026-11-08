@@ -523,7 +523,7 @@ impl<'a> Reader<'a> {
     fn color(&mut self, w: &str, vals: &[V]) {
         let Some((p, named)) = paint::color_op(w, vals) else { return };
         // Registration (`Xs`, `Xz`) says nothing of the document's colour model.
-        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ");
+        let registration = matches!(w, "Xs" | "XS" | "Xz" | "XZ") || p.is_registration();
         match p.color().filter(|_| !registration) {
             Some(vectorcraft_color::Color::Rgb { .. }) => self.rgb_colors += 1,
             Some(vectorcraft_color::Color::Cmyk { .. }) => self.cmyk_colors += 1,
