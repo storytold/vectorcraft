@@ -181,8 +181,8 @@ pub(crate) struct Run {
     /// Are its log lines written to the app's log? Not while the module is being loaded.
     logged: bool,
     deadline: Deadline,
-    /// The last report passed on, as per mille of a known total or the count of an unknown one,
-    /// how many were, and how many changed ones went by since the last.
+    /// The last report passed on, as per mille of a known total (with 1) or the count of an
+    /// unknown one (with 0), how many were, and how many changed ones went by since the last.
     last: Option<(u64, u64)>,
     reports: usize,
     skipped: usize,
@@ -213,7 +213,7 @@ impl Run {
         let done = u64::try_from(done).unwrap_or(0);
         let done = if total > 0 { done.min(total) } else { done };
         self.report.progress = Some((done, total));
-        let key = if total > 0 { ((u128::from(done) * 1000 / u128::from(total)) as u64, total) } else { (done, 0) };
+        let key = if total > 0 { ((u128::from(done) * 1000 / u128::from(total)) as u64, 1) } else { (done, 0) };
         if !self.forward || self.last == Some(key) {
             return;
         }
@@ -358,7 +358,7 @@ mod tests {
         }
     }
 
-    /// Reports are passed on once per tenth of a percent at most, and past
+    /// Reports are passed on once per tenth of a percent at most, whatever the total, and past
     /// [`MAX_PROGRESS_REPORTS`] once per [`PROGRESS_STRIDE`] changes, except the first after the
     /// total becomes known; the last one is always kept.
     #[test]
@@ -402,6 +402,20 @@ mod tests {
         });
         assert_eq!(later.borrow().last(), Some(&(10, 100)), "90 changes are fewer than the stride");
         assert_eq!(unknown.report.progress, Some((100, 100)));
+        // A new total at the same tenth of a percent is not a new step.
+        let mut retotalled = run();
+        let steps = Rc::new(RefCell::new(Vec::new()));
+        let sink: vectorcraft_doc::cancel::ProgressSink = {
+            let steps = steps.clone();
+            Rc::new(move |d, t, _| steps.borrow_mut().push((d, t)))
+        };
+        vectorcraft_doc::cancel::scope(&token, Some(sink), || {
+            for total in 10..2_010 {
+                retotalled.progress(total / 10, total - total % 10);
+            }
+        });
+        assert_eq!(*steps.borrow(), [(1, 10)]);
+        assert_eq!(retotalled.report.progress, Some((200, 2_000)));
     }
 
     /// Text outside memory, text that isn't UTF-8 and an unknown level are errors; a long line is
