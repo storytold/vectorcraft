@@ -59,7 +59,7 @@ use vectorcraft_effects::is_pathfinder;
 
 use super::brush::PathBrush;
 use super::lex::{Lexer, Tok};
-use super::obj::V;
+use super::obj::{self, V};
 use super::paint;
 
 const GLOW: &str = "Adobe Outer Glow"; // brand-ok: the filter's name in the files
@@ -432,6 +432,7 @@ pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(V::text),
+                b"All" | b"[Registration]" | b"Registration" => operands.push(V::Name(obj::text(n))),
                 b"CompoundFilter" => pending = Some(true),
                 b"BasicFilter" => pending = Some(false),
                 b"Part" => in_basic = false,
@@ -605,7 +606,8 @@ fn block_data(lex: &mut Lexer, encoded: &[u8]) -> Option<Vec<u8>> {
 fn paint_op(f: &mut Filter, op: &str, vals: &[V]) {
     let last = vals.iter().rev().find_map(V::num);
     match op {
-        "Xa" | "k" | "g" | "x" | "Xk" | "XA" | "K" | "G" | "X" | "XK" => {
+        "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" | "xa" | "xx" | "xk" | "xs"
+        | "xz" => {
             let Some((p, _)) = paint::color_op(op, vals) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
                 f.fill = Some(p);
