@@ -1033,6 +1033,8 @@ font-technology	Variable	Μεταβλητές
 	Export for Screens Settings	Ρυθμίσεις εξαγωγής για οθόνες
 	Export for Screens…	Εξαγωγή για οθόνες…
 	Export Keyboard Shortcuts…	Εξαγωγή συντομεύσεων πληκτρολογίου…
+	Export Keyboard Shortcuts as Text…	Εξαγωγή συντομεύσεων πληκτρολογίου ως κείμενο…
+	Export Text…	Εξαγωγή κειμένου…
 	Export Option	Επιλογή εξαγωγής
 	Export PDF	Εξαγωγή PDF
 	Export PDF Presets	Εξαγωγή προεπιλογών PDF
@@ -4573,6 +4575,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} εικόνα δεν ήταν δυνατό να αποκωδικοποιηθεί: εμφανίζεται ως πλαίσιο με σταυρό|{n} εικόνες δεν ήταν δυνατό να αποκωδικοποιηθούν: εμφανίζονται ως πλαίσια με σταυρό
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} συνδεδεμένη εικόνα άλλαξε στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τη νέα έκδοση|{n} συνδεδεμένες εικόνες άλλαξαν στον δίσκο: η Ενημέρωση συνδέσμων εμφανίζει τις νέες εκδόσεις
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ενημερώθηκε {n} συνδεδεμένο αρχείο που άλλαξε στον δίσκο|Ενημερώθηκαν {n} συνδεδεμένα αρχεία που άλλαξαν στον δίσκο
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	το έγγραφο ορίζει ξάκρισμα που αυτό το αρχείο PDF/X παραλείπει: ενεργοποιήστε τη «Χρήση ρυθμίσεων ξακρίσματος εγγράφου»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Εξήχθη το {what} με {n} σημείωση: {first}|Εξήχθη το {what} με {n} σημειώσεις: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} αρχείο γραμματοσειράς βρίσκεται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}|{n} αρχεία γραμματοσειρών βρίσκονται πλέον στον φάκελο {folder}· δεν ήταν δυνατή η προσθήκη {failed}: {reason}
@@ -5747,6 +5750,19 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Insert Stop…	Εισαγωγή διακοπής…
+	Insert Stop	Εισαγωγή διακοπής
+	Record Stop	Καταγραφή διακοπής
+	Allow Continue	Να επιτρέπεται η συνέχεια
+	Continue	Συνέχεια
+	Continue Action	Συνέχεια ενέργειας
+	Delete Action Step	Διαγραφή βήματος ενέργειας
+	Press Play Current Selection in the Actions panel to go on.	Για να συνεχίσετε, πατήστε «Αναπαραγωγή τρέχουσας επιλογής» στο πάνελ Ενέργειες.
+	Stop: {message}	Διακοπή: {message}
+@msg	no action is waiting at a stop	καμία ενέργεια δεν περιμένει σε διακοπή
+@msg	message must be text	Το message πρέπει να είναι κείμενο
+@msg	allowContinue must be true or false	Το allowContinue πρέπει να είναι true ή false
+@msg	Batch cannot play an action with a stop	Η μαζική επεξεργασία δεν μπορεί να αναπαράγει ενέργεια με διακοπή
 	Playback Options	Επιλογές αναπαραγωγής
 	Accelerated	Επιταχυμένα
 	Step by Step	Βήμα προς βήμα

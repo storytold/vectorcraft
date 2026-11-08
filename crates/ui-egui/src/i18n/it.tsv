@@ -1090,6 +1090,8 @@ font-technology	Variable	Variabili
 	Export for Screens Settings	Impostazioni Esporta per schermi
 	Export for Screens…	Esporta per schermi…
 	Export Keyboard Shortcuts…	Esporta scelte rapide da tastiera…
+	Export Keyboard Shortcuts as Text…	Esporta scelte rapide da tastiera come testo…
+	Export Text…	Esporta testo…
 	Export Option	Opzione di esportazione
 	Export PDF	Esporta PDF
 	Export PDF Presets	Esporta preset PDF
@@ -4666,6 +4668,7 @@ axis	Both	Entrambi
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} immagine non decodificabile: viene mostrata come riquadro barrato da una croce|{n} immagini non decodificabili: vengono mostrate come riquadri barrati da una croce
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} immagine collegata modificata su disco: Aggiorna collegamenti mostra la nuova versione|{n} immagini collegate modificate su disco: Aggiorna collegamenti mostra le nuove versioni
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Aggiornato {n} file collegato modificato su disco|Aggiornati {n} file collegati modificati su disco
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	il documento imposta un'abbondanza che questo file PDF/X omette: attiva «Usa impostazioni abbondanza del documento»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Esportato {what} con {n} nota: {first}|Esportato {what} con {n} note: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} file di font ora in {folder}|{n} file di font ora in {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}|{n} file di font ora in {folder}; impossibile aggiungerne {failed}: {reason}
@@ -5412,6 +5415,19 @@ axis	Y Axis	Asse Y
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
 	Playback Options…	Opzioni di riproduzione…
+	Insert Stop…	Inserisci interruzione…
+	Insert Stop	Inserisci interruzione
+	Record Stop	Registra interruzione
+	Allow Continue	Consenti di continuare
+	Continue	Continua
+	Continue Action	Continua azione
+	Delete Action Step	Elimina passaggio dell’azione
+	Press Play Current Selection in the Actions panel to go on.	Per continuare, premi Esegui selezione corrente nel pannello Azioni.
+	Stop: {message}	Interruzione: {message}
+@msg	no action is waiting at a stop	nessuna azione è in attesa a un'interruzione
+@msg	message must be text	message deve essere testo
+@msg	allowContinue must be true or false	allowContinue deve essere true o false
+@msg	Batch cannot play an action with a stop	L'elaborazione batch non può eseguire un'azione con un'interruzione
 	Playback Options	Opzioni di riproduzione
 	Accelerated	Accelerata
 	Step by Step	Passo per passo

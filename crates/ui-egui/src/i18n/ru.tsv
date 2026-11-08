@@ -1087,6 +1087,8 @@ font-technology	Variable	Вариативные
 	Export for Screens Settings	Параметры экспорта для экранов
 	Export for Screens…	Экспортировать для экранов…
 	Export Keyboard Shortcuts…	Экспортировать сочетания клавиш…
+	Export Keyboard Shortcuts as Text…	Экспортировать сочетания клавиш как текст…
+	Export Text…	Экспорт текста…
 	Export Option	Параметр экспорта
 	Export PDF	Экспортировать PDF
 	Export PDF Presets	Экспортировать наборы PDF
@@ -4661,6 +4663,7 @@ axis	Both	Оба
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	не удалось декодировать {n} изображение: оно показано как перечёркнутая рамка|не удалось декодировать {n} изображения: они показаны как перечёркнутые рамки|не удалось декодировать {n} изображений: они показаны как перечёркнутые рамки
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} связанное изображение изменилось на диске: «Обновить связи» покажет новую версию|{n} связанных изображения изменились на диске: «Обновить связи» покажет новые версии|{n} связанных изображений изменились на диске: «Обновить связи» покажет новые версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновлён {n} связанный файл, изменённый на диске|Обновлено {n} связанных файла, изменённых на диске|Обновлено {n} связанных файлов, изменённых на диске
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	в документе задан вылет, который этот файл PDF/X не включает: включите «Использовать параметры вылета документа»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Экспортировано: {what} с {n} примечанием: {first}|Экспортировано: {what} с {n} примечаниями: {first}|Экспортировано: {what} с {n} примечаниями: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} файл шрифта теперь в {folder}|{n} файла шрифтов теперь в {folder}|{n} файлов шрифтов теперь в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} файл шрифта теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файла шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}|{n} файлов шрифтов теперь в {folder}; не удалось добавить {failed}: {reason}
@@ -5407,6 +5410,19 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Insert Stop…	Вставить остановку…
+	Insert Stop	Вставить остановку
+	Record Stop	Записать остановку
+	Allow Continue	Разрешить продолжение
+	Continue	Продолжить
+	Continue Action	Продолжить действие
+	Delete Action Step	Удалить шаг действия
+	Press Play Current Selection in the Actions panel to go on.	Чтобы продолжить, нажмите «Воспроизвести текущее выделение» на панели «Действия».
+	Stop: {message}	Остановка: {message}
+@msg	no action is waiting at a stop	ни одно действие не ожидает на остановке
+@msg	message must be text	message должно быть текстом
+@msg	allowContinue must be true or false	allowContinue должно быть true или false
+@msg	Batch cannot play an action with a stop	Пакет не может воспроизвести действие с остановкой
 	Playback Options	Параметры воспроизведения
 	Accelerated	Ускоренно
 	Step by Step	Пошагово

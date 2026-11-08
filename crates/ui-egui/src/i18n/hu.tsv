@@ -1367,6 +1367,8 @@ font-technology	Variable	Változó
 	Export for Screens Settings	Exportálás képernyőkre – beállítások
 	Export for Screens…	Exportálás képernyőkre…
 	Export Keyboard Shortcuts…	Billentyűparancsok exportálása…
+	Export Keyboard Shortcuts as Text…	Billentyűparancsok exportálása szövegként…
+	Export Text…	Szöveg exportálása…
 	Export Library	Könyvtár exportálása
 	Export Library…	Könyvtár exportálása…
 	Export Option	Exportálási beállítás
@@ -5125,6 +5127,7 @@ imageTrace	Outline	Körvonal
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {n}; áthúzott keretként látszanak
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	a dokumentum kifutót állít be, amelyet ez a PDF/X-fájl kihagy: kapcsolja be „A dokumentum kifutóbeállításainak használata” beállítást
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
@@ -5779,6 +5782,19 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Insert Stop…	Megállás beszúrása…
+	Insert Stop	Megállás beszúrása
+	Record Stop	Megállás rögzítése
+	Allow Continue	Folytatás engedélyezése
+	Continue	Folytatás
+	Continue Action	Művelet folytatása
+	Delete Action Step	Műveletlépés törlése
+	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
+	Stop: {message}	Megállás: {message}
+@msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
+@msg	message must be text	message: szöveg kell
+@msg	allowContinue must be true or false	allowContinue: true vagy false kell
+@msg	Batch cannot play an action with a stop	A kötegelt feldolgozás nem játszhat le megállást tartalmazó műveletet
 	Playback Options	Lejátszási beállítások
 	Accelerated	Gyorsított
 	Step by Step	Lépésenként

@@ -1089,6 +1089,8 @@ font-technology	Variable	Variables
 	Export for Screens Settings	Ajustes de Exportar para pantallas
 	Export for Screens…	Exportar para pantallas…
 	Export Keyboard Shortcuts…	Exportar métodos abreviados de teclado…
+	Export Keyboard Shortcuts as Text…	Exportar métodos abreviados de teclado como texto…
+	Export Text…	Exportar texto…
 	Export Option	Opción de exportación
 	Export PDF	Exportar PDF
 	Export PDF Presets	Exportar preajustes de PDF
@@ -4624,6 +4626,7 @@ axis	Both	Ambos
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no se pudo descodificar {n} imagen: se muestra como un recuadro tachado|no se pudieron descodificar {n} imágenes: se muestran como recuadros tachados
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagen vinculada cambió en el disco: Actualizar vínculos muestra la versión nueva|{n} imágenes vinculadas cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Se actualizó {n} archivo vinculado que cambió en el disco|Se actualizaron {n} archivos vinculados que cambiaron en el disco
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	el documento define un sangrado que este archivo PDF/X omite: activa «Usar los ajustes de sangrado del documento»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Se exportó {what} con {n} nota: {first}|Se exportó {what} con {n} notas: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} archivo de fuentes ahora está en {folder}|{n} archivos de fuentes ahora están en {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo de fuentes ahora está en {folder}; no se pudieron agregar {failed}: {reason}|{n} archivos de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
@@ -5737,6 +5740,19 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Playback Options…	Opciones de reproducción…
+	Insert Stop…	Insertar parada…
+	Insert Stop	Insertar parada
+	Record Stop	Grabar parada
+	Allow Continue	Permitir continuar
+	Continue	Continuar
+	Continue Action	Continuar acción
+	Delete Action Step	Eliminar paso de la acción
+	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
+	Stop: {message}	Parada: {message}
+@msg	no action is waiting at a stop	ninguna acción está esperando en una parada
+@msg	message must be text	message debe ser texto
+@msg	allowContinue must be true or false	allowContinue debe ser true o false
+@msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
 	Playback Options	Opciones de reproducción
 	Accelerated	Acelerada
 	Step by Step	Paso a paso

@@ -255,6 +255,7 @@ impl VectorcraftApp {
         let confined = self.synthetic_frame.then(|| self.automation_roots.clone()).flatten();
         if let Err(msg) = file_access::confine(confined.as_ref(), || vectorcraft_engine::guard::catch_panic(|| self.tick_frame(ctx))) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
     }
@@ -494,6 +495,7 @@ impl VectorcraftApp {
             })
         }) {
             self.picks.recover();
+            self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
         crate::ime::finish_ui(self, &ctx);

@@ -831,6 +831,8 @@ lighting	Light	სინათლე
 	Expand Layers Panel Rows	შრეების პანელის სტრიქონების გაშლა
 	Export CSS…	CSS-ის ექსპორტირება…
 	Export Keyboard Shortcuts…	კლავიატურის მალსახმობების ექსპორტირება…
+	Export Keyboard Shortcuts as Text…	კლავიატურის მალსახმობების ტექსტად ექსპორტირება…
+	Export Text…	ტექსტის ექსპორტი…
 	File Info Dialog	ფაილის ინფორმაციის დიალოგი
 	Go to Artboard	სამუშაო დაფაზე გადასვლა
 	Graphic Style Options…	გრაფიკული სტილის პარამეტრები…
@@ -4362,6 +4364,7 @@ font-technology	Variable	ცვლადი
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	მიბმული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
@@ -5719,6 +5722,19 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Insert Stop…	გაჩერების ჩასმა…
+	Insert Stop	გაჩერების ჩასმა
+	Record Stop	გაჩერების ჩაწერა
+	Allow Continue	გაგრძელების დაშვება
+	Continue	გაგრძელება
+	Continue Action	მოქმედების გაგრძელება
+	Delete Action Step	მოქმედების ნაბიჯის წაშლა
+	Press Play Current Selection in the Actions panel to go on.	გასაგრძელებლად მოქმედებების პანელზე დააჭირეთ „მიმდინარე მონიშნულის შესრულებას“.
+	Stop: {message}	გაჩერება: {message}
+@msg	no action is waiting at a stop	გაჩერებაზე არცერთი მოქმედება არ ელოდება
+@msg	message must be text	message უნდა იყოს ტექსტი
+@msg	allowContinue must be true or false	allowContinue უნდა იყოს true ან false
+@msg	Batch cannot play an action with a stop	პაკეტურ დამუშავებას არ შეუძლია გაჩერების მქონე მოქმედების შესრულება
 	Playback Options	შესრულების პარამეტრები
 	Accelerated	დაჩქარებული
 	Step by Step	ნაბიჯ-ნაბიჯ

@@ -878,6 +878,8 @@ lighting	Light	Lys
 	Expand Layers Panel Rows	Udvid rækker i lagpanelet
 	Export CSS…	Eksportér CSS…
 	Export Keyboard Shortcuts…	Eksportér tastaturgenveje…
+	Export Keyboard Shortcuts as Text…	Eksportér tastaturgenveje som tekst…
+	Export Text…	Eksportér tekst…
 	File Info Dialog	Dialogboks til filoplysninger
 	Go to Artboard	Gå til tegnebræt
 	Graphic Style Options…	Indstillinger for grafisk typografi…
@@ -4562,6 +4564,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} billede kunne ikke afkodes og vises som en overkrydset boks|{n} billeder kunne ikke afkodes og vises som overkrydsede bokse
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} linket billede er ændret på disken: Opdatér links viser den nye version|{n} linkede billeder er ændret på disken: Opdatér links viser de nye versioner
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Opdaterede {n} linket fil ændret på disken|Opdaterede {n} linkede filer ændret på disken
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumentet angiver et udløb, som denne PDF/X-fil udelader: slå „Brug dokumentets udløbsindstillinger“ til
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Eksporterede {what} med {n} note: {first}|Eksporterede {what} med {n} noter: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} skrifttypefil er nu i {folder}|{n} skrifttypefiler er nu i {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} skrifttypefil er nu i {folder}; {failed} kunne ikke tilføjes: {reason}|{n} skrifttypefiler er nu i {folder}; {failed} kunne ikke tilføjes: {reason}
@@ -5695,6 +5698,19 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Playback Options…	Afspilningsindstillinger…
+	Insert Stop…	Indsæt stop…
+	Insert Stop	Indsæt stop
+	Record Stop	Optag stop
+	Allow Continue	Tillad fortsæt
+	Continue	Fortsæt
+	Continue Action	Fortsæt handling
+	Delete Action Step	Slet handlingstrin
+	Press Play Current Selection in the Actions panel to go on.	Tryk på Afspil aktuel markering i panelet Handlinger for at fortsætte.
+	Stop: {message}	Stop: {message}
+@msg	no action is waiting at a stop	ingen handling venter ved et stop
+@msg	message must be text	message skal være tekst
+@msg	allowContinue must be true or false	allowContinue skal være true eller false
+@msg	Batch cannot play an action with a stop	Batch kan ikke afspille en handling med et stop
 	Playback Options	Afspilningsindstillinger
 	Accelerated	Accelereret
 	Step by Step	Trin for trin

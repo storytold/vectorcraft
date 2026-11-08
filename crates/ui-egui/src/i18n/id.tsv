@@ -878,6 +878,8 @@ lighting	Light	Cahaya
 	Expand Layers Panel Rows	Perluas baris panel Lapisan
 	Export CSS…	Ekspor CSS…
 	Export Keyboard Shortcuts…	Ekspor pintasan papan ketik…
+	Export Keyboard Shortcuts as Text…	Ekspor pintasan papan ketik sebagai teks…
+	Export Text…	Ekspor teks…
 	File Info Dialog	Dialog info file
 	Go to Artboard	Buka artboard
 	Graphic Style Options…	Opsi gaya grafis…
@@ -4562,6 +4564,7 @@ imageTrace	Outline	Kontur
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} gambar tidak dapat didekode dan ditampilkan sebagai kotak bersilang
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} gambar tertaut di disk telah berubah: Perbarui Tautan menampilkan versi barunya
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Telah memperbarui {n} berkas tertaut yang berubah di disk
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokumen menetapkan bleed yang dihilangkan oleh file PDF/X ini: aktifkan "Gunakan pengaturan bleed dokumen"
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} diekspor dengan {n} catatan: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} berkas font kini berada di {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} berkas font kini berada di {folder}; {failed} tidak dapat ditambahkan: {reason}
@@ -5695,6 +5698,19 @@ axis	Y Axis	Sumbu Y
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
 	Playback Options…	Opsi pemutaran…
+	Insert Stop…	Sisipkan henti…
+	Insert Stop	Sisipkan henti
+	Record Stop	Rekam henti
+	Allow Continue	Izinkan lanjutkan
+	Continue	Lanjutkan
+	Continue Action	Lanjutkan tindakan
+	Delete Action Step	Hapus langkah tindakan
+	Press Play Current Selection in the Actions panel to go on.	Untuk melanjutkan, tekan Putar seleksi saat ini di panel Tindakan.
+	Stop: {message}	Henti: {message}
+@msg	no action is waiting at a stop	tidak ada tindakan yang menunggu di titik henti
+@msg	message must be text	message harus berupa teks
+@msg	allowContinue must be true or false	allowContinue harus true atau false
+@msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
 	Playback Options	Opsi pemutaran
 	Accelerated	Dipercepat
 	Step by Step	Langkah demi langkah

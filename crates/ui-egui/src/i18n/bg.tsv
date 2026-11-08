@@ -1060,6 +1060,8 @@ font-technology	Variable	Променливи
 	Export for Screens Settings	Настройки за експортиране за екрани
 	Export for Screens…	Експортиране за екрани…
 	Export Keyboard Shortcuts…	Експортиране на клавишни комбинации…
+	Export Keyboard Shortcuts as Text…	Експортиране на клавишни комбинации като текст…
+	Export Text…	Експортиране на текст…
 	Export Option	Опция за експортиране
 	Export PDF	Експортиране в PDF
 	Export PDF Presets	Предварителни настройки за PDF
@@ -4163,13 +4165,13 @@ axis	Both	И двете
 @msg	no point {i} (the gradient has {_1})	няма точка {i} (градиентът има {_1})
 @msg	no preset editor	няма редактор на предварителни настройки
 @msg	no previous transform	няма предишно трансформиране
-@msg	no print preset named `{base}`	няма предварителна настройка за печат с име „{base}“
-@msg	no print preset named `{name}`	няма предварителна настройка за печат с име „{name}“
+@msg	no print preset named `{base}`	няма предварителна настройка за печат с име `{base}`
+@msg	no print preset named `{name}`	няма предварителна настройка за печат с име `{name}`
 @msg	no print service	няма услуга за печат
 @msg	no revert command	няма команда за връщане
-@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име „{name}“ (вградените настройки са само за четене: създайте нова от тях)
+@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име `{name}` (вградените настройки са само за четене: създайте нова от тях)
 @msg	no saved presets	няма запазени предварителни настройки
-@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име „{name}“ ({DEFAULT_PRESET} е защитена: създайте нова от нея)
+@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име `{name}` ({DEFAULT_PRESET} е защитена: създайте нова от нея)
 @msg	no saved profiles	няма запазени профили
 @msg	no saved selection recalled	няма възстановена запазена селекция
 @msg	no saved selections	няма запазени селекции
@@ -4207,13 +4209,13 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
-@msg	no swatch `{name}`	няма образец „{name}“
-@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци „{l}“ (вижте swatch.library.list)
+@msg	no swatch `{name}`	няма образец `{name}`
+@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
 @msg	no target object has an opacity mask: select one or give `id`	никой целеви обект няма маска за непрозрачност: изберете един или задайте `id`
 @msg	no threaded text selected	няма избран свързан текст
 @msg	no user library folder here	тук няма папка с потребителска библиотека
-@msg	no user workspace `{from}`	няма потребителско работно пространство „{from}“
+@msg	no user workspace `{from}`	няма потребителско работно пространство `{from}`
 @msg	node {_1} is not text	възелът {_1} не е текст
 @msg	not a DXF drawing	не е DXF чертеж
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
@@ -4475,6 +4477,7 @@ axis	Both	И двете
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} изображение не може да бъде декодирано: показва се като зачеркната рамка|{n} изображения не могат да бъдат декодирани: показват се като зачеркнати рамки
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	документът задава изтичане, което този PDF/X файл пропуска: включете „Използване на настройките за изтичане на документа“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
@@ -5680,6 +5683,19 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Insert Stop…	Вмъкване на спиране…
+	Insert Stop	Вмъкване на спиране
+	Record Stop	Записване на спиране
+	Allow Continue	Разрешаване на продължаване
+	Continue	Продължаване
+	Continue Action	Продължаване на действието
+	Delete Action Step	Изтриване на стъпка от действието
+	Press Play Current Selection in the Actions panel to go on.	За да продължите, натиснете „Изпълнение на текущия избор“ в панела „Действия“.
+	Stop: {message}	Спиране: {message}
+@msg	no action is waiting at a stop	няма действие, което чака при спиране
+@msg	message must be text	message трябва да бъде текст
+@msg	allowContinue must be true or false	allowContinue трябва да бъде true или false
+@msg	Batch cannot play an action with a stop	Пакет не може да изпълни действие със спиране
 	Playback Options	Опции за възпроизвеждане
 	Accelerated	Ускорено
 	Step by Step	Стъпка по стъпка
