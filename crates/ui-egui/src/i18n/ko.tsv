@@ -480,6 +480,11 @@ digits	Malayalam	말라얄람어
 	Document Raster Effects Settings…	문서 래스터 효과 설정…
 	Vector Effects	벡터 효과
 	3D and Materials	3D 및 재질
+	Plane	평면
+	Extrude	돌출
+	Revolve	회전체
+	Inflate	부풀리기
+	Select objects, then pick an object type to give them a 3D effect.	개체를 선택한 다음 개체 유형을 골라 3D 효과를 적용하십시오.
 	Extrude & Bevel…	돌출 및 경사…
 	Revolve…	회전체…
 	Inflate…	부풀리기…
@@ -1019,6 +1024,8 @@ digits	Malayalam	말라얄람어
 	Show Cross Hairs	십자선 보기
 	Show Video Safe Areas	비디오 안전 영역 보기
 	Video Ruler Pixel Aspect Ratio:	비디오 눈금자 픽셀 종횡비:
+	Fade Region Outside Artboard	아트보드 외부 영역 어둡게 표시
+	Update While Dragging	드래그하는 동안 업데이트
 	Hide Video Rulers	비디오 눈금자 숨기기
 	Background Contents	배경 내용
 	Background Contents:	배경 내용:
@@ -1571,6 +1578,8 @@ digits	Malayalam	말라얄람어
 	Export Document	문서 내보내기
 	Export EPS	EPS 내보내기
 	Export Keyboard Shortcuts…	단축키 내보내기…
+	Export Keyboard Shortcuts as Text…	단축키를 텍스트로 내보내기…
+	Export Text…	텍스트 내보내기…
 	Export Option	내보내기 옵션
 	Export PDF	PDF 내보내기
 	Export PDF Presets	PDF 프리셋 내보내기
@@ -1717,6 +1726,8 @@ digits	Malayalam	말라얄람어
 	Graphics: {adapter}	그래픽: {adapter}
 	Grays	회색 계열
 	Grayscale	그레이스케일
+	High Color	많은 색상
+	Low Color	적은 색상
 	Flat Logo	단색 로고
 	Grayscale images	그레이스케일 이미지
 	Green	녹색
@@ -1762,6 +1773,7 @@ digits	Malayalam	말라얄람어
 	Step Backward	한 단계 뒤로
 	Step Forward	한 단계 앞으로
 	Clear History	히스토리 지우기
+	New Document from State	상태에서 새 문서 만들기
 	Set History Limit…	히스토리 한도 설정…
 	History States	히스토리 상태
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2071,6 +2083,9 @@ digits	Malayalam	말라얄람어
 	Live Paint Selection Tool	라이브 페인트 선택 도구
 	Live Shape Properties	라이브 모양 속성
 	Load Color Profile…	색상 프로파일 불러오기…
+	Load Character Styles…	문자 스타일 불러오기…
+	Load Paragraph Styles…	단락 스타일 불러오기…
+	Load All Styles…	모든 스타일 불러오기…
 	Remove Color Profile…	색상 프로파일 제거…
 	Load Image into Clipboard	이미지를 클립보드로 불러오기
 	Load Metafile into Clipboard	메타파일을 클립보드로 불러오기
@@ -2704,6 +2719,14 @@ mark-style	Japanese	일본식
 	Release to Layers (Sequence)	레이어로 풀기(순차)
 	Relink	다시 연결
 	Relink to Folder…	폴더로 다시 연결…
+	Each Link Separately	각 연결 따로
+	Selected Instances	선택한 인스턴스
+	All Instances	모든 인스턴스
+	Missing Links from This Folder	이 폴더에서 누락된 연결
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v}은(는) each|selected|all|missingInFolder 중 하나가 아닙니다
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each와 paths는 함께 사용합니다: paths에는 ids, path, folder 대신 ids와 path가 있는 항목을 나열합니다
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	paths 항목 {i}에는 path와 ids(다른 항목에 없는 개체 ID)가 필요합니다
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder는 path를 받습니다: 그 파일의 폴더에서 다른 누락된 연결을 찾습니다
 	Relink…	다시 연결…
 	Find Linked Files	연결된 파일 찾기
 	Find Linked Files in Folder…	폴더에서 연결된 파일 찾기…
@@ -2739,6 +2762,7 @@ mark-style	Japanese	일본식
 	Replace:	바꾸기:
 	Replace Font	글꼴 바꾸기
 	Replace Symbol	심볼 바꾸기
+	Reset Transformation	변형 재설정
 	Replace With Font	바꿀 글꼴
 	Replace With Font From	바꿀 글꼴 목록
 	System	시스템
@@ -2753,6 +2777,8 @@ mark-style	Japanese	일본식
 	Reset OpenType Features	OpenType 기능 재설정
 	Reset Panel	패널 재설정
 	Reset Preferences	환경 설정 재설정
+	Search Preferences	환경 설정 검색
+	No settings found	설정을 찾을 수 없음
 	Reset Profiles	프로필 재설정
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Reset to Default	기본값으로 재설정
@@ -2787,6 +2813,7 @@ mark-style	Japanese	일본식
 	Rotate Tool	회전 도구
 	Rotate View Tool	보기 회전 도구
 	Trackpad Gesture to Rotate View	트랙패드 제스처로 보기 회전
+	Hold a Tool Shortcut to Use the Tool Temporarily	도구 단축키를 누르고 있는 동안 도구를 임시로 사용
 	Rotation	회전
 	Round Cap	둥근 끝
 	Round Join	둥근 연결
@@ -3053,6 +3080,7 @@ mark-style	Japanese	일본식
 	Spaces	공백
 	Spacing Guides	간격 안내선
 	Invoke Distance Guides	거리 안내선 호출
+	Snap to Last Location	마지막 위치에 스냅
 	Spacing:	간격:
 	Spanish	Español
 	Specify:	지정:
@@ -3897,6 +3925,9 @@ axis	Both	양쪽
 	Put back in the toolbar	도구 모음으로 되돌리기
 	Float Panel	패널 분리
 	Dock Panel	패널 고정
+	Dock to Top	위쪽에 고정
+	Dock to Bottom	아래쪽에 고정
+	Dock Control Bar	컨트롤 막대 고정
 	Drag to float the toolbar	드래그하여 도구 모음 분리
 	Drag to the window's left edge to dock	창 왼쪽 가장자리로 드래그하여 고정
 	Float Tool Group	도구 그룹 분리
@@ -4093,6 +4124,7 @@ theme	Appearance	외관
 @msg	nothing to redo	다시 실행할 항목이 없습니다
 @msg	nothing to undo	실행 취소할 항목이 없습니다
 @msg	no history to clear	지울 히스토리가 없습니다
+@msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
@@ -4664,6 +4696,7 @@ theme	Appearance	외관
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	이미지 {n}개를 디코딩할 수 없습니다: X 표시가 된 상자로 표시됩니다
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	링크된 이미지 {n}개가 디스크에서 바뀌었습니다: 링크 업데이트를 하면 새 버전이 표시됩니다
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	디스크에서 바뀐 링크된 파일 {n}개를 업데이트했습니다
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	문서에 설정된 도련이 이 PDF/X 파일에서 빠집니다: "문서 도련 설정 사용"을 켜세요
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	참고 {n}건과 함께 {what}을(를) 내보냈습니다: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	글꼴 파일 {n}개가 이제 {folder}에 있습니다
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	글꼴 파일 {n}개가 이제 {folder}에 있으며, {failed}개는 추가할 수 없었습니다: {reason}
@@ -4746,6 +4779,7 @@ theme	Appearance	외관
 @msg	No linked files to look for	찾을 링크된 파일이 없습니다
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id`는 단계 참조 {r}이며, `run`과 `command_batch`만 이를 해석합니다
 @msg	`ids` must be an array of object ids, not {v}	`ids`는 {v}이(가) 아니라 개체 id 배열이어야 합니다
+@msg	`colors` must be an array of colors, not {v}	`colors`는 {v}이(가) 아니라 색상 배열이어야 합니다
 @msg	`corners` must be an array of anchor indices, not {v}	`corners`는 {v}이(가) 아니라 앵커 인덱스 배열이어야 합니다
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: 단계 {i}의 결과에 해당 값이 없습니다(문자 그대로의 $는 $$로 쓰세요)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: 이 단계 앞에 단계 {i}이(가) 없습니다(단계는 0부터 셉니다. 문자 그대로의 $는 $$로 쓰세요)
@@ -5375,6 +5409,11 @@ axis	Y Axis	Y축
 	Keep data of its own with the document	자체 데이터를 문서와 함께 보관
 	Change how the objects its effect is applied to are drawn	효과가 적용된 개체가 그려지는 방식 변경
 	Write the document as a file in its own format	문서를 자체 형식의 파일로 쓰기
+	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `progress` 권한이 있을 때만 사용할 수 있습니다
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 `env.vc_progress`, `env.vc_cancelled`, `env.vc_log`(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다
@@ -5403,6 +5442,19 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Playback Options…	재생 옵션…
+	Insert Stop…	중지 삽입…
+	Insert Stop	중지 삽입
+	Record Stop	중지 기록
+	Allow Continue	계속 허용
+	Continue	계속
+	Continue Action	액션 계속
+	Delete Action Step	액션 단계 삭제
+	Press Play Current Selection in the Actions panel to go on.	계속하려면 액션 패널에서 현재 선택 항목 재생을 누르세요.
+	Stop: {message}	중지: {message}
+@msg	no action is waiting at a stop	중지에서 대기 중인 액션이 없습니다
+@msg	message must be text	message의 값은 텍스트여야 합니다
+@msg	allowContinue must be true or false	allowContinue의 값은 true 또는 false여야 합니다
+@msg	Batch cannot play an action with a stop	일괄 처리에서는 중지가 있는 액션을 재생할 수 없습니다
 	Playback Options	재생 옵션
 	Accelerated	가속
 	Step by Step	단계별
@@ -5845,6 +5897,7 @@ breakText	Glyphs	글리프
 	Gap 5	간격 5
 
 @msg	{_1}: they came in as the page's art	{_1}: 페이지의 아트로 가져왔습니다
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	편집 가능한 문자가 아닌 아트로 가져온 왜곡된 문자 오브젝트: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	파일 자체 페이지와 다르게 그려진 오브젝트를 페이지의 아트로 가져왔습니다: {_1}
 
 @msg	You must choose a side pattern.	측면 패턴을 선택해야 합니다.

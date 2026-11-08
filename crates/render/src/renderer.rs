@@ -31,6 +31,8 @@ pub(crate) use paint::{CROP_STROKES, crop_line};
 
 impl Renderer {
     pub fn new() -> Self {
+        // Envelopes map type from its glyphs here too, without an engine session.
+        vectorcraft_text::register_envelope_ink();
         Self {
             texts: FrameCache::new(lru::TEXT_BUDGET, 1024),
             text_ids: PtrMap::default(),
@@ -91,6 +93,7 @@ impl Renderer {
 
     /// Render `doc` into a `width`×`height` image using `view` (document → pixel transform).
     pub fn render(&mut self, doc: &Document, width: u32, height: u32, view: Affine, opts: &RenderOptions) -> Rendered {
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, width, height, view, opts, false)
     }
 
@@ -315,6 +318,7 @@ impl Renderer {
     pub fn render_region_inks(&mut self, doc: &Document, region: Rect, scale: f64, opts: &RenderOptions) -> Vec<u8> {
         let (w, h) = region_pixels(region, scale);
         let view = Affine::scale(scale) * Affine::translate((-region.x0, -region.y0));
+        let _frame = vectorcraft_text::KeptLayoutsFrame::begin();
         self.render_as(doc, w, h, view, opts, true).pixels
     }
 

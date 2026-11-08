@@ -35,10 +35,14 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
-        // The crate's own tests are the audit of the params descriptions (#1442): a key a test
-        // passes that its command's description doesn't name fails the test.
-        #[cfg(test)]
-        self.check_params(id, params)?;
+        // A key the command's params description doesn't name is a parameter error (#1442), before
+        // anything runs, for the commands other commands run too. A `command.batch` or an
+        // `action.batch` checks its steps before the first one runs, and each step is checked again
+        // as it runs, against the document the steps before it left (the effects `effect.setParams`
+        // edits). Saved steps played with `replay` aren't checked.
+        if !self.replaying {
+            self.check_params(id, params)?;
+        }
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
         // command's id, never the selection in its place. `effect.apply {id: "stylize.dropShadow"}`
@@ -158,8 +162,8 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key`: a value it resolved from the
-    /// preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
+    /// it resolved from the preferences or the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -186,6 +190,29 @@ impl Session {
         Ok((r?, noted))
     }
 
+    /// [`Session::execute`] for saved steps: a journal entry or an action's steps, recorded by this
+    /// version or an older one. Keys a command's params description doesn't name (a key it no longer
+    /// reads, an effect parameter it no longer takes) are taken, by the commands it runs too, so what
+    /// was recorded still plays (#1442). Everything else is checked as `execute` checks it.
+    pub fn replay(&mut self, id: &str, params: &Value) -> Result<Value> {
+        let outer = self.set_replaying(true);
+        let r = self.execute(id, params);
+        self.set_replaying(outer);
+        r
+    }
+
+    /// Whether [`Session::execute`] plays saved steps as [`Session::replay`] does. A frontend that
+    /// runs saved steps through its own path to `execute` sets it around that call, and puts back the
+    /// value this returns, which it had before.
+    pub fn set_replaying(&mut self, on: bool) -> bool {
+        std::mem::replace(&mut self.replaying, on)
+    }
+
+    /// Whether saved steps are playing ([`Session::set_replaying`]).
+    pub fn replaying(&self) -> bool {
+        self.replaying
+    }
+
     /// The journal from entry `start` on, as an action records it: without the params that only
     /// pin a replay to the original run ([`REPLAY_ONLY`]), so playing the action later acts now.
     pub fn journal_for_action(&self, start: usize) -> Vec<(String, Value)> {
@@ -204,9 +231,14 @@ impl Session {
     pub(super) fn noted(&mut self, params: &Value) -> Value {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
-            // The params' own values win.
+            // The params' own values win, except a null: it reads as a key left out, so the
+            // noted value is the one the command resolved.
             Value::Object(m) if !note.is_empty() => {
-                note.extend(m.clone());
+                for (k, v) in m {
+                    if !v.is_null() || !note.contains_key(k) {
+                        note.insert(k.clone(), v.clone());
+                    }
+                }
                 Value::Object(note)
             }
             Value::Null if !note.is_empty() => Value::Object(note),

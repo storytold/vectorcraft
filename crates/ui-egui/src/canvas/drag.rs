@@ -363,6 +363,10 @@ fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Send a pointer event to the active tool and act on UI requests (dialogs, tool switches).
 pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: vectorcraft_engine::ViewInfo) {
+    // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
+    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+        crate::shortcuts::note_tool_use(app);
+    }
     let r = app.session.pointer(ev, view);
     // The artboard the Artboard tool makes active is the active one (the navigator's, the
     // Artboards panel's).

@@ -532,6 +532,7 @@ pub(crate) mod testutil {
             transform_tools_guides: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,

@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{name: \"VectorCraft Defaults\" | \"Classic Defaults\"} (names of earlier versions are accepted)",
     ),
     ("shortcuts.export", "Export Keyboard Shortcuts…", "", "{path?}"),
+    (
+        "shortcuts.exportText",
+        "Export Keyboard Shortcuts as Text…",
+        "",
+        "{path?} save the current set's tools and menu commands with their shortcuts as a UTF-8 text file (Keyboard Shortcuts › Export Text…): the set's name, then a Tools and a Menu Commands section in the dialog's order, one `name<TAB>shortcut` line per row, empty after the tab when it has none; without `path`, pick a file",
+    ),
     ("shortcuts.import", "Import Keyboard Shortcuts…", "", "{path? | data?}"),
     (
         "ui.shortcutImportDialog",
@@ -441,6 +447,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    (
+        "window.control.dock",
+        "Dock Control Bar",
+        "",
+        "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -952,6 +964,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
     ),
     (
+        "ui.loadCharStyles",
+        "Load Character Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character styles to the active one (engine: charStyle.load), the Character Styles panel menu's Load Character Styles…",
+    ),
+    (
+        "ui.loadParaStyles",
+        "Load Paragraph Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's paragraph styles to the active one (engine: paraStyle.load), the Paragraph Styles panel menu's Load Paragraph Styles…",
+    ),
+    (
+        "ui.loadAllStyles",
+        "Load All Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character and paragraph styles to the active one (engine: textStyle.loadAll), Load All Styles… in either panel's menu",
+    ),
+    (
         "window.userGraphicStyleLibrary1",
         "User Graphic Style Library 1",
         "",
@@ -1230,6 +1260,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
     ),
     (
+        "ui.relinkDialog",
+        "Relink…",
+        "",
+        "{ids?: [image or placed document ids]} open Relink for `ids` (default: the selected ones; dialog `relink`: ids, links ([{name, ids}], one row per linked file), scope (Replace: each|selected (default)|all|missingInFolder, see links.relink), path (picked when empty), paths (with each: the files chosen so far, one per row of links)); OK runs links.relink with them, one undo step, except with each: OK takes path, or picks a file, for the next row of links, and the last row's OK relinks them all. An error when nothing is given or selected",
+    ),
+    (
         "ui.findLinksInFolder",
         "Find Linked Files in Folder…",
         "",
@@ -1269,7 +1305,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::PLAY_ACTION,
         "Play Action",
         "",
-        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
+        "{action: name, set?: name} play the Actions panel's action named action at the speed ui.action.playbackOptions sets; set names the set to look in (default: every set). Accelerated plays it as one undoable batch → what command.batch returns. Step by Step and Pause For play its first step now and the others one at a time, each its own undo step, until the last, ui.action.stop, or a step that comes due while a different document is active than after the step before → {results: [the first step's result], pending: the steps left}. An action with a stop, at any speed, plays up to the stop and waits until ui.action.continue or ui.action.stop; at Accelerated the steps between stops are one undoable batch each → {results, pending, atStop?: true when it already waits}. A name no action has, or one that more than one action in the sets looked in has, or an action played while another is still playing step by step or with pauses, is an error and nothing plays",
     ),
     (
         crate::panels::actions::PLAYBACK_OPTIONS,
@@ -1287,7 +1323,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::STOP_RECORDING,
         "Stop Playing/Recording",
         "",
-        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses: the steps played stay and the rest do not run. With nothing recording or playing it changes nothing → {stopped}",
+        "{} end the Actions panel's recording and keep its steps, in the action ui.action.new made for it, else in a new action after the last action of its set, as the panel's Stop Playing/Recording button does. It also ends an action playing step by step or with pauses, or one waiting at a stop, whose message box closes: the steps played stay and the rest do not run. With nothing recording or playing it changes nothing → {stopped}",
+    ),
+    (
+        crate::panels::actions::INSERT_STOP,
+        "Insert Stop",
+        "",
+        "{set?: index, action?: index, step?: index, message?, allowContinue?: bool} insert a stop, at which a playing action waits and shows message. With set and action (0 is the top set or action), the stop goes into that action, after step, else after its last step; without them it goes into the recording in progress, after the steps recorded so far. message defaults to none, and allowContinue, which offers Continue in the message box, defaults to false. A stop in an action becomes the panel's selected step, and its action and set become the selected ones. An index past the last set, action or step, a param of another type, params that are not an object, or no action and no recording is an error and changes nothing. The panel menu's Insert Stop… (dialog `actionStopRecord` with message, allowContinue, set, action and step) runs this on OK → {set, action, step}, or {recording: true}",
+    ),
+    (
+        crate::panels::actions::CONTINUE_PLAYBACK,
+        "Continue Action",
+        "",
+        "{} play on from the stop the Actions panel's playing action waits at, on the document active now, and close the stop's message box (dialog `actionStopMessage`): the next step runs at once, or at Accelerated the steps up to the next stop as one undo step. The panel's Play Current Selection runs this while an action waits. With no action waiting at a stop it is an error → {results, pending, atStop?}",
+    ),
+    (
+        crate::panels::actions::DELETE_STEP,
+        "Delete Action Step",
+        "",
+        "{set: index, action: index, step: index} delete one step, a stop or a command, of the Actions panel's action at action in set (0 is the top set, action or step). The steps after it keep whether they are excluded, and no step of that action stays selected. A Record Stop dialog open on that step closes, and one open on a later step of the action follows it up. A missing or invalid index is an error and changes nothing. Undo does not bring the step back. The panel's Delete Selection runs this for the selected step → {set, action, step}",
     ),
     (
         "ui.batchDialog",

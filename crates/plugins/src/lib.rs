@@ -3,8 +3,9 @@
 //! A plug-in is a WebAssembly module that implements the VectorCraft plug-in ABI (v1, documented
 //! in `docs/plugins.md`). It runs in [`wasmi`], a pure-Rust interpreter, with:
 //!
-//! - **no host imports**: no WASI, file system, network, clock or randomness. A module that
-//!   imports anything is rejected;
+//! - **no host imports but the three of API level 2** ([`host`]: progress, Cancel and log lines,
+//!   with the `progress` permission): no WASI, file system, network, clock or randomness. A module
+//!   that imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
 //!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a
 //!   larger one ([`Budget::Heavy`]), which the host lets the user allow before installing it;
@@ -30,6 +31,7 @@
 pub mod dialog;
 pub mod effect;
 pub mod export;
+pub mod host;
 pub mod manifest;
 pub mod objects;
 pub mod permissions;
@@ -38,6 +40,7 @@ mod runtime;
 pub mod wat;
 
 pub use dialog::ParamUi;
+pub use host::{LogLevel, LogLine, Report};
 pub use manifest::{Budget, Command, Kind, Manifest, Param, ParamSpec};
 pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Limits, Plugin, heavy_terms};
 

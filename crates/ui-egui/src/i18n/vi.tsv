@@ -83,6 +83,11 @@
 	3 x 3 Average	Trung bình 3 x 3
 	30° Angles	Góc 30°
 	3D and Materials	3D và vật liệu
+	Plane	Mặt phẳng
+	Extrude	Kéo dài
+	Revolve	Xoay tròn
+	Inflate	Phình
+	Select objects, then pick an object type to give them a 3D effect.	Chọn đối tượng, rồi chọn một kiểu đối tượng để tạo hiệu ứng 3D cho chúng.
 	3D Ribbon	Dải 3D
 	45° Angles	Góc 45°
 	5 x 5 Average	Trung bình 5 x 5
@@ -307,6 +312,8 @@ font-technology	Variable	Biến thiên
 	Show Cross Hairs	Hiện đường chữ thập
 	Show Video Safe Areas	Hiện vùng an toàn video
 	Video Ruler Pixel Aspect Ratio:	Tỷ lệ khung điểm ảnh của thước video:
+	Fade Region Outside Artboard	Làm tối vùng bên ngoài bảng vẽ
+	Update While Dragging	Cập nhật khi kéo
 	Hide Video Rulers	Ẩn thước video
 	Background Contents	Nội dung nền
 	Background Contents:	Nội dung nền:
@@ -963,6 +970,9 @@ font-technology	Variable	Biến thiên
 	Do Not Move	Không di chuyển
 	Do you want to save the changes you made to “{name}”?	Bạn có muốn lưu các thay đổi đã thực hiện với “{name}”?
 	Dock Panel	Neo bảng
+	Dock to Top	Neo lên trên
+	Dock to Bottom	Neo xuống dưới
+	Dock Control Bar	Neo thanh điều khiển
 	Document	Tài liệu
 	Document Color Mode	Chế độ màu tài liệu
 	Document Info	Thông tin tài liệu
@@ -1244,6 +1254,8 @@ font-technology	Variable	Biến thiên
 	Export for Screens Settings	Cài đặt xuất cho màn hình
 	Export for Screens…	Xuất cho màn hình…
 	Export Keyboard Shortcuts…	Xuất phím tắt…
+	Export Keyboard Shortcuts as Text…	Xuất phím tắt dưới dạng văn bản…
+	Export Text…	Xuất văn bản…
 	Export Library	Xuất thư viện
 	Export Library…	Xuất thư viện…
 	Export Option	Tùy chọn xuất
@@ -1592,6 +1604,8 @@ file-filter	Templates	Mẫu
 	Grays	Các màu xám
 	Grays and Neutrals	Xám và trung tính
 	Grayscale	Thang xám
+	High Color	Nhiều màu
+	Low Color	Ít màu
 	Grayscale images	Ảnh thang xám
 	Greek & Cyrillic	Hy Lạp & Cyrillic
 	Green	Xanh lá
@@ -1674,6 +1688,7 @@ digits	Hindi	Hindi
 	Step Backward	Lùi một bước
 	Step Forward	Tiến một bước
 	Clear History	Xóa lịch sử
+	New Document from State	Tài liệu mới từ trạng thái
 	Set History Limit…	Đặt giới hạn lịch sử…
 	History States	Trạng thái lịch sử
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -2126,6 +2141,9 @@ digits	Hindi	Hindi
 	Live Paint Selection Tool	Công cụ Chọn Tô trực tiếp
 	Live Shape Properties	Thuộc tính hình dạng trực tiếp
 	Load Color Profile…	Tải hồ sơ màu…
+	Load Character Styles…	Tải kiểu ký tự…
+	Load Paragraph Styles…	Tải kiểu đoạn văn…
+	Load All Styles…	Tải tất cả kiểu…
 	Remove Color Profile…	Xóa hồ sơ màu…
 	Load Image into Clipboard	Tải ảnh vào bảng tạm
 	Load Metafile into Clipboard	Tải metafile vào bảng tạm
@@ -2989,6 +3007,14 @@ mark-style	Japanese	Kiểu Nhật
 	Relink	Liên kết lại
 	Relink Linked Files to the Document	Liên kết lại các tệp liên kết với tài liệu
 	Relink to Folder…	Liên kết lại vào thư mục…
+	Each Link Separately	Từng liên kết riêng
+	Selected Instances	Các phiên bản đã chọn
+	All Instances	Tất cả phiên bản
+	Missing Links from This Folder	Liên kết thiếu từ thư mục này
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} không phải each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each và paths đi cùng nhau: paths liệt kê các mục có ids và path, thay cho ids, path và folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	mục {i} của paths cần path và ids (ID đối tượng mà không mục nào khác có)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder nhận path: các liên kết thiếu khác được tìm trong thư mục của tệp đó
 	Relink…	Liên kết lại…
 	Reload Plug-ins	Tải lại plug-in
 	Remove	Gỡ
@@ -3033,6 +3059,7 @@ mark-style	Japanese	Kiểu Nhật
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Thay thế bằng tệp khác hoặc bỏ qua: ảnh của nó vẫn hiển thị bản xem trước đã lưu cùng tài liệu.
 	Replace Spine	Thay thế trục
 	Replace Symbol	Thay thế ký hiệu
+	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
 	Replace With Font From	Thay thế bằng phông chữ từ
 	System	Hệ thống
@@ -3055,6 +3082,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset OpenType Features	Đặt lại tính năng OpenType
 	Reset Panel	Đặt lại bảng
 	Reset Preferences	Đặt lại tùy chọn
+	Search Preferences	Tìm trong tùy chọn
+	No settings found	Không tìm thấy cài đặt
 	Reset Profiles	Đặt lại hồ sơ màu
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
@@ -3126,6 +3155,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rotate Tool	Công cụ Xoay
 	Rotate View Tool	Công cụ Xoay chế độ xem
 	Trackpad Gesture to Rotate View	Xoay chế độ xem bằng cử chỉ trên bàn di chuột
+	Hold a Tool Shortcut to Use the Tool Temporarily	Giữ phím tắt của công cụ để tạm thời dùng công cụ đó
 	Rotate…	Xoay…
 	Rotation	Góc xoay
 	Rotation relative to:	Xoay tương đối với:
@@ -3609,6 +3639,7 @@ mark-style	Japanese	Kiểu Nhật
 	Spacing	Khoảng cách
 	Spacing Guides	Đường căn khoảng cách
 	Invoke Distance Guides	Gọi đường căn đo khoảng cách
+	Snap to Last Location	Hút vào vị trí cuối cùng
 	Spacing:	Khoảng cách:
 	Spanish	Tiếng Tây Ban Nha
 	Spatter	Bắn tung tóe
@@ -4233,6 +4264,7 @@ theme	Appearance	Giao diện
 @msg	`groupColors` must be an array	`groupColors` phải là một mảng
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` là tham chiếu bước {r}, chỉ `run` và `command_batch` giải quyết
 @msg	`ids` must be an array of object ids, not {v}	`ids` phải là mảng id đối tượng, không phải {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` phải là mảng màu, không phải {v}
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng
@@ -4710,6 +4742,7 @@ theme	Appearance	Giao diện
 @msg	nothing to save: the document has no visible art	không có gì để lưu: tài liệu không có tác phẩm hiển thị
 @msg	nothing to undo	không có gì để hoàn tác
 @msg	no history to clear	không có lịch sử để xóa
+@msg	no history state {v}	không có trạng thái lịch sử {v}
 @msg	nothing to warp	không có gì để biến dạng
 @msg	nothing to wrap	không có gì để bọc
 @msg	object ids are non-negative integers, not {v}	id đối tượng là số nguyên không âm, không phải {v}
@@ -4779,6 +4812,7 @@ theme	Appearance	Giao diện
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} hình ảnh không thể giải mã: chúng hiển thị dưới dạng khung có dấu gạch chéo
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} ảnh liên kết đã thay đổi trên đĩa: Cập nhật liên kết hiển thị phiên bản mới
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Đã cập nhật {n} tệp liên kết đã thay đổi trên đĩa
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	tài liệu đặt bleed mà tệp PDF/X này bỏ qua: hãy bật "Dùng cài đặt bleed của tài liệu"
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Đã xuất {what} với {n} ghi chú: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} tệp phông chữ hiện ở trong {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} tệp phông chữ hiện ở trong {folder}; {failed} không thể thêm: {reason}
@@ -5395,6 +5429,11 @@ axis	Y Axis	Trục Y
 	Keep data of its own with the document	Lưu dữ liệu riêng cùng tài liệu
 	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
 	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
+	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `progress` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập `env.vc_progress`, `env.vc_cancelled` và `env.vc_log` (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
@@ -5423,6 +5462,19 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Insert Stop…	Chèn điểm dừng…
+	Insert Stop	Chèn điểm dừng
+	Record Stop	Ghi điểm dừng
+	Allow Continue	Cho phép tiếp tục
+	Continue	Tiếp tục
+	Continue Action	Tiếp tục hành động
+	Delete Action Step	Xóa bước hành động
+	Press Play Current Selection in the Actions panel to go on.	Để tiếp tục, nhấn Phát vùng chọn hiện tại trong bảng Hành động.
+	Stop: {message}	Điểm dừng: {message}
+@msg	no action is waiting at a stop	không có hành động nào đang chờ ở điểm dừng
+@msg	message must be text	message phải là văn bản
+@msg	allowContinue must be true or false	allowContinue phải là true hoặc false
+@msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
 	Playback Options	Tùy chọn phát lại
 	Accelerated	Tăng tốc
 	Step by Step	Từng bước
@@ -5865,6 +5917,7 @@ breakText	Glyphs	Glyph
 	Gap 5	Khoảng hở 5
 
 @msg	{_1}: they came in as the page's art	{_1}: đã được nhập dưới dạng hình vẽ của trang
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	các đối tượng văn bản biến dạng được nhập dưới dạng hình vẽ, không phải văn bản có thể chỉnh sửa: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	các đối tượng được vẽ khác với trang riêng của tệp đã được nhập dưới dạng hình vẽ của trang: {_1}
 
 @msg	You must choose a side pattern.	Bạn phải chọn mẫu bên.

@@ -243,6 +243,10 @@ fn structured_junk() {
         ("addon.select.byLinkStatus", json!({"status": "embedded", "ids": {"a": 1}, "add": [1], "zoom": "yes"})),
         ("addon.select.byLinkStatus", json!({"status": ["modified", "embedded"], "ids": [], "add": true, "zoom": true})),
         ("addon.select.byLinkStatus", json!({"status": [[["linked"]]], "ids": null})),
+        ("links.relink", json!({"scope": "each", "paths": [{"ids": [2, u64::MAX, -1, "x"], "path": ""}, null, 7, {"path": [1]}]})),
+        ("links.relink", json!({"scope": ["all"], "path": "/no/such/file.png", "ids": {"a": 1}})),
+        ("links.relink", json!({"scope": "missingInFolder", "path": "", "folder": [], "paths": "x"})),
+        ("links.relink", json!({"scope": "all", "path": "/no/such/file.png", "ids": [2, u64::MAX, -1, 1.5]})),
         ("object.transform", json!({"matrix": [0, 0, 0, 0, 0, 0]})),
         ("object.transform", json!({"matrix": [1e308, 1e308, 1e308, 1e308, 1e308, 1e308]})),
         ("object.transform", json!({"matrix": [1, 2, 3]})),
@@ -911,7 +915,15 @@ fn every_command_undoes_exactly() {
         let mut s = Fixture::Multi.session();
         let before = doc_json(&s.doc().unwrap().doc);
         let depth = s.doc().unwrap().history.undo.len();
+        let source = s.active_index().unwrap();
         let Ok(Ok(_)) = catch_quiet(|| s.execute(c.id, &json!({}))) else { continue };
+        // A command that makes a new document and makes it active leaves the source document as it is.
+        if s.active_index() != Some(source) {
+            if s.documents().get(source).map(|d| doc_json(&d.doc)).as_ref() != Some(&before) {
+                failures.push(format!("{}: changed the source document while making another active", c.id));
+            }
+            continue;
+        }
         if s.doc().unwrap().history.undo.len() > depth {
             let _ = no_panic(s.execute("edit.undo", &json!({})));
             let after = doc_json(&s.doc().unwrap().doc);

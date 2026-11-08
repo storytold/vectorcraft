@@ -84,6 +84,11 @@
 	3 Color Job…	Trabajo a 3 colores…
 	30° Angles	Ángulos de 30°
 	3D and Materials	3D y materiales
+	Plane	Plano
+	Extrude	Extrusión
+	Revolve	Revolución
+	Inflate	Inflar
+	Select objects, then pick an object type to give them a 3D effect.	Seleccione objetos y luego elija un tipo de objeto para darles un efecto 3D.
 	3D Ribbon	Cinta 3D
 	45° Angles	Ángulos de 45°
 	60° Angles	Ángulos de 60°
@@ -284,6 +289,8 @@ font-technology	Variable	Variables
 	Show Cross Hairs	Mostrar líneas en cruz
 	Show Video Safe Areas	Mostrar áreas seguras de video
 	Video Ruler Pixel Aspect Ratio:	Proporción de píxel de las reglas de video:
+	Fade Region Outside Artboard	Atenuar región fuera de la mesa de trabajo
+	Update While Dragging	Actualizar al arrastrar
 	Hide Video Rulers	Ocultar reglas de video
 	Background Contents	Contenido de fondo
 	Background Contents:	Contenido de fondo:
@@ -1089,6 +1096,8 @@ font-technology	Variable	Variables
 	Export for Screens Settings	Ajustes de Exportar para pantallas
 	Export for Screens…	Exportar para pantallas…
 	Export Keyboard Shortcuts…	Exportar métodos abreviados de teclado…
+	Export Keyboard Shortcuts as Text…	Exportar métodos abreviados de teclado como texto…
+	Export Text…	Exportar texto…
 	Export Option	Opción de exportación
 	Export PDF	Exportar PDF
 	Export PDF Presets	Exportar preajustes de PDF
@@ -1376,6 +1385,8 @@ font-technology	Variable	Variables
 	Grays	Grises
 	Grays and Neutrals	Grises y neutros
 	Grayscale	Escala de grises
+	High Color	Muchos colores
+	Low Color	Pocos colores
 	Grayscale images	Imágenes en escala de grises
 	Greek & Cyrillic	Griego y cirílico
 	Green	Verde
@@ -1449,6 +1460,7 @@ font-technology	Variable	Variables
 	Step Backward	Paso atrás
 	Step Forward	Paso adelante
 	Clear History	Borrar historial
+	New Document from State	Nuevo documento desde estado
 	Set History Limit…	Definir límite de historial…
 	History States	Estados de historial
 # History panel: the names of undo steps (`untranslated_report` lists any that are missing).
@@ -1826,6 +1838,9 @@ font-technology	Variable	Variables
 	Live Paint Selection Tool	Herramienta Selección de pintura interactiva
 	Live Shape Properties	Propiedades de forma dinámica
 	Load Color Profile…	Cargar perfil de color…
+	Load Character Styles…	Cargar estilos de carácter…
+	Load Paragraph Styles…	Cargar estilos de párrafo…
+	Load All Styles…	Cargar todos los estilos…
 	Remove Color Profile…	Quitar perfil de color…
 	Load Image into Clipboard	Cargar imagen en el portapapeles
 	Load Metafile into Clipboard	Cargar metarchivo en el portapapeles
@@ -2693,6 +2708,14 @@ digits	Malayalam	Malayálam
 	Relink	Volver a vincular
 	Relink Linked Files to the Document	Volver a vincular los archivos vinculados al documento
 	Relink to Folder…	Volver a vincular a carpeta…
+	Each Link Separately	Cada vínculo por separado
+	Selected Instances	Instancias seleccionadas
+	All Instances	Todas las instancias
+	Missing Links from This Folder	Vínculos que faltan de esta carpeta
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} no es each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each y paths van juntos: paths enumera entradas con ids y path, en lugar de ids, path y folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	la entrada {i} de paths necesita path e ids (id. de objeto que ninguna otra entrada tenga)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder toma path: en la carpeta de ese archivo se buscan los demás vínculos que faltan
 	Relink…	Volver a vincular…
 	Find Linked Files	Buscar archivos vinculados
 	Find Linked Files in Folder…	Buscar archivos vinculados en una carpeta…
@@ -2737,6 +2760,7 @@ digits	Malayalam	Malayálam
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	Reemplázalo con otro archivo o ignóralo: sus imágenes seguirán mostrando la vista previa guardada con el documento.
 	Replace Spine	Reemplazar eje
 	Replace Symbol	Reemplazar símbolo
+	Reset Transformation	Restablecer transformación
 	Replace With Font	Reemplazar con fuente
 	Replace With Font From	Reemplazar con fuente de
 	System	Sistema
@@ -2753,6 +2777,8 @@ digits	Malayalam	Malayálam
 	Reset OpenType Features	Restablecer funciones OpenType
 	Reset Panel	Restablecer panel
 	Reset Preferences	Restablecer preferencias
+	Search Preferences	Buscar en preferencias
+	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
@@ -2807,6 +2833,7 @@ digits	Malayalam	Malayálam
 	Rotate Tool	Herramienta Rotar
 	Rotate View Tool	Herramienta Rotar vista
 	Trackpad Gesture to Rotate View	Rotar vista con un gesto del trackpad
+	Hold a Tool Shortcut to Use the Tool Temporarily	Mantener pulsado el atajo de una herramienta para usarla temporalmente
 	Rotate…	Rotar…
 	Rotation	Rotación
 	Roughen…	Hacer áspero…
@@ -3246,6 +3273,7 @@ digits	Malayalam	Malayálam
 	Spaces	Espacios
 	Spacing Guides	Guías de espaciado
 	Invoke Distance Guides	Invocar guías de distancia
+	Snap to Last Location	Ajustar a última ubicación
 	Spacing:	Espaciado:
 	Spanish	Español
 	Specified Distance	Distancia especificada
@@ -3929,6 +3957,9 @@ axis	Both	Ambos
 	Put back in the toolbar	Devolver a la barra de herramientas
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
+	Dock to Top	Anclar arriba
+	Dock to Bottom	Anclar abajo
+	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas
@@ -4376,6 +4407,7 @@ axis	Both	Ambos
 @msg	nothing to save: the document has no visible art	no hay nada que guardar: el documento no tiene ilustración visible
 @msg	nothing to undo	no hay nada que deshacer
 @msg	no history to clear	no hay historial que borrar
+@msg	no history state {v}	no hay ningún estado del historial {v}
 @msg	nothing to warp	no hay nada que deformar
 @msg	nothing to wrap	no hay nada que envolver
 @msg	object {0} cannot have children	el objeto {0} no puede tener hijos
@@ -4624,6 +4656,7 @@ axis	Both	Ambos
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	no se pudo descodificar {n} imagen: se muestra como un recuadro tachado|no se pudieron descodificar {n} imágenes: se muestran como recuadros tachados
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} imagen vinculada cambió en el disco: Actualizar vínculos muestra la versión nueva|{n} imágenes vinculadas cambiaron en el disco: Actualizar vínculos muestra las versiones nuevas
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Se actualizó {n} archivo vinculado que cambió en el disco|Se actualizaron {n} archivos vinculados que cambiaron en el disco
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	el documento define un sangrado que este archivo PDF/X omite: activa «Usar los ajustes de sangrado del documento»
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Se exportó {what} con {n} nota: {first}|Se exportó {what} con {n} notas: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} archivo de fuentes ahora está en {folder}|{n} archivos de fuentes ahora están en {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} archivo de fuentes ahora está en {folder}; no se pudieron agregar {failed}: {reason}|{n} archivos de fuentes ahora están en {folder}; no se pudieron agregar {failed}: {reason}
@@ -4736,6 +4769,7 @@ axis	Both	Ambos
 	Perspective Distort	Distorsión de perspectiva
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` es la referencia a un paso {r}, que solo `run` y `command_batch` resuelven
 @msg	`ids` must be an array of object ids, not {v}	`ids` debe ser una lista de identificadores de objeto, no {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` debe ser una lista de colores, no {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` debe ser una lista de índices de puntos de ancla, no {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: el resultado del paso {i} no tiene ese valor (escriba $$ para un $ literal)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: no hay ningún paso {i} antes de este (los pasos se cuentan desde 0; escriba $$ para un $ literal)
@@ -5739,6 +5773,11 @@ axis	Y Axis	Eje Y
 	Keep data of its own with the document	Guardar datos propios con el documento
 	Change how the objects its effect is applied to are drawn	Cambiar cómo se dibujan los objetos a los que se aplica su efecto
 	Write the document as a file in its own format	Escribir el documento como un archivo en su propio formato
+	Show its progress, see Cancel and write log lines	Mostrar su progreso, detectar la cancelación y escribir líneas de registro
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	el permiso `progress` necesita el nivel de API de plugins {PROGRESS_API}: indique `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	el módulo importa `env.{name}` con un tipo distinto del del host: el del host es {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	el módulo importa `env.{name}`, que un plugin solo puede usar en el nivel de API de plugins {PROGRESS_API} (`api` {PROGRESS_API}) y con el permiso `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	el módulo importa `{from}.{name}`, que el host no ofrece: un plugin solo puede importar `env.vc_progress`, `env.vc_cancelled` y `env.vc_log` (nivel de API de plugins 2), y ningún WASI, archivo ni red
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` es {_1}; este host admite los niveles de API de plugins de 1 a {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` debe ser una lista de nombres de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` nombra un permiso desconocido `{shown}`
@@ -5767,6 +5806,19 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Playback Options…	Opciones de reproducción…
+	Insert Stop…	Insertar parada…
+	Insert Stop	Insertar parada
+	Record Stop	Grabar parada
+	Allow Continue	Permitir continuar
+	Continue	Continuar
+	Continue Action	Continuar acción
+	Delete Action Step	Eliminar paso de la acción
+	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
+	Stop: {message}	Parada: {message}
+@msg	no action is waiting at a stop	ninguna acción está esperando en una parada
+@msg	message must be text	message debe ser texto
+@msg	allowContinue must be true or false	allowContinue debe ser true o false
+@msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
 	Playback Options	Opciones de reproducción
 	Accelerated	Acelerada
 	Step by Step	Paso a paso
@@ -6206,6 +6258,7 @@ breakText	Glyphs	Glifos
 	Gap 5	Hueco 5
 
 @msg	{_1}: they came in as the page's art	{_1}: se importaron como el arte de la página
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	objetos de texto deformados que se importaron como arte, no como texto editable: {_1}
 @msg	objects that drew differently from the file's own page came in as its art: {_1}	los objetos que se dibujaban de forma distinta a la página del propio archivo se importaron como el arte de la página: {_1}
 
 @msg	You must choose a side pattern.	Debe elegir un motivo lateral.

@@ -268,3 +268,19 @@ fn a_shortcut_runs_a_plugin_command() {
     assert_eq!(objects(&app), before + 1, "the command added its triangle: {}", app.ui.status);
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
+
+/// A plug-in of API level 2 that lists `progress` names it in plain words when it asks.
+#[test]
+fn installing_a_plugin_that_reports_progress_says_so() {
+    let mut app = app();
+    let id = "test.ui.permissions.progress";
+    let manifest = format!(r#"{{"id":"{id}","name":"Count","kind":"filter","api":2,"permissions":["doc.read","progress"]}}"#);
+    let bytes = wat::parse_str(tpl::reporting(&manifest, "(call $vc_progress (i64.const 1) (i64.const 2))", r#"{"objects":[]}"#)).unwrap();
+    let r = app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).unwrap();
+    assert_eq!(r["pending"], dialogs::confirm::KIND);
+    let detail = app.ui.dialog.as_ref().unwrap().str("detail");
+    assert!(detail.ends_with("• Read the objects it is given\n• Show its progress, see Cancel and write log lines"), "{detail}");
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
