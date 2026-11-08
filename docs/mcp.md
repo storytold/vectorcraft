@@ -1156,8 +1156,8 @@ refused before the command runs:
 → invalid parameters for `file.new`: unknown parameter `widht`; did you mean `width`?
 ```
 
-Only the top level is checked: the keys of an object inside a value (`artboardLayout: {…}`) are the command's to
-read. The one exception is an effect's `params`: `effect.apply` (and `appearance.addEffect`) and `effect.setParams`
+Only the top level is checked, except for the export commands below: the keys of an object inside a value
+(`artboardLayout: {…}`) are the command's to read. Another exception is an effect's `params`: `effect.apply` (and `appearance.addEffect`) and `effect.setParams`
 check them against the effect's own entry in `effect.list`, its `defaults` and the keys its `params` text names. A key
 the effect doesn't take, or a value of another type than its default (a string for a number, a number for a switch),
 is refused the same way:
@@ -1195,7 +1195,7 @@ A number outside the range the effect documents is still stored as given and cla
 plug-in effect's parameters are resolved against its manifest instead. `effect.setParams` as a step of
 `command.batch` is checked when the step runs, against the effects the steps before it added, and the batch then
 fails with no change. A description with a `…` entry takes more keys than it lists: those of the command it names
-(`…settings as file.new`), or any key when it names none, as `document.export` and `document.save` do for the options
+(`…settings as file.new`), or, except for the export commands below, any key when it names none, as `document.save` does for the options
 of the format they write (one object can carry several formats' options). A command that takes its own reply back
 (`document.setup`, `text.areaOptions`) says so the same way.
 
@@ -1203,6 +1203,21 @@ Saved actions aren't checked this way. When the Actions panel plays an action (P
 key, the Batch dialog or `ui.action.play`), a key a command no longer reads, recorded by an older version, is ignored
 and the action still plays. `Session::replay` plays a journal the same way. The command still refuses an effect
 `color` or `channel` it can't read.
+
+The export commands limit those keys. `document.export`, `document.exportSelection`, `document.serialize`, `app.export`
+and `file.export` refuse a key that no format takes, and ignore a key that only another format takes
+(`{"format": "pdf", "quality": 80}` writes the PDF). `document.exportPdf`, `document.pdfSettings` and `pdf.preset.save`
+refuse a key that PDF doesn't take, `document.exportEps` one that EPS doesn't take and `document.exportDxf` one that DXF
+doesn't take. Each of them refuses an unknown key inside an option object it takes (`marks`, `bleed`, `compression`,
+`output`, `advanced`, `security`, `flattener`), naming its path:
+
+```json
+{"id": "document.export", "params": {"format": "pdf", "marks": {"useDocumentBleed": true}}}
+→ invalid parameters for `document.export`: unknown parameter `marks.useDocumentBleed`; `marks` takes: …
+```
+
+A saved PDF preset that holds a key that is no longer read keeps loading. `document.save`, `file.saveAs`, `file.saveCopy`
+and `document.exportForScreens` don't apply this check.
 
 An unknown command id is matched the same way as an unknown parameter key: the error names the nearest command id when
 one is near, ignoring case. A step of `command.batch` or `action.batch` gets the same suggestion in its step error:

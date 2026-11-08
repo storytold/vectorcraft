@@ -315,6 +315,8 @@ impl Headless {
 
     /// `app.export {path?, format?, …}`: `document.export` (format defaults to the path's extension).
     pub fn export(&mut self, p: &Value) -> Result<Value, String> {
+        // The key check of `document.export` runs before the file is written.
+        self.session.check_params("document.export", p).map_err(|e| e.to_string())?;
         let roots = self.roots.clone();
         file_access::confine(roots.as_ref(), || self.session.execute("document.export", p)).map_err(|e| e.to_string())
     }
