@@ -1651,6 +1651,13 @@ fn an_ai_symbol_librarys_symbols_keep_their_spot_colors() {
     assert_eq!(link(&d).as_deref(), Some("Ink 2"), "{warnings:?}");
     assert_eq!(ink(&d, "Ink 2"), Some((yellow, true)));
     assert_eq!(d.swatch("Ink").map(|s| &s.paint), Some(&green));
+    // A color group of the PDF part keeps its name: the library's color of that name is renamed.
+    let mut part = pdf_part(10.0, 86.0);
+    part.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Kit".into(), swatches: vec![] });
+    let (d, warnings, _) = crate::layered_ai(&private(&library("", "Kit")), part, vec![], false, true, 1.0);
+    assert_eq!(link(&d).as_deref(), Some("Kit 2"), "{warnings:?}");
+    assert_eq!(ink(&d, "Kit 2"), Some((yellow, true)));
+    assert!(d.swatch("Kit").is_none());
 }
 
 /// A symbol library's symbols bring a global process color their art is filled with as a global

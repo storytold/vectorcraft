@@ -336,7 +336,7 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
 /// the global and spot colors it is linked to that `doc` has no such swatch for (a color whose name
 /// another swatch has takes that swatch's place when it is a default swatch and not `own_palette`,
 /// the swatches being those of the editing data's palette, and else comes in under a free variant
-/// of the name, which the art then names), as [`build`] gives a document read from the layers, and
+/// of the name, which the art then names, as does one whose name a color group has), as [`build`] gives a document read from the layers, and
 /// the note about instances that can't be drawn added to `warnings`. An object of their art linked
 /// to a graphic style keeps the link when [`use_styles`] gave `doc` the editing data's styles. The
 /// symbols' art keeps the editing data's units, as in a document read from the layers: when
@@ -352,21 +352,21 @@ fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mu
         doc.images.entry(key).or_insert(blob);
     }
     // A color whose name a swatch of another color has takes that swatch's place when it is a
-    // default swatch, and else a free variant of the name.
+    // default swatch, and else a free variant of the name, as does one whose name a color group has.
     let (defaults, groups) = vectorcraft_color::default_swatches(doc.color_mode.model());
     let is_default =
         |have: &vectorcraft_color::Swatch| !own_palette && defaults.iter().chain(groups.iter().flat_map(|g| &g.swatches)).any(|d| d == have);
     let mut renamed = std::collections::HashMap::new();
     for s in swatches {
         match doc.swatch(&s.name) {
-            None => doc.swatches.push(s),
+            None if !doc.swatch_name_taken(&s.name) => doc.swatches.push(s),
             Some(have) if have == &s || (s.name.starts_with('[') && s.name.ends_with(']')) => {}
             Some(have) if is_default(have) => {
                 if let Some(default) = doc.swatch_mut(&s.name) {
                     *default = s;
                 }
             }
-            Some(_) => {
+            _ => {
                 let name = doc.free_swatch_name(&s.name);
                 renamed.insert(s.name.clone(), name.clone());
                 doc.swatches.push(vectorcraft_color::Swatch { name, ..s });
