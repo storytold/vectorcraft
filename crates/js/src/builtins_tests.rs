@@ -134,6 +134,14 @@ fn bind_fixes_this_and_leading_arguments() {
     throws("'use strict'; function f() {} f.bind(null).caller", "TypeError");
     truth("function f() { return arguments.length; } f.bind(null, 1).bind(null, 2)(3) === 3");
     truth("Object.prototype.toString.call(function () {}.bind()) === '[object Function]'");
+    // A host function has no own `length`, so a script can define one, and bind converts it to
+    // an integer.
+    let mut realm = Realm::new();
+    realm.define_function("host", |_| Ok(JsValue::Undefined));
+    let src = "function len(v) { Object.defineProperty(host, 'length', {value: v, configurable: true}); return host; } \
+               var a = len(2.9).bind(null).length; var b = 1 / len(-0.5).bind(null).length; var c = len(NaN).bind(null).length; \
+               [a, b, c, len(Infinity).bind(null, 1).length].join()";
+    assert_eq!(realm.run(src), Ok(JsValue::String("2,Infinity,0,Infinity".into())));
 }
 
 // ---- Array ----

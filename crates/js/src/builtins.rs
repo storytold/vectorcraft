@@ -448,11 +448,15 @@ fn function_bind(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> J
     let Some(target) = this.as_object() else { return Err(interp.type_error("the value bind was called on is not a function")) };
     let bound_this = arg(args, 0);
     let bound_args: Rc<[Value]> = args.get(1..).unwrap_or_default().into();
+    // A host function's `length` is an ordinary property a script can set, so it is converted
+    // to an integer first, as later editions specify.
     let target_length = match interp.get_from(target, &key("length"), &this)? {
-        Value::Number(n) => n,
+        Value::Number(n) if n.is_nan() => 0.0,
+        Value::Number(n) => n.trunc(),
         _ => 0.0,
     };
-    let length = (target_length - bound_args.len() as f64).max(0.0);
+    // Adding 0 turns a negative zero into 0.
+    let length = (target_length - bound_args.len() as f64).max(0.0) + 0.0;
     interp.reserve_heap(OBJECT_BYTES + 4 * PROP_BYTES + BOUND_ARG_BYTES * bound_args.len())?;
     let proto = interp.intrinsics.function_proto;
     let class = Class::Function(Func::Bound { target, this: bound_this, args: bound_args.clone() });
