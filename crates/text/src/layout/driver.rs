@@ -119,6 +119,8 @@ const SHRINK_PASSES: usize = 11;
 /// fit, composer, OpenType features). Each run is set at the em size its font height reference
 /// gives it ([`FontDb::font_heights_resolved`]).
 pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    #[cfg(any(test, feature = "test-fonts"))]
+    crate::test_fonts::count_layout();
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);

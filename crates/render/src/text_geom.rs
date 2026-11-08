@@ -147,7 +147,7 @@ pub(crate) fn text_geom(t: &TextObject) -> TextGeom {
 /// Glyph geometry of `t`; `snap` (text space → device pixels) puts the glyphs on whole pixels.
 pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeom {
     let db = vectorcraft_text::FontDb::global();
-    let mut layout = vectorcraft_text::layout(db, t);
+    let mut layout = vectorcraft_text::take_kept_layout(t).unwrap_or_else(|| vectorcraft_text::layout(db, t));
     if let Some(xf) = snap {
         layout.snap_to_pixels(xf);
     }
