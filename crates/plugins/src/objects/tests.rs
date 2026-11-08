@@ -544,6 +544,56 @@ fn an_object_too_large_to_give_is_a_limit_naming_it() {
     assert_eq!((bytes, read_only.len()), (fits, 1));
 }
 
+/// A path or compound path that doesn't fit what is left of the input fails the run with the limit
+/// the runtime gives an input past its share, before anything after it is written; the exact size
+/// still fits.
+#[test]
+fn a_path_past_the_input_capacity_is_the_runtime_limit() {
+    let (d, ids, _, [text, ..]) = mixed();
+    let (bytes, _) = encode_input_with(&d, &ids, &[], usize::MAX).unwrap();
+    assert_eq!(encode_input_with(&d, &ids, &[], bytes.len()).unwrap().0, bytes, "the exact size fits");
+    let e = encode_input_with(&d, &[ids[0], ids[1], ids[2], text], &[InputKind::Type], bytes.len() - 1).unwrap_err();
+    assert_eq!(e.to_string(), "plug-in exceeded its memory budget (the selection is too large to hand over)");
+}
+
+/// Objects that clip a clip group are left out, and so are those inside a group that clips one;
+/// those it clips are given. This covers a filter that lists no `inputs` too.
+#[test]
+fn objects_that_clip_a_clip_group_are_not_inputs() {
+    let (mut d, _, layer, [text, embedded, ..]) = mixed();
+    let (t, e) = (Arc::new(d.node(text).unwrap().clone()), Arc::new(d.node(embedded).unwrap().clone()));
+    let mut copy = |n: &Arc<Node>| {
+        let mut c = (**n).clone();
+        c.id = d.alloc_id();
+        Arc::new(c)
+    };
+    let (t_source, e_source, t_inner, e_inner, t_clipped) = (copy(&t), copy(&e), copy(&t), copy(&e), copy(&t));
+    let inner = Node::group(d.alloc_id(), vec![t_inner.clone(), e_inner.clone()]);
+    let mut by_group = Node::group(d.alloc_id(), vec![Arc::new(inner), t_clipped.clone()]);
+    by_group.set_clips(true);
+    let mut by_type = Node::group(d.alloc_id(), vec![t_source.clone(), e_source.clone()]);
+    by_type.set_clips(true);
+    let by_group = d.insert(Some(layer), usize::MAX, by_group).unwrap();
+    let by_type = d.insert(Some(layer), usize::MAX, by_type).unwrap();
+    let path = |d: &mut Document, x: f64| Arc::new(Node::path(d.alloc_id(), square(x), Appearance::default()));
+    let (part, clipped_by_compound, in_source, clipped_by_paths) = (path(&mut d, 0.0), path(&mut d, 10.0), path(&mut d, 20.0), path(&mut d, 30.0));
+    let compound = Node::new(d.alloc_id(), NodeKind::Compound { children: vec![part], rule: FillRule::NonZero });
+    let mut by_compound = Node::group(d.alloc_id(), vec![Arc::new(compound), clipped_by_compound.clone()]);
+    by_compound.set_clips(true);
+    let source = Node::group(d.alloc_id(), vec![in_source]);
+    let mut by_paths = Node::group(d.alloc_id(), vec![Arc::new(source), clipped_by_paths.clone()]);
+    by_paths.set_clips(true);
+    let by_compound = d.insert(Some(layer), usize::MAX, by_compound).unwrap();
+    let by_paths = d.insert(Some(layer), usize::MAX, by_paths).unwrap();
+    let ids = |list: &[NodeId]| filter_targets_with(&d, list, &InputKind::ALL);
+    assert_eq!(ids(&[by_type]), [e_source.id], "the type clips; the image is clipped");
+    assert_eq!(ids(&[by_group]), [t_clipped.id], "the group's type and image clip");
+    assert_eq!(ids(&[by_compound]), [clipped_by_compound.id], "the compound path clips");
+    assert_eq!(ids(&[by_paths]), [clipped_by_paths.id], "the group's path clips");
+    assert_eq!(filter_targets(&d, &[by_compound]), [clipped_by_compound.id], "a filter without inputs");
+    assert_eq!(filter_targets(&d, &[by_paths]), [clipped_by_paths.id], "a filter without inputs");
+}
+
 /// A field a plug-in adds to a read-only object is named in the refusal with its control and
 /// direction characters escaped, and cut short.
 #[test]

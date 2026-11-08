@@ -398,9 +398,10 @@ type and `blob` but without their data, which follows the JSON in a saved file; 
 ### Reading type, images and symbols
 
 A filter whose manifest lists `inputs` also gets the selected objects of those kinds, in paint order among the paths
-and under the same rules (hidden and locked ones, type that clips a clip group and anything inside a symbol, a placed
-document or a live object are left out). They are never turned into outlines, rectangles or the symbol's art. Each
-has `id`, `type`, `name` (when it has one), `bounds` (`null` until the object has been laid out or drawn) and
+and under the same rules (hidden and locked ones, objects that clip a clip group, alone or inside a group that clips
+it, and anything inside a symbol, a placed document or a live object are left out). They are never turned into
+outlines, rectangles or the symbol's art. Each has `id`, `type`, `name` (when it has one), `bounds` (`null` until the
+object has been laid out or drawn) and
 `transform`, `[a, b, c, d, e, f]` mapping its own space (text space, pixel space, the symbol's art) into the document.
 In this example the character and paragraph styles are cut short; a filter gets every attribute:
 
@@ -446,7 +447,9 @@ Every object in the input counts toward the half of the memory cap that the inpu
 order, with its id, bounds, transform and name. Type whose runs and paragraphs don't fit what is left comes with
 `truncated: true`, and an image whose pixels don't fit comes with `pixelsOmitted: true`. When the other fields of one
 of these objects don't fit what is left, the run fails before the plug-in starts, naming the object and the bytes it
-needs: `plug-in exceeded its memory budget (object 17 needs 4200 bytes of input, 1000 left)`. An echo of them counts
+needs: `plug-in exceeded its memory budget (object 17 needs 4200 bytes of input, 1000 left)`. A path or compound path
+that doesn't fit fails it with `plug-in exceeded its memory budget (the selection is too large to hand over)` before
+the objects after it are written. An echo of them counts
 toward the 64 MiB output cap.
 
 ### Parameters
@@ -546,6 +549,6 @@ per change of their input, parameters or paints (results are cached), not per fr
 
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
   (plug-in formats that open files).
-- Live effects that change paint (they reshape geometry; an object filter recolours), and filters that change type,
+- Live effects that change paint (they reshape geometry; an object filter recolors), and filters that change type,
   images or symbol instances (a filter at `api` 2 reads them, see [`inputs`](#reading-type-images-and-symbols)).
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.

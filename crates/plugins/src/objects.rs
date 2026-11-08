@@ -186,8 +186,9 @@ pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
 /// [`MAX_INPUT_TEXT_TOTAL`] over all of them in order, and within `capacity`, the most bytes the
 /// input may be. Every object counts toward `capacity` in order, ids, bounds, transforms and names
 /// included: pixels or text that don't fit what is left are omitted (`pixelsOmitted`,
-/// `truncated`), and a read-only object whose other fields alone don't fit is an
-/// [`Error::Limit`] naming it and its size. Also returns those objects by id, which the filter
+/// `truncated`), a read-only object whose other fields alone don't fit is an [`Error::Limit`]
+/// naming it and its size, and a path or compound path that doesn't fit is the limit the runtime
+/// gives an input past its share. Also returns those objects by id, which the filter
 /// must return as they were ([`decode_output_with`]).
 pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind], capacity: usize) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
     encode_input_within(doc, ids, kinds, Allowance { input: capacity.saturating_sub(EMPTY_INPUT.len()), ..Allowance::FULL })
@@ -240,10 +241,12 @@ fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut 
             return Ok((Vec::new(), HashMap::new()));
         }
         let size = out.len() - start;
-        if checked && size > left.input {
-            return Err(too_large(n, size, left.input));
+        // A path or compound path past what is left fails the run as the runtime would fail it,
+        // before the rest of the selection is written.
+        if size > left.input {
+            return Err(if checked { too_large(n, size, left.input) } else { Error::Limit(crate::runtime::SELECTION_TOO_LARGE.into()) });
         }
-        left.input = left.input.saturating_sub(size);
+        left.input -= size;
     }
     out.extend_from_slice(b"]}");
     Ok((out, read_only))
@@ -976,33 +979,39 @@ pub fn selectable(n: &Node) -> bool {
 
 /// The paths and compound paths a filter reads from the selection `selected`, in paint order:
 /// selected ones, and those inside selected groups and layers; hidden, locked, guide (compound
-/// guides too) and clipping paths are left out (so are paths inside compound paths, blends and
-/// other live objects).
+/// guides too) and clipping paths are left out, and so are compound paths that clip a clip group
+/// and paths inside a group that clips one (and paths inside compound paths, blends and other
+/// live objects).
 pub fn filter_targets(doc: &Document, selected: &[NodeId]) -> Vec<NodeId> {
     filter_targets_with(doc, selected, &[])
 }
 
 /// [`filter_targets`] for a filter that asks for `kinds` too: type, images and symbol instances of
-/// those kinds join the paths in paint order, under the same rules (type that clips a clip group is
-/// left out, and so is anything inside a symbol, a placed document or a live object).
+/// those kinds join the paths in paint order, under the same rules (objects that clip a clip
+/// group are left out, inside a group that clips one too, and so is anything inside a symbol, a
+/// placed document or a live object).
 pub fn filter_targets_with(doc: &Document, selected: &[NodeId], kinds: &[InputKind]) -> Vec<NodeId> {
-    fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, clips: bool, kinds: &[InputKind], out: &mut Vec<NodeId>) {
+    /// `source`: `list` is inside the clipping object of a clip group.
+    fn visit(list: &[Arc<Node>], sel: &HashSet<NodeId>, inside: bool, clips: bool, source: bool, kinds: &[InputKind], out: &mut Vec<NodeId>) {
         for (i, n) in list.iter().enumerate() {
             if !n.visible || n.locked {
                 continue;
             }
             let picked = inside || sel.contains(&n.id);
+            let clipping = source || (clips && i == 0);
             match &n.kind {
-                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !is_guide(n) => out.push(n.id),
-                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, n.clips(), kinds, out),
-                _ if picked && !(clips && i == 0) && input_kind(n).is_some_and(|k| kinds.contains(&k)) => out.push(n.id),
+                NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. } if picked && !clipping && !is_guide(n) => {
+                    out.push(n.id)
+                }
+                NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => visit(children, sel, picked, n.clips(), clipping, kinds, out),
+                _ if picked && !clipping && input_kind(n).is_some_and(|k| kinds.contains(&k)) => out.push(n.id),
                 _ => {}
             }
         }
     }
     let sel: HashSet<NodeId> = selected.iter().copied().collect();
     let mut out = vec![];
-    visit(&doc.layers, &sel, false, false, kinds, &mut out);
+    visit(&doc.layers, &sel, false, false, false, kinds, &mut out);
     out
 }
 
