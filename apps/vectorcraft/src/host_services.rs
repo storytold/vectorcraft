@@ -298,13 +298,16 @@ fn start_pick(request: PickRequest, parent: &Parent, ui: &egui::Context) -> Opti
         // up its Format menu before the sheet begins (#866); rfd shows the others.
         PickRequest::Save(pick) => match mac_save_format::begin(window, &pick) {
             // The dialog thread blocks here until the sheet answers.
-            Some(picked) => Box::pin(async move { picked.recv().unwrap_or_default() }),
-            None => {
+            Ok(mac_save_format::Begin::Shown(picked)) => Box::pin(async move { picked.recv().unwrap_or_default() }),
+            Ok(mac_save_format::Begin::DeferToRfd) => {
                 // Nothing is added to the sheet once rfd has begun it: an accessory view set then
                 // made recent macOS versions dismiss the sheet at once (#1800).
                 let picked = dialog.save_file();
                 Box::pin(async move { picked.await.iter().map(path).collect() })
             }
+            // AppKit returned nil for the panel. rfd uses the same `+savePanel` and would panic
+            // on that nil; treat the pick as cancelled instead (#5980).
+            Err(()) => Box::pin(async move { Vec::new() }),
         },
         PickRequest::Folder => {
             let picked = dialog.pick_folder();

@@ -98,7 +98,14 @@ impl<'a> Reader<'a> {
             ..
         } = f;
         if matches!(kind, Kind::Clip) {
+            // `Q` restores the painting state, not the transparency: the writer sets `Xy` only when
+            // the next object's differs from the last one written, wherever that was, so a state set
+            // inside a clipping group stays after it (a glow set to Screen, then a clipping path set
+            // back to Normal: the type after the group has no `Xy` and is Normal).
+            let now = &self.gs;
+            let transparency = (now.opacity, now.blend, now.isolate, now.knockout, now.knockout_shape);
             self.gs = gs.clone();
+            (self.gs.opacity, self.gs.blend, self.gs.isolate, self.gs.knockout, self.gs.knockout_shape) = transparency;
             self.pending_unread_fill = pending_unread_fill;
             self.pending_unread_stroke = pending_unread_stroke;
         }
@@ -140,10 +147,19 @@ impl<'a> Reader<'a> {
                 self.new_node(NodeKind::Group { children, clip }, &gs)
             }
             Kind::Compound => {
-                // A group in a compound path (`*u u … U *U`) only holds its paths. Clipping subpaths'
-                // painted copies make a compound of their own, under what it clips.
-                let (fills, kids): (Vec<Node>, Vec<Node>) = ungrouped(kids).into_iter().partition(|n| self.clip_fills.contains(&n.id));
-                painted = self.compound(fills, &gs);
+                // A group in a compound path (`*u u … U *U`) only holds its paths.
+                let mut kids = ungrouped(kids);
+                // A compound clipping path keeps its subpaths' fill when they all paint alike. When they paint
+                // differently, the fills of the filled clipping ones are a compound path of their own, under what it clips.
+                let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
+                if clipping && kids.windows(2).any(|w| look(&w[0]) != look(&w[1])) {
+                    let fills: Vec<Node> = kids
+                        .iter_mut()
+                        .filter(|k| matches!(k.kind, NodeKind::Path { clipping: true, .. }))
+                        .filter_map(|k| self.fill_apart(k))
+                        .collect();
+                    painted = self.compound(fills, &gs);
+                }
                 let Some(n) = self.compound(kids, &gs) else {
                     if gs.hidden || !self.shown() {
                         self.hidden_unread.extend(unread);
@@ -221,9 +237,9 @@ impl<'a> Reader<'a> {
     /// Several clipping paths in a clipping group or a layer clip to their intersection, as each `W` reduces the clip
     /// set by the ones before it: each clipping path after the first clips a clipping group nested in the one before
     /// it, and the innermost one holds the art. As with one clipping path, every object in the group is clipped by all
-    /// of them, wherever it is written. A clipping path's painted fill stays at its path's level. In a compound path
-    /// (`union`), several clipping paths are one compound path. `at`: how deep the group or layer made of them is in the
-    /// document.
+    /// of them, wherever it is written. The fill of a compound clipping path read apart from it (`clip_fills`) stays at
+    /// its path's level. In a compound path (`union`), several clipping paths are one compound path. `at`: how deep the
+    /// group or layer made of them is in the document.
     fn clip_first(&mut self, kids: Vec<Node>, clips: &[usize], union: bool, at: usize) -> Result<(Vec<Arc<Node>>, bool), String> {
         if union || clips.len() < 2 {
             return Ok(self.clip_union(kids, clips));
@@ -231,7 +247,7 @@ impl<'a> Reader<'a> {
         let clips: std::collections::HashSet<usize> = clips.iter().copied().collect();
         let (clip, rest): (Vec<Indexed>, Vec<Indexed>) = kids.into_iter().enumerate().partition(|(i, _)| clips.contains(i));
         let innermost = clip.len() - 1;
-        // A painted fill follows its clipping path; the art goes in the innermost level.
+        // A fill read apart follows its clipping path; the art goes in the innermost level.
         let level = |i: usize, n: &Node| {
             if self.clip_fills.contains(&n.id) { clip.iter().rposition(|(c, _)| *c < i).unwrap_or(0) } else { innermost }
         };
@@ -244,8 +260,7 @@ impl<'a> Reader<'a> {
         if at + deepest > MAX_DEPTH || (at + deepest > vectorcraft_doc::MAX_DEPTH && at + flat <= vectorcraft_doc::MAX_DEPTH) {
             return Err("its clipping masks are nested too deeply".into());
         }
-        // Each level: its clipping path, the clipping paths' own fills, which paint under the art they clip, then the
-        // art.
+        // Each level: its clipping path, the fills read apart from it, which paint under the art they clip, then the art.
         let mut fills_at: Vec<Vec<Node>> = clip.iter().map(|_| Vec::new()).collect();
         let mut art_at: Vec<Vec<Node>> = clip.iter().map(|_| Vec::new()).collect();
         for (i, n) in rest {
@@ -275,13 +290,19 @@ impl<'a> Reader<'a> {
     fn clip_union(&mut self, kids: Vec<Node>, clips: &[usize]) -> (Vec<Arc<Node>>, bool) {
         let clips: std::collections::HashSet<usize> = clips.iter().copied().collect();
         let (mut clip, rest): (Vec<Indexed>, Vec<Indexed>) = kids.into_iter().enumerate().partition(|(i, _)| clips.contains(i));
+        let mut fills = Vec::new();
         let clip_node = match clip.len() {
             0 => None,
             1 => clip.pop().map(|(_, n)| n),
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
-                // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
-                // ones: it has one appearance for all its paths.
+                // Each clipping path's fill is a path of its own, under the art it clips, as each one paints it. The
+                // compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same ones,
+                // and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                for (_, n) in &mut clip {
+                    fills.extend(self.fill_apart(n));
+                }
+                let shape = clip.iter().all(|(_, n)| n.knockout_shape);
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 let shared =
                     clip.split_first().and_then(|((_, first), others)| others.iter().all(|(_, n)| look(n) == look(first)).then(|| look(first)));
@@ -292,14 +313,69 @@ impl<'a> Reader<'a> {
                     n.opacity = opacity;
                     n.blend = blend;
                 }
+                n.knockout_shape = shape;
                 Some(n)
             }
         };
         let clips = clip_node.is_some();
-        // A clipping path's own fill paints under the art it clips.
-        let (fills, rest): (Vec<Indexed>, Vec<Indexed>) = rest.into_iter().partition(|(_, n)| self.clip_fills.contains(&n.id));
-        let children = clip_node.into_iter().chain(fills.into_iter().chain(rest).map(|(_, n)| n)).map(Arc::new).collect();
+        // A fill read apart paints under the art it clips.
+        let (apart, rest): (Vec<Indexed>, Vec<Indexed>) = rest.into_iter().partition(|(_, n)| self.clip_fills.contains(&n.id));
+        let children = clip_node.into_iter().chain(fills).chain(apart.into_iter().chain(rest).map(|(_, n)| n)).map(Arc::new).collect();
         (children, clips)
+    }
+
+    /// Clipping path `n`'s fills as a path of their own, taken off `n`; `None` when it has no fill. The path keeps `n`'s
+    /// transparency, visibility, lock and opacity mask, and none of its other attributes.
+    pub(super) fn fill_apart(&mut self, n: &mut Node) -> Option<Node> {
+        let is_fill = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(_));
+        if !n.appearance.items.iter().any(is_fill) {
+            return None;
+        }
+        let mut kind = n.kind.clone();
+        if let NodeKind::Path { clipping, .. } = &mut kind {
+            *clipping = false;
+        }
+        let mut fill = Node::new(self.doc.alloc_id(), kind);
+        // The copies of a path read on `%_` lines are on those lines too, as `add` records them.
+        let hidden = self.hidden_ids.contains(&n.id);
+        if hidden {
+            self.hidden_ids.insert(fill.id);
+        }
+        // A compound clipping path's subpaths: copies with ids of their own, linked to the same swatches, that don't clip.
+        for c in fill.children_mut().into_iter().flatten() {
+            let mut copy = self.doc.reid(c);
+            self.reid_masks(&mut copy, 0);
+            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
+                *clipping = false;
+            }
+            if hidden {
+                self.hidden_ids.insert(copy.id);
+            }
+            *c = Arc::new(copy);
+        }
+        (fill.opacity, fill.blend, fill.isolate, fill.knockout, fill.knockout_shape, fill.visible, fill.locked) =
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape, n.visible, n.locked);
+        // The opacity mask's art is a copy with ids of its own, linked to the same swatches.
+        if let Some(mut mask) = n.extras().mask.clone() {
+            let mut art = self.doc.reid(&mask.art);
+            self.reid_masks(&mut art, 0);
+            mask.art = Arc::new(art);
+            fill.extras_mut().mask = Some(mask);
+        }
+        let (mut fills, mut rest) = ((*n.appearance).clone(), (*n.appearance).clone());
+        fills.items.retain(is_fill);
+        rest.items.retain(|i| !is_fill(i));
+        fill.appearance = fills.into();
+        n.appearance = rest.into();
+        // The new path, its subpaths and their points count toward the objects read, as a multi-layer mask's copies do.
+        let mut weight = fill.count_with_masks();
+        fill.walk(&mut |p| {
+            if let NodeKind::Path { path, .. } = &p.kind {
+                weight = weight.saturating_add(path.anchor_count());
+            }
+        });
+        self.nodes = self.nodes.saturating_add(weight);
+        Some(fill)
     }
 
     pub(super) fn end_layer(&mut self) -> Result<(), String> {
@@ -312,7 +388,7 @@ impl<'a> Reader<'a> {
         if let (Some(_), Some(before)) = (state, self.mesh_undo.take())
             && let Some(mesh) = f.children.last_mut().filter(|n| matches!(n.kind, NodeKind::Mesh(_) | NodeKind::Blend { .. }))
         {
-            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout) = before;
+            (mesh.opacity, mesh.blend, mesh.isolate, mesh.knockout, mesh.knockout_shape) = before;
         }
         let Kind::Layer(a) = f.kind else { return Ok(()) };
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 1)?;
@@ -379,7 +455,12 @@ impl<'a> Reader<'a> {
         let f = self.close("X+", |k| matches!(k, Kind::Mask))?;
         // The mask's art is one level under the object it masks.
         let (children, clip) = self.clip_first(f.children, &f.clips, false, self.nesting() + 2)?;
-        let art = self.new_node(NodeKind::Group { children, clip }, &f.gs);
+        // One shown object is the art itself. A hidden object or a guide stays in a group: the canvas draws the art's root
+        // whether it is shown or not and whether guides show, and a group doesn't draw a hidden member or a left-out guide.
+        let art = match children.as_slice() {
+            [only] if !clip && only.visible && !matches!(only.kind, NodeKind::Path { guide: true, .. }) => only.clone(),
+            _ => Arc::new(self.new_node(NodeKind::Group { children, clip }, &f.gs)),
+        };
         self.gs = f.gs;
         self.pending_unread_fill = f.pending_unread_fill;
         self.pending_unread_stroke = f.pending_unread_stroke;
@@ -388,7 +469,7 @@ impl<'a> Reader<'a> {
         let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last_mut() else {
             return Err("mask art ends outside a mask dictionary".into());
         };
-        if o.art.replace(Arc::new(art)).is_some() {
+        if o.art.replace(art).is_some() {
             return Err("a mask has more than one art block".into());
         }
         o.unread = f.unread;
@@ -760,7 +841,8 @@ impl<'a> Reader<'a> {
                 // did (they were counted as read).
                 let mut blend = Node::new(self.doc.alloc_id(), kind);
                 (blend.name, blend.visible, blend.locked) = (steps.name.take(), steps.visible, steps.locked);
-                (blend.opacity, blend.blend, blend.isolate, blend.knockout) = (steps.opacity, steps.blend, steps.isolate, steps.knockout);
+                (blend.opacity, blend.blend, blend.isolate, blend.knockout, blend.knockout_shape) =
+                    (steps.opacity, steps.blend, steps.isolate, steps.knockout, steps.knockout_shape);
                 // Its note, URL and data (object tags) too.
                 blend.extras_mut().attrs = steps.extras_mut().attrs.take();
                 f.children.push(blend);
