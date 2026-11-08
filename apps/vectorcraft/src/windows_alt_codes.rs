@@ -42,7 +42,7 @@ const VK_NUMPAD9: usize = 0x69;
 /// `VK_DOWN`, `VK_NEXT`, `VK_LEFT`, `VK_CLEAR`, `VK_RIGHT`, `VK_HOME`, `VK_UP` and `VK_PRIOR`.
 const NUMLOCK_OFF_KEYS: [usize; 10] = [0x2D, 0x23, 0x28, 0x22, 0x25, 0x0C, 0x27, 0x24, 0x26, 0x21];
 /// The keys egui reports for the keypad with NumLock off, by digit (Clear has no egui key, so it
-/// comes as the keypad's own key, the digit).
+/// comes as the top-row digit key, `Num5`).
 const NUMLOCK_OFF_EGUI_KEYS: [Key; 10] =
     [Key::Insert, Key::End, Key::ArrowDown, Key::PageDown, Key::ArrowLeft, Key::Num5, Key::ArrowRight, Key::Home, Key::ArrowUp, Key::PageUp];
 const DIGIT_KEYS: [Key; 10] = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
@@ -300,7 +300,8 @@ mod tests {
     #[test]
     fn with_numlock_off_keypad_five_counts_too() {
         let mut c = AltCodes::default();
-        // Keypad 5 is Clear, which egui reports as the keypad's 5; 0151 uses every other kind.
+        // Keypad 5 is Clear, which egui reports as the top-row 5. 0151 uses Insert, End and Clear;
+        // 0234 uses Insert, Down, Page Down and Left.
         alt_code_numlock_off(&mut c, "0151", 0x2014);
         alt_code_numlock_off(&mut c, "0234", 0xEA);
         let mut events =
