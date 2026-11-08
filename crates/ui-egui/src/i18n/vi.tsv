@@ -422,6 +422,13 @@ font-technology	Variable	Biến thiên
 	Apply Bullets	Áp dụng dấu đầu dòng
 	Numbered List	Danh sách đánh số
 	Apply Numbers	Áp dụng đánh số
+	Bullets and Numbering…	Dấu đầu dòng và đánh số…
+	Numbers	Số
+	Level:	Cấp độ:
+	Bullet Character:	Ký tự đầu dòng:
+	Number Style:	Kiểu đánh số:
+	Left Indent:	Lề trái:
+	First Line Indent:	Thụt lề dòng đầu:
 	Convert to Text	Chuyển thành văn bản
 	Filled Dot	Chấm đặc
 	Dash	Gạch ngang
@@ -997,6 +1004,7 @@ font-technology	Variable	Biến thiên
 	Dots	Chấm
 	Double Click To Isolate	Bấm đúp để cô lập
 	Double Column	Hai cột
+	Keep Tools Beside the Canvas	Công cụ cạnh vùng vẽ
 	Double Left Quotation Marks	Dấu ngoặc kép trái đôi
 	Double Quotes:	Dấu ngoặc kép:
 	Double Right Quotation Marks	Dấu ngoặc kép phải đôi
@@ -1244,6 +1252,14 @@ font-technology	Variable	Biến thiên
 	Export As SVG…	Xuất thành SVG…
 	Export Asset	Xuất asset
 	Export Assets	Xuất asset
+	Export 3D Object	Xuất đối tượng 3D
+	3D Export Format	Định dạng xuất 3D
+	Export 3D Assets	Xuất asset 3D
+@msg	{what} can't be exported in 3D: {e}	không thể xuất {what} dưới dạng 3D: {e}
+@msg	asset {id} isn't a 3D asset	asset {id} không phải là asset 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	asset {id} là asset 3D: assets.export3D sẽ ghi nó
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	chưa có asset 3D nào: hãy thu thập trước một đối tượng có hiệu ứng 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	hãy chọn một đối tượng có hiệu ứng 3D (hoặc cung cấp id của nó)
 	Export As…	Xuất thành…
 	Export CSS	Xuất CSS
 	Export CSS…	Xuất CSS…
@@ -1345,6 +1361,7 @@ digits	Malayalam	Malayalam
 	Highlight:	Làm nổi bật:
 	Stroke When Editable	Nét khi có thể chỉnh sửa
 	Fill New Type Objects With Placeholder Text	Tô đối tượng chữ mới bằng văn bản giữ chỗ
+	Start Lists From Typed Markers	Bắt đầu danh sách từ ký hiệu đã gõ
 	Fill Rule	Quy tắc tô
 	Fill with Placeholder Text	Tô bằng văn bản giữ chỗ
 	Fill:	Tô:
@@ -1389,6 +1406,7 @@ digits	Malayalam	Malayalam
 	Find Linked Files in Folder…	Tìm tệp liên kết trong thư mục…
 	Find Next	Tìm tiếp
 	Find Objects	Tìm đối tượng
+	Compare with Image	So sánh với ảnh
 	Fine Dots	Chấm mịn
 
 	Simple	Đơn giản
@@ -1888,6 +1906,7 @@ digits	Hindi	Hindi
 	Line {line}	Dòng {line}
 	Line {line}: {name}: {status}	Dòng {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Đã nhập. Nhấn OK để giữ bộ đã nhập.
+	Read Action Set File	Đọc tệp bộ hành động
 	Read Shortcut Set File	Đọc tệp bộ phím tắt
 	Import Matches	Cặp ghép khi nhập
 	Remember Import Matches	Ghi nhớ cặp ghép khi nhập
@@ -3062,6 +3081,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reset Transformation	Đặt lại biến đổi
 	Replace With Font	Thay thế bằng phông chữ
 	Replace With Font From	Thay thế bằng phông chữ từ
+	Find In	Tìm trong
 	System	Hệ thống
 	Replace “{name}”, the file this document was opened from?	Thay thế “{name}”, tệp mà tài liệu này được mở từ đó?
 	Replaces the saved preset of that name.	Thay thế thiết lập sẵn đã lưu có tên đó.
@@ -3416,6 +3436,11 @@ mark-style	Japanese	Kiểu Nhật
 	Selected Swatches	Mẫu màu đã chọn
 	Selected Swatches Only	Chỉ mẫu màu đã chọn
 	Selection	Vùng chọn
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Chọn bằng khung
+	Touching	Đối tượng chạm khung
+	Fully Enclosed	Nằm hoàn toàn trong khung
+	Drag Direction	Hướng kéo
 	Selection & Anchor Display	Hiển thị vùng chọn & điểm neo
 	Selection Only	Chỉ vùng chọn
 	Selection Tool	Công cụ Chọn
@@ -3791,6 +3816,9 @@ mark-style	Japanese	Kiểu Nhật
 	Symbols	Ký hiệu
 	System Layout	Bố cục hệ thống
 	System Title Bar	Thanh tiêu đề hệ thống
+	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
+	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -3805,6 +3833,15 @@ mark-style	Japanese	Kiểu Nhật
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
 	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Composite Fonts…	Phông chữ tổ hợp…
+	Composite Fonts	Phông chữ tổ hợp
+	Export Composite Fonts	Xuất phông chữ tổ hợp
+	Import Composite Fonts	Nhập phông chữ tổ hợp
+	Delete Font	Xóa phông chữ
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Chữ số
+	Scale at Center	Co giãn từ tâm
 	Up/Down:	Lên/Xuống:
 	Left/Right:	Trái/Phải:
 	Temperature	Nhiệt độ màu
@@ -4188,6 +4225,7 @@ mark-style	Japanese	Kiểu Nhật
 	Zoom to Selection	Thu phóng đến vùng chọn
 	Zoom Tool	Công cụ thu phóng
 	Zoom with Mouse Wheel	Thu phóng bằng con lăn chuột
+	Scroll Sideways with Cmd/Ctrl + Wheel	Cuộn ngang bằng Cmd/Ctrl + con lăn
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	{n} tệp trong {folder} {note}. Hiện thư mục gói?
 @plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	{n} thư mục hoặc tệp không thể đọc được
 @plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Đã bỏ qua {n} thư mục, chẳng hạn thư mục của ứng dụng khác, thư mục hệ thống và thư mục ẩn
@@ -4378,6 +4416,7 @@ theme	Appearance	Giao diện
 @msg	an image VectorCraft can't read was left out	một ảnh VectorCraft không đọc được đã bị bỏ qua
 @msg	graphs come in as plain art, without their data or settings	biểu đồ được nhập dưới dạng hình vẽ thường, không kèm dữ liệu và thiết lập của chúng
 @msg	an image whose data is cut short was left out	một ảnh bị cắt ngắn dữ liệu đã bị bỏ qua
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	một ảnh nhúng {_1} × {_2} điểm ảnh đã được thu nhỏ còn {_3} × {_4} điểm ảnh để giữ các lớp
 @msg	an object can't be read	không thể đọc một đối tượng
 @msg	an object in perspective would leave the edited grid	đối tượng trong phối cảnh sẽ rời khỏi lưới đang chỉnh sửa
 @msg	An object takes one 3D effect. Edit the existing effect's options, or remove it first.	Một đối tượng chỉ nhận một hiệu ứng 3D. Hãy chỉnh sửa tùy chọn của hiệu ứng hiện có hoặc xóa nó trước.
@@ -4411,7 +4450,7 @@ theme	Appearance	Giao diện
 @msg	bad shortcut	phím tắt không hợp lệ
 @msg	bad stream length	độ dài luồng không hợp lệ
 @msg	bad trailer	trailer không hợp lệ
-@msg	balance must be between 0 and 100	cân bằng phải nằm trong khoảng 0 đến 100
+@msg	balance must be between 0 and 100	balance phải nằm trong khoảng 0 đến 100
 @msg	batch step {_1} (`{id}`) failed: {e}	bước hàng loạt {_1} (`{id}`) thất bại: {e}
 @msg	before must name a panel	before phải đặt tên bảng
 @msg	below and above must name a panel floating in another group	below và above phải đặt tên bảng đang thả nổi trong nhóm khác
@@ -4466,7 +4505,7 @@ theme	Appearance	Giao diện
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Phục hồi dữ liệu không có nơi lưu bản sao: đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	Data Recovery can't keep copies in {path}: {e}	Phục hồi dữ liệu không thể lưu bản sao vào {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Không thể tải plug-in từ {path}: {e}
-@msg	decimals must be {_1}–{_2} (got {_3})	số thập phân phải từ {_1}–{_2} (nhận được {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals phải từ {_1}–{_2} (nhận được {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	chọn trực tiếp các điểm neo để cắt (không phải điểm cuối của đường dẫn mở)
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
@@ -4506,7 +4545,7 @@ theme	Appearance	Giao diện
 @msg	icon must be true or false	icon phải là true hoặc false
 @msg	icon only docks a panel in the icon column, with no anchor	icon chỉ neo bảng vào cột biểu tượng, không có anchor
 @msg	column docks a set as a dock column, with no anchor or icon	column neo một bộ thành cột neo, không có anchor hay icon
-@msg	panel is not in a dock group	bảng không thuộc nhóm nào của dock
+@msg	panel is not in a dock group	panel không thuộc nhóm nào của dock
 @msg	only a dock group above or below others collapses, not one beside another	chỉ thu gọn được nhóm dock nằm trên hoặc dưới các nhóm khác, không phải nhóm nằm cạnh
 @msg	guides are locked	đường căn bị khóa
 @msg	handle must be in or out	handle phải là in hoặc out
@@ -4517,9 +4556,9 @@ theme	Appearance	Giao diện
 @msg	image would be too large; lower the resolution	ảnh sẽ quá lớn; hãy giảm độ phân giải
 @msg	Imported library {name}	Đã nhập thư viện {name}
 @msg	Imported {what}: {_1}	Đã nhập {what}: {_1}
-@msg	index must be a number or first, previous, next or last	chỉ mục phải là số hoặc first, previous, next hoặc last
-@msg	index must be a number or first, previous, next or last, not `{other}`	chỉ mục phải là số hoặc first, previous, next hoặc last, không phải `{other}`
-@msg	index must be ≥ 0	chỉ mục không được âm
+@msg	index must be a number or first, previous, next or last	index phải là số hoặc first, previous, next hoặc last
+@msg	index must be a number or first, previous, next or last, not `{other}`	index phải là số hoặc first, previous, next hoặc last, không phải `{other}`
+@msg	index must be ≥ 0	index phải ≥ 0
 @msg	Installed plug-in {_1}	Đã cài đặt plug-in {_1}
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	cài đặt từ đường dẫn không khả dụng trên web; hãy truyền mô-đun dưới dạng `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	lỗi nội bộ trong `{cmd}`: {msg} (tài liệu được giữ nguyên; vui lòng báo cáo lỗi này)
@@ -4680,6 +4719,8 @@ theme	Appearance	Giao diện
 @msg	no such action set	không có bộ hành động như vậy
 @msg	the action sets changed; nothing was deleted	các bộ hành động đã thay đổi; không có gì bị xóa
 @msg	no action set to save	không có bộ hành động nào để lưu
+@msg	the action set file can't be read in full	không thể đọc hết tệp bộ hành động
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
 @msg	the action set file holds more than 1,000 actions	tệp bộ hành động chứa hơn 1.000 hành động
@@ -4748,6 +4789,7 @@ theme	Appearance	Giao diện
 @msg	object ids are non-negative integers, not {v}	id đối tượng là số nguyên không âm, không phải {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} phải là một mảng id đối tượng là số nguyên không âm
 @msg	invalid object id {value}: expected a non-negative integer	id đối tượng {value} không hợp lệ: cần một số nguyên không âm
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	mục {index} của `{key}` là {value}, không phải id đối tượng (số nguyên không âm)
 @msg	no such object id {value}	không có đối tượng nào có id {value}
 @msg	id {value} is a layer, not an object	id {value} là một lớp, không phải đối tượng
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value} là một lớp, không phải đối tượng; hãy di chuyển lớp bằng layer.move
@@ -4779,9 +4821,9 @@ theme	Appearance	Giao diện
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng
 @msg	PDF security settings are not an object	Cài đặt bảo mật PDF không phải là đối tượng
 @msg	PDF writer error: {0}	Lỗi ghi PDF: {0}
-@msg	percent must be above 0 and at most 6400, not {p}	phần trăm phải lớn hơn 0 và tối đa 6400, không phải {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent phải lớn hơn 0 và tối đa 6400, không phải {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	hãy chọn màu, chuyển sắc hoặc họa tiết để lưu làm mẫu màu
-@msg	plane must be left, right or ground	mặt phẳng phải là left, right hoặc ground
+@msg	plane must be left, right or ground	plane phải là left, right hoặc ground
 @msg	plug-in ABI: {0}	ABI plug-in: {0}
 @msg	plug-in exceeded its {0}	plug-in đã vượt quá {0}
 @msg	plug-in failed: {0}	plug-in thất bại: {0}
@@ -4843,8 +4885,8 @@ theme	Appearance	Giao diện
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}
 @msg	Saving {_1}	Đang lưu {_1}
-@msg	scale must be a number from {_1} to {_2}, not {_3}	tỷ lệ phải là số từ {_1} đến {_2}, không phải {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	tỷ lệ phải là số từ {_1} đến {_2}, không phải {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale phải là số từ {_1} đến {_2}, không phải {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale phải là số từ {_1} đến {_2}, không phải {s}
 @msg	searching a folder isn't available on the web	tìm kiếm trong thư mục không khả dụng trên web
 @msg	select (or target) objects whose appearance isn't basic	chọn (hoặc đặt mục tiêu) đối tượng có diện mạo không cơ bản
 @msg	select a blend	hãy chọn một đối tượng hòa trộn
@@ -4876,7 +4918,7 @@ theme	Appearance	Giao diện
 @msg	select paths or anchor points	chọn đường dẫn hoặc điểm neo
 @msg	select paths to join	hãy chọn đường dẫn để nối
 @msg	select some type first	hãy chọn chữ trước
-@msg	kerning must be a number, "auto", or "optical"	Kerning phải là số, “auto” hoặc “optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning phải là số, “auto” hoặc “optical”
 @msg	the selection has no gradient fill	vùng chọn không có tô chuyển sắc
 @msg	the selection has no gradient stroke	vùng chọn không có nét chuyển sắc
 @msg	the selection has no pattern fill	vùng chọn không có tô họa tiết
@@ -4985,6 +5027,9 @@ theme	Appearance	Giao diện
 @msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
+@msg	the HEIC or HEIF file can't be read	không thể đọc tệp HEIC hoặc HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	tệp HEIC hoặc HEIF chứa loại ảnh không thể đọc được
+@msg	HEIC and HEIF images can't be opened in this build	không thể mở ảnh HEIC và HEIF trong bản dựng này
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
 @msg	the scale is not a usable number	tỷ lệ không phải là số dùng được
@@ -5104,6 +5149,11 @@ theme	Appearance	Giao diện
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: không phải ảnh PNG, JPEG, WebP, TIFF hay BMP
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	ảnh có kích thước {iw} × {ih} điểm ảnh, còn bảng vẽ ở chiều rộng đó có kích thước {rw} × {rh} điểm ảnh: tỉ lệ của chúng khác nhau
+@msg	`threshold` must be a number from 0 to 1	`threshold` phải là một số từ 0 đến 1
+@msg	background {v}: a color such as "#808080"	background {v}: màu như "#808080"
+@msg	comparing with an image file isn't available in the browser	không thể so sánh với tệp ảnh trong trình duyệt
 @msg	an image of {w} × {h} pixels is shown at reduced size	ảnh {w} × {h} điểm ảnh được hiển thị ở kích thước thu nhỏ
 	Basic	Cơ bản
 	Fill and Stroke Controls	Điều khiển tô và nét
@@ -5299,6 +5349,9 @@ theme	Appearance	Giao diện
 @msg	too many library panels were opened in this session	đã mở quá nhiều bảng thư viện trong phiên này
 @msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Ảnh có kích thước {_1} × {_2} điểm ảnh, hơn {LARGE_TRACE_SIDE} ở một cạnh: ảnh vẫn được dò, nhưng chậm hơn. Một thiết lập sẵn có độ trung thực thấp hơn hoặc một bản sao nhỏ hơn của ảnh sẽ dò nhanh hơn.
 @msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Ảnh đã được dò ở {_1} × {_2} điểm ảnh, thu nhỏ từ {_3} × {_4} (tối đa {_5} megapixel).
+@msg	byColor must be true or false	byColor phải là true hoặc false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor không thể tách các nhóm của Tự động nhóm: hãy dò mà không bật Tự động nhóm
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor không thể nhóm lại bản dò có hiệu ứng Pathfinder đang hoạt động: mở rộng mà không dùng byColor
 	Snapping	Hút
 	Snap to Tangent	Hút vào tiếp tuyến
 	Snap to Perpendicular	Hút vào đường vuông góc
@@ -5423,6 +5476,9 @@ axis	Y Axis	Trục Y
 	Install “{name}”, which asks for these permissions?	Cài đặt “{name}”, plug-in yêu cầu các quyền này?
 	ID: {id}	ID: {id}
 	Version: {version}	Phiên bản: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Cài đặt “{name}” thay cho plug-in có cùng ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Tệp này không phải là plug-in đã cài đặt trước đây với ID này. Tệp sẽ nhận cài đặt và bộ nhớ đệm được lưu cho ID đó.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” là mô-đun khác với plug-in có ID {_1} và sẽ nhận cài đặt và bộ nhớ đệm được lưu cho plug-in đó: hãy cài đặt với `replace: true` khi người dùng đồng ý
 	File SHA-256: {hash}	SHA-256 của tệp: {hash}
 	Read the objects it is given	Đọc các đối tượng được trao cho nó
 	Change, add and delete objects in the document	Thay đổi, thêm và xóa đối tượng trong tài liệu
@@ -5430,10 +5486,13 @@ axis	Y Axis	Trục Y
 	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
 	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `progress` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
+	Keep settings of its own	Lưu cài đặt riêng
+	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Clear Plug-in Cache	Xóa bộ nhớ đệm của plug-in
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `{permission}` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập `env.vc_progress`, `env.vc_cancelled` và `env.vc_log` (API plug-in cấp 2), không có WASI, tệp hay mạng
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập các hàm `env.vc_*` mà docs/plugins.md liệt kê (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`
@@ -5865,6 +5924,8 @@ breakText	Glyphs	Glyph
 	File + Data Set Name	Tệp + tên tập dữ liệu
 	Data Set Name	Tên tập dữ liệu
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` phải là `fileNumber`, `fileDataSetName` hoặc `dataSetName`
+	Each data set saves over the same file, which keeps only the last data set.	Mỗi tập dữ liệu được lưu đè lên cùng một tệp, nên tệp chỉ giữ lại tập dữ liệu cuối cùng.
+@msg	save the document with Save As before Save and Close	hãy lưu tài liệu bằng Lưu thành trước khi dùng Lưu và đóng
 @msg	no free data set file name in destination folder	Không có tên tệp tập dữ liệu còn trống trong thư mục đích
 
 # Path Precision Tools add-on: Path Effects (Effect › Path Effects).
@@ -5985,9 +6046,20 @@ breakText	Glyphs	Glyph
 	Reset Symbol Instance	Đặt lại đối tượng ký hiệu
 @msg	type must be static or dynamic, not {v}	type phải là static hoặc dynamic, không phải {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` là ký hiệu tĩnh: trước tiên hãy đặt Kiểu ký hiệu thành Động
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Chỉ có thể thay đổi màu đặc của màu tô và nét của đường dẫn, đường dẫn phức hoặc chữ được chọn trong một đối tượng ký hiệu
 @msg	path must be a list of child indices	path phải là danh sách chỉ số con
 @msg	no object at path {shown} in the symbol's art	không có đối tượng tại đường dẫn {shown} trong hình của ký hiệu
 @msg	give fill, stroke, opacity and/or blend	hãy cung cấp fill, stroke, opacity và/hoặc blend
+@msg	{key} cannot be set on a guide	không thể đặt {key} cho đường căn
+@msg	{key} cannot be set on a blend	không thể đặt {key} cho hòa trộn
+@msg	{key} cannot be set on an envelope	không thể đặt {key} cho envelope
+@msg	{key} cannot be set on a gradient mesh	không thể đặt {key} cho lưới chuyển sắc
+@msg	{key} cannot be set on a Repeat	không thể đặt {key} cho lặp lại
+@msg	{key} cannot be set on a placed document	không thể đặt {key} cho tài liệu đã đặt
+@msg	{key} cannot be set on an Intertwine group	không thể đặt {key} cho nhóm đan xen
+@msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
+@msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
 @msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng
@@ -6082,3 +6154,25 @@ breakText	Glyphs	Glyph
 # 3D Box add-on
 	3D Box	Hộp 3D
 	3D Box Tool	Công cụ Hộp 3D
+
+# Safe Mode
+	Safe Mode…	Chế độ an toàn…
+	Safe Mode	Chế độ an toàn
+	Help › Safe Mode…	Trợ giúp › Chế độ an toàn…
+	Enable on Re-launch	Bật ở lần khởi chạy tiếp theo
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Lần khởi chạy VectorCraft trước đã dừng khi đang tải plug-in {name}. Có thể plug-in đó không phải là nguyên nhân.
+	Disable and Continue	Tắt và tiếp tục
+	Start Normally	Khởi động bình thường
+	Start in Safe Mode	Khởi động ở chế độ an toàn
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft đang ở chế độ an toàn: không plug-in nào được tải hay chạy cho đến khi ứng dụng khởi động bình thường.
+	Disabled plug-ins	Plug-in đã tắt
+	No plug-ins are disabled.	Không có plug-in nào bị tắt.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Chế độ an toàn đang bật: plug-in không được tải hay chạy cho đến khi VectorCraft khởi động bình thường
+@msg	give `id` or `file` (see plugin.safeMode)	cung cấp `id` hoặc `file` (xem plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	plug-in đó không bị tắt (xem plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Không thể lưu các plug-in đã tắt cho lần khởi chạy tiếp theo
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Mở rộng diện mạo: không thể mở rộng hiệu ứng plug-in trong vùng chọn ở chế độ an toàn
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Căn theo lưới pixel
+@msg	only paths and compound paths can be aligned to the pixel grid	chỉ đường dẫn và đường dẫn phức mới căn theo lưới pixel được

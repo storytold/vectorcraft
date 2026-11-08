@@ -64,6 +64,32 @@ fn export_writes_dxf_of_the_chosen_version() {
 }
 
 #[test]
+fn the_cnc_preset_sets_the_options_that_are_not_given() {
+    let mut s = two_boards();
+    let cnc = text(&s.execute("document.exportDxf", &json!({"dxfPreset": "cnc"})).unwrap());
+    assert_eq!(header(&cnc, "$ACADVER").as_deref(), Some("AC1015"));
+    assert_eq!(header(&cnc, "$INSUNITS").as_deref(), Some("4"));
+    // document.export takes it too, beside a PDF preset's name.
+    let r = s.execute("document.export", &json!({"format": "dxf", "dxfPreset": "cnc"})).unwrap();
+    assert_eq!(header(&text(&r), "$ACADVER").as_deref(), Some("AC1015"));
+    let o = dxf::options(&json!({"dxfPreset": "CNC", "unit": "in"})).unwrap();
+    assert_eq!(
+        (o.version, o.unit, o.colors, o.preserve, o.alter_paths, o.outline_text),
+        (
+            vectorcraft_cad::DxfVersion::R2000,
+            vectorcraft_doc::Unit::Inches,
+            vectorcraft_cad::ColorDepth::Aci256,
+            vectorcraft_cad::Preserve::Editability,
+            false,
+            true
+        )
+    );
+    assert_eq!(dxf::options(&json!({})).unwrap().version, vectorcraft_cad::DxfVersion::R2018, "custom by default");
+    let e = s.execute("document.exportDxf", &json!({"dxfPreset": "laser"})).unwrap_err().to_string();
+    assert!(e.contains("custom or cnc"), "{e}");
+}
+
+#[test]
 fn use_artboards_writes_one_drawing_per_artboard() {
     let mut s = two_boards();
     let r = s.execute("document.export", &json!({"format": "dxf", "useArtboards": true})).unwrap();

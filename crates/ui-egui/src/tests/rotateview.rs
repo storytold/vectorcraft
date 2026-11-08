@@ -227,7 +227,7 @@ impl Window {
     }
 
     /// One headless frame of the whole window, `seconds` after the last one, with `events`.
-    fn after(&mut self, seconds: f64, events: Vec<egui::Event>) {
+    fn after(&mut self, seconds: f64, events: Vec<egui::Event>) -> egui::FullOutput {
         self.time += seconds;
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
@@ -237,6 +237,7 @@ impl Window {
             app.ui(ui);
         });
         out.textures_delta.clear();
+        out
     }
 
     /// A press and release of Escape, `seconds` after the last frame.
@@ -336,12 +337,18 @@ fn escape_after_ending_isolation_or_with_the_rotate_view_tool_resets_the_view() 
 #[test]
 fn escape_after_closing_a_popup_or_during_a_ruler_origin_drag_keeps_the_rotation() {
     let mut w = Window::new();
-    // The menu's button has the id `ComboBox::from_id_salt("rot-combo")` gives it in the status bar's
-    // row, which hosts other widgets too. egui 0.37 salts the Ui's stable `scope_id`, not the
-    // widget rect's unstable `parent_id`; in debug builds the id's debug source names its salt.
-    let widgets: Vec<egui::WidgetRect> = w.ctx.viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, ws)| ws.iter().copied()).collect());
-    let combo = widgets.iter().find(|r| format!("{:?}", r.id).contains("rot-combo")).copied();
-    let combo = combo.expect("the status bar's angle menu");
+    // Find the actual combo by its accessible name, which is present in both build profiles;
+    // `Id`'s debug source (including "rot-combo") only exists with debug assertions enabled.
+    w.ctx.enable_accesskit();
+    let out = w.after(0.0, vec![]);
+    let tree = out.platform_output.accesskit_update.expect("the window's accessibility tree");
+    let combos: Vec<_> =
+        tree.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::ComboBox && node.label() == Some("Rotation")).collect();
+    assert_eq!(combos.len(), 1, "the status bar's angle menu");
+    let combo = w
+        .ctx
+        .viewport(|vp| vp.prev_pass.widgets.layers().flat_map(|(_, ws)| ws.iter()).find(|r| r.id.accesskit_id() == combos[0].0).copied())
+        .expect("the angle menu's widget");
     w.click(0.0, egui::PointerButton::Primary, combo.rect.center());
     w.after(0.0, vec![]);
     assert!(craft_ui::ComboBox::is_open(&w.ctx, combo.id), "the angle menu is open");

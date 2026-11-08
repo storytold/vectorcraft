@@ -34,7 +34,9 @@
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
-//!   become an RGBA PNG.
+//!   become an RGBA PNG. Images larger than 2^25 pixels keep their samples' channels (1-bit gray as
+//!   a 1-bit PNG), and are averaged down past a target size ([`raster`]); past the hard limits, one
+//!   is a box that the page's art replaces when there is a page ([`read_over_page`]).
 //! - Linked images in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF` with the
 //!   operands `XI` takes and no samples. Each is a linked image of that file showing a placeholder
 //!   over the image's place until its file is found. An `XF` without a file name before it, or
@@ -46,6 +48,10 @@
 //!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
+//!   The dictionary after a placed PDF or `.ai` file has the page shown, from 1, in
+//!   `AI11 PlacedPDFPageIndex` and its box in `AI11 PlacedPDFCropTo` (0 Art, 1 Crop, 2 Trim, 3 Bleed,
+//!   4 Media, 5 Bounding Box): each is a placed document of that page and box, showing the preview
+//!   until its file is found. A value outside those leaves it a linked image.
 //!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
 //!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
 //!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
@@ -112,7 +118,7 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer, Unit,
+    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
@@ -130,6 +136,7 @@ mod document;
 mod masks;
 mod on_path;
 mod ops;
+mod raster;
 mod types;
 
 pub(crate) use art::join_and;
@@ -139,8 +146,10 @@ pub use document::{
 };
 pub(crate) use document::{slot_frame, slot_of};
 pub(crate) use ops::read_art_style;
-pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+#[cfg(test)]
+pub(crate) use raster::with_image_limits;
+pub use types::PlacedPage;
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -185,6 +194,8 @@ pub struct Structure {
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
     pub placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// The placed files that are pages of PDF or `.ai` files.
+    pub placed_pages: Vec<PlacedPage>,
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
@@ -229,19 +240,32 @@ pub(super) fn remember_xml_id(xml_ids: &mut HashMap<String, Option<NodeId>>, byt
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
 /// keep the reduced one, which the PDF import reads as it is (#2031).
 pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, false)
+}
+
+/// [`read`] for a file whose page art replaces the objects the reader doesn't read (see
+/// [`Reader::unread_box`]): an image past the hard limits ([`raster::Limits`]) is then such an
+/// object, where [`read`] leaves it out with a note.
+pub(crate) fn read_over_page(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_with(data, large_canvas, true)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool) -> Result<Structure, String> {
     let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     r.run()?;
     r.finish()
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
 /// data): the program's header gives the author and the custom colors the editing data's header
-/// doesn't.
-pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structure, String> {
+/// doesn't. `page_art`: as [`read_over_page`] reads a file.
+pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool) -> Result<Structure, String> {
     let header = Reader::header_of(ps);
     let mut r = Reader::with_names(data);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     // The program's custom colors have swatches of their names, which no gradient or pattern takes.
     for n in &header.custom_colors {
         r.global_names.reserve(&n.name);
@@ -438,6 +462,9 @@ struct Reader<'a> {
     image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
     place: Option<Place>,
+    /// The placed files just read, until the dictionary after each: at most one for each depth of
+    /// frames, the innermost last.
+    placed_tails: Vec<PlacedTail>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
     /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
@@ -554,6 +581,8 @@ struct Reader<'a> {
     placeholders: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// See [`Structure::placed_pages`].
+    placed_pages: Vec<PlacedPage>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
@@ -576,6 +605,8 @@ struct Reader<'a> {
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The file has page art to replace the objects that aren't read ([`read_over_page`]).
+    page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
@@ -732,6 +763,8 @@ impl<'a> Reader<'a> {
             restyled: vec![],
             placeholders: vec![],
             placed_elsewhere: vec![],
+            placed_pages: vec![],
+            placed_tails: vec![],
             unread_elsewhere: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),
@@ -743,6 +776,7 @@ impl<'a> Reader<'a> {
             art_size: None,
             template_center: None,
             large_canvas: None,
+            page_art: false,
             canvas_scale: 1.0,
             ruler_units: None,
             pattern: None,

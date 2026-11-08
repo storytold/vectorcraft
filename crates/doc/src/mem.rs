@@ -103,6 +103,11 @@ impl Document {
         let styles = |s: &Vec<TextStyleDef>| vec_bytes(s) + s.iter().map(|s| s.name.capacity() + map_bytes(&s.attrs)).sum::<usize>();
         n += shared(&self.char_styles, &newer.char_styles, styles);
         n += shared(&self.para_styles, &newer.para_styles, styles);
+        n += shared(&self.composite_fonts, &newer.composite_fonts, |c| {
+            let part = |p: &crate::CompositePart| p.font.capacity() + p.style.capacity();
+            vec_bytes(c)
+                + c.iter().map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>()).sum::<usize>()
+        });
         n += shared(&self.saved_selections, &newer.saved_selections, |s| {
             vec_bytes(s) + s.iter().map(|s: &SavedSelection| s.name.capacity() + vec_bytes(&s.objects)).sum::<usize>()
         });

@@ -10,12 +10,30 @@ use std::sync::{Arc, Mutex, RwLock};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Error;
 use crate::permissions::Grant;
+use crate::storage::Storage;
 use crate::{Limits, Plugin, Result};
 
 static PLUGINS: RwLock<BTreeMap<String, Arc<Plugin>>> = RwLock::new(BTreeMap::new());
 static REVISION: AtomicU64 = AtomicU64::new(0);
 /// What the user approved, by plug-in id.
 static GRANTS: RwLock<BTreeMap<String, Grant>> = RwLock::new(BTreeMap::new());
+/// Where each plug-in keeps its settings and cache, by plug-in id.
+static STORAGE: RwLock<BTreeMap<String, Arc<dyn Storage>>> = RwLock::new(BTreeMap::new());
+
+/// Keeps the settings and cache of plug-in `id` in `storage` from now on (`None`: nowhere, so its
+/// storage calls fail as unavailable). A run of the plug-in reaches only its own id's storage.
+pub fn set_storage(id: &str, storage: Option<Arc<dyn Storage>>) {
+    let mut all = STORAGE.write().unwrap_or_else(|e| e.into_inner());
+    match storage {
+        Some(s) => all.insert(id.to_string(), s),
+        None => all.remove(id),
+    };
+}
+
+/// Where plug-in `id` keeps its settings and cache, if anywhere.
+pub fn storage(id: &str) -> Option<Arc<dyn Storage>> {
+    STORAGE.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+}
 
 /// Records what the user approved for a plug-in, replacing an earlier grant for its id.
 pub fn grant(g: Grant) {
@@ -47,9 +65,12 @@ pub fn approved(plugin: &Plugin) -> bool {
 
 /// Installs `plugin`, replacing one with the same id.
 pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
+    // The revision moves while the write lock is held, so a cache that reads the new revision and
+    // then the plug-ins finds the new plug-in among them.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     let p = Arc::new(plugin);
-    PLUGINS.write().unwrap_or_else(|e| e.into_inner()).insert(p.id().to_string(), p.clone());
+    plugins.insert(p.id().to_string(), p.clone());
     p
 }
 
@@ -113,6 +134,9 @@ pub fn load_file(path: &std::path::Path, limits: Limits) -> Result<Plugin> {
     Ok(Plugin::load(&bytes, limits)?.with_source(path.display().to_string()))
 }
 
+/// What [`load_folder`] reports for a plug-in the user disabled.
+pub const DISABLED: &str = "disabled: turn it on again in Help › Safe Mode, for the next launch";
+
 /// What [`load_folder`] did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FolderReport {
@@ -120,6 +144,10 @@ pub struct FolderReport {
     pub loaded: Vec<String>,
     /// `(file, error)` for each `.wasm` that failed to load.
     pub failed: Vec<(String, String)>,
+    /// The disabled items saved for the next launch changed: a plug-in disabled by its id alone was
+    /// found in a file, which is now disabled too ([`crate::safe_mode::disable_file_of`]). The app
+    /// saves the list again.
+    pub disabled_changed: bool,
 }
 
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
@@ -132,13 +160,18 @@ pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
 }
 
 /// [`load_folder`], loading only the files `allow` accepts, and of the plug-ins that list
-/// permissions only those `approve` accepts; the others are reported as failed with the reason.
+/// permissions only those `approve` accepts; the others are reported as failed with the reason. A plug-in the user disabled ([`crate::safe_mode::skipped`]) is reported and
+/// skipped, by its file before it loads or by its id after (its file is then disabled too, so the
+/// next load skips it before it runs); the launch marker names each file while it loads
+/// ([`crate::safe_mode::loading`]). In Safe Mode nothing loads ([`Error::SafeMode`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder_where(
     dir: &std::path::Path,
     allow: impl Fn(&std::path::Path) -> std::result::Result<(), String>,
     approve: impl Fn(&Plugin) -> bool,
 ) -> Result<FolderReport> {
+    use crate::safe_mode::{self, Item};
+    safe_mode::check()?;
     let rd = std::fs::read_dir(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
     let mut files: Vec<std::path::PathBuf> =
         rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm"))).collect();
@@ -150,7 +183,19 @@ pub fn load_folder_where(
             report.failed.push((f.display().to_string(), why));
             continue;
         }
-        match load_file(&f, Limits::default()) {
+        let item = Item::file(f.display().to_string());
+        if safe_mode::skipped(&item) {
+            report.failed.push((f.display().to_string(), DISABLED.into()));
+            continue;
+        }
+        let token = safe_mode::loading(&item);
+        let loaded = load_file(&f, Limits::default());
+        safe_mode::loaded(token);
+        match loaded {
+            Ok(p) if safe_mode::skipped(&Item::of(&p)) => {
+                report.disabled_changed |= safe_mode::disable_file_of(&Item::of(&p));
+                report.failed.push((f.display().to_string(), DISABLED.into()));
+            }
             // A heavy plug-in installs once the user agrees, which loading a folder doesn't ask.
             Ok(p) if p.manifest().budget == crate::Budget::Heavy => {
                 report.failed.push((f.display().to_string(), "asks for a heavy budget, which the user allows when installing it on its own".into()));
