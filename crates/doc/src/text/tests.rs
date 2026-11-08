@@ -246,7 +246,7 @@ fn typed_list_starts_are_found_at_a_paragraphs_start() {
 #[test]
 fn typed_list_starts_skip_a_continued_paragraph() {
     let dot = ParaList::bulleted(Bullet::Dot);
-    let mut t = TextObject::point(Point::ZERO, "* Pears\n# ", CharStyle::default());
+    let mut t = TextObject::point(Point::ZERO, "* Pears\n* ", CharStyle::default());
     assert_eq!(t.typed_list_at(2), Some((0, dot)));
     t.first_para_continues = true;
     assert_eq!(t.typed_list_at(2), None, "a continued paragraph starts no list");
