@@ -1014,17 +1014,20 @@ impl Spine {
         let mut start = 0.0;
         for i in 0..n {
             let c = sp.segment(i);
-            let len = c.arclen(1e-9);
-            if s <= start + len || i + 1 == n {
-                let t = c.inv_arclen((s - start).max(0.0), 1e-9).clamp(1e-9, 1.0 - 1e-9);
+            let end = self.anchor_length(i + 1).unwrap_or(self.length());
+            if s <= end || i + 1 == n {
+                let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+                let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
                 let e = c.eval(t);
                 let tv = c.deriv().eval(t);
                 return (Point::new(e.x, e.y), tv.y.atan2(tv.x));
             }
-            start += len;
+            start = end;
         }
         let c = sp.segment(n - 1);
-        let t = c.inv_arclen(c.arclen(1e-9), 1e-9).clamp(1e-9, 1.0 - 1e-9);
+        let end = self.length();
+        let local_s = (s - start).max(0.0) / (end - start).max(1e-12) * c.arclen(1e-9);
+        let t = c.inv_arclen(local_s, 1e-9).clamp(1e-9, 1.0 - 1e-9);
         let e = c.eval(t);
         let tv = c.deriv().eval(t);
         (Point::new(e.x, e.y), tv.y.atan2(tv.x))
