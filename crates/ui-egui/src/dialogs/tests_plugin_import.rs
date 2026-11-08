@@ -230,7 +230,7 @@ fn a_dropped_file_only_an_importer_reads_opens() {
 #[test]
 fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
     use vectorcraft_engine::cmd::{self, fileio};
-    let lists: [&[&str]; 10] = [
+    let lists: [&[&str]; 11] = [
         cmd::plugin::EXTS,
         cmd::shortcutset::EXTS,
         cmd::scripts::EXTS,
@@ -239,6 +239,7 @@ fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
         cmd::printpresets::PRESET_EXTS,
         cmd::perspgrid::PRESET_EXTS,
         fileio::SCREEN_EXPORT_PRESET_EXTS,
+        cmd::compositefonts::EXTS,
         cmd::library::LIBRARY_EXTS,
         cmd::swatchlib::LIBRARY_EXTS,
     ];

@@ -18,7 +18,7 @@ use vectorcraft_doc::{Document, MAX_COORD};
 use vectorcraft_geom::Rect;
 use vectorcraft_plugins::{Plugin, export, import, objects};
 
-use super::super::{Result, bad};
+use super::super::{Result, bad, str_param};
 use super::load::{Loaded, detect, file_name};
 use super::{err, extension, file_stem, format};
 use crate::EngineError;
@@ -55,6 +55,32 @@ pub(super) fn pick(name: &str, bytes: &[u8], p: &Value) -> Result<Option<Arc<Plu
     Ok(import::for_extension(&ext).into_iter().next())
 }
 
+/// How much of a file [`detect`] is given: more than its content checks read.
+const SNIFF_BYTES: usize = 64 << 10;
+
+/// Refuses `document.open`'s `dataBase64` in `p` before it is decoded when it holds a file past
+/// [`import::MAX_INPUT_BYTES`] that only an importer reads, by the rule of `read_path`.
+pub(super) fn check_data(p: &Value) -> Result<()> {
+    let Some(b64) = str_param(p, "dataBase64") else {
+        return Ok(());
+    };
+    let name = str_param(p, "name").unwrap_or("Untitled");
+    let ext = extension(name);
+    let explicit = named(p)?.is_some();
+    let built_in = !explicit && (super::readable_format(&ext).is_some() || import::for_extension(&ext).is_empty());
+    if built_in || vectorcraft_format::base64_decoded_len(b64) <= import::MAX_INPUT_BYTES as u64 {
+        return Ok(());
+    }
+    if !explicit {
+        let start: Vec<u8> = b64.bytes().filter(|b| !b.is_ascii_whitespace()).take(SNIFF_BYTES / 3 * 4).collect();
+        let head = std::str::from_utf8(&start).ok().and_then(vectorcraft_format::base64_decode);
+        if head.is_some_and(|head| detect(name, &head).is_some()) {
+            return Ok(());
+        }
+    }
+    Err(err(format!("can't open `{}`: {}", file_name(name), import::too_large())))
+}
+
 /// The file at `path` for `document.open`'s params `p`. A file that only an importer reads (one
 /// `importer` names, or an extension no built-in format reads that an importer lists) is read up
 /// to [`import::MAX_INPUT_BYTES`]: past that, it is an error, unless the start of the file shows a
@@ -62,9 +88,6 @@ pub(super) fn pick(name: &str, bytes: &[u8], p: &Value) -> Result<Option<Arc<Plu
 /// the limit that isn't read whole is reported from its size, without reading it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn read_path(path: &str, p: &Value) -> Result<Vec<u8>> {
-    /// How much of the file [`detect`] is given: more than its content checks read.
-    const SNIFF_BYTES: usize = 64 << 10;
-
     let ext = extension(path);
     let explicit = named(p)?.is_some();
     if !explicit && (super::readable_format(&ext).is_some() || import::for_extension(&ext).is_empty()) {

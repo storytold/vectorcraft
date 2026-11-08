@@ -689,7 +689,10 @@ pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
     // A file only an importer plug-in reads is read up to the importer's input limit.
     let src = match str_param(p, "path") {
         Some(path) => Source { name: path, bytes: super::importer::read_path(path, p)?, path: Some(path) },
-        None => source(p, "document.open")?,
+        None => {
+            super::importer::check_data(p)?;
+            source(p, "document.open")?
+        }
     };
     // A relative path is the file in the working directory: its folder is where relative links
     // are found (a bare file name has no folder of its own).

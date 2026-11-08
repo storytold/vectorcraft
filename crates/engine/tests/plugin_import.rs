@@ -199,6 +199,7 @@ fn file_open_lists_only_the_extensions_it_opens_with_an_importer() {
     let filters: Vec<_> = fileio::open_filters().collect();
     assert!(filters.contains(&("Test test.claimed", &["tcl"][..])), "{filters:?}");
     assert!(!filters.iter().any(|(label, _)| *label == "Test test.claimedonly"), "{filters:?}");
+    assert!(filters.contains(&("Composite fonts", vectorcraft_engine::cmd::compositefonts::EXTS)), "{filters:?}");
     s.execute("plugin.remove", &json!({"id": "test.claimed"})).unwrap();
     s.execute("plugin.remove", &json!({"id": "test.claimedonly"})).unwrap();
 }
@@ -366,6 +367,20 @@ fn a_file_past_the_input_limit_is_refused() {
     let e = open(&mut s, "big.tsb", &vec![0; max + 1], json!({})).unwrap_err();
     assert!(e.to_string().contains("larger than"), "{e}");
     assert_eq!(state(&mut s), before, "as data");
+    // The size is checked before the text is decoded: this text is not base64 at all.
+    let not_base64 = "!".repeat((max + 1) / 3 * 4 + 8);
+    for extra in [json!({}), json!({"importer": "plugin.test.large"})] {
+        let mut p = json!({"name": "big.tsb", "dataBase64": not_base64});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let e = s.execute("document.open", &p).unwrap_err();
+        assert!(e.to_string().contains("larger than"), "{e}");
+        assert_eq!(state(&mut s), before, "before decoding");
+    }
+    // White space is not part of the file's size.
+    let spaced = format!("QUJD{}", " ".repeat(max / 3 * 4 + 8));
+    if let Err(e) = s.execute("document.open", &json!({"name": "small.tsb", "dataBase64": spaced})) {
+        assert!(!e.to_string().contains("larger than"), "{e}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -386,5 +401,9 @@ fn a_built_in_file_past_the_input_limit_still_opens() {
     assert!(s.documents().is_empty());
     let r = s.execute("document.open", &json!({"path": path_of(&path)})).unwrap();
     assert_eq!(r["format"], "png");
+    let mut data = png.into_inner();
+    data.resize((vectorcraft_plugins::import::MAX_INPUT_BYTES + 3) / 3 * 3, 0);
+    let encoded = json!({"name": "big.tsp", "dataBase64": vectorcraft_format::base64_encode(&data)});
+    assert_eq!(s.execute("document.open", &encoded).unwrap()["format"], "png");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -686,8 +686,8 @@ pub fn opens_with_importer(name: &str) -> bool {
 
 /// Whether File › Open opens a file of extension `ext` (lower case) as something other than a
 /// document: a plug-in (installed), a shortcut set, a script (checked), flattener, PDF, print,
-/// perspective grid or export presets (imported), a Libraries panel library, or a swatch or graphic
-/// style library.
+/// perspective grid or export presets or composite fonts (imported), a Libraries panel library, or a
+/// swatch or graphic style library.
 pub fn opens_as_other(ext: &str) -> bool {
     [
         crate::cmd::plugin::EXTS,
@@ -698,6 +698,7 @@ pub fn opens_as_other(ext: &str) -> bool {
         crate::cmd::printpresets::PRESET_EXTS,
         crate::cmd::perspgrid::PRESET_EXTS,
         screens::PRESET_FILE_EXTS,
+        crate::cmd::compositefonts::EXTS,
         crate::cmd::library::LIBRARY_EXTS,
         crate::cmd::swatchlib::LIBRARY_EXTS,
         std::slice::from_ref(&vectorcraft_doc::style_libs::STYLES_EXT),
@@ -771,7 +772,7 @@ pub fn builtin_open_filters() -> impl Iterator<Item = (&'static str, &'static [&
 }
 
 /// The open-dialog filters after the document formats: swatch libraries, Libraries panel
-/// libraries, presets, shortcut sets, scripts and plug-ins.
+/// libraries, presets, composite fonts, shortcut sets, scripts and plug-ins.
 fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
     std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
@@ -779,6 +780,7 @@ fn other_open_filters() -> impl Iterator<Item = (&'static str, &'static [&'stati
         .chain(std::iter::once(("PDF presets", crate::cmd::pdfcmds::PRESET_EXTS)))
         .chain(std::iter::once(("Print presets", crate::cmd::printpresets::PRESET_EXTS)))
         .chain(std::iter::once(("Export presets", screens::PRESET_FILE_EXTS)))
+        .chain(std::iter::once(("Composite fonts", crate::cmd::compositefonts::EXTS)))
         .chain(std::iter::once(("Shortcut sets", crate::cmd::shortcutset::EXTS)))
         .chain(std::iter::once(("Scripts", crate::cmd::scripts::EXTS)))
         .chain(std::iter::once(("Plug-ins", crate::cmd::plugin::EXTS)))
