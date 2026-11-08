@@ -62,7 +62,8 @@ object is where the art was.
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
 
-Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
+Holes stay holes, with walls of their own. Contours that cross or overlap, as type often draws a glyph, are merged
+first, so the solid follows the shape as it is filled. Bevels move each corner along its bisector (mitres are limited to four
 times the width), so a bevel wider than a narrow part of the shape folds over itself.
 
 ## Inflate
