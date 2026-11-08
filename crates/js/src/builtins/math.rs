@@ -2,12 +2,11 @@
 //! cases the section lists for NaN, signed zeros and infinities.
 
 use super::{arg, data, method};
-use crate::heap::{Class, NativeFn, OBJECT_BYTES, Object};
+use crate::heap::{Class, NativeFn, Object};
 use crate::interp::{Interp, JsResult};
 use crate::value::Value;
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
-    interp.reserve_heap(OBJECT_BYTES)?;
     let proto = interp.intrinsics.object_proto;
     let math = interp.heap.alloc_object(Object::new(Class::Math, Some(proto)));
     let constants = [

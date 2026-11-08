@@ -170,6 +170,8 @@ pub(crate) struct Interp {
     /// charged to `heap.bytes` and added back after each collection, and a native call's
     /// buffers are released when it returns.
     pub(crate) held_bytes: usize,
+    /// Why installing the built-ins failed; a realm with this set runs no script.
+    pub(crate) install_error: Option<String>,
 }
 
 /// The least heap size a collection waits for.
@@ -307,6 +309,7 @@ impl Interp {
             random: random_seed(),
             join_stack: Vec::new(),
             held_bytes: 0,
+            install_error: None,
         };
         crate::builtins::install(&mut interp);
         interp.gc_threshold = interp.next_threshold();

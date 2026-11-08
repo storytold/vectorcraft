@@ -16,7 +16,6 @@ use crate::interp::{Desc, ErrorType, Hint, Interp, JsResult};
 use crate::value::{Str, Value, number_to_str};
 
 pub(super) fn install(interp: &mut Interp) -> JsResult<()> {
-    interp.reserve_heap(OBJECT_BYTES)?;
     let proto = interp.intrinsics.object_proto;
     let json = interp.heap.alloc_object(Object::new(Class::Json, Some(proto)));
     method(interp, json, "parse", parse, 2)?;

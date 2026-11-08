@@ -53,12 +53,17 @@ fn constructor(interp: &mut Interp, name: &'static str, ctor: ObjId, proto: ObjI
     data(interp, global, name, Value::Object(ctor), HIDDEN)
 }
 
-/// Creates the built-ins and the global object's properties.
+/// Creates the built-ins and the global object's properties. Installing is not bounded by
+/// [`crate::Limits`]; if it fails, the failure is kept in `interp.install_error` and every run of
+/// the realm ends with it.
 pub(crate) fn install(interp: &mut Interp) {
     if let Err(e) = try_install(interp) {
-        // Installing touches only objects it has just made, so this does not happen; a realm
-        // that somehow lacks a built-in reports it when a script uses it.
-        let _ = e;
+        let reason = match e {
+            Abrupt::Throw(v) => interp.describe(&v),
+            Abrupt::Limit(kind) => format!("limit reached: {kind:?}"),
+            Abrupt::Internal(message) => message,
+        };
+        interp.install_error = Some(format!("the built-ins could not be installed: {reason}"));
     }
 }
 

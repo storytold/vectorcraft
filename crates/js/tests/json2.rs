@@ -72,9 +72,13 @@ fn json2_polyfill_round_trips_with_the_built_in_json() {
     };
     let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let mut realm = Realm::new();
-    if realm.run(NEEDS) != Ok(JsValue::Bool(true)) {
-        println!("json2: SKIPPED (the interpreter lacks Date, String.prototype.replace or RegExp, which json2.js uses)");
-        return;
+    match realm.run(NEEDS) {
+        Ok(JsValue::Bool(true)) => {}
+        Ok(JsValue::Bool(false)) => {
+            println!("json2: SKIPPED (the interpreter lacks Date, String.prototype.replace or RegExp, which json2.js uses)");
+            return;
+        }
+        other => panic!("json2: the built-in check failed: {other:?}"),
     }
     match realm.run(&format!("{BEFORE}\n{source}\n{ROUND_TRIP}")) {
         Ok(JsValue::String(s)) if s == "ok" => println!("json2: the polyfill and the built-in JSON agree on every sample"),

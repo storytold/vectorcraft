@@ -357,6 +357,31 @@ fn define_properties_checks_the_heap_before_each_new_property() {
 }
 
 #[test]
+fn a_heap_limit_smaller_than_the_built_ins_still_installs_every_built_in() {
+    // The heap limit bounds what scripts make, not the realm's own built-ins: a realm made with a
+    // tiny limit refuses runs with the heap limit, and has every built-in once the limit is raised.
+    let mut realm = small(Limits { heap_bytes: 1, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "[]"), LimitKind::Heap);
+    realm.set_limits(Limits::default());
+    assert_eq!(
+        realm.run("typeof Math.max + typeof JSON.stringify + typeof parseInt + typeof escape + typeof decodeURIComponent"),
+        Ok(JsValue::String("functionfunctionfunctionfunctionfunction".into()))
+    );
+}
+
+#[test]
+fn a_realm_whose_built_ins_failed_to_install_runs_nothing() {
+    let mut realm = Realm::new();
+    realm.interp().install_error = Some("the built-ins could not be installed: test".into());
+    match realm.run("var ran = true; 1") {
+        Err(RunError { kind: RunErrorKind::Internal, message, .. }) => assert_eq!(message, "the built-ins could not be installed: test"),
+        other => panic!("{other:?}"),
+    }
+    realm.interp().install_error = None;
+    assert_eq!(realm.run("typeof ran"), Ok(JsValue::String("undefined".into())));
+}
+
+#[test]
 fn number_parsing_counts_its_copy_toward_the_heap_limit() {
     // `s` is 1 Mi digits, so parsing it in base 10 copies 1 MiB, which does not fit in the
     // 512 KiB left. Bases 16 and 36 read the digits where they are and still fit, but
