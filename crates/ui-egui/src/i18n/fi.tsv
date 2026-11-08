@@ -5862,6 +5862,11 @@ axis	Y Axis	Y-akseli
 	Keep data of its own with the document	Tallentaa omia tietojaan asiakirjaan
 	Change how the objects its effect is applied to are drawn	Muuttaa sitä, miten objektit, joihin sen tehostetta on käytetty, piirretään
 	Write the document as a file in its own format	Kirjoittaa asiakirjan tiedostoksi omassa muodossaan
+	Show its progress, see Cancel and write log lines	Näyttää edistymisensä, havaita peruutuksen ja kirjoittaa lokirivejä
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	käyttöoikeus `progress` vaatii laajennus-API:n tason {PROGRESS_API}: anna `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduuli tuo kohteen `env.{name}` eri tyyppisenä kuin isäntä: isännän tyyppi on {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	moduuli tuo kohteen `env.{name}`, jota laajennus saa käyttää vain laajennus-API:n tasolla {PROGRESS_API} (`api` {PROGRESS_API}) ja käyttöoikeudella `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	moduuli tuo kohteen `{from}.{name}`, jota isäntä ei tarjoa: laajennus saa tuoda vain kohteet `env.vc_progress`, `env.vc_cancelled` ja `env.vc_log` (laajennus-API:n taso 2) eikä mitään WASIa, tiedostoja tai verkkoa
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`

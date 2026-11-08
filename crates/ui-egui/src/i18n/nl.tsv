@@ -5777,6 +5777,7 @@ axis	Y Axis	Y-as
 	Keep data of its own with the document	Eigen gegevens bij het document bewaren
 	Change how the objects its effect is applied to are drawn	Wijzigen hoe de objecten waarop het effect is toegepast worden getekend
 	Write the document as a file in its own format	Het document als bestand in een eigen indeling schrijven
+	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 # Actions panel: action sets (#3712).
 	New Set…	Nieuwe set…
 	New Set	Nieuwe set

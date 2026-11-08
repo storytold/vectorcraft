@@ -5731,6 +5731,7 @@ axis	Y Axis	Sumbu Y
 	Keep data of its own with the document	Menyimpan datanya sendiri bersama dokumen
 	Change how the objects its effect is applied to are drawn	Mengubah cara objek yang diberi efeknya digambar
 	Write the document as a file in its own format	Menulis dokumen sebagai file dalam formatnya sendiri
+	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
 # Actions panel: action sets (#3712).
 	New Set…	Set baru…
 	New Set	Set baru

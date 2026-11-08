@@ -5789,6 +5789,11 @@ axis	Y Axis	Y ekseni
 	Keep data of its own with the document	Kendi verilerini belgeyle birlikte saklama
 	Change how the objects its effect is applied to are drawn	Efektinin uygulandığı nesnelerin nasıl çizildiğini değiştirme
 	Write the document as a file in its own format	Belgeyi kendi biçiminde bir dosya olarak yazma
+	Show its progress, see Cancel and write log lines	İlerlemesini gösterme, iptali algılama ve günlük satırları yazma
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` izni için eklenti API düzeyi {PROGRESS_API} gerekir: `api` {PROGRESS_API} verin
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modül `env.{name}` öğesini ana bilgisayarınkinden farklı bir türle içe aktarıyor: ana bilgisayarın türü {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modül `env.{name}` öğesini içe aktarıyor; bir eklenti bunu yalnızca eklenti API düzeyi {PROGRESS_API} (`api` {PROGRESS_API}) ile ve `progress` izniyle kullanabilir
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modül, ana bilgisayarın sunmadığı `{from}.{name}` öğesini içe aktarıyor: bir eklenti yalnızca `env.vc_progress`, `env.vc_cancelled` ve `env.vc_log` öğelerini (eklenti API düzeyi 2) içe aktarabilir; WASI, dosya veya ağ kullanamaz
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` değeri {_1}; bu ana bilgisayar 1 ile {API_LEVEL} arasındaki eklenti API düzeylerini destekler
 @msg	`grant` must be a list of permission names	`grant` izin adlarından oluşan bir liste olmalıdır
 @msg	`grant` names an unknown permission `{shown}`	`grant` bilinmeyen bir izin adlandırıyor: `{shown}`

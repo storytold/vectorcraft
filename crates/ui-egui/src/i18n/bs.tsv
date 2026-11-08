@@ -5737,6 +5737,11 @@ axis	Y Axis	Y osa
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
 	Write the document as a file in its own format	Zapisati dokument kao datoteku u vlastitom formatu
+	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `progress` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul uvozi `env.{name}`, koji dodatak smije koristiti samo na nivou API-ja dodataka {PROGRESS_API} (`api` {PROGRESS_API}) i s dozvolom `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul uvozi `{from}.{name}`, koji domaćin ne nudi: dodatak smije uvoziti samo `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivo API-ja dodataka 2), a nikakav WASI, datoteke ni mrežu
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; ovaj domaćin podržava nivoe API-ja dodataka od 1 do {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` mora biti lista naziva dozvola
 @msg	`grant` names an unknown permission `{shown}`	`grant` navodi nepoznatu dozvolu `{shown}`

@@ -5429,6 +5429,11 @@ axis	Y Axis	Trục Y
 	Keep data of its own with the document	Lưu dữ liệu riêng cùng tài liệu
 	Change how the objects its effect is applied to are drawn	Thay đổi cách vẽ các đối tượng được áp dụng hiệu ứng của nó
 	Write the document as a file in its own format	Ghi tài liệu thành tệp theo định dạng riêng
+	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	quyền `progress` cần API plug-in cấp {PROGRESS_API}: hãy đặt `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	mô-đun nhập `env.{name}` với kiểu khác với kiểu của máy chủ: kiểu của máy chủ là {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	mô-đun nhập `env.{name}`, thứ mà plug-in chỉ được dùng ở API plug-in cấp {PROGRESS_API} (`api` {PROGRESS_API}) và với quyền `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	mô-đun nhập `{from}.{name}`, thứ mà máy chủ không cung cấp: plug-in chỉ được nhập `env.vc_progress`, `env.vc_cancelled` và `env.vc_log` (API plug-in cấp 2), không có WASI, tệp hay mạng
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` là {_1}; máy chủ này hỗ trợ các mức API plug-in từ 1 đến {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` phải là danh sách tên quyền
 @msg	`grant` names an unknown permission `{shown}`	`grant` nêu một quyền không xác định `{shown}`

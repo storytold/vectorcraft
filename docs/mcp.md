@@ -6100,6 +6100,10 @@ the entry's `hash` as `hash` so that a module that changed since is refused. Wit
 an error naming the permissions needed. The grant is kept with the module's hash; a module
 with the same id that lists no new permission installs without `grant`, and `plugin.remove` forgets the grant. A
 filter without `doc.write` or `state` that returns output needing them gets an error and the document is unchanged.
+A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may report its progress, see Cancel and write
+log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
+under its id. A module that imports anything else, or imports these without `api` 2 and `progress`, is refused by
+`plugin.install` and `plugin.inspect` with an error naming the import.
 `plugin.install` rejects a `replace` or `allowHeavy` value that is not a boolean, a `grant` that is not a list of
 permission names, and a `hash` that is not the module's SHA-256. `prefs.set` returns an error and
 changes nothing when a new `pluginsFolder` is missing, is not a folder or can't be listed. It does not check an empty

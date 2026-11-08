@@ -2,10 +2,11 @@
 //! approves when it is installed ([`Grant`], kept in [`crate::registry`]), and which the host
 //! enforces on every run.
 //!
-//! `doc.read`, `doc.write`, `state` and the reserved `progress` are the names of the plug-in
-//! capability model in storytold/photocraft#662; the other names are VectorCraft's own. A manifest
-//! without `permissions` gets the ones its kind implies ([`Permission::implied`]): what every
-//! plug-in of that kind could do before manifests listed them.
+//! `doc.read`, `doc.write`, `state` and `progress` are the names of the plug-in capability model in
+//! storytold/photocraft#662; the other names are VectorCraft's own. A manifest without
+//! `permissions` gets the ones its kind implies ([`Permission::implied`]): what every plug-in of
+//! that kind could do before manifests listed them. `progress`, which lets a plug-in use the host
+//! imports of API level 2 ([`crate::host`]), is never implied: a manifest lists it.
 
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +14,11 @@ use crate::{Error, Kind, Result};
 
 /// The plug-in API level this host implements. A manifest's `api` (1 when left out) may be at most
 /// this.
-pub const API_LEVEL: u32 = 1;
+pub const API_LEVEL: u32 = 2;
+
+/// The API level that adds the host imports ([`crate::host::IMPORTS`]) and the `progress`
+/// permission they need.
+pub const PROGRESS_API: u32 = 2;
 
 /// Most permissions a manifest may list.
 pub const MAX_PERMISSIONS: usize = 16;
@@ -26,7 +31,7 @@ pub const MAX_SHOWN_FIELD: usize = 64;
 
 /// Names kept for host calls a later plug-in API adds. This host grants none of them, so a
 /// manifest that lists one is refused when it is installed.
-pub const RESERVED: &[&str] = &["progress", "ui.panel", "ui.tool"];
+pub const RESERVED: &[&str] = &["ui.panel", "ui.tool"];
 
 /// One thing a plug-in may do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -47,10 +52,15 @@ pub enum Permission {
     /// Write the document as a file in its own format (an exporter).
     #[serde(rename = "export.write")]
     ExportWrite,
+    /// Report how far a run has got, see that the user asked it to stop and write log lines: the
+    /// host imports of API level 2 ([`crate::host::IMPORTS`]).
+    #[serde(rename = "progress")]
+    Progress,
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 5] = [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender, Permission::ExportWrite];
+pub const ALL: [Permission; 6] =
+    [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender, Permission::ExportWrite, Permission::Progress];
 
 impl Permission {
     /// Its name in a manifest and in `plugin.install`'s `grant`.
@@ -61,6 +71,7 @@ impl Permission {
             Permission::State => "state",
             Permission::EffectRender => "effect.render",
             Permission::ExportWrite => "export.write",
+            Permission::Progress => "progress",
         }
     }
 
@@ -77,11 +88,18 @@ impl Permission {
             Permission::State => "Keep data of its own with the document",
             Permission::EffectRender => "Change how the objects its effect is applied to are drawn",
             Permission::ExportWrite => "Write the document as a file in its own format",
+            Permission::Progress => "Show its progress, see Cancel and write log lines",
         }
     }
 
-    /// The permissions a plug-in of `kind` may list, which are also the ones a manifest without
-    /// `permissions` gets.
+    /// May a plug-in of `kind` list it: one its kind implies, or `progress`, which any kind may
+    /// list.
+    pub fn applies(self, kind: Kind) -> bool {
+        self == Permission::Progress || Permission::implied(kind).contains(&self)
+    }
+
+    /// The permissions a manifest of `kind` without `permissions` gets. A manifest may also list
+    /// `progress` ([`Permission::applies`]).
     pub fn implied(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[Permission::DocRead, Permission::DocWrite, Permission::State],
@@ -117,7 +135,7 @@ pub(crate) fn validate(kind: Kind, names: &[String]) -> Result<Vec<Permission>> 
             }
             return Err(Error::Manifest(format!("unknown permission `{shown}`")));
         };
-        if !Permission::implied(kind).contains(&p) {
+        if !p.applies(kind) {
             return Err(Error::Manifest(format!("permission `{shown}` doesn't apply to a plug-in of kind `{}`", kind.name())));
         }
         if out.contains(&p) {
@@ -218,9 +236,15 @@ mod tests {
         assert_eq!(validate(Kind::Filter, &[]).unwrap(), []);
         assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render"])).is_ok());
         assert!(validate(Kind::Exporter, &list(&["export.write", "doc.read"])).is_ok());
+        // Any kind may list `progress`, which no kind implies.
+        assert_eq!(validate(Kind::Filter, &list(&["progress", "doc.read"])).unwrap(), [Permission::DocRead, Permission::Progress]);
+        assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render", "progress"])).is_ok());
+        assert!(validate(Kind::Exporter, &list(&["progress", "export.write", "doc.read"])).is_ok());
+        assert!([Kind::Filter, Kind::Effect, Kind::Exporter].iter().all(|k| !Permission::implied(*k).contains(&Permission::Progress)));
         for (kind, names, says) in [
             (Kind::Filter, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
-            (Kind::Filter, &["progress"], "`progress` is reserved"),
+            (Kind::Filter, &["ui.panel"], "`ui.panel` is reserved"),
+            (Kind::Filter, &["progress", "progress"], "`progress` is listed twice"),
             (Kind::Filter, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),
             (Kind::Exporter, &["doc.read", "export.write", "doc.read"], "`doc.read` is listed twice"),
             (Kind::Effect, &["doc.read"], "needs the permission `effect.render`"),

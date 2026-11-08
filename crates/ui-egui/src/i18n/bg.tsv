@@ -5716,6 +5716,7 @@ axis	Y Axis	Y ос
 	Keep data of its own with the document	Съхраняване на собствени данни в документа
 	Change how the objects its effect is applied to are drawn	Промяна на начина, по който се рисуват обектите, към които е приложен ефектът му
 	Write the document as a file in its own format	Записване на документа като файл в собствен формат
+	Show its progress, see Cancel and write log lines	Показване на напредъка, разпознаване на отказ и записване на редове в дневника
 # Actions panel: action sets (#3712).
 	New Set…	Нов набор…
 	New Set	Нов набор

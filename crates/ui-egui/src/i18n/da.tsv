@@ -5731,6 +5731,7 @@ axis	Y Axis	Y-akse
 	Keep data of its own with the document	Gemme sine egne data med dokumentet
 	Change how the objects its effect is applied to are drawn	Ændre, hvordan de objekter, dens effekt er anvendt på, tegnes
 	Write the document as a file in its own format	Skrive dokumentet som en fil i sit eget format
+	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
 	New Set	Nyt sæt

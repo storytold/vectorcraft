@@ -5513,6 +5513,11 @@ axis	Y Axis	Y 軸
 	Keep data of its own with the document	独自のデータをドキュメントと一緒に保存
 	Change how the objects its effect is applied to are drawn	効果が適用されたオブジェクトの描画方法の変更
 	Write the document as a file in its own format	ドキュメントを独自形式のファイルとして書き出し
+	Show its progress, see Cancel and write log lines	進行状況の表示、キャンセルの検知、ログ行の書き込み
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	権限 `progress` にはプラグイン API レベル {PROGRESS_API} が必要です。`api` {PROGRESS_API} を指定してください
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	モジュールが `env.{name}` をホストと異なる型でインポートしています。ホストの型は {signature} です
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	モジュールが `env.{name}` をインポートしていますが、プラグインがこれを使用できるのはプラグイン API レベル {PROGRESS_API} (`api` {PROGRESS_API}) で権限 `progress` がある場合だけです
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	モジュールがホストの提供しない `{from}.{name}` をインポートしています。プラグインがインポートできるのは `env.vc_progress`、`env.vc_cancelled`、`env.vc_log` (プラグイン API レベル 2) だけで、WASI、ファイル、ネットワークは使用できません
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています

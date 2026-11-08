@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, Permission};
+use crate::permissions::{self, API_LEVEL, PROGRESS_API, Permission};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -307,8 +307,11 @@ impl Manifest {
         if !(1..=API_LEVEL).contains(&self.api) {
             return Err(Error::Manifest(format!("`api` is {}; this host implements plug-in API levels 1 to {API_LEVEL}", self.api)));
         }
-        if let Some(names) = &self.permissions {
-            permissions::validate(self.kind, names)?;
+        if let Some(names) = &self.permissions
+            && permissions::validate(self.kind, names)?.contains(&Permission::Progress)
+            && self.api < PROGRESS_API
+        {
+            return Err(Error::Manifest(format!("permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -649,12 +652,20 @@ mod tests {
         let exporter = Manifest::parse(br#"{"id":"a","name":"x","kind":"exporter","extensions":["plt"]}"#).unwrap();
         assert_eq!(exporter.permissions(), [Permission::DocRead, Permission::ExportWrite]);
         assert!(!Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","permissions":[]}"#).unwrap().asks_permissions());
+        // Level 2 adds `progress`, which only a level-2 manifest may list.
+        let level2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["progress","doc.read"]}"#).unwrap();
+        assert_eq!((level2.api, level2.permissions()), (2, vec![Permission::DocRead, Permission::Progress]));
+        assert_eq!(serde_json::to_value(&level2).unwrap()["api"], json!(2));
+        let plain2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2}"#).unwrap();
+        assert!(!plain2.permissions().contains(&Permission::Progress), "never implied");
         for (bad, says) in [
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["doc.read","net.fetch"]}"#, "unknown permission `net.fetch`"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["ui.panel"]}"#, "reserved"),
             (r#"{"id":"a","name":"x","kind":"effect","permissions":["doc.read"]}"#, "effect.render"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":"doc.read"}"#, "manifest"),
-            (r#"{"id":"a","name":"x","kind":"filter","api":2}"#, "`api` is 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),
         ] {
