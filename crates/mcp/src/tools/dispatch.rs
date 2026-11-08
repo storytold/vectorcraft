@@ -191,7 +191,11 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "screenshot" => screenshot(b, a),
         "open_file" => {
             let path = absolute_path(b, req_str(a, "path")?)?;
-            j(b.call("app.open", json!({"path": path}))?)
+            let mut p = json!({"path": path});
+            if let Some(importer) = a.get("importer").filter(|v| !v.is_null()) {
+                p["importer"] = importer.clone();
+            }
+            j(b.call("app.open", p)?)
         }
         "save_file" => {
             let mut p = json!({"path": a.get("path").and_then(Value::as_str).map(|p| absolute_path(b, p)).transpose()?});

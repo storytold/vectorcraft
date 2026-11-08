@@ -443,7 +443,10 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
                 None => ok(with_data(json!({"width": img.width, "height": img.height}), Some(&png))),
             }
         }
-        "app.open" => wrap(app.run("file.open", json!({"path": s("path")}))),
+        "app.open" => match p.get("importer").filter(|v| !v.is_null()) {
+            Some(importer) => wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer}))),
+            None => wrap(app.run("file.open", json!({"path": s("path")}))),
+        },
         "app.save" | "app.export" => {
             let mut p = if p.is_object() { p.clone() } else { json!({}) };
             // `wait: true`: the file is written before the reply, whatever Background Save and

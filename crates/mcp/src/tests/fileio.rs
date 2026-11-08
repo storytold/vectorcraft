@@ -415,3 +415,19 @@ fn document_color_mode_puts_rgb_greys_on_the_black_plate() {
     let bad = call_tool(&mut o, "run_command", &json!({"command": "file.documentColorMode", "params": {"mode": "rgb", "grays": "rich"}}));
     assert!(bad.is_error, "{bad:?}");
 }
+
+/// `open_file`'s `importer` reaches `document.open`: an SVG opens with the SVG reader without it,
+/// and naming an importer that isn't installed is an error that names it.
+#[test]
+fn open_file_passes_the_importer_on() {
+    let tools = tool_definitions();
+    let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
+    assert!(open["inputSchema"]["properties"].get("importer").is_some(), "{open}");
+    let svg = tmp("importer.svg");
+    std::fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="5" height="5"/></svg>"#).unwrap();
+    let mut h = Headless::new();
+    assert_eq!(text(&call_tool(&mut h, "open_file", &json!({"path": svg})))["format"], "svg");
+    let r = call_tool(&mut h, "open_file", &json!({"path": svg, "importer": "plugin.test.mcp.absent"}));
+    assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("test.mcp.absent"), "{r:?}");
+    assert_eq!(h.session.documents().len(), 1);
+}

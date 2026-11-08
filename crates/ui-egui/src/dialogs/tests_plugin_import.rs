@@ -68,6 +68,11 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     assert_eq!(r["format"], "plugin.test.ui.svgreader");
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0), "Open With: the importer");
     assert_eq!(app.session.documents().len(), 2);
+    // `app.open {importer}` (MCP's open_file) opens as Open With does.
+    let (req, _rx) = crate::control::ControlRequest::new("app.open", json!({"path": svg, "importer": "plugin.test.ui.svgreader"}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+    assert_eq!(r["result"]["format"], "plugin.test.ui.svgreader", "{r}");
+    assert_eq!(app.session.documents().len(), 3);
 
     // An importer is not a filter: Object › Plug-ins' command says where it is.
     let e = app.run("plugin.dialog", json!({"id": "test.ui.svgreader"})).unwrap_err();
