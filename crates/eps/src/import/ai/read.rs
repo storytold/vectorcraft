@@ -138,6 +138,7 @@ pub use document::{
     BindingRef, Brushes, PaletteSwatches, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
+pub(crate) use ops::read_art_style;
 pub use types::IMAGE_TOO_LARGE;
 use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
 #[cfg(test)]
@@ -146,6 +147,10 @@ pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
 mod legacy_text;
+
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
 
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]

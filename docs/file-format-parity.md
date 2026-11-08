@@ -18,7 +18,7 @@ from the public specifications, and users' own `.ai` files are used locally only
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 29 | missing: FreeHand, CorelDRAW, DWG, HEIC/HEIF, PICT, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 17 | missing: DWG, 3D (OBJ/USDA/glTF); extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -76,21 +76,42 @@ private editing data. VectorCraft:
   RGB or CMYK ink amounts, and their alpha channel) and linked images as placed files with their path, their folder
   relative to the document's and a preview; images that can't be decoded or have more than 33,554,432 pixels are
   written as their outlines filled mid gray, images of 16 bits a channel at 8 bits, and linked images in opacity
-  masks and pattern tiles as embedded images, each with a warning. Point type, area type (with its rows, columns,
+  masks, pattern tiles and symbols as embedded images, each with a warning. Every symbol is written as a symbol
+  definition (its art, its registration point and its place in the Symbols panel's order, nested symbols included)
+  and its instances as symbol instances with their matrix, name, hide, lock, opacity, blending mode and opacity
+  mask; instances with a fill, appearance changes, isolation, knockout or knockout shape of their own, instances of
+  symbols with 9-slice guides or pattern paint, instances in pattern tiles or in art cut to a clipping object,
+  instances scaled almost flat, instances that turn, mirror or scale symbols holding type, live objects,
+  instances written as their art, shapes with rounded live corners or strokes written as outlines or brush art,
+  instances that scale their symbol more than 100 times and instances on the layers of a large canvas are written as their art, pattern fills in a
+  symbol's art are written as their tiles cut to the shape, symbols past 4,096 are written only as their
+  instances' art, and symbols' 9-slice guides, export types and dynamic type are left out, each with a
+  warning. Paths, compound paths and groups with live effects keep them as art styles: the drawn look, the object
+  itself and the style it names, for a fill and a stroke at most in solid colors or the object's gradient (a stroke
+  with its variable-width profile), filled by the non-zero rule, with Drop Shadow, Inner Glow, Outer Glow, Feather,
+  Round Corners, Scribble, Convert to Shape, Offset Path, Outline Object or Outline Stroke, and groups with Pathfinder ›
+  Add. Groups keep them when their members are paths, compound paths or such groups, without effects of their own; when the
+  group's effects change its members' outlines, a member's strokes are plain lines, and its fills are not pattern
+  fills written as tiles or gradients that fit their object. The look holds the object's vector art, without the shadow, glow or feather. Other objects with
+  live effects are written as their vector art with their geometry effects applied, and their other effects, such as
+  Drop Shadow, the glows and Feather, are left out with a warning. Graphic styles and links to them are left out with a warning. No art style is written on a large
+  canvas.
+  Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
   scales, solid fills and strokes, capitals and paragraph alignment, indents, spacing and direction; other character
-  and paragraph attributes are left out with a warning. Type in opacity masks, pattern tiles and art cut to a
+  and paragraph attributes are left out with a warning. Type in opacity masks, pattern tiles, symbols and art cut to a
   clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type in an open frame,
   type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of
   type on a path, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
-  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, symbols, other clipping objects and live
+  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and live
   objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
   color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
   gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity
   and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
-  move, turn or scale their pattern, and effects other than geometry effects are left out.
+  move, turn or scale their pattern, and the effects of objects written without an art style, other than geometry
+  effects, are left out.
   The editing copy also holds the document's variables, data sets, the data set shown and the variables' lock as
   the variable library the reader reads, with the objects bound to visibility variables, the type bound to text
   variables and the linked images bound to image variables. Bindings to layers, to type written as outlines and to

@@ -3845,6 +3845,91 @@ proptest! {
         survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
     }
+
+    /// A `.ai` whose art styles, as the writer writes them, are damaged: the styles, the style
+    /// list, a styled object's drawn look, the object on `%_` lines and its `1 (style) XW`, cut
+    /// short or edited.
+    #[test]
+    fn ai_written_styles_never_panic(cut in 0usize..STYLES_FUZZ_CHARS, edits in prop::collection::vec((0usize..STYLES_FUZZ_CHARS, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'X', 'W'])), 0..12)) {
+        let text = mutate_text(styles_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai art styles", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai art styles, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+/// The range of [`ai_written_styles_never_panic`]'s cuts and edits: past the end of [`styles_text`].
+const STYLES_FUZZ_CHARS: usize = 64_000;
+
+/// The editing data VectorCraft writes for a document with a drop shadow on a path, a gradient fill
+/// and a width profile on others, a stroked even-odd path with an opacity mask and Pathfinder › Add
+/// on a group.
+fn styles_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+        use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
+        use vectorcraft_geom::{FillRule, Rect, shapes};
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let fx = |id: &str| vectorcraft_render::effects::new_effect(id, &json!({})).unwrap();
+        let mut ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::WHITE), 2.0);
+        ap.effects = vec![fx("stylize.dropShadow")];
+        let shaded = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap.clone());
+        doc.insert(Some(layer), usize::MAX, shaded).unwrap();
+        let ramp = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)]);
+        let mut graded = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(ramp))), Paint::None, 0.0);
+        graded.effects = vec![fx("stylize.outerGlow")];
+        let n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 50.0, 50.0, 90.0)), graded);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let mut tapered = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+        tapered.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 0.5), (1.0, 0.0, 1.0)] });
+        let profiled = Appearance { items: vec![AppearanceItem::Stroke(tapered)], effects: vec![fx("stylize.roundCorners")], contents_index: None };
+        let n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 150.0, 40.0)), profiled);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let mut stroked = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 2.0);
+        stroked.effects = vec![fx("stylize.dropShadow")];
+        let mut odd = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 50.0, 150.0, 90.0)), stroked);
+        if let NodeKind::Path { rule, .. } = &mut odd.kind {
+            *rule = FillRule::EvenOdd;
+        }
+        let mask_art = Node::path(
+            doc.alloc_id(),
+            shapes::rectangle(Rect::new(100.0, 50.0, 150.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::gray(0.0)), Paint::None, 0.0),
+        );
+        odd.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+        doc.insert(Some(layer), usize::MAX, odd).unwrap();
+        let square = |doc: &mut Document, x: f64| {
+            Node::path(
+                doc.alloc_id(),
+                shapes::rectangle(Rect::new(x, 50.0, x + 30.0, 80.0)),
+                Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+            )
+        };
+        let (a, b) = (square(&mut doc, 60.0), square(&mut doc, 80.0));
+        let mut merged = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(a), std::sync::Arc::new(b)]);
+        merged.appearance = Appearance { effects: vec![fx("pathfinder.add")], ..Appearance::default() }.into();
+        doc.insert(Some(layer), usize::MAX, merged).unwrap();
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_styles_never_panic`] damages, as it is, opens with its styles live, and the
+/// property's cuts and edits reach all of it.
+#[test]
+fn the_written_styles_fuzz_data_opens_live() {
+    let text = styles_text();
+    assert!(text.chars().count() < STYLES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI9_BeginArtStyles", "%AI5_BeginLayer", "\n6 () XW", "\n1 (Anon", "(BSLeftWidthsArray)", "0 /Bool (UseEvenOdd)", "Bb"] {
+        assert!(text.contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.iter().map(|n| n.appearance.effects.len()).collect::<Vec<_>>(), [1, 1, 1, 1, 1]);
 }
 
 /// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
