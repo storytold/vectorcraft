@@ -1230,7 +1230,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
     let selected = if defaults_only {
         vec![]
     } else {
-        match ids_param(p, "ids") {
+        match ids_param(p, "ids", C)? {
             Some(v) => outermost(&s.doc()?.doc, v),
             None => selected_roots(s)?,
         }

@@ -300,6 +300,13 @@
 	Apply Bullets	Zastosuj punktory
 	Numbered List	Lista numerowana
 	Apply Numbers	Zastosuj numerację
+	Bullets and Numbering…	Punktory i numeracja…
+	Numbers	Numery
+	Level:	Poziom:
+	Bullet Character:	Znak punktora:
+	Number Style:	Styl numeracji:
+	Left Indent:	Wcięcie z lewej:
+	First Line Indent:	Wcięcie pierwszego wiersza:
 	Convert to Text	Konwertuj na tekst
 	Filled Dot	Pełna kropka
 	Dash	Myślnik
@@ -1437,6 +1444,15 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ustawienia Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ustawienia Tate-chu-yoko
+	Composite Fonts…	Fonty złożone…
+	Composite Fonts	Fonty złożone
+	Export Composite Fonts	Eksportuj fonty złożone
+	Import Composite Fonts	Importuj fonty złożone
+	Delete Font	Usuń font
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Cyfry
+	Scale at Center	Skaluj od środka
 	Up/Down:	W górę/w dół:
 	Left/Right:	W lewo/w prawo:
 	Underline	Podkreślenie
@@ -4870,6 +4886,7 @@ imageTrace	Outline	Kontur
 @msg	an image VectorCraft can't read was left out	pominięto obraz, którego VectorCraft nie potrafi odczytać
 @msg	graphs come in as plain art, without their data or settings	wykresy są wczytywane jako zwykła grafika, bez ich danych i ustawień
 @msg	an image whose data is cut short was left out	pominięto obraz z uciętymi danymi
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	osadzony obraz o wymiarach {_1} × {_2} pikseli zmniejszono do {_3} × {_4} pikseli, aby zachować warstwy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst zmieniający kierunek pisania wewnątrz obiektu tekstowego otwiera się w kierunku swojego pierwszego znaku
@@ -4905,6 +4922,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	identyfikatory obiektów to nieujemne liczby całkowite, nie {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} musi być tablicą identyfikatorów obiektów, które są nieujemnymi liczbami całkowitymi
 @msg	invalid object id {value}: expected a non-negative integer	nieprawidłowy identyfikator obiektu {value}: oczekiwano nieujemnej liczby całkowitej
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} w `{key}` to {value}, a nie identyfikator obiektu (nieujemna liczba całkowita)
 @msg	no such object id {value}	brak obiektu o identyfikatorze {value}
 @msg	id {value} is a layer, not an object	identyfikator {value} oznacza warstwę, a nie obiekt
 @msg	id {value} is a layer, not an object; move layers with layer.move	identyfikator {value} oznacza warstwę, a nie obiekt; warstwy przenosi się za pomocą layer.move
@@ -5714,6 +5732,9 @@ axis	Y Axis	Oś Y
 	Install “{name}”, which asks for these permissions?	Zainstalować „{name}”, wtyczkę, która prosi o te uprawnienia?
 	ID: {id}	ID: {id}
 	Version: {version}	Wersja: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Zainstalować „{name}” zamiast wtyczki o tym samym ID?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Ten plik nie jest wtyczką zainstalowaną wcześniej z tym ID. Otrzyma ustawienia i pamięć podręczną przechowywane dla tego ID.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” to inny moduł niż wtyczka o ID {_1} i otrzymałby przechowywane dla niej ustawienia i pamięć podręczną: zainstaluj go z `replace: true`, gdy użytkownik się zgodzi
 	File SHA-256: {hash}	SHA-256 pliku: {hash}
 	Read the objects it is given	Odczytywać obiekty, które otrzymuje
 	Change, add and delete objects in the document	Zmieniać, dodawać i usuwać obiekty w dokumencie
@@ -5721,10 +5742,13 @@ axis	Y Axis	Oś Y
 	Change how the objects its effect is applied to are drawn	Zmieniać sposób rysowania obiektów, do których zastosowano jej efekt
 	Write the document as a file in its own format	Zapisywać dokument jako plik we własnym formacie
 	Show its progress, see Cancel and write log lines	Pokazywać swój postęp, wykrywać anulowanie i zapisywać wiersze dziennika
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	uprawnienie `progress` wymaga poziomu API wtyczek {PROGRESS_API}: podaj `api` {PROGRESS_API}
+	Keep settings of its own	Przechowywać własne ustawienia
+	Keep a cache of its own, which you can clear	Przechowywać własną pamięć podręczną, którą możesz wyczyścić
+	Clear Plug-in Cache	Wyczyść pamięć podręczną wtyczki
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	uprawnienie `{permission}` wymaga poziomu API wtyczek {PROGRESS_API}: podaj `api` {PROGRESS_API}
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	moduł importuje `env.{name}` z innym typem niż typ hosta: typ hosta to {signature}
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	moduł importuje `env.{name}`, którego wtyczka może używać tylko na poziomie API wtyczek {PROGRESS_API} (`api` {PROGRESS_API}) i z uprawnieniem `progress`
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	moduł importuje `{from}.{name}`, którego host nie udostępnia: wtyczka może importować tylko `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (poziom API wtyczek 2), bez WASI, plików i sieci
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	moduł importuje `env.{name}`, którego wtyczka może używać tylko na poziomie API wtyczek {PROGRESS_API} (`api` {PROGRESS_API}) i z uprawnieniem `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	moduł importuje `{from}.{name}`, którego host nie udostępnia: wtyczka może importować tylko funkcje `env.vc_*` wymienione w docs/plugins.md (poziom API wtyczek 2), bez WASI, plików i sieci
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` ma wartość {_1}; ten host obsługuje poziomy API wtyczek od 1 do {API_LEVEL}
 @msg	`grant` must be a list of permission names	`grant` musi być listą nazw uprawnień
 @msg	`grant` names an unknown permission `{shown}`	`grant` wymienia nieznane uprawnienie `{shown}`

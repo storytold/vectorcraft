@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fonts in Document",
             [],
             None,
-            "{selectionOnly?} (the type in the art of the symbols in scope included: all of the document's, or those the selected instances show) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font)",
+            "{selectionOnly?} (the type in the art of the symbols in scope included: all of the document's, or those the selected instances show) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font). For a composite font, status is the worst among the parts its characters are drawn in, and missingGlyphs counts the characters their part's font lacks",
             has_doc,
             fonts
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name, a composite font's as its own name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -208,7 +208,18 @@ pub(super) fn font_label((family, style, version): &UsedFont) -> String {
     }
 }
 
-/// The fonts (family, style, version) of the type in the layers and symbols of `d`.
+/// The fonts (family, style, version) run `r` is drawn in: its own, or, set in a composite font,
+/// the fonts of the parts its characters fall in ([`vectorcraft_text::FontDb::composite_fonts_for`]).
+pub(super) fn run_fonts(r: &TextRun) -> Vec<UsedFont> {
+    let parts = if r.inline.is_some() { None } else { vectorcraft_text::FontDb::global().composite_fonts_for(&r.style.font_family, &r.text) };
+    match parts {
+        Some(parts) => parts.into_iter().map(|(family, style)| (family, style, None)).collect(),
+        None => vec![font_of(&r.style)],
+    }
+}
+
+/// The fonts (family, style, version) the type in the layers and symbols of `d` is drawn in, a
+/// composite font's parts in place of its name ([`run_fonts`]).
 pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     art_fonts(d, &[])
 }
@@ -219,7 +230,7 @@ pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().map(|r| (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone())));
+            fonts.extend(t.runs.iter().flat_map(run_fonts));
         }
     };
     d.walk(&mut add);
@@ -344,7 +355,7 @@ impl Printed<'_> {
                     self.overflow.insert(n.id);
                 }
                 for r in runs {
-                    self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    self.fonts.extend(run_fonts(r));
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = &r.inline {
                         self.symbol(&art.symbol);
@@ -546,14 +557,15 @@ fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
     let symbols = if selected.is_some() { Some(selected_symbols(s, selected)?.0) } else { None };
     let mut texts: Vec<&TextObject> = ids.iter().filter_map(|id| text(d, *id)).collect();
     texts.extend(symbol_texts(d, symbols.as_ref()).into_iter().map(|(t, _)| t));
-    let mut found: BTreeMap<UsedFont, (usize, usize, String)> = BTreeMap::new();
+    // Each font's runs, objects and the text of its runs.
+    let mut found: BTreeMap<UsedFont, (usize, usize, Vec<&str>)> = BTreeMap::new();
     for t in texts {
         let mut seen = BTreeSet::new();
         for r in &t.runs {
             let font = (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone());
             let e = found.entry(font.clone()).or_default();
             e.0 += 1;
-            e.2.push_str(&r.text);
+            e.2.push(&r.text);
             if seen.insert(font) {
                 e.1 += 1;
             }
@@ -561,14 +573,27 @@ fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
     }
     let list: Vec<Value> = found
         .into_iter()
-        .map(|((family, style, version), (runs, objects, chars))| {
+        .map(|((family, style, version), (runs, objects, texts))| {
             // The face the type is set in: the version it names when that one is installed.
-            let resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
-            let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
-            let mut lacking: Vec<char> = chars.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
-            lacking.sort_unstable();
-            lacking.dedup();
-            lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+            let mut resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
+            let (status, lacking) = match db.composite_coverage(&family, &texts) {
+                // A composite font: each character is drawn by the font of the part it falls in, and
+                // the row names the face of the first part that isn't there as named.
+                Some(c) => {
+                    if c.status != vectorcraft_text::FontMatch::Exact {
+                        resolved = c.face.map(|f| (f, c.status));
+                    }
+                    (c.status, c.lacking)
+                }
+                None => {
+                    let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
+                    let mut lacking: Vec<char> = texts.concat().chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
+                    lacking.sort_unstable();
+                    lacking.dedup();
+                    lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+                    (status, lacking)
+                }
+            };
             let mut row = json!({
                 "family": family, "style": style, "runs": runs, "objects": objects,
                 "missing": status == vectorcraft_text::FontMatch::Missing,
@@ -612,10 +637,11 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     let (ff, fs) = font_param(p, "from", C)?;
     let (tf, ts) = font_param(p, "to", C)?;
     let db = vectorcraft_text::FontDb::global();
-    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans).
-    let tf = match db.resolve(&tf, ts.as_deref().unwrap_or("Regular")) {
-        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, format!("font family `{tf}` is not available"))),
+    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans), and a
+    // composite font as its own name.
+    let composite = db.composite_font(&tf).is_some();
+    let Some(tf) = db.stored_family(&tf, ts.as_deref().unwrap_or("Regular")) else {
+        return Err(bad(C, format!("font family `{tf}` is not available")));
     };
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
@@ -626,8 +652,10 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         if !matches(st) {
             return None;
         }
-        // An explicit style, else the closest the new family has to the old one.
-        let style = ts.clone().or_else(|| db.face(&tf, &st.font_style).map(|f| f.style.clone())).unwrap_or_else(|| st.font_style.clone());
+        // An explicit style, else the closest the new family has to the old one (a composite font's
+        // parts name their own styles: the run keeps its style).
+        let closest = || if composite { None } else { db.face(&tf, &st.font_style).map(|f| f.style.clone()) };
+        let style = ts.clone().or_else(closest).unwrap_or_else(|| st.font_style.clone());
         (st.font_family != tf || st.font_style != style || st.font_version.is_some() || !st.font_axes.is_empty()).then_some(style)
     };
     // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
@@ -674,7 +702,7 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                         // Another font: none of the old one's versions or Variable Font settings.
                         r.style.font_version = None;
                         r.style.font_axes.clear();
-                        set.insert(font_of(&r.style));
+                        set.extend(run_fonts(r));
                         changed = true;
                         n += 1;
                     }

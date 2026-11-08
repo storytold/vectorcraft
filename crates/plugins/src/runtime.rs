@@ -154,8 +154,9 @@ impl Plugin {
         let hash = crate::permissions::sha256_hex(bytes);
         let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
         let deadline = Deadline::new(p.limits.wall_time_ms);
-        // The manifest isn't read yet: every host import is linked, and what it reports is dropped.
-        let mut live = p.instantiate(Run::new("", false, false, deadline), true, &mut Report::default())?;
+        // The manifest isn't read yet: every host import is linked, what it reports is dropped and
+        // there is no storage to reach.
+        let mut live = p.instantiate(Run::new("", false, false, deadline), &crate::permissions::ALL, &mut Report::default())?;
         let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
         let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
         if v != ABI_VERSION {
@@ -215,9 +216,9 @@ impl Plugin {
         self.serial = serial;
     }
 
-    /// A new instance for `run`, with the host imports linked when `granted`. When the module's
-    /// start function fails, what it reported through the host imports goes to `report`.
-    fn instantiate(&self, run: Run, granted: bool, report: &mut Report) -> Result<Live> {
+    /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
+    /// module's start function fails, what it reported through the host imports goes to `report`.
+    fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
         let limits =
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
         let mut store = Store::new(&self.engine, Host { limits, run });
@@ -287,7 +288,8 @@ impl Plugin {
     }
 
     /// [`Plugin::run_limited`], and what the run reported through the host imports: its last
-    /// progress report and its log lines, which also go to the app's log under its id. Inside a
+    /// progress report and its log lines, which also go to the app's log under its id. Its storage
+    /// imports reach the storage of its id ([`crate::registry::storage`]). Inside a
     /// [`vectorcraft_doc::cancel::scope`] its progress goes to the scope's sink (a live effect's
     /// doesn't) and `vc_cancelled` sees the scope's Cancel.
     pub fn run_reporting(&self, input: &[u8], params: &[u8], limits: &Limits) -> (Result<Vec<u8>>, Report) {
@@ -306,8 +308,8 @@ impl Plugin {
         total.ok_or_else(|| Error::Limit("memory budget (the selection is too large to hand over)".into()))?;
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
-        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline);
-        let mut live = self.instantiate(run, m.permissions().contains(&Permission::Progress), report)?;
+        let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
+        let mut live = self.instantiate(run, &m.permissions(), report)?;
         let out = self.run_live(&mut live, input, params, limits, &deadline);
         *report = std::mem::take(&mut live.store.data_mut().run.report);
         out
