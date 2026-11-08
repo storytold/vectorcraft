@@ -2026,6 +2026,11 @@ already walks Image Trace. Short agent entry points:
   `view.livePaintGaps` (View › Show Live Paint Gaps, or Hide Live Paint Gaps while it is on) turns the drawing of
   those gaps on or off. While it is on and edges show, the canvas draws the gaps of each selected Live Paint group in
   that group's Gap Preview Color. The reply is the new state (`true` when on).
+  `view.missingLinks {on?}` (View › Show Missing Links, also in the Links panel menu; #5547) turns on (`true`), off
+  (`false`) or over (omitted) a red outline and ? badge on each visible linked image and placed document whose file
+  can't be found (`links.list` status `missing`). The markers are drawn on the canvas only: never printed, exported,
+  saved, selectable or undoable. The files are looked at again every 2 s while it is on. The reply is
+  `{on, marked: [ids]}`; pass the current state as `on` to ask which images are marked.
   The Live Paint Selection tool's options (`tool.setOption {tool: "livePaintSelection", values}`; double-clicking the
   tool opens them, dialog `livePaintSelectionOptions`) are `selectFills` and `selectStrokes` (both on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the highlight's width, 1 to 20 screen

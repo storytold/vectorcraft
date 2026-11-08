@@ -1278,6 +1278,8 @@ file-filter	Templates	Vorlagen
 	Close Gaps With Paths	Lücken mit Pfaden schließen
 	Show Live Paint Gaps	Lücken beim interaktiven Malen einblenden
 	Hide Live Paint Gaps	Lücken beim interaktiven Malen ausblenden
+	Show Missing Links	Fehlende Verknüpfungen einblenden
+	Hide Missing Links	Fehlende Verknüpfungen ausblenden
 	Select Fills	Flächen auswählen
 	Select Strokes	Konturen auswählen
 	Paint Fills	Flächen malen

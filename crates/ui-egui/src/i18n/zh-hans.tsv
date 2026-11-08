@@ -1246,6 +1246,8 @@ file-filter	Templates	模板
 	Close Gaps With Paths	用路径封闭间隙
 	Show Live Paint Gaps	显示实时上色间隙
 	Hide Live Paint Gaps	隐藏实时上色间隙
+	Show Missing Links	显示缺失的链接
+	Hide Missing Links	隐藏缺失的链接
 	Select Fills	选择填色
 	Select Strokes	选择描边
 	Paint Fills	为填色上色

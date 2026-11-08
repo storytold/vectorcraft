@@ -1614,6 +1614,8 @@ file-filter	Templates	Sablonok
 	Close Gaps With Paths	Hézagok lezárása útvonalakkal
 	Show Live Paint Gaps	Élő festés hézagainak megjelenítése
 	Hide Live Paint Gaps	Élő festés hézagainak elrejtése
+	Show Missing Links	Hiányzó csatolások megjelenítése
+	Hide Missing Links	Hiányzó csatolások elrejtése
 	Select Fills	Kitöltések kijelölése
 	Select Strokes	Körvonalak kijelölése
 	Paint Fills	Kitöltések festése

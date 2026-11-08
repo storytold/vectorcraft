@@ -1290,6 +1290,8 @@ font-technology	Variable	Variables
 	Close Gaps With Paths	Fermer les espaces avec des tracés
 	Show Live Paint Gaps	Afficher les espaces de peinture dynamique
 	Hide Live Paint Gaps	Masquer les espaces de peinture dynamique
+	Show Missing Links	Afficher les liens manquants
+	Hide Missing Links	Masquer les liens manquants
 	Select Fills	Sélectionner les fonds
 	Select Strokes	Sélectionner les contours
 	Paint Fills	Peindre les fonds

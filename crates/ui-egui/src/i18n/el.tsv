@@ -1219,6 +1219,8 @@ font-technology	Variable	Μεταβλητές
 	Close Gaps With Paths	Κλείσιμο διακένων με διαδρομές
 	Show Live Paint Gaps	Εμφάνιση διακένων δυναμικής βαφής
 	Hide Live Paint Gaps	Απόκρυψη διακένων δυναμικής βαφής
+	Show Missing Links	Εμφάνιση συνδέσμων που λείπουν
+	Hide Missing Links	Απόκρυψη συνδέσμων που λείπουν
 	Select Fills	Επιλογή γεμισμάτων
 	Select Strokes	Επιλογή περιγραμμάτων
 	Paint Fills	Βαφή γεμισμάτων

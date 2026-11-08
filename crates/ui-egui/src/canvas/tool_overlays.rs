@@ -153,6 +153,37 @@ pub(super) fn live_paint_gap_overlays(app: &mut VectorcraftApp) -> Vec<Overlay> 
     gaps.to_vec()
 }
 
+/// View › Show Missing Links (#5547): a red outline round the bounds of each image and placed
+/// document whose file can't be found ([`crate::addons::select::link_status::marked`]), with the
+/// Links panel's red ? badge on its top left corner. Drawn on the canvas only: never in the art.
+/// Nothing is drawn while the view is off or the Revolve gizmo is being edited.
+pub(super) fn missing_link_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf, t: &Tokens) {
+    if !app.ui.view.missing_links || app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active) {
+        return;
+    }
+    let Some(st) = app.session.active() else { return };
+    let clip = p.clip_rect();
+    for id in crate::addons::select::link_status::marked(app) {
+        let Some(b) = st.doc.oriented_bounds(&[vectorcraft_doc::NodeId(id)], false) else { continue };
+        let to_doc = b.to_doc();
+        let r = b.rect;
+        let corners: Vec<Pos2> = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)]
+            .map(|c| xf.to_screen(to_doc * c))
+            .to_vec();
+        if !egui::Rect::from_points(&corners).expand(MISSING_BADGE_R).intersects(clip) {
+            continue;
+        }
+        p.add(Shape::closed_line(corners.clone(), Stroke::new(2.0, t.error)));
+        // The badge on the corner the box starts from (top left, square to the page).
+        let Some(&c) = corners.first() else { continue };
+        p.circle_filled(c, MISSING_BADGE_R, t.error);
+        p.text(c, egui::Align2::CENTER_CENTER, "?", crate::theme::semibold(11.0), Color32::WHITE);
+    }
+}
+
+/// The radius of View › Show Missing Links' badge (screen points).
+const MISSING_BADGE_R: f32 = 8.0;
+
 /// Simplify's Show Original Path: the paths its preview ran on, as they were before it, in a band
 /// 3 screen points wide of their layer's color at 40%, under the selection's outlines. Nothing is drawn
 /// when they have more than [`OVERLAY_MAX_ANCHORS`] anchor points.

@@ -1516,6 +1516,8 @@ file-filter	Templates	Mẫu
 	Close Gaps With Paths	Đóng khoảng cách bằng đường dẫn
 	Show Live Paint Gaps	Hiện khoảng cách tô trực tiếp
 	Hide Live Paint Gaps	Ẩn khoảng cách tô trực tiếp
+	Show Missing Links	Hiện liên kết bị thiếu
+	Hide Missing Links	Ẩn liên kết bị thiếu
 	Select Fills	Chọn vùng tô
 	Select Strokes	Chọn nét
 	Paint Fills	Tô vùng tô

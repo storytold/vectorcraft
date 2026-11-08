@@ -50,12 +50,21 @@ pub struct Present {
     key: Option<(u64, u64)>,
     at: f64,
     pub has: [bool; 4],
+    /// The ids of the images and placed documents whose file can't be found (View › Show Missing
+    /// Links marks them).
+    pub missing: Vec<u64>,
 }
 
 /// The statuses the `links.list` result `list` holds, in [`STATUSES`] order.
 pub(crate) fn statuses_in(list: &Value) -> [bool; 4] {
     let rows = list["links"].as_array().map_or(&[][..], Vec::as_slice);
     STATUSES.map(|(status, ..)| rows.iter().any(|r| command_status(r) == status))
+}
+
+/// The ids of the `links.list` result `list`'s missing images and placed documents.
+pub(crate) fn missing_in(list: &Value) -> Vec<u64> {
+    let rows = list["links"].as_array().map_or(&[][..], Vec::as_slice);
+    rows.iter().filter(|r| command_status(r) == "missing").filter_map(|r| r["id"].as_u64()).collect()
 }
 
 /// The status of a `links.list` row as the command names it (`ok` is `linked`).
@@ -79,8 +88,43 @@ pub fn refresh(app: &mut VectorcraftApp, now: f64) {
     if !due {
         return;
     }
-    let has = if key.is_some() { app.session.execute("links.list", &json!({})).map(|l| statuses_in(&l)).unwrap_or_default() } else { [false; 4] };
-    app.ui.link_statuses = Present { key, at: now, has };
+    let list = if key.is_some() { app.session.execute("links.list", &json!({})).unwrap_or_default() } else { Value::Null };
+    app.ui.link_statuses = Present { key, at: now, has: statuses_in(&list), missing: missing_in(&list) };
+}
+
+/// Seconds until [`refresh`] looks at the files again while View › Show Missing Links is on and the
+/// document has linked files: an idle window is woken for it, so a marker shows when a file goes
+/// missing (or is found again).
+pub fn wake_after(app: &VectorcraftApp) -> Option<f64> {
+    let p = &app.ui.link_statuses;
+    let linked = p.has.iter().zip(STATUSES).any(|(on, (status, ..))| *on && status != "embedded");
+    (app.ui.view.missing_links && linked).then_some(RECHECK)
+}
+
+/// The images and placed documents View › Show Missing Links marks: the visible ones whose file
+/// can't be found, none while it is off.
+pub fn marked(app: &VectorcraftApp) -> Vec<u64> {
+    let Some(st) = app.session.active().filter(|_| app.ui.view.missing_links) else { return vec![] };
+    let p = &app.ui.link_statuses;
+    if p.key.map(|k| k.0) != Some(st.uid) {
+        return vec![];
+    }
+    p.missing.iter().copied().filter(|id| st.doc.is_visible(vectorcraft_doc::NodeId(*id))).collect()
+}
+
+/// `view.missingLinks`: turn the markers on (`on: true`), off (`on: false`) or over (no `on`) →
+/// `{on, marked: [ids]}`. The statuses are read again at once, so `marked` is up to date.
+pub(crate) fn show_missing(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let on = match p.get("on") {
+        None | Some(Value::Null) => !app.ui.view.missing_links,
+        Some(v) => v.as_bool().ok_or("view.missingLinks: on must be true or false")?,
+    };
+    app.ui.view.missing_links = on;
+    // Read the statuses now: the next frame's refresh may be up to RECHECK seconds away.
+    app.ui.link_statuses.key = None;
+    let now = app.ui.link_statuses.at;
+    refresh(app, now);
+    Ok(json!({ "on": on, "marked": marked(app) }))
 }
 
 /// Is menu item `status` (a [`STATUSES`] value) on: does an image or placed document have it?

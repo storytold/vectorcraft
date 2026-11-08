@@ -1255,6 +1255,8 @@ font-technology	Variable	Variabla
 	Close Gaps With Paths	Stäng mellanrum med banor
 	Show Live Paint Gaps	Visa mellanrum i direktmålning
 	Hide Live Paint Gaps	Dölj mellanrum i direktmålning
+	Show Missing Links	Visa saknade länkar
+	Hide Missing Links	Dölj saknade länkar
 	Select Fills	Markera fyllningar
 	Select Strokes	Markera konturer
 	Paint Fills	Måla fyllningar
