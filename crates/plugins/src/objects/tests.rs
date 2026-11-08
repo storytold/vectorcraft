@@ -366,7 +366,7 @@ fn legacy_filter_input_bytes_are_unchanged() {
     assert_eq!(filter_targets(&d, &[layer]), ids);
     assert_eq!(filter_targets_with(&d, &[layer], &[]), ids);
     let every: Vec<NodeId> = ids.iter().copied().chain([text, embedded, linked, star, ghost]).collect();
-    let (bytes, read_only) = encode_input_with(&d, &every, &[]);
+    let (bytes, read_only) = encode_input_with(&d, &every, &[], usize::MAX).unwrap();
     assert_eq!(bytes, encode_input(&d, &ids), "the other objects are left out");
     assert!(read_only.is_empty());
     let all = filter_targets_with(&d, &[layer], &InputKind::ALL);
@@ -377,7 +377,7 @@ fn legacy_filter_input_bytes_are_unchanged() {
     d.node_mut(text).unwrap().visible = false;
     d.node_mut(star).unwrap().locked = true;
     assert_eq!(filter_targets_with(&d, &[layer], &InputKind::ALL), [&ids[..], &[embedded, linked, ghost]].concat());
-    let (bytes, read_only) = encode_input_with(&d, &all, &[InputKind::SymbolInstance]);
+    let (bytes, read_only) = encode_input_with(&d, &all, &[InputKind::SymbolInstance], usize::MAX).unwrap();
     let v: Value = serde_json::from_slice(&bytes).unwrap();
     let types: Vec<&str> = v["objects"].as_array().unwrap().iter().map(|o| o["type"].as_str().unwrap()).collect();
     assert_eq!(types, ["path", "path", "path", "symbolInstance", "symbolInstance"]);
@@ -485,10 +485,11 @@ fn input_totals_cover_images_and_type_in_order() {
     };
     let (text2, image2, image3) = (copy(&mut d, text), copy(&mut d, embedded), copy(&mut d, embedded));
     let one = encode_read_only(&d, d.node(text).unwrap()).unwrap();
-    let size: usize = ["runs", "paragraphs"].iter().flat_map(|k| one["text"][k].as_array().unwrap()).map(|v| v.to_string().len()).sum();
+    // The runs and paragraphs with the commas between them, without their brackets.
+    let size: usize = ["runs", "paragraphs"].iter().map(|k| one["text"][k].to_string().len() - 2).sum();
     // A 2 × 1 image is 12 characters of base64: two fit 30, the third doesn't.
     let ids = [text, text2, embedded, image2, image3];
-    let (bytes, read_only) = encode_input_within(&d, &ids, &InputKind::ALL, Allowance { pixels: 30, text: size });
+    let (bytes, read_only) = encode_input_within(&d, &ids, &InputKind::ALL, Allowance { pixels: 30, text: size, input: usize::MAX }).unwrap();
     let v: Value = serde_json::from_slice(&bytes).unwrap();
     let objects = v["objects"].as_array().unwrap();
     assert_eq!(objects.len(), 5);
@@ -500,9 +501,47 @@ fn input_totals_cover_images_and_type_in_order() {
         assert_eq!(Some(o), read_only.get(&NodeId(o["id"].as_u64().unwrap())));
     }
     // Within the full totals every one of them is given.
-    let (bytes, _) = encode_input_with(&d, &ids, &InputKind::ALL);
+    let (bytes, _) = encode_input_with(&d, &ids, &InputKind::ALL, usize::MAX).unwrap();
     let all = String::from_utf8(bytes).unwrap();
     assert!(!all.contains("\"pixelsOmitted\":true") && !all.contains("\"truncated\":true"), "{all}");
+}
+
+/// Every object counts toward the input's capacity in order, its id, bounds, transform and name
+/// included: a symbol instance before type leaves the type less room, so text that fits the exact
+/// size of the whole input comes with `truncated` one byte under it, and an image's pixels are
+/// omitted the same way.
+#[test]
+fn object_fields_count_toward_the_input_capacity() {
+    let (d, ids, _, [text, embedded, _, star, _]) = mixed();
+    for (order, flag) in [([ids[0], star, text], "truncated"), ([ids[0], star, embedded], "pixelsOmitted")] {
+        let (bytes, _) = encode_input_with(&d, &order, &InputKind::ALL, usize::MAX).unwrap();
+        let (exact, _) = encode_input_with(&d, &order, &InputKind::ALL, bytes.len()).unwrap();
+        assert_eq!(exact, bytes, "{flag}: the exact size fits");
+        let (under, _) = encode_input_with(&d, &order, &InputKind::ALL, bytes.len() - 1).unwrap();
+        let v: Value = serde_json::from_slice(&under).unwrap();
+        assert_eq!(v["objects"][2][flag], json!(true), "{flag}: one byte under");
+        assert!(under.len() < bytes.len() - 1, "{flag}");
+    }
+}
+
+/// A read-only object whose fields other than its pixels and text alone don't fit what is left of
+/// the input fails the run with a limit naming it and its size, rather than being left out.
+#[test]
+fn an_object_too_large_to_give_is_a_limit_naming_it() {
+    let (mut d, ids, _, [_, _, linked, star, _]) = mixed();
+    d.node_mut(linked).unwrap().name = Some("n".repeat(4096));
+    let (fits, _) = encode_input_with(&d, &[ids[0], star], &InputKind::ALL, usize::MAX).unwrap();
+    let order = [ids[0], star, linked];
+    let e = encode_input_with(&d, &order, &InputKind::ALL, fits.len() + 4096).unwrap_err();
+    assert!(matches!(e, Error::Limit(_)), "{e}");
+    // Measured with `pixelsOmitted` false and a comma before it.
+    let mut o = encode_read_only(&d, d.node(linked).unwrap()).unwrap();
+    o["pixelsOmitted"] = json!(false);
+    let size = o.to_string().len() + 1;
+    assert_eq!(e.to_string(), format!("plug-in exceeded its memory budget (object {} needs {size} bytes of input, 4096 left)", linked.0));
+    // A filter that doesn't list its kind is given the rest.
+    let (bytes, read_only) = encode_input_with(&d, &order, &[InputKind::SymbolInstance], fits.len() + 4096).unwrap();
+    assert_eq!((bytes, read_only.len()), (fits, 1));
 }
 
 /// A field a plug-in adds to a read-only object is named in the refusal with its control and
@@ -511,7 +550,7 @@ fn input_totals_cover_images_and_type_in_order() {
 fn a_changed_field_is_named_escaped_and_short() {
     let (d, _, layer, [text, ..]) = mixed();
     let targets = filter_targets_with(&d, &[layer], &[InputKind::Type]);
-    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type]);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
     let mut v: Value = serde_json::from_slice(&bytes).unwrap();
     let at = v["objects"].as_array().unwrap().iter().position(|o| o["id"] == json!(text.0)).unwrap();
     let key = format!("\u{202E}{}", "k".repeat(500));
@@ -530,7 +569,7 @@ fn a_changed_field_is_named_escaped_and_short() {
 fn read_only_kind_field_and_omission_refuse() {
     let (mut d, ids, layer, [text, embedded, linked, star, ghost]) = mixed();
     let targets = filter_targets_with(&d, &[layer], &InputKind::ALL);
-    let (bytes, read_only) = encode_input_with(&d, &targets, &InputKind::ALL);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &InputKind::ALL, usize::MAX).unwrap();
     assert_eq!(read_only.len(), 5);
     let input: Value = serde_json::from_slice(&bytes).unwrap();
     let before = d.clone();

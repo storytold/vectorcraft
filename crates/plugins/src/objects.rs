@@ -178,60 +178,80 @@ pub fn encode(n: &Node) -> Option<Value> {
 /// The input document of a filter run: `{"objects": [...]}` for `ids` (paths and compound paths;
 /// others are left out).
 pub fn encode_input(doc: &Document, ids: &[NodeId]) -> Vec<u8> {
-    encode_input_with(doc, ids, &[]).0
+    encode_input_with(doc, ids, &[], usize::MAX).map(|(bytes, _)| bytes).unwrap_or_default()
 }
 
 /// [`encode_input`] for a filter that asks for `kinds` too: objects of those kinds among `ids` are
 /// in it as [`encode_read_only`] gives them, within [`MAX_INPUT_PIXELS_TOTAL`] and
-/// [`MAX_INPUT_TEXT_TOTAL`] over all of them in order. Also returns those objects by id, which the
-/// filter must return as they were ([`decode_output_with`]).
-pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind]) -> (Vec<u8>, HashMap<NodeId, Value>) {
-    encode_input_within(doc, ids, kinds, Allowance::FULL)
+/// [`MAX_INPUT_TEXT_TOTAL`] over all of them in order, and within `capacity`, the most bytes the
+/// input may be. Every object counts toward `capacity` in order, ids, bounds, transforms and names
+/// included: pixels or text that don't fit what is left are omitted (`pixelsOmitted`,
+/// `truncated`), and a read-only object whose other fields alone don't fit is an
+/// [`Error::Limit`] naming it and its size. Also returns those objects by id, which the filter
+/// must return as they were ([`decode_output_with`]).
+pub fn encode_input_with(doc: &Document, ids: &[NodeId], kinds: &[InputKind], capacity: usize) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
+    encode_input_within(doc, ids, kinds, Allowance { input: capacity.saturating_sub(EMPTY_INPUT.len()), ..Allowance::FULL })
 }
 
-/// What an input's images and type may still be given of its totals, as its objects are encoded in
-/// order: characters of base64 for pixels, bytes of JSON for runs and paragraphs.
+/// The input with no objects; each object adds its JSON and a comma.
+const EMPTY_INPUT: &[u8] = b"{\"objects\":[]}";
+
+/// What an input's objects may still be given of its totals, as they are encoded in order:
+/// characters of base64 for pixels, bytes of JSON for runs and paragraphs, and bytes of the whole
+/// input.
 #[derive(Clone, Copy, Debug)]
 struct Allowance {
     pixels: usize,
     text: usize,
+    input: usize,
 }
 
 impl Allowance {
-    const FULL: Allowance = Allowance { pixels: MAX_INPUT_PIXELS_TOTAL, text: MAX_INPUT_TEXT_TOTAL };
+    const FULL: Allowance = Allowance { pixels: MAX_INPUT_PIXELS_TOTAL, text: MAX_INPUT_TEXT_TOTAL, input: usize::MAX };
 }
 
 /// [`encode_input_with`] within `left` of the totals. Each read-only object is kept once, in the map
 /// it returns, and written into the input from there.
-fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut left: Allowance) -> (Vec<u8>, HashMap<NodeId, Value>) {
+fn encode_input_within(doc: &Document, ids: &[NodeId], kinds: &[InputKind], mut left: Allowance) -> Result<(Vec<u8>, HashMap<NodeId, Value>)> {
     let mut read_only = HashMap::new();
     let symbols = doc.symbol_boxes();
     let mut out = b"{\"objects\":[".to_vec();
     let mut first = true;
     for n in ids.iter().filter_map(|id| doc.node(*id)) {
         let path;
-        let o: &Value = match input_kind(n).filter(|k| kinds.contains(k)) {
-            Some(_) => match encode_read_only_within(doc, n, &symbols, &mut left) {
-                Some(o) => read_only.entry(n.id).insert_entry(o).into_mut(),
+        let (o, checked): (&Value, bool) = match input_kind(n).filter(|k| kinds.contains(k)) {
+            Some(_) => match encode_read_only_within(doc, n, &symbols, &mut left)? {
+                Some(o) => (read_only.entry(n.id).insert_entry(o).into_mut(), true),
                 None => continue,
             },
             None => match encode(n) {
                 Some(o) => {
                     path = o;
-                    &path
+                    (&path, false)
                 }
                 None => continue,
             },
         };
+        let start = out.len();
         if !std::mem::take(&mut first) {
             out.push(b',');
         }
         if serde_json::to_writer(&mut out, o).is_err() {
-            return (Vec::new(), HashMap::new());
+            return Ok((Vec::new(), HashMap::new()));
         }
+        let size = out.len() - start;
+        if checked && size > left.input {
+            return Err(too_large(n, size, left.input));
+        }
+        left.input = left.input.saturating_sub(size);
     }
     out.extend_from_slice(b"]}");
-    (out, read_only)
+    Ok((out, read_only))
+}
+
+/// The error for read-only object `n`, which needs `size` bytes of input where `left` are left.
+fn too_large(n: &Node, size: usize, left: usize) -> Error {
+    Error::Limit(format!("memory budget (object {} needs {size} bytes of input, {left} left)", n.id.0))
 }
 
 /// The kind of read-only object `n` is: type, an image or a symbol instance (`None` for others).
@@ -263,37 +283,34 @@ fn affine_json(xf: Affine) -> Value {
 ///   the document has no such symbol, and `overrides: {}`.
 pub fn encode_read_only(doc: &Document, n: &Node) -> Option<Value> {
     let mut left = Allowance::FULL;
-    encode_read_only_within(doc, n, &doc.symbol_boxes(), &mut left)
+    encode_read_only_within(doc, n, &doc.symbol_boxes(), &mut left).ok().flatten()
 }
+
+/// The bytes the `pixelsBase64` key adds to an image's JSON besides the base64 itself.
+const PIXELS_KEY: usize = ",\"pixelsBase64\":\"\"".len();
 
 /// [`encode_read_only`] measuring symbol instances from `symbols`, a cache shared across the
 /// objects of one input, and taking the pixels and text it gives from `left`: pixels or text that
-/// don't fit what is left are omitted (`pixelsOmitted`, `truncated`), and an image's size is
-/// checked against it before anything is decoded.
-fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left: &mut Allowance) -> Option<Value> {
-    let mut o = json!({"id": n.id.0, "type": input_kind(n)?.name(), "bounds": rect_json(doc.bounds_of_with(&[n.id], false, symbols))});
+/// don't fit what is left of their totals or of the input are omitted (`pixelsOmitted`,
+/// `truncated`), and an image's size is checked against it before anything is decoded. The object's
+/// other fields are measured first, with a comma before it: when they alone don't fit what is left
+/// of the input, it is an [`Error::Limit`] naming the object and that size.
+fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left: &mut Allowance) -> Result<Option<Value>> {
+    let Some(kind) = input_kind(n) else { return Ok(None) };
+    let mut o = json!({"id": n.id.0, "type": kind.name(), "bounds": rect_json(doc.bounds_of_with(&[n.id], false, symbols))});
+    // Each flag is measured as `false`, its longer value.
     match &n.kind {
         NodeKind::Text(t) => {
             o["transform"] = affine_json(t.xf);
-            let (text, truncated) = text_json(t, &mut left.text);
-            o["text"] = text;
-            o["truncated"] = json!(truncated);
+            o["text"] = text_json(t, None).0;
+            o["truncated"] = json!(false);
         }
         NodeKind::Image(im) => {
             o["transform"] = affine_json(im.xf);
-            let linked = im.link.is_some();
-            let blob = doc.image_blob(im);
-            // A linked image's pixels are its file's: never given (nor its path).
-            let pixels = blob.filter(|_| !linked).and_then(|b| rgba_pixels(b, im.width, im.height, MAX_INPUT_PIXELS.min(left.pixels)));
             o["pixelSize"] = json!([im.width, im.height]);
-            o["colorMode"] = json!(blob.map_or("unknown", color_mode));
-            o["linked"] = json!(linked);
-            o["pixelsOmitted"] = json!(pixels.is_none());
-            if let Some(p) = pixels {
-                let b64 = craft_vectorcraft_format::base64::encode(&p);
-                left.pixels = left.pixels.saturating_sub(b64.len());
-                o["pixelsBase64"] = json!(b64);
-            }
+            o["colorMode"] = json!(doc.image_blob(im).map_or("unknown", color_mode));
+            o["linked"] = json!(im.link.is_some());
+            o["pixelsOmitted"] = json!(false);
         }
         NodeKind::SymbolInstance { symbol, xf } => {
             o["transform"] = affine_json(*xf);
@@ -303,37 +320,69 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
             }
             o["overrides"] = json!({});
         }
-        _ => return None,
+        _ => return Ok(None),
     }
     if let Some(name) = &n.name {
         o["name"] = json!(name);
     }
-    Some(o)
+    let fields = serde_json::to_vec(&o).map_or(usize::MAX, |b| b.len()).saturating_add(1);
+    if fields > left.input {
+        return Err(too_large(n, fields, left.input));
+    }
+    let room = left.input - fields;
+    match &n.kind {
+        NodeKind::Text(t) => {
+            let mut budget = left.text.min(room);
+            let (text, truncated) = text_json(t, Some(&mut budget));
+            left.text -= left.text.min(room) - budget;
+            o["text"] = text;
+            o["truncated"] = json!(truncated);
+        }
+        NodeKind::Image(im) => {
+            let blob = doc.image_blob(im);
+            let max = MAX_INPUT_PIXELS.min(left.pixels).min(room.saturating_sub(PIXELS_KEY));
+            // A linked image's pixels are its file's: never given (nor its path).
+            let pixels = blob.filter(|_| im.link.is_none()).and_then(|b| rgba_pixels(b, im.width, im.height, max));
+            o["pixelsOmitted"] = json!(pixels.is_none());
+            if let Some(p) = pixels {
+                let b64 = craft_vectorcraft_format::base64::encode(&p);
+                left.pixels = left.pixels.saturating_sub(b64.len());
+                o["pixelsBase64"] = json!(b64);
+            }
+        }
+        _ => {}
+    }
+    Ok(Some(o))
 }
 
 /// The text of type `t` as a filter reads it, and whether it was too long to give
 /// ([`MAX_INPUT_TEXT`], [`MAX_INPUT_RUNS`], or more bytes of JSON than `left`, which what it gives
-/// is taken from).
-fn text_json(t: &TextObject, left: &mut usize) -> (Value, bool) {
+/// is taken from, with the commas between them). With `left` `None`, its kind and direction with no
+/// runs or paragraphs.
+fn text_json(t: &TextObject, left: Option<&mut usize>) -> (Value, bool) {
     let kind = match t.kind {
         TextKind::Point => "point",
         TextKind::Area { .. } => "area",
         TextKind::OnPath { .. } => "path",
     };
-    let bytes = t.runs.iter().fold(0usize, |n, r| n.saturating_add(r.text.len()));
-    let paragraphs = t.paragraph_count();
-    // The text alone is never more bytes than its JSON, so type that can't fit isn't built.
-    let mut truncated = bytes > MAX_INPUT_TEXT.min(*left) || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
     let (mut runs, mut paras): (Vec<Value>, Vec<Value>) = (Vec::new(), Vec::new());
-    if !truncated {
-        let value = |v: std::result::Result<Value, serde_json::Error>| v.unwrap_or(Value::Null);
-        runs = t.runs.iter().map(|r| value(serde_json::to_value(r))).collect();
-        paras = (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect();
-        let size = runs.iter().chain(&paras).fold(0usize, |n, v| n.saturating_add(serde_json::to_vec(v).map_or(usize::MAX, |b| b.len())));
-        match left.checked_sub(size) {
-            Some(rest) => *left = rest,
-            None => {
-                (runs, paras, truncated) = (Vec::new(), Vec::new(), true);
+    let mut truncated = false;
+    if let Some(left) = left {
+        let bytes = t.runs.iter().fold(0usize, |n, r| n.saturating_add(r.text.len()));
+        let paragraphs = t.paragraph_count();
+        // The text alone is never more bytes than its JSON, so type that can't fit isn't built.
+        truncated = bytes > MAX_INPUT_TEXT.min(*left) || t.runs.len() > MAX_INPUT_RUNS || paragraphs > MAX_INPUT_RUNS;
+        if !truncated {
+            let value = |v: std::result::Result<Value, serde_json::Error>| v.unwrap_or(Value::Null);
+            runs = t.runs.iter().map(|r| value(serde_json::to_value(r))).collect();
+            paras = (0..paragraphs).map(|i| value(serde_json::to_value(t.para_at(i)))).collect();
+            let commas = runs.len().saturating_sub(1) + paras.len().saturating_sub(1);
+            let size = runs.iter().chain(&paras).fold(commas, |n, v| n.saturating_add(serde_json::to_vec(v).map_or(usize::MAX, |b| b.len())));
+            match left.checked_sub(size) {
+                Some(rest) => *left = rest,
+                None => {
+                    (runs, paras, truncated) = (Vec::new(), Vec::new(), true);
+                }
             }
         }
     }

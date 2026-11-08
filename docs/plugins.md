@@ -377,8 +377,14 @@ was given (numbers compare by value, so `1` and `1.0` are the same). A changed o
 listed twice or left out, and a new object with one of these types are refused, and the document and undo history
 stay as they were: `objects[1] (id 17): read-only field 'text.runs[0].text' changed`, `objects (id 17): a read-only
 object was left out`. The field is named with control and bidirectional characters escaped (`\u{202E}`), cut to 64
-characters. New objects listed after one of them go just above it. Their text and pixels count toward the input's
-half of the memory cap, and an echo of them toward the 64 MiB output cap.
+characters. New objects listed after one of them go just above it.
+
+Every object in the input counts toward the half of the memory cap that the input and the parameters share, in paint
+order, with its id, bounds, transform and name. Type whose runs and paragraphs don't fit what is left comes with
+`truncated: true`, and an image whose pixels don't fit comes with `pixelsOmitted: true`. When the other fields of one
+of these objects don't fit what is left, the run fails before the plug-in starts, naming the object and the bytes it
+needs: `plug-in exceeded its memory budget (object 17 needs 4200 bytes of input, 1000 left)`. An echo of them counts
+toward the 64 MiB output cap.
 
 ### Parameters
 

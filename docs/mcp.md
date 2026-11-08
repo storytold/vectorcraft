@@ -6089,7 +6089,10 @@ schema, defaults). An object filter runs on the selected paths and compound path
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
 (`type`, `image`, `symbolInstance`; `inputs` in its `plugin.list` entry) also lists `doc.read` in its `permissions`, so
 `plugin.install` needs `grant`. It is also given the selected objects of those kinds to read, with at most 16 MiB of
-pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted` or `truncated`): its output returns
+pixels and 16 MiB of type runs over one run (later ones come with `pixelsOmitted` or `truncated`). Every object counts
+toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included: pixels and runs that
+don't fit come the same way, and an object whose other fields don't fit makes `plugin.run` return a memory-budget error
+naming the object and its size, with nothing changed. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
 field, and the document and undo history are unchanged. A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
