@@ -362,8 +362,10 @@ fn revive(interp: &mut Interp, v: Value, reviver: &Value) -> JsResult<Value> {
             if matches!(r, Value::Undefined) {
                 interp.delete(o, &k, false)?;
             } else {
-                interp.reserve_heap(ELEMENT_BYTES)?;
-                interp.define_own_property(o, k, &Desc::data(r, OPEN), false)?;
+                interp.rooted(std::slice::from_ref(&r), |i| {
+                    i.reserve_heap(ELEMENT_BYTES)?;
+                    i.define_own_property(o, k, &Desc::data(r.clone(), OPEN), false)
+                })?;
             }
         }
         if let (Some(k), Value::Object(o)) = (top.keys.get(top.next).cloned(), &top.val) {
@@ -436,7 +438,10 @@ fn stringify_rooted(interp: &mut Interp, args: &[Value]) -> JsResult<Value> {
     match resolve(interp, &settings, wrapper, &key(""))? {
         Item::Skip => return Ok(Value::Undefined),
         Item::Primitive(v) => write_primitive(interp, &mut w.out, &v)?,
-        Item::Container(o) => open(interp, &settings, &mut w, o)?,
+        Item::Container(o) => {
+            interp.temp_roots.push(Value::Object(o));
+            open(interp, &settings, &mut w, o)?;
+        }
     }
     while !w.stack.is_empty() {
         step(interp, &settings, &mut w)?;
@@ -585,12 +590,12 @@ fn write_primitive(interp: &mut Interp, out: &mut Builder, v: &Value) -> JsResul
 }
 
 /// Starts writing an object or array: a cycle back to one already being written throws a
-/// `TypeError`.
+/// `TypeError`. The caller pushes `o` onto the temporary roots first, and `step` pops it when the
+/// object or array is closed.
 fn open(interp: &mut Interp, settings: &Settings, w: &mut Writer, o: ObjId) -> JsResult<()> {
     if w.open.contains(&o) {
         return Err(interp.type_error("JSON.stringify cannot write a structure that contains itself"));
     }
-    interp.temp_roots.push(Value::Object(o));
     let array = interp.heap.object(o).is_some_and(|x| matches!(x.class, Class::Array { .. }));
     let keys = if array {
         let len = length_of(interp, o)?;
@@ -663,6 +668,10 @@ fn step(interp: &mut Interp, settings: &Settings, w: &mut Writer) -> JsResult<()
     }
     if let Some(top) = w.stack.last_mut() {
         top.count += 1;
+    }
+    // The separator and the key reserve heap, so a container is rooted before they are written.
+    if let Item::Container(o) = item {
+        interp.temp_roots.push(Value::Object(o));
     }
     separator(interp, w, count == 0, gap)?;
     if !array {

@@ -154,10 +154,13 @@ fn has_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<bool> {
 /// The estimated bytes a new element adds.
 const ELEMENT_BYTES: usize = PROP_BYTES + 32 + 2 * 10;
 
-/// `o[k] = v` as the array methods assign: a failure throws.
+/// `o[k] = v` as the array methods assign: a failure throws. `v` stays rooted while heap is
+/// reserved for it, since the caller may hold it nowhere else.
 fn put_at(interp: &mut Interp, o: ObjId, k: f64, v: Value) -> JsResult<()> {
-    interp.reserve_heap(ELEMENT_BYTES)?;
-    interp.put(o, key_of(k), v, true)
+    interp.rooted(std::slice::from_ref(&v), |i| {
+        i.reserve_heap(ELEMENT_BYTES)?;
+        i.put(o, key_of(k), v.clone(), true)
+    })
 }
 
 fn delete_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<()> {
@@ -165,10 +168,13 @@ fn delete_at(interp: &mut Interp, o: ObjId, k: f64) -> JsResult<()> {
 }
 
 /// Defines `a[k]` as a writable, enumerable and configurable data property, as the methods that
-/// build a new array do (DefineOwnProperty with `throw` false).
+/// build a new array do (DefineOwnProperty with `throw` false). `v` stays rooted while heap is
+/// reserved for it.
 fn create_at(interp: &mut Interp, a: ObjId, k: f64, v: Value) -> JsResult<()> {
-    interp.reserve_heap(ELEMENT_BYTES)?;
-    interp.define_own_property(a, key_of(k), &Desc::data(v, OPEN), false).map(drop)
+    interp.rooted(std::slice::from_ref(&v), |i| {
+        i.reserve_heap(ELEMENT_BYTES)?;
+        i.define_own_property(a, key_of(k), &Desc::data(v.clone(), OPEN), false).map(drop)
+    })
 }
 
 /// A new array with the given length and no elements.

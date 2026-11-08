@@ -300,6 +300,63 @@ fn values_built_ins_hold_survive_collections() {
     assert_eq!(realm.run(src), Ok(JsValue::Number(598.0)));
 }
 
+#[test]
+fn fresh_values_survive_a_collection_while_they_are_stored() {
+    // Below 1 MiB the only collections run at the heap limit, many of them while a built-in
+    // reserves room for a value that a callback has just made and nothing else holds.
+    let limits = Limits { heap_bytes: 768 << 10, ..Limits::default() };
+    let src = "var bad = 0; \
+               for (var n = 0; n < 2000; n++) { \
+                 var m = [1, 2, 3, 4, 5, 6, 7, 8].map(function (x) { var g = {x: x}; return {v: x}; }); \
+                 var f = [1, 2, 3, 4].filter(function () { return true; }).map(function (x) { return [x]; }); \
+                 for (var i = 0; i < 8; i++) if (!m[i] || m[i].v !== i + 1) bad++; \
+                 for (var i = 0; i < 4; i++) if (!f[i] || f[i][0] !== i + 1) bad++; \
+               } bad";
+    let mut realm = small(limits.clone());
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    assert!(realm.interp().heap.collections > 0);
+    // Getters make a new object for each read, which `shift` and `sort` then store.
+    let src = "function fresh(v) { var g = {x: v}; return {v: v}; } \
+               function set(i) { return function (x) { Object.defineProperty(this, i, {value: x, writable: true, enumerable: true, configurable: true}); }; } \
+               var p = {}; \
+               for (var i = 0; i < 4; i++) Object.defineProperty(p, i, {get: (function (v) { return function () { return fresh(v); }; })(4 - i), set: set(i)}); \
+               var bad = 0; \
+               for (var n = 0; n < 1000; n++) { \
+                 var o = Object.create(p); o.length = 4; Array.prototype.shift.call(o); \
+                 if (!o[0] || o[0].v !== 3 || o[2].v !== 1) bad++; \
+                 var s = Object.create(p); s.length = 4; Array.prototype.sort.call(s, function (a, b) { return a.v - b.v; }); \
+                 for (var i = 0; i < 4; i++) if (!s[i] || s[i].v !== i + 1) bad++; \
+               } \
+               var q = {}; \
+               for (var i = 0; i < 4; i++) Object.defineProperty(q, i, {get: (function (v) { return function () { return {v: v}; }; })(4 - i), set: function () {}}); \
+               for (var n = 0; n < 20000; n++) { \
+                 var u = Object.create(q); u.length = 4; Array.prototype.unshift.call(u, 0, 0, 0, 0); \
+                 for (var i = 4; i < 8; i++) if (!u.hasOwnProperty(i) || u[i].v !== 8 - i) bad++; \
+               } \
+               for (var n = 0; n < 5000; n++) { var t = Object.create(q); t.length = 4; Array.prototype.sort.call(t); } \
+               bad";
+    let mut realm = small(limits.clone());
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    assert!(realm.interp().heap.collections > 0);
+    // The `z` objects change each round's garbage, so the collections fall at different points.
+    let src = "var bad = 0; \
+               for (var n = 0; n < 10000; n++) { \
+                 for (var z = 0; z < n % 7; z++) var g = {z: z}; \
+                 var j = JSON.parse('[1, 2, 3, 4, 5, 6, 7, 8]', function (k, v) { return k === '' ? v : {v: v}; }); \
+                 for (var i = 0; i < 8; i++) if (!j[i] || j[i].v !== i + 1) bad++; \
+               } bad";
+    let mut realm = small(limits.clone());
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    assert!(realm.interp().heap.collections > 0);
+    let src = "var k = ''; for (var i = 0; i < 300; i++) k += 'k'; \
+               var o = {}; o[k] = {toJSON: function () { var g = {x: 1}; return {a: 1}; }}; \
+               var want = '{\"' + k + '\":{\"a\":1}}'; \
+               var bad = 0; for (var n = 0; n < 4000; n++) if (JSON.stringify(o) !== want) bad++; bad";
+    let mut realm = small(limits);
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    assert!(realm.interp().heap.collections > 0);
+}
+
 // ---- errors ----
 
 #[test]

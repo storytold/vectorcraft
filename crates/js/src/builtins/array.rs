@@ -630,8 +630,8 @@ fn sort_elements(interp: &mut Interp, o: ObjId, len: u64, compare: &Value) -> Js
         match element(interp, o, k)? {
             Some(Value::Undefined) => undefined += 1,
             Some(v) => {
-                interp.reserve_heap(ELEMENT_BYTES)?;
                 interp.temp_roots.push(v.clone());
+                interp.reserve_heap(ELEMENT_BYTES)?;
                 values.push(v);
             }
             None => {}
