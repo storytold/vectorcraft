@@ -198,6 +198,10 @@
 	Anti-Alias	Anti-aliasing
 	Anti-alias Rasters	Anti-aliasing per immagini raster
 	Anti-aliased Artwork	Grafica con anti-aliasing
+	Anti-aliasing Method	Metodo di anti-aliasing
+antiAlias	Sharp	Nitido
+	Crisp	Definito
+	Strong	Forte
 	Anti-aliasing:	Anti-aliasing:
 	Any Kind	Qualsiasi tipo
 	Font Technology	Tecnologia font
@@ -367,6 +371,13 @@ font-technology	Variable	Variabili
 	Apply Bullets	Applica punti elenco
 	Numbered List	Elenco numerato
 	Apply Numbers	Applica numerazione
+	Bullets and Numbering…	Punti elenco e numerazione…
+	Numbers	Numeri
+	Level:	Livello:
+	Bullet Character:	Carattere punto elenco:
+	Number Style:	Stile numero:
+	Left Indent:	Rientro sinistro:
+	First Line Indent:	Rientro prima riga:
 	Convert to Text	Converti in testo
 	Filled Dot	Punto pieno
 	Dash	Trattino
@@ -4144,6 +4155,7 @@ axis	Both	Entrambi
 @msg	Targa files are RGB: colorModel rgb	I file Targa sono RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Testo attorno: seleziona un oggetto di avvolgimento
 @msg	This shortcut file is in a form VectorCraft can't read.	Questo file di scelte rapide è in un formato che VectorCraft non può leggere.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` deve essere "none", "sharp", "crisp" o "strong"
 @msg	`aspect` must be a number (%)	`aspect` deve essere un numero (%)
 @msg	`at` must be [x, y]	`at` deve essere [x, y]
 @msg	`color` must be a colour	`color` deve essere un colore
@@ -5369,6 +5381,11 @@ lighting	Light	Luce
 	Snap to Perpendicular	Aggancia alla perpendicolare
 @msg	unknown snap option `{key}` (use {options})	opzione di aggancio sconosciuta `{key}` (usare {options})
 	Gap Length:	Lunghezza lacuna:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	La modalità Logo piatto non usa keepColors: vettorializza i colori indicati in logoColors o i colori che trova.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Non è stato vettorializzato nulla: nessuno dei colori trovati dalla vettorializzazione corrisponde a keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Non è stato vettorializzato nulla: Ignora colore esclude ogni area dei colori elencati in keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Non è stato vettorializzato nulla: i colori che corrispondono a keepColors non producono tracciati.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: nessuno dei colori trovati dalla vettorializzazione corrisponde a {c}, quindi non ne viene vettorializzato nulla.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` richiede `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` richiede `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` richiede `mode: "color"`
@@ -5516,6 +5533,14 @@ axis	Y Axis	Asse Y
 @msg	unknown permission `{shown}`	autorizzazione sconosciuta `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” chiede le autorizzazioni {asked}: installalo con un `grant` che le elenca quando l’utente acconsente
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	a “{name}” non è stata concessa `{p}`, che serve al suo risultato: non è stato modificato nulla
+@msg	a heavy filter runs in the background, so it can't declare `commands`	un filtro pesante viene eseguito in background, quindi non può dichiarare `commands`
+@msg	at most {MAX_COMMANDS} `commands`	al massimo {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	il comando {name} è dichiarato due volte
+@msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve avere 1-64 caratteri stampabili
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: usa un id di 1-{MAX_COMMAND_ID} caratteri tra a-z 0-9 _ che inizi con una lettera
+@msg	command {name}: {e}	comando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	solo un filtro o un effetto dinamico dichiara `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	il modulo non ha lo SHA-256 indicato da `hash`: non è stato installato nulla
 # Actions panel: action sets (#3712).
 	New Set…	Nuovo set…
@@ -6062,6 +6087,16 @@ breakText	Glyphs	Glifi
 @msg	path must be a list of child indices	path deve essere un elenco di indici figlio
 @msg	no object at path {shown} in the symbol's art	nessun oggetto al percorso {shown} nella grafica del simbolo
 @msg	give fill, stroke, opacity and/or blend	specifica fill, stroke, opacity e/o blend
+@msg	{key} cannot be set on a guide	{key} non può essere impostato su una guida
+@msg	{key} cannot be set on a blend	{key} non può essere impostato su una fusione
+@msg	{key} cannot be set on an envelope	{key} non può essere impostato su un involucro
+@msg	{key} cannot be set on a gradient mesh	{key} non può essere impostato su una trama sfumatura
+@msg	{key} cannot be set on a Repeat	{key} non può essere impostato su una ripetizione
+@msg	{key} cannot be set on a placed document	{key} non può essere impostato su un documento inserito
+@msg	{key} cannot be set on an Intertwine group	{key} non può essere impostato su un gruppo intrecciato
+@msg	stroke cannot be set on a symbol instance	stroke non può essere impostato su un’istanza di simbolo
+@msg	fill on a symbol instance must be a solid color or none	il fill di un’istanza di simbolo deve essere un colore pieno o none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} non può essere impostato su un’immagine senza l’effetto Converti in forma o Contorna oggetto
 @msg	pass newName, registration, exportType, nineSlice and/or type	specifica newName, registration, exportType, nineSlice e/o type
 	Text Flow	Flusso del testo
 	By Rows	Per righe

@@ -152,6 +152,42 @@ fn return_in_the_type_tool_continues_the_paragraph_it_splits() {
 }
 
 #[test]
+fn tab_at_the_start_of_a_list_item_moves_it_a_level_down_in_one_undo_step() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let id = area(&mut s, "one\ntwo");
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "number"})).unwrap();
+    s.select_tool("type", v).unwrap();
+    // Click into the second line, then Home: the caret before "two".
+    let t = text(&s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let l1 = &lay.lines[1];
+    let at = t.xf * vectorcraft_geom::Point::new((l1.x0 + l1.x1) / 2.0, l1.baseline - 3.0);
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, at.x, at.y), v).unwrap();
+    }
+    s.tool_key(ToolKey::Home, Mods::default(), v).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.tool_key(ToolKey::Tab, Mods::default(), v).unwrap();
+    let levels = |s: &Session| text(s, id).paragraph_styles().iter().map(|p| p.list.map(|l| l.level)).collect::<Vec<_>>();
+    assert_eq!(levels(&s), [Some(1), Some(2)]);
+    assert_eq!((text(&s, id).plain_text(), s.doc().unwrap().history.undo.len()), ("one\ntwo".to_string(), undo + 1));
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &text(&s, id));
+    let starts: Vec<f64> = lay.markers.iter().map(|m| lay.glyphs[m.glyphs.start].origin.x).collect();
+    assert!((starts[1] - starts[0] - 18.0).abs() < 1e-6, "the item moved 18 pt in: {starts:?}");
+    assert_eq!(lay.markers.iter().map(|m| m.text.as_str()).collect::<Vec<_>>(), ["1.", "1."]);
+    // Shift+Tab moves it back up, and typing then goes on at the caret.
+    s.tool_key(ToolKey::Tab, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    assert_eq!(levels(&s), [Some(1), Some(1)]);
+    s.tool_text("and ", v).unwrap();
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    assert_eq!(text(&s, id).plain_text(), "one\nand two");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((text(&s, id).plain_text(), levels(&s)), ("one\ntwo".to_string(), vec![Some(1), Some(2)]));
+}
+
+#[test]
 fn paragraph_style_applies_to_one_paragraph() {
     let mut s = session();
     let id = area(&mut s, "Title\nBody text");

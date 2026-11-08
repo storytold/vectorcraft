@@ -198,6 +198,10 @@
 	Anti-alias	Suavizar bordas
 	Anti-alias Rasters	Suavizar Rasters
 	Anti-aliased Artwork	Arte Suavizada
+	Anti-aliasing Method	Método de Suavização
+antiAlias	Sharp	Nítido
+	Crisp	Definido
+	Strong	Forte
 	Anti-aliasing:	Suavização:
 	Appearance	Aparência
 	Appearance Attribute	Atributo de Aparência
@@ -338,6 +342,13 @@
 	Apply Bullets	Aplicar Marcadores
 	Numbered List	Lista Numerada
 	Apply Numbers	Aplicar Numeração
+	Bullets and Numbering…	Marcadores e Numeração…
+	Numbers	Números
+	Level:	Nível:
+	Bullet Character:	Caractere do Marcador:
+	Number Style:	Estilo de Número:
+	Left Indent:	Recuo Esquerdo:
+	First Line Indent:	Recuo da Primeira Linha:
 	Convert to Text	Converter em Texto
 	Filled Dot	Ponto Preenchido
 	Dash	Travessão
@@ -3683,6 +3694,7 @@ axis	Both	Ambos
 @msg	Split Into Grid: select paths large enough for the grid	Dividir em grade: selecione traçados grandes o bastante para a grade
 @msg	Targa files are RGB: colorModel rgb	arquivos Targa são RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Quebra de texto: selecione um objeto de quebra
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` deve ser "none", "sharp", "crisp" ou "strong"
 @msg	`aspect` must be a number (%)	`aspect` deve ser um número (%)
 @msg	`at` must be [x, y]	`at` deve ser [x, y]
 @msg	`color` must be a colour	`color` deve ser uma cor
@@ -5671,6 +5683,11 @@ mark-style	Japanese	Japonesas
 	Snap to Perpendicular	Ajustar à Perpendicular
 @msg	unknown snap option `{key}` (use {options})	opção de ajuste desconhecida `{key}` (use {options})
 	Gap Length:	Comprimento da Lacuna:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	O modo Logotipo Plano não usa keepColors: ele traça as cores indicadas em logoColors ou as cores que encontra.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Nada foi traçado: nenhuma das cores que o traçado encontrou corresponde a keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Nada foi traçado: Ignorar Cor deixa de fora todas as áreas das cores listadas em keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Nada foi traçado: as cores que correspondem a keepColors não geram nenhum caminho.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: nenhuma das cores que o traçado encontrou corresponde a {c}, então nada dela é traçado.
 @msg	`colorGroup` needs `library: "document"`	`colorGroup` requer `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` requer `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	`colorGroup` requer `mode: "color"`
@@ -5815,6 +5832,14 @@ axis	Y Axis	Eixo Y
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	“{name}” pede as permissões {asked}: instale-o com `grant` listando-as depois que o usuário concordar
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	“{name}” não recebeu `{p}`, de que sua saída precisa: nada foi alterado
+@msg	a heavy filter runs in the background, so it can't declare `commands`	um filtro pesado é executado em segundo plano, então não pode declarar `commands`
+@msg	at most {MAX_COMMANDS} `commands`	no máximo {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	o comando {name} está declarado duas vezes
+@msg	command {name}: `label` must be 1-64 printable characters	comando {name}: `label` deve ter 1-64 caracteres imprimíveis
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	comando {name}: use um id de 1-{MAX_COMMAND_ID} caracteres de a-z 0-9 _ que comece com uma letra
+@msg	command {name}: {e}	comando {name}: {e}
+@msg	only a filter or a live effect declares `commands`	só um filtro ou um efeito dinâmico declara `commands`
+@msg	“{name}” › {label}: {e}	“{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	o módulo não tem o SHA-256 indicado em `hash`: nada foi instalado
 # Actions panel: action sets (#3712).
 	New Set…	Novo Conjunto…
@@ -6360,6 +6385,16 @@ breakText	Glyphs	Glifos
 @msg	path must be a list of child indices	path deve ser uma lista de índices de filhos
 @msg	no object at path {shown} in the symbol's art	nenhum objeto no caminho {shown} na arte do símbolo
 @msg	give fill, stroke, opacity and/or blend	informe fill, stroke, opacity e/ou blend
+@msg	{key} cannot be set on a guide	{key} não pode ser definido em uma guia
+@msg	{key} cannot be set on a blend	{key} não pode ser definido em uma mesclagem
+@msg	{key} cannot be set on an envelope	{key} não pode ser definido em um envelope
+@msg	{key} cannot be set on a gradient mesh	{key} não pode ser definido em uma malha de gradiente
+@msg	{key} cannot be set on a Repeat	{key} não pode ser definido em uma repetição
+@msg	{key} cannot be set on a placed document	{key} não pode ser definido em um documento colocado
+@msg	{key} cannot be set on an Intertwine group	{key} não pode ser definido em um grupo entrelaçado
+@msg	stroke cannot be set on a symbol instance	stroke não pode ser definido em uma instância de símbolo
+@msg	fill on a symbol instance must be a solid color or none	o fill de uma instância de símbolo deve ser uma cor sólida ou none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} não pode ser definido em uma imagem sem o efeito Converter em Forma ou Contornar Objeto
 @msg	pass newName, registration, exportType, nineSlice and/or type	informe newName, registration, exportType, nineSlice e/ou type
 # Strings the sibling catalogs translate that pt-BR did not yet cover (translated 2026-10-31).
 	 on the canvas to create one	 na tela para criar um

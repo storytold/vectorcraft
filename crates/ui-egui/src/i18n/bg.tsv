@@ -184,6 +184,10 @@
 	Anti-Alias	Заглаждане
 	Anti-alias Rasters	Заглаждане на растери
 	Anti-aliased Artwork	Загладено произведение
+	Anti-aliasing Method	Метод на заглаждане
+antiAlias	Sharp	Остро
+	Crisp	Четко
+	Strong	Силно
 	Anti-aliasing:	Заглаждане:
 	Any Kind	Всякакъв вид
 	Font Technology	Технология на шрифта
@@ -354,6 +358,13 @@ font-technology	Variable	Променливи
 	Apply Bullets	Прилагане на булети
 	Numbered List	Номериран списък
 	Apply Numbers	Прилагане на номериране
+	Bullets and Numbering…	Булети и номериране…
+	Numbers	Номера
+	Level:	Ниво:
+	Bullet Character:	Знак за булет:
+	Number Style:	Стил на номерата:
+	Left Indent:	Ляв отстъп:
+	First Line Indent:	Отстъп на първия ред:
 	Convert to Text	Конвертиране в текст
 	Filled Dot	Плътна точка
 	Dash	Тире
@@ -3987,6 +3998,7 @@ axis	Both	И двете
 @msg	Targa files are RGB: colorModel rgb	Файловете Targa са RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обгръщане на текст: изберете обгръщащ обект
 @msg	This shortcut file is in a form VectorCraft can't read.	 Този файл с преки пътища е във формат, който VectorCraft не може да прочете.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` трябва да е "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` трябва да бъде число (%)
 @msg	`at` must be [x, y]	`at` трябва да бъде [x, y]
 @msg	`color` must be a colour	`color` трябва да бъде цвят
@@ -6259,6 +6271,16 @@ breakText	Glyphs	Глифи
 @msg	path must be a list of child indices	path трябва да е списък с индекси на дъщерни обекти
 @msg	no object at path {shown} in the symbol's art	в графиката на символа няма обект на пътя {shown}
 @msg	give fill, stroke, opacity and/or blend	задайте fill, stroke, opacity и/или blend
+@msg	{key} cannot be set on a guide	{key} не може да се задава за водач
+@msg	{key} cannot be set on a blend	{key} не може да се задава за преливане
+@msg	{key} cannot be set on an envelope	{key} не може да се задава за плик
+@msg	{key} cannot be set on a gradient mesh	{key} не може да се задава за мрежа с градиент
+@msg	{key} cannot be set on a Repeat	{key} не може да се задава за повтаряне
+@msg	{key} cannot be set on a placed document	{key} не може да се задава за вмъкнат документ
+@msg	{key} cannot be set on an Intertwine group	{key} не може да се задава за група с преплитане
+@msg	stroke cannot be set on a symbol instance	stroke не може да се задава за екземпляр на символ
+@msg	fill on a symbol instance must be a solid color or none	fill на екземпляр на символ трябва да е плътен цвят или none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не може да се задава за изображение без ефект „Конвертиране в фигура“ или „Преобразуване на обекта в контур“
 @msg	pass newName, registration, exportType, nineSlice and/or type	задайте newName, registration, exportType, nineSlice и/или type
 	Text Flow	Поток на текста
 	By Rows	По редове

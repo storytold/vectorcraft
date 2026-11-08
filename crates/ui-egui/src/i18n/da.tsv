@@ -299,6 +299,13 @@
 	Apply Bullets	Anvend kugletegn
 	Numbered List	Nummereret liste
 	Apply Numbers	Anvend nummerering
+	Bullets and Numbering…	Kugletegn og nummerering…
+	Numbers	Tal
+	Level:	Niveau:
+	Bullet Character:	Kugletegn:
+	Number Style:	Talformat:
+	Left Indent:	Venstre indrykning:
+	First Line Indent:	Indrykning af første linje:
 	Convert to Text	Konvertér til tekst
 	Filled Dot	Udfyldt prik
 	Dash	Tankestreg
@@ -2550,6 +2557,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 sek
 	[Unnamed]	[Unavngiven]
 	Amount:	Mængde:
+	Anti-aliasing Method	Antialiaseringsmetode
+antiAlias	Sharp	Skarp
+	Crisp	Klar
+	Strong	Kraftig
 	Anti-aliasing:	Antialiasering:
 	Artboard:	Tegnebræt:
 	Color Table	Farvetabel
@@ -4104,6 +4115,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Opdel i gitter: markér kurver, der er store nok til gitteret
 @msg	Targa files are RGB: colorModel rgb	Targa-filer er RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Tekstombrydning: markér et ombrydningsobjekt
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` skal være "none", "sharp", "crisp" eller "strong"
 @msg	`aspect` must be a number (%)	`aspect` skal være et tal (%)
 @msg	`at` must be [x, y]	`at` skal være [x, y]
 @msg	`color` must be a colour	`color` skal være en farve
@@ -6273,6 +6285,16 @@ breakText	Glyphs	Glyffer
 @msg	path must be a list of child indices	path skal være en liste over underordnede indekser
 @msg	no object at path {shown} in the symbol's art	intet objekt ved stien {shown} i symbolets grafik
 @msg	give fill, stroke, opacity and/or blend	angiv fill, stroke, opacity og/eller blend
+@msg	{key} cannot be set on a guide	{key} kan ikke angives for en hjælpelinje
+@msg	{key} cannot be set on a blend	{key} kan ikke angives for en blanding
+@msg	{key} cannot be set on an envelope	{key} kan ikke angives for en kuvert
+@msg	{key} cannot be set on a gradient mesh	{key} kan ikke angives for et gradientnet
+@msg	{key} cannot be set on a Repeat	{key} kan ikke angives for en gentagelse
+@msg	{key} cannot be set on a placed document	{key} kan ikke angives for et placeret dokument
+@msg	{key} cannot be set on an Intertwine group	{key} kan ikke angives for en sammenflettet gruppe
+@msg	stroke cannot be set on a symbol instance	stroke kan ikke angives for en symbolforekomst
+@msg	fill on a symbol instance must be a solid color or none	fill på en symbolforekomst skal være en ensfarvet farve eller none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kan ikke angives for et billede uden effekten Konvertér til form eller Objekt til kontur
 @msg	pass newName, registration, exportType, nineSlice and/or type	angiv newName, registration, exportType, nineSlice og/eller type
 	Text Flow	Tekstflow
 	By Rows	Efter rækker

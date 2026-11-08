@@ -299,6 +299,13 @@
 	Apply Bullets	Terapkan poin
 	Numbered List	Daftar bernomor
 	Apply Numbers	Terapkan penomoran
+	Bullets and Numbering…	Poin dan penomoran…
+	Numbers	Nomor
+	Level:	Tingkat:
+	Bullet Character:	Karakter poin:
+	Number Style:	Gaya nomor:
+	Left Indent:	Indentasi kiri:
+	First Line Indent:	Indentasi baris pertama:
 	Convert to Text	Konversi ke teks
 	Filled Dot	Titik penuh
 	Dash	Tanda pisah
@@ -2550,6 +2557,10 @@ digits	Malayalam	Malayalam
 	< 1 sec	< 1 detik
 	[Unnamed]	[Tanpa nama]
 	Amount:	Jumlah:
+	Anti-aliasing Method	Metode anti-aliasing
+antiAlias	Sharp	Tajam
+	Crisp	Jelas
+	Strong	Kuat
 	Anti-aliasing:	Anti-aliasing:
 	Artboard:	Artboard:
 	Color Table	Tabel warna
@@ -4104,6 +4115,7 @@ imageTrace	Outline	Kontur
 @msg	Split Into Grid: select paths large enough for the grid	Bagi menjadi kisi: pilih jalur yang cukup besar untuk kisi
 @msg	Targa files are RGB: colorModel rgb	File Targa adalah RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Pembungkusan teks: pilih objek pembungkus
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` harus "none", "sharp", "crisp" atau "strong"
 @msg	`aspect` must be a number (%)	`aspect` harus berupa angka (%)
 @msg	`at` must be [x, y]	`at` harus [x, y]
 @msg	`color` must be a colour	`color` harus berupa warna
@@ -6273,6 +6285,16 @@ breakText	Glyphs	Glif
 @msg	path must be a list of child indices	path harus berupa daftar indeks anak
 @msg	no object at path {shown} in the symbol's art	tidak ada objek di jalur {shown} dalam karya seni simbol
 @msg	give fill, stroke, opacity and/or blend	berikan fill, stroke, opacity dan/atau blend
+@msg	{key} cannot be set on a guide	{key} tidak dapat diatur pada panduan
+@msg	{key} cannot be set on a blend	{key} tidak dapat diatur pada blend
+@msg	{key} cannot be set on an envelope	{key} tidak dapat diatur pada amplop
+@msg	{key} cannot be set on a gradient mesh	{key} tidak dapat diatur pada mesh gradien
+@msg	{key} cannot be set on a Repeat	{key} tidak dapat diatur pada perulangan
+@msg	{key} cannot be set on a placed document	{key} tidak dapat diatur pada dokumen yang ditempatkan
+@msg	{key} cannot be set on an Intertwine group	{key} tidak dapat diatur pada grup jalinan
+@msg	stroke cannot be set on a symbol instance	stroke tidak dapat diatur pada instans simbol
+@msg	fill on a symbol instance must be a solid color or none	fill pada instans simbol harus berupa warna solid atau none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} tidak dapat diatur pada gambar tanpa efek Konversi ke bentuk atau Kerangka objek
 @msg	pass newName, registration, exportType, nineSlice and/or type	berikan newName, registration, exportType, nineSlice dan/atau type
 	Text Flow	Alur teks
 	By Rows	Per baris

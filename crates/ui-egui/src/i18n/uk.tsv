@@ -192,6 +192,10 @@
 	Anti-Alias	Згладжування
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
+	Anti-aliasing Method	Метод згладжування
+antiAlias	Sharp	Різке
+	Crisp	Чітке
+	Strong	Сильне
 	Anti-aliasing:	Згладжування:
 	Any Kind	Будь-який тип
 	Font Technology	Технологія шрифту
@@ -361,6 +365,13 @@ font-technology	Variable	Варіативні
 	Apply Bullets	Застосувати маркери
 	Numbered List	Нумерований список
 	Apply Numbers	Застосувати нумерацію
+	Bullets and Numbering…	Маркери та нумерація…
+	Numbers	Номери
+	Level:	Рівень:
+	Bullet Character:	Символ маркера:
+	Number Style:	Стиль нумерації:
+	Left Indent:	Відступ зліва:
+	First Line Indent:	Відступ першого рядка:
 	Convert to Text	Перетворити на текст
 	Filled Dot	Заповнена крапка
 	Dash	Тире
@@ -4128,6 +4139,7 @@ axis	Both	Обидві
 @msg	Targa files are RGB: colorModel rgb	Файли Targa є RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтікання текстом: виділіть об’єкт обтікання
 @msg	This shortcut file is in a form VectorCraft can't read.	Цей файл сполучень клавіш записано у форматі, який VectorCraft не може прочитати.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` має бути "none", "sharp", "crisp" або "strong"
 @msg	`aspect` must be a number (%)	`aspect` має бути числом (%)
 @msg	`at` must be [x, y]	`at` має бути [x, y]
 @msg	`color` must be a colour	`color` має бути кольором
@@ -5349,6 +5361,11 @@ lighting	Light	Світло
 	Snap to Perpendicular	Прив’язати до перпендикуляра
 @msg	unknown snap option `{key}` (use {options})	невідомий параметр прив’язки `{key}` (використовуйте {options})
 	Gap Length:	Довжина проміжку:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не використовує keepColors: він трасує кольори, вказані в logoColors, або знайдені ним кольори.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Нічого не трасовано: жоден із кольорів, знайдених під час трасування, не відповідає keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Нічого не трасовано: «Ігнорувати колір» пропускає всі області кольорів, перелічених у keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Нічого не трасовано: кольори, що відповідають keepColors, не дають жодного контуру.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: жоден із кольорів, знайдених під час трасування, не відповідає {c}, тому з нього нічого не трасується.
 @msg	`colorGroup` needs `library: "document"`	для `colorGroup` потрібен `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` потрібен `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	для `colorGroup` потрібен `mode: "color"`
@@ -5496,6 +5513,14 @@ axis	Y Axis	Вісь Y
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запитує дозволи {asked}: установіть його з `grant`, де їх перелічено, коли користувач погодиться
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не отримав дозволу `{p}`, потрібного для його результату: нічого не змінено
+@msg	a heavy filter runs in the background, so it can't declare `commands`	важкий фільтр виконується у фоні, тому не може оголошувати `commands`
+@msg	at most {MAX_COMMANDS} `commands`	щонайбільше {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	команду {name} оголошено двічі
+@msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` має містити 1-64 друковані символи
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: використайте id з 1-{MAX_COMMAND_ID} символів a-z 0-9 _, що починається з літери
+@msg	command {name}: {e}	команда {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` оголошує лише фільтр або динамічний ефект
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	модуль має не той SHA-256, що вказаний у `hash`: нічого не встановлено
 # Actions panel: action sets (#3712).
 	New Set…	Новий набір…
@@ -6042,6 +6067,16 @@ breakText	Glyphs	Гліфи
 @msg	path must be a list of child indices	path має бути списком індексів дочірніх об’єктів
 @msg	no object at path {shown} in the symbol's art	у графіці символу немає об’єкта за шляхом {shown}
 @msg	give fill, stroke, opacity and/or blend	вкажіть fill, stroke, opacity та/або blend
+@msg	{key} cannot be set on a guide	{key} не можна задати для напрямної
+@msg	{key} cannot be set on a blend	{key} не можна задати для переходу
+@msg	{key} cannot be set on an envelope	{key} не можна задати для оболонки
+@msg	{key} cannot be set on a gradient mesh	{key} не можна задати для градієнтної сітки
+@msg	{key} cannot be set on a Repeat	{key} не можна задати для повторення
+@msg	{key} cannot be set on a placed document	{key} не можна задати для розміщеного документа
+@msg	{key} cannot be set on an Intertwine group	{key} не можна задати для групи переплетення
+@msg	stroke cannot be set on a symbol instance	stroke не можна задати для екземпляра символу
+@msg	fill on a symbol instance must be a solid color or none	fill екземпляра символу має бути суцільним кольором або none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} не можна задати для зображення без ефекту «Перетворити на фігуру» або «Обвести об’єкт»
 @msg	pass newName, registration, exportType, nineSlice and/or type	вкажіть newName, registration, exportType, nineSlice та/або type
 	Text Flow	Потік тексту
 	By Rows	За рядками

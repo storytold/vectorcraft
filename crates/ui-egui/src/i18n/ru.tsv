@@ -196,6 +196,10 @@
 	Anti-Alias	Сглаживание
 	Anti-alias Rasters	Сглаживать растровые изображения
 	Anti-aliased Artwork	Сглаженный рисунок
+	Anti-aliasing Method	Метод сглаживания
+antiAlias	Sharp	Резкое
+	Crisp	Чёткое
+	Strong	Сильное
 	Anti-aliasing:	Сглаживание:
 	Any Kind	Любой тип
 	Font Technology	Технология шрифта
@@ -365,6 +369,13 @@ font-technology	Variable	Вариативные
 	Apply Bullets	Применить маркеры
 	Numbered List	Нумерованный список
 	Apply Numbers	Применить нумерацию
+	Bullets and Numbering…	Маркеры и нумерация…
+	Numbers	Номера
+	Level:	Уровень:
+	Bullet Character:	Символ маркера:
+	Number Style:	Стиль нумерации:
+	Left Indent:	Отступ слева:
+	First Line Indent:	Отступ первой строки:
 	Convert to Text	Преобразовать в текст
 	Filled Dot	Закрашенная точка
 	Dash	Тире
@@ -4139,6 +4150,7 @@ axis	Both	Оба
 @msg	Targa files are RGB: colorModel rgb	файлы Targa являются RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Обтекание текстом: выделите объект обтекания
 @msg	This shortcut file is in a form VectorCraft can't read.	Этот файл сочетаний клавиш записан в формате, который VectorCraft не может прочитать.
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` должно быть "none", "sharp", "crisp" или "strong"
 @msg	`aspect` must be a number (%)	`aspect` должно быть числом (%)
 @msg	`at` must be [x, y]	`at` должно быть [x, y]
 @msg	`color` must be a colour	`color` должно быть цветом
@@ -5364,6 +5376,11 @@ lighting	Light	Свет
 	Snap to Perpendicular	Привязать к перпендикуляру
 @msg	unknown snap option `{key}` (use {options})	неизвестный параметр привязки `{key}` (допустимо: {options})
 	Gap Length:	Длина зазора:
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Режим «Плоский логотип» не использует keepColors: он трассирует цвета, указанные в logoColors, или найденные им цвета.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Ничего не трассировано: ни один из найденных при трассировке цветов не соответствует keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Ничего не трассировано: «Игнорировать цвет» исключает все области цветов, перечисленных в keepColors.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Ничего не трассировано: цвета, соответствующие keepColors, не дают ни одного контура.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ни один из найденных при трассировке цветов не соответствует {c}, поэтому из него ничего не трассируется.
 @msg	`colorGroup` needs `library: "document"`	для `colorGroup` нужен `library: "document"`
 @msg	`colorGroup` needs `palette: "documentLibrary"`	для `colorGroup` нужен `palette: "documentLibrary"`
 @msg	`colorGroup` needs `mode: "color"`	для `colorGroup` нужен `mode: "color"`
@@ -5511,6 +5528,14 @@ axis	Y Axis	Ось Y
 @msg	unknown permission `{shown}`	неизвестное разрешение `{shown}`
 @msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	«{name}» запрашивает разрешения {asked}: установите его с `grant`, где они перечислены, когда пользователь согласится
 @msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	«{name}» не получил разрешение `{p}`, нужное для его результата: ничего не изменено
+@msg	a heavy filter runs in the background, so it can't declare `commands`	тяжёлый фильтр выполняется в фоне, поэтому не может объявлять `commands`
+@msg	at most {MAX_COMMANDS} `commands`	не более {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	команда {name} объявлена дважды
+@msg	command {name}: `label` must be 1-64 printable characters	команда {name}: `label` должен содержать 1-64 печатаемых символа
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	команда {name}: используйте id из 1-{MAX_COMMAND_ID} символов a-z 0-9 _, начинающийся с буквы
+@msg	command {name}: {e}	команда {name}: {e}
+@msg	only a filter or a live effect declares `commands`	`commands` объявляет только фильтр или динамический эффект
+@msg	“{name}” › {label}: {e}	«{name}» › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	у модуля не тот SHA-256, что указан в `hash`: ничего не установлено
 # Actions panel: action sets (#3712).
 	New Set…	Новый набор…
@@ -6419,6 +6444,16 @@ breakText	Glyphs	Глифы
 @msg	path must be a list of child indices	path должен быть списком индексов дочерних объектов
 @msg	no object at path {shown} in the symbol's art	в графике символа нет объекта по пути {shown}
 @msg	give fill, stroke, opacity and/or blend	укажите fill, stroke, opacity и/или blend
+@msg	{key} cannot be set on a guide	{key} нельзя задать для направляющей
+@msg	{key} cannot be set on a blend	{key} нельзя задать для перехода
+@msg	{key} cannot be set on an envelope	{key} нельзя задать для оболочки
+@msg	{key} cannot be set on a gradient mesh	{key} нельзя задать для градиентной сетки
+@msg	{key} cannot be set on a Repeat	{key} нельзя задать для повторения
+@msg	{key} cannot be set on a placed document	{key} нельзя задать для помещенного документа
+@msg	{key} cannot be set on an Intertwine group	{key} нельзя задать для группы переплетения
+@msg	stroke cannot be set on a symbol instance	stroke нельзя задать для экземпляра символа
+@msg	fill on a symbol instance must be a solid color or none	fill экземпляра символа должен быть сплошным цветом или none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} нельзя задать для изображения без эффекта «Преобразовать в фигуру» или «Обвести объект»
 @msg	pass newName, registration, exportType, nineSlice and/or type	укажите newName, registration, exportType, nineSlice и/или type
 	Text Flow	Поток текста
 	By Rows	По строкам
