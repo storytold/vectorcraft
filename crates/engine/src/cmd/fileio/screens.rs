@@ -21,8 +21,8 @@ use super::encode::single_artboard;
 use super::export::{export_crop, isolated, selected_artwork, without_artboards};
 use super::naming::{self, NameParts};
 use super::{
-    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names, create_dir, distinct_names_by, encode_with_warnings, merge, unique_file_names,
-    with_black_output, writable, write_file,
+    ARTBOARD_PARAMS, ArtboardPick, Format, artboard_file_names_keeping_dots, create_dir, distinct_names_by, encode_with_warnings, merge,
+    unique_file_names_keeping_dots, with_black_output, writable, write_file,
 };
 
 const C: &str = "document.exportForScreens";
@@ -1184,7 +1184,7 @@ fn items(
     // the item folders are (`fold`).
     let safe = |stems: Vec<String>| distinct_names_by(stems.iter().map(|s| safe_file_name(s)), fold);
     let named = |pieces: Vec<(String, Arc<Document>, Option<usize>, Rect)>, fallback: &str| -> Vec<Item> {
-        let stems = safe(unique_file_names(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
+        let stems = safe(unique_file_names_keeping_dots(pieces.iter().map(|(n, ..)| (n.as_str(), fallback.to_string()))));
         pieces
             .into_iter()
             .zip(stems)
@@ -1210,6 +1210,9 @@ fn items(
         let mut pieces = vec![];
         for id in ids {
             let a = doc.asset(*id).ok_or_else(|| bad(C, format!("no asset {id} (see assets.list)")))?;
+            if a.format_3d.is_some() {
+                return Err(bad(C, format!("asset {id} is a 3D asset: assets.export3D writes it")));
+            }
             let (d, r) = alone(&a.nodes, &a.name).ok_or_else(|| bad(C, format!("asset `{}` has no art to export", a.name)))?;
             pieces.push((a.name.clone(), d, Some(0), r));
         }
@@ -1258,7 +1261,7 @@ fn items(
     if boards.is_empty() {
         return Err(bad(C, "the document has no artboard"));
     }
-    let stems = safe(artboard_file_names(doc, &boards));
+    let stems = safe(artboard_file_names_keeping_dots(doc, &boards));
     Ok(boards
         .into_iter()
         .zip(stems)

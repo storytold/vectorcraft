@@ -611,6 +611,9 @@ pub(crate) fn alt_code_char(code: u64) -> Option<char> {
 fn unicode_char(u: &str) -> Option<char> {
     let u = u.trim();
     let hex = u.strip_prefix("U+").or_else(|| u.strip_prefix("u+")).or_else(|| u.strip_prefix("0x")).unwrap_or(u);
+    if hex.is_empty() || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     char::from_u32(u32::from_str_radix(hex, 16).ok()?).filter(|c| !c.is_control() || *c == '\t')
 }
 
@@ -842,4 +845,19 @@ fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
         e.label = "Paste without Formatting".into();
     }
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unicode_char;
+
+    #[test]
+    fn unicode_char_rejects_sign_in_hex_digits() {
+        assert_eq!(unicode_char("+B0"), None);
+        assert_eq!(unicode_char("U++B0"), None);
+        assert_eq!(unicode_char("U+"), None);
+        assert_eq!(unicode_char("00B0"), Some('°'));
+        assert_eq!(unicode_char("U+00B0"), Some('°'));
+        assert_eq!(unicode_char("0x00B0"), Some('°'));
+    }
 }

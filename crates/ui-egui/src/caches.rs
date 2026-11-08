@@ -65,6 +65,10 @@ pub struct CanvasCache {
     /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
     /// again when the rect changes (the window going full screen).
     pub presented: Option<egui::Rect>,
+    /// The canvas a document's opening view was fitted to, with the view the fit gave. The window's
+    /// layout can still move the canvas's edges over the next frames, so until the view is moved or
+    /// the user acts, the opening view is fitted again when the canvas changes ([`canvas::show`]).
+    pub opening_fit: Option<canvas::ViewKey>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.

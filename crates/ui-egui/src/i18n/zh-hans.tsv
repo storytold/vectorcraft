@@ -1027,6 +1027,14 @@
 	Export As SVG…	导出为 SVG…
 	Export Asset	导出资源
 	Export Assets	导出资源
+	Export 3D Object	导出 3D 对象
+	3D Export Format	3D 导出格式
+	Export 3D Assets	导出 3D 资源
+@msg	{what} can't be exported in 3D: {e}	无法将 {what} 导出为 3D：{e}
+@msg	asset {id} isn't a 3D asset	资源 {id} 不是 3D 资源
+@msg	asset {id} is a 3D asset: assets.export3D writes it	资源 {id} 是 3D 资源：由 assets.export3D 写入
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	还没有 3D 资源：请先收集带有 3D 效果的对象 (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	请选择带有 3D 效果的对象 (或提供其 ID)
 	Export As…	导出为…
 	Export CSS	导出 CSS
 	Export CSS…	导出 CSS…
@@ -2669,6 +2677,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset Transformation	重置变换
 	Replace With Font	替换为字体
 	Replace With Font From	替换字体来源
+	Find In	查找范围
 	System	系统
 	Replaces the saved preset of that name.	替换同名已存预设。
 	Replace…	替换…
@@ -3859,14 +3868,14 @@ imageTrace	Outline	轮廓
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次启动时在其窗口出现之前于 {name} 上终止，因此本次在 {summary} 上启动。要再次尝试该图形处理器，请更改“首选项 › 性能 › 图形处理器”，或在设置 WGPU_BACKEND 后启动
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft 上次启动时在列出图形处理器期间终止，因此本次仅使用 OpenGL 在 {summary} 上启动。要再次尝试其他图形后端，请更改“首选项 › 性能 › 图形处理器”，或在设置 WGPU_BACKEND 后启动
 @msg	not a DXF drawing	不是 DXF 图纸
-@msg	scale must be a number from {_1} to {_2}, not {s}	比例必须是 {_1} 到 {_2} 之间的数字，而不是 {s}
+@msg	scale must be a number from {_1} to {_2}, not {s}	scale 必须是 {_1} 到 {_2} 之间的数字，而不是 {s}
 @msg	the artboard to fit must be a positive size up to {_1} pt	要适合的画板尺寸必须为正数，且不超过 {_1} pt
 @msg	the drawing has no layout `{_1}` (it has {_2})	图纸中没有布局 `{_1}` (它包含 {_2})
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	这是 DWG 图纸，无法读取：请在 CAD 应用中将其保存为 ASCII DXF，然后打开该文件
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	按此比例，图纸为 {w} × {h} pt，超出画布的容量：请选择较小的比例，或使其适合画板
 @msg	the scale is not a usable number	比例不是可用的数字
 @msg	the drawing is too large to open	图纸过大，无法打开
-@msg	scale must be a number from {_1} to {_2}, not {_3}	比例必须是 {_1} 到 {_2} 之间的数字，而不是 {_3}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	scale 必须是 {_1} 到 {_2} 之间的数字，而不是 {_3}
 @msg	an image has no pixels and was left out	已略去没有像素的图像
 @msg	object {0} cannot have children	对象 {0} 不能包含子对象
 @msg	range `{s}` is empty	范围 `{s}` 为空
@@ -3969,7 +3978,7 @@ imageTrace	Outline	轮廓
 @msg	{name}: no local header	{name}：没有本地文件头
 @msg	Flatten Transparency: select objects to flatten	拼合透明度：请选择要拼合的对象
 @msg	Flatten Transparency: {e}	拼合透明度：{e}
-@msg	balance must be between 0 and 100	平衡必须介于 0 到 100 之间
+@msg	balance must be between 0 and 100	balance 必须介于 0 到 100 之间
 @msg	resolutions must be between 1 and 2400 ppi	分辨率必须介于 1 到 2400 ppi 之间
 @msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	未知预设 `{name}` (high、medium、low 或已保存的预设：请参阅 flattener.presets.list)
 @msg	`at` must be [x, y]	`at` 必须是 [x, y]
@@ -4135,7 +4144,7 @@ imageTrace	Outline	轮廓
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
 @msg	no selected slice in the image: select slices, or save all of them	图像中没有选中的切片：请选择切片，或全部保存
 @msg	nothing to save: the document has no visible art	没有可保存的内容：文档中没有可见的图稿
-@msg	percent must be above 0 and at most 6400, not {p}	百分比必须大于 0 且不超过 6400，而不是 {p}
+@msg	percent must be above 0 and at most 6400, not {p}	percent 必须大于 0 且不超过 6400，而不是 {p}
 @msg	unknown preset `{name}` (see webExport.presets.list)	未知预设 `{name}` (请参阅 webExport.presets.list)
 @msg	width and height are at least 1 pixel	宽度和高度至少为 1 像素
 @msg	`sampleSize` must be 1, 3 or 5	`sampleSize` 必须是 1、3 或 5
@@ -4292,7 +4301,7 @@ imageTrace	Outline	轮廓
 @msg	is not an image VectorCraft reads	不是 VectorCraft 可读取的图像
 @msg	not found	未找到
 @msg	SVG parse error: {0}	SVG 解析错误：{0}
-@msg	decimals must be {_1}–{_2} (got {_3})	小数位数必须为 {_1}–{_2} (实际为 {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	decimals 必须为 {_1}–{_2} (实际为 {_3})
 @msg	Exporting {_1}	正在导出 {_1}
 @msg	Packaging {_1}	正在打包 {_1}
 @msg	Placing {_1}	正在置入 {_1}
@@ -4448,6 +4457,8 @@ imageTrace	Outline	轮廓
 @msg	no such action set	没有此动作组
 @msg	the action sets changed; nothing was deleted	动作组已更改；未删除任何内容
 @msg	no action set to save	没有要存储的动作组
+@msg	the action set file can't be read in full	无法完整读取动作组文件
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
@@ -4456,7 +4467,7 @@ imageTrace	Outline	轮廓
 @msg	choose a folder to export to	请选择要导出到的文件夹
 @msg	the selection has no URL (or they differ)	所选对象没有 URL (或其 URL 各不相同)
 @msg	select some type first	请先选择一些文字
-@msg	kerning must be a number, "auto", or "optical"	字偶距必须是数字、“auto”或“optical”
+@msg	kerning must be a number, "auto", or "optical"	kerning 必须是数字、“auto”或“optical”
 @msg	the selection has no gradient fill	所选对象没有渐变填色
 @msg	the selection has no gradient stroke	所选对象没有渐变描边
 @msg	the selection has no pattern fill	所选对象没有图案填色
@@ -4621,7 +4632,7 @@ imageTrace	Outline	轮廓
 @msg	before must name a panel	before 必须指定面板
 @msg	docking action contains an unknown panel or an excessive split path	停靠操作包含未知面板或过长的拆分路径
 @msg	group must be true or false	group 必须是 true 或 false
-@msg	panel is not in a dock group	面板不在停放组中
+@msg	panel is not in a dock group	panel 不在停放组中
 @msg	only a dock group above or below others collapses, not one beside another	只有位于其他组上方或下方的停放组可以折叠，并排的不行
 @msg	icon must be true or false	icon 必须为 true 或 false
 @msg	icon only docks a panel in the icon column, with no anchor	icon 只会把面板停放到图标栏中，不能带 anchor
@@ -4715,6 +4726,7 @@ imageTrace	Outline	轮廓
 	Report copied	已复制报告
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
+	Read Action Set File	读取动作组文件
 	Read Shortcut Set File	读取快捷键组文件
 	Import Matches	导入对应
 	Remember Import Matches	记住导入对应
@@ -5213,6 +5225,9 @@ effect	Horizontal	水平
 effect	Vertical	垂直
 	Edge	边缘
 	System Title Bar	系统标题栏
+	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 标题栏
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	设置了环境变量 VECTORCRAFT_TITLEBAR 时，由它选择标题栏。
+	System Title Bar takes precedence over this option while it is on.	开启系统标题栏时，它优先于此选项。
 	Value Axis	数值轴
 	On Left Side	左侧
 	On Right Side	右侧
@@ -6247,6 +6262,7 @@ breakText	Glyphs	字形
 	Reset Symbol Instance	重置符号实例
 @msg	type must be static or dynamic, not {v}	type 必须是 static 或 dynamic,而不是 {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	`{name}` 是静态符号:请先将其符号类型设为动态
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	在符号实例中选中的路径、复合路径或文字只能更改填色和描边的纯色
 @msg	path must be a list of child indices	path 必须是子项索引列表
 @msg	no object at path {shown} in the symbol's art	符号图稿中路径 {shown} 处没有对象
 @msg	give fill, stroke, opacity and/or blend	请提供 fill、stroke、opacity 和/或 blend
@@ -6344,3 +6360,25 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Safe Mode
+	Safe Mode…	安全模式…
+	Safe Mode	安全模式
+	Help › Safe Mode…	帮助 › 安全模式…
+	Enable on Re-launch	下次启动时启用
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	VectorCraft 上次启动时在载入增效工具 {name} 期间停止。该增效工具不一定是原因。
+	Disable and Continue	停用并继续
+	Start Normally	正常启动
+	Start in Safe Mode	以安全模式启动
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	VectorCraft 处于安全模式：在正常启动之前，不会载入或运行任何增效工具。
+	Disabled plug-ins	已停用的增效工具
+	No plug-ins are disabled.	没有停用的增效工具。
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	安全模式已开启：在 VectorCraft 正常启动之前，增效工具不会载入或运行
+@msg	give `id` or `file` (see plugin.safeMode)	请提供 `id` 或 `file` (请参阅 plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	该增效工具未停用 (请参阅 plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	无法为下次启动保存已停用的增效工具
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	扩展外观：在安全模式下无法扩展所选对象中的增效工具效果
+
+# Align to Pixel Grid
+	Align to Pixel Grid	对齐像素网格
+@msg	only paths and compound paths can be aligned to the pixel grid	只有路径和复合路径可以对齐像素网格

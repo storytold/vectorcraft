@@ -117,6 +117,8 @@ impl Session {
         // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
+        // `switch_tool` returns early for the tool already active.
+        self.select_whole_instance(id);
         if again {
             let acts = self.with_tool_cx(view, |t, cx| t.chosen_again(cx));
             self.apply_actions(acts)?;
@@ -147,8 +149,22 @@ impl Session {
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
+            self.select_whole_instance(id);
         }
         Ok(())
+    }
+
+    /// The selection tools other than Direct Selection pick whole objects: with one of them chosen,
+    /// an object selected in a symbol instance's art gives way to the instance. The revision
+    /// changes with it, so panels that cache by revision show the instance.
+    fn select_whole_instance(&mut self, id: &str) {
+        if id != "directSelection"
+            && vectorcraft_tools::catalog::is_selection_tool(id)
+            && let Some(st) = self.active_mut()
+            && st.selection.symbol_part.take().is_some()
+        {
+            st.revision += 1;
+        }
     }
 
     /// The selection tool Cmd lends tool `id` for a drag: the one chosen last; until one is,
@@ -200,7 +216,10 @@ impl Session {
             // Fails only without a document, and then there is no typing to keep.
             let _ = crate::cmd::settle_interaction(self);
         }
+        // The Selection and Group Selection tools act on the instance whole.
+        self.select_whole_instance(id);
         let lent = self.make_tool(id);
+        self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }
     }
@@ -214,6 +233,12 @@ impl Session {
         let r = self.apply_actions(acts);
         self.keep_tool_settings();
         self.tool = lender;
+        // A gesture that left the selection as it found it (a Shift marquee over nothing) picked
+        // nothing: the selection keeps what it was, the Pen's last anchor or an earlier pick.
+        let left = self.active().map(|d| (d.uid, d.selection.clone()));
+        if left != self.selection_at_lend.take() {
+            self.lent_selection = left;
+        }
         self.after_command(None);
         r.map(drop)
     }
@@ -315,6 +340,7 @@ impl Session {
             unit,
             stroke_unit,
             paste_plain_text: self.prefs.paste_text_formatting == "plain",
+            typed_from_keyboard: self.keyboard_text,
             slices_hidden: self.menu.slices_hidden,
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
@@ -598,11 +624,32 @@ impl Session {
         self.apply_actions(acts)
     }
 
+    /// Text typed on the keyboard (a key or an IME commit) for the active tool: as
+    /// [`Session::tool_text`], and Typographer's Quotes may also set a lone typed `”` as an opening
+    /// quote ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]). The Glyphs panel and pastes
+    /// use [`Session::tool_text`], so their quotes stay as inserted.
+    pub fn tool_typed_text(&mut self, text: &str, view: ViewInfo) -> Result<Vec<UiRequest>> {
+        self.keyboard_text = true;
+        let r = self.tool_text(text, view);
+        self.keyboard_text = false;
+        r
+    }
+
     /// Would [`Session::tool_text`] insert `text` unchanged (no control-character filtering,
     /// newline normalization or document formatting such as Typographer's Quotes)? An IME commit
     /// the application rewrites is an application edit, not an accepted IME insertion.
     pub fn tool_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
         self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
+    }
+
+    /// [`Session::tool_text_is_verbatim`] for text typed on the keyboard, as
+    /// [`Session::tool_typed_text`] would insert it: a lone typed `”` that Typographer's Quotes
+    /// turns into an opening quote is not verbatim.
+    pub fn tool_typed_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
+        self.keyboard_text = true;
+        let v = self.tool_text_is_verbatim(text, view);
+        self.keyboard_text = false;
+        v
     }
 
     /// Does the active tool's open typing session still match the document? An IME commit after

@@ -1030,6 +1030,14 @@ font-technology	Variable	Μεταβλητές
 	Export As SVG…	Εξαγωγή ως SVG…
 	Export Asset	Εξαγωγή στοιχείου
 	Export Assets	Εξαγωγή στοιχείων
+	Export 3D Object	Εξαγωγή αντικειμένου 3D
+	3D Export Format	Μορφή εξαγωγής 3D
+	Export 3D Assets	Εξαγωγή στοιχείων 3D
+@msg	{what} can't be exported in 3D: {e}	το {what} δεν μπορεί να εξαχθεί σε 3D: {e}
+@msg	asset {id} isn't a 3D asset	το στοιχείο {id} δεν είναι στοιχείο 3D
+@msg	asset {id} is a 3D asset: assets.export3D writes it	το στοιχείο {id} είναι στοιχείο 3D: το γράφει η assets.export3D
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	δεν υπάρχουν ακόμη στοιχεία 3D: συγκεντρώστε πρώτα ένα αντικείμενο με εφέ 3D (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	επιλέξτε ένα αντικείμενο με εφέ 3D (ή δώστε τα αναγνωριστικά του)
 	Export As…	Εξαγωγή ως…
 	Export CSS	Εξαγωγή CSS
 	Export CSS…	Εξαγωγή CSS…
@@ -1624,6 +1632,7 @@ font-technology	Variable	Μεταβλητές
 	Report copied	Η αναφορά αντιγράφηκε
 	Line {line}	Γραμμή {line}
 	Line {line}: {name}: {status}	Γραμμή {line}: {name}: {status}
+	Read Action Set File	Ανάγνωση αρχείου συνόλου ενεργειών
 	Read Shortcut Set File	Ανάγνωση αρχείου συνόλου συντομεύσεων
 	Import Matches	Αντιστοιχίσεις εισαγωγής
 	Remember Import Matches	Απομνημόνευση αντιστοιχίσεων εισαγωγής
@@ -2161,7 +2170,7 @@ axis	Both	Και τα δύο
 	Dock Control Bar	Αγκύρωση γραμμής ελέγχου
 @msg	no library `{id}`	Δεν υπάρχει βιβλιοθήκη με αναγνωριστικό `{id}`
 @msg	select some type first	Επιλέξτε πρώτα κάποιο κείμενο
-@msg	kerning must be a number, "auto", or "optical"	Η διαγραμμάτωση πρέπει να είναι αριθμός, «auto» ή «optical»
+@msg	kerning must be a number, "auto", or "optical"	το kerning πρέπει να είναι αριθμός, «auto» ή «optical»
 @msg	the selection has no gradient fill	η επιλογή δεν έχει ντεγκραντέ γεμίσματος
 @msg	the selection has no gradient stroke	η επιλογή δεν έχει ντεγκραντέ περιγράμματος
 @msg	the selection has no pattern fill	η επιλογή δεν έχει μοτίβο γεμίσματος
@@ -3332,6 +3341,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reset Transformation	Επαναφορά μετασχηματισμού
 	Replace With Font	Αντικατάσταση με γραμματοσειρά
 	Replace With Font From	Αντικατάσταση με γραμματοσειρά από
+	Find In	Αναζήτηση σε
 	System	Σύστημα
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
@@ -4152,7 +4162,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art ή type
 @msg	artboard {0} does not exist	ο πίνακας σχεδίασης {0} δεν υπάρχει
 @msg	at this scale the drawing is {w} × {h} pt, more than the canvas holds: choose a smaller scale or fit it to the artboard	σε αυτήν την κλίμακα το σχέδιο είναι {w} × {h} pt και υπερβαίνει τον καμβά: επιλέξτε μικρότερη κλίμακα ή προσαρμόστε το στον πίνακα σχεδίασης
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	ο άξονας πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	το axis πρέπει να είναι "vertical", "horizontal" ή γωνία σε μοίρες, όχι `{v}`
 @msg	background {other}: transparent, white, black or a colour such as "#ff8800"	φόντο {other}: transparent, white, black ή χρώμα όπως "#ff8800"
 @msg	bad color {v}	μη έγκυρο χρώμα {v}
 @msg	videoRulerPixelAspectRatio must be a number from 0.1 to 10	Το videoRulerPixelAspectRatio πρέπει να είναι αριθμός από 0,1 έως 10
@@ -4161,9 +4171,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	bad shortcut	μη έγκυρη συντόμευση
 @msg	bad stream length	μη έγκυρο μήκος ροής
 @msg	bad trailer	μη έγκυρο τελικό τμήμα
-@msg	balance must be between 0 and 100	η ισορροπία πρέπει να είναι μεταξύ 0 και 100
+@msg	balance must be between 0 and 100	το balance πρέπει να είναι μεταξύ 0 και 100
 @msg	batch step {_1} (`{id}`) failed: {e}	απέτυχε το βήμα {_1} της μαζικής επεξεργασίας (`{id}`): {e}
-@msg	brightness must be dark|mediumDark|mediumLight|light	η φωτεινότητα πρέπει να είναι dark|mediumDark|mediumLight|light
+@msg	brightness must be dark|mediumDark|mediumLight|light	το brightness πρέπει να είναι dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	δεν είναι δυνατή η κωδικοποίηση εγγράφου: {0}
 @msg	can't parse shortcut `{c}`	δεν είναι δυνατή η ανάλυση της συντόμευσης `{c}`
 @msg	can't parse shortcut `{s}` for `{k}`	δεν είναι δυνατή η ανάλυση της συντόμευσης `{s}` για `{k}`
@@ -4188,7 +4198,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	compound paths can only contain paths	οι σύνθετες διαδρομές μπορούν να περιέχουν μόνο διαδρομές
 @msg	compressed (RLE) bitmaps can't be read yet	τα συμπιεσμένα (RLE) bitmap δεν μπορούν ακόμη να διαβαστούν
 @msg	damaged	κατεστραμμένο
-@msg	decimals must be {_1}–{_2} (got {_3})	τα δεκαδικά πρέπει να είναι {_1}–{_2} (δόθηκε {_3})
+@msg	decimals must be {_1}–{_2} (got {_3})	το decimals πρέπει να είναι {_1}–{_2} (δόθηκε {_3})
 @msg	divide into 1 to {MAX_PIECES} slices	διαιρέστε σε 1 έως {MAX_PIECES} τομές
 @msg	effect {k} is `{_1}`, not `{id}`	το εφέ {k} είναι `{_1}`, όχι `{id}`
 @msg	empty brush stroke	κενό περίγραμμα πινέλου
@@ -4206,9 +4216,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an image has no pixels and was left out	παραλείφθηκε εικόνα χωρίς εικονοστοιχεία
 @msg	image data `{_1}` is missing	λείπουν τα δεδομένα εικόνας `{_1}`
 @msg	image would be too large; lower the resolution	η εικόνα θα ήταν υπερβολικά μεγάλη· μειώστε την ανάλυση
-@msg	index must be a number or first, previous, next or last	ο δείκτης πρέπει να είναι αριθμός ή first, previous, next ή last
-@msg	index must be a number or first, previous, next or last, not `{other}`	ο δείκτης πρέπει να είναι αριθμός ή first, previous, next ή last, όχι `{other}`
-@msg	index must be ≥ 0	ο δείκτης δεν μπορεί να είναι αρνητικός
+@msg	index must be a number or first, previous, next or last	το index πρέπει να είναι αριθμός ή first, previous, next ή last
+@msg	index must be a number or first, previous, next or last, not `{other}`	το index πρέπει να είναι αριθμός ή first, previous, next ή last, όχι `{other}`
+@msg	index must be ≥ 0	το index πρέπει να είναι ≥ 0
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	η εγκατάσταση από διαδρομή δεν υποστηρίζεται στο web· περάστε το πρόσθετο ως `dataBase64`
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	εσωτερικό σφάλμα στην εντολή `{cmd}`: {msg} (το έγγραφο έμεινε αμετάβλητο· αναφέρετε το σφάλμα)
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
@@ -4221,7 +4231,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	its Windows metafile preview was opened instead, which may simplify the art	αντί γι' αυτό ανοίχτηκε η προεπισκόπηση μετααρχείου Windows, η οποία μπορεί να απλοποιεί το σχέδιο
 @msg	its preview was placed instead, at screen resolution	τοποθετήθηκε η προεπισκόπησή του σε ανάλυση οθόνης
 @msg	join needs open paths	η ένωση απαιτεί ανοιχτές διαδρομές
-@msg	lang must be one of {_1}	η γλώσσα πρέπει να είναι μία από τις {_1}
+@msg	lang must be one of {_1}	το lang πρέπει να είναι ένα από τα {_1}
 @msg	layers can't be wrap objects	τα επίπεδα δεν μπορούν να είναι αντικείμενα αναδίπλωσης
 @msg	line {line}: value for `{var}` must be true or false	γραμμή {line}: η τιμή για το `{var}` πρέπει να είναι true ή false
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	γραμμή {line}: η τιμή για το `{var}` είναι μεγαλύτερη από {MAX_GRAPH_CSV} byte
@@ -4313,6 +4323,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such action set	δεν υπάρχει τέτοιο σύνολο ενεργειών
 @msg	the action sets changed; nothing was deleted	τα σύνολα ενεργειών άλλαξαν· δεν διαγράφηκε τίποτα
 @msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
+@msg	the action set file can't be read in full	το αρχείο συνόλου ενεργειών δεν μπορεί να διαβαστεί ολόκληρο
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
 @msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες
@@ -4387,9 +4399,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	replace: the object to replace was changed or deleted	αντικατάσταση: το αντικείμενο προς αντικατάσταση άλλαξε ή διαγράφηκε
 @msg	pattern missing	λείπει το μοτίβο
 @msg	patterns nested too deeply are filled with mid-grey	τα πολύ βαθιά ένθετα μοτίβα γεμίζονται με μέτριο γκρι
-@msg	percent must be above 0 and at most 6400, not {p}	το ποσοστό πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
+@msg	percent must be above 0 and at most 6400, not {p}	το percent πρέπει να είναι μεγαλύτερο από 0 και έως 6400, όχι {p}
 @msg	pick a colour, gradient or pattern to save as a swatch	επιλέξτε χρώμα, ντεγκραντέ ή μοτίβο για αποθήκευση ως δείγμα
-@msg	plane must be left, right or ground	το επίπεδο πρέπει να είναι left, right ή ground
+@msg	plane must be left, right or ground	το plane πρέπει να είναι left, right ή ground
 @msg	plug-in ABI: {0}	ABI προσθέτου: {0}
 @msg	plug-in exceeded its {0}	το πρόσθετο υπερέβη το όριο {0}
 @msg	plug-in failed: {0}	το πρόσθετο απέτυχε: {0}
@@ -4408,8 +4420,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	result would exceed the canvas (coordinates out of range)	το αποτέλεσμα θα υπερέβαινε τον καμβά (συντεταγμένες εκτός εύρους)
 @msg	objects can't be nested more than 32 deep	τα αντικείμενα δεν μπορούν να έχουν ένθεση μεγαλύτερη των 32 επιπέδων
 @msg	the SVG's elements are nested more than {0} deep	τα στοιχεία SVG έχουν ένθεση μεγαλύτερη των {0} επιπέδων
-@msg	scale must be a number from {_1} to {_2}, not {_3}	η κλίμακα πρέπει να είναι αριθμός από {_1} έως {_2}, όχι {_3}
-@msg	scale must be a number from {_1} to {_2}, not {s}	η κλίμακα πρέπει να είναι αριθμός από {_1} έως {_2}, όχι {s}
+@msg	scale must be a number from {_1} to {_2}, not {_3}	το scale πρέπει να είναι αριθμός από {_1} έως {_2}, όχι {_3}
+@msg	scale must be a number from {_1} to {_2}, not {s}	το scale πρέπει να είναι αριθμός από {_1} έως {_2}, όχι {s}
 @msg	select (or target) objects whose appearance isn't basic	επιλέξτε (ή στοχεύστε) αντικείμενα των οποίων η εμφάνιση δεν είναι βασική
 @msg	select a Live Paint group	επιλέξτε ομάδα δυναμικής βαφής
 @msg	select a blend	επιλέξτε ανάμειξη
@@ -4786,6 +4798,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	RGB:	RGB:
 	CMYK:	CMYK:
 	System Title Bar	Γραμμή τίτλου συστήματος
+	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
+	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
+	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά
@@ -4798,12 +4813,12 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit Data Set	Επεξεργασία συνόλου δεδομένων
 	Define a variable first	Ορίστε πρώτα μία μεταβλητή
 @msg	Invalid panel layout; restored the default dock	Μη έγκυρη διάταξη πινάκων· επανήλθε η προεπιλεγμένη περιοχή σύνδεσης
-@msg	action is required	απαιτείται ενέργεια
+@msg	action is required	απαιτείται το action
 @msg	anchor must name a registered panel	το anchor πρέπει να ορίζει καταχωρισμένο πίνακα
 @msg	before must name a panel	το before πρέπει να ορίζει πίνακα
 @msg	docking action contains an unknown panel or an excessive split path	η ενέργεια σύνδεσης περιέχει άγνωστο πίνακα ή υπερβολικά βαθιά διαδρομή διαίρεσης
 @msg	group must be true or false	το group πρέπει να είναι true ή false
-@msg	panel is not in a dock group	Το πάνελ δεν βρίσκεται σε ομάδα αγκύρωσης
+@msg	panel is not in a dock group	το panel δεν βρίσκεται σε ομάδα αγκύρωσης
 @msg	only a dock group above or below others collapses, not one beside another	συμπτύσσεται μόνο ομάδα αγκύρωσης πάνω ή κάτω από άλλες, όχι δίπλα σε άλλη
 @msg	icon must be true or false	το icon πρέπει να είναι true ή false
 @msg	icon only docks a panel in the icon column, with no anchor	το icon αγκυρώνει πάνελ μόνο στη στήλη εικονιδίων, χωρίς anchor
@@ -5260,7 +5275,7 @@ effect	Vertical	Κατακόρυφο
 effect	Points	Σημεία
 	Single Corner Radius	Ακτίνα μίας γωνίας
 	CMYK	CMYK
-@msg	control must be fillStroke, coloring, drawMode or screenMode	Το στοιχείο ελέγχου πρέπει να είναι fillStroke, coloring, drawMode ή screenMode
+@msg	control must be fillStroke, coloring, drawMode or screenMode	το control πρέπει να είναι fillStroke, coloring, drawMode ή screenMode
 	Draw Mode Controls	Στοιχεία ελέγχου λειτουργίας σχεδίασης
 	Hold	Κρατήστε πατημένο
 	Latin	Λατινικά
@@ -6358,6 +6373,7 @@ breakText	Glyphs	Γλύφοι
 	Reset Symbol Instance	Επαναφορά στιγμιότυπου συμβόλου
 @msg	type must be static or dynamic, not {v}	το type πρέπει να είναι static ή dynamic, όχι {v}
 @msg	`{name}` is a static symbol: set its Symbol Type to Dynamic first	το `{name}` είναι στατικό σύμβολο: ορίστε πρώτα τον τύπο συμβόλου σε Δυναμικό
+@msg	Only the solid color fill and stroke of a path, compound path or type selected in a symbol instance can change	Σε διαδρομή, σύνθετη διαδρομή ή κείμενο που έχει επιλεγεί σε στιγμιότυπο συμβόλου αλλάζει μόνο το συμπαγές χρώμα του γεμίσματος και της πινελιάς
 @msg	path must be a list of child indices	το path πρέπει να είναι λίστα δεικτών θυγατρικών αντικειμένων
 @msg	no object at path {shown} in the symbol's art	δεν υπάρχει αντικείμενο στη διαδρομή {shown} στο γραφικό του συμβόλου
 @msg	give fill, stroke, opacity and/or blend	δώστε fill, stroke, opacity ή/και blend
@@ -6455,3 +6471,25 @@ breakText	Glyphs	Γλύφοι
 # 3D Box add-on
 	3D Box	Κουτί 3D
 	3D Box Tool	Εργαλείο κουτιού 3D
+
+# Safe Mode
+	Safe Mode…	Ασφαλής λειτουργία…
+	Safe Mode	Ασφαλής λειτουργία
+	Help › Safe Mode…	Βοήθεια › Ασφαλής λειτουργία…
+	Enable on Re-launch	Ενεργοποίηση στην επόμενη εκκίνηση
+	The last launch of VectorCraft stopped while the plug-in {name} was loading. It may not be what stopped it.	Η τελευταία εκκίνηση του VectorCraft σταμάτησε ενώ φορτωνόταν το πρόσθετο {name}. Ίσως δεν είναι αυτό η αιτία.
+	Disable and Continue	Απενεργοποίηση και συνέχεια
+	Start Normally	Κανονική εκκίνηση
+	Start in Safe Mode	Εκκίνηση σε ασφαλή λειτουργία
+	VectorCraft is in Safe Mode: no plug-ins load or run until it starts normally.	Το VectorCraft είναι σε ασφαλή λειτουργία: κανένα πρόσθετο δεν φορτώνεται ούτε εκτελείται μέχρι να ξεκινήσει κανονικά.
+	Disabled plug-ins	Απενεργοποιημένα πρόσθετα
+	No plug-ins are disabled.	Δεν υπάρχουν απενεργοποιημένα πρόσθετα.
+@msg	Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally	Η ασφαλής λειτουργία είναι ενεργή: τα πρόσθετα δεν φορτώνονται ούτε εκτελούνται μέχρι το VectorCraft να ξεκινήσει κανονικά
+@msg	give `id` or `file` (see plugin.safeMode)	δώστε `id` ή `file` (δείτε plugin.safeMode)
+@msg	that plug-in isn't disabled (see plugin.safeMode)	αυτό το πρόσθετο δεν είναι απενεργοποιημένο (δείτε plugin.safeMode)
+@msg	Couldn't save the disabled plug-ins for the next launch	Δεν ήταν δυνατή η αποθήκευση των απενεργοποιημένων πρόσθετων για την επόμενη εκκίνηση
+@msg	Expand Appearance: a plug-in effect in the selection can't be expanded in Safe Mode	Επέκταση εμφάνισης: ένα εφέ πρόσθετου στην επιλογή δεν μπορεί να επεκταθεί σε ασφαλή λειτουργία
+
+# Align to Pixel Grid
+	Align to Pixel Grid	Στοίχιση στο πλέγμα εικονοστοιχείων
+@msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
