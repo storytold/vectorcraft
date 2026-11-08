@@ -1193,4 +1193,41 @@ fn shadings_not_extended_paint_only_between_their_ends() {
     assert!(40.0 * (1.0 - (std::f64::consts::PI / sides as f64).cos()) <= 0.01 + 1e-9, "{sides} sides");
     let b = shade(3, "50 50 0 50 50 30", "/Extend [true true]");
     assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
+
+    // Axial along y, and extended at its start only.
+    let b = shade(2, "0 20 0 70", "");
+    assert!(near(b, Rect::new(0.0, 30.0, 100.0, 80.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [true false]");
+    assert!(near(b, Rect::new(0.0, 0.0, 90.0, 100.0)), "{b:?}");
+    // Diagonal: from (60, 60) to (90, 90) it paints where x + y lies from 120 to 180, a strip
+    // across the square's top-right corner whose own corners are cut off.
+    let r = read(
+        "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [60 60 90 90] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    assert!(near(bounds(&n), Rect::new(20.0, 0.0, 100.0, 80.0)), "{:?}", bounds(&n));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    for a in path.subpaths.iter().flat_map(|s| s.anchors.iter()) {
+        // Back in PostScript's y-up space.
+        let s = a.p.x + (100.0 - a.p.y);
+        assert!((120.0 - 1e-6..=180.0 + 1e-6).contains(&s), "{a:?}");
+    }
+    // The current transformation turns the axis: rotated a quarter turn about the centre, an axis
+    // from -40 to 40 along x runs up the page from y 10 to 90.
+    let r = read(
+        "50 50 translate 90 rotate << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [-40 0 40 0] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    assert!(near(bounds(&n), Rect::new(0.0, 10.0, 100.0, 90.0)), "{:?}", bounds(&n));
+    // Radial from a point off the circle's centre covers the hull of that point and the circle.
+    let b = shade(3, "20 50 0 60 50 30", "");
+    assert!((b.x0 - 20.0).abs() < 0.5 && (b.x1 - 90.0).abs() < 0.5 && (b.y0 - 20.0).abs() < 0.5 && (b.y1 - 80.0).abs() < 0.5, "{b:?}");
+    // Radial shadings this doesn't bound (extended at one end, or starting from a circle) still
+    // paint the whole area.
+    for (coords, extend) in [("50 50 0 50 50 30", "/Extend [true false]"), ("50 50 0 50 50 30", "/Extend [false true]"), ("50 50 10 50 50 30", "")] {
+        let b = shade(3, coords, extend);
+        assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{coords} {extend}: {b:?}");
+    }
 }
