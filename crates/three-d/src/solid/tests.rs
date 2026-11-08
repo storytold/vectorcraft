@@ -782,3 +782,38 @@ fn crossing_contours_make_one_outline() {
     // The filled area is the union's: the stem, the arm past it and the leg past the arm.
     assert!(close(vectorcraft_pathops::area(&k, FillRule::NonZero), 20.0 * 100.0 + 40.0 * 20.0 + 20.0 * 50.0 - 10.0 * 10.0, 1e-6));
 }
+
+/// Resolving overlaps keeps every contour that fills area, however narrow: a hairline beside a
+/// large shape is art. What a boolean leaves where two curves coincide is still dropped.
+#[test]
+fn resolving_overlaps_keeps_narrow_contours() {
+    let rect = |r: Rect| {
+        vectorcraft_geom::SubPath::polyline(&[Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)], true)
+    };
+    let hairline = Rect::new(120.0, 0.0, 120.005, 50.0);
+    let p = PathData::new(vec![rect(Rect::new(0.0, 0.0, 100.0, 100.0)), rect(hairline)]);
+    let b = p.bounds().unwrap();
+    let filled = 100.0 * 100.0 + hairline.width() * hairline.height();
+    for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        assert!(close(area(&plane(&p, rule, b, front()).unwrap()), filled, 1e-6), "{rule:?}: Rotate");
+        assert!(close(area(&extrude(&p, rule, b, Extrude::default(), front()).unwrap()), filled, 1e-6), "{rule:?}: Extrude's cap");
+    }
+    // A circle drawn twice, exactly and a hair off, is one outline: no sliver between the copies.
+    let circle = |cx: f64, cy: f64, r: f64| {
+        let (mut b, k) = (BezPath::new(), 0.5523 * r);
+        b.move_to((cx + r, cy));
+        b.curve_to((cx + r, cy + k), (cx + k, cy + r), (cx, cy + r));
+        b.curve_to((cx - k, cy + r), (cx - r, cy + k), (cx - r, cy));
+        b.curve_to((cx - r, cy - k), (cx - k, cy - r), (cx, cy - r));
+        b.curve_to((cx + k, cy - r), (cx + r, cy - k), (cx + r, cy));
+        b.close_path();
+        b
+    };
+    for dx in [0.0, 1e-7] {
+        let mut twice = circle(50.0, 50.0, 40.0);
+        twice.extend(circle(50.0 + dx, 50.0, 40.0).iter());
+        let p = PathData::from_bezpath(&twice);
+        let f = plane(&p, FillRule::NonZero, p.bounds().unwrap(), front()).unwrap();
+        assert_eq!(f[0].contours.len(), 1, "{dx}");
+    }
+}

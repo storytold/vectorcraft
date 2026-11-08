@@ -19,13 +19,18 @@ fn pieces(c: vectorcraft_geom::CubicBez, tolerance: f64) -> u32 {
     if n.is_finite() { (n as u32).clamp(1, 32) } else { 32 }
 }
 
+/// Contours thinner than this on average (twice their area over their perimeter) are dropped when
+/// overlaps are resolved: the debris a boolean leaves where two curves coincide, far below any
+/// art. Pathfinder's default precision would drop real hairlines too.
+const DEBRIS: f64 = 1e-6;
+
 /// `path` with its overlaps resolved under `rule`: simple contours that do not cross,
 /// holes running against their outlines. Type often draws one glyph as overlapping contours (a
 /// "k"'s arm across its stem), and [`rings`] tells a contour's side from one point of it, so a
-/// contour that crosses another must be cut where they meet first. A path the boolean refuses is
-/// used as it is.
+/// contour that crosses another must be cut where they meet first. Every contour that fills area
+/// is kept, however narrow ([`DEBRIS`]). A path the boolean refuses is used as it is.
 pub(super) fn resolved(path: &PathData, rule: FillRule) -> (PathData, FillRule) {
-    match vectorcraft_pathops::try_normalize(path, rule) {
+    match vectorcraft_pathops::try_unite_all_with(&[(path, rule)], DEBRIS) {
         Ok(p) if !p.subpaths.is_empty() => (p, FillRule::NonZero),
         _ => (path.clone(), rule),
     }
