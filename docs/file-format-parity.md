@@ -102,7 +102,10 @@ private editing data. VectorCraft:
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
   scales, solid fills and strokes, capitals and paragraph alignment, indents, spacing and direction; other character
-  and paragraph attributes are left out with a warning. Type in opacity masks, pattern tiles, symbols and art cut to a
+  and paragraph attributes are left out with a warning. Each run's baseline direction is written in the form the reader
+  below reads it: 1 when Standard Vertical Roman Alignment is on, 2 when it is off and 3 for Tate-chu-yoko; the
+  document's defaults and the normal character style carry 1. A run with both Tate-chu-yoko and Standard Vertical Roman
+  Alignment is written as Tate-chu-yoko, with the type attributes warning. Type in opacity masks, pattern tiles, symbols and art cut to a
   clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type in an open frame,
   type on an open path whose ends meet, area type that flows around a text wrap, type of only white space, threads of
   type on a path, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
