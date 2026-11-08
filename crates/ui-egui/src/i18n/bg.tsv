@@ -4163,13 +4163,13 @@ axis	Both	И двете
 @msg	no point {i} (the gradient has {_1})	няма точка {i} (градиентът има {_1})
 @msg	no preset editor	няма редактор на предварителни настройки
 @msg	no previous transform	няма предишно трансформиране
-@msg	no print preset named `{base}`	няма предварителна настройка за печат с име „{base}“
-@msg	no print preset named `{name}`	няма предварителна настройка за печат с име „{name}“
+@msg	no print preset named `{base}`	няма предварителна настройка за печат с име `{base}`
+@msg	no print preset named `{name}`	няма предварителна настройка за печат с име `{name}`
 @msg	no print service	няма услуга за печат
 @msg	no revert command	няма команда за връщане
-@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име „{name}“ (вградените настройки са само за четене: създайте нова от тях)
+@msg	no saved PDF preset named `{name}` (built-in presets are read-only: start a new one from them)	няма запазен PDF просет с име `{name}` (вградените настройки са само за четене: създайте нова от тях)
 @msg	no saved presets	няма запазени предварителни настройки
-@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име „{name}“ ({DEFAULT_PRESET} е защитена: създайте нова от нея)
+@msg	no saved print preset named `{name}` ({DEFAULT_PRESET} is protected: start a new one from it)	няма запазена предварителна настройка за печат с име `{name}` ({DEFAULT_PRESET} е защитена: създайте нова от нея)
 @msg	no saved profiles	няма запазени профили
 @msg	no saved selection recalled	няма възстановена запазена селекция
 @msg	no saved selections	няма запазени селекции
@@ -4207,13 +4207,13 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
-@msg	no swatch `{name}`	няма образец „{name}“
-@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци „{l}“ (вижте swatch.library.list)
+@msg	no swatch `{name}`	няма образец `{name}`
+@msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
 @msg	no target object has an opacity mask: select one or give `id`	никой целеви обект няма маска за непрозрачност: изберете един или задайте `id`
 @msg	no threaded text selected	няма избран свързан текст
 @msg	no user library folder here	тук няма папка с потребителска библиотека
-@msg	no user workspace `{from}`	няма потребителско работно пространство „{from}“
+@msg	no user workspace `{from}`	няма потребителско работно пространство `{from}`
 @msg	node {_1} is not text	възелът {_1} не е текст
 @msg	not a DXF drawing	не е DXF чертеж
 @msg	not a VectorCraft file: {0}	не е файл на VectorCraft: {0}
