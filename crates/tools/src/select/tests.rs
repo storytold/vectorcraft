@@ -1307,7 +1307,7 @@ fn escape_cancels_a_marquee() {
     t.pointer(&cx, &ev(PointerKind::Drag, 120.0, 120.0));
     assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "Escape cancels the marquee");
     assert!(!t.busy());
-    assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_))), "the marquee is removed");
+    assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Marquee(_) | Overlay::SelectionMarquee { .. })), "the marquee is removed");
     assert!(t.pointer(&cx, &ev(PointerKind::Up, 120.0, 120.0)).is_empty(), "the release selects nothing");
 }
 
@@ -1378,6 +1378,58 @@ fn e_during_a_marquee_takes_only_the_objects_inside() {
     let mut t = SelectionTool::default();
     t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
     assert!(t.busy() && !t.claims_key(&cx, e));
+}
+
+/// Each rule selects what its feedback promises, with E reversing it for just this gesture.
+#[test]
+fn marquee_rules_and_feedback_agree() {
+    use crate::MarqueeMode::{Directional, Enclosed, Touching};
+    let (d, id) = doc_with_rect();
+    let (s, paint) = (Selection::default(), paint());
+    for (mode, right, expected) in
+        [(Touching, true, true), (Touching, false, true), (Enclosed, true, false), (Directional, true, false), (Directional, false, true)]
+    {
+        let c = ToolContext { marquee_mode: mode, ..cx(&d, &s, &paint) };
+        for inverted in [false, true] {
+            let mut tool = SelectionTool::default();
+            let (a, b) = if right { ((50.0, 50.0), (150.0, 150.0)) } else { ((150.0, 50.0), (50.0, 150.0)) };
+            tool.pointer(&c, &ev(PointerKind::Down, a.0, a.1));
+            tool.pointer(&c, &ev(PointerKind::Drag, b.0, b.1));
+            if inverted {
+                tool.key(&c, ToolKey::Letter('e'), Mods::default());
+            }
+            let selected = expected != inverted;
+            assert!(
+                tool.overlays(&c).iter().any(|o| matches!(o, Overlay::SelectionMarquee { enclosed, .. } if *enclosed != selected)),
+                "{mode:?} right={right} E={inverted}"
+            );
+            let out = tool.pointer(&c, &ev(PointerKind::Up, b.0, b.1));
+            assert_eq!(out, vec![Action::Exec("select.set".into(), json!({"ids": if selected { vec![id.0] } else { vec![] }}))]);
+            assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::SelectionMarquee { .. })));
+        }
+    }
+}
+
+/// Screen direction survives view rotation; near the press's x position, the last mode is kept.
+#[test]
+fn directional_marquee_uses_screen_direction_and_a_dead_zone() {
+    let (d, _) = doc_with_rect();
+    let (s, paint) = (Selection::default(), paint());
+    for angle in [0.0, 45.0, 90.0, 180.0, 270.0] {
+        for zoom in [0.25, 1.0, 4.0] {
+            let mut screen = turned_view(angle).unwrap();
+            screen.right /= zoom;
+            screen.down /= zoom;
+            let c = ToolContext { marquee_mode: crate::MarqueeMode::Directional, screen: Some(screen), zoom, ..cx(&d, &s, &paint) };
+            let start = screen.at(20.0, 20.0);
+            assert!(marquee_direction(&c, start, screen.at(24.0, 60.0), false));
+            assert!(!marquee_direction(&c, start, screen.at(16.0, 60.0), true));
+            for x in [18.0, 20.0, 22.0] {
+                assert!(marquee_direction(&c, start, screen.at(x, 60.0), true));
+                assert!(!marquee_direction(&c, start, screen.at(x, 60.0), false));
+            }
+        }
+    }
 }
 
 /// With E pressed during the drag, a marquee takes only the artboard guides that lie entirely
@@ -2025,7 +2077,10 @@ fn a_dropped_press_keeps_the_text_loaded() {
     t.pointer(&cx, &ev(PointerKind::Drag, 80.0, 90.0));
     assert!(t.drop_press(&cx).is_empty());
     assert!(t.pointer(&cx, &ev(PointerKind::Up, 80.0, 90.0)).is_empty(), "the release threads nothing");
-    assert!(!t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "the new frame's outline is removed");
+    assert!(
+        !t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Marquee(_) | Overlay::SelectionMarquee { .. })),
+        "the new frame's outline is removed"
+    );
     assert_eq!(t.cursor(&cx, Point::new(30.0, 420.0), Mods::default()), Cursor::LoadedText);
     // A press on the port that loaded the text puts it down; dropped, it leaves the text loaded.
     t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
@@ -2243,7 +2298,7 @@ fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     t.pointer(&c, &ev(PointerKind::Down, 400.0, 400.0));
     let a = t.pointer(&c, &ev(PointerKind::Drag, 450.0, 450.0));
     assert!(a.is_empty(), "{a:?}");
-    assert!(matches!(t.overlays(&c).first(), Some(Overlay::Marquee(_))), "a marquee");
+    assert!(matches!(t.overlays(&c).first(), Some(Overlay::SelectionMarquee { .. })), "a marquee");
 }
 
 /// A Shift-press on a selected object's centre point moves the selection too, held to 45° steps,

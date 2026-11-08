@@ -1,4 +1,4 @@
-use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, rings, signed_area};
+use super::rings::{MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, inset, left, signed_area, solid_rings};
 use super::{Bevel, Extrude, Facet, FillRule, MAX_FACES, PathData, Point, Rect, Revolve, V3, View, eye_distance, perspective_scale};
 
 /// Turns 3D points into document points and shades faces for one view.
@@ -41,6 +41,13 @@ impl Camera {
     }
 }
 
+/// A face of a solid before projection: its contours in view space (holes running the other way)
+/// and its outward normal.
+pub(crate) type Face3 = (Vec<Vec<V3>>, V3);
+
+/// What a solid's builder makes: its facets, or with a mesh asked for, its faces before projection.
+pub(crate) type Built = (Vec<Facet>, Vec<Face3>);
+
 /// Facets being collected for one solid.
 pub(super) struct Builder<'a> {
     pub(super) camera: &'a Camera,
@@ -51,6 +58,8 @@ pub(super) struct Builder<'a> {
     /// drawn behind the others.
     pub(super) hidden: bool,
     pub(super) facets: Vec<Facet>,
+    /// With `Some`, every face goes here as it is, none hidden or projected, for a mesh.
+    pub(super) mesh: Option<Vec<Face3>>,
 }
 
 /// Where a face goes in the order the facets are drawn, back to front.
@@ -74,6 +83,13 @@ impl Builder<'_> {
     pub(super) fn face(&mut self, contours: Vec<Vec<V3>>, n: V3, order: Order) -> Result<(), String> {
         let count: usize = contours.iter().map(Vec::len).sum();
         if count < 3 {
+            return Ok(());
+        }
+        if let Some(mesh) = &mut self.mesh {
+            mesh.push((contours, n.unit()));
+            if mesh.len() > MAX_FACES {
+                return Err("The 3D surface is too complex; simplify the shape".into());
+            }
             return Ok(());
         }
         let centre = contours.iter().flatten().fold(V3::default(), |s, v| V3(s.0 + v.0, s.1 + v.1, s.2 + v.2));
@@ -186,9 +202,15 @@ impl Builder<'_> {
         Ok(())
     }
 
-    pub(super) fn finish(mut self) -> Vec<Facet> {
+    /// How many faces the builder holds: facets, or faces kept for a mesh.
+    pub(super) fn len(&self) -> usize {
+        self.mesh.as_ref().map_or(self.facets.len(), Vec::len)
+    }
+
+    /// The facets back to front, and the faces kept for a mesh (none without [`Builder::mesh`]).
+    pub(super) fn finish(mut self) -> Built {
         self.facets.sort_by(|a, b| a.depth.total_cmp(&b.depth));
-        self.facets
+        (self.facets, self.mesh.unwrap_or_default())
     }
 }
 
@@ -374,15 +396,20 @@ fn steps(o: &Extrude) -> Vec<Step> {
 /// Extrude & Bevel: the shape's outline extruded backwards, with optional twist, taper, bevels
 /// and caps.
 pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Vec<Facet>, String> {
+    extrude_faces(path, rule, bounds, options, view, false).map(|(facets, _)| facets)
+}
+
+/// [`extrude`], or with `mesh` the solid's faces before projection instead of its facets.
+pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
     let o = options.sanitized();
     // No depth: the flat shape, seen from either side.
     if o.depth <= 0.0 {
-        return plane(path, rule, bounds, view);
+        return plane_faces(path, rule, bounds, view, mesh);
     }
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
     let camera = Camera::new(view, bounds, o.depth);
-    let mut b = Builder { camera: &camera, closed: o.cap, hidden: o.hidden, facets: vec![] };
+    let mut b = Builder { camera: &camera, closed: o.cap, hidden: o.hidden, facets: vec![], mesh: mesh.then(Vec::new) };
     let steps = steps(&o);
     let z = |t: f64| o.depth / 2.0 - o.depth * t;
     let ring_at =
@@ -432,10 +459,15 @@ pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, 
 /// Rotate: the flat art turned in 3D about the centre of `bounds` (which may be larger than the
 /// shape's own, so that every part of one object turns about the same point).
 pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Vec<Facet>, String> {
+    plane_faces(path, rule, bounds, view, false).map(|(facets, _)| facets)
+}
+
+/// [`plane`], or with `mesh` its face before projection instead of its facet.
+pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, mesh: bool) -> Result<Built, String> {
     check_bounds(bounds)?;
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
+    let rings = solid_rings(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS)?;
     let camera = Camera::new(view, bounds, 0.0);
-    let mut b = Builder { camera: &camera, closed: false, hidden: false, facets: vec![] };
+    let mut b = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: mesh.then(Vec::new) };
     let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(*p, 0.0)).collect()).collect();
     // A plane is one flat face, seen from either side. Its normal is turned toward the viewer, so
     // it is drawn last, as a cap is, and planes drawn in one order keep the order they are given in.

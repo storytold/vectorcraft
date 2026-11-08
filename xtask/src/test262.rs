@@ -1,7 +1,8 @@
 //! `cargo xtask test262`: the official ECMAScript conformance suite (https://github.com/tc39/test262,
 //! BSD-3-Clause) at a pinned commit, fetched as GitHub's archive of that commit, checked against
 //! its SHA-256 and size, and unpacked into `corpus/test262/` (gitignored, never committed). It then
-//! runs `vectorcraft-js`'s `test262` test, which parses the ES5 parse subset and prints its counts.
+//! runs `vectorcraft-js`'s `test262` tests, which parse the ES5 parse subset, run the ES5
+//! `test/language` tests that need only the interpreter's built-ins, and print each one's counts.
 //!
 //! Moving the pin: change [`COMMIT`], run the command once with the new commit to see the
 //! archive's SHA-256 in the error, check the archive, and update [`SHA256`].

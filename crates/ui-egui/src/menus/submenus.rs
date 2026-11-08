@@ -175,11 +175,15 @@ pub(super) fn effect_menu() -> Vec<Item> {
             out.push(item(e));
             continue;
         }
+        // Apply SVG Filter…, Import SVG Filter… and the document's filters.
+        if sub_name == "SVG Filters" {
+            out.push(sub(sub_name, crate::dialogs::svg_filter::menu_items()));
+            continue;
+        }
         let items = items_at(&["Effect", sub_name], true);
         if items.is_empty() {
             let placeholder = match sub_name {
                 "3D and Materials" => vec![todo("Extrude & Bevel…"), todo("Revolve…"), todo("Inflate…"), todo("Rotate…"), todo("Materials…")],
-                "SVG Filters" => vec![todo("Apply SVG Filter…")],
                 _ => continue,
             };
             out.push(sub(sub_name, placeholder));

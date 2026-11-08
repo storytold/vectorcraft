@@ -64,6 +64,10 @@ pub(super) const EXISTS_SPEC: DialogSpec = DialogSpec {
 /// or add `effect`, first asking when that list already has it.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("effect").and_then(Value::as_str).unwrap_or_default();
+    // An SVG filter is chosen and edited in Apply SVG Filter.
+    if id == vectorcraft_effects::SVG_FILTER {
+        return super::svg_filter::open(app, p);
+    }
     let info = vectorcraft_effects::effect_info(id).ok_or_else(|| format!("unknown effect `{id}`"))?;
     // The list the effect goes to: `item` as given, else the active item's (the object's without
     // one). A new effect keeps `item` unresolved, so `effect.apply` targets each object as usual.
