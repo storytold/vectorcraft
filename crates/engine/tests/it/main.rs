@@ -18,6 +18,7 @@ mod dimensions;
 mod eyedropper_sources;
 mod find_replace_paras;
 mod inline_text;
+mod js_lexer_vs_scriptcheck;
 mod known_bugs;
 mod lossy_overwrite;
 mod model_based;
