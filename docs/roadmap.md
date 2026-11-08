@@ -1,6 +1,6 @@
 # Roadmap: milestones and what's next
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (SVG CSS classes survive export and repeated import in all four styling modes (#2480); current-main integration retains event attributes and scripts; Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-07 · **Change:** minor (Selection QoL: marquee modes and visible feedback, #5313; SVG CSS classes survive export and repeated import in all four styling modes (#2480); current-main integration retains event attributes and scripts; Indian-language hyphenation review and license allowlist, #4947; Hindi catalog and contributor loanword preferences; full wording review in progress; Effect dialogs: a colour swatch beside a hex colour opens the Color Picker, #5365; shape tools move the selection from its centre point and turn it from the zone outside a box corner, #5477; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 ## Feature submission evidence
 
