@@ -1,5 +1,8 @@
 # Gaps
 
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-03 · **Change:** minor (Tools stays beside the canvas with left-side panels; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+
+Docked Tools stays beside the canvas, inside any left-side panels. Both the canvas edge and the window edge accept floating Tools. Existing saved workspace fields are reused. This is a requested layout choice; [toolbar documentation](https://helpx.adobe.com/illustrator/using/tools.html) and [workspace documentation](https://helpx.adobe.com/illustrator/using/customizing-workspace.html) describe movability and docking, without establishing this exact relative placement. Sidebar resizing (#5348) remains separate. Scores and estimates are unchanged.
 > **QoL update (2026-11-02):** Selection-tool marquees offer Touching (default), Fully Enclosed and Drag Direction in Preferences › Selection & Anchor Display. Drag Direction uses screen left/right, including rotated views, retaining its last rule within three horizontal screen pixels of the press. E reverses the rule for the current drag. A solid enclosed outline or dashed touching outline and a translated label show the active rule. The selection region remains aligned to the document axes. This is a VectorCraft addition; scores and estimates are unchanged.
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-02 · **Change:** minor (Selection QoL: marquee modes and visible feedback, #5313; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
@@ -41,6 +44,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
 | 2026-11-07 | minor | Indian-language hyphenation (#4947): eleven MIT-licensed pattern sets, with grapheme and shaping-cluster protection in both composers and existing paragraph limits. Assamese and Sanskrit are selectable; Sanskrit automatic patterns remain pending an allowlisted source. Scores and estimates unchanged. |
 | 2026-11-05 | minor | G15: long open strokes with an undashed width profile are outlined near the view while keeping profile positions on the full path; a 200,000-segment outline took 59.95 ms before and 8.44 ms after in local median runs. Closed and dashed profile strokes remain whole; estimate unchanged. |
