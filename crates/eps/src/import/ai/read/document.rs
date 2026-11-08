@@ -149,15 +149,7 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     }
     // Reading can stop before the artboards (art kept in the document's data comes first), or
     // between them and the active artboard's entry: read their array on its own.
-    let Some((array, active)) = artboard_array(data) else { return found };
-    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
-    alone.extend_from_slice(array);
-    if let Some(active) = active {
-        alone.push(b'\n');
-        alone.extend_from_slice(active);
-    }
-    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
-    let (boards, active) = artboards_read(&alone);
+    let Some((boards, active)) = artboard_array_read(data) else { return found };
     if found.0.is_empty() {
         (boards, active)
     } else if boards == found.0 {
@@ -166,6 +158,29 @@ pub fn artboards(data: &[u8]) -> (Vec<(String, Rect)>, Option<usize>) {
     } else {
         found
     }
+}
+
+/// The index of the active artboard (`CropAreaActive`) in the `ArtboardArray` of the editing data
+/// `data`, as [`artboards`] reads it, from that array and the entry beside it alone.
+pub fn active_artboard(data: &[u8]) -> Option<usize> {
+    artboard_array_read(data)?.1
+}
+
+/// Artboards as [`artboards`] gives them: names and rects in art space, and the active one's index.
+type ArtboardsRead = (Vec<(String, Rect)>, Option<usize>);
+
+/// The `ArtboardArray` entry of the editing data `data` ([`artboard_array`]), with the
+/// `CropAreaActive` entry beside it, read on their own as [`artboards_read`] reads them.
+fn artboard_array_read(data: &[u8]) -> Option<ArtboardsRead> {
+    let (array, active) = artboard_array(data)?;
+    let mut alone = b"%_/Document :\n%_/Dictionary :\n".to_vec();
+    alone.extend_from_slice(array);
+    if let Some(active) = active {
+        alone.push(b'\n');
+        alone.extend_from_slice(active);
+    }
+    alone.extend_from_slice(b"\n%_; /NotRecorded ,\n%_;\n");
+    Some(artboards_read(&alone))
 }
 
 /// The key that ends the `ArtboardArray` entry of the editing data.
