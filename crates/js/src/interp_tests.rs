@@ -118,6 +118,11 @@ fn objects_arrays_and_accessors() {
     truth("'abc'.length === 3 && 'abc'[1] === 'b' && 'abc'.x === undefined");
     truth("var o = {}; o.hasOwnProperty('x') === false && ({x: 1}).hasOwnProperty('x')");
     truth("Object.prototype.toString.call([]) === '[object Array]' && Object.prototype.toString.call(null) === '[object Null]'");
+    // Error.prototype and each NativeError prototype are Error objects (sections 15.11.4 and 15.11.7.7).
+    truth(
+        "var s = Object.prototype.toString, all = [Error, EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError], ok = true;\
+         for (var i = 0; i < all.length; i++) ok = ok && s.call(all[i].prototype) === '[object Error]'; ok",
+    );
     let e = fail("var a = []; a.length = -1");
     assert!(e.message.starts_with("RangeError"), "{}", e.message);
     let e = fail("'use strict'; var o = { get x() { return 1; } }; o.x = 2;");
@@ -387,6 +392,13 @@ fn shrinking_an_array_takes_fuel_for_each_property() {
 }
 
 #[test]
+fn apply_takes_fuel_for_each_argument_it_reads() {
+    let mut realm = small(Limits { fuel: 1000, ..Limits::default() });
+    assert_eq!(limit(&mut realm, "(function () {}).apply(null, {length: 65536});"), LimitKind::Fuel);
+    assert_eq!(realm.run("(function () { return arguments.length; }).apply(null, {length: 100})"), Ok(JsValue::Number(100.0)));
+}
+
+#[test]
 fn declarations_check_the_heap_before_they_are_bound() {
     // Each script declares more than fits in the heap. The run ends with the heap limit before
     // the bindings are made, so the estimate never goes past the limit.
@@ -454,6 +466,19 @@ fn a_lower_heap_limit_applies_to_what_is_already_live() {
     let live = realm.collect_garbage();
     realm.set_limits(Limits { heap_bytes: live + (1 << 20), ..Limits::default() });
     assert_eq!(limit(&mut realm, "var more = []; for (var j = 0; j < 20000; j++) more[j] = {j: j};"), LimitKind::Heap);
+}
+
+#[test]
+fn apply_keeps_its_arguments_alive_while_a_native_function_runs() {
+    // The first argument's toString makes 20,000 objects, more than a 1 MiB heap holds, so a
+    // collection runs before it returns. The second argument is reachable only from the list
+    // that apply read from the array-like object.
+    let mut realm = small(Limits { heap_bytes: 1 << 20, ..Limits::default() });
+    let src = "var list = {length: 2, \
+        get 0() { return {toString: function () { for (var i = 0; i < 20000; i++) ({i: i}); return 'a'; }}; }, \
+        get 1() { return {toString: function () { return 'return a * 2'; }}; }}; \
+        Function.apply(null, list)(21)";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(42.0)));
 }
 
 #[test]

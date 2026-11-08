@@ -1691,9 +1691,6 @@ impl Interp {
     /// Resolves `call` and `apply` and runs native and host functions; a function written in
     /// JavaScript comes back to be entered by the caller.
     fn prepare_call(&mut self, mut f: Value, mut this: Value, mut args: Vec<Value>) -> JsResult<Prepared> {
-        // The arguments `apply` reads and those a bound function adds are not on the operand
-        // stack, so a native function's collection must be told about them.
-        let mut unrooted = false;
         loop {
             let Some(func) = self.func_of(&f) else { return Err(self.type_error("the value is not a function")) };
             match func {
@@ -1715,7 +1712,6 @@ impl Interp {
                     f = this;
                     this = args.first().cloned().unwrap_or(Value::Undefined);
                     args = self.list_from_array_like(&list)?;
-                    unrooted = true;
                 }
                 Func::Bound { target, this: bound_this, args: bound_args } => {
                     self.use_fuel()?;
@@ -1725,15 +1721,18 @@ impl Interp {
                     args = all;
                     this = bound_this;
                     f = Value::Object(target);
-                    unrooted = true;
                 }
-                Func::Native { f: native, .. } if unrooted => {
-                    let mut roots = args.clone();
-                    roots.push(this.clone());
-                    let v = self.rooted(&roots, |interp| native(interp, this, &args, false))?;
-                    return Ok(Prepared::Done(v));
+                Func::Native { f: native, .. } => {
+                    // A list from `apply` and the arguments a bound function adds are not on the
+                    // operand stack, and a native function can run JavaScript that collects, so the
+                    // arguments stay rooted for the call.
+                    let mark = self.temp_roots.len();
+                    self.temp_roots.push(this.clone());
+                    self.temp_roots.extend(args.iter().cloned());
+                    let r = native(self, this, &args, false);
+                    self.temp_roots.truncate(mark);
+                    return Ok(Prepared::Done(r?));
                 }
-                Func::Native { f: native, .. } => return Ok(Prepared::Done(native(self, this, &args, false)?)),
                 Func::Host { f: host, .. } => {
                     let js_args: Vec<crate::JsValue> = args.iter().map(|v| self.to_js_value(v)).collect();
                     return match host(&js_args) {
@@ -1766,7 +1765,8 @@ impl Interp {
         let saved = self.temp_roots.len();
         let mut out = Vec::with_capacity(n);
         for i in 0..n {
-            match self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list) {
+            // Each element read takes fuel, so a long array-like list stays within the run's limits.
+            match self.use_fuel().and_then(|()| self.get_from(*o, &index_key(u32::try_from(i).unwrap_or(u32::MAX)), list)) {
                 Ok(v) => {
                     self.temp_roots.push(v.clone());
                     out.push(v);
