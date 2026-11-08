@@ -1,5 +1,6 @@
 //! History panel › New Document from State (`edit.newDocumentFromState`).
 
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -262,7 +263,7 @@ fn a_file_the_source_finds_in_its_folder_is_found_from_the_new_document() {
     s.execute(CMD, &json!({})).unwrap();
     assert_eq!(s.active_index(), Some(1), "the new document");
     let c = check(&mut s);
-    assert_eq!((&c["links"][0]["status"], &c["links"][0]["path"]), (&json!("ok"), &json!(moved)), "{c}");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&moved))), "{c}");
 }
 
 /// A linked file missing from the moved source keeps the place its relative path names from the
@@ -311,7 +312,7 @@ fn a_file_back_beside_the_source_it_was_read_from_is_found_from_the_new_document
     s.execute(CMD, &json!({})).unwrap();
     let c = s.execute("links.check", &json!({})).unwrap();
     let moved = b.file("art/photo.png");
-    assert_eq!((&c["links"][0]["status"], &c["links"][0]["path"]), (&json!("ok"), &json!(moved)), "{c}");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&moved))), "{c}");
     // A file beside the folder the source was last saved in is found too.
     std::fs::create_dir_all(b.0.join("saved/art")).unwrap();
     std::fs::rename(&moved, b.file("saved/art/photo.png")).unwrap();
@@ -319,7 +320,7 @@ fn a_file_back_beside_the_source_it_was_read_from_is_found_from_the_new_document
     s.execute(CMD, &json!({})).unwrap();
     let c = s.execute("links.check", &json!({})).unwrap();
     let saved = b.file("saved/art/photo.png");
-    assert_eq!((&c["links"][0]["status"], &c["links"][0]["path"]), (&json!("ok"), &json!(saved)), "{c}");
+    assert_eq!((&c["links"][0]["status"], c["links"][0]["path"].as_str().map(Path::new)), (&json!("ok"), Some(Path::new(&saved))), "{c}");
     // Missing again when the new document is saved, the file keeps the place it was found.
     std::fs::rename(&saved, away.file("photo.png")).unwrap();
     std::fs::create_dir_all(b.0.join("new")).unwrap();
