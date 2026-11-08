@@ -447,6 +447,10 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     let n = image_node(&mut d, "e", (3, 1), None);
     let id = d.insert(Some(layer), usize::MAX, n).unwrap();
     assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["pixelsOmitted"], json!(true), "not the size it says");
+    // A size whose pixel count overflows is omitted too.
+    let n = image_node(&mut d, "e", (u32::MAX, u32::MAX), None);
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["pixelsOmitted"], json!(true), "too large to count");
     // Gray pixels, and data that isn't an image.
     let mut gray = vec![];
     image::GrayImage::from_pixel(2, 2, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();

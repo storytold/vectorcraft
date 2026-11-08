@@ -421,8 +421,8 @@ fn color_mode(b: &ImageBlob) -> &'static str {
 /// The pixels of image `b` as straight RGBA, when it is `w` × `h` pixels and they fit `max`
 /// characters of base64; the size is checked, and read from the header, before anything is decoded.
 fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize) -> Option<Vec<u8>> {
-    let bytes = u64::from(w) * u64::from(h) * 4;
-    if bytes == 0 || bytes.div_ceil(3) * 4 > max as u64 {
+    let bytes = u64::from(w).checked_mul(u64::from(h))?.checked_mul(4)?;
+    if bytes == 0 || bytes.div_ceil(3).saturating_mul(4) > max as u64 {
         return None;
     }
     if b.is_cmyk() {
