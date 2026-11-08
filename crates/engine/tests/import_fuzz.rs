@@ -4562,6 +4562,8 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "1e308 Ty",
             "1 TY",
             "(x) TY",
+            "3 Tg",
+            "1e308 Tg",
             "1 1 1e308 -1e308 4e9 Th",
             "1 1 (2) 3 4 Th",
             "36 2 Xb",

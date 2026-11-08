@@ -5529,8 +5529,8 @@ Force) of the selected type (or `ids`): an East Asian comma or full stop ending 
 ､｡) hangs outside the frame, Regular only when it doesn't fit, Force always (the rest of the line then fills the
 measure). Closing brackets and Latin punctuation don't hang; point type, right-to-left and hyphenated lines are left as
 they are. The hanging mark is as wide as its punctuation spacing makes it (`mojikumi`). New type (the Type tools,
-`text.create`) takes `standard`; documents from before it and imported text keep `none`, and `none` isn't saved. One
-undo step.
+`text.create`) takes `standard`; documents from before it and imported text keep `none`, except legacy `.ai` type
+with binding punctuation (`Tg`) on, which opens as `forced`. `none` isn't saved. One undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"burasagari":"forced"}}}

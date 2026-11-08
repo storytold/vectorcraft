@@ -3599,6 +3599,32 @@ fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
     assert_eq!(texts[1].para_at(0), two);
 }
 
+/// `Tg` (§15.3.4) turns binding punctuation on (1 and 3) or off (0 and 2); VectorCraft opens it on
+/// as Burasagari's Force setting. Each paragraph of point type and area type keeps the value in
+/// force at its first character, and it lasts into the next text object.
+#[test]
+fn legacy_type_keeps_its_binding_punctuation() {
+    use vectorcraft_doc::Burasagari;
+    let burasagari = |attrs: &str| legacy_texts(&point_type(attrs, "Hi"))[0].para_at(0).burasagari;
+    assert_eq!(burasagari(""), Burasagari::None);
+    for on in ["1", "3"] {
+        assert_eq!(burasagari(&format!("0 Tg\n{on} Tg")), Burasagari::Forced, "{on} Tg");
+    }
+    for off in ["0", "2"] {
+        assert_eq!(burasagari(&format!("1 Tg\n{off} Tg")), Burasagari::None, "{off} Tg");
+    }
+    let two_paragraphs = point_type("1 Tg", "One\\r").replace("TO\n", "0 Tg\n(Two) Tx\nTO\n");
+    let texts = legacy_texts(&format!("{two_paragraphs}{}{}", point_type("3 Tg", "Three"), point_type("", "Four")));
+    let each: Vec<Burasagari> = vec![texts[0].para_at(0).burasagari, texts[0].para_at(1).burasagari, texts[1].para_at(0).burasagari];
+    assert_eq!(each, [Burasagari::Forced, Burasagari::None, Burasagari::Forced]);
+    assert_eq!(texts[2].para_at(0).burasagari, Burasagari::Forced, "the next text object keeps it");
+    let frame = "10 10 m\n110 10 L\n110 110 L\n10 110 L\nN";
+    let area = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n1 Tg\n(Area) Tx\nTO\n");
+    let texts = legacy_texts(&area);
+    assert!(matches!(texts[0].kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert_eq!(texts[0].para_at(0).burasagari, Burasagari::Forced, "area type");
+}
+
 /// `TV` (§15.3.4) sets the writing direction of point type, area type, type on a path and linked
 /// areas, and lasts into the next text object until it changes.
 #[test]
@@ -3739,6 +3765,10 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
     assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
     assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
+    let texts = legacy_texts(&point_type("1 Tg\n4 Tg\n-1 Tg\n0.5 Tg\n/x Tg\n(0) Tg\nTg", "Hi"));
+    assert_eq!(texts[0].para_at(0).burasagari, vectorcraft_doc::Burasagari::Forced, "binding punctuation stays on");
+    let texts = legacy_texts(&point_type("0 Tg\n4 Tg\n-1 Tg\n2.5 Tg", "Hi"));
+    assert_eq!(texts[0].para_at(0).burasagari, vectorcraft_doc::Burasagari::None, "binding punctuation stays off");
     let texts = legacy_texts(&point_type("1 TV\n1 Tv\n1 Ty\n2 TV\n/x TV\nTV\n-1 Tv\n(x) Tv\n0.5 Ty\n2 TY", "Hi"));
     let st = &texts[0].runs[0].style;
     assert!(texts[0].vertical && st.standard_vertical_roman && st.tate_chu_yoko);
