@@ -176,6 +176,9 @@ struct Out {
     column: Option<Option<ColumnDrag>>,
     /// Rows to open or close, and whether to open them.
     toggle: Vec<(NodeId, bool)>,
+    /// The highlighted rows after this frame's row click, when one happened: the click's action
+    /// runs after `delete_key`, so `view.rows` is still the state before it.
+    rows_after_click: Option<Vec<NodeId>>,
 }
 
 /// The panel state that says the Layers panel's rows have the keyboard ([`super::has_row_keys`]).
@@ -361,12 +364,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
     // The panel keeps it while it is drawn ([`super::has_row_keys`]); the app's shortcuts leave
-    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]).
+    // Delete and Backspace to it meanwhile ([`super::rows_take_delete`]). With no highlighted rows
+    // left (the last one was deleted) the panel gives the keys back, so Delete clears the selected
+    // art again instead of doing nothing.
     let pressed_outside = ui.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| !list_rect.contains(p)));
-    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside;
+    // A click's highlight action runs after this block, so read the rows it will leave, not the
+    // snapshot `view.rows` took before it.
+    let rows = out.rows_after_click.as_deref().unwrap_or(&view.rows);
+    let focus = super::has_row_keys(ui.ctx(), ROW_KEYS) && !pressed_outside && !rows.is_empty();
     super::set_row_keys(ui.ctx(), ROW_KEYS, focus);
     if focus
-        && !view.rows.is_empty()
+        && !rows.is_empty()
         && ui.ctx().memory(|m| m.focused().is_none())
         && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete) || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace))
     {
@@ -375,6 +383,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     bottom_bar(app, ui, &view, &doc, &mut out.actions);
     for (c, p) in out.actions {
         app.run(&c, p).ok();
+    }
+    // A deletion that took the last highlighted row leaves the panel nothing to delete. Release the
+    // keys now, not at the next draw, so the very next frame's Delete reaches Edit › Clear.
+    if app.session.active().is_some_and(|st| st.highlighted_rows().is_empty()) {
+        super::set_row_keys(ui.ctx(), ROW_KEYS, false);
     }
     see_selection(app, ui, selected);
 }
