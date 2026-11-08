@@ -4669,6 +4669,7 @@ axis	Both	Båda
 	ICF Box	ICF-ruta
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` är stegreferensen {r}, som bara `run` och `command_batch` löser upp
 @msg	`ids` must be an array of object ids, not {v}	`ids` måste vara en array med objekt-id:n, inte {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` måste vara en array med färger, inte {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` måste vara en array med index för ankarpunkter, inte {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet från steg {i} har inget sådant värde (skriv $$ för ett bokstavligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: det finns inget steg {i} före det här (stegen räknas från 0; skriv $$ för ett bokstavligt $)

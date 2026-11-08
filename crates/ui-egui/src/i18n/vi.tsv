@@ -4247,6 +4247,7 @@ theme	Appearance	Giao diện
 @msg	`groupColors` must be an array	`groupColors` phải là một mảng
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` là tham chiếu bước {r}, chỉ `run` và `command_batch` giải quyết
 @msg	`ids` must be an array of object ids, not {v}	`ids` phải là mảng id đối tượng, không phải {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` phải là mảng màu, không phải {v}
 @msg	`library` is a library id or name (see {list})	`library` là id hoặc tên thư viện (xem {list})
 @msg	`mode` applies to freeform gradients	`mode` áp dụng cho chuyển sắc tự do
 @msg	`preserve` must be an object	`preserve` phải là một đối tượng

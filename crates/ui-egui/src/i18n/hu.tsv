@@ -4595,6 +4595,7 @@ imageTrace	Outline	Körvonal
 @msg	`groupColors` must be an array	`groupColors`: tömb kell
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	az `id` lépéshivatkozás ({r}), ezt csak a `run` és a `command_batch` oldja fel
 @msg	`ids` must be an array of object ids, not {v}	`ids`: objektumazonosítók tömbje kell, ez nem az: {v}
+@msg	`colors` must be an array of colors, not {v}	`colors`: színek tömbje kell, ez nem az: {v}
 @msg	`library` is a library id or name (see {list})	a `library` könyvtárazonosító vagy -név lehet (lásd: {list})
 @msg	`mode` applies to freeform gradients	a `mode` a szabad formájú színátmenetekre vonatkozik
 @msg	`preserve` must be an object	`preserve`: objektum kell

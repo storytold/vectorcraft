@@ -4660,6 +4660,7 @@ imageTrace	Outline	Kontur
 @msg	No linked files to look for	Ingen linkede filer at lede efter
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` er trinreferencen {r}, som kun `run` og `command_batch` fortolker
 @msg	`ids` must be an array of object ids, not {v}	`ids` skal være et array af objekt-id'er, ikke {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` skal være et array af farver, ikke {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` skal være et array af ankerindekser, ikke {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: resultatet af trin {i} har ingen sådan værdi (skriv $$ for at få et bogstaveligt $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: der findes intet trin {i} før dette (trin nummereres fra 0; skriv $$ for at få et bogstaveligt $)

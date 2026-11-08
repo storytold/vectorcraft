@@ -4791,6 +4791,7 @@ axis	Both	Оба
 	Exit	Выйти
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` — это ссылка на шаг {r}, которую разрешают только `run` и `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` должен быть массивом идентификаторов объектов, а не {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` должен быть массивом цветов, а не {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` должен быть массивом индексов опорных точек, а не {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: в результате шага {i} нет такого значения (чтобы написать сам $, введите $$)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: перед этим шагом нет шага {i} (шаги считаются с 0; чтобы написать сам $, введите $$)

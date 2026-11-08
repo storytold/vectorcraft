@@ -4672,6 +4672,7 @@ imageTrace	Outline	Contour
 @msg	No linked files to look for	Geen gekoppelde bestanden om naar te zoeken
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` is de stapverwijzing {r}, die alleen `run` en `command_batch` oplossen
 @msg	`ids` must be an array of object ids, not {v}	`ids` moet een array van object-id's zijn, niet {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` moet een array van kleuren zijn, niet {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` moet een array van ankerindices zijn, niet {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: het resultaat van stap {i} heeft geen dergelijke waarde (schrijf $$ voor een letterlijke $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: er is geen stap {i} vóór deze stap (stappen tellen vanaf 0; schrijf $$ voor een letterlijke $)

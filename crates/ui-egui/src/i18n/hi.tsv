@@ -5548,6 +5548,7 @@
 @msg	`id` must be a node id	`id` एक नोड आईडी होना चाहिए
 @msg	`id` must be an object id, not {v}	`id` एक ऑब्जेक्ट आईडी होना चाहिए, नहीं {v}
 @msg	`ids` must be an array of object ids, not {v}	`ids` को ऑब्जेक्ट आईडी की ऐरे होना चाहिए, {v} नहीं
+@msg	`colors` must be an array of colors, not {v}	`colors` को रंगों की ऐरे होना चाहिए, {v} नहीं
 @msg	`ids` must name Objects on Path groups or objects in them	`ids` को ऑब्जेक्ट्स ऑन पाथ समूह या उनके ऑब्जेक्ट बताने चाहिए
 @msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` में अधिकतम {MAX_INSPECT_IDS} आईडी हो सकती हैं
 @msg	`imageMap` must be none, rectangle or polygon	`imageMap` होना चाहिए कोई नहीं, आयत या बहुभुज

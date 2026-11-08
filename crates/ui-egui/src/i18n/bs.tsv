@@ -4974,6 +4974,7 @@ imageTrace	Outline	Obris
 @msg	No linked files to look for	Nema povezanih datoteka za traženje
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je referenca na korak {r}, koju razrješavaju samo `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` mora biti niz ID-ova objekata, a ne {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` mora biti niz boja, a ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` mora biti niz indeksa sidara, a ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: rezultat koraka {i} nema takvu vrijednost (napišite $$ za doslovni $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: prije ovog nema koraka {i} (koraci se broje od 0; napišite $$ za doslovni $)
