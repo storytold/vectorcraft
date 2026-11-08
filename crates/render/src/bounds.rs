@@ -34,3 +34,15 @@ pub fn drawn_bounds(doc: &Document, n: &Node) -> Option<Rect> {
 pub fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
     fx::drawn_outline(doc, n)
 }
+
+/// The outlines a drag draws for `nodes` with Real-time Drawing off: one for each object in them,
+/// without uniting a group's members. `None` when the outlines' points and the objects evaluated to
+/// make them come to more than `max_points`.
+pub fn drawn_outlines<'a>(doc: &Document, nodes: impl IntoIterator<Item = &'a Node>, max_points: usize) -> Option<Vec<BezPath>> {
+    let symbols = doc.symbol_boxes();
+    let (mut left, mut out) = (max_points, vec![]);
+    for n in nodes {
+        fx::drawn_outlines(doc, &symbols, n, &mut left, &mut out)?;
+    }
+    Some(out)
+}

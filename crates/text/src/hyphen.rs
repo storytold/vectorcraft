@@ -90,6 +90,15 @@ fn parse_list(source: &str) -> Exceptions {
 /// case-insensitive. Empty clears the list.
 pub fn set_hyphenation_exceptions(source: &str) {
     *store() = parse_list(source);
+    EXCEPTIONS_SET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// How many times [`set_hyphenation_exceptions`] has run.
+static EXCEPTIONS_SET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A number that changes whenever [`set_hyphenation_exceptions`] runs.
+pub(crate) fn exceptions_generation() -> u64 {
+    EXCEPTIONS_SET.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// The last string passed to [`set_hyphenation_exceptions`] (empty when none).
@@ -492,12 +501,17 @@ mod tests {
         assert_eq!(hyphen_points_with("language", &opts(&|o| o.capitalized = false)), vec![3]);
     }
 
-    /// Process-wide store used by `prefs.set` / restore.
+    /// Process-wide store used by `prefs.set` / restore. Each change makes envelopes measure type
+    /// again.
     #[test]
     fn set_hyphenation_exceptions_round_trips_the_source_string() {
+        let inputs = crate::layout::envelope_ink_inputs();
         set_hyphenation_exceptions("typography, hap-pen");
         assert_eq!(hyphenation_exceptions(), "typography, hap-pen");
+        let changed = crate::layout::envelope_ink_inputs();
+        assert_ne!(changed, inputs, "the envelope inputs change with the exceptions");
         set_hyphenation_exceptions("");
         assert!(hyphenation_exceptions().is_empty());
+        assert_ne!(crate::layout::envelope_ink_inputs(), changed, "and again when they are cleared");
     }
 }

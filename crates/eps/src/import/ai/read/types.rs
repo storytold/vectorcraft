@@ -1,4 +1,4 @@
-use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Node, Obj, Paint, Rect, V};
+use super::{Affine, BlendMode, Dash, FillRule, HAIRLINE, Knockout, LayerColor, LineCap, LineJoin, Named, Node, Obj, Paint, Rect, V};
 
 /// Deepest nesting of layers, groups and dictionaries.
 pub(super) const MAX_DEPTH: usize = 256;
@@ -41,7 +41,7 @@ pub(crate) const FLIP: Affine = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0]);
 pub(super) const MAX_PATTERNS: usize = 4096;
 
 /// Most symbol definitions read (instances of others come in as the page draws them).
-pub(super) const MAX_SYMBOLS: usize = 4096;
+pub(crate) const MAX_SYMBOLS: usize = 4096;
 
 /// Most names a symbol list orders.
 pub(super) const MAX_LISTED: usize = 4 * MAX_SYMBOLS;
@@ -247,6 +247,29 @@ pub(super) struct SymbolHead {
     /// path paints it.
     pub(super) missing_fill: bool,
     pub(super) missing_stroke: bool,
+}
+
+/// The colors a brush's art uses, counted as the page's are once a brush that is kept uses the art.
+#[derive(Debug, Default)]
+pub(super) struct BrushArtColors {
+    /// The named colors its color operators define.
+    pub(super) spots: Vec<Named>,
+    /// The named colors its gradient stops name.
+    pub(super) stop_spots: Vec<Named>,
+    /// Its colors set in each model.
+    pub(super) cmyk: usize,
+    pub(super) rgb: usize,
+}
+
+impl BrushArtColors {
+    /// Keep each name's first definition only, its color operators' before its gradient stops',
+    /// and at most `limit` names in all. The process-color counts stay as they are.
+    pub(super) fn keep_first(&mut self, limit: usize) {
+        let mut seen = std::collections::HashSet::new();
+        let mut keep = |n: &Named| seen.len() < limit && seen.insert(n.name.clone());
+        self.spots.retain(|n| keep(n));
+        self.stop_spots.retain(|n| keep(n));
+    }
 }
 
 /// An image's operands, from `XN` and before `XI`.
