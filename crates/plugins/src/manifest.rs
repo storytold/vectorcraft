@@ -578,27 +578,101 @@ fn ordered_params<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result
     d.deserialize_any(V)
 }
 
-/// Reads the `commands` list one entry at a time, so a malformed entry is an error that names it
-/// (its id, or its place in the list), and a list longer than [`MAX_COMMANDS`] is refused before
-/// its entries are read.
+/// Reads the `commands` list one entry at a time from the manifest itself, so each command's
+/// `params` keep their declaration order and a repeated parameter is refused. A malformed entry
+/// is an error that names it (its id when the id comes before the fault, otherwise its place in
+/// the list), and a list is refused at its first entry past [`MAX_COMMANDS`].
 fn ordered_commands<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Vec<Command>, D::Error> {
-    use serde::de::Error as _;
-    let entries = match Value::deserialize(d)? {
-        Value::Null => return Ok(Vec::new()),
-        Value::Array(entries) => entries,
-        _ => return Err(D::Error::custom("`commands` must be a list of {id, label, params?}")),
-    };
-    if entries.len() > MAX_COMMANDS {
-        return Err(D::Error::custom(format!("at most {MAX_COMMANDS} `commands`")));
+    use serde::de::{Error as _, IgnoredAny, MapAccess, SeqAccess, Visitor};
+
+    /// A command's `params`, read in declaration order.
+    struct Params(Vec<(String, Param)>);
+    impl<'de> Deserialize<'de> for Params {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+            ordered_params(d).map(Params)
+        }
     }
-    entries
-        .into_iter()
-        .enumerate()
-        .map(|(i, v)| {
-            let name = command_name(i, v.get("id").and_then(Value::as_str).unwrap_or_default());
-            serde_json::from_value::<Command>(v).map_err(|e| D::Error::custom(format!("command {name}: {e}")))
-        })
-        .collect()
+
+    /// The entry at place `.0` in the list.
+    struct Entry(usize);
+    impl<'de> serde::de::DeserializeSeed<'de> for Entry {
+        type Value = Command;
+        fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> std::result::Result<Command, D::Error> {
+            d.deserialize_any(self)
+        }
+    }
+    impl<'de> Visitor<'de> for Entry {
+        type Value = Command;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "command [{}] as {{id, label, params?}}", self.0)
+        }
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> std::result::Result<Command, A::Error> {
+            let (mut id, mut label, mut params) = (None::<String>, None::<String>, None::<Params>);
+            let named = |id: &Option<String>, e: &dyn std::fmt::Display| {
+                A::Error::custom(format!("command {}: {e}", command_name(self.0, id.as_deref().unwrap_or_default())))
+            };
+            while let Some(key) = map.next_key::<String>().map_err(|e| named(&id, &e))? {
+                let repeated = match key.as_str() {
+                    "id" if id.is_none() => {
+                        id = Some(map.next_value().map_err(|e| named(&id, &e))?);
+                        false
+                    }
+                    "label" if label.is_none() => {
+                        label = Some(map.next_value().map_err(|e| named(&id, &e))?);
+                        false
+                    }
+                    "params" if params.is_none() => {
+                        params = Some(map.next_value().map_err(|e| named(&id, &e))?);
+                        false
+                    }
+                    "id" | "label" | "params" => true,
+                    _ => {
+                        map.next_value::<IgnoredAny>().map_err(|e| named(&id, &e))?;
+                        false
+                    }
+                };
+                if repeated {
+                    return Err(named(&id, &format_args!("duplicate field `{key}`")));
+                }
+            }
+            let Some(id) = id else {
+                return Err(named(&None, &"missing field `id`"));
+            };
+            let Some(label) = label else {
+                return Err(named(&Some(id), &"missing field `label`"));
+            };
+            Ok(Command { id, label, params: params.map(|p| p.0).unwrap_or_default() })
+        }
+    }
+
+    struct List;
+    impl<'de> Visitor<'de> for List {
+        type Value = Vec<Command>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("`commands` as a list of {id, label, params?}")
+        }
+        fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+            Ok(Vec::new())
+        }
+        fn visit_map<A: MapAccess<'de>>(self, _: A) -> std::result::Result<Self::Value, A::Error> {
+            Err(A::Error::custom("`commands` must be a list of {id, label, params?}"))
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error> {
+            let mut out = Vec::new();
+            while out.len() < MAX_COMMANDS {
+                match seq.next_element_seed(Entry(out.len()))? {
+                    Some(c) => out.push(c),
+                    None => return Ok(out),
+                }
+            }
+            match seq.next_element::<IgnoredAny>()? {
+                Some(_) => Err(A::Error::custom(format!("at most {MAX_COMMANDS} `commands`"))),
+                None => Ok(out),
+            }
+        }
+    }
+
+    d.deserialize_any(List)
 }
 
 /// How errors name the command at place `i` with id `id`: the id in backticks, escaped and capped
@@ -800,12 +874,12 @@ mod tests {
         let m = Manifest::parse(
             br#"{"id":"org.example.tidy","name":"Tidy","kind":"filter","commands":[
                 {"id":"tidy_all","label":"Tidy All","menu":"File"},
-                {"id":"grow","label":"Grow","params":{"by":{"type":"number","min":0,"max":10,"default":2},"mode":{"type":"bool"}}}]}"#,
+                {"id":"grow","label":"Grow","params":{"mode":{"type":"bool"},"by":{"type":"number","min":0,"max":10,"default":2}}}]}"#,
         )
         .unwrap();
         assert_eq!(m.commands.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(), ["tidy_all", "grow"]);
         let grow = m.command("grow").unwrap();
-        assert_eq!(grow.params.iter().map(|p| p.0.as_str()).collect::<Vec<_>>(), ["by", "mode"]);
+        assert_eq!(grow.params.iter().map(|p| p.0.as_str()).collect::<Vec<_>>(), ["mode", "by"], "declaration order");
         let run = m.for_command(grow);
         assert_eq!((run.name.as_str(), run.id.as_str()), ("Grow", "org.example.tidy"));
         assert_eq!(Value::Object(run.resolve_params(&json!({"by": 50})).unwrap()), json!({"by": 10.0, "mode": false}));
@@ -837,6 +911,10 @@ mod tests {
             (
                 r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A","params":{"id":{"type":"bool"}}}]}"#,
                 "command `x`: invalid parameter",
+            ),
+            (
+                r#"{"id":"a","name":"x","kind":"filter","commands":[{"id":"x","label":"A","params":{"r":{"type":"bool"},"r":{"type":"int"}}}]}"#,
+                "command `x`: parameter `r` is declared twice",
             ),
             (r#"{"id":"a","name":"x","kind":"filter","commands":[1]}"#, "command [0]"),
             (r#"{"id":"a","name":"x","kind":"filter","commands":{"id":"x"}}"#, "must be a list"),
