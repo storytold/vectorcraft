@@ -574,6 +574,41 @@ fn a_second_painted_effect_on_a_fill_keeps_the_piece_s_other_fills() {
     assert!(paints.contains(&vec![fill("#0000ff"), fill("#00ff00")]), "{paints:?}");
 }
 
+/// A Transform effect before a painted effect on a fill moves the fill's placed gradient: a piece
+/// that keeps the fill, and the fill drawn on the moved shape after a refused result, both have the
+/// gradient at its moved position.
+#[test]
+fn a_painted_effect_on_a_fill_keeps_a_placed_gradient_with_its_moved_shape() {
+    let mut gone = solid("#00ff00");
+    gone["swatch"] = json!("Not a swatch");
+    for (name, out, want) in [
+        ("keeps", json!({"objects": [{"path": square_at(40.0)}]}).to_string(), square_at(40.0).bounds()),
+        ("refused", json!({"objects": [{"path": square_at(40.0), "fills": [gone]}]}).to_string(), square_at(110.0).bounds()),
+    ] {
+        let mut s = session();
+        let id = NodeId(run(&mut s, "shape.rectangle", json!({"x": 10, "y": 40, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+        run(&mut s, "paint.setStroke", json!({"ids": [id.0], "none": true}));
+        let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 1, "color": "#000000"}]);
+        run(&mut s, "paint.setFill", json!({"ids": [id.0], "gradient": {"kind": "linear", "stops": stops}}));
+        run(&mut s, "select.set", json!({"ids": [id.0]}));
+        run(&mut s, "paint.setGradientGeom", json!({"start": [14, 50], "end": [26, 50], "stroke": false}));
+        let plugin = format!("test.engine.carry{name}");
+        install_wat(&mut s, &tpl::returning(&painting(&plugin, true), &out));
+        let fill = node(&s, id).appearance.items.iter().position(|i| i.is_fill()).unwrap();
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "distort.transform", "params": {"moveH": 100}, "item": fill}));
+        run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": format!("plugin.{plugin}"), "item": fill}));
+        let st = s.doc().unwrap();
+        let art = vectorcraft_render::effects::reshape(Some(&st.doc), st.doc.node(id).unwrap(), None).unwrap();
+        let mut seen = vec![];
+        art.walk(&mut |n| {
+            if let (Some(p), Some(Paint::Gradient(g))) = (n.path_data(), n.appearance.items.iter().find(|i| i.is_fill()).map(|i| i.paint())) {
+                seen.push((p.bounds(), g.geom.map(|g| (g.start.x, g.end.x))));
+            }
+        });
+        assert_eq!(seen, [(want, Some((114.0, 126.0)))], "{name}");
+    }
+}
+
 /// The geometry of a painted result that names a swatch counts only when the document has that
 /// swatch: without a document, and with one that lacks it, the effect keeps its input.
 #[test]

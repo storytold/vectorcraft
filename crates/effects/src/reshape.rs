@@ -1082,6 +1082,11 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
             let mut it = item.clone();
             let rest: Vec<Effect> = before.iter().filter(|e| !is_geometry(&e.id)).chain(&fx[at + 1..]).cloned().collect();
             *it.effects_mut() = rest;
+            let mut one = Appearance { items: vec![it.clone()], ..Default::default() };
+            if carry.moves(&one) {
+                carry.apply(&mut one);
+            }
+            let it = one.items.pop().unwrap_or(it);
             let paints = vectorcraft_plugins::effect::Paints { appearance: Some(&original.appearance), item: Some(i) };
             let painted = vectorcraft_plugins::effect::apply_painted(plugin, &params, &g, tb, rule, paints, doc)
                 .map(|pieces| pieces.iter().map(|p| (p.path.clone(), p.rule, vectorcraft_plugins::painted::items(&it, p))).collect::<Vec<_>>())
