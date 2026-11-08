@@ -522,6 +522,64 @@ fn kept_art_follows_the_swatches_once_a_replaced_plugin_paints() {
     assert_eq!(draw(&s), (WHITE, RED), "without the swatch, the object as it is");
 }
 
+/// Whether `px` is within 40 levels of `want` on every channel. A blur leaves the middle of a
+/// shape close to its color.
+fn near(px: [u8; 4], want: [u8; 4]) -> bool {
+    px.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 40)
+}
+
+/// A kept raster of a blur over a painted effect is made again when a swatch its piece names
+/// leaves the document (the object is then drawn as if the effect weren't there) and when Undo
+/// brings the swatch back.
+#[test]
+fn a_kept_raster_follows_the_swatches_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "#00ff00"}));
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.blurpaint", true), &leaf_square()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.blurpaint"}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), GREEN) && near(img.pixel(15, 15), WHITE), "the piece, green and blurred");
+    run(&mut s, "swatch.delete", json!({"name": "Leaf"}));
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), WHITE) && near(img.pixel(15, 15), RED), "without the swatch, the object as it is: {:?}", img.pixel(50, 50));
+    run(&mut s, "edit.undo", json!({}));
+    let img = draw(&s);
+    assert!(near(img.pixel(50, 50), GREEN) && near(img.pixel(15, 15), WHITE), "the swatch back, the piece again");
+}
+
+/// A kept raster of a blur over a painted effect is made again when the tile of a pattern its
+/// piece names changes and the pattern keeps its name.
+#[test]
+fn a_kept_raster_follows_the_tiles_of_patterns_painted_pieces_name() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let green = rect(&mut s, 300.0, "#00ff00");
+    let blue = rect(&mut s, 320.0, "#0000ff");
+    let tile = |r: f64, art: vectorcraft_doc::Node| vectorcraft_doc::pattern::PatternDef {
+        tile: vectorcraft_geom::Rect::new(r, 10.0, r + 10.0, 20.0),
+        ..vectorcraft_doc::pattern::PatternDef::new("Tiles", vec![std::sync::Arc::new(art)])
+    };
+    let (first, second) = (tile(300.0, node(&s, green)), tile(320.0, node(&s, blue)));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).patterns.push(first);
+    let paint = serde_json::to_value(Paint::Pattern { pattern: "Tiles".into(), xf: vectorcraft_geom::Affine::IDENTITY }).unwrap();
+    let out = json!({"objects": [{"path": square_at(40.0), "fills": [paint]}]}).to_string();
+    install_wat(&mut s, &tpl::returning(&painting("test.engine.tilepaint", true), &out));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.tilepaint"}));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 1}}));
+    let mut r = vectorcraft_render::Renderer::new();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut draw = |s: &Session| r.render(&s.doc().unwrap().doc, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts).pixel(50, 50);
+    assert!(near(draw(&s), GREEN), "the piece in the green tile");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).patterns[0] = second;
+    let px = draw(&s);
+    assert!(near(px, BLUE), "the piece in the new tile: {px:?}");
+}
+
 /// Every painted piece counts against the effects' budget, however small its path: two painted
 /// effects in a stack that each return 350 tiny triangles make no more than 100,000 objects, not
 /// 350 × 350 of them.

@@ -398,8 +398,10 @@ impl Renderer {
     /// [`crate::RenderOptions::kept_images_only`], also which pixels and undecodable notes the
     /// image store holds); for type the fonts, whether overprinting shows
     /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
-    /// plug-ins installed, when an object in it has a plug-in effect, and when it shows symbol or
-    /// pattern art and an object in the document's symbol or pattern art has one.
+    /// plug-ins installed, with the names of the document's swatches and patterns and its pattern
+    /// definitions (a plug-in's painted pieces can name them), when an object in it has a plug-in
+    /// effect, and when it shows symbol or pattern art and an object in the document's symbol or
+    /// pattern art has one.
     pub(crate) fn raster_inputs(&mut self, f: &Frame, n: &Node, reads: Reads) -> Inputs {
         let doc = self.doc_inputs(f.doc);
         let mut h = DefaultHasher::new();
@@ -442,7 +444,7 @@ impl Renderer {
             (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
         }
         if reads.plugins || (doc.plugins && (reads.symbols || reads.patterns)) {
-            effects::plugin_revision().hash(&mut h);
+            (effects::plugin_revision(), doc.names, doc.patterns).hash(&mut h);
         }
         Inputs { reads, key: h.finish(), _doc: doc }
     }
