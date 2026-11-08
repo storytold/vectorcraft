@@ -474,6 +474,26 @@ fn update_links_on_open_reads_a_modified_file_again() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
 }
 
+/// A placed document whose link keeps no size or hash and whose file's bytes are gone shows no
+/// preview: resolving its links reports the file as modified and leaves the object as it is.
+#[test]
+fn a_placed_document_without_its_bytes_or_a_hash_is_reported_not_read() {
+    let dir = Folder::new("placed-no-hash");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let key = placed(&s, id).key;
+    let mut d = (*s.doc().unwrap().doc).clone();
+    d.images.remove(&key);
+    let Some(NodeKind::PlacedDocument(p)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("a placed document") };
+    p.link.hash = None;
+    p.link.size = None;
+    let r = crate::cmd::links::resolve(&mut d, None, false, false).to_json();
+    assert_eq!(r["modifiedLinks"].as_array().map(Vec::len), Some(1), "{r}");
+    assert!(!d.images.contains_key(&key), "not read");
+}
+
 #[test]
 fn relink_points_a_placed_document_at_another_file() {
     let dir = Folder::new("placed-relink");
@@ -486,6 +506,35 @@ fn relink_points_a_placed_document_at_another_file() {
     assert_eq!(r["relinked"], json!([id.0]), "{r}");
     assert_eq!(placed(&s, id).link.path, b);
     assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
+/// Missing Links from This Folder finds a missing placed document by name, except with copy, which
+/// takes images only: the placed document then stays as it is.
+#[test]
+fn relink_missing_in_folder_finds_placed_documents_except_with_copy() {
+    let dir = Folder::new("placed-missing-folder");
+    let (doc_file, pic) = (dir.file("art/a.vectorcraft"), dir.file("art/photo.png"));
+    write(&pic, &crate::tests_links::png(60, 30, RED));
+    source(&doc_file, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let (placed_id, image_id) = (place(&mut s, &doc_file), place(&mut s, &pic));
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&doc_file).unwrap();
+    std::fs::remove_file(&pic).unwrap();
+    open(&mut s, &doc_path);
+    let found = dir.0.join("found");
+    let chosen = found.join("renamed.png").to_string_lossy().into_owned();
+    write(&chosen, &crate::tests_links::png(60, 30, BLUE));
+    source(&found.join("a.vectorcraft").to_string_lossy(), 100.0, 50.0, BLUE, 0);
+    let p = json!({"ids": [image_id.0], "path": chosen, "scope": "missingInFolder", "copy": true});
+    let r = s.execute("links.relink", &p).unwrap();
+    assert_eq!(r["relinked"], json!([image_id.0]), "{r}");
+    assert_eq!(placed(&s, placed_id).link.path, doc_file, "copy leaves the placed document");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let p = json!({"ids": [image_id.0], "path": chosen, "scope": "missingInFolder"});
+    let r = s.execute("links.relink", &p).unwrap();
+    assert_eq!(r["relinked"], json!([image_id.0, placed_id.0]), "{r}");
 }
 
 /// A file made from scratch at `path` in `format` (`pdf`, or `ai`: a PDF-compatible .ai): one
@@ -632,6 +681,78 @@ fn saving_and_reopening_keeps_a_linked_pdf_pages_number_and_box() {
     let after = placed(&s, id);
     assert_eq!((after.link.page, after.page_box), (Some(2), vectorcraft_doc::PageBox::Media));
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// A placed PDF page in a `.ai` file's editing data is a placed document of the page and box the
+/// dictionary after it names. Its file missing, it shows the preview the file keeps, in the same
+/// place. Its file found in the folder kept relative to the document, it shows that page.
+#[test]
+fn a_pdf_page_placed_in_an_ai_files_editing_data_opens_as_a_placed_document() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("placed-pdf-in-ai");
+    let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 600 4 4 0\n(/no/such/folder/src/flyer.pdf)`\n\
+         %%IncludeFile:/no/such/folder/src/flyer.pdf\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
+         %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x0a\x0a\x73\x7f\x0a\x0a\x73\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n\
+         %_/ArtDictionary :\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n";
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
+    // The page draws what the half-covering preview draws over white.
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.54 0.54 0.95 rg 20 20 60 60 re f"));
+    let shown = |s: &Session| {
+        let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, true);
+        let [r, g, b, _] = img.pixel(50, 50);
+        [r, g, b]
+    };
+    let one = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_placed(|n, p| found.push((n.id, p.clone())));
+        let [(id, p)] = &found[..] else { panic!("one placed document: {found:?}") };
+        (*id, p.clone(), s.doc().unwrap().doc.images[&p.key].is_proxy())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("flyer.pdf"), "{r}");
+    let (id, p, proxy) = one(&s);
+    assert!(proxy, "the preview");
+    assert_eq!((p.link.page, p.page_box, p.bounding), (Some(2), vectorcraft_doc::PageBox::Media, false));
+    assert_eq!(p.link.relative.as_deref(), Some("src/flyer.pdf"));
+    let place = bounds(&s, id);
+    assert!((place.x0 - 20.0).abs() < 0.01 && (place.width() - 60.0).abs() < 0.01 && (place.height() - 60.0).abs() < 0.01, "{place:?}");
+    assert!(near(shown(&s), [138, 138, 243]), "the preview shows: {:?}", shown(&s));
+
+    pdf_source(&dir.file("src/flyer.pdf"), "pdf", &[BLUE, RED], 0);
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    let (id, p, proxy) = one(&s);
+    assert!(!proxy, "the file's bytes, not the preview");
+    assert_eq!((p.link.page, p.page_box, p.bounding), (Some(2), vectorcraft_doc::PageBox::Media, false));
+    assert!(p.link.hash.is_some() && p.link.size.is_some(), "{:?}", p.link);
+    assert_eq!(bounds(&s, id), place, "the same place");
+    assert!(near(shown(&s), RED), "page 2 of the file shows: {:?}", shown(&s));
+}
+
+/// A `.ai` saved without PDF compatibility (its page only text) that places itself as a page is
+/// read once inside itself: the copy inside keeps its link as stored, and the file opens.
+#[test]
+fn an_ai_file_that_places_itself_opens() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("ai-places-itself");
+    let doc_path = dir.file("poster.ai");
+    let at = doc_path.replace('\\', "/");
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 600 4 4 0\n({at})`\n%%IncludeFile:{at}\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x0a\x0a\x73\x7f\x0a\x0a\x73\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n\
+         %_/ArtDictionary :\n%_1 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n"
+    );
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &format!("0 g\n{}f\n{place}", ai::rect(120.0, 20.0, 180.0, 80.0))));
+    write(&doc_path, &ai::ai(data.as_bytes(), "BT /F1 12 Tf 10 50 Td (Saved without its PDF part) Tj ET"));
+    let mut s = session();
+    let r = open(&mut s, &doc_path);
+    let mut found = vec![];
+    s.doc().unwrap().doc.visit_placed(|_, p| found.push(p.link.path.replace('\\', "/")));
+    assert_eq!(found, [at], "{r}");
 }
 
 #[test]
@@ -889,6 +1010,36 @@ fn saving_a_document_refreshes_the_open_documents_that_place_it() {
     assert!(near(centre_colour(&doc.doc), BLUE), "shows the saved version");
     assert!(matches!(doc.doc.node(id).map(|n| &n.kind), Some(NodeKind::PlacedDocument(_))));
     assert_eq!(s.active_index(), Some(child), "the saved document stays active");
+}
+
+/// Placed documents inside a symbol and a pattern of another open document are read again when
+/// their file is saved, as one in the layers is.
+#[test]
+fn saving_a_document_refreshes_its_placed_copies_inside_symbols_and_patterns() {
+    let dir = Folder::new("placed-refresh-nested");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("symbol.new", &json!({"name": "Logo", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &src);
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let parent = s.active_index().unwrap();
+    let mut in_layers = 0;
+    s.doc().unwrap().doc.walk(|n| in_layers += usize::from(matches!(n.kind, NodeKind::PlacedDocument(_))));
+    assert_eq!(in_layers, 0, "no placed document in the layers");
+    s.execute("document.open", &json!({"path": src})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#1414e6"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let hash = Some(vectorcraft_doc::links::hash_bytes(&std::fs::read(&src).unwrap()));
+    let doc = &s.documents()[parent];
+    assert_eq!(doc.history.undo.last().unwrap().label, "Update Links");
+    assert!(near(centre_colour(&doc.doc), BLUE), "the symbol's instance shows the saved version");
+    let mut hashes = vec![];
+    doc.doc.visit_placed(|_, p| hashes.push(p.link.hash.clone()));
+    assert_eq!(hashes, [hash.clone(), hash], "the symbol's, then the pattern's");
 }
 
 #[test]

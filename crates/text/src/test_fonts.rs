@@ -26,6 +26,25 @@ pub(crate) fn keeps_shape_plans() -> bool {
     KEEP_SHAPE_PLANS.load(Ordering::SeqCst)
 }
 
+std::thread_local! {
+    /// How many layouts this thread has started ([`layouts_on_this_thread`]).
+    static LAYOUTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn count_layout() {
+    LAYOUTS.with(|n| n.set(n.get() + 1));
+}
+
+/// How many layouts this thread has started.
+pub fn layouts_on_this_thread() -> u64 {
+    LAYOUTS.with(std::cell::Cell::get)
+}
+
+/// Drop every layout kept for a first frame, so that a test can draw what laying out again draws.
+pub fn drop_kept_layouts() {
+    crate::kept::drop_kept_layouts();
+}
+
 /// The family of [`variable_font`].
 pub const VARIABLE_FAMILY: &str = "Varitest Sans";
 
@@ -836,6 +855,44 @@ pub fn vertical_ligature_caret_font(caret: i16) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// [`vertical_ligature_caret_font`] with its one caret at y = `caret` font units, f + i joined by
+/// `ccmp` (which shaping applies top to bottom too, unlike `liga`), and its `GPOS` replaced by a
+/// `vpal` single adjustment that changes the ligature glyph's advance down the column by
+/// `y_advance` font units. `None` when it can't be built.
+pub fn proportional_vertical_ligature_caret_font(caret: i16, y_advance: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList, SinglePos, ValueRecord};
+    use write_fonts::tables::gsub::{Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SubstitutionLookup, SubstitutionLookupList};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    let base = vertical_ligature_caret_font(caret)?;
+    let font = skrifa::FontRef::new(&base).ok()?;
+    let gid = |c| Some(GlyphId16::new(source_sans_gid(c)?));
+    let ligature = gid(LIGATURE_CARET_GLYPH)?;
+    let langsys = || Script::new(Some(LangSys::new(vec![0])), vec![]);
+    let scripts = || ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), langsys()), ScriptRecord::new(Tag::new(b"latn"), langsys())]);
+    let subst = LigatureSubstFormat1::new(
+        CoverageFormat1::new(vec![gid('f')?]).into(),
+        vec![LigatureSet::new(vec![Ligature::new(ligature, vec![gid('i')?])])],
+    );
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"ccmp"), Feature::new(None, vec![0]))]);
+    let lookups = SubstitutionLookupList::new(vec![SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![subst]))]);
+    let gsub = Gsub::new(scripts(), features, lookups);
+    let pos = SinglePos::format_1(CoverageFormat1::new(vec![ligature]).into(), ValueRecord::new().with_y_advance(y_advance));
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"vpal"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Single(Lookup::new(Default::default(), vec![pos]))]);
+    let mut builder = FontBuilder::new();
+    builder.add_table(&gsub).ok()?;
+    builder.add_table(&Gpos::new(scripts(), features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`variable_ligature_caret_font`].
 pub const VARIABLE_LIGATURE_CARET_FAMILY: &str = "Varicaret Sans";
 
@@ -986,6 +1043,34 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
         }
     }
     Some(builder.build())
+}
+
+/// The family of [`tall_ideograph_font`].
+pub const TALL_IDEOGRAPH_FAMILY: &str = "Tall Ideograph Sans";
+
+/// A face that maps the ideograph 编 to the bundled Source Sans 3 `H` outline, which stands on the
+/// baseline, with a taller ascent (1,058 units per 1,000) and descent (262) than Source Sans 3 in
+/// its `hhea` and `OS/2` tables and no line gap: the vertical proportions of a CJK system face.
+pub fn tall_ideograph_font() -> Option<Vec<u8>> {
+    const ASCENT: i16 = 1058;
+    const DESCENT: i16 = 262;
+    let mut data = remapped_source_sans(TALL_IDEOGRAPH_FAMILY, "TallIdeographSans-Regular", &[('编', 'H')])?;
+    let tables: Vec<(Tag, usize)> = {
+        let font = skrifa::FontRef::new(&data).ok()?;
+        font.table_directory.table_records().iter().map(|r| (Tag::new(&r.tag().to_be_bytes()), r.offset() as usize)).collect()
+    };
+    let (ascent, descent, gap) = (ASCENT.to_be_bytes(), (-DESCENT).to_be_bytes(), [0, 0]);
+    for (tag, at) in tables {
+        if tag == Tag::new(b"hhea") {
+            // ascender, descender and lineGap at bytes 4 to 10.
+            data.get_mut(at + 4..at + 10)?.copy_from_slice(&[ascent, descent, gap].concat());
+        } else if tag == Tag::new(b"OS/2") {
+            // sTypoAscender, sTypoDescender, sTypoLineGap, usWinAscent and usWinDescent at bytes 68 to 78.
+            let win = [ASCENT.unsigned_abs().to_be_bytes(), DESCENT.unsigned_abs().to_be_bytes()];
+            data.get_mut(at + 68..at + 78)?.copy_from_slice(&[ascent, descent, gap, win[0], win[1]].concat());
+        }
+    }
+    Some(data)
 }
 
 /// The family of [`soft_hyphen_outline_font`].

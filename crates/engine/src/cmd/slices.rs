@@ -708,7 +708,9 @@ fn move_slices(s: &mut Session, p: &Value) -> Result<Value> {
                 None => {
                     if let Some(n) = d.node_mut(*id) {
                         n.transform(vectorcraft_geom::Affine::translate(v), vectorcraft_doc::Scaling::default());
+                        super::object::keep_pixel_aligned(n, vectorcraft_doc::Scaling::default());
                     }
+                    super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
                 }
             }
         }

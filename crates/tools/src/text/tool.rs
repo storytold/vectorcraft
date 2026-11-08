@@ -25,7 +25,8 @@ impl Tool for TypeTool {
     fn wants_text(&self) -> bool {
         self.editing.is_some()
     }
-    /// Escape while editing is the tool's: it goes on to the Selection tool (#1686).
+    /// Escape while editing is the tool's: it goes back to the tool that was active before type
+    /// editing began, or to the Selection tool when there was none (#1686).
     fn claims_key(&self, _: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.editing.is_some()
     }
@@ -228,13 +229,8 @@ impl Tool for TypeTool {
             // Escape ends editing and goes back to the tool used before double-clicking into type
             // (or to the Selection tool by default), the type selected: the keyboard is free for
             // tool shortcuts again (#1686).
-            ToolKey::Escape => {
-                let target = self.prev_tool.take().unwrap_or_else(|| "selection".into());
-                let mut out = self.finish(cx);
-                out.push(Action::SwitchTool(target));
-                out
-            }
-            ToolKey::Enter => self.replace(cx, if mods.shift { "\u{2028}" } else { "\n" }, None),
+            ToolKey::Escape => self.end_editing(cx),
+            ToolKey::Enter => self.enter(cx, mods),
             ToolKey::Tab => self.replace(cx, "\t", None),
             ToolKey::Backspace | ToolKey::Delete if a != b || story => self.replace(cx, "", None),
             ToolKey::Backspace if self.caret > 0 => {

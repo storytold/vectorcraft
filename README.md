@@ -253,7 +253,7 @@ The scores are self-assessed from our code against public documentation;
 [target-app-parity.md](docs/target-app-parity.md#how-this-was-measured-2026-10-10) explains how far to trust them.
 
 **What's missing:**
-- reliable exchange of .ai files (layer structure in real files; the editing copy a save writes leaves out live effects and writes symbols and live objects as their art);
+- reliable exchange of .ai files (layer structure in real files; the editing copy a save writes keeps live effects only on paths, compound paths and groups that qualify (at most a fill and a stroke, a non-zero fill rule when filled, no large canvas) and whose appearance and effects the art-style writer supports (see [docs/file-format-parity.md](docs/file-format-parity.md)), leaves out other objects' effects other than geometry effects, and writes live objects as their art);
 - an interaction-fidelity pass covering every tool's modifiers and small behaviours;
 - 3D and Materials beyond the initial live Revolve (Extrude & Bevel, Inflate, Rotate, materials);
 - filter thumbnails and a preview area inside the Effect Gallery (the gallery itself and all 57 Photoshop-style raster filters, approximated, are in);
@@ -317,7 +317,7 @@ Installers and executables are code-signed.
 
 | Build | File | Notes |
 |---|---|---|
-| Static site | `vectorcraft-web-<ver>.zip` | Runs in a modern browser; host it on any static server |
+| Static site | `vectorcraft-web-<ver>.zip` | Runs in a browser with WebAssembly SIMD (Chrome/Edge 91, Firefox 89, Safari 16.4 or newer), see `packaging/web/README.md`; host it on any static server |
 
 ## The Crafting Apps
 

@@ -105,6 +105,8 @@ fn lengths_of(id: &str) -> Lengths {
         "sketch.waterPaper" => always(&["fiberLength"]),
         TRAP => always(&["thickness", "precision"]),
         RASTERIZE => always(&["addAround"]),
+        // The points one unit of the filter measures.
+        crate::SVG_FILTER => always(&["scale"]),
         _ => Lengths::default(),
     }
 }
@@ -825,6 +827,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
         &["Effect"],
         "{colorModel: \"document\" (the document's mode, RGB or CMYK)|\"grayscale\"|\"bitmap\" (\"document\"), useDocumentResolution: bool (true: Document Raster Effects Settings › Resolution), resolution: ppi 1..2400 (72; with useDocumentResolution false), background: \"white\"|\"transparent\" (\"transparent\"), antiAlias: \"none\"|\"art\"|\"type\" (\"art\"; none: hard edges), clippingMask: bool (false; the image clipped to the art's outline), addAround: pt 0..1000 (0; room around the art)} draws the object as an image of square pixels over its bounds and the room around them, leaving its paths, type and other art as they are; when it is the object's only raster effect, Expand Appearance makes the image Object › Rasterize makes",
         json!({"colorModel": "document", "useDocumentResolution": true, "resolution": 72.0, "background": "transparent", "antiAlias": "art", "clippingMask": false, "addAround": 0.0}),
+    ));
+    v.push(r(
+        crate::SVG_FILTER,
+        "SVG Filter",
+        &["Effect", "SVG Filters"],
+        "{name: string (the filter's id), xml: string (one SVG <filter> element with an id and 1..64 primitives, at most 64 KB), scale: number 0.001..1000 (1; points per unit of the filter's user space), origin: [x, y] pt ([0, 0]; where the filter's user space starts in the document)} runs the SVG filter on the object's pixels, its lengths in points times scale, at the Document Raster Effects resolution or finer; svgFilter.apply applies one of the document's filters (svgFilter.list)",
+        json!({"scale": 1.0, "origin": [0.0, 0.0]}),
     ));
     v
 }

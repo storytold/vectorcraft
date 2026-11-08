@@ -26,6 +26,13 @@ pub(super) struct SymbolMade {
     reuse: Reuse,
 }
 
+/// The image key of a linked image of the file at `path` that shows `bytes` (the file's pixels or
+/// a placeholder): the key of the bytes and the path's. Images of other files that show the same
+/// pixels have keys of their own, and reading one file's pixels in changes that file's images only.
+fn linked_key(bytes: &[u8], path: &str) -> String {
+    format!("img-{:016x}-{}", fnv1a(bytes), vectorcraft_doc::links::hash_bytes(path.as_bytes()))
+}
+
 impl Importer {
     pub(super) fn warn(&mut self, s: String) {
         if !self.warnings.contains(&s) {
@@ -80,11 +87,15 @@ impl Importer {
         Some(out)
     }
 
-    /// Give `n` the `data-*` attributes of element `id`, unless it has data already (what an
+    /// Give `n` the `data-*` attributes and classes of element `id`, unless it has data already (what an
     /// inner element made of it keeps).
     pub(super) fn keep_data(&self, id: &str, n: &mut Node) {
-        if let Some(data) = self.data.get(id).filter(|_| n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty())) {
+        let Some((data, classes)) = self.data.get(id) else { return };
+        if n.extras().attrs.as_ref().is_none_or(|a| a.data.is_empty()) {
             n.edit_attrs(|a| a.data = data.clone());
+        }
+        if n.extras().attrs.as_ref().is_none_or(|a| a.classes.is_empty()) {
+            n.edit_attrs(|a| a.classes = classes.clone());
         }
     }
 
@@ -290,10 +301,11 @@ impl Importer {
             (None, id) => format!("'{id}'"),
         };
         let mask = g.mask().and_then(|m| self.opacity_mask(m, ts, &label));
-        // Blurs, shadows and glows become live effects (see [`fx`]).
+        // Blurs, shadows and glows become live effects (see [`fx`]); other filters become Effect ›
+        // SVG Filters effects that keep their XML.
         let effects = match g.filters() {
             [] => vec![],
-            filters => fx::effects(filters, ts, &self.blends).unwrap_or_else(|| {
+            filters => fx::effects(filters, ts, &self.blends).or_else(|| fx::kept(filters, ts, &self.filter_sources)).unwrap_or_else(|| {
                 // usvg wraps a filtered element in a group of its own: name the element then.
                 let on = match g.children() {
                     [usvg::Node::Group(_)] | [] => label.clone(),
@@ -721,11 +733,14 @@ impl Importer {
             .ok()
             .and_then(|r| r.into_dimensions().ok())
             .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
-        let key = format!("img-{:016x}", fnv1a(bytes));
         // A linked file keeps a preview; a placeholder is all a missing one has (its preview).
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);
         let link = linked.map(|l| l.link.clone());
+        let key = match &link {
+            Some(l) => linked_key(bytes, &l.path),
+            None => format!("img-{:016x}", fnv1a(bytes)),
+        };
         self.doc.images.entry(key.clone()).or_insert_with(|| {
             let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()) };
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
@@ -763,9 +778,10 @@ impl Importer {
             std::mem::take(&mut self.data),
             std::mem::take(&mut self.events),
             std::mem::take(&mut self.ellipses),
+            std::mem::take(&mut self.filter_sources),
         );
         let art = self.group_node(tree.root(), acc);
-        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses) = outer;
+        (self.links, self.hidden, self.uses, self.labels, self.non_scaling, self.data, self.events, self.ellipses, self.filter_sources) = outer;
         art
     }
 }
@@ -797,6 +813,7 @@ mod tests {
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
+            filter_sources: HashMap::new(),
             files: Files::default(),
             non_scaling: HashSet::new(),
             data: HashMap::new(),

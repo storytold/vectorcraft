@@ -488,7 +488,7 @@ fn an_ai_file_opens_from_its_vectorcraft_document_when_the_editing_copy_differs(
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
-    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [id]})).unwrap();
     let r = s.execute("document.export", &json!({"format": "ai"})).unwrap();
     assert!(r["warnings"].to_string().contains("live effects"), "{r}");
     let bytes = b64(&r);

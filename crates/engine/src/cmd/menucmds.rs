@@ -106,7 +106,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Bounding Box",
             ["Object", "Transform"],
             None,
-            "{} square the bounding box of the selected objects to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset}",
+            "{} square the bounding box of the selected objects, and of every object inside them (the children of groups, compound paths, clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks), to the page again after a rotation (their geometry stays; one undo step, none when no box is rotated) → {changed: objects reset, the objects inside included}",
             has_selection,
             reset_bounding_box
         ),
@@ -223,21 +223,63 @@ pub(crate) fn squash(s: &mut Session, from: usize, label: &str) {
 
 // ---------- Reset Bounding Box ----------
 
+/// Squares each selected object and every object inside it: the children of groups, compound paths,
+/// clip groups, blends, envelopes, repeats and intertwines, and the art of linked opacity masks.
 fn reset_bounding_box(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
     let d = &s.doc()?.doc;
-    let turned: Vec<NodeId> = ids.into_iter().filter(|id| d.node(*id).is_some_and(|n| n.bbox_angle != 0.0)).collect();
-    if !turned.is_empty() {
+    let mut changed = 0;
+    let squared: Vec<(NodeId, Node)> = ids
+        .into_iter()
+        .filter_map(|id| {
+            let (n, count) = squared(d.node(id)?);
+            changed += count;
+            Some((id, n?))
+        })
+        .collect();
+    if !squared.is_empty() {
         s.edit("Reset Bounding Box", |d, _| {
-            for id in &turned {
-                if let Some(n) = d.node_mut(*id) {
-                    n.bbox_angle = 0.0;
+            for (id, n) in squared {
+                if let Some(slot) = d.node_mut(id) {
+                    *slot = n;
                 }
             }
             Ok(())
         })?;
     }
-    Ok(json!({ "changed": turned.len() }))
+    Ok(json!({ "changed": changed }))
+}
+
+/// A copy of `n` with the angle of every object in its subtree set to 0, or `None` when no box in
+/// it stands at an angle, and the number of objects squared. The subtree takes in children and the
+/// art of linked opacity masks (an unlinked mask's art turns on its own); layers have no box. Only
+/// the nodes on the way to a turned object are copied.
+fn squared(n: &Node) -> (Option<Node>, usize) {
+    let mut out = (!n.is_layer() && n.bbox_angle != 0.0).then(|| {
+        let mut c = n.clone();
+        c.bbox_angle = 0.0;
+        c
+    });
+    let mut count = usize::from(out.is_some());
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        let (child, k) = squared(c);
+        count += k;
+        if let Some(child) = child
+            && let Some(slot) = out.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
+        {
+            *slot = Arc::new(child);
+        }
+    }
+    if let Some(m) = n.extras().mask.as_ref().filter(|m| m.linked) {
+        let (art, k) = squared(&m.art);
+        count += k;
+        if let Some(art) = art
+            && let Some(m) = out.get_or_insert_with(|| n.clone()).extras_if_any().and_then(|e| e.mask.as_mut())
+        {
+            m.art = Arc::new(art);
+        }
+    }
+    (out, count)
 }
 
 // ---------- Lock / Hide ----------
@@ -577,6 +619,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
             let m = Affine::translate((k_mh, k_mv)) * about(o, frame.conjugate(scale));
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
+            }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
             }
         }
         Ok(targets)
@@ -1321,6 +1366,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

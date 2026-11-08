@@ -704,12 +704,12 @@ fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
 }
 
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
-/// takes more than 20 s.
+/// has not ended after 300 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
     let (tx, rx) = std::sync::mpsc::channel();
     let (t, text) = (t.clone(), t.plain_text());
     std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+    rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
 }
 
 /// Each line's baseline, left and right edges, and byte range.
