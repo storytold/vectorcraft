@@ -1211,6 +1211,50 @@ fn appending_a_visible_row_under_a_hidden_one_replaces_the_kept_stroke() {
     assert_eq!(kept.stroke_width, Some(2.0));
 }
 
+/// A stroke added on top of a mark replaces the stroke another mark of the series left on the graph, even when the new
+/// row shows the paint the mark already showed.
+#[test]
+fn adding_a_stroke_replaces_the_kept_stroke_with_the_marks_own() {
+    let (mut s, id, _, marks) = column_marks();
+    let stroke = top_row(&s, marks[0], false);
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": stroke, "color": "#ff0000", "weight": 2})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#0000ff", "weight": 5})).unwrap();
+    s.execute("appearance.addStroke", &json!({"ids": [marks[1].0]})).unwrap();
+    let kept = &spec(&s, id).series_paints[0];
+    assert_eq!(kept.stroke, Some(Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    assert_eq!(kept.stroke_width, Some(2.0));
+}
+
+/// A fill added right above a mark's active top fill replaces the fill another mark of the series left on the graph.
+#[test]
+fn adding_a_fill_above_the_active_top_fill_replaces_the_kept_fill() {
+    let (mut s, id, was, marks) = column_marks();
+    let fill = top_row(&s, marks[0], true);
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": fill, "color": "#0000ff"})).unwrap();
+    s.execute("select.set", &json!({"ids": [marks[1].0]})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].fill, Some(was));
+}
+
+/// A copy of a mark's top stroke replaces the stroke another mark of the series left on the graph.
+#[test]
+fn duplicating_a_marks_top_stroke_replaces_the_kept_stroke() {
+    let (mut s, id, _, marks) = column_marks();
+    let stroke = top_row(&s, marks[0], false);
+    s.execute("appearance.setItem", &json!({"ids": [marks[1].0], "index": stroke, "color": "#ff0000", "weight": 2})).unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#0000ff", "weight": 5})).unwrap();
+    for to in [false, true] {
+        s.execute("appearance.setItem", &json!({"ids": [marks[0].0], "index": stroke, "color": "#0000ff", "weight": 5})).unwrap();
+        let top = top_row(&s, marks[1], false);
+        let p = if to { json!({"ids": [marks[1].0], "index": top, "to": top + 1}) } else { json!({"ids": [marks[1].0], "index": top}) };
+        s.execute("appearance.duplicateItem", &p).unwrap();
+        let kept = &spec(&s, id).series_paints[0];
+        assert_eq!(kept.stroke, Some(Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))), "{p}");
+        assert_eq!(kept.stroke_width, Some(2.0), "{p}");
+    }
+}
+
 /// A weight set on a stroke without paint (a line graph's marker) leaves the paint the series keeps for its line.
 #[test]
 fn a_weight_on_a_stroke_without_paint_leaves_the_kept_stroke() {

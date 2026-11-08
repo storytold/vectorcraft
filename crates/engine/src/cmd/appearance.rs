@@ -551,12 +551,17 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
     // Where the new fill went in on the active item's object, when it went above the active row.
     let mut above = None;
     s.edit(if fill { "Add New Fill" } else { "Add New Stroke" }, |d, _| {
+        // The objects that got a new topmost row of the kind: the series stores its paint even when the object showed it.
+        let mut added = Vec::new();
         for (id, row) in ids.iter().zip(&per) {
             if let Some(n) = d.node_mut(*id) {
                 if let Some(i) = n.appearance.item_of_kind(*row, true)
                     && let Some(paint) = n.appearance.paint_at(Some(i), true).cloned()
                 {
                     n.appearance.insert_item(i + 1, AppearanceItem::Fill(FillLayer::new(paint)));
+                    if let Some(kind) = top_row_kind(&n.appearance, i + 1) {
+                        added.push((*id, kind));
+                    }
                     if active == Some(*id) {
                         above = Some(i + 1);
                     }
@@ -591,11 +596,14 @@ fn add_item(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                     }
                 } else {
                     n.appearance.items.push(item);
+                    added.push((*id, fill));
                 }
             }
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
-        super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
+        let mut rows = top_paint_changed(&before, d, &ids);
+        rows.extend(painted_rows(d, added));
+        super::graph::capture_series_top_paints(d, &rows);
         Ok(())
     })?;
     // A fill added above the active row becomes the active row; otherwise the rows above the new
@@ -651,6 +659,12 @@ fn top_paint_changed(before: &vectorcraft_doc::Document, d: &vectorcraft_doc::Do
 /// replaces the paint another mark of the series left on the graph, even when the mark's own row comes out as it was.
 fn painted_rows(d: &vectorcraft_doc::Document, rows: impl IntoIterator<Item = (NodeId, bool)>) -> Vec<(NodeId, bool)> {
     rows.into_iter().filter(|(id, fill)| d.node(*id).is_some_and(|n| !super::graph::shown_paint(n, *fill).0.is_none())).collect()
+}
+
+/// The kind of the row at `at` (fill `true`, stroke `false`) when it is the topmost visible row of that kind in `ap`.
+fn top_row_kind(ap: &Appearance, at: usize) -> Option<bool> {
+    let fill = ap.items.get(at)?.is_fill();
+    (ap.items.iter().rposition(|it| it.is_fill() == fill && it.visible()) == Some(at)).then_some(fill)
 }
 
 /// Clear Appearance on `n`: no fill, no stroke, and the object's Opacity row back to Default. A
@@ -898,6 +912,9 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
     let per = items_per_target(&before, &ids, &idx, aligned(p, C)?);
     s.edit("Duplicate Item", |d, _| {
         let mut any = false;
+        // Copies that became the topmost visible row of their kind: the series stores their paint even when the object
+        // showed it.
+        let mut added = Vec::new();
         for (id, idx) in ids.iter().zip(&per) {
             let Some(n) = d.node_mut(*id) else { continue };
             let has_contents = n.contents_label().is_some();
@@ -913,9 +930,11 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                 if active == Some(*id) {
                     active_at = Some(at);
                 }
+                let count = copies.len();
                 for (k, item) in copies.into_iter().enumerate() {
                     ap.insert_item(at + k, item);
                 }
+                added.extend((at..at + count).filter_map(|k| top_row_kind(ap, k)).map(|kind| (*id, kind)));
                 if let Some(c) = contents.filter(|_| has_contents) {
                     ap.set_contents_at(c);
                 }
@@ -929,6 +948,10 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(item) = ap.items.get(i).cloned() {
                     first_at.get_or_insert(i + 1);
                     ap.insert_item(i + 1, item);
+                    // Copies below this one go in lower down, so a copy that is the topmost row of its kind stays it.
+                    if let Some(kind) = top_row_kind(ap, i + 1) {
+                        added.push((*id, kind));
+                    }
                     any = true;
                 }
             }
@@ -937,7 +960,9 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("no item at index {}", idx[0])));
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
-        super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
+        let mut rows = top_paint_changed(&before, d, &ids);
+        rows.extend(painted_rows(d, added));
+        super::graph::capture_series_top_paints(d, &rows);
         Ok(())
     })?;
     // Rows at or above each copy move up by one (by the block, for copies placed at `to`).
