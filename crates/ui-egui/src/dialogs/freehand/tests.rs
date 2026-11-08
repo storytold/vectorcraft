@@ -290,7 +290,7 @@ fn the_new_path_is_selected_only_with_keep_selected_on() {
         super::super::confirm(&mut app).unwrap();
         let (selected, id) = stroke(&mut app, tool, 100.0);
         assert_eq!(selected, vec![id], "{tool}");
-        // Off: the next stroke leaves the selection as it was.
+        // Off: the next stroke leaves nothing selected, the earlier path included (#5752).
         app.run("tool.options", json!({"tool": tool})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("keepSelected".into(), json!(false));
         super::super::confirm(&mut app).unwrap();
@@ -299,7 +299,7 @@ fn the_new_path_is_selected_only_with_keep_selected_on() {
         assert_eq!(app.session.tool_options_of(tool)["keepSelected"].as_bool(), Some(false), "{tool}");
         let (selected, new) = stroke(&mut app, tool, 200.0);
         assert_ne!(new, id, "{tool} drew a new path");
-        assert_eq!(selected, vec![id], "{tool}");
+        assert!(selected.is_empty(), "{tool}: the earlier path is no longer selected either");
     }
 }
 

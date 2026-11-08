@@ -48,7 +48,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     let Some(b) = (if on_artboards { picked_artboards_bounds(app) } else { app.selection_bounds() }) else { return };
     let Some(st) = app.session.active() else { return };
     let n = st.selection.len();
-    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned();
+    let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
     let is_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { .. }));
     let is_image = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Image(_)));
     let is_clip_group = first.as_ref().is_some_and(|f| matches!(f.kind, NodeKind::Group { clip: true, .. }));
@@ -72,13 +72,15 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
     // Selection tool: its properties take the place of Lock, as in the reference app
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
     use vectorcraft_doc::LiveShape;
-    let shape = first.clone().filter(|f| {
-        n == 1
-            && st.selection.anchors.is_empty()
-            && app.session.tool_id() == "selection"
-            && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
-                if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
-    });
+    let shape = first
+        .filter(|f| {
+            n == 1
+                && st.selection.anchors.is_empty()
+                && app.session.tool_id() == "selection"
+                && matches!(&f.kind, NodeKind::Path { live: Some(l), .. }
+                    if matches!(**l, LiveShape::Rectangle { .. } | LiveShape::Ellipse { .. } | LiveShape::Polygon { .. }))
+        })
+        .cloned();
     let mut items: Vec<(&str, &str, &str, serde_json::Value)> = vec![]; // (label, icon, command, params)
     let none = || json!({});
     if on_artboards {
@@ -117,8 +119,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
         }
         // As in the reference app, open paths offer Join and Edit Path, compound paths and clipping
-        // masks their Release, images selected with vector art Make Clipping Mask, and type converts
-        // between point and area type (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
+        // masks their Release, images selected with vector art Make Clipping Mask, type converts
+        // between point and area type, and type on a path offers its options (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/contextual-task-bar-overview.html>).
         if n > 1 {
             items.push((tl!("Group"), "group", "object.group", none()));
             if mixed {
@@ -144,11 +146,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Release Compound Path"), "ungroup", "object.compoundPath.release", none()));
         } else if let Some(kind) = text {
             items.push((tl!("Create Outlines"), "type", "type.createOutlines", none()));
-            // Point type converts to area type and back; type on a path doesn't.
+            // Point type converts to area type and back. The overview above gives type on a path an item to add
+            // an effect and rearrange the text; here it opens Type on a Path Options.
             match kind {
                 TextKind::Area { .. } => items.push((tl!("Convert To Point Type"), "type", "type.convertToPointType", none())),
                 TextKind::Point => items.push((tl!("Convert To Area Type"), "dc-type-area", "type.convertToAreaType", none())),
-                TextKind::OnPath { .. } => {}
+                TextKind::OnPath { .. } => items.push((tl!("Type on a Path Options"), "dc-type-path", "type.pathOptions", none())),
             }
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.

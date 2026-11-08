@@ -448,6 +448,11 @@
 	Document Raster Effects Settings…	Postavke rasterskih efekata dokumenta…
 	Vector Effects	Vektorski efekti
 	3D and Materials	3D i materijali
+	Plane	Ravan
+	Extrude	Istiskivanje
+	Revolve	Rotaciono tijelo
+	Inflate	Napuhni
+	Select objects, then pick an object type to give them a 3D effect.	Odaberite objekte, zatim odaberite vrstu objekta da im date 3D efekat.
 	Extrude & Bevel…	Istiskivanje i zakošenje…
 	Revolve…	Rotaciono tijelo…
 	Inflate…	Napuhni…
@@ -645,6 +650,11 @@
 	New Toolbar	Nova traka s alatima
 	Show Toolbar	Prikaži traku s alatima
 	List Toolbars	Izlistaj trake s alatima
+	Manage Toolbars…	Upravljaj trakama s alatima…
+	Manage Toolbars	Upravljaj trakama s alatima
+	Rename Toolbar	Preimenuj traku s alatima
+	Duplicate Toolbar	Dupliciraj traku s alatima
+	Delete Toolbar	Izbriši traku s alatima
 	Manage Workspaces…	Upravljaj radnim prostorima…
 	Control	Kontrola
 	Contextual Task Bar	Kontekstna traka zadataka
@@ -678,6 +688,8 @@
 	Update Changed Links	Ažuriraj promijenjene veze
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
+	Navigator Panel Options	Opcije panela navigatora
+	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
 	Separations Preview	Pregled separacija
@@ -802,6 +814,9 @@
 	Put back in the toolbar	Vrati u traku s alatima
 	Float Panel	Odvoji panel
 	Dock Panel	Usidri panel
+	Dock to Top	Usidri na vrh
+	Dock to Bottom	Usidri na dno
+	Dock Control Bar	Usidri kontrolnu traku
 	Float Tool Group	Odvoji grupu alata
 	Services	Usluge
 	Hide VectorCraft	Sakrij VectorCraft
@@ -931,6 +946,8 @@ lighting	Light	Svjetlo
 	Expand Layers Panel Rows	Proširi redove panela slojeva
 	Export CSS…	Izvezi CSS…
 	Export Keyboard Shortcuts…	Izvezi prečice na tastaturi…
+	Export Keyboard Shortcuts as Text…	Izvezi prečice na tastaturi kao tekst…
+	Export Text…	Izvezi tekst…
 	File Info Dialog	Dijalog informacija o datoteci
 	Go to Artboard	Idi na radnu ploču
 	First Artboard	Prva radna ploča
@@ -943,6 +960,10 @@ lighting	Light	Svjetlo
 	Home	Početna
 	Import Keyboard Shortcuts…	Uvezi prečice na tastaturi…
 	Justify all lines	Obostrano poravnaj sve redove
+	Align Top	Poravnaj gore
+	Align Center	Poravnaj u sredinu
+	Align Bottom	Poravnaj dolje
+	Justify Vertically	Obostrano poravnaj okomito
 	Justify with last line aligned left	Obostrano s posljednjim redom lijevo
 	Keyboard Shortcut Conflicts	Konflikti prečica na tastaturi
 	Keyboard Shortcut Set	Skup prečica na tastaturi
@@ -1277,6 +1298,7 @@ lighting	Light	Svjetlo
 	Rotate Tool	Alat za rotaciju
 	Rotate View Tool	Alat za rotaciju prikaza
 	Trackpad Gesture to Rotate View	Pokret dodirne ploče za rotaciju prikaza
+	Hold a Tool Shortcut to Use the Tool Temporarily	Držite prečicu alata za privremenu upotrebu alata
 	Rotate View	Rotiraj prikaz
 	Rounded Rectangle Tool	Alat zaobljeni pravougaonik
 	Scale Tool	Alat za skaliranje
@@ -1320,6 +1342,9 @@ lighting	Light	Svjetlo
 	Zoom Tool	Alat za zumiranje
 	Action {n}	Akcija {n}
 	Begin Recording	Započni snimanje
+	Exclude from playback	Isključi iz reprodukcije
+	Include in playback	Uključi u reprodukciju
+	Include Action Steps	Uključi korake akcije
 	Center on Artboard	Centriraj na radnoj ploči
 	Default Actions	Zadane akcije
 	▾ Default Actions	▾ Zadane akcije
@@ -1455,7 +1480,9 @@ digits	Malayalam	Malajalam
 	Standard Vertical Roman Alignment	Standardno okomito latinično poravnanje
 	Strikethrough	Precrtano
 	Character:	Znak:
+	Paragraph:	Pasus:
 	Character options	Opcije znakova
+	Paragraph options	Opcije pasusa
 	Subscript	Indeks
 	Subscript (on the roadmap)	Indeks (u planu)
 	Superscript	Eksponent
@@ -1533,6 +1560,11 @@ digits	Malayalam	Malajalam
 	Save Transparency Flattener Preset…	Sačuvaj predložak spljoštavanja prozirnosti…
 	Basic Latin	Osnovna latinica
 	Currency & Symbols	Valuta i simboli
+	Alternates for Current Selection	Alternative za trenutni odabir
+	Select a character with the Type tool to see its alternates.	Odaberite znak alatom za tekst da vidite njegove alternative.
+	The selected character's font is not available.	Font odabranog znaka nije dostupan.
+	No alternates for the selected character.	Nema alternativa za odabrani znak.
+	Double-click to replace	Dvostruki klik za zamjenu
 	Double-click to insert	Dvostruki klik za umetanje
 	Entire Font	Cijeli font
 	glyph {id}	glif {id}
@@ -1589,6 +1621,7 @@ digits	Malayalam	Malajalam
 	Step Backward	Korak unazad
 	Step Forward	Korak naprijed
 	Clear History	Očisti historiju
+	New Document from State	Novi dokument iz stanja
 	Set History Limit…	Postavi ograničenje historije…
 	Open a document to see its history.	Otvorite dokument da vidite njegovu historiju.
 	Apply Data Set	Primijeni skup podataka
@@ -1808,6 +1841,7 @@ digits	Malayalam	Malajalam
 	Select text to set its OpenType features.	Odaberite tekst da postavite njegove OpenType mogućnosti.
 	Standard Ligatures	Standardne ligature
 	Stylistic Alternates	Stilske alternative
+	Set {n}	Skup {n}
 	Swash	Ukrasni potez
 	Tabular Lining	Tabelarne brojke
 	Tabular Oldstyle	Tabelarne stare brojke
@@ -1902,6 +1936,9 @@ digits	Malayalam	Malajalam
 	More Paragraph options	Više opcija pasusa
 	No document open	Nijedan dokument nije otvoren
 	Quick Actions	Brze akcije
+	Rearrange	Preuredi
+	Select All Artboards	Odaberi sve radne ploče
+	Switch Orientation	Promijeni orijentaciju
 	Rearrange All	Preuredi sve
 	Rulers & Grids	Ravnala i mreže
 	Select a text object	Odaberite tekstualni objekat
@@ -2030,6 +2067,14 @@ digits	Malayalam	Malajalam
 	Location	Lokacija
 	No images	Nema slika
 	Relink to Folder…	Ponovo poveži s folderom…
+	Each Link Separately	Svaku vezu zasebno
+	Selected Instances	Odabrane instance
+	All Instances	Sve instance
+	Missing Links from This Folder	Nedostajuće veze iz ovog foldera
+@msg	scope {v} is not each|selected|all|missingInFolder	scope {v} nije each|selected|all|missingInFolder
+@msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each i paths idu zajedno: paths navodi unose s ids i path, umjesto ids, path i folder
+@msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
+@msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene
@@ -2387,6 +2432,7 @@ digits	Malayalam	Malajalam
 	“{file}” is protected by a password.	„{file}” je zaštićen lozinkom.
 	Dim Images to:	Zatamni slike na:
 	Light Blue	Svijetloplava
+	Light Red	Svijetlocrvena
 	Layers Panel Options	Opcije panela slojeva
 	Row Size:	Veličina reda:
 	Show Layers Only	Prikaži samo slojeve
@@ -2475,6 +2521,12 @@ digits	Malayalam	Malajalam
 	Save the document first?	Prvo sačuvati dokument?
 @plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?|Datoteka u {folder}: {n} {note}. Prikazati folder paketa?
 @plural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}|Povezanih datoteka nije pronađeno: {n}
+@msg	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})|(Povezanih datoteka nije pronađeno: {n})
+@msg	(fonts not copied: {fonts})	(fontovi nisu kopirani: {fonts})
+@msg	({note}) ({more})	({note}) ({more})
+@msg	{note}) ({more}	{note}) ({more}
 	fonts not copied: {fonts}	fontovi nisu kopirani: {fonts}
 	Built-in presets are read-only: New… starts an editable copy.	Ugrađeni predlošci su samo za čitanje: Novo… započinje kopiju koja se može uređivati.
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} na radnoj ploči predstavlja {real} {unit} u sceni.
@@ -2524,6 +2576,8 @@ digits	Malayalam	Malajalam
 	Show Cross Hairs	Prikaži končanicu
 	Show Video Safe Areas	Prikaži sigurne oblasti za video
 	Video Ruler Pixel Aspect Ratio:	Omjer stranica piksela video ravnala:
+	Fade Region Outside Artboard	Zatamni područje izvan radne ploče
+	Update While Dragging	Ažuriraj tokom povlačenja
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
@@ -3128,6 +3182,7 @@ theme	Appearance	Izgled
 	Redefine Symbol	Ponovo definiši simbol
 	Remove Brush Stroke	Ukloni potez četkicom
 	Replace Symbol	Zamijeni simbol
+	Reset Transformation	Vrati transformaciju na početno
 	Select All Instances	Odaberi sve instance
 	Symbol Sprayer	Raspršivač simbola
 	Symbolism Tool	Alat simbolizam
@@ -3417,6 +3472,7 @@ theme	Appearance	Izgled
 	Character / Paragraph	Znak / pasus
 	Copy Artboard	Kopiraj radnu ploču
 	Cut Artboard	Izreži radnu ploču
+	Rename Artboards	Preimenuj radne ploče
 	Move Artboard Up/Down	Pomakni radnu ploču gore/dolje
 	Add Anchor (Pen)	Dodaj sidro (pero)
 	Add Anchor Point	Dodaj sidrenu tačku
@@ -3597,6 +3653,8 @@ theme	Appearance	Izgled
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
+	Search Preferences	Pretraga postavki
+	No settings found	Nema pronađenih postavki
 	Scale Corners	Skaliraj uglove
 	Scale Cursor Proportional to UI	Skaliraj kursor proporcionalno interfejsu
 	Scale Strokes & Effects	Skaliraj poteze i efekte
@@ -3617,6 +3675,7 @@ theme	Appearance	Izgled
 	Snapping Tolerance	Tolerancija hvatanja
 	Spacing Guides	Vodilice razmaka
 	Invoke Distance Guides	Pozovi vodiče udaljenosti
+	Snap to Last Location	Prilijepi uz posljednju lokaciju
 	Spanish	Španski
 	Subdivisions	Podjele
 	Templates Folder	Folder predložaka
@@ -3630,6 +3689,7 @@ theme	Appearance	Izgled
 	Type Object Selection by Path Only	Odabir tekstualnog objekta samo putanjom
 	UI Scaling	Skaliranje interfejsa
 	Use Compression	Koristi kompresiju
+	Include Editing Data for Other Apps	Uključi podatke za uređivanje za druge aplikacije
 	Use Japanese Crop Marks	Koristi japanske oznake za izrezivanje
 	Use Low Resolution Proxy for Linked EPS	Koristi proksi niske rezolucije za povezani EPS
 	Use Precise Cursors	Koristi precizne kursore
@@ -3783,6 +3843,8 @@ axis	Both	Obje
 	Center	Sredina
 	Transform in Perspective	Transformiši u perspektivi
 	Grayscale	Nijanse sive
+	High Color	Mnogo boja
+	Low Color	Malo boja
 	Embed	Ugradi
 	Star	Zvijezda
 	Power Saving (integrated)	Ušteda energije (integrisana)
@@ -4256,7 +4318,7 @@ imageTrace	Outline	Obris
 @msg	Save for Web: the image is empty	Sačuvaj za web: slika je prazna
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Sačuvaj zapisuje {_1}, a ne {_2}: za druge formate koristite document.export
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Sačuvaj zapisuje {_1}, a ne {_2}: za zapisivanje koristite file.saveAsTemplate
-@msg	aiVersion 7 writes legacy .ai files; a .ait template is always PDF-compatible	aiVersion 7 zapisuje naslijeđene .ai datoteke; .ait predložak je uvijek kompatibilan s PDF-om
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 zapisuje naslijeđene .ai datoteke, a ne .ait predloške
 @msg	Saved recovery data for {title}	Sačuvani podaci za oporavak za {title}
 @msg	Saved to User Defined: {_1}	Sačuvano u korisnički definisano: {_1}
 @msg	Saved {path}	Sačuvano: {path}
@@ -4561,6 +4623,8 @@ imageTrace	Outline	Obris
 @msg	no such saved selection	nema takvog sačuvanog odabira
 @msg	no such segment	nema takvog segmenta
 @msg	no such spine point	nema takve tačke kičme
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
+@msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -4599,6 +4663,7 @@ imageTrace	Outline	Obris
 @msg	nothing to save: the document has no visible art	nema ničeg za čuvanje: dokument nema vidljiv crtež
 @msg	nothing to undo	nema ničeg za poništavanje
 @msg	no history to clear	nema historije za brisanje
+@msg	no history state {v}	nema stanja historije {v}
 @msg	nothing to warp	nema ničeg za iskrivljenje
 @msg	nothing to wrap	nema ničeg za omotavanje
 @msg	object {0} cannot have children	objekat {0} ne može imati djecu
@@ -4845,6 +4910,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	{n} sliku nije moguće dekodirati: prikazuje se kao prekriženi okvir|{n} slike nije moguće dekodirati: prikazuju se kao prekriženi okviri|{n} slika nije moguće dekodirati: prikazuju se kao prekriženi okviri
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
+@msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
@@ -4889,11 +4955,16 @@ imageTrace	Outline	Obris
 @msg	it has {_1}, which VectorCraft doesn't read from it yet	sadrži {_1}, što VectorCraft još ne čita iz nje
 @msg	its objects are nested too deeply	njeni objekti su previše duboko ugniježđeni
 @msg	its section ending with `%{end}` doesn't end	njen odjeljak koji završava s `%{end}` ne završava
+@msg	brushes VectorCraft can't read yet were left out of the Brushes panel ({_1})	četkice koje VectorCraft još ne može pročitati izostavljene su iz panela Četkice ({_1})
 @msg	objects with several fills or strokes, effects or brushes came in as their drawn look ({_1}): their appearance isn't editable yet	objekti s više ispuna ili poteza, efekata ili četkica stigli su kao njihov iscrtani izgled ({_1}): njihov izgled se još ne može uređivati
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradijent „{name}” nije definisan u datoteci: umjesto njega koristi se obična boja
 @msg	an image VectorCraft can't read was left out	izostavljena je slika koju VectorCraft ne može pročitati
 @msg	an image whose data is cut short was left out	izostavljena je slika čiji su podaci skraćeni
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
+@msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
+@msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
+@msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	tekst u području u okvirima prekratkim za red fonta u kojem se prikazuje dobio je više okvire ({_1}): inače se tekst ne bi prikazao
 @msg	its editing data doesn't say where its art is	njeni podaci za uređivanje ne govore gdje joj je crtež
 @msg	this file was saved without PDF compatibility, and its editing data can't be read ({why})	ova datoteka je sačuvana bez PDF kompatibilnosti, a njeni podaci za uređivanje se ne mogu pročitati ({why})
@@ -4917,6 +4988,7 @@ imageTrace	Outline	Obris
 @msg	No linked files to look for	Nema povezanih datoteka za traženje
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je referenca na korak {r}, koju razrješavaju samo `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` mora biti niz ID-ova objekata, a ne {v}
+@msg	`colors` must be an array of colors, not {v}	`colors` mora biti niz boja, a ne {v}
 @msg	`corners` must be an array of anchor indices, not {v}	`corners` mora biti niz indeksa sidara, a ne {v}
 @msg	`{text}`: step {i}'s result has no such value (write $$ for a literal $)	`{text}`: rezultat koraka {i} nema takvu vrijednost (napišite $$ za doslovni $)
 @msg	`{text}`: there is no step {i} before this one (steps count from 0; write $$ for a literal $)	`{text}`: prije ovog nema koraka {i} (koraci se broje od 0; napišite $$ za doslovni $)
@@ -5463,6 +5535,10 @@ mark-style	Japanese	Japanski
 @msg	open a document with data sets	otvorite dokument sa skupovima podataka
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	ništa iz skupa podataka {name} nije primijenjeno: nijedan objekat nije vezan za varijablu za koju ima vrijednost
 @msg	the action has no steps	akcija nema koraka
+@msg	the action has no included steps	akcija nema uključenih koraka
+@msg	no such action step	nema takvog koraka akcije
+@msg	included must be true or false	included mora biti true ili false
+@msg	others must be true or false	others mora biti true ili false
 	Accent Color	Boja naglaska
 	Amber	Jantar
 	Coral	Koralna
@@ -5484,6 +5560,10 @@ mark-style	Japanese	Japanski
 	Movie Clip	Filmski klip
 @msg	name is empty	naziv je prazan
 @msg	an action is already recording	akcija se već snima
+@msg	an action is already playing	akcija se već reproducira
+@msg	the action stopped playing: its document is no longer active	reprodukcija akcije je zaustavljena: njen dokument više nije aktivan
+@msg	speed must be accelerated, step or pause	speed mora biti accelerated, step ili pause
+@msg	seconds must be a whole number from 1 to 60	seconds mora biti cijeli broj od 1 do 60
 @msg	no such function key	nema takve funkcijske tipke
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
@@ -5567,6 +5647,7 @@ mark-style	Japanese	Japanski
 	Effect Gallery	Galerija efekata
 	Filters	Filteri
 	Select artwork to apply effects	Odaberite crtež za primjenu efekata
+@msg	the file's variable bindings weren't all read (bindings skipped: {_1}): those objects aren't bound to their variables	nisu pročitane sve veze varijabli datoteke (preskočene veze: {_1}): ti objekti nisu vezani za svoje varijable
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	biblioteka varijabli datoteke je djelimično pročitana (preskočeni unosi: {_1}): panel Varijable navodi ostalo
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	biblioteku varijabli datoteke nije bilo moguće pročitati: panel Varijable je ne navodi
 @msg	a variable of unknown kind can't be bound to objects	varijabla nepoznate vrste ne može se povezati s objektima
@@ -5646,12 +5727,57 @@ axis	Y Axis	Y osa
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	živi efekat radi dok se dokument iscrtava, pa ne može biti `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	izvoznik uvijek dobija budžet izvoza: izostavite `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): install it with `allowHeavy: true` once the user agrees	„{_1}” traži veliki budžet (svako pokretanje do {minutes} minuta i {times} puta više uobičajenih instrukcija): instalirajte ga s `allowHeavy: true` kada korisnik pristane
+# Plug-in permissions (Install Plug-in…, plugin.install grant)
+	Install “{name}”, which asks for these permissions?	Instalirati „{name}”, koji traži ove dozvole?
+	ID: {id}	ID: {id}
+	Version: {version}	Verzija: {version}
+	File SHA-256: {hash}	SHA-256 datoteke: {hash}
+	Read the objects it is given	Čitati objekte koje dobije
+	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
+	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
+	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
+	Write the document as a file in its own format	Zapisati dokument kao datoteku u vlastitom formatu
+	Show its progress, see Cancel and write log lines	Prikazati napredak, prepoznati otkazivanje i zapisivati redove dnevnika
+@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	dozvola `progress` zahtijeva nivo API-ja dodataka {PROGRESS_API}: navedite `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modul uvozi `env.{name}` s drugim tipom od domaćinovog: domaćinov tip je {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	modul uvozi `env.{name}`, koji dodatak smije koristiti samo na nivou API-ja dodataka {PROGRESS_API} (`api` {PROGRESS_API}) i s dozvolom `progress`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	modul uvozi `{from}.{name}`, koji domaćin ne nudi: dodatak smije uvoziti samo `env.vc_progress`, `env.vc_cancelled` i `env.vc_log` (nivo API-ja dodataka 2), a nikakav WASI, datoteke ni mrežu
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` je {_1}; ovaj domaćin podržava nivoe API-ja dodataka od 1 do {API_LEVEL}
+@msg	`grant` must be a list of permission names	`grant` mora biti lista naziva dozvola
+@msg	`grant` names an unknown permission `{shown}`	`grant` navodi nepoznatu dozvolu `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	dodatku vrste `{_1}` potrebna je dozvola `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	najviše {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	dozvola `{shown}` ne odnosi se na dodatak vrste `{_1}`
+@msg	permission `{shown}` is listed twice	dozvola `{shown}` navedena je dvaput
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	dozvola `{shown}` rezervisana je za kasniji API dodataka; ovaj domaćin je ne dodjeljuje
+@msg	unknown permission `{shown}`	nepoznata dozvola `{shown}`
+@msg	“{name}” asks for the permissions {asked}: install it with `grant` listing them once the user agrees	„{name}” traži dozvole {asked}: instalirajte ga s `grant` koji ih navodi kada korisnik pristane
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	„{name}” nije dobio `{p}`, što je potrebno njegovom izlazu: ništa nije promijenjeno
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modul nema SHA-256 naveden u `hash`: ništa nije instalirano
 	New Set…	Novi skup…
 	New Set	Novi skup
 	Set Options…	Opcije skupa…
 	Set Options	Opcije skupa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
+	Playback Options…	Opcije reprodukcije…
+	Insert Stop…	Umetni zaustavljanje…
+	Insert Stop	Umetni zaustavljanje
+	Record Stop	Snimi zaustavljanje
+	Allow Continue	Dozvoli nastavak
+	Continue	Nastavi
+	Continue Action	Nastavi akciju
+	Delete Action Step	Izbriši korak akcije
+	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
+	Stop: {message}	Zaustavljanje: {message}
+@msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
+@msg	message must be text	message mora biti tekst
+@msg	allowContinue must be true or false	allowContinue mora biti true ili false
+@msg	Batch cannot play an action with a stop	Paketna obrada ne može reprodukovati akciju sa zaustavljanjem
+	Playback Options	Opcije reprodukcije
+	Accelerated	Ubrzano
+	Step by Step	Korak po korak
+	Pause For	Pauza od
 	Rename Action	Preimenuj akciju
 	New Action…	Nova akcija…
 	New Action	Nova akcija
@@ -6032,6 +6158,9 @@ shape	Open	Otvoren
 	Find Nearest Swatch…	Pronađi najbliži uzorak boje…
 	Find Nearest Swatch	Pronađi najbliži uzorak boje
 	Apply Nearest Swatch	Primijeni najbliži uzorak boje
+# Color Effects add-on: Apply Fill to Stroke and Apply Stroke to Fill (Object › Plug-ins › Color Effects, #5530).
+	Apply Fill to Stroke	Primijeni ispunu na potez
+	Apply Stroke to Fill	Primijeni potez na ispunu
 	Select objects to find the swatches nearest their colors.	Odaberite objekte da pronađete uzorke boja najbliže njihovim bojama.
 @msg	select objects or give `color`	odaberite objekte ili navedite `color`
 @msg	`color` is not a colour	`color` nije boja
@@ -6060,6 +6189,8 @@ shape	Open	Otvoren
 @msg	the paths have nothing to merge there	putanje tu nemaju šta spojiti
 @msg	the path is locked or hidden	putanja je zaključana ili skrivena
 @msg	{_1}: they came in as the page's art	{_1}: uvezeni su kao ilustracija stranice
+@msg	warped text objects that came in as drawn art, not as editable type: {_1}	iskrivljeni tekstualni objekti uvezeni kao ilustracija, a ne kao tekst koji se može uređivati: {_1}
+@msg	objects that drew differently from the file's own page came in as its art: {_1}	objekti koji su se iscrtali drugačije od vlastite stranice datoteke uvezeni su kao ilustracija stranice: {_1}
 
 @msg	You must choose a side pattern.	Morate odabrati bočni uzorak.
 @msg	invalid pattern tile choice	nevažeći izbor pločice uzorka
@@ -6121,6 +6252,11 @@ shape	Open	Otvoren
 	Export All Open Documents as SVG	Izvezi sve otvorene dokumente kao SVG
 @msgplural	Exported {n} document|Exported {n} documents	Izvezen je {n} dokument|Izvezena su {n} dokumenta|Izvezeno je {n} dokumenata
 @msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Izvezen je {n} dokument; {title} nije zapisan: {error}|Izvezena su {n} dokumenta; {title} nije zapisan: {error}|Izvezeno je {n} dokumenata; {title} nije zapisan: {error}
+# Document Tools add-on: Batch Trace Folder (#4921).
+	Batch Trace Folder	Paketno praćenje foldera
+@msgplural	Traced {n} image|Traced {n} images	Praćena je {n} slika|Praćene su {n} slike|Praćeno je {n} slika
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	{n} slika nije mogla biti praćena|{n} slike nisu mogle biti praćene|{n} slika nije moglo biti praćeno
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Praćena je {n} slika; nije praćeno: {failed}|Praćene su {n} slike; nije praćeno: {failed}|Praćeno je {n} slika; nije praćeno: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Vrsta simbola:
 	Dynamic Symbol	Dinamički simbol
@@ -6171,4 +6307,59 @@ shape	Open	Otvoren
 	Bow	Luk
 	Spike	Šiljak
 	Skip Spaces	Preskoči razmake
+	Release Type on a Path…	Oslobodi tekst na putanji…
+	Release Type on a Path	Oslobodi tekst na putanji
+	Text and Path	Tekst i putanja
+	Path Only	Samo putanja
+	Text Only	Samo tekst
 @msg	The art is too large to copy as a picture: other apps get no PNG of it	Grafika je prevelika da bi se kopirala kao slika: druge aplikacije ne dobijaju njen PNG
+
+# Selection Tools add-on: Select by Artboards (Object › Plug-ins › Selection Tools, #5548).
+	Select by Artboards	Odabir po radnim pločama
+	Select by Artboards…	Odabir po radnim pločama…
+	Selection Tools	Alati za odabir
+	Search artboards	Pretraži radne ploče
+	Fully Inside	Potpuno unutra
+	Fully Outside	Potpuno vani
+	No artboards match.	Nijedna radna ploča ne odgovara.
+	Chosen: {n} of {total}	Odabrano: {n} od {total}
+
+# Contour add-on
+	Contour	Kontura
+	Contour Tool	Alat kontura
+	Sharp	Oštro
+	Bake	Proširi
+	Turn the Contour into plain paths	Pretvori konturu u obične putanje
+	Set Corners…	Postavi uglove…
+	All Anchors	Sva sidra
+	Odd-Numbered Anchors	Neparna sidra
+	Even-Numbered Anchors	Parna sidra
+	Minimum angle	Najmanji ugao
+	Maximum angle	Najveći ugao
+
+# Selection Tools add-on: Select by Link Status (Object › Plug-ins › Selection Tools, the Links panel menu, #5526).
+	Select Linked	Odaberi povezane
+	Select Embedded	Odaberi ugrađene
+	Select Missing	Odaberi nedostajuće
+	Select Modified	Odaberi izmijenjene
+	Select by Link Status	Odabir po statusu veze
+	Select by Link Status…	Odabir po statusu veze…
+	Search images	Pretraži slike
+	No images match.	Nijedna slika ne odgovara.
+@msgplural	Selected {n} linked image|Selected {n} linked images	Odabrana je {n} povezana slika|Odabrane su {n} povezane slike|Odabrano je {n} povezanih slika
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Odabrana je {n} ugrađena slika|Odabrane su {n} ugrađene slike|Odabrano je {n} ugrađenih slika
+@msgplural	Selected {n} missing image|Selected {n} missing images	Odabrana je {n} nedostajuća slika|Odabrane su {n} nedostajuće slike|Odabrano je {n} nedostajućih slika
+@msgplural	Selected {n} modified image|Selected {n} modified images	Odabrana je {n} izmijenjena slika|Odabrane su {n} izmijenjene slike|Odabrano je {n} izmijenjenih slika
+@msgplural	Selected {n} image|Selected {n} images	Odabrana je {n} slika|Odabrane su {n} slike|Odabrano je {n} slika
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; još {n} je skrivena ili zaključana|{selected}; još {n} su skrivene ili zaključane|{selected}; još {n} je skriveno ili zaključano
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; još {n} je na sloju predloška|{selected}; još {n} su na slojevima predloška|{selected}; još {n} je na slojevima predloška
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; još {n} je izvan izolirane grupe|{selected}; još {n} su izvan izolirane grupe|{selected}; još {n} je izvan izolirane grupe
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; još {n} se sada ne može odabrati|{selected}; još {n} se sada ne mogu odabrati|{selected}; još {n} se sada ne može odabrati
+
+# Compound Shapes add-on
+	Compound Shapes	Složeni oblici
+	Shape Mode Buttons Make Compound Shapes	Tasteri načina oblika prave složene oblike
+
+# 3D Box add-on
+	3D Box	3D kutija
+	3D Box Tool	Alat za 3D kutiju

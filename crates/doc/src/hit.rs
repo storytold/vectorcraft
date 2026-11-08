@@ -6,9 +6,10 @@ use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use vectorcraft_geom::hit::{fill_contains, stroke_contains};
-use vectorcraft_geom::{BezPath, FillRule, Point, Rect};
+use vectorcraft_geom::kurbo::ParamCurveNearest;
+use vectorcraft_geom::{BezPath, FillRule, PathData, PathSeg, Point, Rect};
 
-use crate::{AppearanceItem, Document, Node, NodeId, NodeKind, SymbolBoxes};
+use crate::{AppearanceItem, Document, Node, NodeId, NodeKind, StrokeAlign, SymbolBoxes};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HitKind {
@@ -508,8 +509,9 @@ fn hit_test_skipping(doc: &Document, p: Point, opt: HitOptions, skip: &dyn Fn(No
         && let Some(isolated) = doc.node(scope)
         && let Some(mut chain) = doc.ancestry(scope)
     {
-        // Isolated before its artboard was locked: nothing in it hits.
-        if locks.holds_id(scope) {
+        // Isolated before its artboard, or its layer or a group around it, was locked or hidden:
+        // nothing in it hits (#5309).
+        if !doc.is_editable_with(&locks, scope) {
             return None;
         }
         if isolated.is_container() {
@@ -723,6 +725,43 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
+/// Check the body without assembling a `BezPath`. A miss near a joint or cap may still hit a
+/// miter or square cap, so the caller falls back to the full stroke check there.
+fn near_path_body(path: &PathData, p: Point, radius: f64, decoration_reach: f64) -> Option<(bool, bool)> {
+    if !radius.is_finite() || radius < 0.0 || !decoration_reach.is_finite() || decoration_reach < 0.0 {
+        return None;
+    }
+    let radius_sq = radius * radius;
+    let decoration_sq = decoration_reach * decoration_reach;
+    let mut near_decoration = false;
+    for sp in &path.subpaths {
+        for i in 0..sp.segment_count() {
+            let c = sp.segment(i);
+            if decoration_reach > 0.0 && !near_decoration && ([c.p0, c.p3].iter().any(|q| (*q - p).hypot2() <= decoration_sq)) {
+                near_decoration = true;
+            }
+            let controls = [c.p0, c.p1, c.p2, c.p3];
+            if controls.iter().all(|q| q.x < p.x - radius)
+                || controls.iter().all(|q| q.x > p.x + radius)
+                || controls.iter().all(|q| q.y < p.y - radius)
+                || controls.iter().all(|q| q.y > p.y + radius)
+            {
+                continue;
+            }
+            let seg = if sp.segment_is_line(i) { PathSeg::Line(vectorcraft_geom::kurbo::Line::new(c.p0, c.p3)) } else { PathSeg::Cubic(c) };
+            if seg.nearest(p, 1e-9).distance_sq <= radius_sq {
+                if vectorcraft_geom::bez::has_length(&seg) {
+                    return Some((true, near_decoration));
+                }
+                // A zero-length segment can still hit as an outline, though a painted stroke
+                // needs a segment with direction. Let the existing check decide its hit kind.
+                near_decoration = true;
+            }
+        }
+    }
+    Some((false, near_decoration))
+}
+
 #[cfg(test)]
 thread_local! {
     /// How many objects [`hit_leaf`] tested on this thread.
@@ -734,6 +773,43 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
+            if opt.outline
+                && let Some((hit, needs_full_check)) = near_path_body(path, p, opt.tol, 0.0)
+            {
+                if hit {
+                    return Some(HitKind::Outline);
+                }
+                if !needs_full_check {
+                    return None;
+                }
+            }
+            let mut strokes = n.appearance.painted_strokes();
+            if !opt.outline
+                && n.appearance.fill().is_none_or(|f| f.paint.is_none())
+                && let Some(s) = strokes.next()
+                && strokes.next().is_none()
+                && s.align == StrokeAlign::Center
+                && s.width.is_finite()
+                && s.width > 0.0
+                && s.dash.as_ref().is_none_or(|d| !d.is_dashed())
+                && s.profile.is_none()
+                && s.start_arrow.is_none()
+                && s.end_arrow.is_none()
+                && s.brush.is_none()
+                && let Some((hit, near_decoration)) = near_path_body(
+                    path,
+                    p,
+                    s.width / 2.0 + opt.tol,
+                    if s.join == crate::LineJoin::Miter || s.cap == crate::LineCap::Square { s.reach() + opt.tol } else { 0.0 },
+                )
+            {
+                if hit {
+                    return Some(HitKind::Stroke);
+                }
+                if !near_decoration {
+                    return None;
+                }
+            }
             let bp = path.to_bezpath();
             if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
                 return Some(k);
@@ -893,6 +969,9 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     let mut out = Vec::new();
     // `tops` pairs each object with the part of `r` in which the marquee can touch it.
     let tops: Vec<(&std::sync::Arc<Node>, Rect)> = match scope.and_then(|s| doc.node(s)) {
+        // Isolated art whose layer, or a group around it, was locked or hidden afterwards: the
+        // marquee touches none of it, as clicks don't (#5309).
+        Some(s) if !doc.is_editable(s.id) => vec![],
         Some(s) => match (s.children(), marquee_in(s, r)) {
             (Some(c), Some(r)) => c.iter().enumerate().filter(|(i, _)| !shaper_hides(s, *i, scope)).map(|(_, c)| (c, r)).collect(),
             (Some(_), None) => vec![],

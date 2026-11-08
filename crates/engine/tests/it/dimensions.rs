@@ -280,6 +280,348 @@ fn a_moved_linked_dimension_stays_where_it_was_dropped() {
     assert!((recipe(&s, id).offset - moved).abs() < 1e-6, "moved together");
 }
 
+/// How many nodes a dimension's art holds, how many of them are type, and whether it has a recipe.
+fn art(s: &Session, id: u64) -> (usize, usize, bool) {
+    let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+    let (mut nodes, mut labels) = (0, 0);
+    n.walk(&mut |c| {
+        nodes += 1;
+        labels += usize::from(matches!(c.kind, NodeKind::Text(_)));
+    });
+    (nodes, labels, n.extras().dimension.is_some())
+}
+fn bounds(s: &Session, id: u64) -> [f64; 4] {
+    let b = s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    [b.x0, b.y0, b.x1, b.y1]
+}
+/// The art of `id`, which holds no type and no recipe, follows a move, a scale, undo and redo as
+/// plain art does.
+fn stays_plain_art(s: &mut Session, id: u64) {
+    let plain = art(s, id);
+    assert_eq!(plain.1, 0, "no type left: {plain:?}");
+    let at = bounds(s, id);
+    run(s, "select.set", json!({"ids":[id]}));
+    run(s, "object.move", json!({"dx":30,"dy":-20}));
+    assert_eq!(art(s, id), plain, "after a move");
+    let moved = bounds(s, id);
+    for (k, (a, b)) in at.iter().zip(moved).enumerate() {
+        let d = if k % 2 == 0 { 30.0 } else { -20.0 };
+        assert!((b - a - d).abs() < 1e-6, "{at:?} moved to {moved:?}");
+    }
+    run(s, "object.scale", json!({"sx":200,"sy":100}));
+    assert_eq!(art(s, id), plain, "after a scale");
+    let scaled = bounds(s, id);
+    assert!(((scaled[2] - scaled[0]) - 2.0 * (at[2] - at[0])).abs() < 1e-6, "{at:?} scaled to {scaled:?}");
+    run(s, "edit.undo", json!({}));
+    assert_eq!(art(s, id), plain, "after undoing the scale");
+    run(s, "edit.redo", json!({}));
+    assert_eq!(art(s, id), plain, "after redoing the scale");
+    run(s, "edit.undo", json!({}));
+    run(s, "edit.undo", json!({}));
+    assert_eq!(art(s, id), plain);
+    assert_eq!(bounds(s, id), at);
+    assert!(!plain.2, "no recipe left");
+}
+
+/// Object › Expand turns a dimension into plain art for good: it no longer follows the art it
+/// measured, and one undo gives the live dimension back.
+#[test]
+fn an_expanded_dimension_stays_plain_art() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let other = dim(&mut s, line);
+    let live = art(&s, id);
+    assert_eq!((live.1, live.2), (1, true));
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.expand", json!({}));
+    stays_plain_art(&mut s, id);
+    let plain = art(&s, id);
+    let at = bounds(&s, id);
+    assert_eq!(art(&s, other), live, "the dimension left out of the selection stays live");
+    // The art it measured no longer moves it, and deleting that art leaves it.
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":100}));
+    assert_eq!(text(&s, other), "20.00 in");
+    assert_eq!((art(&s, id), bounds(&s, id)), (plain, at));
+    run(&mut s, "edit.clear", json!({}));
+    assert_eq!((art(&s, id), bounds(&s, id)), (plain, at));
+    assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none());
+    // Saved and opened again, it is still plain art.
+    let doc = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let mut reopened = Session::new();
+    reopened.add_document(doc, None);
+    stays_plain_art(&mut reopened, id);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live, "one undo gives the live dimension back");
+    assert_eq!(text(&s, id), "10.00 in");
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":100}));
+    assert_eq!(text(&s, id), "20.00 in", "linked again");
+}
+
+/// Expand's options: any one that changes a dimension's art ends its link, and an Expand that
+/// changes nothing leaves it live.
+#[test]
+fn expand_options_that_change_a_dimension_end_its_link() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let live = art(&s, id);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    assert!(s.execute("object.expand", &json!({"object":false,"stroke":false})).is_err(), "no fills to expand");
+    assert_eq!(art(&s, id), live);
+    assert!(s.doc().unwrap().doc.dimensions);
+    // Stroke alone leaves type as it is, so a stroked label on its own does not end the link.
+    let label = {
+        let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
+        children.iter().find(|c| matches!(c.kind, NodeKind::Text(_))).unwrap().id.0
+    };
+    run(&mut s, "paint.setStroke", json!({"ids":[label],"color":"#ff0000"}));
+    run(&mut s, "select.set", json!({"ids":[label]}));
+    assert!(s.execute("object.expand", &json!({"object":false,"fill":false})).is_err(), "no paths to outline");
+    assert!(art(&s, id).2, "still live");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    // Stroke alone: the label stays type, in art that no longer redraws.
+    run(&mut s, "object.expand", json!({"object":false,"fill":false}));
+    let plain = art(&s, id);
+    assert_eq!(plain.1, 1, "{plain:?}");
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+    assert_eq!(art(&s, id), plain);
+    assert!(!plain.2, "no recipe left");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live);
+    // Object alone: the lines stay stroked paths, in art that no longer redraws.
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.expand", json!({"stroke":false,"fill":false}));
+    let plain = art(&s, id);
+    assert_eq!(plain.1, 0, "{plain:?}");
+    run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+    assert_eq!(art(&s, id), plain);
+    assert!(!plain.2, "no recipe left");
+}
+
+/// An Expand that ends up changing no art fails and leaves the dimension live: Outline Stroke skips
+/// guides, here the dimension's lines.
+#[test]
+fn an_expand_that_changes_no_art_leaves_a_dimension_live() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let lines: Vec<u64> = {
+        let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
+        children.iter().filter(|c| matches!(c.kind, NodeKind::Path { .. })).map(|c| c.id.0).collect()
+    };
+    run(&mut s, "select.set", json!({"ids":lines}));
+    run(&mut s, "view.guides.make", json!({}));
+    let live = art(&s, id);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    assert!(s.execute("object.expand", &json!({"object":false,"fill":false})).is_err());
+    assert_eq!(art(&s, id), live);
+    assert!(live.2);
+    // A stroked path selected with it expands, and the dimension's art stays live.
+    let other = run(&mut s, "shape.rectangle", json!({"x":300,"y":300,"width":50,"height":50}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setStroke", json!({"ids":[other],"color":"#000000"}));
+    let moved_with = s.doc().unwrap().doc.node_count();
+    run(&mut s, "select.set", json!({"ids":[id, other]}));
+    run(&mut s, "object.expand", json!({"object":false,"fill":false}));
+    assert_ne!(s.doc().unwrap().doc.node_count(), moved_with, "the rectangle's stroke is outlined");
+    assert_eq!(art(&s, id), live);
+}
+
+/// A dimension selected with the art it measures, or held by a selected group, expands the same
+/// way: outlining that art does not remove it.
+#[test]
+fn a_dimension_expanded_with_its_art_or_in_a_group_stays_plain_art() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    run(&mut s, "select.set", json!({"ids":[line, id]}));
+    run(&mut s, "object.expand", json!({}));
+    stays_plain_art(&mut s, id);
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "object.expand", json!({}));
+    stays_plain_art(&mut s, id);
+}
+
+/// Expand replacing only the art a selected dimension measures leaves the dimension's art as it
+/// is, without a link to the art that went.
+#[test]
+fn a_dimension_keeps_no_link_to_the_art_expand_replaced() {
+    for circle in [false, true] {
+        let mut s = session();
+        let shape = json!({"x":100,"y":100,"width":72,"height":72});
+        let art_id = run(&mut s, if circle { "shape.ellipse" } else { "shape.rectangle" }, shape)["id"].as_u64().unwrap();
+        run(&mut s, "paint.setFill", json!({"ids":[art_id],"gradient":{"kind":"linear"}}));
+        let id = if circle {
+            run(&mut s, "dimension.create", json!({"mode":"radius","source":{"kind":"circle","node":art_id}}))["id"].as_u64().unwrap()
+        } else {
+            dim(&mut s, art_id)
+        };
+        let (nodes, labels, _) = art(&s, id);
+        run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+        run(&mut s, "object.expand", json!({"object":false,"stroke":false}));
+        assert_eq!(art(&s, id), (nodes, labels, false), "circle: {circle}");
+        run(&mut s, "select.set", json!({"ids":[id]}));
+        run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+        assert_eq!(art(&s, id), (nodes, labels, false), "circle: {circle}");
+    }
+}
+
+/// Outline Stroke and Expand Appearance replacing the art a selected dimension measures leave the
+/// dimension as a plain group, whether or not they change its own art.
+#[test]
+fn a_dimension_outlasts_the_art_outline_stroke_or_expand_appearance_replaced() {
+    for command in ["object.path.outlineStroke", "effect.expandAppearance"] {
+        for whole in [true, false] {
+            let mut s = session();
+            let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+            run(&mut s, "paint.setStroke", json!({"ids":[art_id],"color":"#000000"}));
+            run(&mut s, "select.set", json!({"ids":[art_id]}));
+            run(&mut s, "appearance.addStroke", json!({}));
+            let id = dim(&mut s, art_id);
+            let lines: Vec<u64> = {
+                let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
+                children.iter().filter(|c| matches!(c.kind, NodeKind::Path { .. })).map(|c| c.id.0).collect()
+            };
+            run(&mut s, "select.set", json!({"ids":lines}));
+            run(&mut s, "view.guides.make", json!({}));
+            let picked = if whole { id } else { lines[0] };
+            run(&mut s, "select.set", json!({"ids":[art_id, picked]}));
+            run(&mut s, command, json!({}));
+            assert!(s.doc().unwrap().doc.node(NodeId(id)).is_some(), "{command} removed the dimension, whole: {whole}");
+            let plain = art(&s, id);
+            assert!(!plain.2, "{command}: no recipe left, whole: {whole}");
+            run(&mut s, "select.set", json!({"ids":[id]}));
+            run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+            assert_eq!(art(&s, id), plain, "{command}, whole: {whole}");
+        }
+    }
+}
+
+/// A part of a dimension expanded on its own ends the link too, so the move does not undo it.
+#[test]
+fn expanding_a_part_of_a_dimension_ends_its_link() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let part = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap()[0].id;
+    run(&mut s, "select.set", json!({"ids":[part]}));
+    run(&mut s, "object.expand", json!({}));
+    let plain = art(&s, id);
+    assert_eq!(plain.1, 1, "{plain:?}");
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+    assert_eq!(art(&s, id), plain);
+    assert!(!plain.2, "no recipe left");
+}
+
+/// The instance of a symbol whose art is a dimension expands to art that no longer redraws.
+#[test]
+fn a_dimension_in_an_expanded_symbol_instance_stays_plain_art() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,100],"b":[172,100],"options":{"units":"pt","precision":0}}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    let instance = run(&mut s, "symbol.new", json!({"name":"Measure"}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[instance]}));
+    run(&mut s, "object.expand", json!({}));
+    let root = s.doc().unwrap().selection.objects[0].0;
+    let mut recipes = 0;
+    s.doc().unwrap().doc.node(NodeId(root)).unwrap().walk(&mut |c| recipes += usize::from(c.extras().dimension.is_some()));
+    assert_eq!(recipes, 0);
+    stays_plain_art(&mut s, root);
+}
+
+/// Create Outlines on a dimension, or on its label alone, ends the link in the same undo step.
+#[test]
+fn outlining_a_dimension_or_its_label_ends_its_link() {
+    for label_alone in [false, true] {
+        let mut s = session();
+        let line = edge(&mut s);
+        let id = dim(&mut s, line);
+        let live = art(&s, id);
+        let label = {
+            let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
+            children.iter().find(|c| matches!(c.kind, NodeKind::Text(_))).unwrap().id
+        };
+        let target = if label_alone { label.0 } else { id };
+        run(&mut s, "select.set", json!({"ids":[target]}));
+        run(&mut s, "type.createOutlines", json!({}));
+        stays_plain_art(&mut s, id);
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(art(&s, id), live, "one undo gives the live dimension back");
+        assert_eq!(text(&s, id), "10.00 in");
+    }
+}
+
+/// Outline Stroke on a dimension ends its link: the label stays type and the art does not redraw.
+#[test]
+fn outlining_a_dimensions_strokes_ends_its_link() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let live = art(&s, id);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.path.outlineStroke", json!({}));
+    let plain = art(&s, id);
+    assert_eq!(plain.1, 1, "{plain:?}");
+    run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+    assert_eq!(art(&s, id), plain);
+    assert!(!plain.2, "no recipe left");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live, "one undo gives the live dimension back");
+}
+
+/// Expand Appearance, which the menus offer for a dimension in place of Expand, ends its link too.
+#[test]
+fn expanding_a_dimensions_appearance_ends_its_link() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let live = art(&s, id);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], true);
+    run(&mut s, "effect.expandAppearance", json!({}));
+    stays_plain_art(&mut s, id);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live, "one undo gives the live dimension back");
+    assert_eq!(text(&s, id), "10.00 in");
+}
+
+/// Ungroup takes the group that holds the recipe away, so the parts stay ordinary art.
+#[test]
+fn an_ungrouped_dimension_stays_ordinary_art() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let id = dim(&mut s, line);
+    let (nodes, ..) = art(&s, id);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.ungroup", json!({}));
+    assert!(s.doc().unwrap().doc.node(NodeId(id)).is_none());
+    let parts = s.doc().unwrap().selection.objects.clone();
+    assert_eq!(parts.len(), nodes - 1);
+    let boxes = |s: &Session| parts.iter().map(|p| s.doc().unwrap().doc.node(*p).unwrap().geometric_bounds().unwrap()).collect::<Vec<_>>();
+    let at = boxes(&s);
+    run(&mut s, "object.move", json!({"dx":30,"dy":0}));
+    for (a, b) in at.iter().zip(boxes(&s)) {
+        assert!((b.x0 - a.x0 - 30.0).abs() < 1e-6 && (b.y0 - a.y0).abs() < 1e-6, "{a:?} moved to {b:?}");
+    }
+    run(&mut s, "select.set", json!({"ids":[line]}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":100}));
+    assert!(!s.doc().unwrap().doc.dimensions);
+}
+
 #[test]
 fn dimension_options_are_persistent_and_invalid_updates_report_errors() {
     let mut s = session();

@@ -20,9 +20,14 @@ list (author, source, license) is in ASSETS.md.
   (Ubuntu Font Licence 1.0), Hack (MIT), Noto Emoji (SIL Open Font License 1.1) and emoji-icon-font
   (MIT). Their license texts ship with that crate.
 
-Rust dependencies (vello_cpu, kurbo, peniko, skrifa, harfrust, usvg, linesweeper, egui, eframe, …) are
+Rust dependencies (vello_cpu, kurbo, peniko, skrifa, harfrust, usvg, egui, eframe, …) are
 fetched through crates.io under their own permissive licenses (mostly MIT and/or Apache-2.0; also
 BSD, ISC, Zlib, BSL-1.0 and Unicode-3.0).
+
+linesweeper 0.5.0 (MIT OR Apache-2.0) is fetched from https://github.com/storytold/craft-libs at
+revision 481f66d287b2a06845f3667a19daf35f0fe958ed. The copy in craft-libs' vendor/linesweeper is
+the crates.io package with no file changed, and it keeps the package's LICENSE-MIT and
+LICENSE-APACHE.
 
 JPEG export uses the jpeg-encoder crate (MIT OR Apache-2.0, and the IJG License): this software is
 based in part on the work of the Independent JPEG Group.
@@ -72,10 +77,10 @@ Shared PDF backend
 
 The patched hayro-interpret 0.7.0, hayro-syntax 0.7.2, hayro-jbig2 0.3.0, hayro-cmap 0.1.0
 and hayro-postscript 0.1.0 are fetched from https://github.com/storytold/craft-libs at revision
-f8f8829cc7be65d466d687dae381d1ca60e31242. Their upstream project is
+9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb. Their upstream project is
 https://github.com/LaurenzV/hayro, licensed MIT OR Apache-2.0. The snapshot retains each
 crate's upstream licence files. The patch ledger is at
-https://github.com/storytold/craft-libs/blob/f8f8829cc7be65d466d687dae381d1ca60e31242/vendor/README.craft-reader.md.
+https://github.com/storytold/craft-libs/blob/9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb/vendor/README.craft-reader.md.
 
 Assets already bundled through Hayro's default features retain their licences:
 - Foxit standard-14 substitutes: Copyright 2014 PDFium Authors. All rights reserved.
@@ -136,3 +141,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Indic hyphenation patterns (crates/text/patterns/):
+Copyright (C) 2016 Santhosh Thottingal, used under the MIT license option.
+Original copyright and full license notices are preserved in each hyph-*.tex file.
+Source: hyphenation/tex-hyphen, commit 5684c0f51c0b81133db2efbe60a408b4155a3ff5.

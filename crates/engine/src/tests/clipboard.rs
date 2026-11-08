@@ -850,3 +850,94 @@ fn artwork_drop_uses_the_current_layer_even_when_paste_remembers_hidden_or_locke
         assert!(doc(&s).paste_remembers_layers, "the preference still applies to ordinary Paste");
     }
 }
+
+/// Two touching rectangles made into 9-slice symbol `Audit`, its instance scaled 150% × 75% and
+/// copied (#5902).
+fn copied_nine_slice_instance(s: &mut Session) -> Document {
+    let red = rect(s, 30.0, 30.0, 80.0, 60.0);
+    s.execute("paint.setFill", &json!({"ids": [red.0], "color": "#ff0000"})).unwrap();
+    let blue = rect(s, 110.0, 90.0, 40.0, 30.0);
+    s.execute("paint.setFill", &json!({"ids": [blue.0], "color": "#0000ff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Audit", "nineSlice": true, "registration": 0, "exportType": "graphic"})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 75})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    doc(s).clone()
+}
+
+/// The symbol options pasted symbol `to` should have: those of `from` in `src`.
+fn assert_same_symbol_options(src: &Document, from: &str, d: &Document, to: &str) {
+    assert!(src.symbol_nine_slice(from).is_some());
+    assert_eq!(d.symbol_nine_slice(to), src.symbol_nine_slice(from));
+    assert_eq!(d.symbol_registration(to), src.symbol_registration(from));
+    assert_eq!(d.symbol_export_type(to), src.symbol_export_type(from));
+    assert_eq!(d.symbol_natural_xf(to), src.symbol_natural_xf(from));
+}
+
+#[test]
+fn a_nine_slice_symbol_pasted_into_another_document_keeps_its_options_and_look() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
+    // Pasting again uses the symbol the first paste added.
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert_eq!(v["added"], 0, "{v}");
+}
+
+#[test]
+fn a_renamed_nine_slice_symbol_keeps_its_options_under_the_new_name() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    let other = ellipse(&mut s);
+    sel(&mut s, &[other]);
+    s.execute("symbol.new", &json!({"name": "Audit"})).unwrap();
+    let own = doc(&s).clone();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    // The document's own symbol keeps its options.
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None);
+    assert_eq!(doc(&s).symbol_natural_xf("Audit"), own.symbol_natural_xf("Audit"));
+}
+
+#[test]
+fn a_same_named_symbol_with_other_options_is_not_reused() {
+    let mut s = session();
+    let src = copied_nine_slice_instance(&mut s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    // The document's `Audit` has the same art but 9-slice scaling off now.
+    s.execute("symbol.options", &json!({"name": "Audit", "nineSlice": false})).unwrap();
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(renamed(&v).contains(&("symbol".into(), "Audit".into(), "Audit 2".into())), "{v}");
+    assert_same_symbol_options(&src, "Audit", doc(&s), "Audit 2");
+    assert_eq!(doc(&s).symbol_nine_slice("Audit"), None, "the document's own symbol keeps its options");
+}
+
+#[test]
+fn a_symbol_without_a_recorded_natural_size_is_pasted_without_one() {
+    let mut s = session();
+    let r = rect(&mut s, 30.0, 30.0, 80.0, 60.0);
+    sel(&mut s, &[r]);
+    s.execute("symbol.new", &json!({"name": "Plain"})).unwrap();
+    s.edit("Forget size", |d, _| {
+        if let Some(m) = d.unknown.get_mut(vectorcraft_doc::SYMBOL_SIZES).and_then(Value::as_object_mut) {
+            m.remove("Plain");
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None);
+    s.execute("edit.copy", &json!({})).unwrap();
+    let before = render(&s);
+    new_doc(&mut s);
+    s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    assert!(doc(&s).symbols.iter().any(|x| x.name == "Plain"));
+    assert_eq!(doc(&s).unknown.get(vectorcraft_doc::SYMBOL_SIZES).and_then(|m| m.get("Plain")), None, "no size is made up for it");
+    assert!(before == render(&s), "the pasted instance draws as in the source");
+}

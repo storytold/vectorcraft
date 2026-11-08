@@ -146,7 +146,7 @@ impl OtFeatures {
 
     /// Is `tag` (optionally prefixed with `-` or `+`) one this set understands?
     pub fn known_tag(tag: &str) -> bool {
-        let t = tag.trim_start_matches(['-', '+']);
+        let t = tag.strip_prefix(['-', '+']).unwrap_or(tag);
         matches!(t, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh") || EXTRA_FEATURES.contains(&t)
     }
 
@@ -306,6 +306,9 @@ mod tests {
             assert!(OtFeatures::known_tag(t), "{t}");
         }
         assert!(!OtFeatures::known_tag("ss21"));
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            assert!(!OtFeatures::known_tag(tag), "{tag}");
+        }
         let o = OtFeatures::from_tags(["ss03", "pnum", "sups", "-liga"]);
         assert_eq!(o.to_tags(), vec!["-liga", "ss03", "pnum", "sups"]);
         assert_eq!(OtFeatures::from_tags(["ss03", "-ss03"]).to_tags(), Vec::<String>::new(), "turned off again");
@@ -386,6 +389,29 @@ mod tests {
         let glyphs = layout(FontDb::global(), &t).glyphs;
         let per_run: Vec<usize> = (0..2).map(|r| glyphs.iter().filter(|g| g.run == r).count()).collect();
         assert_eq!(per_run, [2, 1]);
+    }
+
+    /// Bulgarian text gets the font's Bulgarian forms (`locl` for `BGR`, #5945): in the bundled
+    /// Source Sans 3 Italic, в, д, ж, з, к, л and ю differ from the Russian ones, and letters
+    /// the font draws alike stay alike.
+    #[test]
+    fn bulgarian_gets_the_fonts_bulgarian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        // Each letter laid out on its own, so one letter's advance doesn't move the next.
+        let outline = |c: char, language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, &c.to_string(), st(language)))
+                .glyphs
+                .into_iter()
+                .map(|g| g.outline)
+                .collect::<Vec<_>>()
+        };
+        let differs: String = "вгджзийклптцшщюьъ".chars().filter(|c| outline(*c, "bg") != outline(*c, "ru")).collect();
+        assert_eq!(differs, "вджзклю");
     }
 
     /// Serbian text gets the font's Serbian forms (`locl` for `SRB`): in the bundled Source Sans

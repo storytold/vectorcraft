@@ -7,6 +7,8 @@ use super::{
 
 /// Most bytes one filter or image reads.
 pub(super) const MAX_DATA: usize = 1 << 28;
+/// The longest chain of filters over one pending file (real programs stack two or three).
+const MAX_FILTER_CHAIN: usize = 64;
 
 /// Most pixels an image may have.
 const MAX_PIXELS: usize = 1 << 26;
@@ -268,7 +270,9 @@ impl Interp<'_> {
         let name = self.pop()?.text().ok_or(PsError::Ps("typecheck", "filter".into()))?;
         let sub = if &*name == "SubFileDecode" {
             let eod = self.pop_str()?.to_vec();
-            let count = self.pop_count()?;
+            // The count bounds what the filter reads, not what it allocates: a stream of several
+            // megabytes read through `currentfile N () /SubFileDecode filter` gives its length.
+            let count = usize::try_from(self.pop_int()?).map_err(|_| PsError::Ps("rangecheck", "a count".into()))?;
             (count, eod)
         } else {
             (0, vec![])
@@ -294,7 +298,16 @@ impl Interp<'_> {
                 let pending = match &*f.borrow() {
                     Stream::Current => Some((vec![], None)),
                     Stream::Buf { .. } if running => Some((vec![], Some(f.clone()))),
-                    Stream::Pending { chain, from } => Some((chain.clone(), from.clone())),
+                    Stream::Pending { chain, from } => {
+                        // Cloning the chain copies each filter's delimiter: bound and charge it.
+                        if chain.len() >= MAX_FILTER_CHAIN {
+                            return Err(PsError::Limit("too many filters over one file"));
+                        }
+                        let copied = chain.iter().map(|c| c.sub.1.len() + 1).sum::<usize>();
+                        self.alloc(copied)?;
+                        self.spend((copied / 256) as u64)?;
+                        Some((chain.clone(), from.clone()))
+                    }
                     Stream::Buf { .. } => None,
                 };
                 match pending {
@@ -386,6 +399,30 @@ impl Interp<'_> {
         let (data, rgb) = buf.unwrap_or_default();
         *f.borrow_mut() = Stream::Buf { data, pos: 0, rgb };
         Ok(())
+    }
+
+    /// Skip the data an image left out (too large to read) would read from the program's own
+    /// file, so the program doesn't go on to read that data as PostScript. The filters that find
+    /// their own end without decompressing (`ASCIIHexDecode`, `ASCII85Decode`, `SubFileDecode`)
+    /// read the file up to it, the way the image reading all its data would leave it; the
+    /// filters over them, which would only decode what those pass, aren't run. When the first
+    /// filter decompresses, it is run alone, and a failure (data too large to hold) leaves the
+    /// data where it was, as before.
+    fn skip_data(&mut self, src: &Source) {
+        let Source::File(f) = src else { return };
+        let (chain, from) = match &*f.borrow() {
+            Stream::Pending { chain, from } => (chain.clone(), from.clone()),
+            _ => return,
+        };
+        let delimited = chain.iter().take_while(|c| matches!(&*c.name, "ASCIIHexDecode" | "ASCII85Decode" | "SubFileDecode")).count();
+        let head = chain.get(..delimited.max(1)).unwrap_or_default().to_vec();
+        *f.borrow_mut() = Stream::Pending { chain: head, from: from.clone() };
+        // A failure leaves the file as it was; the import goes on without the image either way.
+        if self.materialize(f).is_err() {
+            *f.borrow_mut() = Stream::Pending { chain, from };
+            return;
+        }
+        *f.borrow_mut() = Stream::Buf { data: vec![], pos: 0, rgb: None };
     }
 
     /// The bytes a data procedure gives, called until it gives an empty string or `n` bytes.
@@ -507,6 +544,9 @@ impl Interp<'_> {
         let n = image.space.n();
         if image.w.saturating_mul(image.h) > MAX_PIXELS || stencil.w.saturating_mul(stencil.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in image.sources.iter().chain(&stencil.sources) {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
         if interleave != 3.0 {
@@ -613,6 +653,9 @@ impl Interp<'_> {
         }
         if s.w.saturating_mul(s.h) > MAX_PIXELS {
             self.out.warn(TOO_LARGE);
+            for src in &s.sources {
+                self.skip_data(src);
+            }
             return Ok(None);
         }
         self.alloc(s.w * s.h * 4)?;

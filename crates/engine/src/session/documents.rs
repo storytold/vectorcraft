@@ -25,6 +25,8 @@ impl Session {
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
             vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
         });
+        // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
+        vectorcraft_text::register_envelope_ink();
         // Exports bake Vector Halftone into the dots the renderer samples.
         vectorcraft_render::effects::addons::halftone::set_art(vectorcraft_render::addons::halftone::art);
         // OpenType SVG glyphs are drawn as the SVG importer reads their documents.
@@ -44,6 +46,7 @@ impl Session {
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
+            replaying: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -77,6 +80,7 @@ impl Session {
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
+            batch_paint_docs: Vec::new(),
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
@@ -93,6 +97,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_type_selection: None,
             press_point: None,
             ruler_guide: None,
             port_marks: Default::default(),
@@ -142,6 +147,7 @@ impl Session {
         if self.active.is_none() {
             return;
         }
+        self.press_type_selection = None;
         let view = self.last_view;
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
@@ -156,6 +162,12 @@ impl Session {
         self.tool = self.make_tool(self.tool.id());
         self.tool_resets = self.tool_resets.wrapping_add(1);
         self.tool_set_since_reset = false;
+    }
+
+    /// Finish the tool's pending work and give it fresh state, as a switch to another document
+    /// does, while the current document stays the same (a switch to another view of it).
+    pub fn reset_tool(&mut self) {
+        self.reset_tool_for_doc_switch();
     }
 
     pub fn set_active(&mut self, index: usize) -> bool {
@@ -283,6 +295,27 @@ impl Session {
         true
     }
 
+    /// Move the document in tab `from` to tab `to` (a document tab dragged along the strip,
+    /// `document.move`); the documents between them shift by one. The current document stays the
+    /// current one, wherever it moves to, and its tool keeps its state: no document is switched to.
+    /// False, changing nothing, when either index is past the last document.
+    pub fn move_document(&mut self, from: usize, to: usize) -> bool {
+        let n = self.docs.len();
+        if from >= n || to >= n {
+            return false;
+        }
+        if from == to {
+            return true;
+        }
+        let active = self.active().map(|d| d.uid);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        if let Some(uid) = active {
+            self.active = self.docs.iter().position(|d| d.uid == uid);
+        }
+        true
+    }
+
     /// Commands with enablement (for menus, palette, MCP `list_commands`).
     pub fn commands(&self) -> Vec<CommandInfo> {
         command_specs().iter().map(|c| c.info(self)).collect()
@@ -304,7 +337,7 @@ fn refresh_tree_text_bounds(n: &mut Arc<vectorcraft_doc::Node>) {
     if let NodeKind::Text(t) = &mut n.kind
         && t.cached_bounds.is_none()
     {
-        cmd::typecmd::refresh_bounds(t);
+        cmd::typecmd::refresh_bounds_for_first_frame(t);
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
         refresh_tree_text_bounds(&mut m.art);

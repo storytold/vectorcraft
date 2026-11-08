@@ -168,9 +168,20 @@ pub fn has_selection(s: &Session) -> std::result::Result<(), String> {
     let st = s.active().ok_or("no document open")?;
     if st.selection.is_empty() { Err("nothing selected".into()) } else { Ok(()) }
 }
-/// Objects are selected, or the Artboard tool is chosen (Copy and Cut take its artboard).
-pub fn has_selection_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
-    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection(s) }
+/// A path is selected, or inside a selected group or compound path: Object › Path's items that
+/// work on paths (not on text, images or other objects alone).
+pub fn has_selected_path(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    // Stops at the first path: menus ask this every frame, and a selected group can hold many.
+    fn holds_path(n: &vectorcraft_doc::Node) -> bool {
+        matches!(n.kind, vectorcraft_doc::NodeKind::Path { guide: false, .. }) || n.children().is_some_and(|c| c.iter().any(|c| holds_path(c)))
+    }
+    if st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).any(holds_path) { Ok(()) } else { Err("select a path".into()) }
+}
+/// Objects or ruler guides are selected, or the Artboard tool is chosen (what Copy and Cut take).
+pub fn has_selection_guides_or_artboard_tool(s: &Session) -> std::result::Result<(), String> {
+    if s.tool_id() == "artboard" { has_doc(s) } else { has_selection_or_guides(s) }
 }
 /// Objects or ruler guides are selected (what Delete and the arrow keys act on).
 pub fn has_selection_or_guides(s: &Session) -> std::result::Result<(), String> {
@@ -484,9 +495,10 @@ pub fn matrix_param(p: &Value, key: &str) -> Option<Affine> {
 }
 /// A colour from `"#rrggbb"`, a colour key (`"cmyk 0 100 100 0"`, `"lab 55 60 40"`), `[r,g,b]` (0..1),
 /// `{"c":..,"m":..,"y":..,"k":..}` (percent when any component is above 1, else 0..1), `{"gray":..}` or `{"l":..,"a":..,"b":..}` (CIE Lab: L 0..100, a and b about
-/// −128..127).
+/// −128..127). `None` for a hex color with an alpha part (`#rrggbbaa` or `#rgba`, with or without the `#`).
 pub fn color_value(v: &Value) -> Option<Color> {
     match v {
+        Value::String(s) if hex_with_alpha(s) => None,
         // A hex, or a colour key ("cmyk 0 100 100 0", as Recolor Artwork lists colours).
         Value::String(s) => Color::from_hex(s).or_else(|| vectorcraft_color::recolor::ColorKey::parse(s).map(|k| k.color())),
         Value::Array(a) if a.len() >= 3 => Some(Color::rgb(a[0].as_f64()? as f32, a[1].as_f64()? as f32, a[2].as_f64()? as f32)),
@@ -509,6 +521,23 @@ pub fn color_value(v: &Value) -> Option<Color> {
             serde_json::from_value(v.clone()).ok()
         }
         _ => None,
+    }
+}
+
+/// Is `s` a hex color with an alpha part: eight or four hex digits, with or without the `#`?
+/// [`Color::from_hex`] reads `#rrggbbaa` as `#rrggbb`, without the alpha.
+pub(crate) fn hex_with_alpha(s: &str) -> bool {
+    let s = s.trim();
+    let h = s.strip_prefix('#').unwrap_or(s);
+    matches!(h.len(), 4 | 8) && h.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The color `p` gives for `key`, read by [`color_value`]: `None` when `p` leaves it out or gives
+/// null. Any other value that is not a color is an error: "bad color {v}".
+pub(crate) fn color_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Color>> {
+    match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => color_value(v).map(Some).ok_or_else(|| bad(cmd, format!("bad color {v}"))),
     }
 }
 
@@ -546,21 +575,26 @@ pub(crate) fn named_id(p: &Value) -> Result<Option<NodeId>> {
     }
 }
 
-/// Objects a command targets: explicit `ids` param or the selection.
-pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    // Objects given are used as given: a value that isn't an object id fails rather than the
-    // command acting on the selection instead (#785).
-    match p.get("ids").filter(|v| !v.is_null()) {
-        Some(Value::Array(a)) => return a.iter().map(object_id).collect(),
-        Some(v) => return Err(EngineError::Other(format!("`ids` must be an array of object ids, not {v}"))),
-        None => {}
+/// The object `p` gives as `key`, for a command that acts on the selection (or makes something new)
+/// without it: `None` when `p` leaves it out or gives null. Any other value that isn't an object id
+/// (`"abc"`, `"5"`, `true`, `{}`, `-1`, `2.5`) is an error under `cmd` that names `key`, never the
+/// selection. The id is not looked up in the document.
+pub(crate) fn object_param(p: &Value, key: &str, cmd: &str) -> Result<Option<NodeId>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(r)) if key == "id" && r.starts_with('$') => {
+            Err(bad(cmd, format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
+        }
+        Some(v) => v.as_u64().map(|id| Some(NodeId(id))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
     }
-    match p.get("id").filter(|v| !v.is_null()) {
-        Some(v @ Value::Number(_)) => Ok(vec![object_id(v)?]),
-        // A step reference a batch couldn't resolve (other strings are other ids, such as an
-        // effect's).
-        Some(Value::String(r)) if r.starts_with('$') => Err(unresolved_reference(r)),
-        _ => Ok(s.doc()?.selection.objects.clone()),
+}
+
+/// Objects a command targets: its `ids`, else its `id` as `ids` of one ([`named_ids`]), else the
+/// selection. An `ids` or `id` that isn't an object id is an error, never the selection.
+pub(crate) fn targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    match named_ids(p)? {
+        Some(ids) => Ok(ids),
+        None => Ok(s.doc()?.selection.objects.clone()),
     }
 }
 
@@ -692,6 +726,10 @@ pub use pathops::shape_count;
 
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
+
+/// Whether Reset Transformation changes a symbol instance (the Symbols panel menu and the
+/// Control bar enable it when it changes one).
+pub use brushsym::reset_transformation_changes;
 
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).

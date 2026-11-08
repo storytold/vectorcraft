@@ -639,6 +639,64 @@ fn a_dropped_press_keeps_the_type_in_editing() {
 }
 
 #[test]
+fn a_dropped_press_on_other_type_restores_the_edit_target_and_selection() {
+    let (mut d, first, mut tool) = editing("First text");
+    let second = d.alloc_id();
+    let text = TextObject::point(Point::new(300.0, 100.0), "Second text", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(d.layers[0].id), 1, Node::new(second, NodeKind::Text(Box::new(text)))).unwrap();
+    tool.fresh = Some(first);
+    tool.caret = 5;
+    tool.anchor = 2;
+    let (mut selection, p) = (Selection::default(), paint());
+    selection.set([first]);
+    let c = cx(&d, &selection, &p);
+    let target = TypeTool::text(&c, second).unwrap();
+    let layout = vectorcraft_text::layout(FontDb::global(), target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let down = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    assert!(down.contains(&Action::Exec("select.set".into(), json!({"ids": [second.0]}))));
+    assert_eq!(tool.editing, Some(second));
+    selection.set([second]);
+    let c = cx(&d, &selection, &p);
+    let dropped = tool.drop_press(&c);
+    assert!(dropped.is_empty());
+    assert_eq!((tool.editing, tool.caret, tool.anchor), (Some(first), 5, 2));
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, at.x + 0.1, at.y)).is_empty());
+    assert_eq!(tool.editing, Some(first));
+    selection.set([first]);
+    let typed = tool.text_input(&cx(&d, &selection, &p), "!");
+    assert!(typed.iter().any(|action| matches!(action, Action::Preview(_, params) if params["id"] == first.0)));
+    let NodeKind::Text(first_text) = &mut d.node_mut(first).unwrap().kind else { panic!("text fixture") };
+    first_text.runs.clear();
+    let ended = tool.finish(&cx(&d, &selection, &p));
+    assert!(ended.contains(&Action::Exec("text.discardEmpty".into(), json!({"id": first.0}))));
+}
+
+#[test]
+fn a_dropped_press_does_not_reselect_discarded_empty_type() {
+    let (mut d, first, mut tool) = editing("");
+    tool.fresh = Some(first);
+    let second = d.alloc_id();
+    let text = TextObject::point(Point::new(300.0, 100.0), "Second text", CharStyle { size: 20.0, ..Default::default() });
+    d.insert(Some(d.layers[0].id), 1, Node::new(second, NodeKind::Text(Box::new(text)))).unwrap();
+    let (mut selection, p) = (Selection::default(), paint());
+    selection.set([first]);
+    let c = cx(&d, &selection, &p);
+    let target = TypeTool::text(&c, second).unwrap();
+    let layout = vectorcraft_text::layout(FontDb::global(), target);
+    let (a, b) = vectorcraft_text::caret_position(&layout, 3);
+    let at = target.xf * a.midpoint(b);
+    let down = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x + 0.1, at.y));
+    assert!(down.contains(&Action::Exec("text.discardEmpty".into(), json!({"id": first.0}))));
+    d.remove(first).unwrap();
+    selection.set([second]);
+    let dropped = tool.drop_press(&cx(&d, &selection, &p));
+    assert!(dropped.is_empty());
+    assert_eq!(tool.editing, None);
+}
+
+#[test]
 fn select_all_and_styled_paste() {
     let (d, _, mut tool) = editing("abc");
     tool.set_option("selectAll", &json!(true));
@@ -1207,6 +1265,29 @@ fn escape_returns_to_previous_tool_when_set() {
     let (d2, _id2, mut tool2) = editing("World");
     let acts2 = key(&mut tool2, &d2, ToolKey::Escape, Mods::default());
     assert_eq!(acts2.last(), Some(&Action::SwitchTool("selection".into())));
+}
+
+/// Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing as Escape does and types no line
+/// break. Ctrl+Enter on macOS, Shift and Alt with it still type one.
+#[test]
+fn cmd_enter_ends_editing_like_escape() {
+    let (d, _id, mut tool) = editing("Hello");
+    tool.set_option("prevTool", &json!("directSelection"));
+    let acts = key(&mut tool, &d, ToolKey::Enter, CMD);
+    assert!(acts.iter().all(|a| !matches!(a, Action::Preview(..))), "no line break: {acts:?}");
+    assert_eq!(acts.last(), Some(&Action::SwitchTool("directSelection".into())));
+    assert!(!tool.wants_text(), "editing ended");
+    // Ctrl+Enter on Windows and Linux, and Cmd+Ctrl+Enter on macOS.
+    let cmd_ctrl = Mods { ctrl: true, ..CMD };
+    let (d, _id, mut tool) = editing("Hello");
+    assert_eq!(key(&mut tool, &d, ToolKey::Enter, cmd_ctrl).last(), Some(&Action::SwitchTool("selection".into())));
+    let mac_ctrl = Mods { ctrl: true, ..Mods::default() };
+    for mods in [mac_ctrl, Mods { shift: true, ..CMD }, Mods { alt: true, ..CMD }] {
+        let (d, _id, mut tool) = editing("Hello");
+        let acts = key(&mut tool, &d, ToolKey::Enter, mods);
+        assert!(acts.iter().any(|a| matches!(a, Action::Preview(..))), "{mods:?} types a line break: {acts:?}");
+        assert!(tool.wants_text(), "{mods:?} keeps editing");
+    }
 }
 
 /// A click from `tool` at (x, y) → the actions of the press and the release.

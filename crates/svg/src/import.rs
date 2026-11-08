@@ -40,14 +40,15 @@ pub(super) use layers::DEFAULT_FONT_SIZE;
 pub(crate) use layers::SUBLAYER;
 use layers::{RootUnits, inkscape_pages, promote_sublayers, root_layer_name};
 pub(super) use prepass::Edits;
+use prepass::{Extras, labels, prepass};
 pub use prepass::{MAX_FOREIGN, MAX_FOREIGN_VALUE};
-use prepass::{labels, prepass};
 
 mod css;
 mod css_transform;
 mod depth;
 mod files;
 mod fx;
+mod linear_rgb;
 mod spread;
 mod symbol_units;
 mod text;
@@ -150,6 +151,7 @@ pub(crate) fn import(svg: &str, opts: &ImportOptions, max_nodes: usize) -> Resul
         slots,
         patterns: HashMap::new(),
         midpoints: midpoint_stops(&xml),
+        linear_rgb: linear_rgb::linear_rgb_ids(&xml, &tree),
         labels: labels(&xml),
         hidden: found.hidden,
         uses: found.uses,
@@ -299,6 +301,8 @@ struct Importer {
     patterns: HashMap<usize, String>,
     /// Midpoint stops by gradient id (see [`midpoint_stops`]).
     midpoints: HashMap<String, Vec<Option<f32>>>,
+    /// Ids of the gradients mixed in linear light (see [`linear_rgb::linear_rgb_ids`]).
+    linear_rgb: HashSet<String>,
     /// Object names by element id (see [`labels`]).
     labels: HashMap<String, String>,
     /// Ids of the undisplayed objects shown for usvg ([`prepass`]).
@@ -319,7 +323,7 @@ struct Importer {
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
-    data: HashMap<String, Vec<(String, String)>>,
+    data: HashMap<String, Extras>,
     /// The event attributes of elements, by id ([`user_events`]).
     events: HashMap<String, Vec<(String, String)>>,
     /// The attributes of elements in other applications' namespaces, by id ([`foreign`]).

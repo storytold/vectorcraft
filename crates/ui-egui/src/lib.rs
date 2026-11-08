@@ -114,6 +114,7 @@ mod services;
 pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
@@ -126,6 +127,10 @@ pub struct VectorcraftApp {
     pub session: Session,
     pub ui: UiState,
     pub views: Vec<View>,
+    /// The document ([`vectorcraft_engine::DocState::uid`]) each of `views` belonged to at the last
+    /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
+    /// `document.move` reorders them (#5663).
+    pub(crate) view_uids: Vec<u64>,
     pub services: Services,
     pub canvas: CanvasCache,
     pub perf: Perf,
@@ -147,6 +152,13 @@ pub struct VectorcraftApp {
     /// moves ([`native_menu::sync`]).
     run_count: u64,
     control_rx: Option<Receiver<ControlRequest>>,
+    /// A `ui.pointer` request taken from the channel while synthetic input sent before it was not
+    /// yet applied: it runs, ahead of the channel, on the first frame after that input is applied.
+    deferred_control: Option<ControlRequest>,
+    /// When synthetic input was last dropped before a UI pass took it, the sequence number of the
+    /// next control request ([`ControlRequest::next_seq`]): a `ui.pointer` request made before it
+    /// came after that input and is answered with an error.
+    synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
@@ -303,6 +315,9 @@ pub struct VectorcraftApp {
     /// The context, viewport and frame `shortcuts::handle` already took in this host iteration.
     /// Interleaving root and auxiliary viewport passes cannot make an older frame look new again.
     pub(crate) shortcuts_frames: Vec<InputFrame>,
+    /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
+    /// when it is let go ([`shortcuts::HeldTool`]).
+    pub(crate) held_tool: Vec<shortcuts::HeldTool>,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

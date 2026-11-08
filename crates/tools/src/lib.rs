@@ -323,7 +323,7 @@ pub(crate) const MAX_STROKE_SAMPLES: usize = 100_000;
 /// `n / PREVIEW_ALL_UNTIL` samples. Each preview carries every sample so far, so previewing at
 /// every sample cost the square of the stroke's length (a gesture of many drags sent at once
 /// spent seconds); this way it is about `PREVIEW_ALL_UNTIL` per sample.
-const PREVIEW_ALL_UNTIL: usize = 1000;
+pub(crate) const PREVIEW_ALL_UNTIL: usize = 1000;
 
 /// Whether a drag that made the stroke `n` samples long previews it ([`PREVIEW_ALL_UNTIL`]).
 pub(crate) fn previews_at(n: usize) -> bool {
@@ -345,6 +345,28 @@ pub(crate) mod testutil {
         let l = d.layers[0].id;
         let id = d.alloc_id();
         d.insert(Some(l), 0, Node::path(id, shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), Appearance::default_art())).unwrap();
+        (d, id)
+    }
+
+    /// A live 100 × 100 rectangle at (100, 100)–(200, 200) with no paint: its centre point
+    /// (Attributes › Show Center) is at (150, 150), and a press in the middle of it hits no art.
+    pub fn doc_with_live_rect() -> (Document, NodeId) {
+        use vectorcraft_doc::{LiveShape, NodeKind};
+        let shape = LiveShape::Rectangle {
+            w: 100.0,
+            h: 100.0,
+            radii: [0.0; 4],
+            kinds: Default::default(),
+            radii_relative: false,
+            xf: vectorcraft_geom::Affine::translate((100.0, 100.0)),
+        };
+        let mut d = Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut n = Node::path(id, shape.to_path(), Appearance::default());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(shape));
+        }
+        d.insert(Some(l), 0, n).unwrap();
         (d, id)
     }
 
@@ -510,6 +532,7 @@ pub(crate) mod testutil {
             transform_tools_guides: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,

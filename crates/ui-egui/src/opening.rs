@@ -1,8 +1,11 @@
 //! Opening documents off the UI thread (desktop): a file the user asks to open (File › Open, Open
 //! Recent, the Home screen, files handed to the app) is decoded on a thread of its own, which also
 //! reads its linked files and lays out its type, while the status bar shows it, and opens in a new tab
-//! once it is ready, as it would at once: the same notes, recent files and errors. On wasm (no
-//! threads) and in unit tests it opens at once ([`available`]).
+//! once it is ready, as it would at once: the same notes, recent files and errors. A file that takes
+//! longer than [`DELAY`] shows a progress window ([`show`]): its name, a bar that moves while it is
+//! read (the reader counts no steps), Cancel (also Esc, `file.cancelOpen`: the file doesn't open)
+//! and Continue in Background (`file.openInBackground`: it goes on, shown in the status bar). On
+//! wasm (no threads) and in unit tests it opens at once ([`available`]).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
@@ -12,9 +15,13 @@ use vectorcraft_engine::cmd::fileio::{self, ReadFile};
 use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
+use crate::export_progress::{self, Pressed};
+
+pub use crate::export_progress::DELAY;
 
 /// A file being read.
 pub struct Pending {
+    id: u64,
     /// Where it is.
     pub path: String,
     /// What the status bar shows ("Opening Poster.vectorcraft").
@@ -23,12 +30,18 @@ pub struct Pending {
     /// The automation roots in force where the open started: the document is installed under
     /// them too (its links are read as it opens).
     scope: ScopeHandle,
+    /// Continue in Background: the progress window no longer shows it.
+    pub hidden: bool,
 }
 
 /// The files being read.
 #[derive(Default)]
 pub struct Opening {
     pub pending: Vec<Pending>,
+    /// Open documents asked for again while the active one couldn't change: their tabs come to
+    /// the front once it can ([`may_switch`]), each in the file access scope it was asked in.
+    pub activate: Vec<(String, ScopeHandle)>,
+    next_id: u64,
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
@@ -78,10 +91,18 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
         return Err(Arc::try_unwrap(bytes).unwrap_or_else(|b| b.to_vec()));
     }
     let label = format!("Opening {}", fileio::file_name(path));
-    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope: opener });
+    app.opening.next_id += 1;
+    let id = app.opening.next_id;
+    app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope: opener, hidden: false });
     let status = format!("{label}…");
     app.status(status.clone());
     Ok(json!({ "background": true, "status": status }))
+}
+
+/// May the active document change now ([`poll`])?
+pub(crate) fn may_switch(app: &VectorcraftApp) -> bool {
+    let s = &app.session;
+    !(app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()))
 }
 
 /// Open the files that are ready (each frame). Not while a dialog is open: a document that opens
@@ -94,9 +115,18 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Result<Val
 /// waiting between its clicks (the Dimension tool after its first point): the file opens, and the
 /// tool starts afresh, as when the user switches documents.
 pub fn poll(app: &mut VectorcraftApp) {
-    let s = &app.session;
-    if app.ui.dialog.is_some() || s.in_interaction() || (s.tool_busy() && s.pointer_held()) {
-        return;
+    // One at a time: a document that opens again (closed meanwhile) may ask about its links or
+    // fonts, and the rest wait for that dialog too.
+    loop {
+        if !may_switch(app) {
+            return;
+        }
+        if app.opening.activate.is_empty() {
+            break;
+        }
+        let (path, scope) = app.opening.activate.remove(0);
+        // Closed meanwhile, it opens again; a failure is reported to the user there.
+        let _ = scope.run(|| crate::io::open_reporting(app, &path));
     }
     let mut i = 0;
     while let Some(p) = app.opening.pending.get(i) {
@@ -114,6 +144,79 @@ pub fn poll(app: &mut VectorcraftApp) {
             app.ui.status.clear();
         }
         p.scope.run(|| finish(app, &p.path, r));
+        // A file that opened and asks about its links or fonts holds back the others too.
+        if !may_switch(app) {
+            return;
+        }
+    }
+}
+
+/// The progress window's Cancel: the files being read don't open (their threads finish reading
+/// and the result is dropped) → `{cancelled: n}`.
+pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
+    let cancelled = std::mem::take(&mut app.opening.pending);
+    for p in &cancelled {
+        // The status bar no longer says it is opening.
+        if app.ui.status == format!("{}…", p.label) {
+            app.ui.status.clear();
+        }
+    }
+    json!({ "cancelled": cancelled.len() })
+}
+
+/// The progress window's Continue in Background: the files go on being read, shown in the status
+/// bar only → `{hidden: n}`.
+pub fn hide_all(app: &mut VectorcraftApp) -> Value {
+    let mut n = 0;
+    for p in app.opening.pending.iter_mut().filter(|p| !p.hidden) {
+        p.hidden = true;
+        n += 1;
+    }
+    json!({ "hidden": n })
+}
+
+/// Is a file being read that the progress window shows?
+pub fn any_shown(app: &VectorcraftApp) -> bool {
+    app.opening.pending.iter().any(|p| !p.hidden)
+}
+
+/// The progress window of the first file being read it shows, once that has been read for
+/// [`DELAY`]: a quick open doesn't flash it. Not while a dialog or another progress window (an
+/// export, a heavy plug-in filter, an Image Trace) is open: never two modals at once.
+pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let shown: Vec<&Pending> = app.opening.pending.iter().filter(|p| !p.hidden).collect();
+    let Some(first) = shown.first() else { return };
+    let now = ctx.input(|i| i.time);
+    let since = ctx.data_mut(|m| {
+        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("opening-seen"), || (first.id, now));
+        if seen.0 != first.id {
+            *seen = (first.id, now);
+        }
+        seen.1
+    });
+    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
+    let other = exporting || crate::plugin_runs::any_shown(app) || crate::trace_runs::any_shown(app);
+    if now - since < DELAY || app.ui.dialog.is_some() || other {
+        return;
+    }
+    let heading = format!("{}…", crate::i18n::msg(&first.label));
+    let more = shown.len() - 1;
+    let t = crate::theme::Tokens::get(ctx);
+    let pressed = export_progress::window(ctx, "opening-progress", &heading, |ui| {
+        export_progress::indeterminate(ui, tl!("Reading the file…"));
+        if more > 0 {
+            ui.add_space(6.0);
+            let queued = crate::i18n::tn(more as u64, "{n} more file waiting", "{n} more files waiting");
+            ui.label(egui::RichText::new(queued).size(11.5).color(t.text_dim));
+        }
+    });
+    let id = match pressed {
+        Some(Pressed::Cancel) => "file.cancelOpen",
+        Some(Pressed::Hide) => "file.openInBackground",
+        None => return,
+    };
+    if let Err(e) = app.run(id, json!({})) {
+        app.status(e);
     }
 }
 
