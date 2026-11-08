@@ -1,2 +1,9 @@
 [alias]
 xtask = "run --package xtask --"
+
+# WebAssembly SIMD for the web build: without it vello_cpu's SIMD layer (fearless_simd) runs its
+# scalar fallback on wasm32 and the canvas renders about 2.4x slower (#2786). The web build then
+# needs Chrome/Edge 91+, Firefox 89+ or Safari 16.4+. A RUSTFLAGS environment variable replaces
+# these flags.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
