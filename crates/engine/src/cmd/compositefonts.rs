@@ -187,6 +187,9 @@ fn replace(s: &mut Session, label: &str, after: Vec<CompositeFont>) -> Result<()
     }
     let changed: Vec<String> =
         before.iter().filter(|b| !after.contains(b)).chain(after.iter().filter(|a| !before.contains(a))).map(|f| f.name.to_lowercase()).collect();
+    // A refused or panicked edit leaves the document without the new fonts: `sync` forgets a name
+    // listed here that the document doesn't define.
+    s.composite_names.extend(after.iter().map(|f| f.name.to_lowercase()));
     let db = FontDb::global();
     for f in &before {
         if !after.iter().any(|a| CompositeFont::same_name(&a.name, &f.name)) {

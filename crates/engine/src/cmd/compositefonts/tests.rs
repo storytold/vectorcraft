@@ -524,6 +524,21 @@ fn a_failed_batch_takes_back_its_composite_fonts() {
     assert!(db.composite_font("CF Failed Batch").is_none());
 }
 
+/// A composite font whose edit is refused, because it makes selected type too wide for the canvas,
+/// is not left in the font database.
+#[test]
+fn a_refused_edit_takes_back_its_new_composite_font() {
+    let db = vectorcraft_text::FontDb::global();
+    let mut s = session();
+    let x = crate::MAX_COORD - 1000.0;
+    s.execute("text.create", &json!({"x": x, "y": 50, "text": "MMMMMMMM", "size": 100, "font": "CF Refused Edit"})).unwrap();
+    let wide = json!({"name": "CF Refused Edit", "parts": {"kanji": {"font": "Source Sans 3", "size": 400}}});
+    let e = s.execute("type.compositeFonts.set", &json!({"fonts": [wide]})).unwrap_err().to_string();
+    assert!(e.contains("exceed the canvas"), "{e}");
+    assert!(names(&s).is_empty());
+    assert!(db.composite_font("CF Refused Edit").is_none());
+}
+
 /// A loaded composite font cannot replace an installed family used by existing type.
 #[test]
 fn loaded_composite_font_cannot_take_an_installed_family_name() {
