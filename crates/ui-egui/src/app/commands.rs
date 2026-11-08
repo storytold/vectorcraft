@@ -250,7 +250,7 @@ impl VectorcraftApp {
                         let to = &params["to"];
                         to["family"].as_str().and_then(|family| {
                             let style = to["style"].as_str().unwrap_or("Regular");
-                            vectorcraft_text::FontDb::global().resolve(family, style).map(|(face, _)| face.family.clone())
+                            vectorcraft_text::FontDb::global().stored_family(family, style)
                         })
                     }
                     _ => None,
@@ -370,8 +370,10 @@ impl VectorcraftApp {
 
     /// Select a tool (also used by the toolbar and shortcuts).
     pub fn select_tool(&mut self, id: &str) {
-        // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice.
+        // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
+        // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
+        self.held_tool.clear();
         self.activate_tool(id, true);
     }
 

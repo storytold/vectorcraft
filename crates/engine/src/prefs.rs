@@ -41,6 +41,12 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
+    pub fade_region_outside_artboard: bool,
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -48,14 +54,21 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
     pub trackpad_rotate_view: bool,
+    /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
+    /// tool active before comes back; a quick press chooses the tool for good.
+    pub hold_tool_keys: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
     pub selection_tolerance: f64,
+    /// Selection-tool marquee: touching (default), enclosed, or screen drag direction.
+    pub marquee_selection: String,
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
@@ -86,6 +99,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -158,6 +174,10 @@ pub struct Prefs {
     /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
     /// Read when the app starts. macOS always uses the system's.
     pub system_title_bar: bool,
+    /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
+    /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` take precedence over it.
+    pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -350,16 +370,21 @@ impl Default for Prefs {
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            fade_region_outside_artboard: true,
+            artboard_update_while_dragging: true,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: true,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
+            hold_tool_keys: true,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
+            marquee_selection: "touching".into(),
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,
@@ -387,6 +412,7 @@ impl Default for Prefs {
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),
@@ -435,6 +461,7 @@ impl Default for Prefs {
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
             system_title_bar: false,
+            app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),

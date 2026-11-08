@@ -28,10 +28,11 @@ pub struct Timer {
     beat: f64,
 }
 
-/// Each frame: the startup question once, the timer and the heartbeat (`now`: app time in
-/// seconds) → in how many seconds they want the next frame (none while Data Recovery is off).
+/// Each frame: the startup question once no other dialog is open, the timer and the heartbeat
+/// (`now`: app time in seconds) → in how many seconds they want the next frame (none while Data Recovery is off).
 pub fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
-    if !app.recovery.checked {
+    // A dialog already open at launch (the Safe Mode choice) is answered first.
+    if !app.recovery.checked && app.ui.dialog.is_none() {
         app.recovery.checked = true;
         offer(app);
     }

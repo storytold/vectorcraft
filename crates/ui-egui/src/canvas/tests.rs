@@ -2,6 +2,65 @@ use super::*;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Shape as _;
 
+/// The marquee explains E without depending on color. At the canvas edge the hint stays in
+/// view, in every brightness, and the two rules have visibly different outlines.
+#[test]
+fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
+    let draw = |ui: &mut egui::Ui| {
+        let t = Tokens::get(ui.ctx());
+        let xf = Xf { rect: ui.max_rect(), zoom: 1.0, center: Point::new(160.0, 100.0), rot: 0.0 };
+        let prefs = vectorcraft_engine::Prefs::default();
+        for (enclosed, y) in [(false, 80.0), (true, 180.0)] {
+            overlays::draw_overlays(
+                ui.painter(),
+                &xf,
+                &[Overlay::SelectionMarquee { rect: Rect::new(20.0, y - 60.0, 300.0, y), enclosed, pointer: Point::new(315.0, y) }],
+                &t,
+                overlays::HandleLook::of(&prefs),
+            );
+        }
+    };
+    for brightness in crate::theme::Brightness::ALL {
+        for width in [160.0, 320.0] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, brightness);
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(width, 200.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| draw(ui));
+            out.textures_delta.clear();
+            let text = crate::tests_labels::shapes_text(&out);
+            assert!(text.contains("Fully Enclosed · E: Touching") && text.contains("Touching · E: Fully Enclosed"), "{text}");
+            for shape in &out.shapes {
+                if let egui::Shape::Text(label) = &shape.shape {
+                    assert!(
+                        label.pos.x >= shape.clip_rect.min.x && label.pos.x + label.galley.size().x <= shape.clip_rect.max.x,
+                        "{brightness:?}: hint clipped"
+                    );
+                    assert!(
+                        label.pos.y >= shape.clip_rect.min.y && label.pos.y + label.galley.size().y <= shape.clip_rect.max.y,
+                        "{brightness:?}: hint clipped vertically"
+                    );
+                }
+            }
+        }
+    }
+    // Optional visual QA of our own UI. Captures never enter the repository.
+    if let Some(path) = std::env::var_os("VECTORCRAFT_MARQUEE_CAPTURE") {
+        let mut ready = false;
+        let mut harness = egui_kittest::Harness::builder().with_size(vec2(320.0, 200.0)).wgpu().build_ui(move |ui| {
+            if !ready {
+                crate::theme::install_fonts(ui.ctx());
+                crate::theme::apply(ui.ctx(), crate::theme::Brightness::MediumDark);
+                ready = true;
+                return;
+            }
+            draw(ui);
+        });
+        harness.run_steps(4);
+        harness.render().unwrap().save(path).unwrap();
+    }
+}
+
 #[test]
 fn subpixel_dock_layout_does_not_change_pointer_document_coordinates() {
     let mut observed = Vec::new();
@@ -26,6 +85,60 @@ fn subpixel_dock_layout_does_not_change_pointer_document_coordinates() {
     }
     assert_eq!(observed[0], observed[1], "the same physical canvas must map the same pointer identically");
     assert_ne!(observed[0], observed[2], "a real device-pixel resize must still change the mapping");
+}
+
+/// A document's opening view is fitted to the canvas of the first frame that shows it, and the
+/// window's layout can still move the canvas's edges over the next frames. Two starts of the app
+/// then showed one file at zooms a hair apart, on canvases alike once the window had settled. So
+/// until the view is moved or the user presses, types or scrolls, the opening fit follows the
+/// canvas.
+#[test]
+fn the_opening_fit_follows_the_canvas_until_the_view_moves_or_the_user_acts() {
+    // A frame that shows the canvas `width` points wide, which limits the fit of the 800 × 600
+    // artboard, with `events`: the view after it.
+    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, width: f32, events: Vec<egui::Event>) -> View {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1800.0, 900.0))),
+            max_texture_side: Some(8192),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let area = egui::Rect::from_min_size(pos2(54.0, 72.0), vec2(width + SCROLL_BAR, 636.0 + SCROLL_BAR));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            show(app, &mut child);
+        });
+        out.textures_delta.clear();
+        *app.view().unwrap()
+    }
+    fn opened() -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 800, "height": 600, "created": 0})).unwrap();
+        (app, egui::Context::default())
+    }
+    let first_shown_at = |width: f32| {
+        let (mut app, ctx) = opened();
+        frame(&mut app, &ctx, width, vec![]).zoom
+    };
+    let (narrow, wide) = (first_shown_at(700.0), first_shown_at(702.0));
+    assert!(narrow < wide, "the canvas's width limits the fit: {narrow} and {wide}");
+    let escape = || egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+
+    // The first frame lays the canvas out 2 points narrower than the next: the document opens at
+    // the zoom of the settled canvas, as it does when the first frame has it already.
+    let (mut app, ctx) = opened();
+    frame(&mut app, &ctx, 700.0, vec![]);
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![]).zoom, wide);
+    // Once the user has pressed a key, the canvas changing keeps the view, as resizing the window
+    // does.
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![escape()]).zoom, wide);
+    assert_eq!(frame(&mut app, &ctx, 700.0, vec![]).zoom, wide);
+
+    // A view moved before the canvas changes stays where it was moved to.
+    let (mut app, ctx) = opened();
+    frame(&mut app, &ctx, 700.0, vec![]);
+    app.view_mut().unwrap().zoom = 0.5;
+    assert_eq!(frame(&mut app, &ctx, 702.0, vec![]).zoom, 0.5);
 }
 
 /// A rendered raster becomes the image egui's own conversion makes of it, half-transparent
@@ -4306,7 +4419,8 @@ fn show_hidden_characters_releases_the_text_nodes_of_a_closed_document() {
 }
 
 /// General › Zoom with Mouse Wheel (#394), through the control channel's `ui.wheel`: off,
-/// the wheel scrolls and Cmd-wheel zooms; on, the wheel zooms about the pointer, Shift-wheel
+/// the wheel scrolls and Cmd-wheel scrolls sideways (Scroll Sideways with Cmd/Ctrl + Wheel is on
+/// by default); on, the wheel zooms about the pointer, Shift-wheel
 /// scrolls up and down and Cmd/Ctrl-wheel sideways. Alt-wheel (Option on the Mac) and a
 /// trackpad pinch zoom about the pointer either way.
 #[test]
@@ -4348,7 +4462,9 @@ fn zoom_with_mouse_wheel_preference() {
     let zooms_in = |(zoom, _, moved): (f64, _, f64)| zoom > 1.01 && moved < 1e-6;
     let (zoom, scroll, _) = turn(&mut app, "");
     assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "off: the wheel scrolls up ({zoom}, {scroll:?})");
-    assert!(zooms_in(turn(&mut app, "cmd")), "off: Cmd-wheel zooms in about the pointer");
+    // General › Scroll Sideways with Cmd/Ctrl + Wheel is on by default.
+    let (zoom, scroll, _) = turn(&mut app, "cmd");
+    assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "off: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
     assert!(zooms_in(turn(&mut app, "alt")), "off: Alt-wheel zooms in about the pointer");
     assert!(zooms_in(turn(&mut app, "pinch")), "off: a pinch zooms in about the pointer");
     app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
@@ -4359,6 +4475,289 @@ fn zoom_with_mouse_wheel_preference() {
     assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: Shift-wheel scrolls up ({zoom}, {scroll:?})");
     let (zoom, scroll, _) = turn(&mut app, "cmd");
     assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})");
+}
+
+/// General › Scroll Sideways with Cmd/Ctrl + Wheel (on by default), through the control channel's
+/// `ui.wheel`: with Zoom with Mouse Wheel off, Cmd/Ctrl-wheel zooms about the pointer while the
+/// option is off and scrolls sideways while it is on, and a trackpad pinch, two fingers spread on a touch
+/// screen, Alt + Cmd/Ctrl-wheel and Alt-wheel still zoom. A Cmd/Ctrl-wheel notch with a plain
+/// one right after it scrolls two notches in all, and a trackpad gesture during which Cmd/Ctrl
+/// is pressed and released scrolls sideways until the gesture ends, while an Alt gesture that
+/// pauses past egui's scroll timeout no longer holds Alt for the next move. With Zoom with
+/// Mouse Wheel also on, Cmd/Ctrl-wheel scrolls sideways and the wheel zooms.
+#[test]
+fn cmd_wheel_scrolls_sideways_preference() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    // A canvas frame through the host's input hook (it feeds the control channel's input).
+    let run = |app: &mut VectorcraftApp| {
+        let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        app.raw_input_hook(&ctx, &mut raw);
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    run(&mut app);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() + vec2(60.0, 40.0);
+    // One notch up at `at` with `mods` held, or a pinch: → (zoom ratio, scroll in points, how
+    // far the point under `at` moved).
+    let turn = |app: &mut VectorcraftApp, mods: &str| {
+        let before = *app.view().unwrap();
+        if mods == "pinch" {
+            app.synthetic.extend([egui::Event::PointerMoved(at), egui::Event::Zoom(1.25)]);
+        } else {
+            let mut p = json!({"x": at.x, "y": at.y, "dy": 1});
+            for m in mods.split('+').filter(|m| !m.is_empty()) {
+                p[m] = json!(true);
+            }
+            crate::tests_synthetic::control(app, &ctx, "ui.wheel", p);
+        }
+        // egui spreads a notch over a few frames.
+        for _ in 0..40 {
+            run(app);
+        }
+        let after = *app.view().unwrap();
+        let moved = Xf::new(rect, &after).to_doc(at).distance(Xf::new(rect, &before).to_doc(at));
+        (after.zoom / before.zoom, (after.center - before.center) * after.zoom, moved)
+    };
+    let zooms_in = |(zoom, _, moved): (f64, _, f64)| zoom > 1.01 && moved < 1e-6;
+    assert!(app.session.prefs.ctrl_wheel_scrolls_sideways, "the option is on by default");
+    app.session.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": false})).unwrap();
+    assert!(zooms_in(turn(&mut app, "cmd")), "off: Cmd-wheel zooms in about the pointer");
+    let (zoom, scroll, _) = turn(&mut app, "shift");
+    assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "off: Shift-wheel scrolls sideways ({zoom}, {scroll:?})");
+    app.session.execute("prefs.set", &json!({"key": "ctrlWheelScrollsSideways", "value": true})).unwrap();
+    // A notch scrolls one wheel line.
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    let (zoom, scroll, _) = turn(&mut app, "cmd");
+    assert!(
+        (zoom - 1.0).abs() < 1e-9 && (scroll.x + line).abs() < 0.5 && scroll.y == 0.0,
+        "on: Cmd-wheel scrolls sideways by a notch ({zoom}, {scroll:?})"
+    );
+    assert!(zooms_in(turn(&mut app, "pinch")), "on: a pinch right after it zooms in about the pointer");
+    // Two fingers spread on a touch screen, with no wheel turn since the Cmd-wheel one.
+    let before = app.view().unwrap().zoom;
+    let touch = |n: u64, phase, pos| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None };
+    let fingers = |phase, d: f32| vec![touch(1, phase, at - vec2(40.0 + d, 0.0)), touch(2, phase, at + vec2(40.0 + d, 0.0))];
+    frame(&mut app, &ctx, fingers(egui::TouchPhase::Start, 0.0));
+    for k in 1..=3 {
+        frame(&mut app, &ctx, fingers(egui::TouchPhase::Move, 10.0 * k as f32));
+    }
+    frame(&mut app, &ctx, fingers(egui::TouchPhase::End, 30.0));
+    let zoom = app.view().unwrap().zoom / before;
+    assert!(zoom > 1.01, "on: fingers spread on a touch screen zoom in ({zoom})");
+    assert!(zooms_in(turn(&mut app, "alt+cmd")), "on: Alt + Cmd-wheel zooms in about the pointer");
+    assert!(zooms_in(turn(&mut app, "alt")), "on: so does Alt-wheel");
+    let (zoom, scroll, _) = turn(&mut app, "");
+    assert!((zoom - 1.0).abs() < 1e-9 && scroll.x == 0.0 && scroll.y < -1.0, "on: the wheel scrolls up ({zoom}, {scroll:?})");
+    let (zoom, scroll, _) = turn(&mut app, "shift");
+    assert!((zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0, "on: Shift-wheel scrolls sideways ({zoom}, {scroll:?})");
+    // A Cmd-wheel notch with a plain one right after it, before egui has spread the first: they
+    // scroll two notches in all, sideways and up.
+    let before = *app.view().unwrap();
+    crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "cmd": true}));
+    crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1}));
+    for _ in 0..40 {
+        run(&mut app);
+    }
+    let after = *app.view().unwrap();
+    let scroll = (after.center - before.center) * after.zoom;
+    assert!(
+        scroll.x < -1.0 && scroll.y < -1.0 && (scroll.x + scroll.y + 2.0 * line).abs() < 0.5,
+        "on: a Cmd-wheel notch and a plain one right after it scroll two notches in all ({scroll:?})"
+    );
+    // A pinch while egui still spreads a Cmd-wheel notch zooms by the pinch alone, and the
+    // canvas scrolls sideways by one notch; the pinch magnifies the part scrolled before it.
+    let before = *app.view().unwrap();
+    let p = Xf::new(rect, &before).to_doc(at);
+    crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "cmd": true}));
+    app.synthetic.extend([egui::Event::PointerMoved(at), egui::Event::Zoom(1.25)]);
+    for _ in 0..40 {
+        run(&mut app);
+    }
+    let after = *app.view().unwrap();
+    let (zoom, moved) = (after.zoom / before.zoom, Xf::new(rect, &after).to_screen(p) - at);
+    let notch = line as f32;
+    assert!(
+        (zoom - 1.25).abs() < 1e-6 && moved.x > notch - 0.5 && moved.x < 1.25 * notch + 0.5 && moved.y.abs() < 1e-3,
+        "on: a pinch during a Cmd-wheel notch zooms by the pinch, and the notch scrolls sideways ({zoom}, {moved:?})"
+    );
+    // A trackpad gesture starts with no modifier, and Cmd is pressed and released during it:
+    // egui keeps Cmd in its wheel state until the gesture ends, and the canvas keeps scrolling
+    // sideways until then.
+    let before = *app.view().unwrap();
+    let swipe = |phase, modifiers| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 6.0),
+        phase,
+        modifiers,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    app.synthetic.extend([
+        egui::Event::PointerMoved(at),
+        swipe(egui::TouchPhase::Start, egui::Modifiers::NONE),
+        swipe(egui::TouchPhase::Move, egui::Modifiers::COMMAND),
+        swipe(egui::TouchPhase::Move, egui::Modifiers::NONE),
+        swipe(egui::TouchPhase::End, egui::Modifiers::NONE),
+    ]);
+    for _ in 0..40 {
+        run(&mut app);
+    }
+    let after = *app.view().unwrap();
+    let scroll = (after.center - before.center) * after.zoom;
+    assert!(
+        (after.zoom / before.zoom - 1.0).abs() < 1e-9 && (scroll.x + 12.0).abs() < 0.01 && scroll.y == 0.0,
+        "on: a trackpad gesture scrolls sideways to its end after Cmd is let go ({}, {scroll:?})",
+        after.zoom / before.zoom
+    );
+    // An Alt-wheel gesture pauses past egui's scroll timeout with no frame in between: egui
+    // ends it before the next event, so a move with Cmd alone scrolls sideways.
+    // Frames at the given times, with the events in the frame's own input (the host's input
+    // hook hands synthetic events out over several frames).
+    let run_at = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    // The Alt part rests the fingers without moving, so only the Cmd move below acts.
+    let rest = |phase| egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: Vec2::ZERO,
+        phase,
+        modifiers: egui::Modifiers::ALT,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let t = ctx.input(|i| i.time) + 1.0;
+    run_at(&mut app, t, vec![egui::Event::PointerMoved(at), rest(egui::TouchPhase::Start), rest(egui::TouchPhase::Move)]);
+    let before = *app.view().unwrap();
+    run_at(&mut app, t + 2.0, vec![swipe(egui::TouchPhase::Move, egui::Modifiers::COMMAND)]);
+    for k in 1..=40 {
+        run_at(&mut app, t + 2.0 + f64::from(k) / 60.0, vec![]);
+    }
+    let after = *app.view().unwrap();
+    let scroll = (after.center - before.center) * after.zoom;
+    assert!(
+        (after.zoom / before.zoom - 1.0).abs() < 1e-9 && (scroll.x + 6.0).abs() < 0.01 && scroll.y == 0.0,
+        "on: after egui's timeout, a Cmd move scrolls sideways ({}, {scroll:?})",
+        after.zoom / before.zoom
+    );
+    app.session.execute("prefs.set", &json!({"key": "zoomWithMouseWheel", "value": true})).unwrap();
+    let (zoom, scroll, _) = turn(&mut app, "cmd");
+    assert!(
+        (zoom - 1.0).abs() < 1e-9 && scroll.x < -1.0 && scroll.y == 0.0,
+        "with Zoom with Mouse Wheel: Cmd-wheel scrolls sideways ({zoom}, {scroll:?})"
+    );
+    assert!(zooms_in(turn(&mut app, "")), "with Zoom with Mouse Wheel: the wheel zooms in about the pointer");
+}
+
+/// With Scroll Sideways with Cmd/Ctrl + Wheel on and Animated Zoom off, Alt + Cmd-wheel zooms
+/// about the pointer by egui's Cmd-wheel zoom, as Cmd-wheel does with the option off, and
+/// Cmd-wheel alone scrolls sideways.
+#[test]
+fn cmd_wheel_sideways_alt_cmd_zooms_without_animated_zoom() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for (key, value) in [("ctrlWheelScrollsSideways", true), ("zoomWithMouseWheel", false), ("animatedZoom", false)] {
+        app.session.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    let run = |app: &mut VectorcraftApp| {
+        let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        app.raw_input_hook(&ctx, &mut raw);
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    run(&mut app);
+    let rect = app.canvas_rect.unwrap();
+    let at = rect.center() + vec2(60.0, 40.0);
+    let before = *app.view().unwrap();
+    crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "alt": true, "cmd": true}));
+    for _ in 0..40 {
+        run(&mut app);
+    }
+    let after = *app.view().unwrap();
+    let expected = ctx.options(|o| f64::from(o.input_options.line_scroll_speed * o.input_options.scroll_zoom_speed).exp());
+    let zoom = after.zoom / before.zoom;
+    assert!((zoom - expected).abs() < 1e-3, "Alt + Cmd-wheel zooms in by one notch ({zoom}, expected {expected})");
+    assert!(Xf::new(rect, &after).to_doc(at).distance(Xf::new(rect, &before).to_doc(at)) < 1e-6, "Alt + Cmd-wheel zooms about the pointer");
+
+    let before = after;
+    crate::tests_synthetic::control(&mut app, &ctx, "ui.wheel", json!({"x": at.x, "y": at.y, "dy": 1, "cmd": true}));
+    for _ in 0..40 {
+        run(&mut app);
+    }
+    let after = *app.view().unwrap();
+    let scroll = (after.center - before.center) * after.zoom;
+    let line = f64::from(ctx.options(|o| o.input_options.line_scroll_speed));
+    assert!((after.zoom / before.zoom - 1.0).abs() < 1e-9, "Cmd-wheel does not zoom");
+    assert!((scroll.x + line).abs() < 0.5 && scroll.y == 0.0, "Cmd-wheel scrolls sideways ({scroll:?})");
+}
+
+/// With Zoom with Mouse Wheel off, a trackpad gesture that starts with Alt keeps zooming about the
+/// pointer until it ends, also after Alt is let go, as egui keeps a modifier held during a gesture,
+/// with Animated Zoom on and off. A gesture that gains Alt partway zooms from then on.
+#[test]
+fn alt_wheel_gesture_keeps_zooming_after_alt_is_let_go() {
+    for animate in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        for (key, value) in [("zoomWithMouseWheel", false), ("animatedZoom", animate)] {
+            app.session.execute("prefs.set", &json!({"key": key, "value": value})).unwrap();
+        }
+        let ctx = egui::Context::default();
+        let run = |app: &mut VectorcraftApp| {
+            let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+            app.raw_input_hook(&ctx, &mut raw);
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+        };
+        run(&mut app);
+        let rect = app.canvas_rect.unwrap();
+        let at = rect.center() + vec2(60.0, 40.0);
+        let swipe = |phase, modifiers| egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, 6.0),
+            phase,
+            modifiers,
+            source: egui::MouseWheelSource::Unknown,
+        };
+        // One gesture with the given modifiers on its Start and its two Moves → (zoom ratio, how far
+        // the point under `at` moved).
+        let gesture = |app: &mut VectorcraftApp, mods: [egui::Modifiers; 3]| {
+            let before = *app.view().unwrap();
+            app.synthetic.extend([
+                egui::Event::PointerMoved(at),
+                swipe(egui::TouchPhase::Start, mods[0]),
+                swipe(egui::TouchPhase::Move, mods[1]),
+                swipe(egui::TouchPhase::Move, mods[2]),
+                swipe(egui::TouchPhase::End, egui::Modifiers::NONE),
+            ]);
+            for _ in 0..40 {
+                run(app);
+            }
+            let after = *app.view().unwrap();
+            (after.zoom / before.zoom, Xf::new(rect, &after).to_doc(at).distance(Xf::new(rect, &before).to_doc(at)))
+        };
+        let alt = egui::Modifiers::ALT;
+        let (held, _) = gesture(&mut app, [alt, alt, alt]);
+        assert!(held > 1.01, "animate {animate}: an Alt gesture zooms in ({held})");
+        let (zoom, moved) = gesture(&mut app, [alt, alt, egui::Modifiers::NONE]);
+        assert!(
+            (zoom - held).abs() < 1e-9 && moved < 1e-6,
+            "animate {animate}: a move without Alt keeps the gesture zooming about the pointer ({zoom}, expected {held}; moved {moved})"
+        );
+        let (zoom, moved) = gesture(&mut app, [egui::Modifiers::NONE, alt, egui::Modifiers::NONE]);
+        assert!(
+            (zoom - held).abs() < 1e-9 && moved < 1e-6,
+            "animate {animate}: Alt pressed partway zooms the rest of the gesture about the pointer ({zoom}, expected {held}; moved {moved})"
+        );
+    }
 }
 
 /// #888: with Zoom with Mouse Wheel, a wheel notch's zoom glides in over a few frames, as a
@@ -9110,6 +9509,205 @@ fn hidden_artboards_leave_a_paper_canvas_without_edges() {
     app.select_tool("selection");
     app.run("view.artboards", json!({})).unwrap();
     assert_eq!(look(&mut app), (false, true));
+}
+
+/// One headless canvas frame → whether the fade outside the artboards is drawn.
+fn fades(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
+    fade_mesh(&shapes(app, ctx)).is_some()
+}
+
+/// The fade outside the artboards among `shapes`, with its position: the mesh in [`FADE_OUTSIDE`].
+fn fade_mesh(shapes: &[Shape]) -> Option<(usize, &egui::Mesh)> {
+    shapes.iter().enumerate().find_map(|(i, s)| match s {
+        Shape::Mesh(m) if !m.vertices.is_empty() && m.vertices.iter().all(|v| v.color == FADE_OUTSIDE) => Some((i, &**m)),
+        _ => None,
+    })
+}
+
+/// Does `mesh` cover the screen point `p`?
+fn mesh_covers(mesh: &egui::Mesh, p: Pos2) -> bool {
+    let cross = |a: Pos2, b: Pos2| (b - a).x * (p - a).y - (b - a).y * (p - a).x;
+    mesh.indices.chunks(3).any(|t| {
+        let [a, b, c] = [t[0], t[1], t[2]].map(|i| mesh.vertices[i as usize].pos);
+        let (d0, d1, d2) = (cross(a, b), cross(b, c), cross(c, a));
+        (d0 >= 0.0 && d1 >= 0.0 && d2 >= 0.0) || (d0 <= 0.0 && d1 <= 0.0 && d2 <= 0.0)
+    })
+}
+
+/// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active the area
+/// outside the artboards draws darker; with another tool, or with the preference off, it draws as
+/// usual.
+#[test]
+fn the_artboard_tool_fades_the_pasteboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(FADE_OUTSIDE.a(), 102, "black at 40%: each channel under it shows at 60%");
+    assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
+    assert!(!fades(&mut app, &ctx), "the Selection tool");
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.select_tool("rectangle");
+    assert!(!fades(&mut app, &ctx), "the Rectangle tool");
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    app.select_tool("artboard");
+    assert!(!fades(&mut app, &ctx), "the preference off");
+}
+
+/// Presentation Mode shows only the art: with the Artboard tool active and the fade on, it draws no
+/// fade, and the fade comes back when Presentation Mode ends.
+#[test]
+fn presentation_mode_draws_no_fade() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.select_tool("artboard");
+    assert!(fades(&mut app, &ctx), "the Artboard tool");
+    app.run("view.presentation", json!({})).unwrap();
+    assert_eq!(app.ui.screen_mode, 3);
+    assert_eq!(app.session.tool_id(), "artboard");
+    assert!(!fades(&mut app, &ctx), "Presentation Mode");
+    app.run("view.presentation", json!({})).unwrap();
+    assert!(fades(&mut app, &ctx), "after Presentation Mode");
+}
+
+/// A row of boards aligned at the top, each a different height, gives a number of parts that grows
+/// with the number of boards, not with its square, and the parts still add up to the uncovered area.
+#[test]
+fn outside_rects_of_a_row_of_boards_stay_few() {
+    let n = 200;
+    let boards: Vec<Rect> =
+        (0..n).map(|i| Rect::new(20.0 * f64::from(i) + 10.0, 10.0, 20.0 * f64::from(i) + 20.0, 20.0 + 10.0 * f64::from(i))).collect();
+    let bounds = Rect::new(0.0, 0.0, 20.0 * f64::from(n) + 10.0, 10.0 * f64::from(n) + 40.0);
+    let parts = outside_rects(bounds, &boards, usize::MAX).unwrap();
+    assert!(parts.len() <= 3 * n as usize, "{} parts for {n} boards", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let covered: f64 = boards.iter().map(area).sum();
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - covered);
+}
+
+/// 500 narrow tall boards crossed by 500 narrow wide ones leave about 250,000 gaps between them.
+/// The fade then covers only the parts outside the box around all the boards, so it stays a few
+/// rectangles.
+#[test]
+fn the_fade_of_crossing_boards_stays_bounded() {
+    let n = 500;
+    let side = 4.0 * f64::from(n);
+    let boards: Vec<Rect> = (0..n)
+        .flat_map(|i| {
+            let at = 4.0 * f64::from(i);
+            [Rect::new(at, 0.0, at + 1.0, side), Rect::new(0.0, at, side, at + 1.0)]
+        })
+        .collect();
+    let bounds = Rect::new(-100.0, -100.0, side + 100.0, side + 100.0);
+    assert!(outside_rects(bounds, &boards, FADE_MAX_RECTS).is_none(), "more than {FADE_MAX_RECTS} gaps");
+    let parts = fade_rects(bounds, &boards);
+    assert!(parts.len() <= 4, "{} parts", parts.len());
+    let area = |r: &Rect| r.width() * r.height();
+    let all = Rect::new(0.0, 0.0, side, side);
+    assert_eq!(parts.iter().map(area).sum::<f64>(), area(&bounds) - area(&all));
+}
+
+/// The fade covers the art that lies on the pasteboard as well as the pasteboard: it is drawn over
+/// the art, over a point of an object outside the artboard and not over a point of an object on it,
+/// in an upright view and in a rotated one.
+#[test]
+fn the_fade_darkens_art_on_the_pasteboard_and_not_on_the_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": -150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    let ctx = egui::Context::default();
+    shapes(&mut app, &ctx); // the first frame fits the view to the artboard
+    app.view_mut().unwrap().zoom = 0.5;
+    app.select_tool("artboard");
+    for rotation in [0.0, 30.0] {
+        app.view_mut().unwrap().rotation = rotation;
+        let s = shapes(&mut app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let image = s.iter().position(|s| matches!(s, Shape::Mesh(m) if m.texture_id == art)).expect("the art");
+        let (at, mesh) = fade_mesh(&s).expect("the fade");
+        assert!(at > image, "over the art, rotation {rotation}");
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(-100.0, 150.0))), "the object outside, rotation {rotation}");
+        assert!(!mesh_covers(mesh, xf.to_screen(Point::new(200.0, 150.0))), "the object on the artboard, rotation {rotation}");
+        assert!(mesh_covers(mesh, xf.to_screen(Point::new(200.0, -40.0))), "the pasteboard, rotation {rotation}");
+    }
+}
+
+/// The parts outside the boards: none where boards cover the bounds, the bounds without boards, and
+/// otherwise rectangles that do not overlap a board or each other and add up to the uncovered area.
+#[test]
+fn outside_rects_cover_the_bounds_minus_the_boards() {
+    let bounds = Rect::new(0.0, 0.0, 100.0, 100.0);
+    assert!(fade_rects(bounds, &[Rect::new(-10.0, -10.0, 110.0, 110.0)]).is_empty());
+    assert_eq!(fade_rects(bounds, &[]), vec![bounds]);
+    let boards = [Rect::new(10.0, 10.0, 40.0, 40.0), Rect::new(30.0, 30.0, 60.0, 80.0), Rect::new(90.0, -20.0, 130.0, 50.0)];
+    let parts = fade_rects(bounds, &boards);
+    let area = |r: &Rect| r.width() * r.height();
+    let overlap = |a: &Rect, b: &Rect| (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0) * (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
+    for (i, p) in parts.iter().enumerate() {
+        assert!(boards.iter().all(|b| overlap(p, b) == 0.0), "{p:?} overlaps a board");
+        assert!(parts[i + 1..].iter().all(|q| overlap(p, q) == 0.0), "{p:?} overlaps another part");
+    }
+    // Inside the bounds the boards cover 900 + 1,500 less their 100 of overlap, and 500 of the third.
+    assert_eq!(parts.iter().map(area).sum::<f64>(), 10_000.0 - (900.0 + 1_500.0 - 100.0 + 500.0));
+}
+
+/// Artboard Options › Update While Dragging: on, the pasteboard stays darker while the Artboard tool
+/// moves or resizes an artboard; off, it draws as usual during the drag and darker again after it.
+#[test]
+fn update_while_dragging_keeps_or_drops_the_fade_during_an_artboard_drag() {
+    for update in [true, false] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("prefs.set", json!({"key": "artboardUpdateWhileDragging", "value": update})).unwrap();
+        app.select_tool("artboard");
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx, vec![]);
+        let r = app.session.active().unwrap().doc.artboards[0].rect;
+        let view = app.view_info();
+        // A move from the artboard's middle, then a resize from its right edge.
+        let (cx, cy) = (r.center().x, r.center().y);
+        for (from, to) in
+            [(Point::new(cx, cy), Point::new(cx + 40.0, cy + 30.0)), (Point::new(r.x1 + 40.0, cy + 30.0), Point::new(r.x1 + 90.0, cy + 30.0))]
+        {
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Down, from.x, from.y), view);
+            for p in [from + (to - from) * 0.5, to] {
+                dispatch(&mut app, &PointerEvent::new(PointerKind::Drag, p.x, p.y), view);
+            }
+            assert!(app.session.tool_transforming(), "the artboard is being dragged");
+            assert_eq!(fades(&mut app, &ctx), update, "Update While Dragging {update}");
+            dispatch(&mut app, &PointerEvent::new(PointerKind::Up, to.x, to.y), view);
+            assert!(!app.session.tool_transforming());
+            assert!(fades(&mut app, &ctx), "darker again after the drag");
+        }
+        let moved = app.session.active().unwrap().doc.artboards[0].rect;
+        assert!(moved.x0 > r.x0 && moved.width() > r.width(), "moved, then resized: {moved:?} from {r:?}");
+    }
+}
+
+/// The fade is drawn only on the canvas: exports with the Artboard tool active and the fade on are
+/// the same as with the Selection tool and the fade off.
+#[test]
+fn the_pasteboard_fade_leaves_exports_unchanged() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": -40, "y": 20, "width": 120, "height": 40})).unwrap();
+    let exports = |app: &mut VectorcraftApp| -> Vec<serde_json::Value> {
+        ["svg", "png"].iter().map(|f| app.run("document.export", json!({"format": f})).unwrap()).collect()
+    };
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": false})).unwrap();
+    let plain = exports(&mut app);
+    app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": true})).unwrap();
+    app.select_tool("artboard");
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    assert!(fades_outside_artboards(&app));
+    assert_eq!(exports(&mut app), plain);
 }
 
 /// Finished worker renders are uploaded whenever they are not older than what is currently

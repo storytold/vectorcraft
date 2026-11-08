@@ -620,6 +620,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
             if let Some(n) = d.node_mut(*id) {
                 super::object::transform_node(n, m, sc, objects);
             }
+            if objects {
+                super::object::keep_compound_aligned(d, *id, sc);
+            }
         }
         Ok(targets)
     })?;
@@ -1363,6 +1366,7 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         for (id, dl) in &art {
             if let Some(n) = d.node_mut(*id) {
                 n.transform(Affine::translate(*dl), sc);
+                super::object::keep_pixel_aligned(n, sc);
             }
         }
         let mut moved = vec![];

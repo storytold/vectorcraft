@@ -753,7 +753,7 @@ fn a_file_whose_pdf_part_cant_be_read_outlines_its_type_when_asked() {
     assert!(paths > 0, "the outlines are there: {r}");
 }
 
-/// An image too large to read from the editing data of a file whose PDF part can't be read is
+/// An image whose data is cut short in the editing data of a file whose PDF part can't be read is
 /// left out, and both notes say so.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
@@ -762,7 +762,7 @@ fn a_file_whose_pdf_part_cant_be_read_notes_an_image_left_out() {
     let mut s = Session::new();
     let e = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
     let r = open(&mut s, name, &file, json!({})).unwrap();
-    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image too large to read from the editing data was left out"]), "{r}");
+    assert_eq!(r["warnings"], json!([unread_pdf_part(&e), "an image whose data is cut short was left out"]), "{r}");
 }
 
 /// A copied file whose PDF part can't be read pastes the objects of its editing data when asked

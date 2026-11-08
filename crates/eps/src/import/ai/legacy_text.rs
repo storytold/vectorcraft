@@ -3,17 +3,21 @@
 //! type runs along, `TP`), the modal character and paragraph attributes
 //! (`Tr Tf Ts Tz Tt TA Tl Ta Ti`, and §15.4.7 and §22's letter and word spacing `TC TW`, hanging
 //! punctuation `Tq`, hyphenation `Th` and tab stops `Xb Xe XB`, and §15.3.4's writing direction `TV`,
-//! Roman character rotation `Tv` and Kumi blocks `Ty TY`), the paint style, and the characters (`Tx`, `Tj`,
-//! overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
+//! Roman character rotation `Tv`, Kumi blocks `Ty TY` and binding punctuation `Tg`), the paint
+//! style, and the characters (`Tx`, `Tj`, overflow `TX`; `\r` ends a paragraph). Type set in rendering modes 4 to 7 is a mask (§5.7): the
 //! text object clips the objects of its clipping group. Final-form operators (the
 //! computed positions, §15.1) are skipped: the type is laid out again. Strings are decoded by the
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
 //! `useDefault` is 0, else as Windows-1252; a re-encoded font `/_name` is the font its `%AI3_BeginEncoding` or `TZ` names
-//! (else `name`).
+//! (else `name`). Strings in a composite font named `base-CMap` (CJK type) whose `TZ` gives no
+//! encoding pairs are decoded by that predefined CMap instead, and the font is `base`.
 
+use std::sync::Arc;
+
+use craft_pdf::interpret::hayro_cmap::{BfString, CMap, CMapName, load_embedded};
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{Burasagari, CharStyle, Justify, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject, TextRun};
 use vectorcraft_geom::AnchorKind;
 
 use super::super::obj::V;
@@ -206,8 +210,14 @@ pub(super) struct TypeState {
     /// Re-encoded fonts' own encodings (`TZ`), by the new font's name: what its encoding pairs
     /// change, by code (None where they say nothing), and whether `TE`'s encoding applies to it.
     font_encodings: Vec<(String, Vec<Option<char>>, bool)>,
+    /// The new fonts' names whose `TZ` gives encoding pairs, which no composite font has.
+    paired_fonts: Vec<String>,
     /// The font `Tf` set last, as the file names it.
     font: Option<String>,
+    /// How strings in that font decode, when it is a composite font ([`composite_font`]).
+    cmap: Option<Arc<CMapCodes>>,
+    /// The predefined CMaps read so far, by name (`None` when one couldn't be read).
+    cmaps: Vec<(String, Option<Arc<CMapCodes>>)>,
     /// Between `Xb` and `XB`: the tab stops of the tab definition read so far.
     tabs: Option<Vec<TabStop>>,
     chars: usize,
@@ -225,7 +235,10 @@ impl Default for TypeState {
             encoding: vec![None; 256],
             fonts: vec![],
             font_encodings: vec![],
+            paired_fonts: vec![],
             font: None,
+            cmap: None,
+            cmaps: vec![],
             tabs: None,
             chars: 0,
         }
@@ -251,6 +264,9 @@ impl TypeState {
 
     /// A string's bytes, in the current font.
     fn decode(&self, bytes: &[u8]) -> String {
+        if let Some(cmap) = &self.cmap {
+            return cmap.decode(bytes);
+        }
         let own = self.font.as_ref().and_then(|f| self.font_encodings.iter().find(|(n, _, _)| n == f));
         let (own, te) = own.map_or((None, true), |(_, e, te)| (Some(e.as_slice()), *te));
         bytes
@@ -265,6 +281,260 @@ impl TypeState {
             })
             .collect()
     }
+
+    /// How strings in a font with predefined CMap `cmap` decode; `None` when the CMap can't be read.
+    fn cmap_codes(&mut self, cmap: &str) -> Option<Arc<CMapCodes>> {
+        if let Some(form) = unicode_cmap(cmap) {
+            return Some(Arc::new(CMapCodes::Unicode(form)));
+        }
+        if let Some((_, codes)) = self.cmaps.iter().find(|(n, _)| n == cmap) {
+            return codes.clone();
+        }
+        let codes = cid_codes(cmap).map(Arc::new);
+        self.cmaps.push((cmap.to_string(), codes.clone()));
+        codes
+    }
+}
+
+/// How a composite font's strings decode.
+#[derive(Debug)]
+enum CMapCodes {
+    /// By a predefined CMap's codes to CIDs, then by its character collection's CID → Unicode CMap;
+    /// with `high_bit`, each byte 0x21 to 0x7E gets its high bit set first. `space` is the CMap's
+    /// code space ([`code_space`]).
+    Cids { codes: Box<CMap>, unicode: Box<CMap>, high_bit: bool, space: Option<CodeSpace> },
+    /// A predefined Unicode CMap: the codes are the characters.
+    Unicode(Unicode),
+}
+
+/// A CMap's code space: ranges of codes, each given by its lowest and highest code, both with the
+/// code's length in bytes.
+type CodeSpace = &'static [(&'static [u8], &'static [u8])];
+
+/// What control byte `b` is in a composite font's string: `\r` a paragraph break, `\t` a tab.
+fn control(b: u8) -> Option<char> {
+    match b {
+        b'\r' => Some('\n'),
+        b'\t' => Some('\t'),
+        _ => None,
+    }
+}
+
+impl CMapCodes {
+    /// The characters of string `bytes`, leaving out codes the CMaps don't map; a `\r` is a
+    /// paragraph break and a `\t` a tab (also as a byte left over after the last whole code of a
+    /// UTF-16 or UTF-32 string).
+    fn decode(&self, bytes: &[u8]) -> String {
+        let (codes, unicode, high_bit, space) = match self {
+            Self::Unicode(form) => {
+                let unit = match form {
+                    Unicode::Utf16 => 2,
+                    Unicode::Utf8 => 1,
+                    Unicode::Utf32 => 4,
+                };
+                let (whole, rest) = bytes.split_at_checked(bytes.len() - bytes.len() % unit).unwrap_or((bytes, &[]));
+                let mut text = unicode_text(whole, *form).replace('\r', "\n");
+                text.extend(rest.last().copied().and_then(control));
+                return text;
+            }
+            Self::Cids { codes, unicode, high_bit, space } => (codes, unicode, *high_bit, space),
+        };
+        let euc: Vec<u8>;
+        let bytes = if high_bit {
+            euc = bytes.iter().map(|&b| if (0x21..0x7f).contains(&b) { b | 0x80 } else { b }).collect();
+            euc.as_slice()
+        } else {
+            bytes
+        };
+        let mut out = String::new();
+        let mut at = 0;
+        while let Some(&first) = bytes.get(at) {
+            // VectorCraft reads a 0x0D byte as a paragraph break and a 0x09 byte as a tab in every
+            // CMap, as in other fonts' strings, including the row-and-cell CMaps, whose code space
+            // has no one-byte codes.
+            if let Some(control) = control(first) {
+                out.push(control);
+                at += 1;
+                continue;
+            }
+            let rest = bytes.get(at..).unwrap_or_default();
+            let code = |len: u8| rest.get(..usize::from(len)).map(|b| b.iter().fold(0u32, |c, &b| c << 8 | u32::from(b)));
+            let found = match space {
+                // The code is as long as the code space range it falls in; a byte that starts no
+                // code in the code space is skipped.
+                Some(space) => {
+                    let Some(len) = code_len(space, rest) else {
+                        at += 1;
+                        continue;
+                    };
+                    code(len).map(|c| (len, codes.lookup_cid_code(c, len)))
+                }
+                None => (1..=4u8).find_map(|len| Some((len, Some(codes.lookup_cid_code(code(len)?, len)?)))),
+            };
+            let Some((len, cid)) = found else {
+                at += 1;
+                continue;
+            };
+            at += usize::from(len);
+            // A code the CMap leaves out is dropped.
+            let Some(cid) = cid else { continue };
+            match unicode.lookup_bf_string(cid) {
+                // A one-byte Roman code whose CID the table gives as a combining mark alone (0x7E in
+                // the Mac Shift-JIS CMaps, U+0303): the ASCII character, as Adobe's cid2code.txt lists first.
+                Some(BfString::Char('\u{300}'..='\u{36f}')) if len == 1 && (0x20..0x7f).contains(&first) => out.push(char::from(first)),
+                Some(BfString::Char(c)) if c != char::REPLACEMENT_CHARACTER => out.push(c),
+                Some(BfString::String(s)) => out.extend(s.chars().filter(|c| *c != char::REPLACEMENT_CHARACTER)),
+                _ => {}
+            }
+        }
+        out
+    }
+}
+
+/// How a predefined Unicode CMap's codes encode their characters.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Unicode {
+    /// Two bytes a character (`UCS2`) or a UTF-16 surrogate pair, the high byte first.
+    Utf16,
+    Utf8,
+    /// Four bytes, the high byte first.
+    Utf32,
+}
+
+/// The encoding of predefined Unicode CMap `name`: `Uni` and a character collection, then `-UCS2`,
+/// `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms), then `-H` or `-V`
+/// (`UniJIS-UCS2-H`, `UniGB-UTF16-V`: <https://github.com/adobe-type-tools/cmap-resources>).
+fn unicode_cmap(name: &str) -> Option<Unicode> {
+    let rest = name.strip_suffix("-H").or_else(|| name.strip_suffix("-V"))?;
+    let rest = rest.strip_suffix("-HW").unwrap_or(rest);
+    let (collection, form) = rest.rsplit_once('-')?;
+    let collections = ["UniJIS", "UniJISPro", "UniJIS2004", "UniJISX0213", "UniJISX02132004", "UniHojo", "UniGB", "UniCNS", "UniKS", "UniAKR"];
+    if !collections.contains(&collection) {
+        return None;
+    }
+    match form {
+        "UCS2" | "UTF16" => Some(Unicode::Utf16),
+        "UTF8" => Some(Unicode::Utf8),
+        "UTF32" => Some(Unicode::Utf32),
+        _ => None,
+    }
+}
+
+/// The characters string `s` encodes in Unicode form `form` (invalid codes left out).
+fn unicode_text(s: &[u8], form: Unicode) -> String {
+    match form {
+        Unicode::Utf16 => {
+            let units = s.as_chunks::<2>().0.iter().map(|b| u16::from_be_bytes(*b));
+            char::decode_utf16(units).filter_map(Result::ok).collect()
+        }
+        Unicode::Utf8 => s.utf8_chunks().map(|chunk| chunk.valid()).collect(),
+        Unicode::Utf32 => s.as_chunks::<4>().0.iter().filter_map(|b| char::from_u32(u32::from_be_bytes(*b))).collect(),
+    }
+}
+
+/// Predefined CMap `name` among those VectorCraft carries, leaving out the Identity CMaps, whose
+/// codes are CIDs of no known character collection.
+fn predefined(name: &str) -> Option<CMapName<'_>> {
+    match CMapName::from_bytes(name.as_bytes()) {
+        CMapName::Custom(_) | CMapName::IdentityH | CMapName::IdentityV => None,
+        name => Some(name),
+    }
+}
+
+/// Adobe's predefined CMaps that VectorCraft doesn't carry, by name without `-H` or `-V`
+/// (<https://github.com/adobe-type-tools/cmap-resources>): the nearest carried CMap with the same
+/// code space, and whether each byte of a row-and-cell code gets its high bit set first (the EUC
+/// form of the same code; `GB-H`, `CNS1-H` and `KSC-H` have no one-byte codes, their code space
+/// is `<2121>` to `<7E7E>`); `None` for those no carried CMap reads.
+fn stand_in(stem: &str) -> Option<Option<(&'static str, bool)>> {
+    Some(match stem {
+        "RKSJ" | "78-RKSJ" | "78ms-RKSJ" => Some(("90ms-RKSJ-H", false)),
+        "78-EUC" => Some(("EUC-H", false)),
+        "78" | "Add" | "Ext" | "NWP" => Some(("H", false)),
+        "GB" => Some(("GB-EUC-H", true)),
+        "CNS1" => Some(("CNS-EUC-H", true)),
+        "KSC" => Some(("KSC-EUC-H", true)),
+        "B5" => Some(("ETen-B5-H", false)),
+        "ETHK-B5" | "HKdla-B5" | "HKdlb-B5" | "HKgccs-B5" | "HKm314-B5" | "HKm471-B5" => Some(("HKscs-B5-H", false)),
+        "GBT" | "GBT-EUC" | "GBTpc-EUC" | "CNS2" | "KSC-Johab" => None,
+        _ => return None,
+    })
+}
+
+/// Predefined CMap `cmap`'s codes to CIDs, and its character collection's CID → Unicode CMap. A
+/// vertical CMap's codes are read with its horizontal CMap when VectorCraft carries that: the two
+/// differ only in the CIDs of vertical glyph forms. A CMap VectorCraft doesn't carry is read with
+/// its [`stand_in`].
+fn cid_codes(cmap: &str) -> Option<CMapCodes> {
+    let read = |name: &str| CMap::parse(load_embedded(predefined(name)?)?, load_embedded);
+    let horizontal = cmap.strip_suffix('V').map(|stem| format!("{stem}H"));
+    let stem = cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"));
+    let (codes, high_bit) = horizontal.iter().map(String::as_str).chain([cmap]).find_map(|n| Some((read(n)?, false))).or_else(|| {
+        let (name, high_bit) = stand_in(stem?).flatten()?;
+        Some((read(name)?, high_bit))
+    })?;
+    let table = codes.metadata().character_collection.as_ref()?.family.ucs2_cmap()?;
+    let unicode = CMap::parse(load_embedded(table)?, load_embedded)?;
+    // A row-and-cell code read in its EUC form falls in the EUC CMap's code space.
+    let space = if high_bit { stand_in(stem?).flatten().and_then(|(name, _)| code_space(name)) } else { code_space(cmap) };
+    Some(CMapCodes::Cids { codes: Box::new(codes), unicode: Box::new(unicode), high_bit, space })
+}
+
+/// The code space of predefined CMap `cmap`, as Adobe's CMap files give it
+/// (<https://github.com/adobe-type-tools/cmap-resources>); a CMap's vertical form has its
+/// horizontal form's. `None` for a CMap not listed here.
+fn code_space(cmap: &str) -> Option<CodeSpace> {
+    const RKSJ: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa0", b"\xdf"), (b"\x81\x40", b"\x9f\xfc"), (b"\xe0\x40", b"\xfc\xfc")];
+    const RKSJ_MAC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa0", b"\xdf"), (b"\xfd", b"\xff"), (b"\x81\x40", b"\x9f\xfc"), (b"\xe0\x40", b"\xfc\xfc")];
+    const EUC_JP: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8e\xa0", b"\x8e\xdf"), (b"\xa1\xa1", b"\xfe\xfe")];
+    const ROW_CELL: CodeSpace = &[(b"\x21\x21", b"\x7e\x7e")];
+    const EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe")];
+    const GB_PC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xfd", b"\xff"), (b"\xa1\xa1", b"\xfc\xfe")];
+    const GBK: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x40", b"\xfe\xfe")];
+    const GBK2K: CodeSpace = &[(b"\x00", b"\x7f"), (b"\x81\x40", b"\xfe\xfe"), (b"\x81\x30\x81\x30", b"\xfe\x39\xfe\x39")];
+    const B5_PC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xfd", b"\xff"), (b"\xa1\x40", b"\xfc\xfe")];
+    const B5: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\x40", b"\xfe\xfe")];
+    const HKSCS: CodeSpace = &[(b"\x00", b"\x80"), (b"\x87\x40", b"\xfe\xfe")];
+    const HKDLB: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8e\x40", b"\xfe\xfe")];
+    const HKGCCS: CodeSpace = &[(b"\x00", b"\x80"), (b"\x8a\x40", b"\xfe\xfe")];
+    const CNS_EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe"), (b"\x8e\xa1\xa1\xa1", b"\x8e\xa3\xfe\xfe")];
+    const KSC_PC: CodeSpace = &[(b"\x00", b"\x84"), (b"\xfe", b"\xff"), (b"\xa1\x41", b"\xfd\xfe")];
+    const UHC: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x41", b"\xfe\xfe")];
+    let stem = match cmap {
+        "H" | "V" => "",
+        _ => cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"))?,
+    };
+    let stem = stem.strip_suffix("-HW").unwrap_or(stem);
+    Some(match stem {
+        "83pv-RKSJ" | "90pv-RKSJ" => RKSJ_MAC,
+        _ if stem.ends_with("RKSJ") => RKSJ,
+        "EUC" | "78-EUC" => EUC_JP,
+        "" | "78" | "Add" | "Ext" | "NWP" => ROW_CELL,
+        "GB-EUC" | "GBT-EUC" | "KSC-EUC" => EUC,
+        "GBpc-EUC" | "GBTpc-EUC" => GB_PC,
+        "GBK-EUC" | "GBKp-EUC" => GBK,
+        "GBK2K" => GBK2K,
+        "B5pc" => B5_PC,
+        "B5" | "ETen-B5" | "ETenms-B5" | "HKdla-B5" | "HKm314-B5" | "HKm471-B5" => B5,
+        "HKscs-B5" | "ETHK-B5" => HKSCS,
+        "HKdlb-B5" => HKDLB,
+        "HKgccs-B5" => HKGCCS,
+        "CNS-EUC" => CNS_EUC,
+        "KSCpc-EUC" => KSC_PC,
+        "KSCms-UHC" => UHC,
+        _ => return None,
+    })
+}
+
+/// The length of the code string `bytes` starts with: the length of the code space range whose
+/// lowest and highest codes hold each of its bytes between them. `None` when no range does.
+fn code_len(space: CodeSpace, bytes: &[u8]) -> Option<u8> {
+    space
+        .iter()
+        .filter(|(lo, hi)| bytes.get(..lo.len()).is_some_and(|b| b.iter().zip(lo.iter().zip(hi.iter())).all(|(b, (lo, hi))| (lo..=hi).contains(&b))))
+        .map(|(lo, _)| lo.len())
+        .min()
+        .and_then(|len| u8::try_from(len).ok())
 }
 
 /// Encoding pairs (§3.3.1): codes, each followed by the glyph names from it on, into `table`.
@@ -284,6 +554,36 @@ fn encoding_pairs(table: &mut [Option<char>], vals: &[V]) {
             _ => {}
         }
     }
+}
+
+/// A composite font's name `base-CMap`: the base font's name and its CMap's name, when that is a
+/// predefined Unicode CMap ([`unicode_cmap`]), one of the predefined CMaps VectorCraft carries
+/// ([`predefined`]) or one of the others ([`stand_in`]), in its horizontal (`-H`) or vertical
+/// (`-V`) form. A name ending in an Identity CMap is not read as one, nor is one that ends in an
+/// unknown CMap name with an encoding part (`UniFoo-UTF8-H`), which would otherwise end in `H`.
+fn composite_font(name: &str) -> Option<(&str, &str)> {
+    if !(name.ends_with("-H") || name.ends_with("-V")) {
+        return None;
+    }
+    // The longest CMap name first: `83pv-RKSJ-H` before `H`.
+    // No predefined CMap name is longer than 32 bytes.
+    for (at, _) in name.match_indices('-').filter(|(at, _)| name.len() - at <= 33) {
+        let (Some(base), Some(cmap)) = (name.get(..at).filter(|b| !b.is_empty()), name.get(at + 1..)) else { continue };
+        if matches!(cmap, "Identity-H" | "Identity-V") {
+            return None;
+        }
+        let encoding_part =
+            base.rsplit('-').next().is_some_and(|part| ["UCS2", "UTF8", "UTF16", "UTF32", "HW", "EUC", "RKSJ", "B5", "UHC", "Johab"].contains(&part));
+        if matches!(cmap, "H" | "V") && encoding_part {
+            return None;
+        }
+        let vertical_of_predefined = || cmap.strip_suffix('V').is_some_and(|stem| predefined(&format!("{stem}H")).is_some());
+        let other = || cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V")).is_some_and(|stem| stand_in(stem).is_some());
+        if unicode_cmap(cmap).is_some() || predefined(cmap).is_some() || vertical_of_predefined() || other() {
+            return Some((base, cmap));
+        }
+    }
+    None
 }
 
 /// An operator's `N` operands, the last `N` values before it, when each is a finite number.
@@ -341,6 +641,9 @@ impl Reader<'_> {
         let pairs = pairs.iter().rposition(|v| matches!(v, V::Mark)).map_or(pairs, |m| pairs.get(m + 1..).unwrap_or_default());
         let mut table = vec![None; 256];
         encoding_pairs(&mut table, pairs);
+        if pairs.iter().any(|v| matches!(v, V::Name(_))) {
+            st.paired_fonts.push(new.clone());
+        }
         st.font_encodings.push((new.clone(), table, te));
     }
 
@@ -469,9 +772,17 @@ impl Reader<'_> {
                 let Some(at) = vals.iter().position(|v| matches!(v, V::Name(_))) else { return };
                 if let Some(V::Name(name)) = vals.get(at) {
                     st.font = Some(name.clone());
-                    let name =
+                    let full =
                         st.fonts.iter().find(|(new, _)| new == name).map_or_else(|| name.trim_start_matches('_').to_string(), |(_, old)| old.clone());
-                    let (family, style) = super::super::super::text::family_style(&name);
+                    // A font whose `TZ` gives encoding pairs is re-encoded, which a composite font
+                    // can't be; a `TZ` without pairs only names the font.
+                    let reencoded = st.paired_fonts.contains(name);
+                    let (name, cmap) = match composite_font(&full).filter(|_| !reencoded) {
+                        Some((base, cmap)) => (base, st.cmap_codes(cmap)),
+                        None => (full.as_str(), None),
+                    };
+                    st.cmap = cmap;
+                    let (family, style) = super::super::super::text::family_style(name);
                     st.style.font_family = family;
                     st.style.font_style = style;
                     st.style.font_version = None;
@@ -557,6 +868,19 @@ impl Reader<'_> {
             "Tq" => {
                 if let Some(on) = n0.and_then(flag) {
                     st.para.roman_hanging = on;
+                }
+            }
+            // `bindrepeat Tg` (§15.3.4): 1 and 3 turn binding punctuation on, and 0 and 2 turn it
+            // off. VectorCraft's own mapping opens it on as Burasagari's Force setting and off as no
+            // Burasagari. The repeat character (2 and 3) is not kept.
+            "Tg" => {
+                let burasagari = match n0 {
+                    Some(1.0 | 3.0) => Some(Burasagari::Forced),
+                    Some(0.0 | 2.0) => Some(Burasagari::None),
+                    _ => None,
+                };
+                if let Some(b) = burasagari {
+                    st.para.burasagari = b;
                 }
             }
             // `hyphenate limitHyphLines minLeadHyphen minTailHyphen maxHyphLines Th`, kept to the

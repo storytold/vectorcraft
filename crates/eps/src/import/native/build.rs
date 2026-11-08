@@ -9,6 +9,7 @@ use super::slots::{
 use super::{
     Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
 };
+use vectorcraft_doc::PlacedDocument;
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -58,7 +59,9 @@ pub(super) fn build(
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    let large_canvas = matches!(page, Page::Art);
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas)? } else { ai::read(data, large_canvas)? };
+    build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
@@ -203,15 +206,17 @@ pub(super) fn build_from(
         restyled,
         placeholders,
         placed_elsewhere,
+        placed_pages,
         envelopes_drawn,
         styles_read,
         canvas_scale,
         xml_ids,
         bindings,
         bindings_skipped,
+        warped_type,
         warnings,
     } = structure;
-    let restyled = left_out_of_comparisons(page, restyled, placeholders);
+    let mut restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
     // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
     // document read from it is scaled up by `unit`.
@@ -416,6 +421,8 @@ pub(super) fn build_from(
     }
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
+    let bound_text = text_bound_slots(&doc, &bindings, &xml_ids);
+    settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, &bound_text, &mut restyled, &mut notes)?;
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -488,11 +495,62 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
+    placed_documents(&mut doc, &placed_pages);
     if small.is_some() {
         scale_document(&mut doc, unit, styles_read);
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box, over the same place, each showing the same preview until its
+/// file is read. An image bound to an image variable stays a linked image, the object an image
+/// variable binds.
+fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
+    if pages.is_empty() {
+        return;
+    }
+    let vars = &doc.variables;
+    let image_bound = |id: &NodeId| {
+        vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
+    };
+    let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    for layer in &mut doc.layers {
+        to_placed_documents(Arc::make_mut(layer), &pages);
+    }
+}
+
+/// [`placed_documents`] in `n` and everything in it.
+fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+    // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
+    if let Some(page) = pages.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && let Some(link) = &im.link
+        && let (width, height) = page.size
+        && let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / width, f64::from(im.height) / height)
+        && xf.as_coeffs().iter().all(|v| v.is_finite())
+        && xf.determinant().abs() > 1e-12
+    {
+        let link = vectorcraft_doc::LinkInfo { page: Some(page.page), ..link.clone() };
+        let placed = PlacedDocument {
+            link,
+            key: im.key.clone(),
+            bounding: page.bounding,
+            page_box: page.page_box,
+            width,
+            height,
+            xf,
+            placement: im.placement,
+        };
+        n.kind = NodeKind::PlacedDocument(Box::new(placed));
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        to_placed_documents(Arc::make_mut(c), pages);
+    }
 }
 
 /// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each
@@ -553,6 +611,42 @@ fn bind_variables(
         }
     }
     notes.extend(ai::bindings_note(skipped));
+}
+
+/// The text object slots of `doc` that `bindings` binds to a text variable, each named by its XML id
+/// (`ids`).
+fn text_bound_slots(doc: &Document, bindings: &[ai::BindingRef], ids: &std::collections::HashMap<String, Option<NodeId>>) -> BTreeSet<NodeId> {
+    bindings
+        .iter()
+        .filter(|b| doc.variables.variable(&b.variable).is_some_and(|v| v.kind == VariableKind::Text))
+        .filter_map(|b| b.target.as_ref().and_then(|t| ids.get(t).copied().flatten()))
+        .collect()
+}
+
+/// Warped type stays type where its live warp draws as its look, and where a text variable binds it
+/// (`bound_text`, by slot). Elsewhere the look takes its place, and one note says how many did.
+/// `filled` says what each slot became, and the comparisons with the page leave out the boxes in
+/// `restyled`. Fails as [`resolve_text_wrap`] does when the looks give the wrap shapes too many
+/// anchors.
+fn settle_warped_type(
+    warped: ai::WarpedType,
+    doc: &mut Document,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+    threaded: &BTreeSet<NodeId>,
+    bound_text: &BTreeSet<NodeId>,
+    restyled: &mut Vec<Rect>,
+    notes: &mut Vec<String>,
+) -> Result<(), String> {
+    let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()).filter(|_| !bound_text.contains(&slot)) {
+        Some(&[one]) => Some(one),
+        _ => None,
+    };
+    let replaced = warped.settle(doc, made, threaded, restyled);
+    if replaced > 0 {
+        notes.push(format!("{}: {replaced}", ai::WARPED_TYPE_DRAWN));
+        resolve_text_wrap(doc)?;
+    }
+    Ok(())
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
@@ -1878,6 +1972,34 @@ mod candidate_tests {
             // Nor is anything copied on the way, as the placed files' other placement does.
             relayout_wrapped(&mut doc);
             assert!(ids.iter().all(|id| wrap_shapes(&doc, *id) == usize::from(ok)), "{texts} text objects");
+        }
+    }
+
+    /// Warped type whose look takes its place, with the type's wrap setting, is held to the same
+    /// limit on wrap shapes: a file whose looks would copy more than `MAX_WRAP_WORK` anchors isn't
+    /// read from its layers.
+    #[test]
+    fn warped_type_replaced_by_its_look_is_held_to_the_wrap_limit() {
+        for (texts, ok) in [(150, true), (250, false)] {
+            let mut doc = Document::new(100.0, 100.0);
+            (0..texts).for_each(|_| _ = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0)));
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "TILT", Default::default());
+            let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            let mut appearance = vectorcraft_doc::Appearance::default();
+            appearance.effects.push(vectorcraft_doc::Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+            text.appearance = appearance.into();
+            text.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+            let top = doc.layers[0].children().map_or(0, Vec::len);
+            let id = doc.insert(Some(doc.layers[0].id), top, text).unwrap();
+            let look = insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 10_000);
+            let look = doc.remove(look).unwrap();
+            assert!(resolve_text_wrap(&mut doc).is_ok());
+            let warped = ai::WarpedType::unchecked(vec![(id, (*look).clone())]);
+            let filled = std::collections::HashMap::from([(id, Filled { text: vec![id], objects: vec![id] })]);
+            let mut notes = vec![];
+            let settled = settle_warped_type(warped, &mut doc, &filled, &BTreeSet::new(), &BTreeSet::new(), &mut vec![], &mut notes);
+            assert_eq!(settled.is_ok(), ok, "{texts} text objects");
+            assert_eq!(notes, ["warped text objects that came in as drawn art, not as editable type: 1"]);
         }
     }
 

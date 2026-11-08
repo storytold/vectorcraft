@@ -783,7 +783,7 @@ fn pattern_names_are_shown_up_to_their_newline() {
     // Nor the name of a custom color the program of an EPS gives, or None's.
     let ps = b"%!PS-Adobe-3.0\n%%CMYKCustomColor: 0 0 1 0 (Outer Ink)\n%%EndComments\n";
     let data = stream(&format!("{}{}{}", def("Outer Ink\\n1", 8), def("[None]\\n1", 8), layer(&filled("Outer Ink\\n1"))));
-    let doc = super::read_beside(data.as_bytes(), true, ps).unwrap().doc;
+    let doc = super::read_beside(data.as_bytes(), true, ps, false).unwrap().doc;
     assert_eq!(doc.patterns.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Outer Ink 2", "[None] 2"]);
     assert!(matches!(doc.swatch("Outer Ink").unwrap().paint, Paint::Solid { .. }));
     assert!(matches!(fill(&art(&doc)[0]), Paint::Pattern { pattern, .. } if pattern == "Outer Ink 2"));
@@ -904,6 +904,26 @@ fn a_color_named_as_a_palette_gradient_or_pattern_is_numbered() {
     assert_eq!(color("Brand 3"), Some(Color::cmyk(0.0, 1.0, 1.0, 0.0)));
     let links: Vec<_> = art(&doc).iter().map(|n| if let Paint::Solid { swatch, .. } = fill(n) { swatch } else { None }).collect();
     assert_eq!(links, [Some("Brand 3".to_string()), Some("Brand 2".to_string())]);
+}
+
+/// A palette's gradient swatch holds its gradient without a link to a swatch, whether it is named
+/// by its gradient or has a name of its own, and the art filled with the gradient links to the
+/// swatch named by the gradient.
+#[test]
+fn a_palette_gradient_swatch_is_not_linked_to_itself() {
+    let gradient = "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_1 0 50 0 Bs\n%_0 0 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let palette = "%AI5_BeginPalette\n0 0 Pb\nBb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Sky)\nPc\n\
+                   Bb\n2 (Sky) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB\n(Brand)\nPc\nPB\n%AI5_EndPalette\n";
+    let filled = format!("Bb\n1 (Sky) 0 0 0 10 1 0 0 1 0 0 Bg\n{}f\n0 BB\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let doc = read_ok(&format!("{gradient}{palette}{}", layer(&filled))).doc;
+    for name in ["Sky", "Brand"] {
+        let sw = doc.swatch(name).unwrap_or_else(|| panic!("no {name} swatch"));
+        let Paint::Gradient(g) = &sw.paint else { panic!("{sw:?}") };
+        assert_eq!(g.swatch, None, "{name}'s own paint");
+        assert_eq!(g.geom, None);
+        assert_eq!(g.gradient.stops.len(), 2);
+    }
+    assert!(matches!(fill(&art(&doc)[0]), Paint::Gradient(g) if g.swatch.as_deref() == Some("Sky")));
 }
 
 /// A palette's pattern swatch named by its pattern takes the name the pattern is shown with.
@@ -2593,6 +2613,29 @@ fn a_drawn_look_that_is_an_image_stands_for_its_object() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look (1)")), "{:?}", r.warnings);
 }
 
+/// Samples in hex comment lines after `XI` (the version 7 specification's form) are read up to the
+/// bytes the image needs; an image past the hard limits isn't read, whatever lines follow it.
+#[test]
+fn hex_comment_line_samples_are_read_up_to_the_image() {
+    let raster = |(w, h): (u32, u32), lines: &str| {
+        let s = format!(
+            "%AI5_BeginLayer\n1 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n(L) Ln\n%AI5_File:\n%AI5_BeginRaster\n() 1 XG\n/DeviceRGB XN\n\
+             [ 1 0 0 1 0 100 ] {w} {h} 0 Xh\n[ 1 0 0 1 0 100 ] 0 0 {w} {h} {w} {h} 8 3 0 0 0 0 XI\n{lines}%AI5_EndRaster\nN\nLB\n%AI5_EndLayer--\n"
+        );
+        let mut out = stream("").into_bytes();
+        let at = out.windows(14).position(|w| w == b"%%PageTrailer\n").unwrap();
+        out.splice(at..at, s.into_bytes());
+        out
+    };
+    // 2 × 1: red, green, then digits past the image's six bytes.
+    let r = read(&raster((2, 1), "%FF00\n%0000FF\n%00FFFFFF\n")).unwrap();
+    let img = pixels(&r.doc).0;
+    assert_eq!((img.get_pixel(0, 0).0, img.get_pixel(1, 0).0), ([255, 0, 0, 255], [0, 255, 0, 255]));
+    let r = read(&raster((70_000, 70_000), "%FF0000\n%00FF00\n")).unwrap();
+    assert!(art(&r.doc).is_empty());
+    assert!(r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
+}
+
 /// The name and opacity mask after an image follow the operators that end its raster: `XH`, the
 /// versioned `Xr` and the `N` after `%AI5_EndRaster`.
 #[test]
@@ -2891,7 +2934,7 @@ fn a_version_7_linked_image_without_its_file_name_is_left_out_with_a_warning() {
     let r = read(stream7(&layer7("L", &raster7("(a.tif) 0 XG\n", m, (100_000, 100_000), "XF", ""))).as_bytes()).unwrap();
     let a = art(&r.doc);
     assert!(matches!(&a[..], [n] if matches!(&n.kind, NodeKind::Image(im) if (im.width, im.height) == (100_000, 100_000))), "{a:?}");
-    assert!(!r.warnings.iter().any(|w| w == read::IMAGE_TOO_LARGE), "{:?}", r.warnings);
+    assert!(!r.warnings.iter().any(|w| w == "an image too large to read from the editing data was left out"), "{:?}", r.warnings);
     let twice = raster7("(a.tif) 0 XG\n(b.tif) 0 XG\n", m, (2, 2), "XF", "");
     let r = read(stream7(&layer7("L", &twice)).as_bytes()).unwrap();
     let a = art(&r.doc);
@@ -3288,6 +3331,211 @@ fn placed_files_of_other_paths_keep_images_of_their_own() {
     assert_eq!(r.doc.images.len(), 2);
 }
 
+/// A placed file followed by the dictionary `numbers` (`value /Int (key)` lines, on `%_` lines).
+fn placed_with(numbers: &[(&str, &str)]) -> Structure {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let entries: String = numbers.iter().map(|(key, v)| format!("%_{v} /Int ({key}) ,\r")).collect();
+    let dictionary = format!("%_/ArtDictionary :\r{entries}%_;\r%_\r");
+    read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &dictionary)).unwrap()
+}
+
+#[test]
+fn a_placed_files_dictionary_names_the_page_and_box_it_shows() {
+    use vectorcraft_doc::PageBox;
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    for (crop, bounding, page_box) in [
+        ("0", false, PageBox::Art),
+        ("1", false, PageBox::Crop),
+        ("2", false, PageBox::Trim),
+        ("3", false, PageBox::Bleed),
+        ("4", false, PageBox::Media),
+        ("5", true, PageBox::Crop),
+    ] {
+        let r = placed_with(&[(PAGE, "3"), (CROP, crop)]);
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        assert_eq!(r.placed_pages.len(), 1, "{crop}");
+        let p = r.placed_pages[0];
+        assert_eq!((p.id, p.page, p.bounding, p.page_box, p.size), (a[0].id, 3, bounding, page_box, (4.0, 2.0)), "{crop}");
+        assert_eq!(r.doc.images.keys().collect::<Vec<_>>(), [&im.key], "{crop}: the preview is stored once, under the image's key");
+        assert!(r.doc.images[&im.key].is_proxy(), "{crop}");
+    }
+    // One entry alone: the first page, or the page's crop box.
+    let r = placed_with(&[(CROP, "4")]);
+    assert_eq!((r.placed_pages[0].page, r.placed_pages[0].page_box), (1, PageBox::Media));
+    let r = placed_with(&[(PAGE, "2")]);
+    assert_eq!((r.placed_pages[0].bounding, r.placed_pages[0].page_box), (false, PageBox::Crop));
+}
+
+#[test]
+fn a_placed_files_dictionary_it_cant_read_leaves_a_linked_image() {
+    const PAGE: &str = "AI11 PlacedPDFPageIndex";
+    const CROP: &str = "AI11 PlacedPDFCropTo";
+    let plain = placed_with(&[]);
+    let plain_key = {
+        let a = art(&plain.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+        im.key.clone()
+    };
+    assert!(plain.placed_pages.is_empty());
+    for entries in [
+        vec![(PAGE, "0"), (CROP, "4")],
+        vec![(PAGE, "-1"), (CROP, "4")],
+        vec![(PAGE, "1.5"), (CROP, "4")],
+        vec![(PAGE, "1e30"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "6")],
+        vec![(PAGE, "2"), (CROP, "-1")],
+        vec![(PAGE, "2"), (CROP, "0.5")],
+        vec![(PAGE, "(2)"), (CROP, "4")],
+        vec![(PAGE, "2"), (CROP, "(4)")],
+        vec![(PAGE, "(2)")],
+    ] {
+        let r = placed_with(&entries);
+        assert!(r.placed_pages.is_empty(), "{entries:?}");
+        let a = art(&r.doc);
+        let NodeKind::Image(im) = &a[0].kind else { panic!("{entries:?}: {:?}", a[0].kind) };
+        assert_eq!((im.key.as_str(), im.link.as_ref().and_then(|l| l.page)), (plain_key.as_str(), None), "{entries:?}");
+    }
+}
+
+/// The dictionaries of the art in a placed file's opacity mask, read inside its own dictionary,
+/// don't speak for the placed file.
+#[test]
+fn a_placed_files_mask_art_leaves_its_page_to_the_placed_files_dictionary() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_0 g\r%_0 0 m\r%_5 0 l\r%_5 -5 l\r%_f\r\
+                      %_/ArtDictionary :\r%_/XMLUID : (Inner) ; (AI10_ArtUID) ,\r%_;\r%_\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+                      %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary)).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    assert_eq!(r.placed_pages.len(), 1);
+    assert_eq!((r.placed_pages[0].id, r.placed_pages[0].page_box), (a[0].id, vectorcraft_doc::PageBox::Media));
+}
+
+/// A placed file in a placed file's opacity mask, read before the outer file's dictionary closes,
+/// leaves the outer file's page to that dictionary.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_leaves_the_outer_files_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut inner =
+        b"%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/mask.pdf)`\r%_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    inner.extend_from_slice(&preview);
+    inner.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_/ArtDictionary :\r%_5 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let mut dictionary = b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r".to_vec();
+    dictionary.extend_from_slice(&inner);
+    dictionary
+        .extend_from_slice(b"%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r");
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert!(a[0].extras().mask.is_some(), "the mask is read");
+    let outer: Vec<_> = r.placed_pages.iter().filter(|p| p.id == a[0].id).collect();
+    assert_eq!(outer.len(), 1, "{:?}", r.placed_pages);
+    assert_eq!((outer[0].page, outer[0].page_box), (2, vectorcraft_doc::PageBox::Media));
+    assert!(r.placed_pages.iter().any(|p| p.id != a[0].id && p.page == 5), "the inner one names its own page: {:?}", r.placed_pages);
+}
+
+/// A placed file in a placed file's opacity mask that shows the same file with no page of its own
+/// keeps the preview they share when the outer one's dictionary names a page.
+#[test]
+fn a_placed_file_in_a_placed_files_mask_keeps_the_preview_they_share() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let mut dictionary =
+        b"%_/ArtDictionary :\r%_/Mask :\r%_X=\r%_%AI5_BeginPlace\r%_%%FileType: 1\r%_[5 0 0 -5 0 200] 10 20 14 22 4 4 0\r%_(/art/flyer.pdf)`\r\
+          %_%AI26_BeginPlacedObjectPreview\r%_"
+            .to_vec();
+    dictionary.extend_from_slice(&preview);
+    dictionary.extend_from_slice(
+        b"\r%_%AI26_EndPlacedObjectPreview\r%_~\r%_%AI5_EndPlace\r%_X+\r%_ (Art) ,\r%_; (AI9_Mask) ,\r\
+          %_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r",
+    );
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "@@DICT@@");
+    let at = data.windows(8).position(|x| x == b"@@DICT@@").unwrap();
+    let data = [&data[..at], &dictionary[..], &data[at + 8..]].concat();
+    let r = read(&data).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(r.placed_pages.len(), 1, "{:?}", r.placed_pages);
+    let mask = a[0].extras().mask.clone().expect("the mask is read");
+    let mut keys = vec![];
+    mask.art.walk(&mut |n| {
+        if let NodeKind::Image(im) = &n.kind {
+            keys.push(im.key.clone());
+        }
+    });
+    let [inner] = &keys[..] else { panic!("{keys:?}") };
+    assert!(r.doc.images.contains_key(inner), "the mask's image keeps its preview");
+    let NodeKind::Image(outer) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert!(r.doc.images.contains_key(&outer.key) && outer.key != *inner);
+}
+
+#[test]
+fn a_placed_file_with_its_box_written_backward_stays_a_linked_image() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    let data = placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), dictionary);
+    let at = data.windows(11).position(|x| x == b"10 20 14 22").unwrap();
+    let data = [&data[..at], b"14 22 10 20", &data[at + 11..]].concat();
+    let r = read(&data).unwrap();
+    assert!(r.placed_pages.is_empty());
+    let a = art(&r.doc);
+    let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
+    assert_eq!(im.link.as_ref().and_then(|l| l.page), None);
+}
+
+#[test]
+fn only_the_dictionary_right_after_a_placed_file_names_its_page() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let dictionary = "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_4 /Int (AI11 PlacedPDFCropTo) ,\r%_;\r%_\r";
+    // After another object: that object's dictionary. Art with such a dictionary stays art.
+    let after = format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    assert_eq!(art(&r.doc).len(), 2);
+    // A second dictionary after the first: the first one spoke for the placed file.
+    let after = format!("%_/ArtDictionary :\r%_(Photo) /String (AIArtName) ,\r%_;\r%_\r{dictionary}");
+    let r = read(&placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), &after)).unwrap();
+    assert!(r.placed_pages.is_empty());
+    // Without a placed file before it, nothing happens.
+    let r = read(stream(&layer(&format!("0 g\r0 0 m\r5 0 l\r5 5 l\rf\r{dictionary}"))).as_bytes()).ok();
+    assert!(r.is_none_or(|r| r.placed_pages.is_empty()));
+}
+
+/// Two pages of a file with the same preview don't share a key: reading one page's file in would
+/// change the other's image.
+#[test]
+fn placed_pages_of_one_file_keep_images_of_their_own() {
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let one =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_1 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let two =
+        placed(true, "[5 0 0 -5 0 200]", "/art/flyer.pdf", Some(&preview), "%_/ArtDictionary :\r%_2 /Int (AI11 PlacedPDFPageIndex) ,\r%_;\r%_\r");
+    let find = |d: &[u8], w: &[u8]| d.windows(w.len()).position(|x| x == w).unwrap();
+    let body = two[find(&two, b"%AI5_BeginPlace")..find(&two, b"LB\n%AI5_EndLayer")].to_vec();
+    let mut both = one.clone();
+    let at = find(&both, b"LB\n%AI5_EndLayer");
+    both.splice(at..at, body);
+    let r = read(&both).unwrap();
+    assert_eq!(r.placed_pages.len(), 2);
+    let keys: Vec<String> = art(&r.doc)
+        .iter()
+        .map(|n| match &n.kind {
+            NodeKind::Image(im) => im.key.clone(),
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_ne!(keys[0], keys[1]);
+    assert!(keys.iter().all(|k| r.doc.images.contains_key(k)) && r.doc.images.len() == 2, "{keys:?}");
+}
+
 #[test]
 fn placed_files_are_linked_images_showing_their_preview() {
     // A 2×1 preview (premultiplied ARGB, a padded row) of a file of 4×2 pixels.
@@ -3474,6 +3722,96 @@ fn a_tz_with_use_default_0_leaves_te_out() {
     assert_eq!(legacy_chars(setup, &["_F", "_S", "_M", "_G"], "\\047\\140\\200"), ["'`€", "'`€", "'`€", "’`Ä"]);
 }
 
+/// Strings in a composite font `base-CMap` decode by that predefined CMap (codes to CIDs, then the
+/// character collection's CIDs to Unicode), and the font is `base`; `TE`'s encoding does not apply
+/// to them. Codes the CMap leaves out are dropped. A font whose name ends in no predefined CMap
+/// decodes byte by byte.
+#[test]
+fn legacy_type_in_a_cjk_font_decodes_by_its_cmap() {
+    let typed = |font: &str, chars: &str| point_type("", chars).replace("/_Helvetica", &format!("/{font}"));
+    let cases: &[(&str, &str, &str)] = &[
+        // 日 is 0x93FA and 本 0x967B in Shift-JIS; `\r` ends a paragraph.
+        ("83pv-RKSJ-H", "\\223\\372\\226{A\\r\\223\\372", "日本A\n日"),
+        // A tab stays a tab, also after a UTF-16 string's last whole code.
+        ("90ms-RKSJ-H", "\\223\\372\\tA", "日\tA"),
+        ("H", "F|\\tF|", "日\t日"),
+        ("UniJIS-UTF16-H", "e\\345\\t", "日\t"),
+        // One-byte codes in the Mac Shift-JIS CMap: 0x5C yen, 0x7E tilde, 0x80 backslash, 0xFD
+        // copyright, and the underscore and grave accent.
+        ("83pv-RKSJ-H", "\\\\~\\200\\375_`", "¥~\\©_`"),
+        ("90ms-RKSJ-H", "\\\\~_`", "¥~_`"),
+        ("90ms-RKSJ-V", "\\223\\372", "日"),
+        ("90pv-RKSJ-V", "\\223\\372", "日"),
+        // JIS row and cell: 日 is 0x4652.
+        ("H", "F|", "日"),
+        ("V", "F|", "日"),
+        ("EUC-H", "\\306\\374", "日"),
+        ("GBK-EUC-H", "\\326\\320", "中"),
+        ("GBpc-EUC-H", "\\326\\320", "中"),
+        ("B5pc-H", "\\244\\244", "中"),
+        ("KSCms-UHC-H", "\\307\\321", "한"),
+        ("KSCpc-EUC-H", "\\307\\321", "한"),
+        ("UniJIS-UCS2-H", "e\\345", "日"),
+        ("UniGB-UTF8-H", "\\344\\270\\255", "中"),
+        // An encoded U+FFFD is a character; the invalid byte 0xFF is dropped.
+        ("UniGB-UTF8-H", "\\357\\277\\275\\377\\344\\270\\255", "\u{fffd}中"),
+        ("UniJIS-UTF32-H", "\\000\\000e\\345", "日"),
+        ("UniAKR-UTF16-H", "\\254\\000", "가"),
+        // CMaps VectorCraft doesn't carry: read with the nearest carried one, row-and-cell codes in
+        // their EUC form (中 is 0x5650 in GB 2312, 한 0x4751 in KS X 1001), or byte by byte.
+        ("78-RKSJ-H", "\\223\\372", "日"),
+        ("RKSJ-V", "\\223\\372", "日"),
+        ("GB-H", "VP", "中"),
+        ("KSC-V", "GQ", "한"),
+        ("GBT-H", "AB", "AB"),
+        // Codes are as long as the code space range they fall in, and unmapped ones are dropped:
+        // 0x8540 as two bytes, and 0xFD and EUC's 0x8F (in no range) as one.
+        ("90ms-RKSJ-H", "\\205\\100\\223\\372A\\375B", "日AB"),
+        ("EUC-H", "\\217A\\306\\374", "A日"),
+    ];
+    let art: String = cases.iter().map(|(cmap, chars, _)| typed(&format!("_Test-W3-{cmap}"), chars)).collect();
+    let art = [art, typed("_Test-W3-Identity-H", "\\223"), typed("_Test-W3-UniFoo-UTF8-H", "\\223"), typed("_Helvetica", "\\223")].concat();
+    let data = type_stream7(&art).replace("%%BeginSetup\n%%EndSetup", "%%BeginSetup\n[147/Adieresis\nTE\n%%EndSetup");
+    let texts = art_texts(&read(data.as_bytes()).unwrap().doc);
+    let chars: Vec<String> = texts.iter().map(|t| t.plain_text()).collect();
+    let mut want: Vec<&str> = cases.iter().map(|(_, _, want)| *want).collect();
+    want.extend(["Ä", "Ä", "Ä"]);
+    assert_eq!(chars, want);
+    let test = crate::import::family_style("Test-W3");
+    for (t, (cmap, _, _)) in texts.iter().zip(cases) {
+        assert_eq!((&t.runs[0].style.font_family, &t.runs[0].style.font_style), (&test.0, &test.1), "{cmap}");
+    }
+    assert_eq!(texts[0].paragraph_count(), 2);
+    assert_ne!(texts[cases.len()].runs[0].style.font_style, test.1, "an Identity CMap is not read");
+    assert_ne!(texts[cases.len() + 1].runs[0].style.font_style, test.1, "`UniFoo` is not a character collection");
+}
+
+/// A font whose `TZ` gives encoding pairs is not a composite font, even when its name ends in a
+/// CMap name: its strings decode byte by byte, and the font keeps its whole name. A `TZ` without
+/// encoding pairs only names a composite font.
+#[test]
+fn a_re_encoded_font_ending_in_a_cmap_name_is_not_composite() {
+    let setup = "%AI3_BeginEncoding: _F-Bold-H F-Bold-H\n[ 39/quotesingle\n/_F-Bold-H/F-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_F-Bold-H"], "F|'"), ["F|'"]);
+    let setup = "%AI3_BeginEncoding: _G-Bold-H G-Bold-H\n[ 65/A\n/_G-Bold-H/G-Bold-H 0 0 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_G-Bold-H"], "F|"), ["F|"]);
+    let setup = "%AI3_BeginEncoding: _R-W3-83pv-RKSJ-H R-W3-83pv-RKSJ-H\n[/_R-W3-83pv-RKSJ-H/R-W3-83pv-RKSJ-H 0 1 1 TZ\n%AI3_EndEncoding AdobeType\n";
+    assert_eq!(legacy_chars(setup, &["_R-W3-83pv-RKSJ-H"], "\\223\\372"), ["日"]);
+}
+
+/// In a font with a Unicode CMap, a one-byte `(\r)` string, or a 0x0D byte after a string's last
+/// whole UTF-16 code, still ends a paragraph, as in other fonts, and an overflow `(\r) TX` still
+/// ends the story.
+#[test]
+fn legacy_type_in_a_utf16_font_keeps_its_paragraph_breaks() {
+    let art = point_type("", "e\\345")
+        .replace("/_Helvetica", "/_Test-W3-UniJIS-UTF16-H")
+        .replace("TO\n", "(\\r) Tx\n(e\\345\\r) Tx\n(e\\345) Tx\n(\\r) TX\nTO\n");
+    let texts = legacy_texts(&art);
+    assert_eq!(texts[0].plain_text(), "日\n日\n日");
+    assert_eq!(texts[0].paragraph_count(), 3);
+}
+
 fn art_texts(doc: &Document) -> Vec<vectorcraft_doc::TextObject> {
     art(doc).iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).collect()
 }
@@ -3507,6 +3845,32 @@ fn legacy_type_keeps_its_spacing_hanging_punctuation_and_hyphenation() {
     assert_eq!((two.hyphenation.after_first, two.hyphenation.before_last, two.hyphenation.hyphen_limit), (4, 5, 0));
     // The next text object keeps them.
     assert_eq!(texts[1].para_at(0), two);
+}
+
+/// `Tg` (§15.3.4) turns binding punctuation on (1 and 3) or off (0 and 2); VectorCraft opens it on
+/// as Burasagari's Force setting. Each paragraph of point type and area type keeps the value in
+/// force at its first character, and it lasts into the next text object.
+#[test]
+fn legacy_type_keeps_its_binding_punctuation() {
+    use vectorcraft_doc::Burasagari;
+    let burasagari = |attrs: &str| legacy_texts(&point_type(attrs, "Hi"))[0].para_at(0).burasagari;
+    assert_eq!(burasagari(""), Burasagari::None);
+    for on in ["1", "3"] {
+        assert_eq!(burasagari(&format!("0 Tg\n{on} Tg")), Burasagari::Forced, "{on} Tg");
+    }
+    for off in ["0", "2"] {
+        assert_eq!(burasagari(&format!("1 Tg\n{off} Tg")), Burasagari::None, "{off} Tg");
+    }
+    let two_paragraphs = point_type("1 Tg", "One\\r").replace("TO\n", "0 Tg\n(Two) Tx\nTO\n");
+    let texts = legacy_texts(&format!("{two_paragraphs}{}{}", point_type("3 Tg", "Three"), point_type("", "Four")));
+    let each: Vec<Burasagari> = vec![texts[0].para_at(0).burasagari, texts[0].para_at(1).burasagari, texts[1].para_at(0).burasagari];
+    assert_eq!(each, [Burasagari::Forced, Burasagari::None, Burasagari::Forced]);
+    assert_eq!(texts[2].para_at(0).burasagari, Burasagari::Forced, "the next text object keeps it");
+    let frame = "10 10 m\n110 10 L\n110 110 L\n10 110 L\nN";
+    let area = format!("1 To\n1 0 0 1 10 110 0 Tp\n{frame}\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n1 Tg\n(Area) Tx\nTO\n");
+    let texts = legacy_texts(&area);
+    assert!(matches!(texts[0].kind, vectorcraft_doc::TextKind::Area { .. }));
+    assert_eq!(texts[0].para_at(0).burasagari, Burasagari::Forced, "area type");
 }
 
 /// `TV` (§15.3.4) sets the writing direction of point type, area type, type on a path and linked
@@ -3649,6 +4013,10 @@ fn legacy_type_attributes_with_bad_operands_stay_as_they_were() {
     assert_eq!(p.justify, vectorcraft_doc::Justify::Right);
     assert_eq!((p.first_line_indent, p.left_indent, p.right_indent), (5.0, 6.0, 7.0));
     assert_eq!(texts[0].runs[0].style.kerning, Some(0.0), "kerning stays off");
+    let texts = legacy_texts(&point_type("1 Tg\n4 Tg\n-1 Tg\n0.5 Tg\n/x Tg\n(0) Tg\nTg", "Hi"));
+    assert_eq!(texts[0].para_at(0).burasagari, vectorcraft_doc::Burasagari::Forced, "binding punctuation stays on");
+    let texts = legacy_texts(&point_type("0 Tg\n4 Tg\n-1 Tg\n2.5 Tg", "Hi"));
+    assert_eq!(texts[0].para_at(0).burasagari, vectorcraft_doc::Burasagari::None, "binding punctuation stays off");
     let texts = legacy_texts(&point_type("1 TV\n1 Tv\n1 Ty\n2 TV\n/x TV\nTV\n-1 Tv\n(x) Tv\n0.5 Ty\n2 TY", "Hi"));
     let st = &texts[0].runs[0].style;
     assert!(texts[0].vertical && st.standard_vertical_roman && st.tate_chu_yoko);
@@ -5433,6 +5801,111 @@ fn an_object_with_a_style_this_reads_comes_in_as_itself() {
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// An art style named `name`: a blue fill under a red 2 pt stroke written as a Stroke Offset filter
+/// whose `StrokeOffsetInside` entry is `inside` (`None`: left out).
+fn offset_stroke_style(name: &str, inside: Option<u8>) -> String {
+    let switch = inside.map(|v| format!("{v} /Bool (StrokeOffsetInside) ,\n")).unwrap_or_default();
+    offset_stroke_style_with(name, &switch, OFFSET_STROKE)
+}
+
+/// The Stroke Offset stroke of [`offset_stroke_style`]: red, 2 pt, butt caps, miter joins, solid.
+const OFFSET_STROKE: &str = "0 R\n0 1 1 0 1 0 0 XA\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+
+/// An art style named `name`: a blue fill under a Stroke Offset filter whose dictionary holds
+/// `entries` and the stroke style `stroke` (what follows `/StrokeStyle :`).
+fn offset_stroke_style_with(name: &str, entries: &str, stroke: &str) -> String {
+    format!(
+        "/KnownStyle :\n({name}) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /BasicFilter :\n(Adobe Stroke Offset) 1 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n{entries}(Side) /String (DisplayString) ,\n\
+         /StrokeStyle : {stroke}\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n /Part ,\n\
+         /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n"
+    )
+}
+
+#[test]
+fn a_stroke_offset_filter_is_a_stroke_aligned_inside_or_outside() {
+    // GUARDS: a style's stroke aligned inside or outside (Stroke panel › Align Stroke) left the object as its drawn look.
+    use vectorcraft_doc::StrokeAlign;
+    for (inside, align) in [(Some(1), Some(StrokeAlign::Inside)), (Some(0), Some(StrokeAlign::Outside)), (None, None), (Some(2), None)] {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}", offset_stroke_style("Edge", inside), layer(&styled_square("Edge"))));
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{a:#?}");
+        let stroke = a[0].appearance.stroke().map(|s| (s.align, s.width, s.paint.color()));
+        match align {
+            Some(align) => {
+                assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+                assert_eq!(stroke, Some((align, 2.0, Some(Color::rgb(1.0, 0.0, 0.0)))));
+                assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+                assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+            }
+            // Without a 0/1 switch, which side it paints isn't known: the drawn look stays.
+            None => assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{inside:?}: {:?}", r.warnings),
+        }
+    }
+}
+
+/// A Stroke Offset stroke keeps the caps, joins, miter limit, dashes and width profile of its
+/// style, as a Stroke Style Filter's does.
+#[test]
+fn a_stroke_offset_filter_keeps_its_strokes_style() {
+    use vectorcraft_doc::StrokeAlign;
+    let profile = "/Dictionary : /NotRecorded ,\n/Array :\n0 /Real ,\n1 /Real ,\n; (BSVariableWidthTValuesArray) ,\n\
+                   /Array :\n1 /Real ,\n0.1 /Real ,\n; (BSCenteredWidthsArray) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let entries = format!("0 /Bool (StrokeOffsetInside) ,\n{profile}");
+    let stroke = "0 R\n0 1 1 0 1 0 0 XA\n1 J 2 j 3 w 4 M [5 10 ]0 d\n0 XR\n1 0 Xd";
+    let style = offset_stroke_style_with("Edge", &entries, stroke);
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let s = a[0].appearance.stroke().expect("a stroke");
+    assert_eq!((s.align, s.width, s.cap, s.join, s.miter_limit), (StrokeAlign::Outside, 3.0, LineCap::Round, LineJoin::Bevel, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| d.pattern.clone()), Some(vec![5.0, 10.0]));
+    assert_eq!(s.profile.as_ref().map(|p| p.points.clone()), Some(vec![(0.0, 1.0, 1.0), (1.0, 0.1, 0.1)]));
+}
+
+/// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
+/// written as another kind, dashes aligned to corners and path ends, a gradient.
+#[test]
+fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
+    let outside = "0 /Bool (StrokeOffsetInside) ,\n";
+    let gradient = "0 R\nBb\n0 0 0 0 Bh\n2 (Red ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
+    let cases = [
+        ("a switch written as a number", offset_stroke_style_with("Edge", "1 /Int (StrokeOffsetInside) ,\n", OFFSET_STROKE)),
+        (
+            "dashes aligned to corners",
+            offset_stroke_style_with(
+                "Edge",
+                &format!("{outside}/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n"),
+                &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"),
+            ),
+        ),
+        ("a gradient", offset_stroke_style_with("Edge", outside, gradient)),
+    ];
+    for (why, style) in cases {
+        let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// A listed `[Default]` style whose stroke is aligned outside comes in as the default graphic
+/// style with that stroke.
+#[test]
+fn a_default_style_with_a_stroke_aligned_outside_comes_in() {
+    use vectorcraft_doc::StrokeAlign;
+    let r =
+        read_ok(&format!("{}{}", styles_and_list(&[offset_stroke_style("[Default]", Some(0))], &["[Default]"]), layer(&styled_square("[Default]"))));
+    assert_eq!(style_names(&r.doc), [("[Default]".to_string(), 1)]);
+    let stroke = r.doc.graphic_styles[0].appearance.stroke().map(|s| (s.align, s.width));
+    assert_eq!(stroke, Some((StrokeAlign::Outside, 2.0)));
+    let a = art(&r.doc);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    assert_eq!(a[0].extras().graphic_style, Some(1));
+}
+
 #[test]
 fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     // GUARDS: objects in a symbol defined ahead of `%AI9_BeginArtStyles` (as Illustrator 24 writes
@@ -5450,6 +5923,74 @@ fn a_symbol_defined_before_the_art_styles_reads_its_styled_objects() {
     let effects: Vec<_> = object.appearance.effects.iter().map(|e| e.id.as_str()).collect();
     assert_eq!(effects, ["stylize.dropShadow"]);
     assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// `node` is the red square of [`styled_square`] read as itself with [`ART_STYLES`]' `Blue`: a blue
+/// fill and a drop shadow, not the look it draws.
+fn assert_blue_square(node: &Node) {
+    assert!(matches!(node.kind, NodeKind::Path { .. }), "the object, not its look: {node:#?}");
+    assert_eq!(fill(node).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    let effects: Vec<_> = node.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(effects, ["stylize.dropShadow"]);
+}
+
+/// An object in a pattern's art with an art style the file defines comes in as itself, as in a
+/// symbol's art, whichever section comes first.
+#[test]
+fn an_object_in_a_patterns_art_with_a_style_this_reads_comes_in_as_itself() {
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    for body in [format!("{ART_STYLES}{pattern}{}", layer("")), format!("{pattern}{ART_STYLES}{}", layer(""))] {
+        let r = read_ok(&body);
+        let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?} {:?}", r.unread, r.warnings));
+        let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+        assert_blue_square(square);
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    }
+}
+
+/// The same in a pattern defined in the version 7 form: a layer's tile string holding the object.
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_style_this_reads_comes_in_as_itself() {
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{ART_STYLES}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?} {:?}", s.unread, s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_blue_square(square);
+}
+
+/// An object in a brush's art with an art style the file defines comes in as itself, and the brush
+/// that uses the art is kept.
+#[test]
+fn an_object_in_a_brushs_art_with_a_style_this_reads_comes_in_as_itself() {
+    let section = format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{}%AI8_EndBrushPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{section}{ART_STYLES}{}{}", plugin_object(SCATTER, "Spray", SPRAY), layer("")));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let spray = lib.iter().find(|b| b.name == "Spray").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    assert!(matches!(spray.kind, vectorcraft_brush::BrushKind::Scatter(_)), "{:?}", spray.kind);
+    let art = spray.art();
+    let [square] = art.as_slice() else { panic!("{art:#?}") };
+    assert_blue_square(square);
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
+/// art styles still style the layers' objects read after the definition.
+#[test]
+fn art_styles_inside_a_definition_leave_the_files_art_styles_alone() {
+    let nested = format!("%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n", fill_style("Other", "0 0 0 0 1 0 0 Xa\n"));
+    let square = styled_square("Blue");
+    let definitions = [
+        symbols(&symbol("Tag", &format!("{nested}{square}"), 1)),
+        format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{nested}{square}E\n%AI3_EndPattern\n"),
+        format!("%AI8_BeginBrushPattern\n(Dot art)\n0 A\n{nested}{square}%AI8_EndBrushPattern\n"),
+    ];
+    for definition in definitions {
+        let r = read_ok(&format!("{ART_STYLES}{definition}{}", layer(&square)));
+        let a = art(&r.doc);
+        let [object] = a.as_slice() else { panic!("{definition}: {a:#?}") };
+        assert_blue_square(object);
+    }
 }
 
 /// An art style named `name` (its bytes as written) that fills with colour `xa` (`c m y k r g b Xa`).
@@ -5549,6 +6090,30 @@ fn an_object_whose_transparency_differs_from_its_listed_style_is_not_linked() {
     assert_eq!(fill(&a[0]).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
     assert_eq!(a[0].opacity, 0.6);
     assert_eq!(a[0].extras().graphic_style, None, "the style has full opacity");
+}
+
+#[test]
+fn ai_import_registration_style_does_not_carry_over_previous_color_6205() {
+    // Regression test for #6205:
+    // A background shape sets a spot colour ("Shemen").
+    // A following object has an art style with [Registration] at 0% tint.
+    // The object must resolve the Registration style ([Registration] 0% / #ffffff)
+    // rather than falling back to the prior spot color.
+    let defs = [fill_style("RegWhite", "1 1 1 1 ([Registration]) 1 Xs\n")];
+    let background = format!("0 0.67 0.73 0.26 (Shemen) 0 0 Xx\n{}f\n", rect_path(0.0, 0.0, 100.0, 100.0));
+    let styled_obj = styled_square("RegWhite");
+    let content = format!("{background}{styled_obj}");
+    let r = read_ok(&format!("{}{}", styles_and_list(&defs, &["RegWhite"]), layer(&content)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2, "{a:#?}");
+    // First object is background in Shemen spot
+    let Paint::Solid { swatch: s0, .. } = fill(&a[0]) else { panic!("{:#?}", a[0]) };
+    assert_eq!(s0.as_deref(), Some("Shemen"));
+    // Second object is styled in RegWhite: [Registration] at 0% tint (#ffffff)
+    let Paint::Solid { swatch, tint, color } = fill(&a[1]) else { panic!("{:#?}", a[1]) };
+    assert_eq!(swatch.as_deref(), Some(vectorcraft_color::swatch::REGISTRATION));
+    assert_eq!(tint, 0.0);
+    assert_eq!(color, Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.0));
 }
 
 #[test]
@@ -5661,6 +6226,31 @@ fn a_symbol_library_without_layers_gives_its_symbols() {
     assert_eq!(read.images.keys().cloned().collect::<Vec<_>>(), keys);
     // Without symbols there are none to give.
     assert!(super::symbols(stream(&styles).as_bytes()).is_none());
+}
+
+#[test]
+fn an_object_in_a_patterns_art_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{}E\n%AI3_EndPattern\n", styled_square("Blue"));
+    let r = read_ok(&format!("{defs}{pattern}{}", layer("")));
+    assert_eq!(style_names(&r.doc), [("Blue".to_string(), 1)]);
+    let def = r.doc.pattern("P").unwrap_or_else(|| panic!("{:?}", r.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
+}
+
+#[test]
+fn an_object_in_a_version_7_patterns_tile_with_a_listed_style_is_linked() {
+    let defs = styles_and_list(&[fill_style("Blue", "0 0 0 0 0 0 1 Xa\n")], &["Blue"]);
+    let tile = styled_square("Blue").replace('\n', "\r");
+    let layers = format!("(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n");
+    let s = pattern_read7(&format!("{defs}{}", pattern7("Grid", &layers)), &pattern_layer7("Art", ""));
+    assert_eq!(style_names(&s.doc), [("Blue".to_string(), 1)]);
+    let def = s.doc.pattern("Grid").unwrap_or_else(|| panic!("{:?}", s.warnings));
+    let [square] = def.art.as_slice() else { panic!("{:#?}", def.art) };
+    assert_eq!(fill(square).color(), Some(Color::rgb(0.0, 0.0, 1.0)));
+    assert_eq!(square.extras().graphic_style, Some(1), "{square:#?}");
 }
 
 #[test]
@@ -5822,6 +6412,51 @@ fn a_path_with_a_pathfinder_effect_keeps_its_drawn_look() {
     let mut effects = 0;
     r.doc.walk(|n| effects += n.appearance.effects.len());
     assert_eq!(effects, 0);
+}
+
+#[test]
+fn an_object_with_bas_relief_comes_in_with_its_settings() {
+    // GUARDS: Bas Relief's settings block wasn't read, so the object came in as its drawn look.
+    let settings: Vec<u8> = [
+        &[0, 0, 0, 1][..],
+        b"Dtl ",
+        &[0; 4],
+        b"long",
+        &5i32.to_be_bytes(),
+        b"Smth",
+        &[0; 4],
+        b"long",
+        &9i32.to_be_bytes(),
+        b"LghD",
+        &0x2000u32.to_be_bytes(),
+        b"LghD",
+        b"LDTR",
+    ]
+    .concat();
+    let lines: String = crate::ps::ascii85(&settings).lines().map(|l| format!("%{l}\n")).collect();
+    let style = format!(
+        "%AI9_BeginArtStyles\n\
+        /KnownStyle :\n(Carved) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+        /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+        /BasicFilter :\n(PSAdapter_plugin_BsRl) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n\
+        {} /Int (dataSize) ,\n; /Dict ;\n /Part ,\n;\n\
+        %AI9_EndArtStyles\n",
+        settings.len()
+    );
+    let hidden_rect = rect_path(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+    let art_ = format!("0 Ae\nu\n{RED}{}f\nU\n%_0 0 0 1 k\n%_{hidden_rect}f\n1 (Carved) XW\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let r = read_ok(&format!("{style}{}", layer(&art_)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1);
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look");
+    let [relief] = a[0].appearance.effects.as_slice() else { panic!("{:#?}", a[0].appearance) };
+    assert_eq!(
+        (relief.id.as_str(), &relief.params),
+        ("sketch.basRelief", &serde_json::json!({"detail": 5.0, "smoothness": 9.0, "lightDirection": "topRight"}))
+    );
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -6505,16 +7140,21 @@ fn a_top_object_envelope_opens_live_with_its_outline() {
     bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
     bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
     bp.close_path();
-    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp) };
+    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: None };
     let r = read_ok(&layer(&envelope_of(&shape, ENVELOPE_KEYS, &envelope_content(), 3, &drawn_content(&want))));
     let a = art(&r.doc);
     assert_eq!(a.len(), 1, "{a:#?}");
     let (content, kind, ..) = live_envelope(&a[0]);
-    let EnvelopeKind::TopObject { path } = kind else { panic!("{kind:?}") };
+    let EnvelopeKind::TopObject { path, corners } = kind else { panic!("{kind:?}") };
     let anchors: Vec<Point> = path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect();
     for p in [(40.0, 20.0), (100.0, 5.0), (160.0, 20.0), (160.0, 80.0), (40.0, 80.0)] {
         assert!(anchors.iter().any(|q| (*q - Point::from(p)).hypot() < 1e-6), "{p:?} not in {anchors:?}");
     }
+    // The mesh's four corners are kept as the outline's corners.
+    let corners = corners.expect("the saved corners");
+    let at: Vec<Point> = corners.iter().map(|i| anchors[*i as usize]).collect();
+    let want_corners = [(40.0, 20.0), (160.0, 20.0), (160.0, 80.0), (40.0, 80.0)].map(Point::from);
+    assert!(at.iter().zip(want_corners).all(|(p, q)| (*p - q).hypot() < 1e-6), "{at:?}");
     // The curve through the anchor: its handles there run level.
     let mid = path.subpaths.iter().flat_map(|s| s.anchors.iter()).find(|a| (a.p - Point::new(100.0, 5.0)).hypot() < 1e-6).unwrap();
     assert!((mid.h_in.y - 5.0).abs() < 1e-6 && (mid.h_out.y - 5.0).abs() < 1e-6, "{mid:?}");
@@ -6746,7 +7386,7 @@ fn an_envelope_whose_contents_are_edited_opens_live_in_edit_contents() {
     bp.curve_to((120.0, 80.0), (80.0, 80.0), (40.0, 80.0));
     bp.curve_to((40.0, 60.0), (40.0, 40.0), (40.0, 20.0));
     bp.close_path();
-    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp) };
+    let want = EnvelopeKind::TopObject { path: vectorcraft_geom::PathData::from_bezpath(&bp), corners: None };
     let keys = ENVELOPE_KEYS.replace("0 /Bool (AIDeformEditModeKey)", "1 /Bool (AIDeformEditModeKey)");
     let body = envelope_parts(&envelope_content(), &keys, &format!("0 g\n{mesh}"), 3, &drawn_content(&want));
     let r = read_ok(&layer(&body));
@@ -6799,6 +7439,134 @@ fn an_envelope_that_doesnt_come_out_as_drawn_keeps_its_drawn_art() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
+/// A document of `n` warped text objects, with the art the live warp makes of each, in its look.
+fn warped_type_doc(n: usize) -> (Document, Vec<super::envelope::WarpedLook>) {
+    use vectorcraft_doc::{Appearance, Effect, TextObject};
+    let mut doc = Document::new(400.0, 200.0);
+    let mut looks = vec![];
+    let mut layer = Node::layer(doc.alloc_id(), "Art", vectorcraft_doc::LayerColor::Preset(0));
+    for i in 0..n {
+        let t = TextObject::point(kurbo::Point::new(20.0, 40.0 + 40.0 * i as f64), "TILT", Default::default());
+        let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        let mut appearance = Appearance::default();
+        appearance.effects.push(Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+        text.appearance = appearance.into();
+        text.name = Some(format!("Type {i}"));
+        text.locked = i == 0;
+        text.visible = i != 0;
+        let mut look = vectorcraft_effects::expand_outlined(None, &text, None).unwrap();
+        look.id = doc.alloc_id();
+        looks.push(super::envelope::WarpedLook { slot: text.id, look, left_out: None });
+        layer.children_mut().unwrap().push(Arc::new(text));
+    }
+    doc.layers = vec![Arc::new(layer)];
+    (doc, looks)
+}
+
+/// Warped text objects share the import's budget of checks. One past it keeps its drawn art with its
+/// text object's name and state, as one that fails the check does, and its box and wrap setting.
+#[test]
+fn warped_type_past_the_budget_comes_in_as_its_look() {
+    let (mut doc, mut looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let left_out = Rect::new(1.0, 2.0, 3.0, 4.0);
+    looks[1].left_out = Some(left_out);
+    let wrap = vectorcraft_doc::TextWrap::default();
+    doc.node_mut(second).unwrap().extras_mut().wrap = Some(wrap);
+    let warped = super::envelope::WarpedType { looks, checks: 1, ..Default::default() };
+    let mut restyled = vec![Rect::new(5.0, 6.0, 7.0, 8.0), left_out];
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut restyled), 1);
+    assert_eq!(restyled, [Rect::new(5.0, 6.0, 7.0, 8.0)]);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    let kept = doc.node(second).unwrap();
+    assert!(matches!(kept.kind, NodeKind::Group { .. } | NodeKind::Path { .. }), "{kept:#?}");
+    assert_eq!((kept.name.as_deref(), kept.visible, kept.locked), (Some("Type 1"), true, false));
+    assert_eq!(kept.extras().wrap, Some(wrap));
+}
+
+/// The budget for warped type is what the envelopes left: their checks and the page's share they
+/// spent, with the page they are held to.
+#[test]
+fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let exact = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat))));
+    let beside = format!("{RED}{}f\n", rect_path(40.5, 20.0, 160.5, 80.0));
+    let shifted = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &beside)));
+    for r in [&exact, &shifted] {
+        assert_eq!(r.warped_type.checks, super::envelope::MAX_CHECKED - 1);
+        assert!(r.warped_type.page.is_some());
+    }
+    live_envelope(&art(&shifted.doc)[0]);
+    assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
+}
+
+/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+#[test]
+fn warped_type_is_held_to_the_first_artboard() {
+    let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+                  %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+                  %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
+                  %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
+    assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
+    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+}
+
+/// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
+#[test]
+fn type_with_a_hidden_warp_stays_type() {
+    let (mut doc, looks) = warped_type_doc(1);
+    let slot = looks[0].slot;
+    let mut appearance = (*doc.node(slot).unwrap().appearance).clone();
+    appearance.effects[0].visible = false;
+    doc.node_mut(slot).unwrap().appearance = appearance.into();
+    let warped = super::envelope::WarpedType { looks, checks: 0, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, Some, &Default::default(), &mut vec![]), 0);
+    assert!(matches!(doc.node(slot).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// A warped frame of threaded type stays type, whatever its look draws: the thread's frames share
+/// one story. So does a slot that became no text object.
+#[test]
+fn warped_type_in_a_thread_stays_type() {
+    let (mut doc, looks) = warped_type_doc(2);
+    let (first, second) = (looks[0].slot, looks[1].slot);
+    let warped = super::envelope::WarpedType { looks, ..Default::default() };
+    assert_eq!(warped.settle(&mut doc, |id| (id != second).then_some(id), &[first].into(), &mut vec![]), 0);
+    assert!(matches!(doc.node(first).unwrap().kind, NodeKind::Text(_)));
+    assert!(matches!(doc.node(second).unwrap().kind, NodeKind::Text(_)));
+}
+
+/// What is left of the page's share of the budget decides, and the page's share counts only for
+/// what the document shows.
+#[test]
+fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
+    use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE};
+    let (doc, mut looks) = warped_type_doc(2);
+    // The second object shows; the first is hidden. Each look draws a little more than its object.
+    let mark = read_ok(&layer(&format!("{RED}{}f\n", rect_path(2.0, 2.0, 2.6, 2.6))));
+    let mark = art(&mark.doc)[0].clone();
+    for (i, w) in looks.iter_mut().enumerate() {
+        w.look.visible = true;
+        w.look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10 - i as u64), vec![Arc::new(w.look.clone()), mark.clone()]);
+    }
+    let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
+    let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
+    let settle = |w: &super::envelope::WarpedLook, spent| {
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page };
+        warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
+    };
+    let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
+    assert_eq!(settle(&looks[1], Default::default()), 0);
+    assert_eq!(settle(&looks[1], spent()), 1);
+    assert_eq!(settle(&looks[0], spent()), 0);
 }
 
 /// An envelope that comes out close to its drawn art, but with more of the page differing than the
@@ -6945,6 +7713,53 @@ fn vector_opacity_mask_keeps_its_art_and_does_not_paint_as_a_sibling() {
     for broken in [mask.replace("%_X+\n", ""), mask.replace("%_U\n", ""), mask.replace("%_f", "%_unknownMaskOperator")] {
         assert!(read(stream(&layer(&format!("{owner}{broken}"))).as_bytes()).is_err());
     }
+}
+
+/// Mask art that sets no paint of its own paints with the paint before its dictionary: the writer
+/// leaves out paint that doesn't change. In a user's file, white letters were masked by a rectangle
+/// with no colour, which came in black and hid them.
+/// The unread pattern flags it also takes aren't covered here: an owner painted with a pattern the
+/// file doesn't have is unread itself, which hides whether its mask art is.
+#[test]
+fn opacity_mask_art_without_its_own_paint_takes_the_paint_before_its_dictionary() {
+    let paint = "0 0 0 0 k\n1 O\n0 1 0 0 K\n1 R\n2 w\n1 J\n1 j\n4 M\n[3 1] 0 d\n1 XR\n";
+    let owner = format!("{paint}{}B\n", rect_path(10.0, 20.0, 50.0, 60.0));
+    let hidden_rect = rect_path(10.0, 20.0, 30.0, 60.0).lines().map(|l| format!("%_{l}\n")).collect::<String>();
+    let mask = |own_paint: &str| {
+        format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{own_paint}{hidden_rect}%_B\n%_X+\n%_(Art) ,\n%_1 /Bool (Clipping) ,\n%_; (AI9_Mask) ,\n%_;\n")
+    };
+    let fill_layer = |n: &Node| n.appearance.fill().cloned();
+    let stroke_layer = |n: &Node| n.appearance.stroke().cloned();
+    let rule = |n: &Node| match &n.kind {
+        NodeKind::Path { rule, .. } => Some(*rule),
+        _ => None,
+    };
+
+    let r = read_ok(&layer(&format!("{owner}{}", mask(""))));
+    let a = art(&r.doc);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    // The owner has the paint set, none of it the default, so equal layers mean it was taken.
+    let (f, s) = (fill_layer(&a[0]).unwrap(), stroke_layer(&a[0]).unwrap());
+    assert!(f.overprint && s.overprint);
+    assert_eq!((s.width, s.cap, s.join, s.miter_limit), (2.0, LineCap::Round, LineJoin::Round, 4.0));
+    assert_eq!(s.dash.as_ref().map(|d| (d.pattern.clone(), d.offset)), Some((vec![3.0, 1.0], 0.0)));
+    assert_eq!(rule(&a[0]), Some(vectorcraft_geom::FillRule::EvenOdd));
+    assert_eq!(fill_layer(&m.art), Some(f));
+    assert_eq!(stroke_layer(&m.art), Some(s));
+    assert_eq!(rule(&m.art), rule(&a[0]));
+
+    // Paint the mask's art sets for itself stays in the mask: an object after the dictionary that
+    // sets none paints with the owner's.
+    let own = "%_1 g\n%_0 O\n%_0 G\n%_0 R\n%_5 w\n%_0 J\n%_0 j\n%_10 M\n%_[] 0 d\n%_0 XR\n";
+    let following = format!("{}B\n", rect_path(70.0, 20.0, 80.0, 30.0));
+    let r = read_ok(&layer(&format!("{owner}{}{following}", mask(own))));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 2);
+    let m = a[0].extras().mask.as_ref().unwrap();
+    assert_ne!(stroke_layer(&m.art), stroke_layer(&a[0]), "the mask's art has its own paint");
+    assert_eq!(fill_layer(&a[1]), fill_layer(&a[0]));
+    assert_eq!(stroke_layer(&a[1]), stroke_layer(&a[0]));
+    assert_eq!(rule(&a[1]), rule(&a[0]));
 }
 
 /// An opacity mask's art of one shown object is that object; other art is read into a group.
@@ -7194,19 +8009,25 @@ pub(super) fn blend_file(spine: &str, ids: [Option<&str>; 2], record: &str) -> S
 /// [`blend_file`] with the left key in RGB `from`, the right one in `to`, and the steps drawn
 /// between their colors.
 fn blend_file_colored(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3]) -> String {
+    blend_file_apart(spine, ids, record, from, to, 100.0, 3)
+}
+
+/// [`blend_file_colored`] with the right key `apart` points right of the left one and `between`
+/// steps drawn between them.
+fn blend_file_apart(spine: &str, ids: [Option<&str>; 2], record: &str, from: [f64; 3], to: [f64; 3], apart: f64, between: usize) -> String {
     let mut art = String::from("%_0 Ae\n%_u\n");
     art += &square(0.0, 40.0, 20.0, from, true);
     art += &blend_part("K", ids[0]);
-    art += &square(100.0, 40.0, 20.0, to, true);
+    art += &square(apart, 40.0, 20.0, to, true);
     art += &blend_part("K", ids[1]);
     art += spine;
     art += "%_N\n";
     art += &blend_part("S", None);
     art += "%_U\n%_9 () XW\nu\n";
-    for i in 0..5 {
-        let t = i as f64 / 4.0;
+    for i in 0..between + 2 {
+        let t = i as f64 / (between + 1) as f64;
         let rgb = [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * t);
-        art += &square(t * 100.0, 40.0, 20.0, rgb, false);
+        art += &square(t * apart, 40.0, 20.0, rgb, false);
     }
     art += "U\n9 () XW\n0 Ae\n";
     art += record;
@@ -7282,7 +8103,7 @@ fn a_blends_spine_written_backwards_keeps_its_keys_order() {
 
 /// A blend's spacing comes from its record: Specified Distance with its distance (25 pt from one
 /// step's edge to the corresponding edge of the next lays three out between keys 100 pt apart),
-/// Smooth Color (keys 5/255 apart in blue take three steps), and Specified Steps with the steps
+/// Smooth Color (keys 3/255 apart in blue take three steps), and Specified Steps with the steps
 /// counted from the drawn ones, whatever its record's word 4 holds. The distance counts along the
 /// spine between the keys, also where the spine runs on past the last key.
 #[test]
@@ -7290,7 +8111,7 @@ fn a_blend_keeps_its_spacing() {
     use vectorcraft_doc::live::BlendSpacing;
     let straight = "%_10 50 m\n%_110 50 L\n";
     let longer = "%_10 50 m\n%_110 50 L\n%_1010 50 L\n";
-    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 5.0 / 255.0], [0.0, 0.0, 1.0]);
+    let (red, nearly_red, blue) = ([1.0, 0.0, 0.0], [1.0, 0.0, 3.0 / 255.0], [0.0, 0.0, 1.0]);
     for (spine, record, (from, to), spacing) in [
         (straight, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
         (longer, blend_record_spaced(&['A', 'B'], 2, 25.0, 3), (red, blue), BlendSpacing::Distance(25.0)),
@@ -7303,6 +8124,23 @@ fn a_blend_keeps_its_spacing() {
         assert_eq!(spec.spacing, spacing);
         assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5, "{spacing:?}");
         assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{spacing:?}: {warnings:?}");
+    }
+}
+
+/// Smooth Color blends of two 20 pt squares 200 pt apart come in live with the steps drawn
+/// between them: 254 from red to blue, and 9 between two red squares.
+#[test]
+fn a_smooth_color_blend_comes_in_with_its_drawn_steps() {
+    use vectorcraft_doc::live::BlendSpacing;
+    let (red, blue) = ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    for (to, between) in [(blue, 254), (red, 9)] {
+        let record = blend_record_spaced(&['A', 'B'], 0, 4.0, between as u32);
+        let body = blend_file_apart("%_10 50 m\n%_210 50 L\n", [Some("A"), Some("B")], &record, red, to, 200.0, between);
+        let (blend, warnings) = read_blend(&body);
+        let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend for {between} steps: {:?} {warnings:?}", blend.kind) };
+        assert_eq!(spec.spacing, BlendSpacing::SmoothColor);
+        assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), between + 2);
+        assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{between}: {warnings:?}");
     }
 }
 
@@ -8142,6 +8980,172 @@ fn a_brushs_art_places_a_version_7_patterns_tiles_with_its_operands() {
     }
     let r = read_with("0 0 1 1 0 0 0 0 [1 0 0 1 0 0]");
     assert!(!vectorcraft_brush::library(&r.doc).iter().any(|b| b.name == "Spray"), "{:?}", r.warnings);
+}
+
+/// A Scatter brush whose 15 numbers start with 1 colors its art with Tints of the stroke, and one
+/// whose 15 numbers start with 0 keeps the art's colors. The field before the art's name doesn't
+/// count: a brush whose first field is 1 is read by its 15 numbers, and one with 8 numbers, as older
+/// files write their brushes, isn't read as a Scatter brush.
+#[test]
+fn a_scatter_brush_in_tints_comes_in_tinted() {
+    use vectorcraft_brush::{BrushKind, Colorization};
+    let read = |params: &str| {
+        let r = read_ok(&format!("{}{}{}", brush_art("Dot art", 4.0), plugin_object(SCATTER, "Spray", params), layer("")));
+        vectorcraft_brush::library(&r.doc).into_iter().find(|b| b.name == "Spray")
+    };
+    for (field, first, colorization) in
+        [("2", "1", Colorization::Tints), ("2", "0", Colorization::None), ("1", "1", Colorization::Tints), ("1", "0", Colorization::None)]
+    {
+        let params = format!("{field} /Dot art/ 5 0 0 0 / {first} 1 1 0 1 1 0 0 0 0 0 0 0 0 0");
+        let Some(b) = read(&params) else { panic!("{params}: not read") };
+        let BrushKind::Scatter(s) = b.kind else { panic!("scatter") };
+        assert_eq!(s.colorization, colorization, "{params}");
+    }
+    let older = "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0";
+    assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", older), Err(brush::BrushError::Values));
+    assert!(read(older).is_none(), "8 numbers aren't a Scatter brush's");
+}
+
+/// A brush's art section `name`: in a group, a frame (a rectangle from `frame.0` to `frame.1` on
+/// both axes, painted by `op` and followed by `after`) and a filled square from 0 to 4.
+fn framed_art(name: &str, frame: (f64, f64), op: &str, after: &str) -> String {
+    format!(
+        "%AI8_BeginBrushPattern\n({name})\n0 A\n0 Xw\nu\n0 XR\n{}{op}\n{after}0 g\n{}f\nU\n%AI8_EndBrushPattern\n",
+        rect_path(frame.0, frame.0, frame.1, frame.1),
+        rect_path(0.0, 0.0, 4.0, 4.0)
+    )
+}
+
+/// The frame of a brush's art, an unnamed, unpainted rectangle at the art's bounds, isn't part of
+/// the art, closed or open with its first corner again at the end. A frame wider than the art is
+/// part of it, and so are a painted rectangle and a named one, which aren't frames.
+#[test]
+fn a_brushs_frame_is_left_out_only_at_the_arts_bounds() {
+    use vectorcraft_brush::BrushKind;
+    let named = "%_/ArtDictionary :\n%_/XMLUID : (Edge) ; (AI10_ArtUID) ,\n%_;\n%_\n";
+    for (why, frame, op, after, kept) in [
+        ("exact", (0.0, 4.0), "n", "", false),
+        ("open", (0.0, 4.0), "N", "", false),
+        ("wider", (-1.0, 5.0), "n", "", true),
+        ("filled", (0.0, 4.0), "f", "", true),
+        ("named", (0.0, 4.0), "n", named, true),
+    ] {
+        let params = "2 /Dot art/ 5 0 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+        let r = read_ok(&format!("{}{}{}", framed_art("Dot art", frame, op, after), plugin_object(SCATTER, "Spray", params), layer("")));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let BrushKind::Scatter(s) = brush_named(&lib, "Spray") else { panic!("scatter") };
+        if kept {
+            assert!(matches!(s.art.kind, NodeKind::Group { .. }), "{why}: {:#?}", s.art);
+            assert_eq!(s.art.children().map(|c| c.len()), Some(2), "{why}");
+        } else {
+            assert_eq!(s.art.geometric_bounds().map(|b| b.width()), Some(4.0), "{why}: {:#?}", s.art);
+            assert!(matches!(s.art.kind, NodeKind::Path { .. }), "{why}: the square alone: {:#?}", s.art);
+        }
+    }
+}
+
+/// A brush's art group that is hidden, locked, isolated or has a note keeps that state when its
+/// frame is left out: the group stays, without the frame, rather than becoming its one other object.
+#[test]
+fn a_brushs_frame_leaves_the_groups_own_state() {
+    use vectorcraft_doc::{Appearance, FillLayer, NodeId};
+    let square = Rect::new(0.0, 0.0, 4.0, 4.0);
+    let paint = FillLayer::new(Paint::solid(Color::BLACK));
+    let ap = Appearance { items: vec![AppearanceItem::Fill(paint)], effects: vec![], contents_index: None };
+    let dot = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(square), ap);
+    let frame = Node::path(NodeId(1), vectorcraft_geom::shapes::rectangle(square), Default::default());
+    let group = Node::group(NodeId(3), vec![Arc::new(frame), Arc::new(dot)]);
+    assert!(matches!(super::brush::without_frame(group.clone()).kind, NodeKind::Path { .. }), "a plain group is its one object");
+    // A closed path through the four corners across the square, not along its sides, isn't a frame.
+    let corners = [Point::new(0.0, 0.0), Point::new(4.0, 4.0), Point::new(4.0, 0.0), Point::new(0.0, 4.0)];
+    let crossing = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&corners, true));
+    let bowtie = Node::path(NodeId(4), crossing, Default::default());
+    let dot = group.children().and_then(|c| c.last().cloned()).unwrap();
+    let crossed = Node::group(NodeId(5), vec![Arc::new(bowtie), dot]);
+    assert_eq!(super::brush::without_frame(crossed).children().map(|c| c.len()), Some(2), "a path across the corners stays");
+    // An open path along three sides isn't a frame; one that comes back to its first corner is.
+    let sides = [Point::new(0.0, 0.0), Point::new(4.0, 0.0), Point::new(4.0, 4.0), Point::new(0.0, 4.0)];
+    let around = [sides.as_slice(), &sides[..1]].concat();
+    for (why, anchors, frame) in [("three sides", sides.as_slice(), false), ("back to the first corner", around.as_slice(), true)] {
+        let open = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(anchors, false));
+        let dot = group.children().and_then(|c| c.last().cloned()).unwrap();
+        let g = Node::group(NodeId(6), vec![Arc::new(Node::path(NodeId(7), open, Default::default())), dot]);
+        let left = if frame { None } else { Some(2) };
+        assert_eq!(super::brush::without_frame(g).children().map(|c| c.len()), left, "{why}");
+    }
+    // A rectangle with settings of its own (a note, Show Center, hidden) isn't a frame.
+    for why in ["note", "show center", "hidden"] {
+        let mut g = group.clone();
+        if let Some(Some(first)) = g.children_mut().map(|c| c.first_mut()) {
+            let first = Arc::make_mut(first);
+            match why {
+                "note" => first.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { note: "edge".into(), ..Default::default() })),
+                "show center" => {
+                    first.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { show_center: Some(true), ..Default::default() }))
+                }
+                _ => first.visible = false,
+            }
+        }
+        assert_eq!(super::brush::without_frame(g).children().map(|c| c.len()), Some(2), "{why}: the rectangle stays");
+    }
+    for why in ["hidden", "locked", "isolated", "note"] {
+        let mut g = group.clone();
+        (g.visible, g.locked, g.isolate) = (why != "hidden", why == "locked", why == "isolated");
+        if why == "note" {
+            g.extras_mut().attrs = Some(Box::new(vectorcraft_doc::ObjectAttributes { note: "edge".into(), ..Default::default() }));
+        }
+        let out = super::brush::without_frame(g);
+        assert!(matches!(out.kind, NodeKind::Group { .. }), "{why}: {out:#?}");
+        assert_eq!(out.children().map(|c| c.len()), Some(1), "{why}: the frame left out");
+        assert_eq!((out.visible, out.locked, out.isolate), (why != "hidden", why == "locked", why == "isolated"), "{why}");
+        assert_eq!(out.extras().attrs.as_ref().map(|a| a.note.as_str()), (why == "note").then_some("edge"), "{why}");
+    }
+}
+
+/// Leaving out a frame that is exactly the art's bounds doesn't move what a Scatter or Art brush
+/// draws: the pieces along a path are where they are with the frame kept.
+#[test]
+fn a_brushs_frame_at_the_arts_bounds_draws_the_same_without_it() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Scatter};
+    let scatter = ("Spray", "Dot art", SCATTER, "2 /Dot art/ 5 0 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0");
+    for (name, art_name, tool, params) in [scatter, ("Ribbon", "Ribbon art", ART_BRUSH, RIBBON)] {
+        let r = read_ok(&format!("{}{}{}", framed_art(art_name, (0.0, 4.0), "n", ""), plugin_object(tool, name, params), layer("")));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let read = lib.iter().find(|b| b.name == name).cloned().unwrap();
+        let art = match &read.kind {
+            BrushKind::Scatter(s) => s.art.clone(),
+            BrushKind::Art(a) => a.art.clone(),
+            k => panic!("{name}: {k:?}"),
+        };
+        let bounds = art.geometric_bounds().unwrap();
+        assert_eq!((bounds.width(), bounds.height()), (4.0, 4.0), "{name}");
+        assert!(matches!(art.kind, NodeKind::Path { .. }), "{name}: the frame left out: {art:#?}");
+        let frame = Node::path(vectorcraft_doc::NodeId(90), vectorcraft_geom::shapes::rectangle(bounds), Default::default());
+        let framed_art = Node::group(vectorcraft_doc::NodeId(91), vec![Arc::new(frame), Arc::new(art)]);
+        let kind = match &read.kind {
+            BrushKind::Scatter(s) => BrushKind::Scatter(Scatter { art: framed_art, ..s.clone() }),
+            BrushKind::Art(a) => BrushKind::Art(ArtBrush { art: framed_art, ..a.clone() }),
+            k => panic!("{name}: {k:?}"),
+        };
+        let framed = Brush { kind, ..read.clone() };
+        let mut line = kurbo::BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((100.0, 30.0));
+        let stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0);
+        let at = |b: &Brush| -> Vec<[i64; 4]> {
+            vectorcraft_brush::stroke_pieces(&r.doc, b, &line, &stroke)
+                .iter()
+                .filter_map(|n| n.geometric_bounds())
+                .map(|b| [b.x0, b.y0, b.x1, b.y1].map(|v| (v * 1000.0).round() as i64))
+                .collect()
+        };
+        let (without, with) = (at(&read), at(&framed));
+        assert!(!without.is_empty(), "{name}");
+        if name == "Spray" {
+            assert!(without.len() > 10, "{without:?}");
+        }
+        assert_eq!(without, with, "{name}");
+    }
 }
 
 /// A file without brush objects keeps the default brushes.

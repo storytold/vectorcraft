@@ -679,6 +679,7 @@ impl<'a> Reader<'a> {
             head.registration = Some(*r);
         }
         self.constraint_art(o);
+        self.placed_page(o);
         // A blend's key object or spine.
         if let Some(kind) = o.text("ShapeBlendPathType")
             && let Some(id) = self.last_object().map(|n| n.id)
@@ -886,12 +887,13 @@ impl<'a> Reader<'a> {
             let (paint, global, spot) = match e.cell {
                 Cell::Color { color, global, spot } => (Paint::solid(color), global, spot),
                 // A swatch named by its gradient or pattern takes the name that got in the document.
+                // A gradient swatch's own paint does not link to a swatch; art painted with the
+                // gradient links to it.
                 Cell::Gradient(g) => {
-                    let mut gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
+                    let gp = vectorcraft_color::gradient::GradientPaint::new(self.gradients.get(&g)?.clone());
                     if e.name == g {
                         e.name = self.global_names.get(Global::Gradient, &g).to_string();
                     }
-                    gp.swatch = Some(e.name.clone());
                     (Paint::Gradient(Box::new(gp)), false, false)
                 }
                 Cell::Pattern(p) => {
@@ -1099,6 +1101,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
+        // Before the artboards are taken below: the page is the first artboard's.
+        let page = self.page_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1192,6 +1196,9 @@ impl<'a> Reader<'a> {
                 for symbol in &mut doc.symbols {
                     link_styles(std::slice::from_mut(&mut symbol.art), &links, &styles, 0);
                 }
+                for pattern in &mut doc.patterns {
+                    link_styles(&mut pattern.art, &links, &styles, 0);
+                }
             }
             doc.graphic_styles = styles.into();
         }
@@ -1205,6 +1212,9 @@ impl<'a> Reader<'a> {
             doc.map_solid_paints(&mut follow);
             for a in brushes.iter_mut().flat_map(|(lib, _)| lib.iter_mut().flat_map(|b| b.art_mut())) {
                 vectorcraft_doc::swatches::map_node_solid_paints(a, &mut follow);
+            }
+            for w in &mut self.warped_type {
+                vectorcraft_doc::swatches::map_node_solid_paints(&mut w.look, &mut follow);
             }
         }
         let mut warnings = self.warnings;
@@ -1245,7 +1255,14 @@ impl<'a> Reader<'a> {
             restyled: self.restyled,
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
+            placed_pages: self.placed_pages,
             envelopes_drawn: self.envelopes_drawn,
+            warped_type: super::super::envelope::WarpedType {
+                looks: self.warped_type,
+                checks: self.envelope_checks,
+                spent: self.envelope_spent,
+                page,
+            },
             styles_read,
             canvas_scale: self.canvas_scale,
             xml_ids: self.xml_ids,

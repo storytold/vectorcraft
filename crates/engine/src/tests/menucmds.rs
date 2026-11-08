@@ -2087,6 +2087,64 @@ fn find_next_cycles_through_text_objects() {
     assert!(s.execute("edit.findNext", &json!({"find": "zzz"})).unwrap()["id"].is_null());
 }
 
+/// The Type menu's commands and Find and Replace and Find Next refuse a param of the wrong type, or
+/// `ids` that name no object, with an error naming the param, and leave the text, the selection and
+/// the undo history as they were, even when Insert Character is also given a source it would use
+/// first. Null counts as a param left out, which keeps its default.
+#[test]
+fn type_menu_and_find_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let t = text(&mut s, "\"cat\" -- cat catalog...");
+    let pid = s.execute("path.create", &json!({"d": "M100 300 L500 300"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "cat", "size": 12, "at": [300, 310]})).unwrap();
+    let on_path = id_of(&r);
+    select_with_a_step_to_redo(&mut s, &[t, on_path]);
+    let before = (history(&s), plain(&s, t), plain(&s, on_path), selected(&s));
+    let string = |k: &str| format!("`{k}` must be a string");
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    let scope = "`scope` must be one of selection, document".to_string();
+    let not_a_list = "ids must be an array of non-negative integer object ids".to_string();
+    let not_an_id = |entry: usize| format!("`ids` entry {entry} is \"x\", not a non-negative integer object id");
+    for (cmd, p, want) in [
+        ("edit.findReplace", json!({"find": "cat", "replace": 5}), string("replace")),
+        ("edit.findReplace", json!({"find": 5, "replace": "dog"}), string("find")),
+        ("edit.findReplace", json!({"find": "CAT", "replace": "dog", "matchCase": "true"}), switch("matchCase")),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "wholeWord": "yes"}), switch("wholeWord")),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": t.0}), not_a_list),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, 999_999]}), "no such object id 999999".to_string()),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": ["x"]}), not_an_id(0)),
+        ("edit.findReplace", json!({"find": "cat", "replace": "dog", "ids": [t.0, "x"]}), not_an_id(1)),
+        ("edit.findNext", json!({"find": ["cat"]}), string("find")),
+        ("edit.findNext", json!({"find": "cat", "matchCase": 1}), switch("matchCase")),
+        ("edit.findNext", json!({"find": "cat", "wholeWord": "false"}), switch("wholeWord")),
+        ("type.smartPunctuation", json!({"dashes": "false"}), switch("dashes")),
+        ("type.smartPunctuation", json!({"ellipsis": 0}), switch("ellipsis")),
+        ("type.smartPunctuation", json!({"quotes": "no"}), switch("quotes")),
+        ("type.smartPunctuation", json!({"scope": 5}), scope.clone()),
+        ("type.smartPunctuation", json!({"scope": "page"}), scope),
+        ("type.changeCase", json!({"case": 5}), string("case")),
+        ("type.insert", json!({"char": 5}), string("char")),
+        ("type.insert", json!({"text": 5}), string("text")),
+        ("type.insert", json!({"unicode": 176}), string("unicode")),
+        ("type.insert", json!({"char": "bullet", "unicode": 176}), string("unicode")),
+        ("type.insert", json!({"text": "x", "code": "a"}), "`code` must be a whole number".to_string()),
+        ("type.insert", json!({"text": "x", "code": 1.5}), "`code` must be a whole number".to_string()),
+        ("type.pathOptions", json!({"flip": "true"}), switch("flip")),
+        ("type.pathOptions", json!({"effect": 1}), string("effect")),
+        ("type.pathOptions", json!({"alignToPath": true}), string("alignToPath")),
+        ("type.pathOptions", json!({"spacing": "4"}), "`spacing` must be a number, not \"4\"".to_string()),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert_eq!((history(&s), plain(&s, t), plain(&s, on_path), selected(&s)), before, "{cmd} {p}");
+    }
+    // `code: null` gives way to `unicode`, and null switches and ids take their defaults.
+    s.execute("type.insert", &json!({"code": null, "unicode": "00B0", "ids": [on_path.0]})).unwrap();
+    assert_eq!(plain(&s, on_path), "cat°");
+    let r = s.execute("edit.findReplace", &json!({"find": "cat", "replace": "dog", "matchCase": null, "wholeWord": null, "ids": null})).unwrap();
+    assert_eq!((r["count"].as_u64(), plain(&s, t), plain(&s, on_path)), (Some(4), "\"dog\" -- dog dogalog...".to_string(), "dog°".to_string()));
+}
+
 // ---------- Select ----------
 
 #[test]
@@ -4405,7 +4463,7 @@ fn k_only(c: Color) -> f32 {
 fn document_color_mode_separates_rgb_greys_through_the_profile() {
     let (mut s, ids, _, _) = greys_document();
     s.execute("file.documentColorMode", &json!({"mode": "cmyk"})).unwrap();
-    // As Illustrator converts them: four-colour greys and a rich black.
+    // Through the profile: a mid gray in four inks and a rich black.
     let Color::Cmyk { c, m, y, k } = fill_of(&s, ids[2]) else { panic!("not CMYK") };
     assert!(c > 0.05 && m > 0.05 && y > 0.05 && k > 0.0, "a four-colour mid grey: {c} {m} {y} {k}");
     let Color::Cmyk { c, k, .. } = fill_of(&s, ids[0]) else { panic!("not CMYK") };

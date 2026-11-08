@@ -235,6 +235,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{number?: \"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\"|\"none\"} Type › Bullets and Numbering › Apply Numbers: the selected type's paragraphs (or those the Type tool's selection touches) become a numbered list in that number style (text.setFormat {number}); without it, a numbered list keeps its style and other paragraphs are numbered 1, 2, 3 (text.setFormat {list: \"number\"}); \"none\" turns the list off",
     ),
     (
+        "ui.bulletsAndNumbering",
+        "Bullets and Numbering…",
+        "",
+        "{tab?: \"bullets\"|\"numbers\"} open Bullets and Numbering (More Options in the Paragraph panel's Bullets and Numbered List presets) on the paragraphs the Paragraph panel acts on, filled in with the values it shows, on that tab (without it, Numbers when the paragraphs are a numbered list, else Bullets) (dialog `bulletsAndNumbering`: tab (bullets|numbers), list (none|bullet|number: the kind of the preset picked), bullet (dot|dash|circle|square), number (arabic|upperLetters|lowerLetters|upperRoman|lowerRoman|twoDigits|threeDigits), listAlign (left|right), listLevel (1..9; 1 for paragraphs in no list), leftIndent, firstLineIndent (pt)): the type shows the dialog's values while it is open, OK runs text.setFormat with the values that changed (and the indents it shows when a preset puts the paragraphs in a list), as one undo step, and Cancel puts the type back; a preset picked for paragraphs in no list whose indents are 0 fills in 18 and -18 pt; an error with no type selected or an unknown tab",
+    ),
+    (
         "type.convertListToText",
         "Convert to Text",
         "",
@@ -447,6 +453,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("view.rotateReset", "Reset Rotate View", "Cmd+Shift+1", "{}"),
     ("window.control", "Control", "", "{}"),
+    (
+        "window.control.dock",
+        "Dock Control Bar",
+        "",
+        "{edge: \"top\"|\"bottom\"} dock the Control bar to the top of the window, under the menu bar, or to its bottom, as the bar's panel menu (Dock to Top, Dock to Bottom) and a drag of its gripper do; kept with the workspace; another edge is an error and changes nothing; returns {edge}",
+    ),
     ("window.toolbar", "Tools", "", "{}"),
     (
         "window.toolbarColumns",
@@ -455,6 +467,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{double?: bool, toolbar?: name} show the toolbar's tools (with `toolbar`, that toolbar made with New Toolbar's) in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
     ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.toolsBesideCanvas",
+        "Keep Tools Beside the Canvas",
+        "",
+        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
+    ),
     (
         "window.floatTools",
         "Float Tool Group",
@@ -590,7 +608,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.dock",
         "Dock Panel",
         "",
-        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on. Returns {layout, closed, floating}",
     ),
     (
         "window.collapseDock",
@@ -706,6 +724,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
+    (
+        "help.safeMode",
+        "Safe Mode…",
+        "",
+        "{} open the Safe Mode dialog (dialog `safeMode`): whether VectorCraft is in Safe Mode, and the disabled plug-ins, each with Enable on Re-launch (engine: plugin.setEnabled). Closing it leaves Safe Mode as it is; Safe Mode is chosen at launch (--safe-mode, or the choice after a launch that stopped while a plug-in was loading, dialog `pluginStopped`)",
+    ),
     ("app.quit", "Quit VectorCraft", "Cmd+Q", "{}"),
     (
         "ui.swatchOptions",
@@ -958,6 +982,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{names?: [the styles selected in the Graphic Styles panel]} open Save Graphic Style Library (dialog `saveGraphicStyleLibrary`: name, user: save to the user library folder, selectedOnly); OK runs graphicStyle.saveLibrary",
     ),
     (
+        "ui.loadCharStyles",
+        "Load Character Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character styles to the active one (engine: charStyle.load), the Character Styles panel menu's Load Character Styles…",
+    ),
+    (
+        "ui.loadParaStyles",
+        "Load Paragraph Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's paragraph styles to the active one (engine: paraStyle.load), the Paragraph Styles panel menu's Load Paragraph Styles…",
+    ),
+    (
+        "ui.loadAllStyles",
+        "Load All Styles…",
+        "",
+        "{path?} (default: pick a document in an open dialog; cancelling it loads nothing) add that document's character and paragraph styles to the active one (engine: textStyle.loadAll), Load All Styles… in either panel's menu",
+    ),
+    (
         "window.userGraphicStyleLibrary1",
         "User Graphic Style Library 1",
         "",
@@ -1045,6 +1087,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Link JavaScript Files…",
         "",
         "{} open JavaScript Files for the active document (dialog `javascriptFiles`, fields `file`: a path or URL and `selected`: a linked file; the SVG Interactivity panel's Link JavaScript Files button): its list shows svgInteractivity.info's files, Add runs svgInteractivity.addFile with file and Remove runs svgInteractivity.removeFile with selected",
+    ),
+    (
+        "ui.svgFilterDialog",
+        "Apply SVG Filter…",
+        "",
+        "{index?, item?} open Apply SVG Filter for the active document (dialog `svgFilter`, fields `selected`: a filter's name, `code`: the code being edited, `editing`: \"\", \"new\" or the name of the filter being edited; with index, for the applied svg.filter effect at index of item, as effect.dialog opens it): its list shows svgFilter.list's filters; OK runs svgFilter.apply with selected, or effect.setParams on the applied effect; New and Edit open the code, Save runs svgFilter.define, Delete runs svgFilter.delete and Import… svgFilter.import with a picked SVG file",
+    ),
+    (
+        "ui.importSvgFilter",
+        "Import SVG Filter…",
+        "",
+        "{} pick an SVG file and add its filters to the active document's SVG filters (svgFilter.import) → svgFilter.import's result",
     ),
     (
         "ui.spotColors",
@@ -1215,7 +1269,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dxfOptionsDialog",
         "DXF Options Dialog",
         "",
-        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
+        "{path?, useArtboards?, range?, …document.exportDxf options} open DXF Options (dialog `dxfOptions`: fields = these options over the ones used last, a dxfPreset's options under them; the dxfPreset field shows cnc while every field it sets matches, else custom); OK checks them, remembers them and writes path (else asks). Export As… → DXF opens it too",
     ),
     (
         "links.editOriginal",
@@ -1234,6 +1288,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Placement Options…",
         "",
         "{ids?} open Placement Options for images `ids` (default: the selected ones; dialog `placementOptions`: ids, preserve, align, clip, see links.placementOptions); OK runs links.placementOptions",
+    ),
+    (
+        "ui.relinkDialog",
+        "Relink…",
+        "",
+        "{ids?: [image or placed document ids]} open Relink for `ids` (default: the selected ones; dialog `relink`: ids, links ([{name, ids}], one row per linked file), scope (Replace: each|selected (default)|all|missingInFolder, see links.relink), path (picked when empty), paths (with each: the files chosen so far, one per row of links)); OK runs links.relink with them, one undo step, except with each: OK takes path, or picks a file, for the next row of links, and the last row's OK relinks them all. An error when nothing is given or selected",
     ),
     (
         "ui.findLinksInFolder",
@@ -1329,7 +1389,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::LOAD_SET,
         "Load Actions…",
         "",
-        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused; the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}",
+        "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused; the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file; the other steps, every step with no label and every step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
     ),
     (
         crate::panels::actions::DELETE_SETS,
@@ -1421,7 +1481,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.installPlugin",
         "Install Plug-in…",
         "",
-        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A filter that asks for a heavy budget asks the user first: OK installs it → plugin.install's result | {pending: \"confirm\"} while it asks",
+        "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), allowHeavy?: bool (the user agreed to its heavy budget), grant?: [permission] (the permissions the user granted it), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing → plugin.install's result | {pending: \"confirm\"} while it asks",
     ),
     (
         "plugin.cancelRuns",

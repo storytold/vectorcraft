@@ -224,6 +224,8 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     if ![r.x0, r.y0, r.x1, r.y1, opts.origin.x, opts.origin.y].iter().all(|v| v.is_finite()) {
         return Err("the export region is not finite".into());
     }
+    // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     let baked = vectorcraft_effects::bake_document(doc);
     let doc = baked.as_ref().unwrap_or(doc);
     let page = scene::Scene::new(doc, opts).run();

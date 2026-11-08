@@ -279,6 +279,29 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             _ => {}
         }
     }
+    // An SVG filter's XML is one drawable <filter> element.
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(xml) = given.get("xml")
+    {
+        let xml = xml.as_str().ok_or_else(|| bad(id, "`xml` must be a string"))?;
+        vectorcraft_render::effects::svg_filter::check(xml).map_err(|e| bad(id, e))?;
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(scale) = given.get("scale")
+        && !scale.as_f64().is_some_and(|k| (0.001..=1000.0).contains(&k))
+    {
+        return Err(bad(id, "`scale` must be a number from 0.001 to 1000"));
+    }
+    if effect == vectorcraft_render::effects::SVG_FILTER
+        && let Some(origin) = given.get("origin")
+        && !origin.as_array().is_some_and(|o| o.len() == 2 && o.iter().all(|v| v.as_f64().is_some_and(f64::is_finite)))
+    {
+        return Err(bad(id, "`origin` must be [x, y] in points"));
+    }
+    // Its name is the filter's id.
+    if effect == vectorcraft_render::effects::SVG_FILTER && given.contains_key("name") && !given.contains_key("xml") {
+        return Err(bad(id, "an SVG filter is named by its id: give `xml` with `name`"));
+    }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
 }
