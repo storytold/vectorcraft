@@ -22,6 +22,7 @@ pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
 mod command;
+pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
 pub mod dimension;
@@ -348,6 +349,7 @@ registry! {
     Hyphenation: [hyphenation::KIND] => hyphenation::SPEC,
     Justification: [justification::KIND] => justification::SPEC,
     TateChuYokoSettings: [tate_chu_yoko::KIND] => tate_chu_yoko::SPEC,
+    CompositeFonts: [composite_fonts::KIND] => composite_fonts::SPEC,
     SavePdf: [save_pdf::KIND] => save_pdf::SPEC,
     SvgOptions: [svg_options::KIND] => svg_options::SPEC,
     JavaScriptFiles: [javascript_files::KIND] => javascript_files::SPEC,

@@ -72,7 +72,7 @@ pub fn inflate_meshes(
     options: Inflate,
     view: View,
 ) -> impl Iterator<Item = Result<Mesh, String>> + use<> {
-    inflate_faces(shapes, bounds, options, view, true).into_iter().map(|r| r.and_then(|(_, faces)| mesh(&faces)))
+    inflate_faces(shapes, bounds, options, view, true).map(|r| r.and_then(|(_, faces)| mesh(&faces)))
 }
 
 /// Revolve's surface ([`crate::revolve`]) as a mesh. As the effect draws it, a sweep of less than

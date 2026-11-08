@@ -211,7 +211,7 @@ fn a_disabled_plug_in_whose_new_grant_cant_be_stored_stays_disabled() {
     let grants = dir.join("grants.json");
     std::fs::remove_file(&grants).unwrap();
     std::fs::create_dir_all(grants.join("block")).unwrap();
-    s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[],"error":null}"#), "grant": ["doc.read"]})).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": module(r#"{"objects":[],"error":null}"#), "grant": ["doc.read"], "replace": true})).unwrap();
     assert_eq!(safe_mode::disabled().len(), 1, "the module the update could not replace stays disabled");
     safe_mode::set_disabled(vec![]);
     let _ = std::fs::remove_dir_all(&dir);

@@ -1435,6 +1435,15 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Indstillinger for Tate-chu-yoko…
 	Tate-chu-yoko Settings	Indstillinger for Tate-chu-yoko
+	Composite Fonts…	Sammensatte skrifttyper…
+	Composite Fonts	Sammensatte skrifttyper
+	Export Composite Fonts	Eksportér sammensatte skrifttyper
+	Import Composite Fonts	Importér sammensatte skrifttyper
+	Delete Font	Slet skrifttype
+	Kanji	Kanji
+	Kana	Kana
+	Numerals	Tal
+	Scale at Center	Skalér fra midten
 	Up/Down:	Op/ned:
 	Left/Right:	Venstre/højre:
 	Underline	Understreget
@@ -4668,6 +4677,7 @@ imageTrace	Outline	Kontur
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	gradienten »{name}« er ikke defineret i filen: der bruges en flad farve i stedet
 @msg	an image VectorCraft can't read was left out	et billede, som VectorCraft ikke kan læse, blev udeladt
 @msg	an image whose data is cut short was left out	et billede, hvis data er afkortet, blev udeladt
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst, der skifter skriveretning inde i et tekstobjekt, åbnes i retningen for sit første tegn
@@ -4703,6 +4713,7 @@ imageTrace	Outline	Kontur
 @msg	object ids are non-negative integers, not {v}	objekt-id'er er ikke-negative heltal, ikke {v}
 @msg	{key} must be an array of non-negative integer object ids	{key} skal være et array af objekt-id'er, der er ikke-negative heltal
 @msg	invalid object id {value}: expected a non-negative integer	ugyldigt objekt-id {value}: et ikke-negativt heltal var forventet
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	element {index} i `{key}` er {value}, ikke et objekt-id (et ikke-negativt heltal)
 @msg	no such object id {value}	der findes intet objekt med id {value}
 @msg	automation filesystem access is not granted: read authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: læserettighed mangler: {path}
 @msg	automation filesystem access is not granted: write authority is absent: {path}	automatiseringens adgang til filsystemet er ikke tildelt: skriverettighed mangler: {path}
@@ -5744,6 +5755,8 @@ axis	Y Axis	Y-akse
 	Install “{name}”, which asks for these permissions?	Installér »{name}«, som beder om disse rettigheder?
 	ID: {id}	ID: {id}
 	Version: {version}	Version: {version}
+	Install “{name}” in place of the plug-in with the same ID?	Installér »{name}« i stedet for det plug-in, der har samme id?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	Denne fil er ikke det plug-in, der før var installeret med dette id. Den får de indstillinger og den cache, der er gemt for dette id.
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Read the objects it is given	Læse de objekter, den får
 	Change, add and delete objects in the document	Ændre, tilføje og slette objekter i dokumentet
@@ -5751,6 +5764,9 @@ axis	Y Axis	Y-akse
 	Change how the objects its effect is applied to are drawn	Ændre, hvordan de objekter, dens effekt er anvendt på, tegnes
 	Write the document as a file in its own format	Skrive dokumentet som en fil i sit eget format
 	Show its progress, see Cancel and write log lines	Vise sin fremdrift, se en annullering og skrive logrækker
+	Keep settings of its own	Gemme sine egne indstillinger
+	Keep a cache of its own, which you can clear	Gemme sin egen cache, som du kan rydde
+	Clear Plug-in Cache	Ryd plug-in-cache
 # Actions panel: action sets (#3712).
 	New Set…	Nyt sæt…
 	New Set	Nyt sæt
