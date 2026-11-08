@@ -3,14 +3,16 @@
 //! A plug-in is a WebAssembly module that implements the VectorCraft plug-in ABI (v1, documented
 //! in `docs/plugins.md`). It runs in [`wasmi`], a pure-Rust interpreter, with:
 //!
-//! - **no host imports but the three of API level 2** ([`host`]: progress, Cancel and log lines,
-//!   with the `progress` permission): no WASI, file system, network, clock or randomness. A module
-//!   that imports anything else is rejected;
+//! - **no host imports but those of API level 2** ([`host`]: progress, Cancel and log lines with
+//!   the `progress` permission, and settings and a cache of its own with the `settings` and `cache`
+//!   permissions, [`storage`]): no WASI, file system, network, clock or randomness. A module that
+//!   imports anything else is rejected;
 //! - an **instruction budget** (fuel) per call, metered in slices so a wall-clock deadline is
 //!   also enforced (native builds), so infinite loops end with an error. A filter may ask for a
 //!   larger one ([`Budget::Heavy`]), which the host lets the user allow before installing it;
 //! - a **linear-memory cap**, a **recursion-depth cap** and wasmi's strict module limits;
-//! - a **fresh instance per run**, so no state leaks between calls.
+//! - a **fresh instance per run**, so no state leaks between calls; what a plug-in keeps is only
+//!   what it writes to its settings and cache.
 //!
 //! Every failure (malformed module, trap, exhausted budget, bad output) is an [`Error`]; nothing
 //! a module does can panic or hang the host.
@@ -38,6 +40,7 @@ pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod safe_mode;
+pub mod storage;
 pub mod wat;
 
 pub use dialog::ParamUi;

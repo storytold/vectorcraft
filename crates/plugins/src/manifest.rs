@@ -312,10 +312,11 @@ impl Manifest {
             return Err(Error::Manifest(format!("`api` is {}; this host implements plug-in API levels 1 to {API_LEVEL}", self.api)));
         }
         if let Some(names) = &self.permissions
-            && permissions::validate(self.kind, names)?.contains(&Permission::Progress)
+            && let Some(host) = permissions::validate(self.kind, names)?.into_iter().find(|p| permissions::HOST.contains(p))
             && self.api < PROGRESS_API
         {
-            return Err(Error::Manifest(format!("permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
+            let permission = host.name();
+            return Err(Error::Manifest(format!("permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}")));
         }
         self.validate_extensions()?;
         match (self.budget, self.kind) {
@@ -690,6 +691,9 @@ mod tests {
         assert_eq!(serde_json::to_value(&level2).unwrap()["api"], json!(2));
         let plain2 = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2}"#).unwrap();
         assert!(!plain2.permissions().contains(&Permission::Progress), "never implied");
+        let storing = Manifest::parse(br#"{"id":"a","name":"x","kind":"filter","api":2,"permissions":["cache","settings"]}"#).unwrap();
+        assert_eq!(storing.permissions(), [Permission::Settings, Permission::Cache]);
+        assert!(!plain2.permissions().iter().any(|p| permissions::HOST.contains(p)), "never implied");
         for (bad, says) in [
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["doc.read","net.fetch"]}"#, "unknown permission `net.fetch`"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["ui.panel"]}"#, "reserved"),
@@ -697,6 +701,8 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"filter","permissions":"doc.read"}"#, "manifest"),
             (r#"{"id":"a","name":"x","kind":"filter","permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["progress"]}"#, "`progress` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","permissions":["settings"]}"#, "`settings` needs plug-in API level 2"),
+            (r#"{"id":"a","name":"x","kind":"filter","api":1,"permissions":["doc.read","cache"]}"#, "`cache` needs plug-in API level 2"),
             (r#"{"id":"a","name":"x","kind":"filter","api":3}"#, "`api` is 3"),
             (r#"{"id":"a","name":"x","kind":"filter","api":0}"#, "`api` is 0"),
             (r#"{"id":"a","name":"x","kind":"filter","api":-1}"#, "manifest"),

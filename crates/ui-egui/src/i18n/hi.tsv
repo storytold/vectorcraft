@@ -5230,6 +5230,9 @@
 	Install “{name}”, which asks for these permissions?	"{name}" स्थापित करें, जो ये अनुमतियां मांगता है?
 	ID: {id}	ID: {id}
 	Version: {version}	संस्करण: {version}
+	Install “{name}” in place of the plug-in with the same ID?	समान ID वाले प्लग-इन की जगह “{name}” इंस्टॉल करें?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	यह फ़ाइल इस ID के साथ पहले इंस्टॉल किया गया प्लग-इन नहीं है। इसे उस ID के लिए रखी गई सेटिंग्स और कैश मिलते हैं।
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}” आईडी {_1} वाले प्लग-इन से अलग मॉड्यूल है और उसके लिए रखी गई सेटिंग्स और कैश पा लेगा: उपयोगकर्ता की सहमति मिलने पर इसे `replace: true` से इंस्टॉल करें
 	File SHA-256: {hash}	फ़ाइल SHA-256: {hash}
 	Read the objects it is given	उसे दिए गए ऑब्जेक्ट्स पढ़ना
 	Change, add and delete objects in the document	डॉक्यूमेंट में ऑब्जेक्ट्स बदलना, जोड़ना और हटाना
@@ -5237,10 +5240,13 @@
 	Change how the objects its effect is applied to are drawn	जिन ऑब्जेक्ट्स पर उसका इफ़ेक्ट लगा है, उनके बनाए जाने का तरीका बदलना
 	Write the document as a file in its own format	डॉक्यूमेंट को अपने फ़ॉर्मेट की फ़ाइल के रूप में लिखना
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `progress` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
+	Keep settings of its own	अपनी सेटिंग्स रखना
+	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Clear Plug-in Cache	प्लग-इन कैश साफ़ करें
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	अनुमति `{permission}` के लिए प्लग-इन API स्तर {PROGRESS_API} चाहिए: `api` {PROGRESS_API} दें
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	मॉड्यूल `env.{name}` को होस्ट से अलग प्रकार के साथ आयात करता है: होस्ट का प्रकार {signature} है
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `progress` के साथ उपयोग कर सकता है
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल `env.vc_progress`, `env.vc_cancelled` और `env.vc_log` (प्लग-इन API स्तर 2) आयात कर सकता है, और कोई WASI, फ़ाइल या नेटवर्क नहीं
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	मॉड्यूल `env.{name}` आयात करता है, जिसे प्लग-इन केवल प्लग-इन API स्तर {PROGRESS_API} (`api` {PROGRESS_API}) पर और अनुमति `{permission}` के साथ उपयोग कर सकता है
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	मॉड्यूल `{from}.{name}` आयात करता है, जिसे होस्ट उपलब्ध नहीं कराता: प्लग-इन केवल वे `env.vc_*` फ़ंक्शन आयात कर सकता है जो docs/plugins.md में सूचीबद्ध हैं (प्लग-इन API स्तर 2), और कोई WASI, फ़ाइल या नेटवर्क नहीं
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` {_1} है; यह होस्ट प्लग-इन API स्तर 1 से {API_LEVEL} तक का समर्थन करता है
 @msg	`grant` must be a list of permission names	`grant` अनुमति नामों की सूची होनी चाहिए
 @msg	`grant` names an unknown permission `{shown}`	`grant` एक अज्ञात अनुमति `{shown}` बताता है
@@ -6379,6 +6385,7 @@
 @msg	invalid image data for `{0}`	`{0}` के लिए अमान्य इमेज डेटा
 @msg	invalid native panel set	अमान्य मूल पैनल सेट
 @msg	invalid object id {value}: expected a non-negative integer	अमान्य ऑब्जेक्ट id {value}: एक गैर-नकारात्मक पूर्णांक की उम्मीद
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}` की प्रविष्टि {index} {value} है, गैर-नकारात्मक पूर्णांक ऑब्जेक्ट id नहीं
 @msg	Invalid panel layout; restored the default dock	अमान्य पैनल लेआउट; डिफ़ॉल्ट डॉक पुनर्स्थापित किया गया
 @msg	invalid parameter name {k}	अमान्य पैरामीटर नाम {k}
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` के लिए अमान्य पैरामीटर: {msg}

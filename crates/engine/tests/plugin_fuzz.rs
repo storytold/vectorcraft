@@ -30,8 +30,9 @@ fn config() -> ProptestConfig {
     c
 }
 
+/// Installs `wasm`, in place of any module installed with its id before (`replace: true`).
 fn install(s: &mut Session, wasm: &[u8]) -> Result<Value, String> {
-    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(wasm)})).map_err(|e| e.to_string())
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(wasm), "replace": true})).map_err(|e| e.to_string())
 }
 
 /// The document renders and exports without panicking.
@@ -721,5 +722,67 @@ proptest! {
         if let Some((done, total)) = report.progress {
             prop_assert!(total == 0 || done <= total);
         }
+    }
+
+    /// A plug-in that calls the storage imports with hostile keys (`..`, separators, device names,
+    /// control characters, too long), values, lengths and pointers in and out of its memory runs to
+    /// an output, never a panic; every call returns a length or a storage code, and the settings and
+    /// cache of another plug-in in the same store stay as they were.
+    #[test]
+    fn hostile_storage_arguments_never_crash(
+        calls in prop::collection::vec(
+            (
+                0..6usize,
+                prop_oneof![any::<i32>(), 0x1ff00..0x20100i32, Just(0x2000)],
+                prop_oneof![any::<i32>(), 0..80i32],
+                prop_oneof![any::<i32>(), 0x1ff00..0x20100i32, Just(0x3000)],
+                prop_oneof![any::<i32>(), 0..5000i32],
+            ),
+            0..16,
+        ),
+        key in prop::collection::vec(prop_oneof![Just(b'a'), Just(b'.'), Just(b'/'), Just(b'\\'), Just(b'_'), any::<u8>()], 0..80),
+    ) {
+        use vectorcraft_plugins::host::STORAGE_BUDGET;
+        use vectorcraft_plugins::storage::Meter;
+        const FUNCS: [&str; 6] = ["vc_settings_get", "vc_settings_set", "vc_cache_read", "vc_cache_write", "vc_settings_delete", "vc_cache_clear"];
+        let folder = std::env::temp_dir().join(format!("vectorcraft-plugin-fuzz-storage-{}", std::process::id()));
+        let mut s = Session::new();
+        s.attach_plugin_store(folder.clone());
+        let storing = |id: &str| format!(r#"{{"id":"{id}","name":"F","kind":"filter","api":2,"permissions":["settings","cache"]}}"#);
+        let grant = json!(["settings", "cache"]);
+        let other = wat::parse_str(tpl::returning(&storing("fuzz.storage.other"), r#"{"objects":[]}"#)).unwrap();
+        s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&other), "grant": grant})).unwrap();
+        let theirs = vectorcraft_plugins::registry::storage("fuzz.storage.other").unwrap();
+        let m = &mut Meter::unlimited();
+        theirs.set_setting("mine", b"kept", m).unwrap();
+        theirs.set_cache_entry("mine", b"kept", m).unwrap();
+        // Each call's result is checked: a length (0 or more) or one of the storage codes.
+        let check = |call: String| format!("(local.set $r {call}) (if (i32.lt_s (local.get $r) (i32.const {STORAGE_BUDGET})) (then unreachable))");
+        let body: String = calls
+            .iter()
+            .map(|&(f, kp, kl, vp, vl)| match f {
+                0..4 => check(format!("(call ${} (i32.const {kp}) (i32.const {kl}) (i32.const {vp}) (i32.const {vl}))", FUNCS[f])),
+                _ => check(format!("(call ${} (i32.const {kp}) (i32.const {kl}))", FUNCS[f])),
+            })
+            .collect();
+        let text: String = key.iter().map(|b| format!("\\{b:02x}")).collect();
+        let imports = format!(r#"{} (data (i32.const 0x2000) "{text}")"#, tpl::STORAGE_IMPORTS);
+        let wasm = wat::parse_str(tpl::with_imports(&storing("fuzz.storage"), &imports, &format!("(local $r i32) {body}"), r#"{"objects":[]}"#)).unwrap();
+        let r = catch_quiet(|| {
+            s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).map_err(|e| e.to_string())?;
+            let p = vectorcraft_plugins::registry::get("fuzz.storage").ok_or("not installed")?;
+            p.run(b"{\"objects\":[]}", b"{}").map_err(|e| e.to_string())
+        });
+        let out = r.map_err(|msg| TestCaseError::fail(format!("panicked on {calls:?}: {msg}")))?;
+        prop_assert!(out.is_ok(), "{:?}", out);
+        prop_assert_eq!(theirs.setting("mine", m).unwrap(), Some(b"kept".to_vec()));
+        prop_assert_eq!(theirs.cache_entry("mine", m).unwrap(), Some(b"kept".to_vec()));
+        prop_assert_eq!(theirs.cache_bytes(), 4);
+        // The host names every file: the store holds the two modules, their grants and their folders.
+        let names = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(Result::ok).map(|e| e.file_name()).collect::<Vec<_>>();
+        prop_assert!(names(&folder).len() <= 4, "{:?}", names(&folder));
+        prop_assert!(names(&folder.join("storage")).len() <= 2, "{:?}", names(&folder.join("storage")));
+        let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage"}));
+        let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage.other"}));
     }
 }

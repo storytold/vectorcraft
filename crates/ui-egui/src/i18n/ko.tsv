@@ -4389,6 +4389,7 @@ theme	Appearance	외관
 @msg	an image VectorCraft can't read was left out	VectorCraft가 읽을 수 없는 이미지는 제외했습니다
 @msg	graphs come in as plain art, without their data or settings	그래프는 데이터와 설정 없이 일반 아트로 가져왔습니다
 @msg	an image whose data is cut short was left out	데이터가 잘린 이미지는 제외했습니다
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	레이어를 유지하기 위해 {_1} × {_2} 픽셀의 포함된 이미지를 {_3} × {_4} 픽셀로 줄였습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
@@ -4807,6 +4808,7 @@ theme	Appearance	외관
 @msg	object ids are non-negative integers, not {v}	개체 id는 음이 아닌 정수여야 하며 {v}은(는) 안 됩니다
 @msg	{key} must be an array of non-negative integer object ids	{key}은(는) 음이 아닌 정수인 개체 id의 배열이어야 합니다
 @msg	invalid object id {value}: expected a non-negative integer	개체 id {value}이(가) 올바르지 않습니다: 음이 아닌 정수여야 합니다
+@msg	`{key}` entry {index} is {value}, not a non-negative integer object id	`{key}`의 항목 {index}은(는) {value}이며, 음이 아닌 정수인 개체 id가 아닙니다
 @msg	no such object id {value}	id가 {value}인 개체가 없습니다
 @msg	id {value} is a layer, not an object	id {value}은(는) 개체가 아닌 레이어입니다
 @msg	id {value} is a layer, not an object; move layers with layer.move	id {value}은(는) 개체가 아닌 레이어입니다. 레이어는 layer.move로 이동하세요
@@ -5438,6 +5440,9 @@ axis	Y Axis	Y축
 	Install “{name}”, which asks for these permissions?	이 권한을 요청하는 “{name}”을(를) 설치하시겠습니까?
 	ID: {id}	ID: {id}
 	Version: {version}	버전: {version}
+	Install “{name}” in place of the plug-in with the same ID?	같은 ID의 플러그인 대신 “{name}”을(를) 설치하시겠습니까?
+	This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.	이 파일은 이전에 이 ID로 설치된 플러그인이 아닙니다. 이 ID에 보관된 설정과 캐시를 받습니다.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	“{name}”은(는) ID {_1}의 플러그인과 다른 모듈이며 그 플러그인에 보관된 설정과 캐시를 받게 됩니다. 사용자가 동의하면 `replace: true`로 설치하세요
 	File SHA-256: {hash}	파일 SHA-256: {hash}
 	Read the objects it is given	전달받은 개체 읽기
 	Change, add and delete objects in the document	문서의 개체 변경, 추가 및 삭제
@@ -5445,10 +5450,13 @@ axis	Y Axis	Y축
 	Change how the objects its effect is applied to are drawn	효과가 적용된 개체가 그려지는 방식 변경
 	Write the document as a file in its own format	문서를 자체 형식의 파일로 쓰기
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
-@msg	permission `progress` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`progress` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
+	Keep settings of its own	자체 설정 보관
+	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Clear Plug-in Cache	플러그인 캐시 지우기
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	`{permission}` 권한에는 플러그인 API 수준 {PROGRESS_API}이(가) 필요합니다. `api` {PROGRESS_API}을(를) 지정하십시오
 @msg	the module imports `env.{name}` with another type than the host's: it is {signature}	모듈이 `env.{name}`을(를) 호스트와 다른 형식으로 가져옵니다. 호스트의 형식은 {signature}입니다
-@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `progress`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `progress` 권한이 있을 때만 사용할 수 있습니다
-@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only `env.vc_progress`, `env.vc_cancelled` and `env.vc_log` (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 `env.vc_progress`, `env.vc_cancelled`, `env.vc_log`(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	모듈이 `env.{name}`을(를) 가져오지만, 플러그인은 이를 플러그인 API 수준 {PROGRESS_API}(`api` {PROGRESS_API})에서 `{permission}` 권한이 있을 때만 사용할 수 있습니다
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	모듈이 호스트가 제공하지 않는 `{from}.{name}`을(를) 가져옵니다. 플러그인은 docs/plugins.md에 나열된 `env.vc_*` 함수(플러그인 API 수준 2)만 가져올 수 있으며 WASI, 파일, 네트워크는 사용할 수 없습니다
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api`가 {_1}입니다. 이 호스트는 플러그인 API 수준 1부터 {API_LEVEL}까지 지원합니다
 @msg	`grant` must be a list of permission names	`grant`는 권한 이름 목록이어야 합니다
 @msg	`grant` names an unknown permission `{shown}`	`grant`에 알 수 없는 권한 `{shown}`이(가) 있습니다

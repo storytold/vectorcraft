@@ -1,8 +1,9 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
+use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
-    NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
+    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE,
+    NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
@@ -377,7 +378,7 @@ impl<'a> Reader<'a> {
             Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
             _ => vals,
         };
-        self.image_from(vals, data)
+        self.image_from(vals, data, false)
     }
 
     /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
@@ -411,8 +412,22 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// An image of operands `vals` and samples `data`.
-    pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
+    /// The bytes of samples (colour and alpha) that the image of `XI` operands `vals` reads: 0 when
+    /// it isn't read (operands missing, or past the hard limits).
+    pub(super) fn sample_bytes(&self, vals: &[V]) -> usize {
+        let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
+        let n = Self::nums(vals);
+        let [_, _, _, _, w, h, bits, kind, alpha, ..] = n.as_slice() else { return 0 };
+        let shape = Shape { w: *w as u64, h: *h as u64, channels: channels(&space, *kind) as u64, bits: *bits as u64, alpha: *alpha > 0.0 };
+        match (shape.step(&Limits::get()), shape.lens()) {
+            (Some(_), Some((colour, alpha))) => usize::try_from(colour + alpha).unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    /// An image of operands `vals` and samples `data` (`decoded`: bytes already, whatever the
+    /// operands say).
+    pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8], decoded: bool) -> Result<(), String> {
         // A file `XG` named before this image isn't the file of a later `XF`.
         self.image_link = None;
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
@@ -427,41 +442,42 @@ impl<'a> Reader<'a> {
         // ImageMask 1: the image is transparent and takes a color (version 7 specification §8.1).
         let image_mask = rest.first() == Some(&1.0);
         let (w, h) = (*w as u64, *h as u64);
-        if w.saturating_mul(h) > MAX_PIXELS {
-            self.image_left_out(IMAGE_TOO_LARGE);
-            return Ok(());
-        }
         if w == 0 || h == 0 || ![1.0, 8.0].contains(bits) {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
-        let channels: usize = match space.as_str() {
-            "DeviceGray" => 1,
-            "DeviceCMYK" => 4,
-            "DeviceRGB" => 3,
-            _ => match *kind as i64 {
-                1 => 1,
-                4 => 4,
-                _ => 3,
-            },
+        let channels = channels(&space, *kind);
+        // The size is checked before anything is decoded or allocated.
+        let shape = Shape { w, h, channels: channels as u64, bits: *bits as u64, alpha: *alpha > 0.0 };
+        let (Some(k), Some((need, alpha_len))) = (shape.step(&Limits::for_channels(channels)), shape.lens()) else {
+            return self.too_large_image(&m, w, h);
         };
-        let decoded;
-        let data = if *binary == 0.0 {
-            let digits: Vec<u8> = data.iter().copied().filter(|b| b.is_ascii_hexdigit()).collect();
-            decoded = crate::import::lex::hex_decode(&digits).unwrap_or_default();
-            decoded.as_slice()
+        // Within the limits, these fit in memory (see `Limits::bytes`).
+        let (need, alpha_len) = (need as usize, alpha_len as usize);
+        let hex;
+        let data = if *binary == 0.0 && !decoded {
+            let (max, mut half) = (need + alpha_len, None);
+            let mut out = Vec::with_capacity(max.min(data.len() / 2));
+            raster::push_hex(&mut out, &mut half, data, max);
+            raster::end_hex(&mut out, half, max);
+            hex = out;
+            hex.as_slice()
         } else {
             data
         };
-        let row = if *bits == 1.0 { (w as usize * channels).div_ceil(8) } else { w as usize * channels };
-        let need = row.saturating_mul(h as usize);
+        let row = shape.row().unwrap_or(0) as usize;
         // An alpha channel follows the colour samples, one byte a pixel.
-        let alpha_len = if *alpha > 0.0 { (w * h) as usize } else { 0 };
         let (Some(samples), opacity) = (data.get(..need), data.get(need..need.saturating_add(alpha_len))) else {
             self.image_left_out("an image whose data is cut short was left out");
             return Ok(());
         };
         let opacity = opacity.filter(|_| alpha_len > 0);
+        let gray1 = *bits == 1.0 && channels == 1 && opacity.is_none();
+        if k > 1 || w * h > raster::SMALL || (gray1 && !image_mask) {
+            // An image mask keeps the color that colorizes it.
+            let colorize = (image_mask && channels == 1 && *bits == 1.0).then(|| self.mask_paint());
+            return self.large_image(samples, opacity, shape, k, &m, colorize);
+        }
         // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps a CMYK
         // image's, and an alpha channel that hides part of the image becomes its opacity mask.
         if channels == 4
@@ -593,6 +609,67 @@ impl<'a> Reader<'a> {
         let image_mask = bits == 1.0 && n.get(7) == Some(&1.0) && n.get(11) == Some(&1.0);
         let colorize = image_mask.then(|| self.mask_paint());
         self.add_image_colorized(im, None, colorize, hidden)
+    }
+
+    /// An image of `s` past [`raster::SMALL`] pixels, or reduced by the step `k`, or 1-bit gray:
+    /// 1-bit gray at full size is a 1-bit PNG of its rows as they are; other images keep their
+    /// channels a byte each (gray or RGB in a PNG with the alpha channel, CMYK in a TIFF with the
+    /// alpha channel as its opacity mask), averaged over blocks of `k` × `k` pixels. The matrix
+    /// `m` places the image where its full size would be.
+    fn large_image(&mut self, samples: &[u8], opacity: Option<&[u8]>, s: Shape, k: u64, m: &[f64], colorize: Option<Paint>) -> Result<(), String> {
+        let (ow, oh) = (s.w.div_ceil(k) as u32, s.h.div_ceil(k) as u32);
+        if k == 1 && s.bits == 1 && s.channels == 1 && opacity.is_none() {
+            let Some(png) = raster::gray1_png(samples, ow, oh, s.row().unwrap_or(0) as usize) else {
+                return self.too_large_image(m, s.w, s.h);
+            };
+            return self.add_raster(ImageBlob::new("image/png", png), None, m, (ow, oh), colorize);
+        }
+        let cmyk = s.channels == 4;
+        let (pixels, mask) = raster::reduce(samples, opacity, s, k, !cmyk);
+        let blob = if cmyk {
+            Inks::new(ow, oh, pixels).and_then(|i| ImageBlob::cmyk_tiff(&i))
+        } else {
+            use image::ImageEncoder as _;
+            let colour = match (s.channels, opacity.is_some()) {
+                (1, false) => image::ExtendedColorType::L8,
+                (1, true) => image::ExtendedColorType::La8,
+                (_, false) => image::ExtendedColorType::Rgb8,
+                (_, true) => image::ExtendedColorType::Rgba8,
+            };
+            let mut png = vec![];
+            image::codecs::png::PngEncoder::new(&mut png).write_image(&pixels, ow, oh, colour).ok().map(|()| ImageBlob::new("image/png", png))
+        };
+        // One that can't be encoded is left to the page's art, as one past the hard limits.
+        let Some(blob) = blob else {
+            return self.too_large_image(m, s.w, s.h);
+        };
+        // Each pixel as read stands for a block of the full size's.
+        let (sx, sy) = (s.w as f64 / f64::from(ow), s.h as f64 / f64::from(oh));
+        let m: Vec<f64> = match m {
+            [a, b, c, d, tx, ty] => vec![a * sx, b * sx, c * sy, d * sy, *tx, *ty],
+            other => other.to_vec(),
+        };
+        if k > 1 {
+            self.warn(&format!("an embedded image of {} × {} pixels was reduced to {ow} × {oh} pixels to keep the layers", s.w, s.h));
+        }
+        self.add_raster(blob, mask.as_deref(), &m, (ow, oh), colorize)
+    }
+
+    /// An image of `w` × `h` pixels past the hard limits, which matrix `m` maps into art space: a
+    /// box for the page's art to replace ([`Reader::unread_box`]), or, without page art, left out
+    /// with a note.
+    fn too_large_image(&mut self, m: &[f64], w: u64, h: u64) -> Result<(), String> {
+        if !self.page_art {
+            self.image_left_out(IMAGE_TOO_LARGE);
+            return Ok(());
+        }
+        let [a, b, c, d, tx, ty] = m else {
+            self.image_left_out("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        let xf = self.space() * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
+        let bounds = xf.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        self.unread_box(LARGE_IMAGES, bounds, false).map(|_| ())
     }
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
@@ -976,6 +1053,20 @@ fn cmyk_rgb([c, m, y, k]: [u8; 4]) -> [u8; 3] {
     let f = |v: u8| f32::from(v) / 255.0;
     let rgb = vectorcraft_color::Color::cmyk(f(c), f(m), f(y), f(k)).to_rgba8(1.0);
     [rgb[0], rgb[1], rgb[2]]
+}
+
+/// The colour channels of an image in the colour space `space` (`XN`), else of image type `kind`.
+fn channels(space: &str, kind: f64) -> usize {
+    match space {
+        "DeviceGray" => 1,
+        "DeviceCMYK" => 4,
+        "DeviceRGB" => 3,
+        _ => match kind as i64 {
+            1 => 1,
+            4 => 4,
+            _ => 3,
+        },
+    }
 }
 
 /// `a`, `a and b`, `a, b and c`.

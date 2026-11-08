@@ -10,12 +10,30 @@ use std::sync::{Arc, Mutex, RwLock};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::Error;
 use crate::permissions::Grant;
+use crate::storage::Storage;
 use crate::{Limits, Plugin, Result};
 
 static PLUGINS: RwLock<BTreeMap<String, Arc<Plugin>>> = RwLock::new(BTreeMap::new());
 static REVISION: AtomicU64 = AtomicU64::new(0);
 /// What the user approved, by plug-in id.
 static GRANTS: RwLock<BTreeMap<String, Grant>> = RwLock::new(BTreeMap::new());
+/// Where each plug-in keeps its settings and cache, by plug-in id.
+static STORAGE: RwLock<BTreeMap<String, Arc<dyn Storage>>> = RwLock::new(BTreeMap::new());
+
+/// Keeps the settings and cache of plug-in `id` in `storage` from now on (`None`: nowhere, so its
+/// storage calls fail as unavailable). A run of the plug-in reaches only its own id's storage.
+pub fn set_storage(id: &str, storage: Option<Arc<dyn Storage>>) {
+    let mut all = STORAGE.write().unwrap_or_else(|e| e.into_inner());
+    match storage {
+        Some(s) => all.insert(id.to_string(), s),
+        None => all.remove(id),
+    };
+}
+
+/// Where plug-in `id` keeps its settings and cache, if anywhere.
+pub fn storage(id: &str) -> Option<Arc<dyn Storage>> {
+    STORAGE.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
+}
 
 /// Records what the user approved for a plug-in, replacing an earlier grant for its id.
 pub fn grant(g: Grant) {
