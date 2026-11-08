@@ -8,7 +8,8 @@ use vectorcraft_geom::PathData;
 
 use crate::test_fonts::{
     LIGATURE_CARET_FAMILY, LIGATURE_CARET_GLYPH, VARIABLE_LIGATURE_CARET_FAMILY, VERTICAL_LIGATURE_CARET_FAMILY, lam_alef_family, lam_alef_font,
-    ligature_caret_font, placed_ligature_caret_font, source_sans_gid, variable_ligature_caret_font, vertical_ligature_caret_font,
+    ligature_caret_font, placed_ligature_caret_font, proportional_vertical_ligature_caret_font, source_sans_gid, variable_ligature_caret_font,
+    vertical_ligature_caret_font,
 };
 use crate::*;
 
@@ -628,9 +629,10 @@ fn an_upright_ligature_takes_its_caret_down_its_cell() {
     assert!((at(900) - 0.5).abs() < 1e-9, "{}", at(900));
 }
 
-/// On a path, an upright ligature in vertical type turns about its pen, so its cell runs from
-/// 0.12 em before the pen to 0.88 em after it, with or without the font's vertical metrics. The
-/// inner stop lies at the middle of that cell, and the first character's selection ends there.
+/// On a path, an upright ligature in vertical type stands with its top toward the path's start, and
+/// its cell runs from 0.12 em before the pen to 0.88 em after it, with or without the font's vertical
+/// metrics. The inner stop lies at the middle of that cell, and the first character's selection ends
+/// there.
 #[test]
 fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
     for (font, family) in [(ligature_caret_font(None), LIGATURE_CARET_FAMILY), (vertical_ligature_caret_font(900), VERTICAL_LIGATURE_CARET_FAMILY)] {
@@ -686,6 +688,100 @@ fn an_upright_ligature_on_a_path_takes_its_stop_in_its_turned_cell() {
         let stop = (a.midpoint(b) - s.origin).dot(tangent);
         assert!(lo < stop && stop < hi, "{family}: {stop} outside {lo}..{hi}");
     }
+}
+
+/// On a path, an upright ligature in vertical type reads along the path in order: the top of its
+/// cell comes first, and its font caret (600 units down the cell) is drawn where the caret, a click
+/// and the selection put the stop, on a path running either way with any path effect. A glyph lying
+/// on its side keeps its top toward the path's end.
+#[test]
+fn an_upright_ligature_on_a_path_reads_along_it_in_order() {
+    use vectorcraft_doc::PathEffect;
+    let db = db_with(vertical_ligature_caret_font(280));
+    let mut t = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+    t.vertical = true;
+    t.runs[0].style.standard_vertical_roman = true;
+    for (to, effect) in [
+        (1000.0, PathEffect::Rainbow),
+        (-1000.0, PathEffect::Rainbow),
+        (-1000.0, PathEffect::Skew),
+        (-1000.0, PathEffect::Ribbon3d),
+        (-1000.0, PathEffect::StairStep),
+        (-1000.0, PathEffect::Gravity),
+    ] {
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((to, 0.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        t.path_effect = effect;
+        let l = layout(&db, &t);
+        let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+        let &[(1, f)] = g.carets.as_slice() else { panic!("one inner stop: {:?}", g.carets) };
+        assert!((f - 0.6).abs() < 1e-9, "{f}");
+        let tangent = Vec2::new(g.angle.cos(), g.angle.sin());
+        let along = |p: Point| (p - g.origin).dot(tangent);
+        // Font units, y down: the cell's top is 880 units above the baseline and its foot 120 below.
+        let (top, foot) = (along(g.xf * Point::new(0.0, -880.0)), along(g.xf * Point::new(0.0, 120.0)));
+        assert!(top < foot, "{to} {effect:?}: the top comes first along the path: {top} {foot}");
+        let (start, width) = (g.width_start, g.width);
+        assert!((top - start).abs() < 1e-6 && (foot - top - width).abs() < 1e-6, "{to} {effect:?}: {top} {foot} {start} {width}");
+        let drawn = along(g.xf * Point::new(0.0, -280.0));
+        assert!((drawn - (top + (foot - top) * 0.6)).abs() < 1e-6, "{to} {effect:?}: {drawn} against {top} {foot}");
+        let (a, b) = caret_position(&l, 1);
+        let caret = along(a.midpoint(b));
+        assert!((caret - drawn).abs() < 1e-6, "{to} {effect:?}: the caret stands at the drawn stop: {caret} against {drawn}");
+        assert_eq!(hit_byte(&l, g.origin + tangent * (drawn + 0.3)), 1, "{to} {effect:?}");
+        assert_eq!(hit_byte(&l, g.origin + tangent * (drawn - 0.3)), 1, "{to} {effect:?}");
+        assert_eq!(hit_byte(&l, g.origin + tangent * 0.3), 0, "{to} {effect:?}");
+        let q = selection_quads(&l, 0, 1);
+        assert_eq!(q.len(), 1, "{q:?}");
+        let (q0, q1) = (along(q[0][0]), along(q[0][1]));
+        assert!((q0.min(q1) - drawn.min(0.0)).abs() < 1e-6 && (q0.max(q1) - drawn.max(0.0)).abs() < 1e-6, "{to} {effect:?}: {q:?} against {drawn}");
+    }
+    // Without Standard Vertical Roman Alignment the letter lies on its side: its top still faces
+    // the path's end and its advance runs across the path, to its right.
+    let mut line = BezPath::new();
+    line.move_to((0.0, 0.0));
+    line.line_to((1000.0, 0.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.path_effect = PathEffect::Rainbow;
+    t.runs[0].style.standard_vertical_roman = false;
+    let l = layout(&db, &t);
+    let Some(s) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+    let tangent = Vec2::new(s.angle.cos(), s.angle.sin());
+    let right = Vec2::new(-tangent.y, tangent.x);
+    let (pen, up, ahead) = (s.xf * Point::ZERO, s.xf * Point::new(0.0, -500.0), s.xf * Point::new(500.0, 0.0));
+    assert!((up - pen).dot(tangent) > 1.0 && (ahead - pen).dot(right) > 1.0, "{pen:?} {up:?} {ahead:?}");
+}
+
+/// On a path, an upright ligature whose cell Proportional Metrics shortens (`vpal`, from 1000 units
+/// to 800) keeps its font caret (600 units down the cell) where it is drawn: the inner stop lies at
+/// 600 / 800 of its width, and the caret stands at the drawn stop.
+#[test]
+fn an_upright_ligature_on_a_path_keeps_its_font_caret_on_a_proportional_cell() {
+    use vectorcraft_doc::PathEffect;
+    let db = db_with(proportional_vertical_ligature_caret_font(280, -200));
+    let mut t = point("fi", VERTICAL_LIGATURE_CARET_FAMILY);
+    t.vertical = true;
+    t.runs[0].style.standard_vertical_roman = true;
+    t.runs[0].style.proportional_metrics = true;
+    let mut line = BezPath::new();
+    line.move_to((0.0, 0.0));
+    line.line_to((1000.0, 0.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.path_effect = PathEffect::Rainbow;
+    let l = layout(&db, &t);
+    let Some(g) = l.glyphs.iter().find(|g| g.len == 2) else { panic!("f + i is one glyph: {:?}", l.glyphs) };
+    assert!((g.width - 80.0).abs() < 1e-6, "the cell is 800 units at 100 pt: {}", g.width);
+    let &[(1, f)] = g.carets.as_slice() else { panic!("one inner stop: {:?}", g.carets) };
+    assert!((f - 0.75).abs() < 1e-9, "{f}");
+    let tangent = Vec2::new(g.angle.cos(), g.angle.sin());
+    let along = |p: Point| (p - g.origin).dot(tangent);
+    let (top, drawn) = (along(g.xf * Point::new(0.0, -880.0)), along(g.xf * Point::new(0.0, -280.0)));
+    assert!((top - g.width_start).abs() < 1e-6 && (drawn - top - 60.0).abs() < 1e-6, "{top} {drawn} {}", g.width_start);
+    let (a, b) = caret_position(&l, 1);
+    let caret = along(a.midpoint(b));
+    assert!((caret - drawn).abs() < 1e-6, "the caret stands at the drawn stop: {caret} against {drawn}");
 }
 
 /// Tracking that makes an upright ligature's advance negative leaves it upright: it keeps its

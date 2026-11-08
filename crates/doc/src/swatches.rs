@@ -176,7 +176,7 @@ impl Document {
     pub fn visit_paints(&self, f: &mut dyn FnMut(&Paint)) {
         let mut tree = |n: &Node| {
             walk_with_masks(n, &mut |m| {
-                node_paints(m).for_each(&mut *f);
+                node_paints(m).chain(override_paints(m)).for_each(&mut *f);
                 if let NodeKind::Mesh(mesh) = &m.kind {
                     mesh.points.iter().for_each(|p| f(&Paint::solid(p.color)));
                 }
@@ -275,10 +275,11 @@ fn map_style_paint(attrs: &mut serde_json::Map<String, serde_json::Value>, key: 
 }
 
 /// Every colour in the subtree of `n` with the swatch it links to: solid fills, strokes, text runs
-/// and gradient stops (with their link), then mesh points (unlinked), in paint order.
+/// and gradient stops (with their link), a dynamic symbol instance's own paints
+/// ([`override_paints`]), then mesh points (unlinked), in paint order.
 pub fn node_colors(n: &Node, f: &mut dyn FnMut(&Color, Option<&str>)) {
     n.walk(&mut |m| {
-        for p in node_paints(m) {
+        for p in node_paints(m).chain(override_paints(m)) {
             match p {
                 Paint::Solid { color, swatch, .. } => f(color, swatch.as_deref()),
                 Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| f(&s.color, s.swatch.as_deref())),
@@ -313,6 +314,12 @@ pub fn node_paints(n: &Node) -> impl Iterator<Item = &Paint> {
         _ => &[],
     };
     n.appearance.items.iter().map(item_paint).chain(runs.iter().flat_map(|r| [&r.style.fill, &r.style.stroke])).chain(n.extras().colorize.as_deref())
+}
+
+/// The paints a dynamic symbol instance keeps for objects of its art
+/// ([`crate::symbol_overrides`]), which [`node_paints`] leaves out.
+pub fn override_paints(n: &Node) -> impl Iterator<Item = &Paint> {
+    n.extras().symbol_overrides.iter().flat_map(|o| [o.fill.as_ref(), o.stroke.as_ref()]).flatten()
 }
 
 /// Mutable [`node_paints`], in the same order.
@@ -352,6 +359,20 @@ fn map_node(n: &Node, f: &mut LinkFn) -> Option<(Node, usize)> {
             }
         }
         out = Some(m);
+    }
+    // A dynamic symbol instance's own paints for objects of its art (`symbol_overrides`).
+    if !n.extras().symbol_overrides.is_empty() {
+        let mut overrides = n.extras().symbol_overrides.clone();
+        let mut k = 0;
+        for p in overrides.iter_mut().flat_map(|o| [&mut o.fill, &mut o.stroke]).flatten() {
+            if matches!(p, Paint::Solid { .. } | Paint::Gradient(_)) && p.map_links(f) {
+                k += 1;
+            }
+        }
+        if k > 0 {
+            out.get_or_insert_with(|| n.clone()).extras_mut().symbol_overrides = overrides;
+            count += k;
+        }
     }
     if let Some(ch) = n.children() {
         for (i, c) in ch.iter().enumerate() {

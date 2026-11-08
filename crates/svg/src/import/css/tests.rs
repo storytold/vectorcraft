@@ -333,3 +333,11 @@ fn not_selectors() {
         },
     );
 }
+
+#[test]
+fn decl_comments_are_stripped() {
+    let d = |k: &str, v: &str| (k.to_string(), v.to_string(), false);
+    assert_eq!(parse_decls("fill:red /* note */; stroke:blue"), [d("fill", "red"), d("stroke", "blue")]);
+    assert_eq!(parse_decls("fill:red /* a;b */ ; stroke:blue"), [d("fill", "red"), d("stroke", "blue")]);
+    assert_eq!(parse_decls("font-family:'A /* x */ B'"), [d("font-family", "'A /* x */ B'")]);
+}
