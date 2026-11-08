@@ -22,8 +22,8 @@
 //!
 //! A third test runs the tests under `test/built-ins/String`, `Number`, `RegExp` and `Date` the same
 //! way, counting the tests that name an ES5 section apart from the other tests without a feature
-//! tag; its failures go to `builtins-failures.txt`. The interpreter tests fail only when the
-//! interpreter panics.
+//! tag; its failures go to `builtins-failures.txt`. The interpreter tests fail when the
+//! interpreter panics, when a harness or test file cannot be read, or when no ES5 test runs.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -288,8 +288,10 @@ impl RunCounts {
 
 fn run_language_subset(dir: &Path) {
     let language = dir.join("test").join("language");
+    assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
     let missing = missing_builtins(&[TEXT_BUILTINS]);
     let (es5, _) = run_tests(dir, &language, &missing, false);
+    assert!(es5.tests > 0, "no ES5 tests ran under {}", language.display());
     let report = dir.join("run-failures.txt");
     if let Err(e) = std::fs::write(&report, &es5.failures) {
         println!("could not write {}: {e}", report.display());
@@ -328,6 +330,7 @@ fn run_text_builtins(dir: &Path) {
         let missing =
             if name == "String" { missing_builtins(&[TEXT_BUILTINS, STRING_METHODS_SHARED_WITH_ARRAY]) } else { missing_builtins(&[TEXT_BUILTINS]) };
         let (es5, later) = run_tests(dir, &root, &missing, true);
+        assert!(es5.tests > 0, "no ES5 tests ran under {}", root.display());
         println!("test262 built-ins/{name}, ES5 tests: {}. Other tests without a feature tag: {}.", es5.summary(), later.summary());
         report.push_str(&format!("# built-ins/{name}, ES5 tests\n{}\n# built-ins/{name}, other tests\n{}\n", es5.failures, later.failures));
         panicked += es5.panicked + later.panicked;
@@ -345,8 +348,11 @@ fn run_text_builtins(dir: &Path) {
 /// that name an ES5 section and, when `later` is set, for the others (otherwise those are left out).
 fn run_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, later: bool) -> (RunCounts, RunCounts) {
     let harness_dir = dir.join("harness");
-    // A file that cannot be read gives an empty source.
-    let read = |p: &Path| String::from_utf8_lossy(&std::fs::read(p).unwrap_or_default()).into_owned();
+    let read = |p: &Path| {
+        let bytes = std::fs::read(p).map_err(|e| format!("cannot read {}: {e}", p.display()));
+        assert!(bytes.is_ok(), "{}", bytes.as_ref().err().map_or("", String::as_str));
+        String::from_utf8_lossy(&bytes.unwrap_or_default()).into_owned()
+    };
     let prelude = format!("{}\n{}\n", read(&harness_dir.join("assert.js")), read(&harness_dir.join("sta.js")));
     let verbose = std::env::var_os("VECTORCRAFT_TEST262_VERBOSE").is_some();
     let (mut es5_counts, mut later_counts) = (RunCounts::default(), RunCounts::default());
