@@ -260,9 +260,11 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
 
 /// File › Open With: opens the file `p` names (`path`), else one picked among the files with the
 /// extensions the importer plug-in `importer` lists, with that importer, also when a built-in
-/// format reads the extension (`document.open {importer}`); a failure is reported as File › Open
-/// reports it. The web's file picker can't carry the importer: there File › Open's picker opens,
-/// and the file opens as File › Open opens it.
+/// format reads the extension (`document.open {importer, params}`), and adds it to Open Recent; a
+/// failure is reported as File › Open reports it. An importer with parameters, given no `params`,
+/// asks for them first in dialog `pluginImport`, at their defaults. The web's file picker can't
+/// carry the importer: there File › Open's picker opens, and the file opens as File › Open opens
+/// it.
 pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let importer = p.get("importer").and_then(Value::as_str).ok_or("missing `importer` (see document.formats)")?;
     let plugin = vectorcraft_plugins::import::named(importer).map_err(|e| e.to_string())?;
@@ -279,12 +281,22 @@ pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             pick_open(app, &FilePick { filters, folder: open_dialog_folder(app), ..Default::default() })?
         }
     };
-    let opened = vectorcraft_engine::file_access::check_read(&path)
-        .and_then(|()| check_import_size(&path, true))
-        .and_then(|()| read(app, &path))
-        .and_then(|bytes| {
-            open_document(app, &path, &bytes, Some(path.clone()), &json!({ "importer": vectorcraft_plugins::export::format_id(plugin.id()) }))
-        });
+    let importer = vectorcraft_plugins::export::format_id(plugin.id());
+    let given = p.get("params").filter(|v| !v.is_null());
+    let opened = vectorcraft_engine::file_access::check_read(&path).and_then(|()| check_import_size(&path, true)).and_then(|()| {
+        if given.is_none() && !plugin.manifest().params.is_empty() {
+            dialogs::plugin::open_import(app, &plugin, json!({ "path": path, "importer": importer }));
+            return Ok(Value::Null);
+        }
+        let mut o = json!({ "importer": importer });
+        if let Some(params) = given {
+            o["params"] = params.clone();
+        }
+        let bytes = read(app, &path)?;
+        let r = open_document(app, &path, &bytes, Some(path.clone()), &o)?;
+        note_recent(app, &path);
+        Ok(r)
+    });
     if let Err(e) = &opened {
         report_open_error(app, &fileio::file_name(&path), e);
     }

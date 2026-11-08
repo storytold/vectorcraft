@@ -60,8 +60,10 @@ heading and buttons in view. Exporters are formats of **File › Export › Expo
 Artboards is greyed out (the plug-in writes the whole document); one with parameters asks for them in a dialog of the
 same kind once the file is picked, and its Export button writes the file. Importers' files are listed under File ›
 Open's "All readable files" and under a filter of their own, named after the importer; **File › Open With** lists the
-installed importers by name (`file.openWith {"importer", "path"?}`), and each opens a file picked among its extensions
-with that importer (on the web, File › Open's picker opens instead). **File › Open** of a `.wasm` file installs
+installed importers by name (`file.openWith {"importer", "path"?, "params"?}`), and each opens a file picked among its
+extensions with that importer (on the web, File › Open's picker opens instead) and adds it to Open Recent. An importer
+with parameters, given no `params`, asks for them in a dialog of the same kind once the file is picked, and its Open
+button opens the file; File › Open runs an importer with its parameters' defaults. **File › Open** of a `.wasm` file installs
 a plug-in too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the
 background ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).

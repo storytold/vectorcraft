@@ -6,8 +6,9 @@
 
 use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_plugins::wat as tpl;
+use vectorcraft_plugins::wat::{self as tpl, Given};
 
+use super::tests_export::{frame, kind, set};
 use super::*;
 use crate::Services;
 use crate::menus::Item;
@@ -64,10 +65,12 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     let svg = svg.to_string_lossy().into_owned();
     crate::io::open_path(&mut app, &svg).unwrap();
     assert_eq!(artboard(&app), (0.0, 0.0, 50.0, 40.0), "File › Open: the built-in SVG reader");
+    app.ui.recent_files.clear();
     let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.svgreader", "path": svg})).unwrap();
     assert_eq!(r["format"], "plugin.test.ui.svgreader");
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0), "Open With: the importer");
     assert_eq!(app.session.documents().len(), 2);
+    assert_eq!(app.ui.recent_files, std::slice::from_ref(&svg), "Open With adds the file to Open Recent");
     // `app.open {importer}` (MCP's open_file) opens as Open With does.
     let (req, _rx) = crate::control::ControlRequest::new("app.open", json!({"path": svg, "importer": "plugin.test.ui.svgreader"}));
     let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
@@ -80,6 +83,55 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     let e = app.run("file.openWith", json!({"path": svg})).unwrap_err();
     assert!(e.contains("missing `importer`"), "{e}");
     app.run("plugin.remove", json!({"id": "test.ui.svgreader"})).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Open With asks for an importer's parameters, at their defaults, once the file is picked, and
+/// opens the file with the values set; given `params`, it asks nothing, and `app.open` without
+/// them runs the importer on their defaults.
+#[test]
+fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
+    let dir = tmp_dir("params");
+    let mut app = app();
+    let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
+    // RECT when the parameters hold density 7; the file, which isn't JSON, otherwise.
+    install(&mut app, &tpl::when_given(&tpl::importer("test.ui.params", r#"["tup"]"#, params), Given::Params, r#""density":7.0"#, RECT));
+    let file = dir.join("a.tup");
+    std::fs::write(&file, "not json").unwrap();
+    let file = file.to_string_lossy().into_owned();
+
+    app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file})).unwrap();
+    assert_eq!(kind(&app), Some(plugin::IMPORT_KIND));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("__label"), d.fields.get("density")), ("Test test.ui.params".to_string(), Some(&json!(4.0))));
+    assert!(app.session.documents().is_empty(), "nothing opened before Open");
+    frame(&mut app);
+    set(&mut app, "density", json!(7));
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.documents().len(), 1);
+    assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0));
+    assert_eq!(app.ui.recent_files, std::slice::from_ref(&file));
+
+    let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.params", "path": file, "params": {"density": 7}})).unwrap();
+    assert_eq!(r["format"], "plugin.test.ui.params");
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.documents().len(), 2);
+
+    // `app.open` (MCP's open_file) passes `params` on, and asks nothing without them.
+    let control = |app: &mut VectorcraftApp, p: serde_json::Value| {
+        let (req, _rx) = crate::control::ControlRequest::new("app.open", p);
+        let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
+        r
+    };
+    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.params", "params": {"density": 7}}));
+    assert_eq!(r["result"]["format"], "plugin.test.ui.params", "{r}");
+    assert_eq!(app.session.documents().len(), 3);
+    let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.params"}));
+    assert!(r.get("error").is_some(), "the defaults (density 4) don't open the file: {r}");
+    assert_ne!(kind(&app), Some(plugin::IMPORT_KIND));
+    assert_eq!(app.session.documents().len(), 3);
+    app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
 

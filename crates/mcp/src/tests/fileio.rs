@@ -431,3 +431,30 @@ fn open_file_passes_the_importer_on() {
     assert!(r.is_error && r.content[0]["text"].as_str().unwrap().contains("test.mcp.absent"), "{r:?}");
     assert_eq!(h.session.documents().len(), 1);
 }
+
+/// `open_file` sends `app.open` the importer's `params` with the importer.
+#[test]
+fn open_file_passes_the_importer_s_params_on() {
+    struct Recording(Vec<(String, Value)>);
+    impl Backend for Recording {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.0.push((method.to_string(), params));
+            Ok(json!({}))
+        }
+        fn has_ui(&self) -> bool {
+            false
+        }
+        fn describe(&self) -> String {
+            "recording".into()
+        }
+    }
+    let tools = tool_definitions();
+    let open = tools.iter().find(|t| t["name"] == "open_file").unwrap();
+    assert_eq!(open["inputSchema"]["properties"]["params"]["type"], "object", "{open}");
+    let mut b = Recording(vec![]);
+    let args = json!({"path": "/in/a.tup", "importer": "plugin.test.mcp.params", "params": {"density": 7}});
+    assert!(!call_tool(&mut b, "open_file", &args).is_error);
+    let [(method, params)] = &b.0[..] else { panic!("one call: {:?}", b.0) };
+    assert_eq!(method, "app.open");
+    assert_eq!(params, &args);
+}

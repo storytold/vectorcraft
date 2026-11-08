@@ -357,13 +357,14 @@ pub fn tool_definitions() -> Vec<Value> {
             "open_file",
             "Open file",
             &format!(
-                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read). A file of an extension no built-in format reads opens with the installed importer plug-in that lists it; `importer` names the importer to use (File › Open With), also for an extension a built-in format reads.",
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read). A file of an extension no built-in format reads opens with the installed importer plug-in that lists it; `importer` names the importer to use (File › Open With), also for an extension a built-in format reads, and `params` gives that importer's parameters.",
                 OPEN_EXTS.join(", .")
             ),
             obj(
                 json!({
                     "path": string("File path"),
                     "importer": string("An importer plug-in's format id, plugin.<id> (see run_command document.formats), which must list the file's extension (default: the built-in format that reads the file, else the first importer by id that lists its extension)"),
+                    "params": {"type": "object", "description": "The importer plug-in's parameters (see run_command plugin.list; default: the defaults its manifest declares)"},
                 }),
                 &["path"],
             ),

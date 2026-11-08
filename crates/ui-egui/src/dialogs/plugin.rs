@@ -9,7 +9,8 @@
 //! it runs in the background ([`crate::plugin_runs`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
 //! Export button writes the file. Importers open the files File › Open finds no built-in format
-//! for, and File › Open With lists them, to open a file with one of them by name.
+//! for, and File › Open With lists them, to open a file with one of them by name; one with
+//! parameters opens dialog `pluginImport` once the file is picked, and its Open button opens it.
 
 use std::sync::Arc;
 
@@ -210,4 +211,33 @@ fn export_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     let path = p.get("path").and_then(Value::as_str).map(str::to_string);
     app.ui.dialog = None;
     crate::io::export(app, format.as_deref(), path, &p)
+}
+
+/// The dialog kind of an importer's parameters, after Open With picked the file.
+pub const IMPORT_KIND: &str = "pluginImport";
+
+/// Headed by the plug-in's name, as it is; Open opens the file.
+pub(super) const IMPORT_SPEC: DialogSpec = DialogSpec {
+    heading: |d| d.str("__label"),
+    body: export_body,
+    confirm: import_confirm,
+    ok: Some("Open"),
+    max_width: Some(420.0),
+    ..DialogSpec::FORM
+};
+
+/// Open With with importer `plugin`, which has parameters: its fields at their defaults, and
+/// `open`, Open With's own parameters (`path`, `importer`), kept for Open.
+pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
+    let mut fields = fields_for(plugin.manifest());
+    fields.insert("__open".into(), open);
+    app.ui.dialog = Some(Dialog { kind: IMPORT_KIND.into(), fields });
+}
+
+/// Opens the file with Open With's parameters and the plug-in's, as `params`.
+fn import_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut p = d.fields.get("__open").cloned().filter(Value::is_object).ok_or("no file to open")?;
+    p["params"] = form::params(d);
+    app.ui.dialog = None;
+    crate::io::open_with(app, &p)
 }

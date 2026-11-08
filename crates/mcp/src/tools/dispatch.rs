@@ -192,8 +192,10 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
         "open_file" => {
             let path = absolute_path(b, req_str(a, "path")?)?;
             let mut p = json!({"path": path});
-            if let Some(importer) = a.get("importer").filter(|v| !v.is_null()) {
-                p["importer"] = importer.clone();
+            for k in ["importer", "params"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
+                    p[k] = v.clone();
+                }
             }
             j(b.call("app.open", p)?)
         }

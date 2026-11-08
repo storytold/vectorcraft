@@ -444,7 +444,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
             }
         }
         "app.open" => match p.get("importer").filter(|v| !v.is_null()) {
-            Some(importer) => wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer}))),
+            // The importer's parameters, else their defaults: automation gets no dialog asking for them.
+            Some(importer) => {
+                let params = p.get("params").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| json!({}));
+                wrap(app.run("file.openWith", json!({"path": s("path"), "importer": importer, "params": params})))
+            }
             None => wrap(app.run("file.open", json!({"path": s("path")}))),
         },
         "app.save" | "app.export" => {

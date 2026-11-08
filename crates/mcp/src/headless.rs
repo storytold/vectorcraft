@@ -295,13 +295,15 @@ impl Headless {
         Ok(out)
     }
 
-    /// `app.open {path, importer?}`: any readable file as a new active document (`document.open`,
-    /// with the importer plug-in `importer` names).
+    /// `app.open {path, importer?, params?}`: any readable file as a new active document
+    /// (`document.open`, with the importer plug-in `importer` names and its parameters `params`).
     pub fn open(&mut self, p: &Value) -> Result<Value, String> {
         let path = s(p, "path").ok_or("missing `path`")?;
         let mut params = json!({"path": path});
-        if let Some(importer) = p.get("importer").filter(|v| !v.is_null()) {
-            params["importer"] = importer.clone();
+        for k in ["importer", "params"] {
+            if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                params[k] = v.clone();
+            }
         }
         let roots = self.roots.clone();
         file_access::confine(roots.as_ref(), || self.session.execute("document.open", &params)).map_err(|e| e.to_string())
