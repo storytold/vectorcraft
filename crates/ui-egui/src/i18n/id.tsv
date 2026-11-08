@@ -172,6 +172,11 @@
 	Ungroup	Buka grup
 	Lock	Kunci
 	Selection	Seleksi
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Seleksi persegi panjang
+	Touching	Objek tersentuh
+	Fully Enclosed	Sepenuhnya di dalam
+	Drag Direction	Arah seret
 	All Artwork Above	Semua karya seni di atas
 	Other Layers	Lapisan lain
 	Unlock All	Buka kunci semua
@@ -622,6 +627,7 @@
 	Toolbars	Bilah alat
 	Advanced	Lanjutan
 	Double Column	Kolom ganda
+	Keep Tools Beside the Canvas	Alat di samping kanvas
 	Actions	Tindakan
 	Asset Export	Ekspor aset
 	Attributes	Atribut

@@ -2,6 +2,24 @@ use super::*;
 use crate::Services;
 use vectorcraft_engine::Session;
 
+/// The three marquee choices are available in Preferences and saved through the same path as
+/// other selection preferences.
+#[test]
+fn marquee_selection_choices_are_saved_from_preferences() {
+    let mut app = app();
+    open(&mut app, Some("Selection & Anchor Display"));
+    let text = crate::tests_labels::painted_text(&mut app, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Marquee Selection") && text.contains("Touching"), "{text}");
+    app.ui.dialog.as_mut().unwrap().fields.insert("marqueeSelection".into(), json!("directional"));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.prefs.marquee_selection, "directional");
+    let saved: Prefs = serde_json::from_value(app.ui.engine_prefs.clone()).unwrap();
+    assert_eq!(saved.marquee_selection, "directional");
+    open(&mut app, Some("Selection & Anchor Display"));
+    let text = crate::tests_labels::painted_text(&mut app, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains("Drag Direction"), "{text}");
+}
+
 #[test]
 fn geometric_snapping_is_a_saved_smart_guides_preference() {
     let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());

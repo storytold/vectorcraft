@@ -997,6 +997,7 @@ font-technology	Variable	Biến thiên
 	Dots	Chấm
 	Double Click To Isolate	Bấm đúp để cô lập
 	Double Column	Hai cột
+	Keep Tools Beside the Canvas	Công cụ cạnh vùng vẽ
 	Double Left Quotation Marks	Dấu ngoặc kép trái đôi
 	Double Quotes:	Dấu ngoặc kép:
 	Double Right Quotation Marks	Dấu ngoặc kép phải đôi
@@ -3418,6 +3419,11 @@ mark-style	Japanese	Kiểu Nhật
 	Selected Swatches	Mẫu màu đã chọn
 	Selected Swatches Only	Chỉ mẫu màu đã chọn
 	Selection	Vùng chọn
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Chọn bằng khung
+	Touching	Đối tượng chạm khung
+	Fully Enclosed	Nằm hoàn toàn trong khung
+	Drag Direction	Hướng kéo
 	Selection & Anchor Display	Hiển thị vùng chọn & điểm neo
 	Selection Only	Chỉ vùng chọn
 	Selection Tool	Công cụ Chọn
@@ -4988,6 +4994,9 @@ theme	Appearance	Giao diện
 @msg	the Pixar file's image data is damaged	dữ liệu ảnh của tệp Pixar bị hỏng
 @msg	the JPEG 2000 file can't be read	không thể đọc tệp JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tệp JPEG 2000 có không gian màu hoặc nội dung JPX không được hỗ trợ
+@msg	the HEIC or HEIF file can't be read	không thể đọc tệp HEIC hoặc HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	tệp HEIC hoặc HEIF chứa loại ảnh không thể đọc được
+@msg	HEIC and HEIF images can't be opened in this build	không thể mở ảnh HEIC và HEIF trong bản dựng này
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	ảnh PSD quá lớn để đọc ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	hộp thoại Lưu PDF không mở
 @msg	the scale is not a usable number	tỷ lệ không phải là số dùng được

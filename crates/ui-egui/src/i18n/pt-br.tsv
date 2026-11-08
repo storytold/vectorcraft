@@ -2564,6 +2564,11 @@ digits	Malayalam	Malaiala
 	Selected Swatches	Amostras Selecionadas
 	Selected Swatches Only	Somente Amostras Selecionadas
 	Selection	Seleção
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Seleção retangular
+	Touching	Objetos tocados
+	Fully Enclosed	Totalmente contidos
+	Drag Direction	Direção do arrasto
 	Selection & Anchor Display	Exibição de Seleção e Âncora
 	Selection Only	Somente Seleção
 	Selection Tool	Ferramenta Seleção
@@ -2682,6 +2687,7 @@ digits	Malayalam	Malaiala
 	Simulate Colored Paper	Simular Papel Colorido
 	Simulate Paper	Simular Papel
 	Double Column	Coluna Dupla
+	Keep Tools Beside the Canvas	Ferramentas ao Lado da Tela
 	Single Left Quotation Mark	Aspa Esquerda Única
 	Single Quotes:	Aspas Simples:
 	Single Right Quotation Mark	Aspa Direita Única
@@ -4349,6 +4355,9 @@ axis	Both	Ambos
 @msg	the Pixar file's image data is damaged	os dados de imagem do arquivo Pixar estão danificados
 @msg	the JPEG 2000 file can't be read	não é possível ler o arquivo JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	o arquivo JPEG 2000 contém um espaço de cores ou conteúdo JPX sem suporte
+@msg	the HEIC or HEIF file can't be read	não é possível ler o arquivo HEIC ou HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	o arquivo HEIC ou HEIF contém um tipo de imagem que não pode ser lido
+@msg	HEIC and HEIF images can't be opened in this build	imagens HEIC e HEIF não podem ser abertas nesta versão
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a imagem PSD é grande demais para ser lida ({_1} × {_2} pixels)
 @msg	zipped 32-bit PSD image data with prediction can't be read	dados de imagem PSD de 32 bits compactados em zip com previsão não podem ser lidos
 @msg	{depth}-bit PSD files in this colour mode can't be read	arquivos PSD de {depth} bits neste modo de cor não podem ser lidos

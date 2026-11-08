@@ -2890,6 +2890,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Seçilen Renk Örnekleri
 	Selected Swatches Only	Yalnızca Seçilen Renk Örnekleri
 	Selection	Seçim
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Dikdörtgen seçim
+	Touching	Dokunulanlar
+	Fully Enclosed	Tamamen içeride
+	Drag Direction	Sürükleme yönü
 	Selection & Anchor Display	Seçim ve Bağlantı Ekranı
 	Selection Only	Yalnızca Seçim
 	Selection Tool	Seçim Aracı
@@ -3024,6 +3029,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Renkli Kağıdı Simüle Et
 	Simulate Paper	Kağıdı Simüle Et
 	Double Column	Çift Sütun
+	Keep Tools Beside the Canvas	Araçları Tuvalin Yanında Tut
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
@@ -4555,6 +4561,9 @@ axis	Both	Her İkisi
 @msg	the Pixar file's image data is damaged	Pixar dosyasının görüntü verileri bozuk
 @msg	the JPEG 2000 file can't be read	JPEG 2000 dosyası okunamıyor
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 dosyasında desteklenmeyen bir renk alanı veya JPX içeriği var
+@msg	the HEIC or HEIF file can't be read	HEIC veya HEIF dosyası okunamıyor
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC veya HEIF dosyası okunamayan türde bir görüntü içeriyor
+@msg	HEIC and HEIF images can't be opened in this build	HEIC ve HEIF görüntüleri bu derlemede açılamıyor
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD görüntüsü okunamayacak kadar büyük ({_1} × {_2} piksel)
 @msg	zipped 32-bit PSD image data with prediction can't be read	Tahmin içeren sıkıştırılmış 32 bit PSD görüntü verileri okunamıyor
 @msg	{depth}-bit PSD files in this colour mode can't be read	Bu renk modunda {depth}-bit PSD dosyaları okunamaz

@@ -2986,6 +2986,11 @@ digits	Malayalam	Malayalam
 	Selected Swatches	Markerade färgrutor
 	Selected Swatches Only	Endast markerade färgrutor
 	Selection	Markering
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rektangelmarkering
+	Touching	Berörda objekt
+	Fully Enclosed	Helt omslutna
+	Drag Direction	Dragriktning
 	Selection & Anchor Display	Visning av markering och ankarpunkter
 	Selection Only	Endast markering
 	Selection Tool	Markeringsverktyg
@@ -3121,6 +3126,7 @@ digits	Malayalam	Malayalam
 	Simulate Colored Paper	Simulera färgat papper
 	Simulate Paper	Simulera papper
 	Double Column	Dubbel kolumn
+	Keep Tools Beside the Canvas	Verktyg bredvid arbetsytan
 	Single Left Quotation Mark	Enkelt vänster citattecken
 	Single Quotes:	Enkla citattecken:
 	Single Right Quotation Mark	Enkelt höger citattecken
@@ -4722,6 +4728,9 @@ axis	Both	Båda
 @msg	the Pixar file's image data is damaged	Pixar-filens bilddata är skadade
 @msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan inte läsas
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har en färgrymd eller ett JPX-innehåll som inte stöds
+@msg	the HEIC or HEIF file can't be read	HEIC- eller HEIF-filen kan inte läsas
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen innehåller en typ av bild som inte kan läsas
+@msg	HEIC and HEIF images can't be opened in this build	HEIC- och HEIF-bilder kan inte öppnas i den här versionen
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD-bilden är för stor för att läsas ({_1} × {_2} pixlar)
 @msg	zipped 32-bit PSD image data with prediction can't be read	zippad 32-bitars PSD-bilddata med prediktion kan inte läsas
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-bitars PSD-filer i det här färgläget kan inte läsas

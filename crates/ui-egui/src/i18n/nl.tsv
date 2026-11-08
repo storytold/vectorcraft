@@ -186,6 +186,11 @@
 	Ungroup	Groepering opheffen
 	Lock	Vergrendelen
 	Selection	Selectie
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Rechthoekselectie
+	Touching	Geraakt
+	Fully Enclosed	Volledig omsloten
+	Drag Direction	Sleeprichting
 	All Artwork Above	Alle artwork erboven
 	Other Layers	Andere lagen
 	Unlock All	Alles ontgrendelen
@@ -636,6 +641,7 @@
 	Toolbars	Werkbalken
 	Advanced	Geavanceerd
 	Double Column	Dubbele kolom
+	Keep Tools Beside the Canvas	Gereedschappen naast het canvas
 	Actions	Acties
 	Asset Export	Assetexport
 	Attributes	Kenmerken

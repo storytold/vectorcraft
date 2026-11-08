@@ -194,6 +194,11 @@
 	Ungroup	Pura ryhmitys
 	Lock	Lukitse
 	Selection	Valinta
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Suorakulmiovalinta
+	Touching	Kosketetut
+	Fully Enclosed	Kokonaan sisällä
+	Drag Direction	Vetosuunta
 	All Artwork Above	Kaikki yllä oleva kuvitus
 	Other Layers	Muut tasot
 	Unlock All	Avaa kaikki lukitukset
@@ -664,6 +669,7 @@
 	Toolbars	Työkalurivit
 	Advanced	Lisäasetukset
 	Double Column	Kaksi saraketta
+	Keep Tools Beside the Canvas	Työkalut kankaan vieressä
 	Actions	Toiminnot
 	Asset Export	Resurssien vienti
 	Attributes	Määritteet
@@ -4987,6 +4993,9 @@ imageTrace	Outline	Ääriviiva
 @msg	the Pixar file's image data is damaged	Pixar-tiedoston kuvadata on vahingoittunut
 @msg	the JPEG 2000 file can't be read	tätä JPEG 2000 -tiedostoa ei voi lukea
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	tässä JPEG 2000 -tiedostossa on tukematon väriavaruus tai JPX-sisältö
+@msg	the HEIC or HEIF file can't be read	tätä HEIC- tai HEIF-tiedostoa ei voi lukea
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	tässä HEIC- tai HEIF-tiedostossa on kuvatyyppi, jota ei voi lukea
+@msg	HEIC and HEIF images can't be opened in this build	HEIC- ja HEIF-kuvia ei voi avata tässä versiossa
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	tämä PSD-kuva on liian suuri luettavaksi ({_1} × {_2} pikseliä)
 @msg	zipped 32-bit PSD image data with prediction can't be read	ennustusta käyttävää zip-pakattua 32-bittistä PSD-kuvadataa ei voi lukea
 @msg	{depth}-bit PSD files in this colour mode can't be read	tässä väritilassa olevia {depth}-bittisiä PSD-tiedostoja ei voi lukea

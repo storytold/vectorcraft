@@ -319,6 +319,11 @@ impl Session {
             slices_locked: self.menu.slices_locked,
             auto_add_delete: !self.prefs.disable_auto_add_delete,
             selection_tolerance: self.prefs.selection_tolerance,
+            marquee_mode: match self.prefs.marquee_selection.as_str() {
+                "enclosed" => vectorcraft_tools::MarqueeMode::Enclosed,
+                "directional" => vectorcraft_tools::MarqueeMode::Directional,
+                _ => vectorcraft_tools::MarqueeMode::Touching,
+            },
             anchor_size: self.prefs.anchor_size,
             path_only: self.prefs.object_selection_by_path_only,
             type_path_only: self.prefs.type_selection_by_path_only,

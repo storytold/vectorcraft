@@ -3090,6 +3090,11 @@ digits	Malayalam	Малаялам
 	Selected Swatches	Вибрані зразки
 	Selected Swatches Only	Тільки вибрані зразки
 	Selection	Виділення
+# Marquee selection modes (draft translations; native review welcome).
+	Marquee Selection	Виділення рамкою
+	Touching	Перетнуті
+	Fully Enclosed	Повністю всередині
+	Drag Direction	Напрямок перетягування
 	Selection & Anchor Display	Відображення виділення та опорних точок
 	Selection Only	Тільки виділення
 	Selection Tool	Інструмент «Виділення»
@@ -3227,6 +3232,7 @@ digits	Malayalam	Малаялам
 	Simulate Colored Paper	Імітувати кольоровий папір
 	Simulate Paper	Імітувати папір
 	Double Column	Подвійний стовпець
+	Keep Tools Beside the Canvas	Інструменти поруч із полотном
 	Single Left Quotation Mark	Одинарна лапка, що відкриває
 	Single Quotes:	Одинарні лапки:
 	Single Right Quotation Mark	Одинарна лапка, що закриває
@@ -4831,6 +4837,9 @@ axis	Both	Обидві
 @msg	the Pixar file's image data is damaged	дані зображення у файлі Pixar пошкоджені
 @msg	the JPEG 2000 file can't be read	не вдається прочитати файл JPEG 2000
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	файл JPEG 2000 містить непідтримуваний колірний простір або вміст JPX
+@msg	the HEIC or HEIF file can't be read	не вдається прочитати файл HEIC або HEIF
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	файл HEIC або HEIF містить зображення такого типу, яке не вдається прочитати
+@msg	HEIC and HEIF images can't be opened in this build	зображення HEIC і HEIF не можна відкрити в цій збірці
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	зображення PSD завелике для читання ({_1} × {_2} пікс.)
 @msg	zipped 32-bit PSD image data with prediction can't be read	32-бітні дані зображення PSD зі стисненням ZIP із передбаченням не читаються
 @msg	{depth}-bit PSD files in this colour mode can't be read	{depth}-бітні файли PSD у цьому колірному режимі не читаються

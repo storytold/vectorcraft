@@ -2,6 +2,65 @@ use super::*;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Shape as _;
 
+/// The marquee explains E without depending on color. At the canvas edge the hint stays in
+/// view, in every brightness, and the two rules have visibly different outlines.
+#[test]
+fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
+    let draw = |ui: &mut egui::Ui| {
+        let t = Tokens::get(ui.ctx());
+        let xf = Xf { rect: ui.max_rect(), zoom: 1.0, center: Point::new(160.0, 100.0), rot: 0.0 };
+        let prefs = vectorcraft_engine::Prefs::default();
+        for (enclosed, y) in [(false, 80.0), (true, 180.0)] {
+            overlays::draw_overlays(
+                ui.painter(),
+                &xf,
+                &[Overlay::SelectionMarquee { rect: Rect::new(20.0, y - 60.0, 300.0, y), enclosed, pointer: Point::new(315.0, y) }],
+                &t,
+                overlays::HandleLook::of(&prefs),
+            );
+        }
+    };
+    for brightness in crate::theme::Brightness::ALL {
+        for width in [160.0, 320.0] {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            crate::theme::apply(&ctx, brightness);
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(width, 200.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| draw(ui));
+            out.textures_delta.clear();
+            let text = crate::tests_labels::shapes_text(&out);
+            assert!(text.contains("Fully Enclosed · E: Touching") && text.contains("Touching · E: Fully Enclosed"), "{text}");
+            for shape in &out.shapes {
+                if let egui::Shape::Text(label) = &shape.shape {
+                    assert!(
+                        label.pos.x >= shape.clip_rect.min.x && label.pos.x + label.galley.size().x <= shape.clip_rect.max.x,
+                        "{brightness:?}: hint clipped"
+                    );
+                    assert!(
+                        label.pos.y >= shape.clip_rect.min.y && label.pos.y + label.galley.size().y <= shape.clip_rect.max.y,
+                        "{brightness:?}: hint clipped vertically"
+                    );
+                }
+            }
+        }
+    }
+    // Optional visual QA of our own UI. Captures never enter the repository.
+    if let Some(path) = std::env::var_os("VECTORCRAFT_MARQUEE_CAPTURE") {
+        let mut ready = false;
+        let mut harness = egui_kittest::Harness::builder().with_size(vec2(320.0, 200.0)).wgpu().build_ui(move |ui| {
+            if !ready {
+                crate::theme::install_fonts(ui.ctx());
+                crate::theme::apply(ui.ctx(), crate::theme::Brightness::MediumDark);
+                ready = true;
+                return;
+            }
+            draw(ui);
+        });
+        harness.run_steps(4);
+        harness.render().unwrap().save(path).unwrap();
+    }
+}
+
 #[test]
 fn subpixel_dock_layout_does_not_change_pointer_document_coordinates() {
     let mut observed = Vec::new();
