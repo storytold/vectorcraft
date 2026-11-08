@@ -1227,6 +1227,14 @@ in `object.envelope.resetWithMesh`; `antiAlias`, `distortAppearance`, `distortLi
 `distortPatternFills` in `object.envelope.options`; and `editing` in `object.envelope.editContents`. A null is read as
 a key left out.
 
+`object.envelope.makeWithWarp`, `resetWithWarp` and `options` refuse a `style` that is not a string with
+`` `style` must be a string `` and a name that is no warp style with `` unknown warp style `foo` ``, and an
+`orientation` other than `horizontal` or `vertical`, a number or `true` included, with
+`` `orientation` must be one of horizontal, vertical ``. `object.envelope.options` refuses a `preserveShape` that is
+not a string with `` `preserveShape` must be a string ``, and checks the warp keys when no envelope or only mesh
+envelopes are selected, too. Each leaves the document, its undo history and the options new envelopes start with as
+they were. A null is read as a key left out.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key, and leave the document and its undo history as they were:
 `clockwise` in `shape.spiral`; `closed` in `shape.arc` and `path.create`; `vertical` and `placeholder` in `text.create`
