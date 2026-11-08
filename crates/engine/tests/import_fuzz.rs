@@ -3799,8 +3799,9 @@ proptest! {
     }
 
     /// Brush objects of every kind with any parameters, the brush manager's order with any names,
-    /// and brush art sections nested or cut short: read with the layers, or as a library without
-    /// them, the brushes kept within their ranges.
+    /// and brush art sections nested or cut short, their art alone or in a group after a frame of
+    /// any corners, painted or not, open or closed, the group ended or not: read with the layers,
+    /// or as a library without them, the brushes kept within their ranges.
     #[test]
     fn ai_brushes_never_panic(
         kind in 0usize..7,
@@ -3809,6 +3810,7 @@ proptest! {
         nest in 0usize..6,
         cut in any::<bool>(),
         layers in any::<bool>(),
+        frame in prop::option::of((prop::collection::vec(prop_oneof![arb_num(), Just("0".to_string()), Just("4".to_string())], 4), prop::sample::select(vec!["n", "N", "f", "S"]), any::<bool>())),
     ) {
         use vectorcraft_testkit::ai;
         let kinds = ["Adobe Calligraphic Brush Tool", "Adobe Scatter Brush Tool", "Adobe ArtOnPath Brush Tool", "Adobe PatternOnPath Brush Tool", "Adobe dBrush Brush Tool", "Adobe Brush Manager Order", "Other"];
@@ -3822,7 +3824,14 @@ proptest! {
         for _ in 0..nest {
             art.push_str("%AI8_BeginBrushPattern\n(A)\n");
         }
-        art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        match &frame {
+            Some((c, op, ended)) => {
+                let (x0, y0, x1, y1) = (&c[0], &c[1], &c[2], &c[3]);
+                let end = if *ended { "U\n" } else { "" };
+                art.push_str(&format!("u\n{x0} {y0} m\n{x1} {y0} L\n{x1} {y1} L\n{x0} {y1} L\n{x0} {y0} L\n{op}\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n{end}"));
+            }
+            None => art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n"),
+        }
         for _ in 0..nest.saturating_sub(usize::from(cut)) {
             art.push_str("%AI8_EndBrushPattern\n");
         }
