@@ -599,8 +599,9 @@ const BAR_ALIGNMENTS: [&str; 3] = ["Align left", "Align center", "Align right"];
 fn the_control_bar_shows_the_paragraph_alignment_of_the_selected_type() {
     let ctx = control_bar_ctx();
     let mut app = control_bar_app(&[json!({"x": 20, "y": 50, "text": "Point"})]);
-    // Pinned, so that the room the buttons need can't creep up past common window widths.
-    for width in [1440.0, 1920.0] {
+    // Pinned, so that the room the buttons need can't creep up past common window widths. The
+    // bar's right end keeps the panel menu button's room.
+    for width in [1536.0, 1920.0] {
         let nodes = control_bar_nodes(&ctx, &mut app, width, vec![]);
         let ends = BAR_ALIGNMENTS.map(|n| control_bar_end(&nodes, n));
         assert!(ends.iter().all(|e| e.is_some_and(|x| x <= f64::from(width) - 10.0)), "pinned: the buttons show on a {width} pt window: {ends:?}");

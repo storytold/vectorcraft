@@ -1073,6 +1073,9 @@ font-technology	Variable	Változó
 	Do Not Scale	Nincs méretezés
 	Do you want to save the changes you made to “{name}”?	Mented a módosításokat ebben: „{name}”?
 	Dock Panel	Panel dokkolása
+	Dock to Top	Dokkolás felülre
+	Dock to Bottom	Dokkolás alulra
+	Dock Control Bar	Vezérlősáv dokkolása
 	Document	Dokumentum
 	Document Color Mode	Dokumentum színmódja
 	Document Info	Dokumentuminformáció

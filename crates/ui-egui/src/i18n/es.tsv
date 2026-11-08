@@ -3936,6 +3936,9 @@ axis	Both	Ambos
 	Put back in the toolbar	Devolver a la barra de herramientas
 	Float Panel	Hacer flotar el panel
 	Dock Panel	Anclar panel
+	Dock to Top	Anclar arriba
+	Dock to Bottom	Anclar abajo
+	Dock Control Bar	Anclar barra de control
 	Drag to float the toolbar	Arrastrar para hacer flotar la barra de herramientas
 	Drag to the window's left edge to dock	Arrastrar al borde izquierdo de la ventana para anclar
 	Float Tool Group	Hacer flotar el grupo de herramientas

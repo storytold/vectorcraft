@@ -3920,6 +3920,9 @@ axis	Both	両方
 	Put back in the toolbar	ツールバーに戻す
 	Float Panel	パネルをフローティング
 	Dock Panel	パネルをドッキング
+	Dock to Top	上部にドッキング
+	Dock to Bottom	下部にドッキング
+	Dock Control Bar	コントロールバーをドッキング
 	Drag to float the toolbar	ドラッグしてツールバーをフローティング
 	Drag to the window's left edge to dock	ウィンドウの左端までドラッグしてドッキング
 	Float Tool Group	ツールグループをフローティング

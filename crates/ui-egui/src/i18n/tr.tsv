@@ -3741,6 +3741,9 @@ axis	Both	Her İkisi
 	Put back in the toolbar	Araç çubuğuna geri yerleştir
 	Float Panel	Paneli Yüzer Yap
 	Dock Panel	Bağlantı İstasyonu Paneli
+	Dock to Top	Üste yerleştir
+	Dock to Bottom	Alta yerleştir
+	Dock Control Bar	Kontrol çubuğunu yerleştir
 	Drag to float the toolbar	Araç çubuğunu ayırmak için sürükleyin
 	Drag to the window's left edge to dock	Sabitlemek için pencerenin sol kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
