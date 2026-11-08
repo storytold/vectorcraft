@@ -343,6 +343,10 @@
 	Anti-Alias	एंटी-एलियास
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
+	Anti-aliasing Method	एंटी-एलियासिंग विधि
+antiAlias	Sharp	शार्प
+	Crisp	क्रिस्प
+	Strong	स्ट्रॉन्ग
 	Anti-aliasing:	एंटी-एलियासिंग:
 	Any except extracting pages	पेज निकालने के अलावा सभी
 	Any Kind	किसी भी प्रकार का
@@ -5538,6 +5542,7 @@
 @msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, एंकर] जोड़े की एक सारणी होना चाहिए
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {k} नहीं
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {v} नहीं
+@msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` होना चाहिए "none", "sharp", "crisp" या "strong"
 @msg	`artboards` must be a list of artboard indices	`artboards` को आर्टबोर्ड इंडेक्स की सूची होना चाहिए
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all या 1, 3-5 जैसी सीमा दें, {v} नहीं
 @msg	`aspect` must be a number (%)	`aspect` को संख्या (%) होना चाहिए

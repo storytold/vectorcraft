@@ -194,6 +194,19 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// The Character panel's Anti-aliasing Method label and its choices, with the Sharp method's
+/// own `antiAlias` row apart from the plain "Sharp" corner row.
+#[test]
+fn anti_aliasing_method_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let cat = lang.catalog();
+        for label in ["Anti-aliasing Method", "Crisp", "Strong"] {
+            assert!(cat.plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+        assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
+    }
+}
+
 /// Each language counts with its own plural rule: the form a count picks (`one`, then `few`, then
 /// `other`/`many`).
 #[test]
