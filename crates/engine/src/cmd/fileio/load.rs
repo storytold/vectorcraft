@@ -555,10 +555,15 @@ impl ReadFile {
 /// thread): read and decode the file, read its linked files and lay out its type → what
 /// [`open_read`] opens. The linked files are looked for from `path`, where the file was read from,
 /// and modified ones are read again when `update_links` (Preferences › File Handling › Update
-/// Links set to Automatically; see [`crate::cmd::links::resolve`]).
+/// Links set to Automatically; see [`crate::cmd::links::resolve`]). A file an importer plug-in
+/// reads (`importer` in `p`, or an extension only an importer lists) is read by it
+/// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let mut loaded = load_with(name, bytes, &opts)?;
+    let mut loaded = match super::importer::pick(name, bytes, p)? {
+        Some(plugin) => super::importer::load(name, bytes, &plugin, p)?,
+        None => load_with(name, bytes, &opts)?,
+    };
     let links = crate::cmd::links::resolve(&mut loaded.doc, path.as_deref(), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links })
@@ -663,7 +668,11 @@ pub(crate) fn source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
 }
 
 pub(super) fn open(s: &mut Session, p: &Value) -> Result<Value> {
-    let src = source(p, "document.open")?;
+    // A file only an importer plug-in reads is read up to the importer's input limit.
+    let src = match str_param(p, "path") {
+        Some(path) => Source { name: path, bytes: super::importer::read_path(path, p)?, path: Some(path) },
+        None => source(p, "document.open")?,
+    };
     // A relative path is the file in the working directory: its folder is where relative links
     // are found (a bare file name has no folder of its own).
     let path = src.path.map(super::absolute_path);

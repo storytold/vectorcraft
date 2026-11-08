@@ -174,6 +174,7 @@ fn permission_words(name: &str) -> String {
         Some(permissions::Permission::State) => tl!("Keep data of its own with the document"),
         Some(permissions::Permission::EffectRender) => tl!("Change how the objects its effect is applied to are drawn"),
         Some(permissions::Permission::ExportWrite) => tl!("Write the document as a file in its own format"),
+        Some(permissions::Permission::ImportRead) => tl!("Read files you open in its format and make documents from them"),
         None => return permissions::display_text(name, permissions::MAX_SHOWN_FIELD),
     };
     words.to_string()
@@ -254,6 +255,70 @@ pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
     let path =
         pick_open(app, &FilePick { filters: FilePick::filters(fileio::open_filters()), folder: open_dialog_folder(app), ..Default::default() })?;
     open_reporting(app, &path).map(|_| ())
+}
+
+/// File › Open With: opens the file `p` names (`path`), else one picked among the files with the
+/// extensions the importer plug-in `importer` lists, with that importer, also when a built-in
+/// format reads the extension (`document.open {importer}`); a failure is reported as File › Open
+/// reports it. The web's file picker can't carry the importer: there File › Open's picker opens,
+/// and the file opens as File › Open opens it.
+pub fn open_with(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let importer = p.get("importer").and_then(Value::as_str).ok_or("missing `importer` (see document.formats)")?;
+    let plugin = vectorcraft_plugins::import::named(importer).map_err(|e| e.to_string())?;
+    let path = match p.get("path").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+        Some(path) => path.to_string(),
+        None if app.services.open_async.is_some() => return open_dialog(app).map(|_| Value::Null),
+        None => {
+            // The importer's format: its name and extensions, made once for each installation.
+            let filters = fileio::format(&vectorcraft_plugins::export::format_id(plugin.id()))
+                .filter(|f| f.read)
+                .map(|f| FilePick::filter(f.label, f.extensions))
+                .into_iter()
+                .collect();
+            pick_open(app, &FilePick { filters, folder: open_dialog_folder(app), ..Default::default() })?
+        }
+    };
+    let opened = vectorcraft_engine::file_access::check_read(&path)
+        .and_then(|()| check_import_size(&path, true))
+        .and_then(|()| read(app, &path))
+        .and_then(|bytes| {
+            open_document(app, &path, &bytes, Some(path.clone()), &json!({ "importer": vectorcraft_plugins::export::format_id(plugin.id()) }))
+        });
+    if let Err(e) = &opened {
+        report_open_error(app, &fileio::file_name(&path), e);
+    }
+    opened
+}
+
+/// A file at `path` that only an importer plug-in reads (with `explicit`, the one named for it),
+/// larger than the importer's input limit: an error before the file is read. A file whose start
+/// shows a built-in format passes when no importer was named, since a built-in reader opens it.
+#[cfg(not(target_arch = "wasm32"))]
+fn check_import_size(path: &str, explicit: bool) -> Result<(), String> {
+    use std::io::Read as _;
+    use vectorcraft_plugins::import;
+    let ext = fileio::extension(path);
+    if !explicit && (fileio::readable_format(&ext).is_some() || import::for_extension(&ext).is_empty()) {
+        return Ok(());
+    }
+    if std::fs::metadata(path).map_or(true, |m| m.len() <= import::MAX_INPUT_BYTES as u64) {
+        return Ok(());
+    }
+    if !explicit {
+        let mut head = Vec::new();
+        if let Ok(f) = std::fs::File::open(path) {
+            let _ = f.take(64 << 10).read_to_end(&mut head);
+        }
+        if fileio::detect(path, &head).is_some() {
+            return Ok(());
+        }
+    }
+    Err(format!("can't open `{}`: {}", fileio::file_name(path), import::too_large()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn check_import_size(_: &str, _: bool) -> Result<(), String> {
+    Ok(())
 }
 
 /// A file the user asked to open (File › Open, Open Recent, the Home screen, a drop, the Finder)
@@ -353,6 +418,8 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A file only an importer plug-in reads is not read past the importer's input limit.
+    check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
         // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.

@@ -651,11 +651,12 @@ pub fn read_extensions(f: &Format) -> &'static [&'static str] {
     READ_ALIASES.iter().find(|(id, _)| *id == f.id).map_or(f.extensions, |(_, exts)| *exts)
 }
 
-/// The readable format of extension `ext` (any case, leading dot allowed): [`format`]'s when it
-/// reads, else the one [`READ_ALIASES`] gives it (`.dib` is BMP).
+/// The built-in readable format of extension `ext` (any case, leading dot allowed): [`format`]'s
+/// when it reads, else the one [`READ_ALIASES`] gives it (`.dib` is BMP). Importer plug-ins are
+/// not looked at ([`importer_formats`]).
 pub fn readable_format(ext: &str) -> Option<&'static Format> {
     let k = ext.trim_start_matches('.').to_ascii_lowercase();
-    format(&k).filter(|f| f.read).or_else(|| READ_ALIASES.iter().find(|(_, exts)| exts.contains(&k.as_str())).and_then(|(id, _)| format(id)))
+    builtin(&k).filter(|f| f.read).or_else(|| READ_ALIASES.iter().find(|(_, exts)| exts.contains(&k.as_str())).and_then(|(id, _)| builtin(id)))
 }
 
 /// The readable format a file name's extension names ([`readable_format`]).
@@ -668,12 +669,38 @@ fn format_filters() -> impl Iterator<Item = (&'static str, &'static [&'static st
     FORMATS.iter().filter(|f| f.read).map(|f| (f.label, read_extensions(f)))
 }
 
-/// Open-dialog filters: "All readable files" first, then one per readable format, then swatch
-/// libraries (which open in the library panel), Libraries panel libraries, flattener, PDF, print
-/// and export presets (imported), scripts (checked without running them) and plug-ins (installed).
+/// Every extension File › Open reads as a document: [`OPEN_EXTS`], then the extensions the
+/// installed importer plug-ins list that no built-in format reads, in plug-in id order. Made once
+/// for each set of installed plug-ins, so it lives as long as the dialogs that hold it.
+pub fn open_extensions() -> &'static [&'static str] {
+    use vectorcraft_plugins::registry;
+    static MADE: std::sync::Mutex<Option<(u64, &'static [&'static str])>> = std::sync::Mutex::new(None);
+    let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
+    let revision = registry::revision();
+    if let Some((r, exts)) = *made
+        && r == revision
+    {
+        return exts;
+    }
+    let mut exts: Vec<&'static str> = OPEN_EXTS.to_vec();
+    for e in importer_formats().iter().flat_map(|f| f.extensions.iter().copied()) {
+        if !exts.contains(&e) && readable_format(e).is_none() {
+            exts.push(e);
+        }
+    }
+    let exts: &'static [&'static str] = if exts.len() == OPEN_EXTS.len() { OPEN_EXTS } else { Box::leak(exts.into_boxed_slice()) };
+    *made = Some((revision, exts));
+    exts
+}
+
+/// Open-dialog filters: "All readable files" first, then one per readable format, then one per
+/// importer plug-in (under its name), then swatch libraries (which open in the library panel),
+/// Libraries panel libraries, flattener, PDF, print and export presets (imported), scripts (checked
+/// without running them) and plug-ins (installed).
 pub fn open_filters() -> impl Iterator<Item = (&'static str, &'static [&'static str])> {
-    std::iter::once(("All readable files", OPEN_EXTS))
+    std::iter::once(("All readable files", open_extensions()))
         .chain(format_filters())
+        .chain(importer_formats().into_iter().map(|f| (f.label, f.extensions)))
         .chain(std::iter::once(("Swatch libraries", crate::cmd::swatchlib::LIBRARY_EXTS)))
         .chain(std::iter::once(("Libraries", crate::cmd::library::LIBRARY_EXTS)))
         .chain(std::iter::once(("Flattener presets", crate::cmd::flatten::PRESET_EXTS)))
@@ -707,26 +734,40 @@ pub fn place_filters() -> impl Iterator<Item = (&'static str, &'static [&'static
 }
 
 /// A format by id or extension (any case, leading dot allowed; `jpeg` finds `jpg`): a built-in
-/// one, else one an exporter plug-in adds ([`plugin_formats`]). A built-in format keeps its
-/// extension, so an exporter that lists it too is found by its format id.
+/// one, else one a plug-in adds ([`plugin_formats`]), an exporter's before an importer's for an
+/// extension both list. A built-in format keeps its extension, so an exporter or importer that
+/// lists it too is found by its format id.
 pub fn format(id_or_ext: &str) -> Option<&'static Format> {
     let k = id_or_ext.trim_start_matches('.').to_ascii_lowercase();
-    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k.as_str()))).or_else(|| {
+    builtin(&k).or_else(|| {
         let added = plugin_formats();
-        added.iter().find(|f| f.id.eq_ignore_ascii_case(&k)).or_else(|| added.iter().find(|f| f.extensions.contains(&k.as_str()))).copied()
+        let by_ext = |f: &&&Format| f.extensions.contains(&k.as_str());
+        added
+            .iter()
+            .find(|f| f.id.eq_ignore_ascii_case(&k))
+            .or_else(|| added.iter().filter(|f| f.write).find(by_ext))
+            .or_else(|| added.iter().find(by_ext))
+            .copied()
     })
 }
 
-/// The formats the installed exporter plug-ins add ([`vectorcraft_plugins::export`]), by plug-in
-/// id: write only, with the plug-in's name as the label and its extensions. Each is made once for
-/// each installation of its plug-in, its strings interned, so formats live as long as the catalogues
+/// A built-in format by id or extension (lower case, without the dot).
+fn builtin(k: &str) -> Option<&'static Format> {
+    FORMATS.iter().find(|f| f.id == k).or_else(|| FORMATS.iter().find(|f| f.extensions.contains(&k)))
+}
+
+/// The formats the installed exporter and importer plug-ins add ([`vectorcraft_plugins::export`],
+/// [`vectorcraft_plugins::import`]), by plug-in id: an exporter's write only and an importer's read
+/// only, with the plug-in's name as the label and its extensions. Each is made once for each
+/// installation of its plug-in, its strings interned, so formats live as long as the catalogues
 /// that hold them.
 pub fn plugin_formats() -> Vec<&'static Format> {
-    use vectorcraft_plugins::{export, registry};
+    use vectorcraft_plugins::{Kind, export, registry};
     static MADE: std::sync::Mutex<Vec<(u64, &'static Format)>> = std::sync::Mutex::new(Vec::new());
     let mut made = MADE.lock().unwrap_or_else(|e| e.into_inner());
-    export::installed()
+    registry::list()
         .iter()
+        .filter(|p| matches!(p.manifest().kind, Kind::Exporter | Kind::Importer))
         .map(|p| {
             if let Some((_, f)) = made.iter().find(|(serial, _)| *serial == p.serial()) {
                 return *f;
@@ -738,8 +779,8 @@ pub fn plugin_formats() -> Vec<&'static Format> {
                 label: registry::intern(&m.name),
                 extensions: Box::leak(extensions.into_boxed_slice()),
                 mime: "application/octet-stream",
-                read: false,
-                write: true,
+                read: m.kind == Kind::Importer,
+                write: m.kind == Kind::Exporter,
                 raster: false,
                 options: &[],
             }));
@@ -747,6 +788,11 @@ pub fn plugin_formats() -> Vec<&'static Format> {
             f
         })
         .collect()
+}
+
+/// The formats the installed importer plug-ins add ([`plugin_formats`] that read), by plug-in id.
+pub fn importer_formats() -> Vec<&'static Format> {
+    plugin_formats().into_iter().filter(|f| f.read).collect()
 }
 
 /// The lower-case extension of a file name or path (empty when it has none).
@@ -837,7 +883,7 @@ pub(super) fn formats(_: &mut Session, _: &Value) -> Result<Value> {
         "formats": all().map(listed).collect::<Vec<_>>(),
         "readable": ids(|f| f.read),
         "writable": ids(|f| f.write),
-        "openExtensions": OPEN_EXTS,
+        "openExtensions": open_extensions(),
         "unsupported": UNSUPPORTED.iter().map(Unsupported::to_json).collect::<Vec<_>>(),
     }))
 }

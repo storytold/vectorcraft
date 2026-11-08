@@ -8,7 +8,8 @@
 //! at once. A heavy filter (its manifest's `budget`) has no Preview, since a run may take minutes:
 //! it runs in the background ([`crate::plugin_runs`]). Exporters are formats of File › Export ›
 //! Export As; one with parameters opens dialog `pluginExport` once the file is picked, and its
-//! Export button writes the file.
+//! Export button writes the file. Importers open the files File › Open finds no built-in format
+//! for, and File › Open With lists them, to open a file with one of them by name.
 
 use std::sync::Arc;
 
@@ -56,6 +57,18 @@ pub fn object_menu() -> Vec<Item> {
     items
 }
 
+/// File › Open With's header while no importer plug-in is installed.
+pub const NO_IMPORTERS: &str = "No importer plug-ins installed";
+
+/// File › Open With: the installed importers (`file.openWith {importer}`), each by its name.
+pub fn open_with_menu() -> Vec<Item> {
+    let items: Vec<Item> = vectorcraft_plugins::import::installed()
+        .iter()
+        .map(|p| Item::Cmd(label(&p.manifest().name, true), "file.openWith", json!({ "importer": vectorcraft_plugins::export::format_id(p.id()) })))
+        .collect();
+    if items.is_empty() { vec![Item::Header(NO_IMPORTERS)] } else { items }
+}
+
 /// Effect › Plug-ins: the live-effect plug-ins (`None` while none is installed). Effects without
 /// options apply at once, as built-in ones do.
 pub fn effect_menu() -> Option<Item> {
@@ -79,6 +92,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         Kind::Filter => {}
         Kind::Effect => return Err(format!("{} is a live effect (Effect › Plug-ins)", m.name)),
         Kind::Exporter => return Err(format!("{} is an exporter (File › Export › Export As…)", m.name)),
+        Kind::Importer => return Err(format!("{} is an importer (File › Open With)", m.name)),
     }
     let given = p.get("params").filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
     if m.params.is_empty() || given.is_some() {

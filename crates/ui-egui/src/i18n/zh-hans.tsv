@@ -6285,3 +6285,20 @@ breakText	Glyphs	字形
 # 3D Box add-on
 	3D Box	3D 盒子
 	3D Box Tool	3D 盒子工具
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	打开方式
+	No importer plug-ins installed	未安装导入增效工具
+	Read files you open in its format and make documents from them	读取以其格式打开的文件并据此创建文档
+@msg	{_1} is an importer (File › Open With)	{_1} 是导入增效工具 (文件 › 打开方式)
+@msg	missing `importer` (see document.formats)	缺少 `importer` (参见 document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` 必须是增效工具的格式 ID (参见 document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
+@msg	`{_1}` is a {_2}, not an importer	`{_1}` 是 {_2}，不是导入增效工具
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
+@msg	the importer returned no objects	导入增效工具未返回任何对象
+@msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	导入增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
+@msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	导入增效工具始终获得导入的预算：请省略 `budget`

@@ -6282,3 +6282,8 @@ breakText	Glyphs	Глифи
 # 3D Box add-on
 	3D Box	3D кутия
 	3D Box Tool	Инструмент за 3D кутия
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Отваряне с
+	No importer plug-ins installed	Няма инсталирани плъгини за импортиране
+	Read files you open in its format and make documents from them	Четене на файлове, които отваряте в неговия формат, и създаване на документи от тях

@@ -47,10 +47,14 @@ pub enum Permission {
     /// Write the document as a file in its own format (an exporter).
     #[serde(rename = "export.write")]
     ExportWrite,
+    /// Read a file the user opens and make a new document from it (an importer).
+    #[serde(rename = "import.read")]
+    ImportRead,
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 5] = [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender, Permission::ExportWrite];
+pub const ALL: [Permission; 6] =
+    [Permission::DocRead, Permission::DocWrite, Permission::State, Permission::EffectRender, Permission::ExportWrite, Permission::ImportRead];
 
 impl Permission {
     /// Its name in a manifest and in `plugin.install`'s `grant`.
@@ -61,6 +65,7 @@ impl Permission {
             Permission::State => "state",
             Permission::EffectRender => "effect.render",
             Permission::ExportWrite => "export.write",
+            Permission::ImportRead => "import.read",
         }
     }
 
@@ -77,6 +82,7 @@ impl Permission {
             Permission::State => "Keep data of its own with the document",
             Permission::EffectRender => "Change how the objects its effect is applied to are drawn",
             Permission::ExportWrite => "Write the document as a file in its own format",
+            Permission::ImportRead => "Read files you open in its format and make documents from them",
         }
     }
 
@@ -87,16 +93,17 @@ impl Permission {
             Kind::Filter => &[Permission::DocRead, Permission::DocWrite, Permission::State],
             Kind::Effect => &[Permission::DocRead, Permission::EffectRender],
             Kind::Exporter => &[Permission::DocRead, Permission::ExportWrite],
+            Kind::Importer => &[Permission::ImportRead],
         }
     }
 
     /// The permissions a plug-in of `kind` can't work without, which its list must hold: a live
-    /// effect and an exporter are always handed objects, and only draw or write. A filter may
-    /// leave any of its permissions out.
+    /// effect and an exporter are always handed objects, and only draw or write; an importer is
+    /// always handed the file being opened. A filter may leave any of its permissions out.
     fn required(kind: Kind) -> &'static [Permission] {
         match kind {
             Kind::Filter => &[],
-            Kind::Effect | Kind::Exporter => Permission::implied(kind),
+            Kind::Effect | Kind::Exporter | Kind::Importer => Permission::implied(kind),
         }
     }
 }
@@ -218,7 +225,11 @@ mod tests {
         assert_eq!(validate(Kind::Filter, &[]).unwrap(), []);
         assert!(validate(Kind::Effect, &list(&["doc.read", "effect.render"])).is_ok());
         assert!(validate(Kind::Exporter, &list(&["export.write", "doc.read"])).is_ok());
+        assert_eq!(validate(Kind::Importer, &list(&["import.read"])).unwrap(), [Permission::ImportRead]);
         for (kind, names, says) in [
+            (Kind::Importer, &["import.read", "doc.read"][..], "`doc.read` doesn't apply to a plug-in of kind `importer`"),
+            (Kind::Importer, &[], "needs the permission `import.read`"),
+            (Kind::Exporter, &["export.write", "doc.read", "import.read"], "`import.read` doesn't apply to a plug-in of kind `exporter`"),
             (Kind::Filter, &["doc.read", "clipboard"][..], "unknown permission `clipboard`"),
             (Kind::Filter, &["progress"], "`progress` is reserved"),
             (Kind::Filter, &["export.write"], "doesn't apply to a plug-in of kind `filter`"),

@@ -242,6 +242,24 @@ proptest! {
         renders(&s, &out)?;
     }
 
+    /// An importer's hostile output (`document.open`) either opens a document that renders and
+    /// exports, or is an error that opens nothing.
+    #[test]
+    fn hostile_importer_output_never_crashes(
+        objects in prop::collection::vec(arb_object(), 0..5),
+        junk in prop::option::weighted(0.1, arb_junk()),
+    ) {
+        let mut s = Session::new();
+        let out = output(&objects, &[], junk);
+        install(&mut s, &wat::parse_str(tpl::returning(&tpl::importer("fuzz.importer", r#"["fzi"]"#, "{}"), &out)).unwrap()).unwrap();
+        let r = catch_quiet(|| s.execute("document.open", &json!({"name": "x.fzi", "dataBase64": ""})).map(|_| ()));
+        match r {
+            Err(msg) => return Err(TestCaseError::fail(format!("panicked on {out}: {msg}"))),
+            Ok(Err(_)) => prop_assert!(s.documents().is_empty(), "a failed open opened a document: {}", out),
+            Ok(Ok(())) => renders(&s, &out)?,
+        }
+    }
+
     #[test]
     fn mutated_and_garbage_modules_never_crash(
         flips in prop::collection::vec((any::<prop::sample::Index>(), any::<u8>()), 0..8),
@@ -276,10 +294,10 @@ proptest! {
     /// character from the name.
     #[test]
     fn hostile_manifest_permissions_never_crash(
-        kind in prop::sample::select(vec!["filter", "effect", "exporter"]),
+        kind in prop::sample::select(vec!["filter", "effect", "exporter", "importer"]),
         names in prop::collection::vec(
             prop_oneof![
-                prop::sample::select(vec!["doc.read", "doc.write", "state", "effect.render", "export.write", "progress", "ui.panel", ""]),
+                prop::sample::select(vec!["doc.read", "doc.write", "state", "effect.render", "export.write", "import.read", "progress", "ui.panel", ""]),
                 Just("doc.read\u{202E}"),
                 Just("\u{0007}"),
             ],
@@ -288,10 +306,10 @@ proptest! {
         permissions in prop::option::weighted(0.8, prop_oneof![Just(Value::Null), arb_junk()]),
         api in prop_oneof![3 => Just(json!(1)), 1 => arb_junk()],
         name in prop_oneof![3 => "[a-z\u{202E}\u{2066}\u{200F} ]{1,64}", 1 => "[a-z\u{202E}\u{2066}\u{0007}\u{200F} ]{1,80}"],
-        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write"]))],
+        grant in prop_oneof![Just(Value::Null), arb_junk(), Just(json!(["doc.read", "doc.write", "state", "effect.render", "export.write", "import.read"]))],
     ) {
         let mut m = json!({"id": "fuzz.permissions", "name": name, "kind": kind, "api": api});
-        if kind == "exporter" {
+        if matches!(kind, "exporter" | "importer") {
             m["extensions"] = json!(["fz"]);
         }
         m["permissions"] = match permissions {

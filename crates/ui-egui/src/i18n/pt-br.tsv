@@ -6517,3 +6517,20 @@ swatch	Yellow Green	Verde-amarelado
 # 3D Box add-on
 	3D Box	Caixa 3D
 	3D Box Tool	Ferramenta Caixa 3D
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Abrir Com
+	No importer plug-ins installed	Nenhum plug-in de importação instalado
+	Read files you open in its format and make documents from them	Ler os arquivos que você abre no formato dele e criar documentos a partir deles
+@msg	{_1} is an importer (File › Open With)	{_1} é um plug-in de importação (Arquivo › Abrir Com)
+@msg	missing `importer` (see document.formats)	falta `importer` (consulte document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` deve ser o id de formato de um plug-in (consulte document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” abre arquivos {_1}, não `{_2}`
+@msg	`{_1}` is a {_2}, not an importer	`{_1}` é um {_2}, não um plug-in de importação
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` é um plug-in de importação: abra um arquivo com document.open {{"importer"}"}}
+@msg	the importer returned no objects	o plug-in de importação não retornou nenhum objeto
+@msg	an importer returns `objects` and `warnings`, not `{key}`	um plug-in de importação retorna `objects` e `warnings`, não `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	o arquivo é maior que os {MAX_INPUT_BYTES} bytes que um plug-in de importação lê
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de importação declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	um plug-in de importação sempre recebe o orçamento de uma importação: omita `budget`

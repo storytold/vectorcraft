@@ -6533,3 +6533,20 @@ shape	Open	Открытый
 # 3D Box add-on
 	3D Box	3D-параллелепипед
 	3D Box Tool	Инструмент «3D-параллелепипед»
+
+# Importer plug-ins (File › Open With, document.open)
+	Open With	Открыть с помощью
+	No importer plug-ins installed	Модули импорта не установлены
+	Read files you open in its format and make documents from them	Читать файлы, открываемые в его формате, и создавать из них документы
+@msg	{_1} is an importer (File › Open With)	{_1} — модуль импорта (Файл › Открыть с помощью)
+@msg	missing `importer` (see document.formats)	не указан `importer` (см. document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` должен быть идентификатором формата модуля (см. document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» открывает файлы {_1}, а не `{_2}`
+@msg	`{_1}` is a {_2}, not an importer	`{_1}` — это {_2}, а не модуль импорта
+@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` — модуль импорта: откройте файл с помощью document.open {{"importer"}"}}
+@msg	the importer returned no objects	модуль импорта не вернул ни одного объекта
+@msg	an importer returns `objects` and `warnings`, not `{key}`	модуль импорта возвращает `objects` и `warnings`, а не `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл больше {MAX_INPUT_BYTES} байт, которые читает модуль импорта
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль импорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	`extensions` объявляет только модуль экспорта или импорта
+@msg	an importer always gets an import's budget: leave `budget` out	модуль импорта всегда получает бюджет импорта: не указывайте `budget`
