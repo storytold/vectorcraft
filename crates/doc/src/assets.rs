@@ -78,7 +78,7 @@ mod tests {
     fn name_after(names: &[&str]) -> String {
         let mut doc = Document::new(100.0, 100.0);
         for (i, n) in names.iter().enumerate() {
-            doc.assets.push(ExportAsset { id: i as u64 + 1, name: (*n).to_string(), nodes: vec![] });
+            doc.assets.push(ExportAsset { id: i as u64 + 1, name: (*n).to_string(), nodes: vec![], format_3d: None });
         }
         doc.next_asset_name()
     }
