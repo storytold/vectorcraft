@@ -1626,7 +1626,6 @@ impl LibraryWalk {
     }
 }
 
-/// The library of the `variableSets` element `sets` (see [`variable_library`]).
 /// Whether an XML node in `o` or the dictionaries it holds has a value or a type
 /// (`xmlnode-nodevalue`, `xmlnode-nodetype`). `seen` counts the dictionaries looked at; past
 /// [`MAX_LIBRARY_NODES`] of them, or deeper than [`MAX_DEPTH`], the library is taken to hold some.
@@ -1641,6 +1640,7 @@ fn holds_values(o: &Obj, seen: &mut usize, depth: usize) -> bool {
     o.items().any(|c| holds_values(c, seen, depth + 1))
 }
 
+/// The library of the `variableSets` element `sets` (see [`variable_library`]).
 fn read_variable_sets(sets: &Obj) -> VariableRead {
     let mut walk = LibraryWalk::default();
     let mut vars = Variables::default();
@@ -1665,4 +1665,28 @@ fn read_variable_sets(sets: &Obj) -> VariableRead {
         walk.skipped = 0;
     }
     VariableRead { variables: vars, bindings: walk.bindings, bindings_skipped: walk.bindings_skipped, skipped: walk.skipped, present: true }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+
+    /// An XML node holding `child` (when given) and nothing else: no value, no type.
+    fn node(child: Option<Obj>) -> Obj {
+        let children = Obj { ty: "Array".into(), content: child.map(|c| V::Obj(Rc::new(c))).into_iter().collect(), ..Obj::default() };
+        Obj { ty: "XMLNode".into(), entries: vec![(Some("xmlnode-children".into()), vec![V::Obj(Rc::new(children))])], ..Obj::default() }
+    }
+
+    /// An empty library is taken to hold values past the caps on what is looked at: nested deeper
+    /// than [`MAX_DEPTH`], or once [`MAX_LIBRARY_NODES`] dictionaries have been looked at.
+    #[test]
+    fn an_empty_library_past_the_caps_is_taken_to_hold_values() {
+        let shallow = node(Some(node(None)));
+        assert!(!holds_values(&shallow, &mut 0, 0));
+        let deep = (0..MAX_DEPTH).fold(node(None), |inner, _| node(Some(inner)));
+        assert!(holds_values(&deep, &mut 0, 0));
+        let mut seen = MAX_LIBRARY_NODES;
+        assert!(holds_values(&shallow, &mut seen, 0));
+    }
 }
