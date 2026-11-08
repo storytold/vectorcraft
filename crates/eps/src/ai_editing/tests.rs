@@ -1396,8 +1396,8 @@ fn transparency_is_written_in_its_forms() {
     );
 }
 
-/// A clipping path filled and stroked keeps its stroke; the reader reads its fill as a path of
-/// its own under the clipped art, as the file's PDF page draws it.
+/// A clipping path filled and stroked is written with its fill and stroke, and reads back with
+/// both on the clipping path.
 #[test]
 fn a_painted_clipping_path_is_written_with_its_paint() {
     let mut doc = Document::new(200.0, 100.0);
@@ -1421,8 +1421,7 @@ fn a_painted_clipping_path_is_written_with_its_paint() {
     assert_eq!(
         painted,
         [
-            (true, None, Some(paint(&solid(Color::BLACK)))),
-            (false, Some(paint(&solid(Color::rgb(1.0, 1.0, 0.0)))), None),
+            (true, Some(paint(&solid(Color::rgb(1.0, 1.0, 0.0)))), Some(paint(&solid(Color::BLACK)))),
             (false, Some(paint(&solid(Color::rgb(0.0, 0.0, 1.0)))), None)
         ]
     );
@@ -2090,8 +2089,7 @@ fn gradients_and_patterns_are_written_in_their_forms() {
     assert!(art.contains(" p\n") && art.contains(" P\n"), "{art}");
 }
 
-/// A clipping path filled with a gradient keeps it: the reader reads it as the clipping path and
-/// its fill as a path of its own under the art.
+/// A clipping path filled with a gradient keeps it, and reads back with it.
 #[test]
 fn a_clipping_path_keeps_its_gradient() {
     let mut doc = Document::new(200.0, 100.0);
@@ -2107,7 +2105,9 @@ fn a_clipping_path_keeps_its_gradient() {
     assert!(text.contains("h\nW\nBb\n0 (Gradient) "), "{text}");
     let back = read_back(&doc);
     let NodeKind::Group { children, clip: true } = &back.layers[0].children().unwrap()[0].kind else { panic!("a clipping group") };
-    let fill = &children[1];
+    assert_eq!(children.len(), 2, "the clipping path and the art");
+    let fill = &children[0];
+    assert!(matches!(fill.kind, NodeKind::Path { clipping: true, .. }), "{:?}", fill.kind);
     let bounds = Rect::new(10.0, 10.0, 90.0, 60.0);
     let want = drawn(&doc, &gradient_paint(sunset(), None, None), bounds);
     assert_eq!(drawn(&back, fill.appearance.items[0].paint(), bounds), want);

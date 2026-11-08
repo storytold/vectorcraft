@@ -648,10 +648,10 @@ impl<'a> Reader<'a> {
         named
     }
 
-    /// Give the art of the opacity masks in `n` (a copy of a symbol's art with ids of this
+    /// Give the art of the opacity masks in `n` (a copy of a symbol's art or of a clipping path with ids of this
     /// document, [`vectorcraft_doc::Document::reid`], which leaves masks as they are) ids of this
     /// document too.
-    fn reid_masks(&mut self, n: &mut Node, depth: usize) {
+    pub(super) fn reid_masks(&mut self, n: &mut Node, depth: usize) {
         if depth > MAX_DEPTH {
             return;
         }
