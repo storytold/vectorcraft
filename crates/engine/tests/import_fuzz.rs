@@ -1,6 +1,6 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
 //! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
-//! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
+//! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
 //! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
@@ -1615,6 +1615,93 @@ fn shortcut_sets_past_the_caps_are_truncated() {
     for text in [deep, many, long, big] {
         assert_eq!(read(text)["truncated"], true);
     }
+}
+
+// ---------- action sets ----------
+
+/// Action set `bytes` read with `actionSet.read`: an error, or a set within the caps.
+fn action_set(bytes: &[u8]) -> Result<(), TestCaseError> {
+    let read = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": "fuzz.aia"});
+    if let Ok(r) = no_panic(vectorcraft_engine::Session::new().execute("actionSet.read", &read)) {
+        let actions = r["actions"].as_array().cloned().unwrap_or_default();
+        prop_assert!(actions.len() <= 1000);
+        prop_assert!(actions.iter().all(|a| a["steps"].as_array().map_or(0, Vec::len) <= 10_000));
+        prop_assert!(actions.iter().map(|a| a["steps"].as_array().map_or(0, Vec::len)).sum::<usize>() <= 100_000);
+        prop_assert!(r["unread"].as_array().map_or(0, Vec::len) <= 1000);
+    }
+    Ok(())
+}
+
+/// A token of a text action set: a block or field name, a number of any size and sign, text in
+/// parentheses (unclosed, nested or escaped too), bracketed or angled hexadecimal, a brace, a line
+/// end, NUL or bytes that aren't UTF-8.
+fn arb_aia_token() -> impl Strategy<Value = Vec<u8>> {
+    prop_oneof![
+        prop::sample::select(vec![
+            "/action-1",
+            "/event-2",
+            "/parameter-1",
+            "/name",
+            "/internalName",
+            "/localizedName",
+            "/isOn",
+            "/value",
+            "/x",
+            "/version",
+        ])
+        .prop_map(|t| t.as_bytes().to_vec()),
+        any::<i64>().prop_map(|n| n.to_string().into_bytes()),
+        Just(b"99999999999999999999999".to_vec()),
+        "[a-z ()\\\\]{0,12}".prop_map(|t| format!("({t})").into_bytes()),
+        prop::sample::select(vec!["(", ")", "\\", "[ 2 4142 ]", "[ 3 41 4", "[ 1 zz ]", "[", "]", "< 2 0a0b >", "<", ">", "2.5"])
+            .prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec!["{", "}", "\r\n", "\r", "\n"]).prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec![vec![0u8], vec![0xFF, 0xFE], vec![0xC3]]),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn action_set_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..600), head in any::<bool>()) {
+        let mut data = if head { b"/version 3 ".to_vec() } else { vec![] };
+        data.extend(bytes);
+        action_set(&data)?;
+    }
+
+    #[test]
+    fn hostile_action_sets_never_panic(tokens in prop::collection::vec(arb_aia_token(), 0..200), sep in prop::sample::select(vec![" ", "", "\t"])) {
+        let mut data = b"/version 3".to_vec();
+        for t in tokens {
+            data.extend(sep.as_bytes());
+            data.extend(t);
+        }
+        action_set(&data)?;
+    }
+}
+
+/// An action set past any cap (nesting, actions, steps, name length, file size) is read up to it
+/// and marked truncated.
+#[test]
+fn action_sets_past_the_caps_are_truncated() {
+    let read = |text: String| vectorcraft_engine::Session::new().execute("actionSet.read", &json!({ "data": text })).unwrap();
+    let deep = format!("/version 3 /action-1 {{ {} }}", "/x { ".repeat(40));
+    let actions = format!("/version 3 {}", "/action-1 { } ".repeat(1001));
+    let steps = format!("/version 3 /action-1 {{ {} }}", "/event-1 { } ".repeat(10_001));
+    let action = format!("/action-1 {{ {} }} ", "/event-1 { } ".repeat(10_000));
+    let all_steps = format!("/version 3 {}", action.repeat(11));
+    let long = format!("/version 3 /name [ 2000 {} ]", "6e".repeat(2000));
+    let big = format!("/version 3 /action-1 {{ }} {}", " ".repeat(8 << 20));
+    let uncapped: Vec<&str> = [("deep", deep), ("actions", actions), ("steps", steps), ("long", long), ("big", big)]
+        .into_iter()
+        .filter(|(_, text)| read(text.clone())["truncated"] != true)
+        .map(|(name, _)| name)
+        .collect();
+    assert!(uncapped.is_empty(), "{uncapped:?}");
+    let r = read(all_steps);
+    assert_eq!(r["truncated"], true);
+    assert_eq!(r["actions"].as_array().unwrap().iter().map(|a| a["steps"].as_array().unwrap().len()).sum::<usize>(), 100_000);
 }
 
 /// A small image of each raster format Place reads, with resolution metadata where it has some.

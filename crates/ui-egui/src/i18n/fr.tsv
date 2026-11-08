@@ -1711,6 +1711,7 @@ font-technology	Variable	Variables
 	Report copied	Rapport copié
 	Line {line}	Ligne {line}
 	Line {line}: {name}: {status}	Ligne {line}, {name}, {status}
+	Read Action Set File	Lire un fichier de jeu de scripts
 	Read Shortcut Set File	Lire un fichier de jeu de raccourcis
 	Import Matches	Correspondances d’importation
 	Remember Import Matches	Mémoriser les correspondances d’importation
@@ -4348,6 +4349,8 @@ axis	Both	Les deux
 @msg	no such action set	jeu de scripts inexistant
 @msg	the action sets changed; nothing was deleted	les jeux de scripts ont changé ; rien n’a été supprimé
 @msg	no action set to save	aucun jeu de scripts à enregistrer
+@msg	the action set file can't be read in full	le fichier de jeu de scripts ne peut pas être lu en entier
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	« {name} » chargé : {n} étape a été ignorée|« {name} » chargé : {n} étapes ont été ignorées
 @msg	not an action set file	ce n’est pas un fichier de jeu de scripts
 @msg	the action set file is larger than 8 MiB	le fichier de jeu de scripts dépasse 8 Mio
 @msg	the action set file holds more than 1,000 actions	le fichier de jeu de scripts contient plus de 1 000 scripts

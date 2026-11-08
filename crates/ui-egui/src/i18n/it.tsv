@@ -1746,6 +1746,7 @@ file-filter	Templates	Modelli
 	Line {line}	Riga {line}
 	Line {line}: {name}: {status}	Riga {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Importato. Premi OK per mantenere il set importato.
+	Read Action Set File	Leggi file di set di azioni
 	Read Shortcut Set File	Leggi file di set di scelte rapide
 	Import Matches	Abbinamenti di importazione
 	Remember Import Matches	Ricorda abbinamenti di importazione
@@ -4400,6 +4401,8 @@ axis	Both	Entrambi
 @msg	no such action set	set di azioni inesistente
 @msg	the action sets changed; nothing was deleted	i set di azioni sono cambiati; non è stato eliminato nulla
 @msg	no action set to save	nessun set di azioni da salvare
+@msg	the action set file can't be read in full	il file di set di azioni non può essere letto per intero
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Caricato “{name}”: {n} passaggio è stato omesso|Caricato “{name}”: {n} passaggi sono stati omessi
 @msg	not an action set file	non è un file di set di azioni
 @msg	the action set file is larger than 8 MiB	il file del set di azioni supera 8 MiB
 @msg	the action set file holds more than 1,000 actions	il file del set di azioni contiene più di 1.000 azioni

@@ -3218,6 +3218,7 @@ digits	Malayalam	Malaiàlam
 	Rating:	Valoració:
 	Ratio	Proporció
 	Rays	Raigs
+	Read Action Set File	Llegeix el fitxer de conjunt d’accions
 	Read Shortcut Set File	Llegeix el fitxer de conjunt de drets de teclat
 	Reads or sets environment variables	Llegeix o defineix variables d’entorn
 	Ready	A punt
@@ -5375,6 +5376,8 @@ digits	Malayalam	Malaiàlam
 @msg	no such action set	no existeix aquest conjunt d’accions
 @msg	the action sets changed; nothing was deleted	els conjunts d’accions han canviat; no s’ha suprimit res
 @msg	no action set to save	no hi ha cap conjunt d’accions per desar
+@msg	the action set file can't be read in full	el fitxer de conjunt d’accions no es pot llegir sencer
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
 @msg	the action set file holds more than 1,000 actions	el fitxer de conjunt d’accions conté més de 1.000 accions

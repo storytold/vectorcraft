@@ -3509,6 +3509,7 @@
 	Rating:	रेटिंग:
 	Ratio	अनुपात
 	Rays	रे
+	Read Action Set File	एक्शन सेट फ़ाइल पढ़ें
 	Read Shortcut Set File	शॉर्टकट सेट फ़ाइल पढ़ें
 	Reads or sets environment variables	पर्यावरण चर पढ़ता है या सेट करता है
 	Ready	तैयार
@@ -6857,6 +6858,8 @@
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	वर्ड डॉक्यूमेंट नहीं: इसकी WordDocument धारा फ़ाइल सूचना ब्लॉक के साथ शुरू नहीं होती है
+@msg	the action set file can't be read in full	एक्शन सेट फ़ाइल पूरी तरह नहीं पढ़ी जा सकती
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an export presets file (format `{_1}`)	नहीं निर्यात presets फ़ाइल (format `{_1}`)

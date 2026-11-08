@@ -1717,6 +1717,7 @@ font-technology	Variable	Variables
 	Report copied	Informe copiado
 	Line {line}	Línea {line}
 	Line {line}: {name}: {status}	Línea {line}: {name}: {status}
+	Read Action Set File	Leer archivo de conjunto de acciones
 	Read Shortcut Set File	Leer archivo de conjunto de métodos abreviados
 	Import Matches	Asociaciones de importación
 	Remember Import Matches	Recordar asociaciones de importación
@@ -4358,6 +4359,8 @@ axis	Both	Ambos
 @msg	no such action set	no existe ese conjunto de acciones
 @msg	the action sets changed; nothing was deleted	los conjuntos de acciones han cambiado; no se ha eliminado nada
 @msg	no action set to save	no hay ningún conjunto de acciones que guardar
+@msg	the action set file can't be read in full	el archivo de conjunto de acciones no se puede leer completo
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
 @msg	the action set file holds more than 1,000 actions	el archivo de conjunto de acciones contiene más de 1000 acciones

@@ -1743,6 +1743,7 @@ file-filter	Templates	Шаблоны
 	Line {line}	Строка {line}
 	Line {line}: {name}: {status}	Строка {line}: {name}: {status}
 	Imported. Press OK to keep the imported set.	Импортировано. Нажмите «ОК», чтобы сохранить импортированный набор.
+	Read Action Set File	Прочитать файл набора действий
 	Read Shortcut Set File	Прочитать файл набора сочетаний клавиш
 	Import Matches	Сопоставления импорта
 	Remember Import Matches	Запомнить сопоставления импорта
@@ -4395,6 +4396,8 @@ axis	Both	Оба
 @msg	no such action set	такого набора действий нет
 @msg	the action sets changed; nothing was deleted	наборы действий изменились; ничего не удалено
 @msg	no action set to save	нет набора действий для сохранения
+@msg	the action set file can't be read in full	файл набора действий невозможно прочитать целиком
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Загружено «{name}»: пропущен {n} шаг|Загружено «{name}»: пропущено {n} шага|Загружено «{name}»: пропущено {n} шагов
 @msg	not an action set file	это не файл набора действий
 @msg	the action set file is larger than 8 MiB	файл набора действий больше 8 MiB
 @msg	the action set file holds more than 1,000 actions	файл набора действий содержит более 1000 действий

@@ -1624,6 +1624,7 @@ font-technology	Variable	Μεταβλητές
 	Report copied	Η αναφορά αντιγράφηκε
 	Line {line}	Γραμμή {line}
 	Line {line}: {name}: {status}	Γραμμή {line}: {name}: {status}
+	Read Action Set File	Ανάγνωση αρχείου συνόλου ενεργειών
 	Read Shortcut Set File	Ανάγνωση αρχείου συνόλου συντομεύσεων
 	Import Matches	Αντιστοιχίσεις εισαγωγής
 	Remember Import Matches	Απομνημόνευση αντιστοιχίσεων εισαγωγής
@@ -4313,6 +4314,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such action set	δεν υπάρχει τέτοιο σύνολο ενεργειών
 @msg	the action sets changed; nothing was deleted	τα σύνολα ενεργειών άλλαξαν· δεν διαγράφηκε τίποτα
 @msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
+@msg	the action set file can't be read in full	το αρχείο συνόλου ενεργειών δεν μπορεί να διαβαστεί ολόκληρο
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
 @msg	the action set file holds more than 1,000 actions	το αρχείο συνόλου ενεργειών περιέχει περισσότερες από 1.000 ενέργειες

@@ -2008,6 +2008,7 @@ digits	Malayalam	マラヤーラム数字
 	Line {line}	{line} 行目
 	Line {line}: {name}: {status}	{line} 行目: {name}: {status}
 	Imported. Press OK to keep the imported set.	読み込みました。読み込んだセットを保持するには OK を押してください。
+	Read Action Set File	アクションセットファイルを読む
 	Read Shortcut Set File	ショートカットセットファイルを読む
 	Import Matches	読み込み時の対応付け
 	Remember Import Matches	読み込み時の対応付けを記憶
@@ -4735,6 +4736,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no such action set	指定されたアクションセットが見つかりません
 @msg	the action sets changed; nothing was deleted	アクションセットが変更されたため、何も削除しませんでした
 @msg	no action set to save	保存するアクションセットがありません
+@msg	the action set file can't be read in full	アクションセットファイルをすべて読み込めません
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
 @msg	the action set file holds more than 1,000 actions	アクションセットファイルのアクションが 1,000 個を超えています

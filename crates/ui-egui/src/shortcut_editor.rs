@@ -539,6 +539,17 @@ fn needs_a_value(key: &str) -> bool {
     .contains(key)
 }
 
+/// Does a menu bar item run the command with no params, so that it does what its label says and opens
+/// no dialog? A command no menu bar item runs (the Crop Image item runs `ui.cropImage`), a menu item
+/// that gives it params, a [`NEEDS_A_PARAM`] command and a field a call must give each rule it out.
+pub(crate) fn runs_with_no_values(c: &vectorcraft_engine::CommandSpec) -> bool {
+    menu_bar_items().contains_key(c.id)
+        && menu_target(c.id).is_none()
+        && !NEEDS_A_PARAM.contains(&c.id)
+        && !crate::dialogs::variables::opens(c.id)
+        && !names_a_required_field(c.params)
+}
+
 /// Does a params doc name a field a call must give? Its fields are the top-level parts of its
 /// first `{…}`. A field is optional when it is empty, starts with `…`, gives a default (`rows=10`)
 /// or each of its names ends with `?` (`id?|ids?: [id…]`); `{index | indices}` names a required

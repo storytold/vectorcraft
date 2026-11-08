@@ -135,6 +135,7 @@
 	Report copied	Laporan disalin
 	Line {line}	Baris {line}
 	Line {line}: {name}: {status}	Baris {line}: {name}: {status}
+	Read Action Set File	Baca berkas set tindakan
 	Read Shortcut Set File	Baca berkas set pintasan
 	Import Matches	Impor kecocokan
 	Remember Import Matches	Ingat kecocokan impor
@@ -4330,6 +4331,8 @@ imageTrace	Outline	Kontur
 @msg	no such action set	tidak ada set tindakan seperti itu
 @msg	the action sets changed; nothing was deleted	set tindakan telah berubah; tidak ada yang dihapus
 @msg	no action set to save	tidak ada set tindakan untuk disimpan
+@msg	the action set file can't be read in full	file set tindakan tidak dapat dibaca seluruhnya
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” dimuat: {n} langkah dilewati
 @msg	not an action set file	bukan file set tindakan
 @msg	the action set file is larger than 8 MiB	file set tindakan lebih besar dari 8 MiB
 @msg	the action set file holds more than 1,000 actions	file set tindakan berisi lebih dari 1.000 tindakan

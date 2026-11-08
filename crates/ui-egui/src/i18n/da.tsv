@@ -135,6 +135,7 @@
 	Report copied	Rapporten er kopieret
 	Line {line}	Linje {line}
 	Line {line}: {name}: {status}	Linje {line}: {name}: {status}
+	Read Action Set File	Læs handlingssætfil
 	Read Shortcut Set File	Læs fil med genvejssæt
 	Import Matches	Importér match
 	Remember Import Matches	Husk importmatch
@@ -4330,6 +4331,8 @@ imageTrace	Outline	Kontur
 @msg	no such action set	intet sådant handlingssæt
 @msg	the action sets changed; nothing was deleted	handlingssættene er ændret; intet blev slettet
 @msg	no action set to save	intet handlingssæt at gemme
+@msg	the action set file can't be read in full	handlingssætfilen kan ikke læses helt
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Indlæste »{name}«: {n} trin blev udeladt|Indlæste »{name}«: {n} trin blev udeladt
 @msg	not an action set file	ikke en handlingssætfil
 @msg	the action set file is larger than 8 MiB	handlingssætfilen er større end 8 MiB
 @msg	the action set file holds more than 1,000 actions	handlingssætfilen indeholder mere end 1.000 handlinger

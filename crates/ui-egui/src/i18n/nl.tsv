@@ -135,6 +135,7 @@
 	Report copied	Rapport gekopieerd
 	Line {line}	Regel {line}
 	Line {line}: {name}: {status}	Regel {line}: {name}: {status}
+	Read Action Set File	Actiesetbestand lezen
 	Read Shortcut Set File	Sneltoetsensetbestand lezen
 	Import Matches	Overeenkomsten importeren
 	Remember Import Matches	Importovereenkomsten onthouden
@@ -4342,6 +4343,8 @@ imageTrace	Outline	Contour
 @msg	no such action set	actieset bestaat niet
 @msg	the action sets changed; nothing was deleted	de actiesets zijn gewijzigd; er is niets verwijderd
 @msg	no action set to save	geen actieset om op te slaan
+@msg	the action set file can't be read in full	het actiesetbestand kan niet volledig worden gelezen
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” geladen: {n} stap is weggelaten|„{name}” geladen: {n} stappen zijn weggelaten
 @msg	not an action set file	geen actiesetbestand
 @msg	the action set file is larger than 8 MiB	het actiesetbestand is groter dan 8 MiB
 @msg	the action set file holds more than 1,000 actions	het actiesetbestand bevat meer dan 1.000 acties

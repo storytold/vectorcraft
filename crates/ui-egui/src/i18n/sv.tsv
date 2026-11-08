@@ -1672,6 +1672,7 @@ font-technology	Variable	Variabla
 	Report copied	Rapporten har kopierats
 	Line {line}	Rad {line}
 	Line {line}: {name}: {status}	Rad {line}: {name}: {status}
+	Read Action Set File	Läs fil med åtgärdsuppsättning
 	Read Shortcut Set File	Läs fil med kortkommandon
 	Import Matches	Importera matchningar
 	Remember Import Matches	Kom ihåg importmatchningar
@@ -4263,6 +4264,8 @@ axis	Both	Båda
 @msg	no such action set	åtgärdsuppsättningen finns inte
 @msg	the action sets changed; nothing was deleted	åtgärdsuppsättningarna har ändrats; inget raderades
 @msg	no action set to save	ingen åtgärdsuppsättning att spara
+@msg	the action set file can't be read in full	filen med åtgärdsuppsättning kan inte läsas helt
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
 @msg	the action set file holds more than 1,000 actions	filen med åtgärdsuppsättningen innehåller fler än 1 000 åtgärder

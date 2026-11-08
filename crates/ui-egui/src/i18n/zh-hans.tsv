@@ -4448,6 +4448,8 @@ imageTrace	Outline	轮廓
 @msg	no such action set	没有此动作组
 @msg	the action sets changed; nothing was deleted	动作组已更改；未删除任何内容
 @msg	no action set to save	没有要存储的动作组
+@msg	the action set file can't be read in full	无法完整读取动作组文件
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已载入“{name}”：已略过 {n} 个步骤
 @msg	not an action set file	不是动作组文件
 @msg	the action set file is larger than 8 MiB	动作组文件大于 8 MiB
 @msg	the action set file holds more than 1,000 actions	动作组文件包含超过 1,000 个动作
@@ -4715,6 +4717,7 @@ imageTrace	Outline	轮廓
 	Report copied	已复制报告
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
+	Read Action Set File	读取动作组文件
 	Read Shortcut Set File	读取快捷键组文件
 	Import Matches	导入对应
 	Remember Import Matches	记住导入对应

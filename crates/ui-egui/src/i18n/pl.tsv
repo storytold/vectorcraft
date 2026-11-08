@@ -4491,6 +4491,8 @@ imageTrace	Outline	Kontur
 @msg	no such action set	brak takiego zestawu operacji
 @msg	the action sets changed; nothing was deleted	zestawy operacji się zmieniły; nic nie usunięto
 @msg	no action set to save	brak zestawu operacji do zapisania
+@msg	the action set file can't be read in full	nie można odczytać całego pliku zestawu operacji
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
 @msg	the action set file holds more than 1,000 actions	plik zestawu operacji zawiera ponad 1000 operacji
@@ -5060,6 +5062,7 @@ imageTrace	Outline	Kontur
 	Report copied	Skopiowano raport
 	Line {line}	Wiersz {line}
 	Line {line}: {name}: {status}	Wiersz {line}: {name}: {status}
+	Read Action Set File	Odczytaj plik zestawu operacji
 	Read Shortcut Set File	Odczytaj plik zestawu skrótów
 	Import Matches	Dopasowania importu
 	Remember Import Matches	Zapamiętaj dopasowania importu

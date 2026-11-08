@@ -2303,6 +2303,8 @@ file-filter	Templates	範本
 @msg	no such action set	沒有這個動作組
 @msg	the action sets changed; nothing was deleted	動作組已變更；未刪除任何內容
 @msg	no action set to save	沒有要儲存的動作組
+@msg	the action set file can't be read in full	無法完整讀取動作組檔案
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
 @msg	the action set file holds more than 1,000 actions	動作組檔案包含超過 1,000 個動作
@@ -2597,6 +2599,7 @@ file-filter	Templates	範本
 	Line {line}	第 {line} 行
 	Line {line}: {name}: {status}	第 {line} 行：{name}：{status}
 	Imported. Press OK to keep the imported set.	已匯入。按一下「確定」以保留匯入的快速鍵組。
+	Read Action Set File	讀取動作組檔案
 	Read Shortcut Set File	讀取快速鍵組檔案
 	Import Matches	匯入對應
 	Remember Import Matches	記住匯入對應
