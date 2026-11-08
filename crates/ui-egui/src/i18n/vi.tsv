@@ -6052,6 +6052,16 @@ breakText	Glyphs	Glyph
 @msg	path must be a list of child indices	path phải là danh sách chỉ số con
 @msg	no object at path {shown} in the symbol's art	không có đối tượng tại đường dẫn {shown} trong hình của ký hiệu
 @msg	give fill, stroke, opacity and/or blend	hãy cung cấp fill, stroke, opacity và/hoặc blend
+@msg	{key} cannot be set on a guide	không thể đặt {key} cho đường căn
+@msg	{key} cannot be set on a blend	không thể đặt {key} cho hòa trộn
+@msg	{key} cannot be set on an envelope	không thể đặt {key} cho envelope
+@msg	{key} cannot be set on a gradient mesh	không thể đặt {key} cho lưới chuyển sắc
+@msg	{key} cannot be set on a Repeat	không thể đặt {key} cho lặp lại
+@msg	{key} cannot be set on a placed document	không thể đặt {key} cho tài liệu đã đặt
+@msg	{key} cannot be set on an Intertwine group	không thể đặt {key} cho nhóm đan xen
+@msg	stroke cannot be set on a symbol instance	không thể đặt stroke cho thực thể ký hiệu
+@msg	fill on a symbol instance must be a solid color or none	fill của thực thể ký hiệu phải là màu đặc hoặc none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	không thể đặt {key} cho hình ảnh không có hiệu ứng Chuyển thành hình dạng hoặc Đường bao đối tượng
 @msg	pass newName, registration, exportType, nineSlice and/or type	hãy cung cấp newName, registration, exportType, nineSlice và/hoặc type
 	Text Flow	Luồng văn bản
 	By Rows	Theo hàng

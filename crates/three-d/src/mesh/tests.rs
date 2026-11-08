@@ -252,6 +252,24 @@ fn a_partial_revolve_caps_its_ends_with_sectors() {
 }
 
 #[test]
+fn a_revolved_surface_has_unit_normals_facing_out_whatever_its_length_and_direction() {
+    // A wall 100 pt tall and one 0.5 pt tall, each drawn up and down the page.
+    for (from, to) in [(0.0, 100.0), (100.0, 0.0), (0.0, 0.5), (0.5, 0.0)] {
+        let mut b = BezPath::new();
+        b.move_to((20.0, from));
+        b.line_to((20.0, to));
+        let p = PathData::from_bezpath(&b);
+        let r = p.bounds().unwrap();
+        let o = Revolve { offset: 10.0, edge: Edge::Left, segments: 64, ..Revolve::default() };
+        let m = revolve_mesh(&p, r, o).unwrap();
+        assert!(!m.is_empty(), "{from} to {to}: the revolve made no triangles");
+        assert!(m.normals.iter().all(|n| (dot(*n, *n) - 1.0).abs() < 1e-9), "{from} to {to}: a normal is not unit length");
+        assert!(closed(&m), "{from} to {to}");
+        assert!(outward(&m), "{from} to {to}: a face turns inward");
+    }
+}
+
+#[test]
 fn inflate_puffs_the_front_toward_the_viewer() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);

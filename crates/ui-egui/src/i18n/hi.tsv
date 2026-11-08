@@ -6296,6 +6296,16 @@
 @msg	give dataBase64	dataBase64 दें
 @msg	give either at (a click) or area (a path drawn around the overlaps)	या तो (एक क्लिक) या क्षेत्र (ओवरलैप के चारों ओर खींचा गया एक पाथ) देना
 @msg	give fill, stroke, opacity and/or blend	भरने, स्ट्रोक, अपारदर्शिता और/या मिश्रण देते हैं
+@msg	{key} cannot be set on a guide	गाइड पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a blend	ब्लेंड पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on an envelope	एन्वेलप पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a gradient mesh	ग्रेडिएंट मेश पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a Repeat	रिपीट पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on a placed document	प्लेस्ड डॉक्यूमेंट पर {key} सेट नहीं किया जा सकता
+@msg	{key} cannot be set on an Intertwine group	इंटरट्वाइन समूह पर {key} सेट नहीं किया जा सकता
+@msg	stroke cannot be set on a symbol instance	सिंबल इंस्टेंस पर stroke सेट नहीं किया जा सकता
+@msg	fill on a symbol instance must be a solid color or none	सिंबल इंस्टेंस का fill ठोस रंग या none होना चाहिए
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	शेप में बदलें या रूपरेखा ऑब्जेक्ट इफ़ेक्ट के बिना इमेज पर {key} सेट नहीं किया जा सकता
 @msg	give formats or a preset, not both	फ़ॉर्मैट या एक पूर्व निर्धारित देना, दोनों ही नहीं
 @msg	give horizontal or vertical	क्षैतिज या ऊर्ध्वाधर देना
 @msg	give newName or delete	newName या delete दें

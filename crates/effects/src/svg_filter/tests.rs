@@ -457,9 +457,48 @@ fn a_filter_at_the_size_limit_draws_with_its_measured_region() {
     assert_eq!(xml.len(), SvgFilter::MAX_XML);
     assert_eq!(check(&xml), Ok("r".into()));
     let f = filter(json!({ "xml": xml }));
-    let written = f.written_xml(Rect::new(0.123456789, 0.123456789, 1000.987654321, 1000.987654321)).unwrap();
-    assert!(written.len() > SvgFilter::MAX_XML, "the region written out is longer: {} bytes", written.len());
-    assert!(with_id(&written, DRAWN_ID).is_some(), "the drawn form is read");
+    let drawn = f.drawn_xml(Rect::new(0.123456789, 0.123456789, 1000.987654321, 1000.987654321)).unwrap();
+    assert!(drawn.len() > SvgFilter::MAX_XML, "the region written out is longer: {} bytes", drawn.len());
+    assert!(with_id(&drawn, DRAWN_ID).is_some(), "the drawn form is read");
+}
+
+/// SVG output writes a filter live only when the form it writes, with its region and id, is one
+/// SVG import reads back: at most [`SvgFilter::MAX_XML`] bytes. A filter at the limit whose region
+/// is measured against the box, one at the limit whose id is a character long, and one whose
+/// shadows make its SVG 1.1 form longer are left to be written as other pixel effects are.
+#[test]
+fn svg_output_writes_a_filter_only_in_a_form_import_reads() {
+    let at_limit = |open: &str, close: &str| {
+        let xml = format!("{open}{}{close}", "a".repeat(SvgFilter::MAX_XML - open.len() - close.len()));
+        assert_eq!((xml.len(), check(&xml).is_ok()), (SvgFilter::MAX_XML, true));
+        filter(json!({ "xml": xml }))
+    };
+    let measured = at_limit(
+        r#"<filter id="r" filterUnits="userSpaceOnUse" x="-1%" y="-1%" width="1%" height="1%"><feOffset result=""#,
+        r#""/><feOffset/></filter>"#,
+    );
+    let short_id = at_limit(r#"<filter id="r"><feOffset result=""#, r#""/><feOffset/></filter>"#);
+    let shadows = format!(r#"<filter id="s">{}<feOffset result="{}"/></filter>"#, "<feDropShadow/>".repeat(12), "a".repeat(SvgFilter::MAX_XML - 400));
+    assert!(check(&shadows).is_ok() && shadows.len() <= SvgFilter::MAX_XML);
+    for f in [measured, short_id, filter(json!({ "xml": shadows }))] {
+        assert!(!f.writes_as_svg11() && f.written_xml(Rect::new(0.0, 0.0, 10.0, 10.0)).is_none(), "{} bytes", f.xml().len());
+    }
+    // Room for the id and the longest region: still written, and read back.
+    let open = r#"<filter id="r" filterUnits="userSpaceOnUse" x="-1%" y="-1%" width="1%" height="1%"><feOffset result=""#;
+    let close = r#""/><feOffset/></filter>"#;
+    let xml = format!("{open}{}{close}", "a".repeat(MAX_WRITTEN_XML - REGION_ROOM - open.len() - close.len()));
+    let f = filter(json!({ "xml": xml }));
+    assert!(f.writes_as_svg11());
+    let id = format!("u_vc_unique_-filter-{}", usize::MAX);
+    let out = with_id(&f.written_xml(Rect::new(0.123456789, 0.123456789, 1000.987654321, 1000.987654321)).unwrap(), &id).unwrap();
+    assert!(out.len() <= SvgFilter::MAX_XML && check(&out).is_ok(), "{} bytes", out.len());
+    // The longest numbers a region can take still fit.
+    let far = f.written_xml(Rect::new(-f64::MIN_POSITIVE, -f64::MIN_POSITIVE, f64::MAX / 4.0, f64::MAX / 4.0)).unwrap();
+    assert!(with_id(&far, &id).is_some_and(|out| out.len() <= SvgFilter::MAX_XML));
+    for v in [-f64::MIN_POSITIVE, -5e-324, -2.225073858507201e-308, f64::MIN, -1.0 / 3.0] {
+        assert!(format!("{v}").len() <= MAX_NUMBER_TEXT, "{v:e}");
+    }
+    assert_eq!(format!("{}", -f64::MIN_POSITIVE).len(), MAX_NUMBER_TEXT);
 }
 
 /// Only a type selector naming a filter or one of its elements, or `*`, lets a style sheet reach

@@ -461,6 +461,25 @@ fn svg_export_writes_the_filter_when_it_is_the_last_effect() {
     assert!(!out.contains("<feOffset dx=\"3\""), "{out}");
 }
 
+/// A filter at the size limit whose written form, with the id SVG export gives it, would be longer
+/// than SVG import reads is exported as an image, which opens again as the canvas draws it.
+#[test]
+fn svg_export_draws_a_filter_too_long_to_read_back_as_an_image() {
+    let (mut s, id) = blue_square();
+    let (open, close) =
+        (r##"<filter id="r"><feFlood flood-color="#ff0000" result=""##, r#""/><feComposite in2="SourceGraphic" operator="in"/></filter>"#);
+    let xml = format!("{open}{}{close}", "a".repeat(vectorcraft_doc::SvgFilter::MAX_XML - open.len() - close.len()));
+    run(&mut s, "effect.apply", json!({"effect": "svg.filter", "ids": [id.0], "params": {"xml": xml}}));
+    assert_eq!(&render(&s).pixel(100, 100)[..3], &[255, 0, 0]);
+    let out = svg(&mut s);
+    assert!(out.contains("<image") && !out.contains("<filter"), "{} bytes", out.len());
+    let (back, warnings) = vectorcraft_svg::import_with_report(&out).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let again = vectorcraft_render::Renderer::new().render_region(&back, vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0), 1.0, true);
+    let px = again.pixel(100, 100);
+    assert!(px[0] > 240 && px[1] < 15 && px[2] < 15, "{px:?}");
+}
+
 /// A filter SVG 1.1 can't hold (a blend mode SVG 1.1 lacks) is exported as an image, as the canvas
 /// draws it; an SVG 1.1 one stays a filter.
 #[test]

@@ -6433,6 +6433,16 @@ breakText	Glyphs	Glifs
 @msg	path must be a list of child indices	path ha de ser una llista d’índexs de fills
 @msg	no object at path {shown} in the symbol's art	no hi ha cap objecte al camí {shown} de l’art del símbol
 @msg	give fill, stroke, opacity and/or blend	indiqueu fill, stroke, opacity i/o blend
+@msg	{key} cannot be set on a guide	{key} no es pot definir en una guia
+@msg	{key} cannot be set on a blend	{key} no es pot definir en una fusió
+@msg	{key} cannot be set on an envelope	{key} no es pot definir en un embolcall
+@msg	{key} cannot be set on a gradient mesh	{key} no es pot definir en una malla de degradat
+@msg	{key} cannot be set on a Repeat	{key} no es pot definir en una repetició
+@msg	{key} cannot be set on a placed document	{key} no es pot definir en un document col·locat
+@msg	{key} cannot be set on an Intertwine group	{key} no es pot definir en un grup entrelligat
+@msg	stroke cannot be set on a symbol instance	stroke no es pot definir en una instància de símbol
+@msg	fill on a symbol instance must be a solid color or none	el fill d’una instància de símbol ha de ser un color sòlid o none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no es pot definir en una imatge sense l’efecte Converteix en forma o Contorneja l’objecte
 @msg	pass newName, registration, exportType, nineSlice and/or type	indiqueu newName, registration, exportType, nineSlice i/o type
 	Text Flow	Flux del text
 	By Rows	Per files

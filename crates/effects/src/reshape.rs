@@ -150,7 +150,13 @@ fn gives_shape(e: &Effect) -> bool {
 /// Does `item`, a fill or stroke of an image, paint something: does it paint and carry an effect
 /// that gives it a shape ([`gives_shape`])?
 fn shapes_image(item: &AppearanceItem) -> bool {
-    crate::paints(item) && item.effects().iter().any(gives_shape)
+    crate::paints(item) && gives_image_shape(item.effects())
+}
+
+/// Do `effects`, those of an image's fill or stroke, give that fill or stroke a shape to paint
+/// ([`gives_shape`])?
+pub fn gives_image_shape(effects: &[Effect]) -> bool {
+    effects.iter().any(gives_shape)
 }
 
 /// The fills and strokes of `items` (an image's own) that paint something ([`shapes_image`]), each

@@ -6393,6 +6393,16 @@ breakText	Glyphs	Glifos
 @msg	path must be a list of child indices	path debe ser una lista de índices de hijos
 @msg	no object at path {shown} in the symbol's art	no hay ningún objeto en la ruta {shown} del arte del símbolo
 @msg	give fill, stroke, opacity and/or blend	indique fill, stroke, opacity y/o blend
+@msg	{key} cannot be set on a guide	{key} no se puede definir en una guía
+@msg	{key} cannot be set on a blend	{key} no se puede definir en una fusión
+@msg	{key} cannot be set on an envelope	{key} no se puede definir en una envolvente
+@msg	{key} cannot be set on a gradient mesh	{key} no se puede definir en una malla de degradado
+@msg	{key} cannot be set on a Repeat	{key} no se puede definir en una repetición
+@msg	{key} cannot be set on a placed document	{key} no se puede definir en un documento colocado
+@msg	{key} cannot be set on an Intertwine group	{key} no se puede definir en un grupo entrelazado
+@msg	stroke cannot be set on a symbol instance	stroke no se puede definir en una instancia de símbolo
+@msg	fill on a symbol instance must be a solid color or none	el fill de una instancia de símbolo debe ser un color sólido o none
+@msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} no se puede definir en una imagen sin el efecto Convertir en forma o Contornear objeto
 @msg	pass newName, registration, exportType, nineSlice and/or type	indique newName, registration, exportType, nineSlice y/o type
 	Text Flow	Flujo de texto
 	By Rows	Por filas
