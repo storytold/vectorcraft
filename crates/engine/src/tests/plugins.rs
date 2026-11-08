@@ -1086,10 +1086,11 @@ fn replace_storing(s: &mut Session, id: &str, first: &str) -> Value {
 
 /// A plug-in's settings and cache are kept in the plug-in store under its id: the next session
 /// has them, replacing the plug-in keeps them, another plug-in can't read them, `plugin.clearCache`
-/// empties the cache alone and `plugin.remove` deletes both. The caps and the bytes each call is
-/// charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
-/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test, since
-/// clearing every plug-in's cache would empty theirs.
+/// with its id empties its cache alone and `plugin.remove` deletes both. The caps and the bytes
+/// each call is charged follow ([`plugin_storage_is_capped_and_survives_a_damaged_settings_file`],
+/// [`plugin_storage_calls_are_charged_the_files_they_read_and_write`]) in the same test.
+/// `plugin.clearCache` without an id empties the cache of every plug-in installed in the process,
+/// so it is tested in a binary of its own (`tests/plugin_clear_cache.rs`).
 #[test]
 fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     let folder = crate::tests_links::Folder::new("plugin-storage");
@@ -1116,16 +1117,13 @@ fn plugins_keep_settings_and_a_cache_of_their_own_in_the_store() {
     install_storing(&mut next, other, READS);
     assert!(next.execute("plugin.run", &json!({"id": other, "ids": []})).is_err());
 
-    // Clearing the cache leaves the settings.
-    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
-    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
+    // Clearing the cache leaves the settings, and the other plug-in's cache.
     replace_storing(&mut next, other, WRITES);
     run(&mut next, "plugin.run", json!({"id": other, "ids": []}));
-    let all = run(&mut next, "plugin.clearCache", json!({}));
-    let cleared = all["cleared"].as_array().unwrap();
-    assert!(cleared.contains(&json!(id)) && cleared.contains(&json!(other)) && all["bytesFreed"] == json!(3), "{all}");
-    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.clearCache", json!({"id": id})), json!({"cleared": [id], "bytesFreed": 3}));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": id}))["cacheBytes"], json!(0));
+    assert_eq!(run(&mut next, "plugin.info", json!({"id": other}))["cacheBytes"], json!(3));
+    run(&mut next, "plugin.run", json!({"id": id, "ids": []}));
     assert!(next.execute("plugin.clearCache", &json!({"id": "test.engine.storing.missing"})).is_err());
 
     run(&mut next, "plugin.remove", json!({"id": id}));
